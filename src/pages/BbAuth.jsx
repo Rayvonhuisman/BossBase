@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { I, Logo } from '../bb-shared.jsx';
+import { loginWithEmail, registerWithEmail } from '../services/authService.js';
 
 const TRADES = [
   { icon: '🖌️', label: 'Schilder' }, { icon: '🌿', label: 'Hovenier' },
@@ -10,8 +11,24 @@ const TRADES = [
 ];
 
 export function LoginPage({ onLogin, onRegister }) {
-  const [form, setForm] = useState({ email: 'marco@veldhuis.nl', password: 'demo1234' });
+  const [form, setForm] = useState({ email: '', password: '' });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const submit = async () => {
+    setError('');
+    if (!/^\S+@\S+\.\S+$/.test(form.email)) return setError('Vul een geldig e-mailadres in.');
+    if (!form.password) return setError('Vul je wachtwoord in.');
+    setLoading(true);
+    try {
+      await loginWithEmail(form.email, form.password);
+      onLogin();
+    } catch (err) {
+      setError(err.message || 'Inloggen is mislukt.');
+    } finally {
+      setLoading(false);
+    }
+  };
   return (
     <div className="auth-shell">
       <div className="auth-card afu">
@@ -29,17 +46,14 @@ export function LoginPage({ onLogin, onRegister }) {
           <label>Wachtwoord</label>
           <input type="password" value={form.password} onChange={e => set('password', e.target.value)} placeholder="••••••••" />
         </div>
+        {error && <div style={{ color: '#dc2626', fontSize: '.78rem', fontWeight: 600, marginBottom: 10 }}>{error}</div>}
         <div style={{ textAlign: 'right', marginBottom: 4 }}>
           <a href="#" style={{ fontSize: '.78rem', color: 'var(--pd)', fontWeight: 600 }}>Wachtwoord vergeten?</a>
         </div>
-        <button className="auth-submit" onClick={onLogin}>Inloggen →</button>
+        <button className="auth-submit" onClick={submit} disabled={loading}>{loading ? 'Bezig...' : 'Inloggen →'}</button>
         <div className="auth-divider"><span>of</span></div>
         <div className="auth-link">
           Nog geen account? <a href="#" onClick={e => { e.preventDefault(); onRegister(); }}>Gratis aanmelden</a>
-        </div>
-        <div style={{ marginTop: 20, padding: 12, background: 'var(--pll)', borderRadius: 'var(--r8)', border: '1px solid rgba(255,151,100,.2)' }}>
-          <div style={{ fontSize: '.75rem', color: 'var(--pd)', fontWeight: 700, marginBottom: 4 }}>Demo-modus</div>
-          <div style={{ fontSize: '.73rem', color: 'var(--dmu)', lineHeight: 1.5 }}>Klik op "Inloggen" om het dashboard te bekijken met voorbeelddata van Veldhuis Schilderwerken.</div>
         </div>
       </div>
     </div>
@@ -50,7 +64,52 @@ export function RegisterFlow({ onDone, onBack }) {
   const [step, setStep] = useState(0);
   const [trade, setTrade] = useState('');
   const [setup, setSetup] = useState('');
+  const [form, setForm] = useState({ fullName: '', email: '', password: '', companyName: '', phone: '', kvk: '' });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const steps = ['Account', 'Bedrijf', 'Setup', 'Team'];
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const validateAccount = () => {
+    if (!form.fullName.trim()) return 'Vul je volledige naam in.';
+    if (!/^\S+@\S+\.\S+$/.test(form.email)) return 'Vul een geldig e-mailadres in.';
+    if (!form.password) return 'Vul een wachtwoord in.';
+    if (form.password.length < 8) return 'Gebruik minimaal 8 tekens voor je wachtwoord.';
+    return '';
+  };
+
+  const validateCompany = () => {
+    if (!form.companyName.trim()) return 'Vul je bedrijfsnaam in.';
+    return '';
+  };
+
+  const next = () => {
+    const msg = step === 0 ? validateAccount() : step === 1 ? validateCompany() : '';
+    if (msg) {
+      setError(msg);
+      return;
+    }
+    setError('');
+    setStep(s => s + 1);
+  };
+
+  const submit = async () => {
+    const msg = validateAccount() || validateCompany();
+    if (msg) {
+      setError(msg);
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      await registerWithEmail({ ...form, trade });
+      onDone();
+    } catch (err) {
+      setError(err.message || 'Registreren is mislukt.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const stepTitles = ['Maak je account aan', 'Vertel over je bedrijf', 'Hoe werk je?', 'Nodig je team uit'];
   const stepSubs = [
@@ -83,14 +142,14 @@ export function RegisterFlow({ onDone, onBack }) {
 
         {step === 0 && (
           <>
-            <div className="auth-field"><label>Volledige naam</label><input placeholder="Marco Veldhuis" /></div>
-            <div className="auth-field"><label>E-mailadres</label><input type="email" placeholder="marco@veldhuis.nl" /></div>
-            <div className="auth-field"><label>Wachtwoord</label><input type="password" placeholder="Min. 8 tekens" /></div>
+            <div className="auth-field"><label>Volledige naam</label><input value={form.fullName} onChange={e => set('fullName', e.target.value)} placeholder="Marco Veldhuis" /></div>
+            <div className="auth-field"><label>E-mailadres</label><input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="marco@veldhuis.nl" /></div>
+            <div className="auth-field"><label>Wachtwoord</label><input type="password" value={form.password} onChange={e => set('password', e.target.value)} placeholder="Min. 8 tekens" /></div>
           </>
         )}
         {step === 1 && (
           <>
-            <div className="auth-field"><label>Bedrijfsnaam</label><input placeholder="Veldhuis Schilderwerken" /></div>
+            <div className="auth-field"><label>Bedrijfsnaam</label><input value={form.companyName} onChange={e => set('companyName', e.target.value)} placeholder="Veldhuis Schilderwerken" /></div>
             <div style={{ marginBottom: 8 }}>
               <div className="auth-field" style={{ marginBottom: 8 }}><label>Branche</label></div>
               <div className="trade-grid">
@@ -101,8 +160,8 @@ export function RegisterFlow({ onDone, onBack }) {
                 ))}
               </div>
             </div>
-            <div className="auth-field"><label>Telefoon</label><input placeholder="06-12345678" /></div>
-            <div className="auth-field"><label>KvK-nummer</label><input placeholder="12345678" /></div>
+            <div className="auth-field"><label>Telefoon</label><input value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="06-12345678" /></div>
+            <div className="auth-field"><label>KvK-nummer</label><input value={form.kvk} onChange={e => set('kvk', e.target.value)} placeholder="12345678" /></div>
           </>
         )}
         {step === 2 && (
@@ -139,17 +198,17 @@ export function RegisterFlow({ onDone, onBack }) {
             </button>
           </>
         )}
-
+        {error && <div style={{ color: '#dc2626', fontSize: '.78rem', fontWeight: 600, marginTop: 10 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
           {step > 0 && <button className="btn btn-s" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setStep(s => s - 1)}>Terug</button>}
           {step < 3
-            ? <button className="auth-submit" style={{ flex: 1 }} onClick={() => setStep(s => s + 1)}>Volgende →</button>
-            : <button className="auth-submit" style={{ flex: 1 }} onClick={onDone}>BossBase starten 🚀</button>
+            ? <button className="auth-submit" style={{ flex: 1 }} onClick={next}>Volgende →</button>
+            : <button className="auth-submit" style={{ flex: 1 }} onClick={submit} disabled={loading}>{loading ? 'Bezig...' : 'BossBase starten 🚀'}</button>
           }
         </div>
         {step === 3 && (
           <div className="auth-link">
-            <a href="#" onClick={e => { e.preventDefault(); onDone(); }}>Overslaan, later doen</a>
+            <a href="#" onClick={e => { e.preventDefault(); submit(); }}>Overslaan, later doen</a>
           </div>
         )}
         {step === 0 && (

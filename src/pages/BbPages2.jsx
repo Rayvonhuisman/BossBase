@@ -3,11 +3,38 @@ import {
   I, CAL_EVENTS, HOURS_DATA, COSTS_DATA, TEAM_DATA, CUSTOMERS_DATA, QUOTES_DATA,
   fmt, custById, Av, StatusBadge, ModalX, Logo,
 } from '../bb-shared.jsx';
+import { createCalendarEvent, listCalendarEvents, updateCalendarEvent } from '../services/calendarService.js';
+import { createJobCost, listJobCosts } from '../services/jobCostService.js';
+import { listCustomers } from '../services/customerService.js';
+import { listDeals } from '../services/dealService.js';
+import { listActivities } from '../services/activityService.js';
+import { useToast } from '../lib/toast.jsx';
+import { useProfile } from '../lib/profileContext.jsx';
+import { ActivityEditModal, NewCalendarEventModal, NewJobCostModal } from '../components/SharedModals.jsx';
 
 // ── CALENDAR ─────────────────────────────────────────────────
 export function CalendarPage({ openCustomer }) {
+  const toast = useToast();
+  const { refreshKey, bumpRefresh } = useProfile();
   const [view, setView] = useState('week');
   const [showEvent, setShowEvent] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [showGoogle, setShowGoogle] = useState(false);
+  const [editEvent, setEditEvent] = useState(null);
+  const [editActivity, setEditActivity] = useState(null);
+  const [showNew, setShowNew] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  React.useEffect(() => {
+    setLoading(true);
+    Promise.all([listCalendarEvents(), listCustomers(), listActivities()])
+      .then(([data, custData, actData]) => { setEvents(data); setCustomers(custData); setActivities(actData); setError(''); })
+      .catch(err => setError(err.message || 'Agenda laden is mislukt.'))
+      .finally(() => setLoading(false));
+  }, [refreshKey]);
 
   const DAYS = ['Ma','Di','Wo','Do','Vr','Za','Zo'];
   const DATES = [4, 5, 6, 7, 8, 9, 10];
@@ -20,6 +47,28 @@ export function CalendarPage({ openCustomer }) {
   while (MAY_2026.length % 7 !== 0) MAY_2026.push({ day: null, other: true });
 
   const typeLabel = t => ({ job: 'Klus', activity: 'Activiteit', visit: 'Opname' }[t] || t);
+
+  // Als een kalenderitem gekoppeld is aan een activiteit, open ActivityEditModal.
+  const handleEventClick = e => {
+    if (e.activityId) {
+      const act = activities.find(a => a.id === e.activityId);
+      if (act) { setEditActivity(act); return; }
+    }
+    setShowEvent(e);
+  };
+  const saveEvent = async input => {
+    try {
+      const payload = { title: input.title, type: input.type, date: input.date, time: input.time, end: input.end, custId: input.custId || null, notes: input.notes || '' };
+      const saved = input.id ? await updateCalendarEvent(input.id, payload) : await createCalendarEvent(payload);
+      setEvents(es => input.id ? es.map(e => e.id === saved.id ? saved : e) : [saved, ...es]);
+      setEditEvent(null);
+      setShowEvent(null);
+      toast.success(input.id ? 'Agenda-item bijgewerkt' : 'Agenda-item toegevoegd');
+      bumpRefresh?.();
+    } catch (err) {
+      toast.error(err.message || 'Opslaan mislukt');
+    }
+  };
 
   return (
     <div>
@@ -36,7 +85,7 @@ export function CalendarPage({ openCustomer }) {
               </button>
             ))}
           </div>
-          <button className="btn btn-p btn-sm">{I.plus} Toevoegen</button>
+          <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>{I.plus} Toevoegen</button>
         </div>
       </div>
 
@@ -44,21 +93,23 @@ export function CalendarPage({ openCustomer }) {
         {I.google}
         <span style={{ fontSize: '.8rem', color: 'var(--dmu)', fontWeight: 500 }}>Google Agenda</span>
         <span className="badge b-gray">Niet verbonden</span>
-        <button className="btn btn-p btn-xs">Verbinden</button>
+        <button className="btn btn-p btn-xs" onClick={() => setShowGoogle(true)}>Verbinden</button>
       </div>
+      {loading && <div className="card card-p">Agenda laden...</div>}
+      {error && <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>}
 
-      {view === 'month' && (
+      {!loading && !error && view === 'month' && (
         <div className="afu3">
           <div className="cal-grid-month">
             {DAYS.map(d => <div key={d} className="cal-day-hdr">{d}</div>)}
             {MAY_2026.map((cell, i) => {
               const isToday = cell.day === 3;
-              const dayEvts = cell.day ? CAL_EVENTS.filter(e => parseInt(e.date.split('-')[2]) === cell.day) : [];
+              const dayEvts = cell.day ? events.filter(e => parseInt(e.date.split('-')[2]) === cell.day) : [];
               return (
                 <div key={i} className={`cal-cell${cell.other ? ' other-month' : ''}${isToday ? ' today' : ''}`}>
                   <div className="cal-day-num">{cell.day}</div>
                   {dayEvts.slice(0, 2).map(e => (
-                    <div key={e.id} className={`cal-event cal-ev-${e.type}`} style={{ background: e.color, color: e.textColor }} onClick={() => setShowEvent(e)}>
+                    <div key={e.id} className={`cal-event cal-ev-${e.type}`} style={{ background: e.color, color: e.textColor }} onClick={() => handleEventClick(e)}>
                       {e.time} {e.title}
                     </div>
                   ))}
@@ -70,7 +121,7 @@ export function CalendarPage({ openCustomer }) {
         </div>
       )}
 
-      {view === 'week' && (
+      {!loading && !error && view === 'week' && (
         <div className="afu3" style={{ overflowX: 'auto' }}>
           <div className="cal-week-grid" style={{ minWidth: 700 }}>
             <div className="cal-week-hdr" style={{ borderRight: '1px solid var(--border)' }}></div>
@@ -84,14 +135,14 @@ export function CalendarPage({ openCustomer }) {
               <React.Fragment key={hour}>
                 <div className="cal-time-slot">{hour}</div>
                 {DATES.map(date => {
-                  const slotEvts = CAL_EVENTS.filter(e => {
+                  const slotEvts = events.filter(e => {
                     const d = parseInt(e.date.split('-')[2]);
                     return d === date && e.time && e.time.startsWith(hour.split(':')[0]);
                   });
                   return (
                     <div key={`s-${date}-${hour}`} className="cal-slot">
                       {slotEvts.map(e => (
-                        <div key={e.id} className="cal-block" style={{ background: e.color, color: e.textColor }} onClick={() => setShowEvent(e)}>
+                        <div key={e.id} className="cal-block" style={{ background: e.color, color: e.textColor }} onClick={() => handleEventClick(e)}>
                           {e.title}
                         </div>
                       ))}
@@ -104,23 +155,22 @@ export function CalendarPage({ openCustomer }) {
         </div>
       )}
 
-      {view === 'day' && (
+      {!loading && !error && view === 'day' && (
         <div className="afu3">
           <div style={{ fontSize: '.9rem', fontWeight: 700, marginBottom: 12, color: 'var(--dk)' }}>Zondag 3 mei 2026</div>
           <div className="card card-p">
-            {CAL_EVENTS.filter(e => parseInt(e.date.split('-')[2]) === 3).length === 0
+            {events.filter(e => parseInt(e.date.split('-')[2]) === 3).length === 0
               ? <div className="empty"><div className="empty-emoji">📅</div><div className="empty-title">Geen items vandaag</div></div>
-              : CAL_EVENTS.filter(e => parseInt(e.date.split('-')[2]) === 3).map(e => {
-                  const c = custById(e.custId);
+              : events.filter(e => parseInt(e.date.split('-')[2]) === 3).map(e => {
                   return (
-                    <div key={e.id} style={{ display: 'flex', gap: 14, padding: '12px 0', borderBottom: '1px solid #f3f4f6', cursor: 'pointer' }} onClick={() => setShowEvent(e)}>
+                    <div key={e.id} style={{ display: 'flex', gap: 14, padding: '12px 0', borderBottom: '1px solid #f3f4f6', cursor: 'pointer' }} onClick={() => handleEventClick(e)}>
                       <div style={{ width: 60, flexShrink: 0, textAlign: 'right', fontSize: '.8rem', color: 'var(--dl)', paddingTop: 3 }}>{e.time}</div>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                           <div style={{ width: 4, height: 32, borderRadius: 2, background: e.textColor, flexShrink: 0 }} />
                           <div>
                             <div style={{ fontWeight: 700, fontSize: '.9rem' }}>{e.title}</div>
-                            <div style={{ fontSize: '.76rem', color: 'var(--dmu)', marginTop: 1 }}>{typeLabel(e.type)} · {c?.name} · {c?.city}</div>
+                            <div style={{ fontSize: '.76rem', color: 'var(--dmu)', marginTop: 1 }}>{typeLabel(e.type)}</div>
                           </div>
                         </div>
                       </div>
@@ -145,7 +195,7 @@ export function CalendarPage({ openCustomer }) {
               <ModalX onClose={() => setShowEvent(null)} />
             </div>
             {(() => {
-              const c = custById(showEvent.custId);
+              const c = null;
               return c ? (
                 <div style={{ padding: '12px 14px', background: 'var(--bgs)', borderRadius: 'var(--r8)', marginBottom: 14 }}>
                   <div style={{ fontWeight: 700, fontSize: '.88rem', marginBottom: 4 }}>{c.name}</div>
@@ -158,11 +208,89 @@ export function CalendarPage({ openCustomer }) {
             })()}
             <div className="fa">
               <button className="btn btn-s" onClick={() => setShowEvent(null)}>Sluiten</button>
+              {showEvent.activityId && activities.find(a => a.id === showEvent.activityId)
+                ? <button className="btn btn-s" onClick={() => { setEditActivity(activities.find(a => a.id === showEvent.activityId)); setShowEvent(null); }}>Bewerken</button>
+                : <button className="btn btn-s" onClick={() => setEditEvent(showEvent)}>Bewerken</button>
+              }
               <button className="btn btn-p" onClick={() => { openCustomer(showEvent.custId); setShowEvent(null); }}>Open klant</button>
             </div>
           </div>
         </div>
       )}
+      {editEvent && <CalendarEventModal event={editEvent} onClose={() => setEditEvent(null)} onSave={saveEvent} customers={customers} />}
+      {editActivity && (
+        <ActivityEditModal
+          activity={editActivity}
+          customers={customers}
+          onClose={() => setEditActivity(null)}
+          onSaved={updated => {
+            setActivities(acts => acts.map(a => a.id === updated.id ? updated : a));
+            setEditActivity(null);
+          }}
+          onDeleted={id => {
+            setActivities(acts => acts.filter(a => a.id !== id));
+            setEditActivity(null);
+          }}
+        />
+      )}
+      {showNew && (
+        <NewCalendarEventModal
+          onClose={() => setShowNew(false)}
+          customers={customers}
+          onSaved={created => { setEvents(es => [created, ...es]); bumpRefresh?.(); }}
+        />
+      )}
+      {showGoogle && (
+        <div className="overlay" onClick={e => e.target === e.currentTarget && setShowGoogle(false)}>
+          <div className="modal" style={{ maxWidth: 420 }}>
+            <div className="modal-hd">
+              <div><div className="modal-title">Google Agenda koppelen</div><div className="modal-sub">OAuth en een backend endpoint zijn hiervoor nodig.</div></div>
+              <ModalX onClose={() => setShowGoogle(false)} />
+            </div>
+            <p style={{ fontSize: '.86rem', color: 'var(--dmu)', lineHeight: 1.55 }}>Deze knop is voorbereid als placeholder. Voor een echte Google Calendar-koppeling moet BossBase later een OAuth-flow, tokenopslag en server-side synchronisatie krijgen.</p>
+            <div className="fa"><button className="btn btn-p" onClick={() => setShowGoogle(false)}>Begrepen</button></div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CalendarEventModal({ event, onClose, onSave, customers = [] }) {
+  const [form, setForm] = useState(event);
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const submit = async () => {
+    if (!form.title?.trim()) return;
+    setSaving(true);
+    try { await onSave(form); } finally { setSaving(false); }
+  };
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && !saving && onClose()}>
+      <div className="modal modal-wide">
+        <div className="modal-hd">
+          <div><div className="modal-title">Agenda item</div><div className="modal-sub">Maak of bewerk een kalenderitem.</div></div>
+          <ModalX onClose={onClose} />
+        </div>
+        <div className="fg">
+          <div className="f s2"><label>Titel</label><input value={form.title || ''} onChange={e => set('title', e.target.value)} /></div>
+          <div className="f"><label>Type</label><select value={form.type || 'event'} onChange={e => set('type', e.target.value)}><option value="event">Afspraak</option><option value="job">Klus</option><option value="activity">Activiteit</option><option value="visit">Opname</option></select></div>
+          <div className="f"><label>Klant</label>
+            <select value={form.custId || ''} onChange={e => set('custId', e.target.value)}>
+              <option value="">Geen klant</option>
+              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="f"><label>Datum</label><input type="date" value={form.date || ''} onChange={e => set('date', e.target.value)} /></div>
+          <div className="f"><label>Start</label><input type="time" value={form.time || ''} onChange={e => set('time', e.target.value)} /></div>
+          <div className="f"><label>Einde</label><input type="time" value={form.end || ''} onChange={e => set('end', e.target.value)} /></div>
+          <div className="f s2"><label>Notities</label><textarea value={form.notes || ''} onChange={e => set('notes', e.target.value)} /></div>
+        </div>
+        <div className="fa">
+          <button className="btn btn-s" disabled={saving} onClick={onClose}>Annuleren</button>
+          <button className="btn btn-p" disabled={saving || !form.title?.trim()} onClick={submit}>{saving ? 'Opslaan...' : 'Opslaan'}</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -242,7 +370,7 @@ export function WorkOrdersPage() {
             <div className="wo-section">
               <div className="wo-section-title">Taken ({done}/{tasks.length})</div>
               <div style={{ height: 5, background: '#f3f4f6', borderRadius: 99, overflow: 'hidden', marginBottom: 10 }}>
-                <div style={{ height: '100%', width: `${(done / tasks.length) * 100}%`, background: 'linear-gradient(90deg,var(--p),#ffd9b3)', borderRadius: 99, transition: 'width .3s ease' }} />
+                <div style={{ height: '100%', width: `${(done / tasks.length) * 100}%`, background: 'linear-gradient(90deg,#1DDB62,#15A34A)', borderRadius: 99, transition: 'width .3s ease' }} />
               </div>
               {tasks.map(t => (
                 <div key={t.id} className="wo-task" onClick={() => toggle(t.id)}>
@@ -324,22 +452,47 @@ export function HoursPage() {
 
 // ── COSTS ────────────────────────────────────────────────────
 export function CostsPage() {
-  const total = COSTS_DATA.reduce((s, c) => s + c.amt, 0);
-  const cats = [...new Set(COSTS_DATA.map(c => c.cat))];
+  const { refreshKey, bumpRefresh } = useProfile();
+  const [costs, setCosts] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [deals, setDeals] = useState([]);
+  const [showNew, setShowNew] = useState(false);
+  const [filterCust, setFilterCust] = useState('');
+  const [filterCat, setFilterCat] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  React.useEffect(() => {
+    setLoading(true);
+    Promise.all([listJobCosts(), listCustomers(), listDeals()])
+      .then(([costData, customerData, dealData]) => { setCosts(costData); setCustomers(customerData); setDeals(dealData); setError(''); })
+      .catch(err => setError(err.message || 'Kosten laden is mislukt.'))
+      .finally(() => setLoading(false));
+  }, [refreshKey]);
+  const filtered = costs.filter(r => {
+    if (filterCust && String(r.custId) !== filterCust) return false;
+    if (filterCat && r.cat !== filterCat) return false;
+    return true;
+  });
+  const total = filtered.reduce((s, c) => s + c.amt, 0);
+  const cats = [...new Set(costs.map(c => c.cat))];
   return (
     <div>
       <div className="page-hd afu">
         <div><h1>Kosten</h1><p>Kosten bijhouden per klant en opdracht</p></div>
         <div className="page-hd-actions">
-          <button className="btn btn-p btn-sm">{I.plus} Kosten toevoegen</button>
+          <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>{I.plus} Kosten toevoegen</button>
         </div>
       </div>
+      {loading && <div className="card card-p">Kosten laden...</div>}
+      {error && <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>}
+      {loading && <div className="card card-p">Kosten laden...</div>}
+      {error && <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>}
       <div className="stats-row afu2" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
         {[
           { label: 'Totale kosten',    val: fmt(total) },
-          { label: 'Materiaalkosten',  val: fmt(COSTS_DATA.filter(c => c.cat === 'materiaal').reduce((s, c) => s + c.amt, 0)) },
-          { label: 'Arbeidskosten',    val: fmt(COSTS_DATA.filter(c => c.cat === 'arbeid').reduce((s, c) => s + c.amt, 0)) },
-          { label: 'Reiskosten',       val: fmt(COSTS_DATA.filter(c => c.cat === 'reiskosten').reduce((s, c) => s + c.amt, 0)) },
+          { label: 'Materiaalkosten',  val: fmt(filtered.filter(c => c.cat === 'materiaal').reduce((s, c) => s + c.amt, 0)) },
+          { label: 'Arbeidskosten',    val: fmt(filtered.filter(c => c.cat === 'arbeid').reduce((s, c) => s + c.amt, 0)) },
+          { label: 'Reiskosten',       val: fmt(filtered.filter(c => c.cat === 'reiskosten').reduce((s, c) => s + c.amt, 0)) },
         ].map((s, i) => (
           <div key={i} className="sc" style={{ padding: '16px 18px' }}>
             <div className="sc-val">{s.val}</div>
@@ -351,41 +504,61 @@ export function CostsPage() {
         <div className="tw-hd">
           <div className="card-title">Kostenregels</div>
           <div style={{ display: 'flex', gap: 6 }}>
-            <select className="btn btn-s btn-sm" style={{ padding: '5px 10px' }}>
-              <option>Alle klanten</option>{CUSTOMERS_DATA.map(c => <option key={c.id}>{c.name}</option>)}
+            <select className="btn btn-s btn-sm" style={{ padding: '5px 10px' }} value={filterCust} onChange={e => setFilterCust(e.target.value)}>
+              <option value="">Alle klanten</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
-            <select className="btn btn-s btn-sm" style={{ padding: '5px 10px' }}>
-              <option>Alle categorieën</option>{cats.map(c => <option key={c}>{c}</option>)}
+            <select className="btn btn-s btn-sm" style={{ padding: '5px 10px' }} value={filterCat} onChange={e => setFilterCat(e.target.value)}>
+              <option value="">Alle categorieën</option>{cats.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
         </div>
         <table className="dt">
-          <thead><tr><th>Klant</th><th>Categorie</th><th>Omschrijving</th><th>Bedrag</th><th>Datum</th><th></th></tr></thead>
+          <thead><tr><th>Klant</th><th>Categorie</th><th>Omschrijving</th><th>Bedrag</th><th>Datum</th></tr></thead>
           <tbody>
-            {COSTS_DATA.map(r => {
-              const c = custById(r.custId);
+            {filtered.map(r => {
+              const c = customers.find(x => x.id === r.custId);
               return (
                 <tr key={r.id}>
-                  <td style={{ fontWeight: 600 }}>{c?.name}</td>
+                  <td style={{ fontWeight: 600 }}>{c?.name || '—'}</td>
                   <td><span className="badge b-gray" style={{ textTransform: 'capitalize' }}>{r.cat}</span></td>
                   <td>{r.desc}</td>
                   <td style={{ fontWeight: 700 }}>{fmt(r.amt)}</td>
                   <td style={{ color: 'var(--dl)', fontSize: '.8rem' }}>{r.date}</td>
-                  <td><button className="btn-icon">{I.edit}</button></td>
                 </tr>
               );
             })}
+            {filtered.length === 0 && !loading && (
+              <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--dl)', padding: 24 }}>Geen kosten gevonden{(filterCust || filterCat) ? ' bij dit filter.' : '. Voeg de eerste kost toe.'}</td></tr>
+            )}
           </tbody>
         </table>
       </div>
+      {showNew && (
+        <NewJobCostModal
+          onClose={() => setShowNew(false)}
+          customers={customers}
+          deals={deals}
+          onSaved={created => { setCosts(cs => [created, ...cs]); bumpRefresh?.(); }}
+        />
+      )}
     </div>
   );
 }
 
 // ── REVENUE / PROFIT ─────────────────────────────────────────
 export function RevenuePage() {
-  const rows = CUSTOMERS_DATA.map(c => {
-    const costs = COSTS_DATA.filter(x => x.custId === c.id).reduce((s, x) => s + x.amt, 0);
+  const toast = useToast();
+  const { refreshKey } = useProfile();
+  const [customers, setCustomers] = useState([]);
+  const [costsData, setCostsData] = useState([]);
+  React.useEffect(() => {
+    Promise.all([listCustomers(), listJobCosts()]).then(([customerData, costData]) => {
+      setCustomers(customerData);
+      setCostsData(costData);
+    }).catch(() => {});
+  }, [refreshKey]);
+  const rows = customers.map(c => {
+    const costs = costsData.filter(x => x.custId === c.id).reduce((s, x) => s + x.amt, 0);
     const profit = c.paid - costs;
     const margin = c.paid > 0 ? Math.round((profit / c.paid) * 100) : 0;
     return { ...c, costs, profit, margin };
@@ -396,12 +569,44 @@ export function RevenuePage() {
   const totalQuoted = rows.reduce((s, r) => s + r.total, 0);
   const avgMargin   = totalRev > 0 ? Math.round((totalProfit / totalRev) * 100) : 0;
 
+  const handleExport = () => {
+    if (rows.length === 0) {
+      toast.info('Geen omzetdata om te exporteren');
+      return;
+    }
+    const headers = ['Klant', 'Stad', 'Geoffreerd (€)', 'Kosten (€)', 'Betaald (€)', 'Openstaand (€)', 'Winst (€)', 'Marge (%)', 'Status'];
+    const escape = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const csvRows = [
+      headers.map(escape).join(','),
+      ...rows.map(r => [
+        r.name,
+        r.city || '',
+        r.total.toFixed(2),
+        r.costs.toFixed(2),
+        r.paid.toFixed(2),
+        (r.total - r.paid).toFixed(2),
+        r.profit.toFixed(2),
+        r.margin,
+        r.stage === 'completed' || r.stage === 'paid' ? 'Afgerond' : 'In uitvoering',
+      ].map(escape).join(',')),
+    ];
+    const csv = csvRows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bossbase-omzet-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Omzet export gedownload');
+  };
+
   return (
     <div>
       <div className="page-hd afu">
         <div><h1>Omzet & winst</h1><p>Financieel overzicht — mei 2026</p></div>
         <div className="page-hd-actions">
-          <button className="btn btn-s btn-sm">Exporteren</button>
+          <button className="btn btn-s btn-sm" onClick={handleExport}>Exporteren</button>
         </div>
       </div>
 

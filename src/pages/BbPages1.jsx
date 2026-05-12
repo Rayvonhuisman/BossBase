@@ -1,22 +1,123 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   I, CUSTOMERS_DATA, DEALS, ACTIVITIES_DATA, QUOTES_DATA, COSTS_DATA,
   fmt, custById, stageLabel, stageCol, Av, StatusBadge, ModalX,
 } from '../bb-shared.jsx';
+import { createCustomer, deleteCustomer, getCustomer, listCustomers, updateCustomer } from '../services/customerService.js';
+import { buildDueAt, createActivity, listActivities, updateActivity } from '../services/activityService.js';
+import { createNote, listNotes } from '../services/noteService.js';
+import { listJobCosts } from '../services/jobCostService.js';
+import { listDeals } from '../services/dealService.js';
+import { useToast } from '../lib/toast.jsx';
+import { useProfile } from '../lib/profileContext.jsx';
+import { ActivityEditModal, NewActivityModal, NewCustomerModal, NewJobCostModal } from '../components/SharedModals.jsx';
+
+// Customer form keeps friendly UI fields; service-layer maps to real DB columns.
+// `type` and `source` are local-only display state for now (no DB columns yet).
+const emptyCustomerForm = { name: '', company: '', email: '', phone: '', city: '', address: '', type: 'Zakelijk', source: 'Handmatig', notes: '' };
 
 // ── CUSTOMER DETAIL DRAWER ───────────────────────────────────
 export function CustomerPage({ custId, onClose, setPage }) {
+  const toast = useToast();
   const [tab, setTab] = useState('overview');
-  const c = CUSTOMERS_DATA.find(x => x.id === custId);
+  const [c, setCustomer] = useState(null);
+  const [cActs, setActs] = useState([]);
+  const [cNotes, setNotes] = useState([]);
+  const [cCosts, setCosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [savingCustomer, setSavingCustomer] = useState(false);
+  const [form, setForm] = useState(emptyCustomerForm);
+  const [noteText, setNoteText] = useState('');
+  const [activityTitle, setActivityTitle] = useState('');
+  const [savingActivity, setSavingActivity] = useState(false);
+  const [savingNote, setSavingNote] = useState(false);
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [showCostModal, setShowCostModal] = useState(false);
+  const [selectedAct, setSelectedAct] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    Promise.all([getCustomer(custId), listActivities(), listNotes(custId), listJobCosts()])
+      .then(([customer, activities, notes, costs]) => {
+        if (!alive) return;
+        setCustomer(customer);
+        setForm({ ...emptyCustomerForm, ...customer });
+        setActs(activities.filter(a => a.custId === custId));
+        setNotes(notes);
+        setCosts(costs.filter(x => x.custId === custId));
+        setError('');
+      })
+      .catch(err => alive && setError(err.message || 'Klant laden is mislukt.'))
+      .finally(() => alive && setLoading(false));
+    return () => { alive = false; };
+  }, [custId]);
+
+  if (loading) return <div className="card card-p">Klant laden...</div>;
+  if (error) return <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>;
   if (!c) return null;
 
-  const cDeals  = DEALS.filter(d => d.custId === custId);
-  const cQuotes = QUOTES_DATA.filter(q => q.custId === custId);
-  const cActs   = ACTIVITIES_DATA.filter(a => a.custId === custId);
-  const cCosts  = COSTS_DATA.filter(x => x.custId === custId);
+  const cDeals  = [];
+  const cQuotes = [];
   const totalCosts = cCosts.reduce((s, x) => s + x.amt, 0);
   const profit = c.paid - totalCosts;
   const margin = c.paid > 0 ? Math.round((profit / c.paid) * 100) : 0;
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const saveCustomer = async () => {
+    setSavingCustomer(true);
+    try {
+      const saved = await updateCustomer(c.id, form);
+      setCustomer(saved);
+      setEditing(false);
+      toast.success('Klantgegevens opgeslagen');
+    } catch (err) {
+      toast.error(err.message || 'Opslaan mislukt');
+    } finally {
+      setSavingCustomer(false);
+    }
+  };
+  const addActivity = async () => {
+    if (!activityTitle.trim()) return;
+    setSavingActivity(true);
+    try {
+      const created = await createActivity({ title: activityTitle, customer_id: c.id, type: 'task', completed: false, due_at: buildDueAt(new Date().toISOString().slice(0, 10)) });
+      setActs(a => [created, ...a]);
+      setActivityTitle('');
+      toast.success('Activiteit toegevoegd');
+    } catch (err) {
+      toast.error(err.message || 'Activiteit opslaan mislukt');
+    } finally {
+      setSavingActivity(false);
+    }
+  };
+  const addNote = async () => {
+    if (!noteText.trim()) return;
+    setSavingNote(true);
+    try {
+      const created = await createNote({ customer_id: c.id, body: noteText });
+      setNotes(n => [created, ...n]);
+      setNoteText('');
+      toast.success('Notitie toegevoegd');
+    } catch (err) {
+      toast.error(err.message || 'Notitie opslaan mislukt');
+    } finally {
+      setSavingNote(false);
+    }
+  };
+  const reloadActivities = async () => {
+    try {
+      const activities = await listActivities();
+      setActs(activities.filter(a => a.custId === custId));
+    } catch { /* ignore */ }
+  };
+  const reloadCosts = async () => {
+    try {
+      const costs = await listJobCosts();
+      setCosts(costs.filter(x => x.custId === custId));
+    } catch { /* ignore */ }
+  };
 
   const TABS = ['overview','timeline','activities','quotes','costs','notes'];
   const TAB_LABELS = { overview: 'Overzicht', timeline: 'Tijdlijn', activities: 'Activiteiten', quotes: 'Offertes', costs: 'Kosten', notes: 'Notities' };
@@ -47,10 +148,12 @@ export function CustomerPage({ custId, onClose, setPage }) {
           </div>
           <div style={{ fontSize: '.82rem', color: 'var(--dmu)', marginBottom: 10 }}>{c.company} · {c.city}</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <a href={`tel:${c.phone}`} className="btn btn-s btn-sm">{I.call} {c.phone}</a>
-            <a href={`mailto:${c.email}`} className="btn btn-s btn-sm">{I.mail} E-mail</a>
-            <button className="btn btn-s btn-sm">{I.act} Activiteit</button>
-            <button className="btn btn-p btn-sm">{I.quotes} Offerte</button>
+            {c.phone && <a href={`tel:${c.phone}`} className="btn btn-s btn-sm">{I.call} {c.phone}</a>}
+            {c.email && <a href={`mailto:${c.email}`} className="btn btn-s btn-sm">{I.mail} E-mail</a>}
+            <button className="btn btn-s btn-sm" onClick={() => setShowActivityModal(true)}>{I.act} Activiteit</button>
+            <button className="btn btn-s btn-sm" onClick={() => setShowCostModal(true)}>{I.costs} Kosten</button>
+            <button className="btn btn-s btn-sm" onClick={() => setEditing(true)}>{I.edit} Bewerken</button>
+            <button className="btn btn-s btn-sm" onClick={() => setPage('customers')}>{I.arrow_r} Overzicht</button>
           </div>
         </div>
         {onClose && <button className="drawer-x" onClick={onClose}>{I.x}</button>}
@@ -83,7 +186,17 @@ export function CustomerPage({ custId, onClose, setPage }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div className="card card-p">
             <div style={{ fontWeight: 700, fontSize: '.9rem', marginBottom: 14 }}>Klantgegevens</div>
-            {[
+            {editing ? (
+              <div className="fg">
+                <div className="f"><label>Naam</label><input value={form.name} onChange={e => set('name', e.target.value)} /></div>
+                <div className="f"><label>Bedrijf</label><input value={form.company} onChange={e => set('company', e.target.value)} /></div>
+                <div className="f"><label>E-mail</label><input value={form.email} onChange={e => set('email', e.target.value)} /></div>
+                <div className="f"><label>Telefoon</label><input value={form.phone} onChange={e => set('phone', e.target.value)} /></div>
+                <div className="f"><label>Stad</label><input value={form.city} onChange={e => set('city', e.target.value)} /></div>
+                <div className="f"><label>Type</label><input value={form.type} onChange={e => set('type', e.target.value)} /></div>
+                <div className="fa s2"><button className="btn btn-s" disabled={savingCustomer} onClick={() => { setForm({ ...emptyCustomerForm, ...c }); setEditing(false); }}>Annuleren</button><button className="btn btn-p" disabled={savingCustomer} onClick={saveCustomer}>{savingCustomer ? 'Opslaan...' : <>{I.check} Opslaan</>}</button></div>
+              </div>
+            ) : [
               { label: 'Telefoon', val: c.phone },
               { label: 'E-mail',   val: c.email },
               { label: 'Stad',     val: c.city },
@@ -101,7 +214,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
             <div className="card card-p">
               <div style={{ fontWeight: 700, fontSize: '.9rem', marginBottom: 10 }}>Openstaande activiteit</div>
               {cActs.filter(a => a.status !== 'done').slice(0, 2).map(a => (
-                <div key={a.id} className="act-item" style={{ paddingTop: 0 }}>
+                <div key={a.id} className="act-item" style={{ paddingTop: 0, cursor: 'pointer' }} onClick={() => setSelectedAct(a)}>
                   <div className="act-icon visit" style={{ fontSize: '.85rem' }}>
                     {({ call: '📞', email: '✉️', visit: '🏠', task: '✅', follow: '📋' })[a.type]}
                   </div>
@@ -158,10 +271,16 @@ export function CustomerPage({ custId, onClose, setPage }) {
         <div className="card card-p">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
             <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Activiteiten</div>
-            <button className="btn btn-p btn-xs">{I.plus} Toevoegen</button>
+            <button className="btn btn-p btn-xs" onClick={() => setShowActivityModal(true)}>{I.plus} Met details toevoegen</button>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <input style={{ flex: 1 }} value={activityTitle} onChange={e => setActivityTitle(e.target.value)} placeholder="Snelle activiteit..." />
+            <button className="btn btn-p btn-xs" disabled={savingActivity || !activityTitle.trim()} onClick={addActivity}>
+              {savingActivity ? 'Opslaan...' : <>{I.plus} Snel toevoegen</>}
+            </button>
           </div>
           {cActs.length > 0 ? cActs.map(a => (
-            <div key={a.id} className="act-item">
+            <div key={a.id} className="act-item" style={{ cursor: 'pointer' }} onClick={() => setSelectedAct(a)}>
               <div className="act-icon visit" style={{ fontSize: '.85rem' }}>
                 {({ call: '📞', email: '✉️', visit: '🏠', task: '✅', follow: '📋' })[a.type]}
               </div>
@@ -169,7 +288,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
                 <div className="act-title">{a.title}</div>
                 <div className="act-meta"><span>{a.date}</span><span>·</span><span>{a.time}</span><StatusBadge status={a.status} /></div>
               </div>
-              <button className="btn btn-s btn-xs">Gereed</button>
+              <button className="btn btn-s btn-xs" onClick={e => { e.stopPropagation(); setSelectedAct(a); }}>Open</button>
             </div>
           )) : <div className="empty"><div className="empty-emoji">📋</div><div className="empty-title">Geen activiteiten</div></div>}
         </div>
@@ -218,7 +337,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
           <div className="tw">
             <div className="tw-hd">
               <div className="card-title">Kostenregels</div>
-              <button className="btn btn-p btn-xs">{I.plus} Kosten toevoegen</button>
+              <button className="btn btn-p btn-xs" onClick={() => setShowCostModal(true)}>{I.plus} Kosten toevoegen</button>
             </div>
             <table className="dt">
               <thead><tr><th>Categorie</th><th>Omschrijving</th><th>Bedrag</th><th>Datum</th></tr></thead>
@@ -231,6 +350,9 @@ export function CustomerPage({ custId, onClose, setPage }) {
                     <td style={{ color: 'var(--dl)' }}>{r.date}</td>
                   </tr>
                 ))}
+                {cCosts.length === 0 && (
+                  <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--dl)', padding: 20 }}>Nog geen kosten geboekt</td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -242,21 +364,56 @@ export function CustomerPage({ custId, onClose, setPage }) {
         <div className="card card-p">
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
             <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Interne notities</div>
-            <button className="btn btn-p btn-xs">{I.plus} Notitie</button>
           </div>
-          {[
-            { date: '1 mei 2026',   author: 'Marco', note: 'Klant wil graag vóór 20 mei alles afgerond hebben vanwege verblijf buitenland.' },
-            { date: '28 apr 2026', author: 'Marco', note: 'Offerte met extra korting verstuurd na verzoek. Klant vergelijkt nog met een andere offerte.' },
-          ].map((n, i) => (
-            <div key={i} style={{ padding: '12px 0', borderBottom: '1px solid #f3f4f6' }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <input style={{ flex: 1 }} value={noteText} onChange={e => setNoteText(e.target.value)} placeholder="Nieuwe notitie..." />
+            <button className="btn btn-p btn-xs" disabled={savingNote || !noteText.trim()} onClick={addNote}>
+              {savingNote ? 'Opslaan...' : <>{I.plus} Opslaan</>}
+            </button>
+          </div>
+          {cNotes.map((n, i) => (
+            <div key={n.id || i} style={{ padding: '12px 0', borderBottom: '1px solid #f3f4f6' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{ fontWeight: 600, fontSize: '.82rem' }}>{n.author}</span>
-                <span style={{ fontSize: '.73rem', color: 'var(--dl)' }}>{n.date}</span>
+                <span style={{ fontWeight: 600, fontSize: '.82rem' }}>{n.author || 'Notitie'}</span>
+                <span style={{ fontSize: '.73rem', color: 'var(--dl)' }}>{n.createdAt?.slice(0, 10) || ''}</span>
               </div>
-              <div style={{ fontSize: '.85rem', color: 'var(--dm)', lineHeight: 1.55 }}>{n.note}</div>
+              <div style={{ fontSize: '.85rem', color: 'var(--dm)', lineHeight: 1.55 }}>{n.body}</div>
             </div>
           ))}
+          {cNotes.length === 0 && <div className="empty"><div className="empty-title">Geen notities</div></div>}
         </div>
+      )}
+
+      {showActivityModal && (
+        <NewActivityModal
+          onClose={() => setShowActivityModal(false)}
+          customers={[c]}
+          defaultCustId={c.id}
+          onSaved={() => { reloadActivities(); setTab('activities'); }}
+        />
+      )}
+      {selectedAct && (
+        <ActivityEditModal
+          activity={selectedAct}
+          customers={[c]}
+          onClose={() => setSelectedAct(null)}
+          onSaved={updated => {
+            setActs(list => list.map(a => a.id === updated.id ? updated : a));
+            setSelectedAct(null);
+          }}
+          onDeleted={id => {
+            setActs(list => list.filter(a => a.id !== id));
+            setSelectedAct(null);
+          }}
+        />
+      )}
+      {showCostModal && (
+        <NewJobCostModal
+          onClose={() => setShowCostModal(false)}
+          customers={[c]}
+          defaultCustId={c.id}
+          onSaved={() => { reloadCosts(); setTab('costs'); }}
+        />
       )}
     </div>
   );
@@ -264,39 +421,67 @@ export function CustomerPage({ custId, onClose, setPage }) {
 
 // ── CUSTOMERS LIST ───────────────────────────────────────────
 export function CustomersPage({ openCustomer }) {
+  const toast = useToast();
+  const { refreshKey, bumpRefresh } = useProfile();
   const [search, setSearch] = useState('');
   const [view, setView] = useState('grid');
-  const filtered = CUSTOMERS_DATA.filter(c =>
+  const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [showNew, setShowNew] = useState(false);
+
+  const reload = () => {
+    setLoading(true);
+    listCustomers()
+      .then(data => { setCustomers(data); setError(''); })
+      .catch(err => setError(err.message || 'Klanten laden is mislukt.'))
+      .finally(() => setLoading(false));
+  };
+  useEffect(reload, [refreshKey]);
+  const filtered = customers.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.company.toLowerCase().includes(search.toLowerCase())
+    (c.company || '').toLowerCase().includes(search.toLowerCase())
   );
+  const remove = async id => {
+    if (!confirm('Weet je zeker dat je deze klant wilt verwijderen?')) return;
+    try {
+      await deleteCustomer(id);
+      setCustomers(cs => cs.filter(c => c.id !== id));
+      toast.success('Klant verwijderd');
+      bumpRefresh?.();
+    } catch (err) {
+      toast.error(err.message || 'Verwijderen mislukt');
+    }
+  };
 
   return (
     <div>
       <div className="page-hd afu">
-        <div><h1>Klanten</h1><p>{CUSTOMERS_DATA.length} klanten in je CRM</p></div>
+        <div><h1>Klanten</h1><p>{customers.length} klanten in je CRM</p></div>
         <div className="page-hd-actions">
           <div className="tabs">
             <button className={`tab${view === 'grid' ? ' active' : ''}`} onClick={() => setView('grid')}>Kaarten</button>
             <button className={`tab${view === 'table' ? ' active' : ''}`} onClick={() => setView('table')}>Tabel</button>
           </div>
-          <button className="btn btn-p btn-sm">{I.plus} Nieuwe klant</button>
+          <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>{I.plus} Nieuwe klant</button>
         </div>
       </div>
+      {error && <div className="card card-p" style={{ color: '#dc2626', marginBottom: 14 }}>{error}</div>}
       <div className="card" style={{ padding: '10px 14px', marginBottom: 14 }}>
         <div className="search" style={{ minWidth: 0, maxWidth: 360 }}>
           {I.search}
           <input placeholder="Zoek op naam of bedrijf…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
       </div>
-      {view === 'grid' ? (
+      {loading && <div className="card card-p">Klanten laden...</div>}
+      {!loading && filtered.length === 0 && <div className="empty"><div className="empty-title">Geen klanten gevonden</div><div className="empty-sub">Maak je eerste klant aan of pas je zoekopdracht aan.</div></div>}
+      {!loading && filtered.length > 0 && (view === 'grid' ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }} className="afu2">
           {filtered.map(c => {
-            const costs = COSTS_DATA.filter(x => x.custId === c.id).reduce((s, x) => s + x.amt, 0);
             return (
               <div key={c.id} className="card card-p" style={{ cursor: 'pointer', transition: 'all .18s ease' }}
                 onClick={() => openCustomer(c.id)}
-                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.borderColor = 'rgba(255,151,100,.3)'; }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.borderColor = 'rgba(29,219,98,.3)'; }}
                 onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.borderColor = ''; }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                   <Av name={c.name} size="lg" idx={c.av} />
@@ -318,6 +503,7 @@ export function CustomersPage({ openCustomer }) {
                     <div style={{ fontSize: '.68rem', color: 'var(--dl)' }}>Betaald</div>
                     <div style={{ fontWeight: 700, fontSize: '.88rem', color: c.paid > 0 ? '#059669' : 'var(--dk)' }}>{fmt(c.paid)}</div>
                   </div>
+                  <button className="btn-icon" title="Verwijderen" onClick={e => { e.stopPropagation(); remove(c.id); }}>{I.trash}</button>
                   <span className={`badge ${stageCol(c.stage)}`} style={{ fontSize: '.65rem' }}>{stageLabel(c.stage)}</span>
                 </div>
               </div>
@@ -337,12 +523,22 @@ export function CustomersPage({ openCustomer }) {
                   <td><span className={`badge ${stageCol(c.stage)}`}>{stageLabel(c.stage)}</span></td>
                   <td style={{ fontWeight: 700 }}>{fmt(c.total)}</td>
                   <td style={{ fontWeight: 700, color: '#059669' }}>{fmt(c.paid)}</td>
-                  <td><button className="btn-icon" onClick={e => { e.stopPropagation(); openCustomer(c.id); }}>{I.arrow_r}</button></td>
+                  <td><button className="btn-icon" onClick={e => { e.stopPropagation(); openCustomer(c.id); }}>{I.arrow_r}</button><button className="btn-icon" onClick={e => { e.stopPropagation(); remove(c.id); }}>{I.trash}</button></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      ))}
+      {showNew && (
+        <NewCustomerModal
+          onClose={() => setShowNew(false)}
+          onSaved={created => {
+            setCustomers(cs => [created, ...cs]);
+            bumpRefresh?.();
+            openCustomer?.(created.id);
+          }}
+        />
       )}
     </div>
   );
@@ -350,26 +546,59 @@ export function CustomersPage({ openCustomer }) {
 
 // ── ACTIVITIES ───────────────────────────────────────────────
 export function ActivitiesPage({ openCustomer }) {
+  const toast = useToast();
+  const { refreshKey, bumpRefresh } = useProfile();
   const [filter, setFilter] = useState('all');
-  const [acts, setActs] = useState(ACTIVITIES_DATA);
+  const [dateFilter, setDateFilter] = useState('');
+  const [acts, setActs] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [deals, setDeals] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [showNew, setShowNew] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([listActivities(), listCustomers(), listDeals()])
+      .then(([activityData, customerData, dealData]) => {
+        setActs(activityData);
+        setCustomers(customerData);
+        setDeals(dealData);
+        setError('');
+      })
+      .catch(err => setError(err.message || 'Activiteiten laden is mislukt.'))
+      .finally(() => setLoading(false));
+  }, [refreshKey]);
 
   const filters = [
     { id: 'all',     label: 'Alle' },
-    { id: 'today',   label: 'Vandaag' },
-    { id: 'overdue', label: 'Te laat' },
     { id: 'open',    label: 'Open' },
+    { id: 'completed', label: 'Afgerond' },
   ];
 
-  const filtered = filter === 'all' ? acts : acts.filter(a => a.status === filter);
+  const filtered = acts.filter(a => {
+    const statusOk = filter === 'all' || (filter === 'completed' ? ['completed', 'done'].includes(a.status) : a.status === filter);
+    const dateOk = !dateFilter || a.dueAt?.slice(0, 10) === dateFilter;
+    return statusOk && dateOk;
+  });
   const actIcon = t => ({ call: '📞', email: '✉️', visit: '🏠', task: '✅', follow: '📋' }[t] || '📌');
-  const markDone = id => setActs(as => as.map(a => a.id === id ? { ...a, status: 'done' } : a));
+  const markDone = async a => {
+    try {
+      const updated = await updateActivity(a.id, { status: 'completed' });
+      setActs(list => list.map(x => x.id === updated.id ? updated : x));
+      toast.success('Activiteit afgerond');
+    } catch (err) {
+      toast.error(err.message || 'Bijwerken mislukt');
+    }
+  };
 
   return (
     <div>
       <div className="page-hd afu">
-        <div><h1>Activiteiten</h1><p>{acts.filter(a => a.status !== 'done').length} openstaande acties</p></div>
+        <div><h1>Activiteiten</h1><p>{acts.filter(a => a.status !== 'done' && a.status !== 'completed').length} openstaande acties</p></div>
         <div className="page-hd-actions">
-          <button className="btn btn-p btn-sm">{I.plus} Nieuwe activiteit</button>
+          <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>{I.plus} Nieuwe activiteit</button>
         </div>
       </div>
 
@@ -379,13 +608,17 @@ export function ActivitiesPage({ openCustomer }) {
             <button key={f.id} className={`tab${filter === f.id ? ' active' : ''}`} onClick={() => setFilter(f.id)}>
               {f.label}
               {f.id !== 'all' && (
-                <span style={{ marginLeft: 5, background: f.id === 'overdue' ? '#fef2f2' : '#f3f4f6', color: f.id === 'overdue' ? '#dc2626' : 'var(--dl)', fontSize: '.65rem', padding: '1px 5px', borderRadius: 'var(--r999)', fontWeight: 700 }}>
-                  {acts.filter(a => a.status === f.id).length}
+                <span style={{ marginLeft: 5, background: '#f3f4f6', color: 'var(--dl)', fontSize: '.65rem', padding: '1px 5px', borderRadius: 'var(--r999)', fontWeight: 700 }}>
+                  {f.id === 'completed'
+                    ? acts.filter(a => ['completed', 'done'].includes(a.status)).length
+                    : acts.filter(a => !['completed', 'done'].includes(a.status)).length}
                 </span>
               )}
             </button>
           ))}
         </div>
+        <input className="btn btn-s btn-sm" type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} />
+        {dateFilter && <button className="btn btn-ghost btn-sm" onClick={() => setDateFilter('')}>Datum wissen</button>}
       </div>
 
       <div className="tw afu3">
@@ -399,31 +632,35 @@ export function ActivitiesPage({ openCustomer }) {
             </select>
           </div>
         </div>
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="card card-p">Activiteiten laden...</div>
+        ) : error ? (
+          <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>
+        ) : filtered.length === 0 ? (
           <div className="empty"><div className="empty-emoji">✅</div><div className="empty-title">Geen activiteiten</div><div className="empty-sub">Alles bijgewerkt!</div></div>
         ) : (
           <div style={{ padding: '0 4px' }}>
             {filtered.map(a => {
-              const c = custById(a.custId);
-              const isDone = a.status === 'done';
+              const c = customers.find(customer => customer.id === a.custId);
+              const isDone = a.status === 'done' || a.status === 'completed';
               return (
-                <div key={a.id} className="act-item" style={{ opacity: isDone ? .5 : 1, padding: '12px 14px' }}>
+                <div key={a.id} className="act-item" style={{ opacity: isDone ? .5 : 1, padding: '12px 14px', cursor: 'pointer' }} onClick={() => setSelected(a)}>
                   <div className="act-icon visit" style={{ background: { call: '#eff6ff', email: '#ecfdf5', visit: 'var(--pll)', task: '#f5f3ff', follow: '#fff4ec' }[a.type] || '#f3f4f6', fontSize: '.9rem', flexShrink: 0 }}>
                     {actIcon(a.type)}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="act-title" style={{ textDecoration: isDone ? 'line-through' : 'none' }}>{a.title}</div>
                     <div className="act-meta">
-                      <span className="act-cust" style={{ cursor: 'pointer' }} onClick={() => openCustomer(a.custId)}>{c?.name}</span>
+                      <span className="act-cust" style={{ cursor: 'pointer' }} onClick={e => { e.stopPropagation(); openCustomer(a.custId); }}>{a.customerName || c?.name}</span>
                       <span>·</span><span>{a.date}</span><span>·</span><span>{a.time}</span>
                       <span>·</span><span style={{ fontSize: '.72rem' }}>{a.assignee}</span>
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                    <span className={`badge ${a.status === 'overdue' ? 'b-overdue' : a.status === 'today' ? 'b-today' : a.status === 'done' ? 'b-done' : 'b-gray'}`}>
-                      {a.status === 'overdue' ? 'Te laat' : a.status === 'today' ? 'Vandaag' : a.status === 'done' ? 'Gereed' : 'Open'}
+                    <span className={`badge ${a.status === 'overdue' ? 'b-overdue' : a.status === 'today' ? 'b-today' : isDone ? 'b-done' : 'b-gray'}`}>
+                      {a.status === 'overdue' ? 'Te laat' : a.status === 'today' ? 'Vandaag' : isDone ? 'Gereed' : 'Open'}
                     </span>
-                    {!isDone && <button className="btn btn-s btn-xs" onClick={() => markDone(a.id)}>{I.check} Gereed</button>}
+                    {!isDone && <button className="btn btn-s btn-xs" onClick={e => { e.stopPropagation(); markDone(a); }}>{I.check} Gereed</button>}
                   </div>
                 </div>
               );
@@ -431,6 +668,33 @@ export function ActivitiesPage({ openCustomer }) {
           </div>
         )}
       </div>
+      {selected && (
+        <ActivityEditModal
+          activity={selected}
+          customers={customers}
+          deals={deals}
+          onClose={() => setSelected(null)}
+          onSaved={updated => {
+            setActs(as => as.map(a => a.id === updated.id ? updated : a));
+            setSelected(null);
+          }}
+          onDeleted={id => {
+            setActs(as => as.filter(a => a.id !== id));
+            setSelected(null);
+          }}
+        />
+      )}
+      {showNew && (
+        <NewActivityModal
+          onClose={() => setShowNew(false)}
+          customers={customers}
+          deals={deals}
+          onSaved={created => {
+            setActs(list => [created, ...list]);
+            bumpRefresh?.();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -519,7 +783,7 @@ export function QuotesPage({ openCustomer }) {
               <div className="f"><label>BTW (%)</label><select><option>21%</option><option>9%</option><option>0%</option></select></div>
               <div className="f"><label>Geldig t/m</label><input type="date" /></div>
             </div>
-            <div style={{ background: 'var(--pll)', border: '1px solid rgba(255,151,100,.2)', borderRadius: 'var(--r8)', padding: '10px 14px', marginTop: 14, fontSize: '.8rem', color: 'var(--pd)', fontWeight: 600 }}>
+            <div style={{ background: 'var(--pll)', border: '1px solid rgba(29,219,98,.2)', borderRadius: 'var(--r8)', padding: '10px 14px', marginTop: 14, fontSize: '.8rem', color: 'var(--pd)', fontWeight: 600 }}>
               ✦ BossBase stelt automatisch een concepttotaal voor. Controleer alle regels voordat je verstuurt.
             </div>
             <div className="fa">

@@ -7,52 +7,52 @@ import {
   Wrench
 } from 'lucide-react';
 
-/* ── Duotone feature icons from design ── */
+/* ── Duotone feature icons — BossBase green palette ── */
 const FeatureIcons = {
   leads: (
     <svg viewBox="0 0 24 24" fill="none">
-      <path d="M3 7a4 4 0 014-4h7l5 5v9a4 4 0 01-4 4H7a4 4 0 01-4-4V7z" fill="#fce4be" stroke="#ff9764" strokeWidth="1.6"/>
-      <path d="M14 3v4a2 2 0 002 2h4" stroke="#ff9764" strokeWidth="1.6" strokeLinecap="round"/>
-      <circle cx="12" cy="14" r="2.2" fill="#ff9764"/>
-      <path d="M8 19c0-2 1.8-3.4 4-3.4s4 1.4 4 3.4" stroke="#ff9764" strokeWidth="1.6" strokeLinecap="round"/>
+      <path d="M3 7a4 4 0 014-4h7l5 5v9a4 4 0 01-4 4H7a4 4 0 01-4-4V7z" fill="#d1fae5" stroke="#1DDB62" strokeWidth="1.6"/>
+      <path d="M14 3v4a2 2 0 002 2h4" stroke="#1DDB62" strokeWidth="1.6" strokeLinecap="round"/>
+      <circle cx="12" cy="14" r="2.2" fill="#1DDB62"/>
+      <path d="M8 19c0-2 1.8-3.4 4-3.4s4 1.4 4 3.4" stroke="#1DDB62" strokeWidth="1.6" strokeLinecap="round"/>
     </svg>
   ),
   pipeline: (
     <svg viewBox="0 0 24 24" fill="none">
-      <rect x="2" y="5" width="5" height="14" rx="1.5" fill="#fce4be" stroke="#ff9764" strokeWidth="1.6"/>
-      <rect x="9.5" y="5" width="5" height="10" rx="1.5" fill="#fce4be" stroke="#ff9764" strokeWidth="1.6"/>
-      <rect x="17" y="5" width="5" height="6" rx="1.5" fill="#ff9764" stroke="#ff9764" strokeWidth="1.6"/>
+      <rect x="2" y="5" width="5" height="14" rx="1.5" fill="#d1fae5" stroke="#1DDB62" strokeWidth="1.6"/>
+      <rect x="9.5" y="5" width="5" height="10" rx="1.5" fill="#d1fae5" stroke="#1DDB62" strokeWidth="1.6"/>
+      <rect x="17" y="5" width="5" height="6" rx="1.5" fill="#1DDB62" stroke="#1DDB62" strokeWidth="1.6"/>
     </svg>
   ),
   quote: (
     <svg viewBox="0 0 24 24" fill="none">
-      <path d="M5 3h10l4 4v14a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z" fill="#fce4be" stroke="#ff9764" strokeWidth="1.6"/>
-      <path d="M15 3v4h4" stroke="#ff9764" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M8 12h8M8 15.5h8M8 19h5" stroke="#ff9764" strokeWidth="1.6" strokeLinecap="round"/>
+      <path d="M5 3h10l4 4v14a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z" fill="#d1fae5" stroke="#1DDB62" strokeWidth="1.6"/>
+      <path d="M15 3v4h4" stroke="#1DDB62" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M8 12h8M8 15.5h8M8 19h5" stroke="#1DDB62" strokeWidth="1.6" strokeLinecap="round"/>
     </svg>
   ),
   approval: (
     <svg viewBox="0 0 24 24" fill="none">
-      <rect x="3" y="4" width="18" height="14" rx="2" fill="#fce4be" stroke="#ff9764" strokeWidth="1.6"/>
-      <path d="M3 9h18" stroke="#ff9764" strokeWidth="1.6"/>
-      <path d="M8 14l2.5 2.5L16 11" stroke="#ff9764" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <rect x="3" y="4" width="18" height="14" rx="2" fill="#d1fae5" stroke="#1DDB62" strokeWidth="1.6"/>
+      <path d="M3 9h18" stroke="#1DDB62" strokeWidth="1.6"/>
+      <path d="M8 14l2.5 2.5L16 11" stroke="#1DDB62" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   ),
   calendar: (
     <svg viewBox="0 0 24 24" fill="none">
-      <rect x="3" y="5" width="18" height="16" rx="2" fill="#fce4be" stroke="#ff9764" strokeWidth="1.6"/>
-      <path d="M3 10h18" stroke="#ff9764" strokeWidth="1.6"/>
-      <path d="M8 3v4M16 3v4" stroke="#ff9764" strokeWidth="1.6" strokeLinecap="round"/>
-      <rect x="7" y="13" width="3" height="3" rx="0.5" fill="#ff9764"/>
-      <rect x="12" y="13" width="3" height="3" rx="0.5" fill="#ff9764" opacity="0.5"/>
+      <rect x="3" y="5" width="18" height="16" rx="2" fill="#d1fae5" stroke="#1DDB62" strokeWidth="1.6"/>
+      <path d="M3 10h18" stroke="#1DDB62" strokeWidth="1.6"/>
+      <path d="M8 3v4M16 3v4" stroke="#1DDB62" strokeWidth="1.6" strokeLinecap="round"/>
+      <rect x="7" y="13" width="3" height="3" rx="0.5" fill="#1DDB62"/>
+      <rect x="12" y="13" width="3" height="3" rx="0.5" fill="#1DDB62" opacity="0.5"/>
     </svg>
   ),
   mobile: (
     <svg viewBox="0 0 24 24" fill="none">
-      <rect x="6" y="2" width="12" height="20" rx="2.5" fill="#fce4be" stroke="#ff9764" strokeWidth="1.6"/>
-      <path d="M9 5h6" stroke="#ff9764" strokeWidth="1.4" strokeLinecap="round"/>
-      <circle cx="12" cy="18.5" r="1" fill="#ff9764"/>
-      <path d="M9 9h6M9 12h4" stroke="#ff9764" strokeWidth="1.4" strokeLinecap="round"/>
+      <rect x="6" y="2" width="12" height="20" rx="2.5" fill="#d1fae5" stroke="#1DDB62" strokeWidth="1.6"/>
+      <path d="M9 5h6" stroke="#1DDB62" strokeWidth="1.4" strokeLinecap="round"/>
+      <circle cx="12" cy="18.5" r="1" fill="#1DDB62"/>
+      <path d="M9 9h6M9 12h4" stroke="#1DDB62" strokeWidth="1.4" strokeLinecap="round"/>
     </svg>
   ),
 };
@@ -120,7 +120,7 @@ const faqItems = [
   ['Is mijn data veilig?', 'Alle data wordt versleuteld opgeslagen in EU-datacenters en dagelijks geback-upt. Wij voldoen aan de AVG/GDPR-richtlijnen.'],
 ];
 
-export default function MarketingWebsite({ navigate }) {
+export default function MarketingWebsite({ navigate, isAuthenticated = false }) {
   const [yearly,  setYearly]  = useState(true);
   const [openFaq, setOpenFaq] = useState(0);
 
@@ -139,7 +139,7 @@ export default function MarketingWebsite({ navigate }) {
       {/* ── NAVBAR ── */}
       <nav className="bb-nav">
         <div className="bb-nav-inner">
-          <button className="bb-logo-btn" onClick={() => navigate('/website')} aria-label="BossBase home">
+          <button className="bb-logo-btn" onClick={() => navigate('/')} aria-label="BossBase home">
             <span className="bb-logo-boss">Boss</span>
             <span className="bb-logo-base">Base</span>
             <i className="bb-logo-line" />
@@ -150,7 +150,8 @@ export default function MarketingWebsite({ navigate }) {
             <a href="#prijzen">Prijzen</a>
             <a href="#faq">FAQ</a>
             <button onClick={() => navigate('/login')}>Inloggen</button>
-            <button className="bb-nav-cta" onClick={() => navigate('/registreer')}>Gratis starten</button>
+            {isAuthenticated && <button onClick={() => navigate('/dashboard')}>Dashboard</button>}
+            <button className="bb-nav-cta" onClick={() => navigate('/register')}>Gratis starten</button>
           </div>
         </div>
       </nav>
@@ -174,15 +175,15 @@ export default function MarketingWebsite({ navigate }) {
             uren en omzet te beheren — vanuit één eenvoudig dashboard.
           </p>
           <div className="bb-hero-ctas">
-            <button className="bb-btn bb-btn-primary" onClick={() => navigate('/registreer')}>Gratis beginnen →</button>
-            <button className="bb-btn bb-btn-secondary" onClick={() => navigate('/dashboard')}>Bekijk demo</button>
+            <button className="bb-btn bb-btn-primary" onClick={() => navigate('/register')}>Gratis beginnen →</button>
+            <button className="bb-btn bb-btn-secondary" onClick={() => navigate('/demo')}>Bekijk demo</button>
           </div>
           <div className="bb-hero-proof">
             <div className="bb-avatars">
-              <div className="bb-avatar" style={{ background: 'linear-gradient(135deg,#ff9764,#e8784a)' }}>JV</div>
-              <div className="bb-avatar" style={{ background: 'linear-gradient(135deg,#fce4be,#ff9764)', color: '#e8784a' }}>MK</div>
-              <div className="bb-avatar" style={{ background: 'linear-gradient(135deg,#1a1a1a,#4a2818)' }}>RD</div>
-              <div className="bb-avatar" style={{ background: 'linear-gradient(135deg,#374151,#1a1a1a)' }}>+</div>
+              <div className="bb-avatar" style={{ background: 'linear-gradient(135deg,#1DDB62,#15A34A)' }}>JV</div>
+              <div className="bb-avatar" style={{ background: 'linear-gradient(135deg,#d1fae5,#1DDB62)', color: '#15A34A' }}>MK</div>
+              <div className="bb-avatar" style={{ background: 'linear-gradient(135deg,#0D0D0D,#1a1a1a)' }}>RD</div>
+              <div className="bb-avatar" style={{ background: 'linear-gradient(135deg,#374151,#0D0D0D)' }}>+</div>
             </div>
             <span className="bb-stars">★★★★★</span>
             <span>Gebruikt door 200+ ondernemers</span>
@@ -266,7 +267,7 @@ export default function MarketingWebsite({ navigate }) {
                   </div>
                   <button
                     className={`bb-btn bb-price-cta${t.secondary ? ' bb-btn-secondary' : ' bb-btn-primary'}`}
-                    onClick={() => navigate('/registreer')}
+                    onClick={() => navigate('/register')}
                   >
                     {t.cta}
                   </button>
@@ -313,8 +314,8 @@ export default function MarketingWebsite({ navigate }) {
             <h2>Klaar om de basis<br />op orde te krijgen?</h2>
             <p>Begin vandaag gratis. Geen creditcard, geen training, geen verplichtingen — gewoon werk dat eindelijk klopt.</p>
             <div className="bb-cta-actions">
-              <button className="bb-btn bb-btn-primary" onClick={() => navigate('/registreer')}>Gratis beginnen →</button>
-              <button className="bb-btn bb-btn-ghost" onClick={() => navigate('/dashboard')}>Plan een demo</button>
+              <button className="bb-btn bb-btn-primary" onClick={() => navigate('/register')}>Gratis beginnen →</button>
+              <button className="bb-btn bb-btn-ghost" onClick={() => navigate('/demo')}>Bekijk demo</button>
             </div>
           </div>
         </div>
@@ -325,7 +326,7 @@ export default function MarketingWebsite({ navigate }) {
         <div className="bb-footer-inner">
           <div className="bb-footer-top">
             <div className="bb-footer-brand">
-              <button className="bb-logo-btn bb-logo-dark" onClick={() => navigate('/website')}>
+              <button className="bb-logo-btn bb-logo-dark" onClick={() => navigate('/')}>
                 <span className="bb-logo-boss">Boss</span>
                 <span className="bb-logo-base">Base</span>
                 <i className="bb-logo-line" />
@@ -347,7 +348,7 @@ export default function MarketingWebsite({ navigate }) {
                 <li><a href="#">Over ons</a></li>
                 <li><a href="#">Contact</a></li>
                 <li><button onClick={() => navigate('/login')}>Inloggen</button></li>
-                <li><button onClick={() => navigate('/registreer')}>Aanmelden</button></li>
+                <li><button onClick={() => navigate('/register')}>Aanmelden</button></li>
               </ul>
             </div>
             <div className="bb-footer-col">
@@ -398,7 +399,7 @@ function ProductMock({ navigate }) {
         </div>
         <div className="bb-product-body">
           <aside className="bb-product-sidebar">
-            <button onClick={() => navigate('/dashboard')} className="bb-product-brand-btn">
+            <button onClick={() => navigate('/demo')} className="bb-product-brand-btn">
               <span className="bb-logo-boss" style={{ fontWeight: 800, fontSize: '0.9rem' }}>Boss</span>
               <span style={{ fontWeight: 800, fontSize: '0.9rem', letterSpacing: '-0.03em' }}>Base</span>
             </button>
@@ -415,7 +416,7 @@ function ProductMock({ navigate }) {
                 <h3>Sales pipeline</h3>
                 <div className="bb-product-header-meta">14 actieve trajecten · €48.250 in offertes</div>
               </div>
-              <button className="bb-btn bb-btn-primary bb-btn-sm" onClick={() => navigate('/aanvragen')}>+ Nieuwe lead</button>
+              <button className="bb-btn bb-btn-primary bb-btn-sm" onClick={() => navigate('/demo')}>Bekijk demo</button>
             </div>
             <div className="bb-kpi-row">
               <Kpi label="Open offertes" value="€18.420" trend="▲ 12%" />
