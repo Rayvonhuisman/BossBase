@@ -476,7 +476,7 @@ export function CustomersPage({ openCustomer }) {
       {loading && <div className="card card-p">Klanten laden...</div>}
       {!loading && filtered.length === 0 && <div className="empty"><div className="empty-title">Geen klanten gevonden</div><div className="empty-sub">Maak je eerste klant aan of pas je zoekopdracht aan.</div></div>}
       {!loading && filtered.length > 0 && (view === 'grid' ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }} className="afu2">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }} className="afu2 cust-card-grid">
           {filtered.map(c => {
             return (
               <div key={c.id} className="card card-p" style={{ cursor: 'pointer', transition: 'all .18s ease' }}

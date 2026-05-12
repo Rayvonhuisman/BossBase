@@ -91,7 +91,7 @@ export function DashboardHome({ setPage, openCustomer }) {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 14 }} className="afu3">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 14 }} className="afu3 dash-two-col">
         {loading && <div className="card card-p">Dashboard laden...</div>}
         {error && <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>}
         {!loading && !error && <div className="card">

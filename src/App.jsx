@@ -422,6 +422,121 @@ function CustomerDrawer({ custId, onClose, setPage }) {
   );
 }
 
+// ── MOBILE MEER MENU ─────────────────────────────────────────
+function MeerMenu({ page, onNavigate, onClose, profile }) {
+  const isMedewerker = profile?.role === 'medewerker';
+  const groups = [
+    {
+      label: 'Uitvoering',
+      items: [
+        { id: 'calendar',   label: 'Agenda',     icon: I.cal },
+        { id: 'werkbonnen', label: 'Werkbonnen', icon: I.wo },
+        { id: 'uren',       label: 'Uren',       icon: I.hours },
+      ],
+    },
+    {
+      label: 'Financieel',
+      items: [
+        { id: 'offertes', label: 'Offertes', icon: I.quotes },
+        { id: 'costs',    label: 'Kosten',   icon: I.costs },
+        { id: 'revenue',  label: 'Omzet',    icon: I.revenue },
+      ],
+    },
+    ...(isMedewerker ? [] : [{
+      label: 'Bedrijf',
+      items: [
+        { id: 'team',          label: 'Team',          icon: I.team },
+        { id: 'instellingen',  label: 'Instellingen',  icon: I.settings },
+      ],
+    }]),
+  ];
+
+  return (
+    <div className="meer-overlay open" onClick={onClose}>
+      <div className="meer-sheet" onClick={e => e.stopPropagation()}>
+        <div className="meer-grabber">
+          <div className="meer-grabber-bar" />
+        </div>
+        {groups.map(g => (
+          <div key={g.label}>
+            <div className="meer-section-label">{g.label}</div>
+            <div className="meer-section-card">
+              {g.items.map(item => {
+                const isActive = page === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    className="meer-row"
+                    style={isActive ? { background: '#f0fdf4', color: '#15A34A' } : {}}
+                    onClick={() => onNavigate(item.id)}
+                  >
+                    <span className="meer-row-icon" style={isActive ? { background: '#dcfce7', color: '#15A34A' } : {}}>{item.icon}</span>
+                    <span className="meer-row-label" style={isActive ? { color: '#15A34A', fontWeight: 700 } : {}}>{item.label}</span>
+                    <span className="meer-row-chev">{I.chev_r}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        <div style={{ height: 8 }} />
+      </div>
+    </div>
+  );
+}
+
+// ── MOBILE BOTTOM NAV ─────────────────────────────────────────
+const MEER_PAGE_IDS = ['calendar','werkbonnen','uren','costs','revenue','offertes','team','instellingen'];
+
+function MobileBottomNav({ page, setPage, badges = {}, profile }) {
+  const [showMeer, setShowMeer] = useState(false);
+  const isOnMeerPage = MEER_PAGE_IDS.includes(page);
+
+  const items = [
+    { id: 'dashboard',  label: 'Dashboard',    icon: I.dash },
+    { id: 'pipeline',   label: 'Pipeline',     icon: I.pipe,  badge: badges.pipeline },
+    { id: 'customers',  label: 'Klanten',      icon: I.cust },
+    { id: 'activities', label: 'Activiteiten', icon: I.act,   badge: badges.activities },
+    { id: 'meer',       label: 'Meer',         icon: I.meer },
+  ];
+
+  const go = id => { setPage(id); setShowMeer(false); };
+
+  return (
+    <>
+      <nav className="bnav" aria-label="Mobiele navigatie">
+        {items.map(item => {
+          const isActive = item.id === 'meer'
+            ? (isOnMeerPage || showMeer)
+            : page === item.id;
+          return (
+            <button
+              key={item.id}
+              className={`bnav-item${isActive ? ' active' : ''}`}
+              onClick={() => item.id === 'meer' ? setShowMeer(v => !v) : go(item.id)}
+              aria-label={item.label}
+            >
+              {item.badge > 0 && (
+                <span className="bnav-badge">{item.badge > 99 ? '99+' : item.badge}</span>
+              )}
+              {item.icon}
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+      {showMeer && (
+        <MeerMenu
+          page={page}
+          onNavigate={go}
+          onClose={() => setShowMeer(false)}
+          profile={profile}
+        />
+      )}
+    </>
+  );
+}
+
 // ── INNER APP ────────────────────────────────────────────────
 function AppInner() {
   const toast = useToast();
@@ -770,6 +885,13 @@ function AppInner() {
             ) : renderPage()}
           </div>
         </div>
+
+        <MobileBottomNav
+          page={page}
+          setPage={navigatePage}
+          badges={sidebarBadges}
+          profile={profile}
+        />
 
         {drawerCust !== null && (
           <CustomerDrawer
