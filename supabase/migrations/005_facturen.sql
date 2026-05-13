@@ -1,6 +1,9 @@
 -- ── FACTUREN ────────────────────────────────────────────────────────────────
 
-CREATE TABLE IF NOT EXISTS facturen (
+DROP TABLE IF EXISTS factuur_regels CASCADE;
+DROP TABLE IF EXISTS facturen CASCADE;
+
+CREATE TABLE facturen (
   id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id       UUID        NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   customer_id      UUID        REFERENCES customers(id) ON DELETE SET NULL,
@@ -17,14 +20,10 @@ CREATE TABLE IF NOT EXISTS facturen (
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_facturen_company
-  ON facturen (company_id);
-CREATE INDEX IF NOT EXISTS idx_facturen_customer
-  ON facturen (customer_id);
-CREATE INDEX IF NOT EXISTS idx_facturen_status
-  ON facturen (company_id, status);
-CREATE INDEX IF NOT EXISTS idx_facturen_created
-  ON facturen (company_id, created_at DESC);
+CREATE INDEX idx_facturen_company   ON facturen (company_id);
+CREATE INDEX idx_facturen_customer  ON facturen (customer_id);
+CREATE INDEX idx_facturen_status    ON facturen (company_id, status);
+CREATE INDEX idx_facturen_created   ON facturen (company_id, created_at DESC);
 
 ALTER TABLE facturen ENABLE ROW LEVEL SECURITY;
 
@@ -43,22 +42,26 @@ CREATE POLICY "facturen_insert" ON facturen
 
 DROP POLICY IF EXISTS "facturen_update" ON facturen;
 CREATE POLICY "facturen_update" ON facturen
-  FOR UPDATE USING (
+  FOR UPDATE
+  USING (
     company_id = (SELECT company_id FROM profiles WHERE id = auth.uid())
-  ) WITH CHECK (
+    AND (SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin', 'planner')
+  )
+  WITH CHECK (
     company_id = (SELECT company_id FROM profiles WHERE id = auth.uid())
+    AND (SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin', 'planner')
   );
 
 DROP POLICY IF EXISTS "facturen_delete" ON facturen;
 CREATE POLICY "facturen_delete" ON facturen
   FOR DELETE USING (
     company_id = (SELECT company_id FROM profiles WHERE id = auth.uid())
-    AND (SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin', 'planner')
+    AND (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin'
   );
 
 -- ── FACTUUR REGELS ───────────────────────────────────────────────────────────
 
-CREATE TABLE IF NOT EXISTS factuur_regels (
+CREATE TABLE factuur_regels (
   id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   factuur_id    UUID        NOT NULL REFERENCES facturen(id) ON DELETE CASCADE,
   company_id    UUID        NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
@@ -72,10 +75,8 @@ CREATE TABLE IF NOT EXISTS factuur_regels (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_factuur_regels_factuur
-  ON factuur_regels (factuur_id);
-CREATE INDEX IF NOT EXISTS idx_factuur_regels_company
-  ON factuur_regels (company_id);
+CREATE INDEX idx_factuur_regels_factuur  ON factuur_regels (factuur_id);
+CREATE INDEX idx_factuur_regels_company  ON factuur_regels (company_id);
 
 ALTER TABLE factuur_regels ENABLE ROW LEVEL SECURITY;
 
@@ -89,16 +90,24 @@ DROP POLICY IF EXISTS "factuur_regels_insert" ON factuur_regels;
 CREATE POLICY "factuur_regels_insert" ON factuur_regels
   FOR INSERT WITH CHECK (
     company_id = (SELECT company_id FROM profiles WHERE id = auth.uid())
+    AND (SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin', 'planner')
   );
 
 DROP POLICY IF EXISTS "factuur_regels_update" ON factuur_regels;
 CREATE POLICY "factuur_regels_update" ON factuur_regels
-  FOR UPDATE USING (
+  FOR UPDATE
+  USING (
     company_id = (SELECT company_id FROM profiles WHERE id = auth.uid())
+    AND (SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin', 'planner')
+  )
+  WITH CHECK (
+    company_id = (SELECT company_id FROM profiles WHERE id = auth.uid())
+    AND (SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin', 'planner')
   );
 
 DROP POLICY IF EXISTS "factuur_regels_delete" ON factuur_regels;
 CREATE POLICY "factuur_regels_delete" ON factuur_regels
   FOR DELETE USING (
     company_id = (SELECT company_id FROM profiles WHERE id = auth.uid())
+    AND (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin'
   );
