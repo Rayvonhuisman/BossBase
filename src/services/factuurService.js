@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
 import { withCompanyId } from '../lib/currentCompany'
+import { syncFactuurNaarMoneybird } from './accountingService'
 
 const toFactuur = row => ({
   id: row.id,
@@ -90,7 +91,11 @@ export async function updateFactuur(id, input) {
     .select('*, customers(name)')
     .single()
   if (error) throw error
-  return toFactuur(data)
+  const result = toFactuur(data)
+  if (input.status === 'betaald') {
+    syncFactuurNaarMoneybird(id).catch(() => {})
+  }
+  return result
 }
 
 export async function deleteFactuur(id) {

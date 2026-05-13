@@ -6,6 +6,7 @@ import {
 import { createCalendarEvent, listCalendarEvents, updateCalendarEvent } from '../services/calendarService.js';
 import { createJobCost, listJobCosts } from '../services/jobCostService.js';
 import { getFacturen, getAllFactuurRegels } from '../services/factuurService.js';
+import { getConnection, syncFactuurNaarMoneybird } from '../services/accountingService.js';
 import { getOffertes } from '../services/offerteService.js';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { listCustomers } from '../services/customerService.js';
@@ -560,6 +561,8 @@ export function RevenuePage() {
   const [allRegels, setAllRegels] = useState([]);
   const [chartMode, setChartMode] = useState('gefactureerd');
   const [loading, setLoading] = useState(true);
+  const [mbConnection, setMbConnection] = useState(null);
+  const [mbSyncing, setMbSyncing] = useState(false);
 
   const TODAY = new Date().toISOString().slice(0, 10);
   const THIS_MONTH = TODAY.slice(0, 7);
@@ -569,13 +572,14 @@ export function RevenuePage() {
 
   React.useEffect(() => {
     setLoading(true);
-    Promise.all([listCustomers(), listJobCosts(), getFacturen(), getOffertes(), getAllFactuurRegels()])
-      .then(([custData, costData, facturenData, offertesData, regelsData]) => {
+    Promise.all([listCustomers(), listJobCosts(), getFacturen(), getOffertes(), getAllFactuurRegels(), getConnection()])
+      .then(([custData, costData, facturenData, offertesData, regelsData, mbConn]) => {
         setCustomers(custData);
         setCostsData(costData);
         setFacturen(facturenData);
         setOffertes(offertesData);
         setAllRegels(regelsData);
+        setMbConnection(mbConn);
       }).catch(() => {}).finally(() => setLoading(false));
   }, [refreshKey]);
 
@@ -617,6 +621,21 @@ export function RevenuePage() {
     const margin = c.paid > 0 ? Math.round((profit / c.paid) * 100) : 0;
     return { ...c, costs, profit, margin };
   });
+
+  const handleMbSync = async () => {
+    const betaald = facturen.filter(f => f.status === 'betaald');
+    if (betaald.length === 0) { toast.info('Geen betaalde facturen om te synchroniseren'); return; }
+    setMbSyncing(true);
+    let ok = 0; let fail = 0;
+    for (const f of betaald) {
+      try { await syncFactuurNaarMoneybird(f.id); ok++; } catch { fail++; }
+    }
+    setMbSyncing(false);
+    if (fail === 0) toast.success(`${ok} factuur${ok !== 1 ? 'en' : ''} gesynchroniseerd`);
+    else toast.error(`${ok} gesynchroniseerd, ${fail} mislukt`);
+    const refreshed = await getConnection().catch(() => null);
+    if (refreshed) setMbConnection(refreshed);
+  };
 
   const handleExport = () => {
     if (rows.length === 0) { toast.info('Geen financiële data om te exporteren'); return; }
@@ -763,6 +782,33 @@ export function RevenuePage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="tw afu3">
+        <div className="tw-hd">
+          <div>
+            <div className="card-title">Boekhoudkoppeling</div>
+            <div style={{ fontSize: '.8rem', color: 'var(--dmu)', marginTop: 2 }}>
+              {mbConnection?.apiToken
+                ? `Moneybird verbonden${mbConnection.lastSyncedAt ? ' · Laatste sync: ' + new Date(mbConnection.lastSyncedAt).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}`
+                : 'Geen boekhoudpakket gekoppeld · Stel dit in via Instellingen → Integraties'}
+            </div>
+          </div>
+          {mbConnection?.apiToken && (
+            <button
+              className="btn btn-s btn-sm"
+              onClick={handleMbSync}
+              disabled={mbSyncing}
+            >
+              {mbSyncing ? 'Synchroniseren...' : 'Synchroniseer betaalde facturen'}
+            </button>
+          )}
+        </div>
+        {!mbConnection?.apiToken && (
+          <div style={{ padding: '16px 0 4px', fontSize: '.84rem', color: 'var(--dl)' }}>
+            Koppel Moneybird om facturen automatisch te exporteren en inkoopfacturen als kostenregels te importeren.
+          </div>
+        )}
       </div>
     </div>
   );

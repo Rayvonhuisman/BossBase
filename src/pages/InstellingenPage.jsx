@@ -13,6 +13,12 @@ import {
   deletePipelineStage,
 } from '../services/instellingenService.js';
 import { updateCompany } from '../services/profileService.js';
+import {
+  getConnection,
+  saveConnection,
+  testMoneybirdConnection,
+  importKostenVanuitMoneybird,
+} from '../services/accountingService.js';
 
 const TEMPLATE_LABELS = {
   lead_ontvangen: 'Lead ontvangen',
@@ -72,10 +78,18 @@ export function InstellingenPage() {
   // TODO: replace with real OAuth flow when Google API credentials are configured
   const [googleConnected, setGoogleConnected] = useState(false);
 
+  // Moneybird
+  const [mbConnection, setMbConnection] = useState(null);
+  const [mbForm, setMbForm] = useState({ apiToken: '', administrationId: '' });
+  const [mbShowToken, setMbShowToken] = useState(false);
+  const [mbTesting, setMbTesting] = useState(false);
+  const [mbSaving, setMbSaving] = useState(false);
+  const [mbImporting, setMbImporting] = useState(false);
+
   useEffect(() => {
     setLoading(true);
-    Promise.all([getBedrijfsinstellingen(), getEmailTemplates(), getPipelineStages()])
-      .then(([instellingen, emailTemplates, pipelineStages]) => {
+    Promise.all([getBedrijfsinstellingen(), getEmailTemplates(), getPipelineStages(), getConnection()])
+      .then(([instellingen, emailTemplates, pipelineStages, mbConn]) => {
         if (instellingen) {
           setStandaardForm({
             uurtarief: instellingen.uurtarief ?? 55,
@@ -92,6 +106,10 @@ export function InstellingenPage() {
         });
         setTemplateForms(forms);
         setStages(pipelineStages);
+        if (mbConn) {
+          setMbConnection(mbConn);
+          setMbForm({ apiToken: mbConn.apiToken, administrationId: mbConn.administrationId });
+        }
       })
       .catch(err => toast.error(err.message || 'Laden mislukt'))
       .finally(() => setLoading(false));
@@ -209,6 +227,61 @@ export function InstellingenPage() {
     } finally {
       setEditingStageId(null);
       setEditingStageValue('');
+    }
+  };
+
+  const handleMbTest = async () => {
+    if (!mbForm.apiToken || !mbForm.administrationId) {
+      toast.error('Vul API token en administratie-ID in');
+      return;
+    }
+    setMbTesting(true);
+    try {
+      const result = await testMoneybirdConnection(mbForm.apiToken, mbForm.administrationId);
+      if (result?.success) {
+        toast.success('Verbinding met Moneybird gelukt');
+      } else {
+        toast.error(result?.error || 'Verbinding mislukt');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Verbinding mislukt');
+    } finally {
+      setMbTesting(false);
+    }
+  };
+
+  const handleMbSave = async () => {
+    if (!mbForm.apiToken || !mbForm.administrationId) {
+      toast.error('Vul API token en administratie-ID in');
+      return;
+    }
+    setMbSaving(true);
+    try {
+      const saved = await saveConnection(mbForm);
+      setMbConnection(saved);
+      toast.success('Moneybird-koppeling opgeslagen');
+    } catch (err) {
+      toast.error(err.message || 'Opslaan mislukt');
+    } finally {
+      setMbSaving(false);
+    }
+  };
+
+  const handleMbImport = async () => {
+    setMbImporting(true);
+    try {
+      const result = await importKostenVanuitMoneybird();
+      if (result?.success) {
+        toast.success(`${result.imported ?? 0} inkoopfacturen geïmporteerd`);
+        const refreshed = await getConnection();
+        if (refreshed) setMbConnection(refreshed);
+      } else {
+        toast.error(result?.error || 'Importeren mislukt');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Importeren mislukt');
+    } finally {
+      setMbImporting(false);
     }
   };
 
@@ -522,6 +595,8 @@ export function InstellingenPage() {
 
       {!loading && tab === 'integraties' && (
         <div className="afu3" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          {/* Google Agenda */}
           <div className="card card-p" style={{ border: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bgs)', borderRadius: 'var(--r8)', border: '1px solid var(--border)', flexShrink: 0 }}>
@@ -561,6 +636,97 @@ export function InstellingenPage() {
               </div>
             </div>
           </div>
+
+          {/* Moneybird */}
+          <div className="card card-p" style={{ border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+              <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bgs)', borderRadius: 'var(--r8)', border: '1px solid var(--border)', flexShrink: 0, fontSize: '1.2rem' }}>
+                🐦
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: '.95rem', marginBottom: 2 }}>Moneybird</div>
+                <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>
+                  Synchroniseer facturen automatisch naar Moneybird en importeer inkoopfacturen als kostenregels.
+                </div>
+              </div>
+              <div style={{ flexShrink: 0 }}>
+                {mbConnection?.apiToken ? (
+                  <span style={{ fontSize: '.75rem', color: '#059669', fontWeight: 600 }}>Verbonden</span>
+                ) : (
+                  <span style={{ fontSize: '.75rem', color: 'var(--dmu)' }}>Niet verbonden</span>
+                )}
+              </div>
+            </div>
+
+            <div className="fg" style={{ marginBottom: 14 }}>
+              <div className="f s2">
+                <label>API token</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={mbShowToken ? 'text' : 'password'}
+                    value={mbForm.apiToken}
+                    onChange={e => setMbForm(f => ({ ...f, apiToken: e.target.value }))}
+                    placeholder="Moneybird API token..."
+                    style={{ paddingRight: 40 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setMbShowToken(v => !v)}
+                    style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dmu)', fontSize: '.8rem', padding: 0 }}
+                  >
+                    {mbShowToken ? 'Verberg' : 'Toon'}
+                  </button>
+                </div>
+              </div>
+              <div className="f s2">
+                <label>
+                  Administratie-ID
+                  <span style={{ fontSize: '.73rem', color: 'var(--dl)', fontWeight: 400, marginLeft: 6 }}>
+                    Te vinden in de URL: moneybird.com/
+                    <strong>123456789</strong>
+                    /…
+                  </span>
+                </label>
+                <input
+                  value={mbForm.administrationId}
+                  onChange={e => setMbForm(f => ({ ...f, administrationId: e.target.value }))}
+                  placeholder="bijv. 123456789"
+                />
+              </div>
+            </div>
+
+            <div className="fa" style={{ flexWrap: 'wrap', gap: 8 }}>
+              {mbConnection?.apiToken && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={handleMbImport}
+                  disabled={mbImporting}
+                >
+                  {mbImporting ? 'Importeren...' : 'Kosten importeren'}
+                </button>
+              )}
+              {mbConnection?.lastSyncedAt && (
+                <span style={{ fontSize: '.75rem', color: 'var(--dl)', alignSelf: 'center', marginRight: 'auto' }}>
+                  Laatste sync: {new Date(mbConnection.lastSyncedAt).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={handleMbTest}
+                disabled={mbTesting || !mbForm.apiToken || !mbForm.administrationId}
+              >
+                {mbTesting ? 'Testen...' : 'Verbinding testen'}
+              </button>
+              <button
+                className="btn btn-p btn-sm"
+                onClick={handleMbSave}
+                disabled={mbSaving || !mbForm.apiToken || !mbForm.administrationId}
+              >
+                {mbSaving ? 'Opslaan...' : 'Opslaan'}
+              </button>
+            </div>
+          </div>
+
         </div>
       )}
     </div>
