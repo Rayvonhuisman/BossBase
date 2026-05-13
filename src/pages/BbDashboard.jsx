@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { I, PIPELINE_STAGES, fmt, Av, ModalX } from '../bb-shared.jsx';
 import { listDeals, listPipelineStages, updateDealStage } from '../services/dealService.js';
 import { listActivities } from '../services/activityService.js';
@@ -192,6 +192,169 @@ export function DashboardHome({ setPage, openCustomer }) {
   );
 }
 
+// ── MOVE STAGE SHEET (mobile bottom sheet) ───────────────────
+function MoveStageSheet({ deal, stages, moveDeal, onClose, setActiveIdx }) {
+  return (
+    <div className="meer-overlay open" onClick={onClose}>
+      <div className="meer-sheet" onClick={e => e.stopPropagation()}>
+        <div className="meer-grabber"><div className="meer-grabber-bar" /></div>
+        <div style={{ padding: '0 16px 4px', fontWeight: 700, fontSize: 15, color: 'var(--dk)' }}>Verplaats naar fase</div>
+        <div style={{ padding: '0 16px 12px', fontSize: 12, color: 'var(--dl)' }}>{deal.customerName} — {deal.title}</div>
+        <div className="meer-section-card" style={{ margin: '0 12px 24px' }}>
+          {stages.map((s, i) => (
+            <button key={s.id} className="meer-row"
+              style={deal.stage === s.id ? { background: '#f0fdf4' } : {}}
+              onClick={() => {
+                if (deal.stage !== s.id) moveDeal(deal, s.id);
+                setActiveIdx(i);
+                onClose();
+              }}>
+              <span className={`badge ${s.col}`} style={{ fontSize: 12 }}>{s.label}</span>
+              {deal.stage === s.id
+                ? <span style={{ marginLeft: 'auto', fontSize: 12, color: '#15A34A', fontWeight: 700, marginRight: 4 }}>✓ Huidig</span>
+                : <span className="meer-row-chev">{I.chev_r}</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── MOBILE PIPELINE (swipeable carousel) ─────────────────────
+function MobilePipeline({ stages, dealsInStage, openCustomer, moveDeal, markLost, setNewStage, setShowNew }) {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [movingDeal, setMovingDeal] = useState(null);
+  const touchStartX = useRef(null);
+  const touchStartY = useRef(null);
+  const tabsRef = useRef(null);
+
+  const idx = Math.min(activeIdx, stages.length - 1);
+
+  useEffect(() => {
+    const el = tabsRef.current?.children[idx];
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [idx]);
+
+  const prioColor = p => ({ high: '#dc2626', med: '#e8784a', low: '#9ca3af' }[p] || '#9ca3af');
+
+  const handleTouchStart = e => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+  const handleTouchEnd = e => {
+    if (touchStartX.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    const dy = Math.abs(e.changedTouches[0].clientY - touchStartY.current);
+    if (Math.abs(dx) > dy && Math.abs(dx) > 40) {
+      if (dx < 0 && idx < stages.length - 1) setActiveIdx(i => i + 1);
+      if (dx > 0 && idx > 0) setActiveIdx(i => i - 1);
+    }
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
+
+  const stage = stages[idx];
+  if (!stage) return null;
+  const stageDeals = dealsInStage(stage.id);
+  const stageTotal = stageDeals.reduce((s, d) => s + d.value, 0);
+
+  return (
+    <div className="pipe-mob afu2">
+      {/* ── Stage tab pills ── */}
+      <div className="pipe-mob-tabs" ref={tabsRef}>
+        {stages.map((s, i) => {
+          const cnt = dealsInStage(s.id).length;
+          return (
+            <button key={s.id} className={`pipe-mob-tab${i === idx ? ' active' : ''}`} onClick={() => setActiveIdx(i)}>
+              {s.label}
+              {cnt > 0 && <span className="pipe-mob-tab-cnt">{cnt}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Swipeable stage panel ── */}
+      <div className="pipe-mob-panel" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+        {/* Header */}
+        <div className="pipe-mob-stage-hd">
+          <div>
+            <span className={`badge ${stage.col}`}>{stage.label}</span>
+            <div className="pipe-mob-stage-meta">
+              {stageDeals.length} {stageDeals.length === 1 ? 'lead' : 'leads'}
+              {stageTotal > 0 && ` · ${fmt(stageTotal)}`}
+            </div>
+          </div>
+          <div className="pipe-mob-nav">
+            <button className="pipe-mob-arrow" disabled={idx === 0} onClick={() => setActiveIdx(i => i - 1)}>‹</button>
+            <span className="pipe-mob-pos">{idx + 1} / {stages.length}</span>
+            <button className="pipe-mob-arrow" disabled={idx === stages.length - 1} onClick={() => setActiveIdx(i => i + 1)}>›</button>
+          </div>
+        </div>
+
+        {/* Dots indicator */}
+        <div className="pipe-mob-dots">
+          {stages.map((_, i) => (
+            <span key={i} className={`pipe-mob-dot${i === idx ? ' active' : ''}`} onClick={() => setActiveIdx(i)} />
+          ))}
+        </div>
+
+        {/* Deal cards */}
+        <div className="pipe-mob-cards">
+          {stageDeals.length === 0 && (
+            <div className="pipe-mob-empty">
+              <div>Geen leads in deze fase</div>
+              <button className="btn btn-p btn-sm" style={{ marginTop: 14 }}
+                onClick={() => { setNewStage(stage.id); setShowNew(true); }}>
+                {I.plus} Lead toevoegen
+              </button>
+            </div>
+          )}
+          {stageDeals.map(deal => (
+            <div key={deal.id} className={`pipe-mob-card${deal.priority === 'high' ? ' highlight' : ''}`}>
+              <div className="pipe-mob-card-top">
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="pipe-mob-card-name" onClick={() => openCustomer(deal.custId)}>
+                    {deal.customerName || 'Klant'}
+                  </div>
+                  {deal.title && <div className="pipe-mob-card-title">{deal.title}</div>}
+                  {deal.city && <div className="pipe-mob-card-city">{I.map} {deal.city}</div>}
+                </div>
+                <span className="pipe-mob-prio" style={{ background: prioColor(deal.priority) }} title={`Prioriteit: ${deal.priority}`} />
+              </div>
+              {deal.nextAct && <div className="pipe-mob-card-act">→ {deal.nextAct}</div>}
+              <div className="pipe-mob-card-footer">
+                <span className="pipe-mob-card-value">{fmt(deal.value)}</span>
+                <div className="pipe-mob-card-btns">
+                  <button className="btn btn-xs btn-ghost" title="Open klant" onClick={() => openCustomer(deal.custId)}>{I.eye}</button>
+                  <button className="btn btn-xs btn-s" onClick={() => setMovingDeal(deal)}>Verplaatsen</button>
+                  <button className="btn btn-xs btn-danger btn-icon" title="Markeer verloren" onClick={() => markLost(deal)}>{I.x}</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Add lead to this stage */}
+        <button className="pipe-mob-add" onClick={() => { setNewStage(stage.id); setShowNew(true); }}>
+          {I.plus} Lead toevoegen aan {stage.label}
+        </button>
+      </div>
+
+      {/* Move stage bottom sheet */}
+      {movingDeal && (
+        <MoveStageSheet
+          deal={movingDeal}
+          stages={stages}
+          moveDeal={moveDeal}
+          onClose={() => setMovingDeal(null)}
+          setActiveIdx={setActiveIdx}
+        />
+      )}
+    </div>
+  );
+}
+
 // ── PIPELINE ─────────────────────────────────────────────────
 export function Pipeline({ openCustomer }) {
   const toast = useToast();
@@ -211,6 +374,13 @@ export function Pipeline({ openCustomer }) {
 
   const [showNew, setShowNew] = useState(false);
   const [newStage, setNewStage] = useState(null);
+
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 767);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= 767);
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   const LOST_REASONS = [
     'Te duur','Geen reactie','Ander bedrijf gekozen','Datum niet mogelijk',
@@ -359,7 +529,19 @@ export function Pipeline({ openCustomer }) {
         </div>
       )}
 
-      {!loading && !error && totalShown > 0 && <div className="pipe-wrap afu2">
+      {!loading && !error && totalShown > 0 && isMobile && (
+        <MobilePipeline
+          stages={filter.stage === 'all' ? stages : stages.filter(s => s.id === filter.stage)}
+          dealsInStage={dealsInStage}
+          openCustomer={openCustomer}
+          moveDeal={moveDeal}
+          markLost={markLost}
+          setNewStage={setNewStage}
+          setShowNew={setShowNew}
+        />
+      )}
+
+      {!loading && !error && totalShown > 0 && !isMobile && <div className="pipe-wrap afu2">
         {visibleStages.map(stageId => {
           const stage = stages.find(s => s.id === stageId) || PIPELINE_STAGES.find(s => s.id === stageId) || { id: stageId, label: stageId, col: 'b-gray' };
           const stageDeals = dealsInStage(stageId);
