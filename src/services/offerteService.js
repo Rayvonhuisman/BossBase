@@ -51,7 +51,10 @@ const toOfferteItem = row => ({
  * Berekent totaal_excl en totaal_incl op basis van de offerte-velden.
  * Wordt gebruikt vóór elke insert of update.
  */
-export function calculateOfferteTotals({ arbeidsuren = 0, uurtarief = 55, materiaalkosten = 0, reiskosten = 0, marge_pct = 25, btw_pct = 21 } = {}) {
+export function calculateOfferteTotals({ arbeidsuren = 0, uurtarief = 55, materiaalkosten = 0, reiskosten = 0, marge_pct = 25, btw_pct = 21, totaal_excl: preExcl, totaal_incl: preIncl } = {}) {
+  if (preExcl !== undefined && preIncl !== undefined) {
+    return { totaal_excl: preExcl, totaal_incl: preIncl }
+  }
   const arbeid = Number(arbeidsuren) * Number(uurtarief)
   const subtotaal = arbeid + Number(materiaalkosten) + Number(reiskosten)
   const totaal_excl = subtotaal * (1 + Number(marge_pct) / 100)

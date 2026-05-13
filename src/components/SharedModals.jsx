@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { I, ModalX, PIPELINE_STAGES } from '../bb-shared.jsx';
+import { I, ModalX, PIPELINE_STAGES, fmt } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
+import { supabase } from '../lib/supabase';
 import { createCustomer } from '../services/customerService.js';
 import { createDeal } from '../services/dealService.js';
 import { createActivity, updateActivity, deleteActivity, buildDueAt } from '../services/activityService.js';
@@ -10,6 +11,23 @@ import { createJobCost } from '../services/jobCostService.js';
 import { updateProfile } from '../services/profileService.js';
 
 const isEmail = v => !v || /^\S+@\S+\.\S+$/.test(v);
+
+// ── KOSTEN BTW HELPERS ───────────────────────────────────────
+const calcBtwHelper = (bedrag, pct, mode) => {
+  const b = Number(bedrag) || 0;
+  const p = Number(pct) || 0;
+  if (mode === 'excl') {
+    const excl = b;
+    const btw = Math.round(excl * p / 100 * 100) / 100;
+    return { excl, btw, incl: Math.round((excl + btw) * 100) / 100 };
+  }
+  const incl = b;
+  const excl = Math.round(incl / (1 + p / 100) * 100) / 100;
+  const btw = Math.round((incl - excl) * 100) / 100;
+  return { excl, btw, incl };
+};
+const getRegelPct = r => r.btw_pct === 'anders' ? Number(r.btw_custom) || 0 : Number(r.btw_pct);
+const newKostenRegel = () => ({ id: Date.now() + Math.random(), omschrijving: '', bedrag: '', btw_mode: 'excl', btw_pct: 21, btw_custom: '' });
 
 // Customer form keeps friendly UI fields. customerService.mapCustomerFormToPayload
 // strips anything Supabase doesn't actually have (source, type, company_name).
@@ -520,32 +538,41 @@ export function NewCalendarEventModal({ onClose, onSaved, customers, defaultDate
 }
 
 // ── NEW JOB COST MODAL ───────────────────────────────────────
-export function NewJobCostModal({ onClose, onSaved, customers, deals, defaultCustId = '', defaultDealId = '' }) {
+export function NewJobCostModal({ onClose, onSaved, customers, defaultCustId = '' }) {
   const toast = useToast();
   const [form, setForm] = useState({
     customer_id: defaultCustId,
-    deal_id: defaultDealId,
     category: 'materiaal',
-    description: '',
-    amount: '',
     cost_date: new Date().toISOString().slice(0, 10),
   });
+  const [regels, setRegels] = useState(() => [newKostenRegel()]);
+  const [bijlageFile, setBijlageFile] = useState(null);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const dealsForCust = useMemo(() => {
-    if (!deals) return [];
-    if (!form.customer_id) return deals;
-    return deals.filter(d => String(d.custId) === String(form.customer_id));
-  }, [deals, form.customer_id]);
+  const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setRegel = (id, k, v) => setRegels(rs => rs.map(r => r.id === id ? { ...r, [k]: v } : r));
+  const addRegel = () => setRegels(rs => [...rs, newKostenRegel()]);
+  const removeRegel = id => setRegels(rs => rs.filter(r => r.id !== id));
+
+  const totalen = useMemo(() => regels.reduce((acc, r) => {
+    const { excl, btw, incl } = calcBtwHelper(r.bedrag, getRegelPct(r), r.btw_mode);
+    const pct = getRegelPct(r);
+    acc.excl += excl;
+    acc.incl += incl;
+    if (pct === 21) acc.btw21 += btw;
+    else if (pct === 9) acc.btw9 += btw;
+    else acc.btwOverig += btw;
+    return acc;
+  }, { excl: 0, incl: 0, btw21: 0, btw9: 0, btwOverig: 0 }), [regels]);
 
   const validate = () => {
     const next = {};
-    if (!form.description.trim()) next.description = 'Omschrijving is verplicht';
-    const amount = Number(form.amount);
-    if (!form.amount || Number.isNaN(amount) || amount <= 0) next.amount = 'Voer een geldig bedrag in';
     if (!form.cost_date) next.cost_date = 'Kies een datum';
+    regels.forEach((r, i) => {
+      if (!r.omschrijving.trim()) next[`r${i}o`] = true;
+      if (!r.bedrag || Number(r.bedrag) <= 0) next[`r${i}b`] = true;
+    });
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -554,16 +581,29 @@ export function NewJobCostModal({ onClose, onSaved, customers, deals, defaultCus
     if (!validate()) return;
     setSaving(true);
     try {
-      const created = await createJobCost({
-        amount: Number(form.amount),
-        description: form.description,
+      let bijlage_url = null;
+      if (bijlageFile) {
+        const ext = bijlageFile.name.split('.').pop();
+        const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: uploadError } = await supabase.storage.from('kosten-bijlagen').upload(path, bijlageFile);
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage.from('kosten-bijlagen').getPublicUrl(path);
+        bijlage_url = publicUrl;
+      }
+      const header = {
         category: form.category,
         cost_date: form.cost_date,
-        customer_id: form.customer_id || null,
-        deal_id: form.deal_id || null,
-      });
-      toast.success('Kosten toegevoegd');
-      onSaved?.(created);
+        bijlage_url,
+        klant_type: form.customer_id ? 'klant' : 'algemeen',
+      };
+      let first = null;
+      for (const r of regels) {
+        const { excl } = calcBtwHelper(r.bedrag, getRegelPct(r), r.btw_mode);
+        const created = await createJobCost({ ...header, amount: excl, description: r.omschrijving });
+        if (!first) first = created;
+      }
+      toast.success(regels.length > 1 ? `${regels.length} kostenregels toegevoegd` : 'Kosten toegevoegd');
+      onSaved?.(first);
       onClose();
     } catch (err) {
       toast.error(err.message || 'Kosten opslaan is mislukt');
@@ -571,6 +611,17 @@ export function NewJobCostModal({ onClose, onSaved, customers, deals, defaultCus
       setSaving(false);
     }
   };
+
+  const inputStyle = (hasErr) => ({
+    background: 'white',
+    border: `1px solid ${hasErr ? '#dc2626' : 'var(--border)'}`,
+    borderRadius: 'var(--r8)',
+    padding: '6px 10px',
+    fontSize: '.84rem',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box',
+  });
 
   return (
     <div className="overlay" onClick={e => e.target === e.currentTarget && !saving && onClose()}>
@@ -582,47 +633,161 @@ export function NewJobCostModal({ onClose, onSaved, customers, deals, defaultCus
           </div>
           <ModalX onClose={onClose} />
         </div>
+
+        {/* Header velden */}
         <div className="fg">
           <div className="f">
             <label>Klant</label>
-            <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)}>
-              <option value="">Geen klant</option>
+            <select value={form.customer_id} onChange={e => setField('customer_id', e.target.value)}>
+              <option value="">Algemeen</option>
               {(customers || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="f">
-            <label>Deal / klus</label>
-            <select value={form.deal_id} onChange={e => set('deal_id', e.target.value)}>
-              <option value="">Geen deal</option>
-              {dealsForCust.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
-            </select>
-          </div>
-          <div className="f">
             <label>Categorie</label>
-            <select value={form.category} onChange={e => set('category', e.target.value)}>
+            <select value={form.category} onChange={e => setField('category', e.target.value)}>
               <option value="materiaal">Materiaal</option>
               <option value="arbeid">Arbeid</option>
               <option value="reiskosten">Reiskosten</option>
               <option value="onderaannemer">Onderaannemer</option>
+              <option value="inkoopfactuur">Inkoopfactuur</option>
               <option value="overig">Overig</option>
             </select>
           </div>
-          <div className="f">
-            <label>Bedrag (€) *</label>
-            <input type="number" step="0.01" min="0" value={form.amount} onChange={e => set('amount', e.target.value)} placeholder="0.00" />
-            {errors.amount && <span className="bb-err">{errors.amount}</span>}
-          </div>
-          <div className="f">
+          <div className="f s2">
             <label>Datum *</label>
-            <input type="date" value={form.cost_date} onChange={e => set('cost_date', e.target.value)} />
+            <input type="date" value={form.cost_date} onChange={e => setField('cost_date', e.target.value)} />
             {errors.cost_date && <span className="bb-err">{errors.cost_date}</span>}
           </div>
-          <div className="f s2">
-            <label>Omschrijving *</label>
-            <input value={form.description} onChange={e => set('description', e.target.value)} placeholder="Bijv. Verf + primers" />
-            {errors.description && <span className="bb-err">{errors.description}</span>}
-          </div>
         </div>
+
+        {/* Kostenregels */}
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontSize: '.75rem', fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>
+            Kostenregels
+          </div>
+
+          {regels.map((r, idx) => {
+            const pct = getRegelPct(r);
+            const { excl, btw, incl } = calcBtwHelper(r.bedrag, pct, r.btw_mode);
+            const hasVal = Number(r.bedrag) > 0;
+            const errO = !!errors[`r${idx}o`];
+            const errB = !!errors[`r${idx}b`];
+            return (
+              <div key={r.id} style={{ background: 'var(--bgs)', borderRadius: 'var(--r8)', padding: '10px 12px', marginBottom: 6 }}>
+                {/* Rij 1: omschrijving + bedrag + delete */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 7, alignItems: 'center' }}>
+                  <input
+                    value={r.omschrijving}
+                    onChange={e => setRegel(r.id, 'omschrijving', e.target.value)}
+                    placeholder="Omschrijving"
+                    style={{ ...inputStyle(errO), flex: 1 }}
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={r.bedrag}
+                    onChange={e => setRegel(r.id, 'bedrag', e.target.value)}
+                    placeholder="0.00"
+                    style={{ ...inputStyle(errB), width: 100, flexShrink: 0 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => removeRegel(r.id)}
+                    disabled={regels.length === 1}
+                    style={{ padding: '5px 8px', flexShrink: 0 }}
+                    title="Regel verwijderen"
+                  >
+                    {I.trash}
+                  </button>
+                </div>
+
+                {/* Rij 2: toggle + BTW% + berekend */}
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div className="tabs" style={{ gap: 2, flexShrink: 0 }}>
+                    {[['excl', 'Excl. BTW'], ['incl', 'Incl. BTW']].map(([mode, label]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        className={`tab${r.btw_mode === mode ? ' active' : ''}`}
+                        style={{ fontSize: '.72rem', padding: '3px 8px' }}
+                        onClick={() => setRegel(r.id, 'btw_mode', mode)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <select
+                    value={r.btw_pct}
+                    onChange={e => setRegel(r.id, 'btw_pct', e.target.value === 'anders' ? 'anders' : Number(e.target.value))}
+                    style={{ fontSize: '.78rem', padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 6, background: 'white', outline: 'none', flexShrink: 0 }}
+                  >
+                    <option value={21}>21%</option>
+                    <option value={9}>9%</option>
+                    <option value={0}>0%</option>
+                    <option value="anders">Anders</option>
+                  </select>
+
+                  {r.btw_pct === 'anders' && (
+                    <input
+                      type="number"
+                      value={r.btw_custom}
+                      onChange={e => setRegel(r.id, 'btw_custom', e.target.value)}
+                      placeholder="%"
+                      style={{ width: 54, fontSize: '.78rem', padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 6, background: 'white', outline: 'none', flexShrink: 0 }}
+                    />
+                  )}
+
+                  {hasVal && (
+                    <div style={{ marginLeft: 'auto', fontSize: '.74rem', color: 'var(--dmu)', display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      <span>Excl: <strong style={{ color: 'var(--dm)' }}>{fmt(excl)}</strong></span>
+                      {btw !== 0 && <span>BTW: <strong style={{ color: 'var(--dm)' }}>{fmt(btw)}</strong></span>}
+                      <span>Incl: <strong style={{ color: 'var(--dk)', fontSize: '.78rem' }}>{fmt(incl)}</strong></span>
+                    </div>
+                  )}
+                </div>
+
+                {(errO || errB) && (
+                  <div style={{ fontSize: '.72rem', color: '#dc2626', marginTop: 5 }}>
+                    {errO ? 'Omschrijving is verplicht' : 'Voer een geldig bedrag in'}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          <button type="button" className="btn btn-s btn-sm" style={{ marginTop: 4 }} onClick={addRegel}>
+            {I.plus} Regel toevoegen
+          </button>
+        </div>
+
+        {/* Totalen */}
+        <div style={{ borderTop: '1px solid var(--border)', marginTop: 14, paddingTop: 10 }}>
+          {[
+            { label: 'Totaal excl. BTW', val: totalen.excl, main: false },
+            ...(totalen.btw21 > 0.005   ? [{ label: 'BTW 21%',     val: totalen.btw21,     main: false }] : []),
+            ...(totalen.btw9 > 0.005    ? [{ label: 'BTW 9%',      val: totalen.btw9,      main: false }] : []),
+            ...(totalen.btwOverig > 0.005 ? [{ label: 'Overige BTW', val: totalen.btwOverig, main: false }] : []),
+            { label: 'Totaal incl. BTW', val: totalen.incl, main: true },
+          ].map((row, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', fontSize: row.main ? '.9rem' : '.82rem' }}>
+              <span style={{ color: row.main ? 'var(--dk)' : 'var(--dmu)', fontWeight: row.main ? 700 : 400 }}>{row.label}</span>
+              <span style={{ fontWeight: row.main ? 800 : 600 }}>{fmt(row.val)}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Bijlage */}
+        <div style={{ marginTop: 14 }}>
+          <label style={{ fontSize: '.8rem', fontWeight: 600, color: 'var(--dk)', marginBottom: 5, display: 'block' }}>
+            Bijlage (PDF of afbeelding)
+          </label>
+          <input type="file" accept="image/*,application/pdf" onChange={e => setBijlageFile(e.target.files[0] || null)} />
+        </div>
+
         <div className="fa">
           <button className="btn btn-s" onClick={onClose} disabled={saving}>Annuleren</button>
           <button className="btn btn-p" onClick={submit} disabled={saving}>

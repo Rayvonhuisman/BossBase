@@ -24,6 +24,8 @@ export function mapJobCostFormToPayload(input = {}) {
   if (input.company_id !== undefined || input.companyId !== undefined) {
     payload.company_id = input.company_id ?? input.companyId ?? null
   }
+  if (input.bijlage_url !== undefined) payload.bijlage_url = input.bijlage_url
+  if (input.klant_type !== undefined) payload.klant_type = input.klant_type
 
   return payload
 }
@@ -38,6 +40,8 @@ export const toJobCost = row => ({
   date: row.cost_date || row.created_at?.slice(0, 10) || "",
   // Best-effort linkage to a customer via the deal — populated by joins where needed.
   custId: row.deals?.customer_id ?? null,
+  bijlageUrl: row.bijlage_url || null,
+  klantType: row.klant_type || 'klant',
   raw: row,
 })
 
