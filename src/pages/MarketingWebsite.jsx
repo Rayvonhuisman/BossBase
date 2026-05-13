@@ -149,7 +149,7 @@ export default function MarketingWebsite({ navigate, isAuthenticated = false }) 
             <a href="#hoe">Hoe het werkt</a>
             <a href="#prijzen">Prijzen</a>
             <a href="#faq">FAQ</a>
-            <button onClick={() => navigate('/login')}>Inloggen</button>
+            <button className="bb-nav-login" onClick={() => navigate('/login')}>Inloggen</button>
             {isAuthenticated && <button onClick={() => navigate('/dashboard')}>Dashboard</button>}
             <button className="bb-nav-cta" onClick={() => navigate('/register')}>Gratis starten</button>
           </div>

@@ -208,6 +208,9 @@
 
 @media (max-width: 767px) {
 
+  /* ── Prevent iOS input zoom (font-size must be ≥16px) ── */
+  input, textarea, select { font-size: 16px !important; }
+
   /* ── Dashboard main grid: single column ── */
   .dash-two-col { grid-template-columns: 1fr !important; }
 
@@ -356,6 +359,40 @@
   /* ── Customer info card ── */
   .cust-quick-actions { flex-direction: row; flex-wrap: wrap; }
   .cqa { flex: 1; min-width: 140px; justify-content: center; }
+
+  /* ── Pipeline: scroll-snap for swipe feel ── */
+  .pipe-wrap {
+    scroll-snap-type: x mandatory;
+  }
+  .pipe-col {
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  /* ── Werkbon: 44px touch targets for icon buttons ── */
+  .wo-act-btns .btn-icon {
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+
+  /* ── Offertes: filter chips above search, full-width ── */
+  .offertes-filter-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+  .offertes-filter-bar .tabs { flex: none !important; width: 100%; }
+  .offertes-filter-bar > div:last-child { width: 100%; }
+  .offertes-filter-bar > div:last-child input { width: 100% !important; }
+
+  /* ── Uren: filter bar stacks vertically, select full-width ── */
+  .uren-filter-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+  .uren-filter-bar .tabs { flex: none !important; width: 100%; }
+  .uren-filter-bar select { width: 100% !important; min-width: unset !important; padding: 8px 10px; }
 
 }
 

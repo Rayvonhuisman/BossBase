@@ -694,7 +694,7 @@ export function WerkbonPage() {
                       e.target.value = '';
                     }}
                   />
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <div className="wo-act-btns" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     <button
                       className="btn btn-sm btn-ghost btn-icon"
                       title="Bel klant"

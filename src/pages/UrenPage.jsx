@@ -333,7 +333,7 @@ export function UrenPage() {
         </div>
 
         <div className="card">
-          <div style={{ padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid var(--br)' }}>
+          <div className="uren-filter-bar" style={{ padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid var(--br)' }}>
             <div className="tabs" style={{ flex: 1 }}>
               {periodeFilters.map(f => (
                 <button
