@@ -141,7 +141,7 @@ export const CAL_EVENTS = [
 
 // ── HELPERS ─────────────────────────────────────────────────
 export const initials = n => n.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase();
-export const fmt = n => '€' + Number(n).toLocaleString('nl-NL');
+export const fmt = n => '€' + Number(n).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export const custById = id => CUSTOMERS_DATA.find(c => c.id === id);
 export const stageLabel = id => (PIPELINE_STAGES.find(s => s.id === id) || {}).label || id;
 export const stageCol   = id => (PIPELINE_STAGES.find(s => s.id === id) || {}).col   || 'b-gray';

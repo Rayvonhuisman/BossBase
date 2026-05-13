@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { I, ModalX, PIPELINE_STAGES, fmt } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { supabase } from '../lib/supabase';
@@ -546,7 +546,9 @@ export function NewJobCostModal({ onClose, onSaved, customers, defaultCustId = '
     cost_date: new Date().toISOString().slice(0, 10),
   });
   const [regels, setRegels] = useState(() => [newKostenRegel()]);
-  const [bijlageFile, setBijlageFile] = useState(null);
+  const [bijlageFiles, setBijlageFiles] = useState([]);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef(null);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
@@ -554,6 +556,17 @@ export function NewJobCostModal({ onClose, onSaved, customers, defaultCustId = '
   const setRegel = (id, k, v) => setRegels(rs => rs.map(r => r.id === id ? { ...r, [k]: v } : r));
   const addRegel = () => setRegels(rs => [...rs, newKostenRegel()]);
   const removeRegel = id => setRegels(rs => rs.filter(r => r.id !== id));
+
+  const MAX_FILE_SIZE = 5 * 1024 * 1024;
+  const addFiles = files => {
+    const next = [];
+    for (const f of files) {
+      if (f.size > MAX_FILE_SIZE) { toast.error(`${f.name}: bestand is te groot. Maximum is 5MB.`); continue; }
+      next.push(f);
+    }
+    if (next.length) setBijlageFiles(prev => [...prev, ...next]);
+  };
+  const removeFile = idx => setBijlageFiles(prev => prev.filter((_, i) => i !== idx));
 
   const totalen = useMemo(() => regels.reduce((acc, r) => {
     const { excl, btw, incl } = calcBtwHelper(r.bedrag, getRegelPct(r), r.btw_mode);
@@ -581,15 +594,16 @@ export function NewJobCostModal({ onClose, onSaved, customers, defaultCustId = '
     if (!validate()) return;
     setSaving(true);
     try {
-      let bijlage_url = null;
-      if (bijlageFile) {
-        const ext = bijlageFile.name.split('.').pop();
+      const uploadedUrls = [];
+      for (const file of bijlageFiles) {
+        const ext = file.name.split('.').pop();
         const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-        const { error: uploadError } = await supabase.storage.from('kosten-bijlagen').upload(path, bijlageFile);
+        const { error: uploadError } = await supabase.storage.from('kosten-bijlagen').upload(path, file);
         if (uploadError) throw uploadError;
         const { data: { publicUrl } } = supabase.storage.from('kosten-bijlagen').getPublicUrl(path);
-        bijlage_url = publicUrl;
+        uploadedUrls.push(publicUrl);
       }
+      const bijlage_url = uploadedUrls.length > 0 ? JSON.stringify(uploadedUrls) : null;
       const header = {
         category: form.category,
         cost_date: form.cost_date,
@@ -780,12 +794,54 @@ export function NewJobCostModal({ onClose, onSaved, customers, defaultCustId = '
           ))}
         </div>
 
-        {/* Bijlage */}
+        {/* Bijlagen */}
         <div style={{ marginTop: 14 }}>
-          <label style={{ fontSize: '.8rem', fontWeight: 600, color: 'var(--dk)', marginBottom: 5, display: 'block' }}>
-            Bijlage (PDF of afbeelding)
+          <label style={{ fontSize: '.8rem', fontWeight: 600, color: 'var(--dk)', marginBottom: 6, display: 'block' }}>
+            Bijlagen
           </label>
-          <input type="file" accept="image/*,application/pdf" onChange={e => setBijlageFile(e.target.files[0] || null)} />
+          <div
+            style={{
+              border: `2px dashed ${dragOver ? 'var(--p)' : 'var(--border)'}`,
+              borderRadius: 'var(--r8)',
+              padding: '18px 16px',
+              textAlign: 'center',
+              cursor: 'pointer',
+              background: dragOver ? 'var(--bgs)' : 'transparent',
+              transition: 'border-color .15s, background .15s',
+            }}
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={e => { e.preventDefault(); setDragOver(false); addFiles(Array.from(e.dataTransfer.files)); }}
+          >
+            <div style={{ color: 'var(--dl)', marginBottom: 6, display: 'flex', justifyContent: 'center' }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+            </div>
+            <div style={{ fontSize: '.82rem', color: 'var(--dk)', fontWeight: 500 }}>Sleep bestand hierheen of klik om te uploaden</div>
+            <div style={{ fontSize: '.74rem', color: 'var(--dl)', marginTop: 3 }}>JPG, PNG of PDF · Max 5MB per bestand</div>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,application/pdf"
+            multiple
+            style={{ display: 'none' }}
+            onChange={e => { addFiles(Array.from(e.target.files)); e.target.value = ''; }}
+          />
+          {bijlageFiles.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+              {bijlageFiles.map((f, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 20, padding: '3px 8px 3px 10px', fontSize: '.76rem' }}>
+                  <span style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                  <button type="button" onClick={() => removeFile(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1, color: 'var(--dl)', fontSize: '1.1rem', display: 'flex', alignItems: 'center' }}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="fa">

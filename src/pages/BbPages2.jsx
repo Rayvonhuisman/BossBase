@@ -690,7 +690,7 @@ export function RevenuePage() {
                   axisLine={false} tickLine={false} width={44}
                 />
                 <Tooltip
-                  formatter={(v, name) => [`€${Number(v).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, CHART_MODES.find(m => m.id === chartMode)?.label || name]}
+                  formatter={(v, name) => [fmt(v), CHART_MODES.find(m => m.id === chartMode)?.label || name]}
                   contentStyle={{ border: '1px solid var(--border)', borderRadius: 8, fontSize: '.8rem', boxShadow: 'none' }}
                   cursor={{ fill: 'rgba(0,0,0,.03)' }}
                 />

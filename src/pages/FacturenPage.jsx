@@ -265,14 +265,13 @@ export function NewFactuurModal({ customers, prefill, onClose, onSaved }) {
           </div>
 
           <RegelItemsForm regels={regels} setRegels={setRegels} />
-          <TotalenBlok regels={regels} />
-
           <div className="f">
             <label>Betalingskenmerk</label>
             <div style={{ padding: '9px 11px', border: '1px solid var(--bstrong)', borderRadius: 'var(--r8)', fontSize: '.85rem', color: 'var(--dl)', background: 'var(--bgs)' }}>
               {nummer || '…'}
             </div>
           </div>
+          <TotalenBlok regels={regels} />
           <div className="f s2">
             <label>Notities / betalingsinstructies</label>
             <textarea rows={2} value={form.notities} onChange={e => set('notities', e.target.value)} placeholder="Betalingsinstructies, interne notities..." />
