@@ -2,7 +2,7 @@ import { supabase } from "../lib/supabase"
 import { withCompanyId } from "../lib/currentCompany"
 
 // Real DB columns: id, company_id, deal_id, description, amount, category,
-// date, created_at, updated_at.
+// cost_date, created_at, updated_at.
 
 export function mapJobCostFormToPayload(input = {}) {
   const payload = {}
@@ -14,9 +14,9 @@ export function mapJobCostFormToPayload(input = {}) {
   }
   if (input.category !== undefined) payload.category = input.category || null
 
-  // Accept date, cost_date, or coste_date (legacy aliases).
-  const date = input.date ?? input.cost_date ?? input.coste_date
-  if (date !== undefined) payload.date = date || null
+  // Accept cost_date, date, or coste_date (legacy aliases).
+  const date = input.cost_date ?? input.date ?? input.coste_date
+  if (date !== undefined) payload.cost_date = date || null
 
   if (input.deal_id !== undefined || input.dealId !== undefined) {
     payload.deal_id = input.deal_id ?? input.dealId ?? null
@@ -37,7 +37,7 @@ export const toJobCost = row => ({
   cat: row.category || "overig",
   desc: row.description || "",
   amt: Number(row.amount || 0),
-  date: row.date || row.created_at?.slice(0, 10) || "",
+  date: row.cost_date || row.created_at?.slice(0, 10) || "",
   // Best-effort linkage to a customer via the deal — populated by joins where needed.
   custId: row.deals?.customer_id ?? null,
   bijlageUrl: row.bijlage_url || null,
