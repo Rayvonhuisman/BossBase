@@ -5,10 +5,10 @@ import { listActivities } from '../services/activityService.js';
 import { listCustomers } from '../services/customerService.js';
 import { useProfile, displayName } from '../lib/profileContext.jsx';
 import { useToast } from '../lib/toast.jsx';
-import { NewLeadModal, ActivityEditModal } from '../components/SharedModals.jsx';
+import { ActivityEditModal } from '../components/SharedModals.jsx';
 
-// ── DASHBOARD HOME ───────────────────────────────────────────
-export function DashboardHome({ setPage, openCustomer }) {
+// DashboardHome is now at src/pages/dashboard/DashboardHome.jsx
+function _LegacyDashboardHome({ setPage, openCustomer }) {
   const { profile, user, company, loading: profileLoading, requestNewLead, requestNewActivity, refreshKey } = useProfile();
   const [deals, setDeals] = useState([]);
   const [activities, setActivities] = useState([]);
@@ -222,7 +222,7 @@ function MoveStageSheet({ deal, stages, moveDeal, onClose, setActiveIdx }) {
 }
 
 // ── MOBILE PIPELINE (swipeable carousel) ─────────────────────
-function MobilePipeline({ stages, dealsInStage, openCustomer, moveDeal, markLost, setNewStage, setShowNew }) {
+function MobilePipeline({ stages, dealsInStage, openCustomer, openDeal, moveDeal, markLost, setNewStage, setShowNew }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [movingDeal, setMovingDeal] = useState(null);
   const touchStartX = useRef(null);
@@ -317,7 +317,7 @@ function MobilePipeline({ stages, dealsInStage, openCustomer, moveDeal, markLost
                   <div className="pipe-mob-card-name" onClick={() => openCustomer(deal.custId)}>
                     {deal.customerName || 'Klant'}
                   </div>
-                  {deal.title && <div className="pipe-mob-card-title">{deal.title}</div>}
+                  {deal.title && <div className="pipe-mob-card-title" style={{ cursor: 'pointer' }} onClick={() => openDeal ? openDeal(deal.id) : openCustomer(deal.custId)}>{deal.title}</div>}
                   {deal.city && <div className="pipe-mob-card-city">{I.map} {deal.city}</div>}
                 </div>
                 <span className="pipe-mob-prio" style={{ background: prioColor(deal.priority) }} title={`Prioriteit: ${deal.priority}`} />
@@ -356,7 +356,7 @@ function MobilePipeline({ stages, dealsInStage, openCustomer, moveDeal, markLost
 }
 
 // ── PIPELINE ─────────────────────────────────────────────────
-export function Pipeline({ openCustomer }) {
+export function Pipeline({ openCustomer, openDeal }) {
   const toast = useToast();
   const { refreshKey, bumpRefresh } = useProfile();
   const [deals, setDeals] = useState([]);
@@ -534,6 +534,7 @@ export function Pipeline({ openCustomer }) {
           stages={filter.stage === 'all' ? stages : stages.filter(s => s.id === filter.stage)}
           dealsInStage={dealsInStage}
           openCustomer={openCustomer}
+          openDeal={openDeal}
           moveDeal={moveDeal}
           markLost={markLost}
           setNewStage={setNewStage}
@@ -568,7 +569,7 @@ export function Pipeline({ openCustomer }) {
                       </div>
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: prioColor(deal.priority), flexShrink: 0, marginTop: 4 }} title={`Prioriteit: ${deal.priority}`} />
                     </div>
-                    <div className="pc-job">{I.map} <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{deal.title}</span></div>
+                    <div className="pc-job" style={{ cursor: 'pointer' }} title="Open deal" onClick={() => openDeal ? openDeal(deal.id) : openCustomer(deal.custId)}>{I.map} <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{deal.title}</span></div>
                     {deal.city && <div style={{ fontSize: '.73rem', color: 'var(--dl)', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
                       {I.map} {deal.city}
                     </div>}

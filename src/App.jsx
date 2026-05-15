@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { I, Logo, initials } from './bb-shared.jsx';
 import { LoginPage, RegisterFlow } from './pages/BbAuth.jsx';
-import { DashboardHome, Pipeline } from './pages/BbDashboard.jsx';
+import { DashboardHome } from './pages/dashboard/DashboardHome.jsx';
+import { Pipeline } from './pages/BbDashboard.jsx';
+import { DealDetailDrawer } from './pages/dashboard/DealDetailDrawer.jsx';
+import { InvoiceDetailDrawer } from './pages/dashboard/InvoiceDetailDrawer.jsx';
+import { CalendarEventDetailDrawer } from './pages/dashboard/CalendarEventDetailDrawer.jsx';
 import { CustomerPage, CustomersPage, ActivitiesPage } from './pages/BbPages1.jsx';
 import { CalendarPage, CostsPage, RevenuePage } from './pages/BbPages2.jsx';
 import { InstellingenPage } from './pages/InstellingenPage.jsx';
@@ -422,6 +426,48 @@ function CustomerDrawer({ custId, onClose, setPage }) {
   );
 }
 
+// ── DEAL DRAWER ──────────────────────────────────────────────
+function DealDrawer({ dealId, onClose, setPage, openCustomer }) {
+  return (
+    <>
+      <div className="drawer-overlay" onClick={onClose} />
+      <div className="drawer">
+        <div className="drawer-body">
+          <DealDetailDrawer dealId={dealId} onClose={onClose} setPage={setPage} openCustomer={openCustomer} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── INVOICE DRAWER ───────────────────────────────────────────
+function InvoiceDrawer({ invoiceId, onClose, setPage, openCustomer }) {
+  return (
+    <>
+      <div className="drawer-overlay" onClick={onClose} />
+      <div className="drawer">
+        <div className="drawer-body">
+          <InvoiceDetailDrawer invoiceId={invoiceId} onClose={onClose} setPage={setPage} openCustomer={openCustomer} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── CALENDAR EVENT DRAWER ────────────────────────────────────
+function CalEventDrawer({ eventId, onClose, setPage, openCustomer, openDeal }) {
+  return (
+    <>
+      <div className="drawer-overlay" onClick={onClose} />
+      <div className="drawer">
+        <div className="drawer-body">
+          <CalendarEventDetailDrawer eventId={eventId} onClose={onClose} setPage={setPage} openCustomer={openCustomer} openDeal={openDeal} />
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── MOBILE MEER MENU ─────────────────────────────────────────
 function MeerMenu({ page, onNavigate, onClose, profile }) {
   const isMedewerker = profile?.role === 'medewerker';
@@ -546,6 +592,10 @@ function AppInner() {
   const [page,       setPage]       = useState('dashboard');
   const [sbOpen,     setSbOpen]     = useState(false);
   const [drawerCust, setDrawerCust] = useState(null);
+  const [drawerDeal, setDrawerDeal] = useState(null);
+  const [drawerInvoice, setDrawerInvoice] = useState(null);
+  const [drawerCalEvent, setDrawerCalEvent] = useState(null);
+  const [navIntent,  setNavIntent]  = useState(null);
   const [user,       setUser]       = useState(null);
   const [profile,    setProfile]    = useState(null);
   const [company,    setCompany]    = useState(null);
@@ -664,9 +714,26 @@ function AppInner() {
     setRoute(nextPath);
   };
 
-  const openCustomer  = id => setDrawerCust(id);
-  const closeCustomer = () => setDrawerCust(null);
-  const navigatePage  = p => { setPage(p); closeCustomer(); };
+  // Customer / deal / invoice / calendar-event drawers are mutually exclusive
+  const openCustomer     = id => { setDrawerDeal(null); setDrawerInvoice(null); setDrawerCalEvent(null); setDrawerCust(id); };
+  const closeCustomer    = () => setDrawerCust(null);
+  const openDeal         = id => { setDrawerCust(null); setDrawerInvoice(null); setDrawerCalEvent(null); setDrawerDeal(id); };
+  const closeDeal        = () => setDrawerDeal(null);
+  const openInvoice      = id => { setDrawerCust(null); setDrawerDeal(null); setDrawerCalEvent(null); setDrawerInvoice(id); };
+  const closeInvoice     = () => setDrawerInvoice(null);
+  const openCalendarEvent = id => { setDrawerCust(null); setDrawerDeal(null); setDrawerInvoice(null); setDrawerCalEvent(id); };
+  const closeCalEvent    = () => setDrawerCalEvent(null);
+  // Optional deep-open intent: { page, id } so a target page can open a
+  // specific record via its own existing modal. Cleared once consumed.
+  const navigatePage  = (p, intent) => {
+    setPage(p);
+    setNavIntent(intent && intent.id ? { page: p, id: intent.id } : null);
+    closeCustomer();
+    closeDeal();
+    closeInvoice();
+    closeCalEvent();
+  };
+  const clearNavIntent = () => setNavIntent(null);
   const handleLogout = async () => {
     try {
       await logout();
@@ -725,17 +792,17 @@ function AppInner() {
   }), [user, profile, company, profileLoading, profileError, refreshProfile, repairProfile, requestNewLead, requestNewActivity, bumpRefresh, refreshKey]);
 
   const renderPage = () => {
-    const props = { setPage: navigatePage, openCustomer };
+    const props = { setPage: navigatePage, openCustomer, openDeal, openInvoice, openCalendarEvent };
     switch (page) {
       case 'dashboard':  return <DashboardHome {...props} />;
-      case 'pipeline':   return <Pipeline openCustomer={openCustomer} />;
+      case 'pipeline':   return <Pipeline openCustomer={openCustomer} openDeal={openDeal} />;
       case 'customers':  return <CustomersPage openCustomer={openCustomer} />;
-      case 'activities': return <ActivitiesPage openCustomer={openCustomer} />;
-      case 'calendar':   return <CalendarPage openCustomer={openCustomer} />;
+      case 'activities': return <ActivitiesPage openCustomer={openCustomer} preOpenActivityId={navIntent?.page === 'activities' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
+      case 'calendar':   return <CalendarPage openCustomer={openCustomer} openCalendarEvent={openCalendarEvent} preOpenActivityId={navIntent?.page === 'calendar' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'costs':       return <CostsPage />;
       case 'revenue':     return <RevenuePage />;
-      case 'offertes':    return <OffertesPage />;
-      case 'werkbonnen':  return <WerkbonPage />;
+      case 'offertes':    return <OffertesPage preOpenOfferteId={navIntent?.page === 'offertes' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
+      case 'werkbonnen':  return <WerkbonPage preOpenWerkbonId={navIntent?.page === 'werkbonnen' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'uren':        return <UrenPage />;
       case 'team':        return <TeamPage />;
       case 'instellingen':return <InstellingenPage />;
@@ -898,6 +965,34 @@ function AppInner() {
             custId={drawerCust}
             onClose={closeCustomer}
             setPage={navigatePage}
+          />
+        )}
+
+        {drawerDeal !== null && (
+          <DealDrawer
+            dealId={drawerDeal}
+            onClose={closeDeal}
+            setPage={navigatePage}
+            openCustomer={openCustomer}
+          />
+        )}
+
+        {drawerInvoice !== null && (
+          <InvoiceDrawer
+            invoiceId={drawerInvoice}
+            onClose={closeInvoice}
+            setPage={navigatePage}
+            openCustomer={openCustomer}
+          />
+        )}
+
+        {drawerCalEvent !== null && (
+          <CalEventDrawer
+            eventId={drawerCalEvent}
+            onClose={closeCalEvent}
+            setPage={navigatePage}
+            openCustomer={openCustomer}
+            openDeal={openDeal}
           />
         )}
 

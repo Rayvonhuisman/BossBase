@@ -545,7 +545,7 @@ export function CustomersPage({ openCustomer }) {
 }
 
 // ── ACTIVITIES ───────────────────────────────────────────────
-export function ActivitiesPage({ openCustomer }) {
+export function ActivitiesPage({ openCustomer, preOpenActivityId, onNavConsumed }) {
   const toast = useToast();
   const { refreshKey, bumpRefresh } = useProfile();
   const [filter, setFilter] = useState('all');
@@ -570,6 +570,18 @@ export function ActivitiesPage({ openCustomer }) {
       .catch(err => setError(err.message || 'Activiteiten laden is mislukt.'))
       .finally(() => setLoading(false));
   }, [refreshKey]);
+
+  // Deep-open a specific activity requested from the dashboard
+  useEffect(() => {
+    if (!preOpenActivityId || loading) return;
+    const a = acts.find(x => x.id === preOpenActivityId);
+    if (a) {
+      setSelected(a);
+      onNavConsumed && onNavConsumed();
+    } else if (import.meta.env.DEV) {
+      console.warn('[bb:dashboard] activiteit niet gevonden voor deep-open:', preOpenActivityId);
+    }
+  }, [preOpenActivityId, loading, acts]);
 
   const filters = [
     { id: 'all',     label: 'Alle' },

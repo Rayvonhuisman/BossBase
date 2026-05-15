@@ -515,7 +515,7 @@ function TabUren({ werkbonId }) {
 
 // ── WERKBON PAGE ─────────────────────────────────────────────────────────────
 
-export function WerkbonPage() {
+export function WerkbonPage({ preOpenWerkbonId, onNavConsumed }) {
   const toast = useToast();
   const [werkbonnen, setWerkbonnen] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -545,6 +545,18 @@ export function WerkbonPage() {
       .then(([t, m]) => { setTaken(t); setMaterialen(m); })
       .catch(err => toast.error(err.message || 'Details laden mislukt'));
   }, [selected]);
+
+  // Deep-open a specific werkbon requested from the dashboard
+  useEffect(() => {
+    if (!preOpenWerkbonId || loading) return;
+    if (werkbonnen.some(w => w.id === preOpenWerkbonId)) {
+      setSelected(preOpenWerkbonId);
+      setActiveTab('info');
+      onNavConsumed && onNavConsumed();
+    } else if (import.meta.env.DEV) {
+      console.warn('[bb:dashboard] werkbon niet gevonden voor deep-open:', preOpenWerkbonId);
+    }
+  }, [preOpenWerkbonId, loading, werkbonnen]);
 
   const selectedWerkbon = werkbonnen.find(w => w.id === selected) || null;
 

@@ -298,7 +298,7 @@ function ViewOfferteModal({ offerte, customers, onClose }) {
 
 // ── OFFERTES PAGE ────────────────────────────────────────────────────────────
 
-export function OffertesPage() {
+export function OffertesPage({ preOpenOfferteId, onNavConsumed }) {
   const toast = useToast();
   const { profile } = useProfile();
   const canManageOffertes = profile?.role === 'admin' || profile?.role === 'planner';
@@ -321,6 +321,18 @@ export function OffertesPage() {
   };
 
   useEffect(() => { load(); }, []);
+
+  // Deep-open a specific offerte requested from the dashboard
+  useEffect(() => {
+    if (!preOpenOfferteId || loading) return;
+    const o = offertes.find(x => x.id === preOpenOfferteId);
+    if (o) {
+      setViewOfferte(o);
+      onNavConsumed && onNavConsumed();
+    } else if (import.meta.env.DEV) {
+      console.warn('[bb:dashboard] offerte niet gevonden voor deep-open:', preOpenOfferteId);
+    }
+  }, [preOpenOfferteId, loading, offertes]);
 
   const filters = [
     { label: 'Alle', value: '' },

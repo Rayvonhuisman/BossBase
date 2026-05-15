@@ -13,7 +13,7 @@ import { useProfile } from '../lib/profileContext.jsx';
 import { ActivityEditModal, NewCalendarEventModal, NewJobCostModal } from '../components/SharedModals.jsx';
 
 // ── CALENDAR ─────────────────────────────────────────────────
-export function CalendarPage({ openCustomer }) {
+export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityId, onNavConsumed }) {
   const toast = useToast();
   const { refreshKey, bumpRefresh } = useProfile();
   const [view, setView] = useState('week');
@@ -36,6 +36,18 @@ export function CalendarPage({ openCustomer }) {
       .finally(() => setLoading(false));
   }, [refreshKey]);
 
+  // Deep-open a specific activity requested from the dashboard agenda widget
+  React.useEffect(() => {
+    if (!preOpenActivityId || loading) return;
+    const a = activities.find(x => x.id === preOpenActivityId);
+    if (a) {
+      setEditActivity(a);
+      onNavConsumed && onNavConsumed();
+    } else if (import.meta.env.DEV) {
+      console.warn('[bb:dashboard] agenda-activiteit niet gevonden voor deep-open:', preOpenActivityId);
+    }
+  }, [preOpenActivityId, loading, activities]);
+
   const DAYS = ['Ma','Di','Wo','Do','Vr','Za','Zo'];
   const DATES = [4, 5, 6, 7, 8, 9, 10];
   const HOURS_LIST = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00'];
@@ -48,12 +60,14 @@ export function CalendarPage({ openCustomer }) {
 
   const typeLabel = t => ({ job: 'Klus', activity: 'Activiteit', visit: 'Opname' }[t] || t);
 
-  // Als een kalenderitem gekoppeld is aan een activiteit, open ActivityEditModal.
+  // Gekoppeld aan een activiteit → ActivityEditModal. Los agenda-event met een
+  // id → globale CalendarEventDetailDrawer. Anders de inline event-modal.
   const handleEventClick = e => {
     if (e.activityId) {
       const act = activities.find(a => a.id === e.activityId);
       if (act) { setEditActivity(act); return; }
     }
+    if (openCalendarEvent && e.id) { openCalendarEvent(e.id); return; }
     setShowEvent(e);
   };
   const saveEvent = async input => {
