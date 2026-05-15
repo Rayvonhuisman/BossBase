@@ -5,6 +5,10 @@ import {
 } from '../bb-shared.jsx';
 import { createCalendarEvent, listCalendarEvents, updateCalendarEvent } from '../services/calendarService.js';
 import { createJobCost, listJobCosts } from '../services/jobCostService.js';
+import { getFacturen, getAllFactuurRegels } from '../services/factuurService.js';
+import { getConnection, syncFactuurNaarMoneybird } from '../services/accountingService.js';
+import { getOffertes } from '../services/offerteService.js';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { listCustomers } from '../services/customerService.js';
 import { listDeals } from '../services/dealService.js';
 import { listActivities } from '../services/activityService.js';
@@ -527,22 +531,23 @@ export function CostsPage() {
           </div>
         </div>
         <table className="dt">
-          <thead><tr><th>Klant</th><th>Categorie</th><th>Omschrijving</th><th>Bedrag</th><th>Datum</th></tr></thead>
+          <thead><tr><th>Klant</th><th>Categorie</th><th>Omschrijving</th><th>Bedrag</th><th>Datum</th><th></th></tr></thead>
           <tbody>
             {filtered.map(r => {
               const c = customers.find(x => x.id === r.custId);
               return (
                 <tr key={r.id}>
-                  <td style={{ fontWeight: 600 }}>{c?.name || '—'}</td>
+                  <td style={{ fontWeight: 600 }}>{r.klantType === 'algemeen' ? 'Algemeen' : (c?.name || '—')}</td>
                   <td><span className="badge b-gray" style={{ textTransform: 'capitalize' }}>{r.cat}</span></td>
                   <td>{r.desc}</td>
                   <td style={{ fontWeight: 700 }}>{fmt(r.amt)}</td>
                   <td style={{ color: 'var(--dl)', fontSize: '.8rem' }}>{r.date}</td>
+                  <td>{r.bijlageUrl ? <a href={r.bijlageUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--dl)', display: 'flex', alignItems: 'center' }}>{I.paperclip}</a> : null}</td>
                 </tr>
               );
             })}
             {filtered.length === 0 && !loading && (
-              <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--dl)', padding: 24 }}>Geen kosten gevonden{(filterCust || filterCat) ? ' bij dit filter.' : '. Voeg de eerste kost toe.'}</td></tr>
+              <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--dl)', padding: 24 }}>Geen kosten gevonden{(filterCust || filterCat) ? ' bij dit filter.' : '. Voeg de eerste kost toe.'}</td></tr>
             )}
           </tbody>
         </table>
@@ -559,132 +564,265 @@ export function CostsPage() {
   );
 }
 
-// ── REVENUE / PROFIT ─────────────────────────────────────────
+// ── FINANCIËN ─────────────────────────────────────────────────
 export function RevenuePage() {
   const toast = useToast();
   const { refreshKey } = useProfile();
   const [customers, setCustomers] = useState([]);
   const [costsData, setCostsData] = useState([]);
+  const [facturen, setFacturen] = useState([]);
+  const [offertes, setOffertes] = useState([]);
+  const [allRegels, setAllRegels] = useState([]);
+  const [chartMode, setChartMode] = useState('gefactureerd');
+  const [loading, setLoading] = useState(true);
+  const [mbConnection, setMbConnection] = useState(null);
+  const [mbSyncing, setMbSyncing] = useState(false);
+
+  const TODAY = new Date().toISOString().slice(0, 10);
+  const THIS_MONTH = TODAY.slice(0, 7);
+  const qStart = (() => { const d = new Date(TODAY); const q = Math.floor(d.getMonth() / 3); return `${d.getFullYear()}-${String(q * 3 + 1).padStart(2, '0')}-01`; })();
+  const qEnd   = (() => { const d = new Date(TODAY); const q = Math.floor(d.getMonth() / 3); return new Date(d.getFullYear(), q * 3 + 3, 0).toISOString().slice(0, 10); })();
+  const qLabel = (() => { const d = new Date(TODAY); return `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}`; })();
+
   React.useEffect(() => {
-    Promise.all([listCustomers(), listJobCosts()]).then(([customerData, costData]) => {
-      setCustomers(customerData);
-      setCostsData(costData);
-    }).catch(() => {});
+    setLoading(true);
+    Promise.all([listCustomers(), listJobCosts(), getFacturen(), getOffertes(), getAllFactuurRegels(), getConnection()])
+      .then(([custData, costData, facturenData, offertesData, regelsData, mbConn]) => {
+        setCustomers(custData);
+        setCostsData(costData);
+        setFacturen(facturenData);
+        setOffertes(offertesData);
+        setAllRegels(regelsData);
+        setMbConnection(mbConn);
+      }).catch(() => {}).finally(() => setLoading(false));
   }, [refreshKey]);
+
+  // ── KPI ──────────────────────────────────────────────────────
+  const omzetMaand     = facturen.filter(f => f.status !== 'concept' && f.factuurdatum?.startsWith(THIS_MONTH)).reduce((s, f) => s + f.totaalIncl, 0);
+  const ontvangenMaand = facturen.filter(f => f.status === 'betaald' && f.betaaldOp?.startsWith(THIS_MONTH)).reduce((s, f) => s + f.totaalIncl, 0);
+  const openstaand     = facturen.filter(f => f.status === 'verzonden').reduce((s, f) => s + f.totaalIncl, 0);
+  const teVerwachten   = offertes.filter(o => o.status === 'geaccepteerd').reduce((s, o) => s + o.totaalIncl, 0);
+  const kostenMaand    = costsData.filter(c => c.date?.startsWith(THIS_MONTH)).reduce((s, c) => s + c.amt, 0);
+  const netto          = ontvangenMaand - kostenMaand;
+  const marge          = ontvangenMaand > 0 ? Math.round((netto / ontvangenMaand) * 100) : 0;
+
+  // ── CHART DATA ────────────────────────────────────────────────
+  const chartData = React.useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleDateString('nl-NL', { month: 'short' }).replace('.', '');
+      return {
+        maand: label,
+        gefactureerd: facturen.filter(f => f.status !== 'concept' && f.factuurdatum?.startsWith(key)).reduce((s, f) => s + f.totaalIncl, 0),
+        ontvangen:    facturen.filter(f => f.status === 'betaald' && f.betaaldOp?.startsWith(key)).reduce((s, f) => s + f.totaalIncl, 0),
+        kosten:       costsData.filter(c => c.date?.startsWith(key)).reduce((s, c) => s + c.amt, 0),
+      };
+    });
+  }, [facturen, costsData]);
+
+  // ── BTW ───────────────────────────────────────────────────────
+  const qFactuurIds = new Set(facturen.filter(f => f.status !== 'concept' && f.factuurdatum >= qStart && f.factuurdatum <= qEnd).map(f => f.id));
+  const qRegels     = allRegels.filter(r => qFactuurIds.has(r.factuurId));
+  const btw21 = Math.round(qRegels.filter(r => r.btwPct === 21).reduce((s, r) => s + r.regelprijs * 0.21, 0) * 100) / 100;
+  const btw9  = Math.round(qRegels.filter(r => r.btwPct === 9).reduce((s, r) => s + r.regelprijs * 0.09, 0) * 100) / 100;
+
+  // ── PER KLANT ─────────────────────────────────────────────────
   const rows = customers.map(c => {
-    const costs = costsData.filter(x => x.custId === c.id).reduce((s, x) => s + x.amt, 0);
+    const costs  = costsData.filter(x => x.custId === c.id).reduce((s, x) => s + x.amt, 0);
     const profit = c.paid - costs;
     const margin = c.paid > 0 ? Math.round((profit / c.paid) * 100) : 0;
     return { ...c, costs, profit, margin };
   });
-  const totalRev    = rows.reduce((s, r) => s + r.paid, 0);
-  const totalCosts  = rows.reduce((s, r) => s + r.costs, 0);
-  const totalProfit = totalRev - totalCosts;
-  const totalQuoted = rows.reduce((s, r) => s + r.total, 0);
-  const avgMargin   = totalRev > 0 ? Math.round((totalProfit / totalRev) * 100) : 0;
+
+  const handleMbSync = async () => {
+    const betaald = facturen.filter(f => f.status === 'betaald');
+    if (betaald.length === 0) { toast.info('Geen betaalde facturen om te synchroniseren'); return; }
+    setMbSyncing(true);
+    let ok = 0; let fail = 0;
+    for (const f of betaald) {
+      try { await syncFactuurNaarMoneybird(f.id); ok++; } catch { fail++; }
+    }
+    setMbSyncing(false);
+    if (fail === 0) toast.success(`${ok} factuur${ok !== 1 ? 'en' : ''} gesynchroniseerd`);
+    else toast.error(`${ok} gesynchroniseerd, ${fail} mislukt`);
+    const refreshed = await getConnection().catch(() => null);
+    if (refreshed) setMbConnection(refreshed);
+  };
 
   const handleExport = () => {
-    if (rows.length === 0) {
-      toast.info('Geen omzetdata om te exporteren');
-      return;
-    }
-    const headers = ['Klant', 'Stad', 'Geoffreerd (€)', 'Kosten (€)', 'Betaald (€)', 'Openstaand (€)', 'Winst (€)', 'Marge (%)', 'Status'];
+    if (rows.length === 0) { toast.info('Geen financiële data om te exporteren'); return; }
+    const headers = ['Klant', 'Stad', 'Geoffreerd (€)', 'Kosten (€)', 'Betaald (€)', 'Openstaand (€)', 'Nettoresultaat (€)', 'Marge (%)', 'Status'];
     const escape = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const csvRows = [
       headers.map(escape).join(','),
-      ...rows.map(r => [
-        r.name,
-        r.city || '',
-        r.total.toFixed(2),
-        r.costs.toFixed(2),
-        r.paid.toFixed(2),
-        (r.total - r.paid).toFixed(2),
-        r.profit.toFixed(2),
-        r.margin,
-        r.stage === 'completed' || r.stage === 'paid' ? 'Afgerond' : 'In uitvoering',
-      ].map(escape).join(',')),
+      ...rows.map(r => [r.name, r.city || '', r.total.toFixed(2), r.costs.toFixed(2), r.paid.toFixed(2), (r.total - r.paid).toFixed(2), r.profit.toFixed(2), r.margin, r.stage === 'completed' || r.stage === 'paid' ? 'Afgerond' : 'In uitvoering'].map(escape).join(',')),
     ];
-    const csv = csvRows.join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `bossbase-omzet-export-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
+    const a = document.createElement('a'); a.href = url; a.download = `bossbase-financien-export-${TODAY}.csv`; a.click();
     URL.revokeObjectURL(url);
-    toast.success('Omzet export gedownload');
+    toast.success('Export gedownload');
   };
+
+  const CHART_MODES = [
+    { id: 'gefactureerd', label: 'Gefactureerd' },
+    { id: 'ontvangen',    label: 'Ontvangen' },
+    { id: 'kosten',       label: 'Kosten' },
+  ];
+
+  const KPI = [
+    { label: 'Omzet deze maand',  val: fmt(omzetMaand),     sub: 'Verzonden + betaald (incl. BTW)' },
+    { label: 'Ontvangen',         val: fmt(ontvangenMaand), sub: 'Betaalde facturen deze maand' },
+    { label: 'Openstaand',        val: fmt(openstaand),     sub: 'Verzonden, nog te ontvangen',     color: '#e8784a' },
+    { label: 'Te verwachten',     val: fmt(teVerwachten),   sub: 'Geaccepteerde offertes' },
+    { label: 'Kosten deze maand', val: fmt(kostenMaand),    sub: 'Alle kostenregels deze maand',    color: '#dc2626' },
+    { label: 'Nettoresultaat',    val: fmt(netto),          sub: `${marge}% marge deze maand`,      color: netto >= 0 ? '#059669' : '#dc2626' },
+  ];
 
   return (
     <div>
       <div className="page-hd afu">
-        <div><h1>Omzet & winst</h1><p>Financieel overzicht — mei 2026</p></div>
+        <div><h1>Financiën</h1><p>Financieel overzicht</p></div>
         <div className="page-hd-actions">
           <button className="btn btn-s btn-sm" onClick={handleExport}>Exporteren</button>
         </div>
       </div>
 
-      <div className="profit-card afu2">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-          <div>
-            <div style={{ fontSize: '.78rem', color: 'rgba(255,255,255,.55)', marginBottom: 6 }}>NETTORESULTAAT (MEI 2026)</div>
-            <div className="profit-card-val">{fmt(totalProfit)}</div>
-            <div className="profit-card-label">Winst na alle kosten</div>
+      {loading && <div className="card card-p">Financiën laden...</div>}
+
+      <div className="stats-row afu2" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+        {KPI.map((k, i) => (
+          <div key={i} className="sc" style={{ padding: '16px 18px' }}>
+            <div className="sc-val" style={k.color ? { color: k.color } : {}}>{k.val}</div>
+            <div className="sc-label">{k.label}</div>
+            <div style={{ fontSize: '.7rem', color: 'var(--dl)', marginTop: 2 }}>{k.sub}</div>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '.75rem', color: 'rgba(255,255,255,.5)', marginBottom: 4 }}>Marge</div>
-            <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--p)' }}>{avgMargin}%</div>
+        ))}
+      </div>
+
+      <div className="tw afu3" style={{ padding: '16px 18px' }}>
+        <div className="tw-hd" style={{ marginBottom: 14 }}>
+          <div className="card-title">Omzetgrafiek — afgelopen 12 maanden</div>
+          <div className="tabs">
+            {CHART_MODES.map(m => (
+              <button key={m.id} className={`tab${chartMode === m.id ? ' active' : ''}`} onClick={() => setChartMode(m.id)}>{m.label}</button>
+            ))}
           </div>
         </div>
-        <div className="margin-bar"><div className="margin-fill" style={{ width: `${avgMargin}%` }} /></div>
-        <div className="profit-row">
-          {[
-            { label: 'Omzet (betaald)',  val: fmt(totalRev) },
-            { label: 'Totale kosten',    val: fmt(totalCosts) },
-            { label: 'Open offertes',    val: fmt(totalQuoted - totalRev) },
-          ].map((x, i) => (
-            <div key={i} className="profit-item">
-              <div className="profit-item-val">{x.val}</div>
-              <div className="profit-item-label">{x.label}</div>
+        <div style={{ overflowX: 'auto' }}>
+          <div style={{ minWidth: 480 }}>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                <XAxis dataKey="maand" tick={{ fontSize: 11, fill: 'var(--dl)' }} axisLine={false} tickLine={false} />
+                <YAxis
+                  tickFormatter={v => v === 0 ? '€0' : `€${(v / 1000).toFixed(0)}k`}
+                  tick={{ fontSize: 11, fill: 'var(--dl)' }}
+                  axisLine={false} tickLine={false} width={44}
+                />
+                <Tooltip
+                  formatter={(v, name) => [fmt(v), CHART_MODES.find(m => m.id === chartMode)?.label || name]}
+                  contentStyle={{ border: '1px solid var(--border)', borderRadius: 8, fontSize: '.8rem', boxShadow: 'none' }}
+                  cursor={{ fill: 'rgba(0,0,0,.03)' }}
+                />
+                <Bar dataKey={chartMode} fill={chartMode === 'kosten' ? '#dc2626' : '#1DDB62'} radius={[4, 4, 0, 0]} maxBarSize={32} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      <div className="afu3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div className="sc" style={{ padding: '16px 18px' }}>
+          <div style={{ fontWeight: 700, fontSize: '.88rem', marginBottom: 12, color: 'var(--dk)' }}>BTW {qLabel}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[{ label: 'BTW 21%', val: btw21 }, { label: 'BTW 9%', val: btw9 }].map((row, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.85rem' }}>
+                <span style={{ color: 'var(--dmu)' }}>{row.label}</span>
+                <span style={{ fontWeight: 700 }}>{fmt(row.val)}</span>
+              </div>
+            ))}
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: '.85rem' }}>
+              <span style={{ color: 'var(--dmu)', fontWeight: 600 }}>Totaal BTW</span>
+              <span style={{ fontWeight: 800 }}>{fmt(btw21 + btw9)}</span>
             </div>
-          ))}
+          </div>
+          <div style={{ fontSize: '.7rem', color: 'var(--dl)', marginTop: 10 }}>Informatief · geen aangifte</div>
         </div>
       </div>
 
       <div className="tw afu3">
         <div className="tw-hd"><div className="card-title">Per klant / opdracht</div></div>
-        <table className="dt">
-          <thead><tr><th>Klant</th><th>Geoffreerd</th><th>Kosten</th><th>Betaald</th><th>Openstaand</th><th>Winst</th><th>Marge</th><th>Status</th></tr></thead>
-          <tbody>
-            {rows.map(r => (
-              <tr key={r.id}>
-                <td>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                    <Av name={r.name} size="sm" idx={r.av} />
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: '.84rem' }}>{r.name}</div>
-                      <div style={{ fontSize: '.72rem', color: 'var(--dl)' }}>{r.city}</div>
-                    </div>
-                  </div>
-                </td>
-                <td style={{ fontWeight: 600 }}>{fmt(r.total)}</td>
-                <td style={{ color: '#dc2626', fontWeight: 600 }}>{fmt(r.costs)}</td>
-                <td style={{ color: '#059669', fontWeight: 700 }}>{fmt(r.paid)}</td>
-                <td style={{ fontWeight: 600, color: r.total - r.paid > 0 ? '#e8784a' : 'var(--dl)' }}>{fmt(r.total - r.paid)}</td>
-                <td style={{ fontWeight: 800, color: r.profit >= 0 ? '#059669' : '#dc2626' }}>{fmt(r.profit)}</td>
-                <td>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ width: 40, height: 5, background: '#f3f4f6', borderRadius: 99, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${Math.max(0, r.margin)}%`, background: r.margin >= 30 ? '#059669' : r.margin >= 15 ? '#e8784a' : '#dc2626', borderRadius: 99 }} />
-                    </div>
-                    <span style={{ fontSize: '.78rem', fontWeight: 700 }}>{r.margin}%</span>
-                  </div>
-                </td>
-                <td><StatusBadge status={r.stage === 'completed' || r.stage === 'paid' ? 'completed' : 'in_progress'} /></td>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="dt" style={{ minWidth: 680 }}>
+            <thead>
+              <tr>
+                <th>Klant</th><th>Geoffreerd</th><th>Kosten</th><th>Betaald</th><th>Openstaand</th><th>Nettoresultaat</th><th>Marge</th><th>Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.id}>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <Av name={r.name} size="sm" idx={r.av} />
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '.84rem' }}>{r.name}</div>
+                        <div style={{ fontSize: '.72rem', color: 'var(--dl)' }}>{r.city}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td style={{ fontWeight: 600 }}>{fmt(r.total)}</td>
+                  <td style={{ color: '#dc2626', fontWeight: 600 }}>{fmt(r.costs)}</td>
+                  <td style={{ color: '#059669', fontWeight: 700 }}>{fmt(r.paid)}</td>
+                  <td style={{ fontWeight: 600, color: r.total - r.paid > 0 ? '#e8784a' : 'var(--dl)' }}>{fmt(r.total - r.paid)}</td>
+                  <td style={{ fontWeight: 800, color: r.profit >= 0 ? '#059669' : '#dc2626' }}>{fmt(r.profit)}</td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ width: 40, height: 5, background: '#f3f4f6', borderRadius: 99, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${Math.max(0, r.margin)}%`, background: r.margin >= 30 ? '#059669' : r.margin >= 15 ? '#e8784a' : '#dc2626', borderRadius: 99 }} />
+                      </div>
+                      <span style={{ fontSize: '.78rem', fontWeight: 700 }}>{r.margin}%</span>
+                    </div>
+                  </td>
+                  <td><StatusBadge status={r.stage === 'completed' || r.stage === 'paid' ? 'completed' : 'in_progress'} /></td>
+                </tr>
+              ))}
+              {rows.length === 0 && !loading && (
+                <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--dl)', padding: 24 }}>Nog geen klantdata beschikbaar.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="tw afu3">
+        <div className="tw-hd">
+          <div>
+            <div className="card-title">Boekhoudkoppeling</div>
+            <div style={{ fontSize: '.8rem', color: 'var(--dmu)', marginTop: 2 }}>
+              {mbConnection?.apiToken
+                ? `Moneybird verbonden${mbConnection.lastSyncedAt ? ' · Laatste sync: ' + new Date(mbConnection.lastSyncedAt).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}`
+                : 'Geen boekhoudpakket gekoppeld · Stel dit in via Instellingen → Integraties'}
+            </div>
+          </div>
+          {mbConnection?.apiToken && (
+            <button
+              className="btn btn-s btn-sm"
+              onClick={handleMbSync}
+              disabled={mbSyncing}
+            >
+              {mbSyncing ? 'Synchroniseren...' : 'Synchroniseer betaalde facturen'}
+            </button>
+          )}
+        </div>
+        {!mbConnection?.apiToken && (
+          <div style={{ padding: '16px 0 4px', fontSize: '.84rem', color: 'var(--dl)' }}>
+            Koppel Moneybird om facturen automatisch te exporteren en inkoopfacturen als kostenregels te importeren.
+          </div>
+        )}
       </div>
     </div>
   );

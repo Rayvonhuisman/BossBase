@@ -11,6 +11,7 @@ import { CalendarPage, CostsPage, RevenuePage } from './pages/BbPages2.jsx';
 import { InstellingenPage } from './pages/InstellingenPage.jsx';
 import { TeamPage } from './pages/TeamPage.jsx';
 import { OffertesPage } from './pages/OffertesPage.jsx';
+import { FacturenPage } from './pages/FacturenPage.jsx';
 import { UrenPage } from './pages/UrenPage.jsx';
 import { WerkbonPage } from './pages/WerkbonPage.jsx';
 import MarketingWebsite from './pages/MarketingWebsite.jsx';
@@ -37,7 +38,8 @@ const NAV = [
   { id: 'werkbonnen',  label: 'Werkbonnen',  icon: 'wo',       section: 'work' },
   { id: 'uren',        label: 'Uren',        icon: 'hours',    section: 'work' },
   { id: 'costs',       label: 'Kosten',      icon: 'costs',    section: 'finance' },
-  { id: 'revenue',     label: 'Omzet',       icon: 'revenue',  section: 'finance' },
+  { id: 'revenue',     label: 'Financiën',   icon: 'chart',    section: 'finance' },
+  { id: 'facturen',    label: 'Facturen',    icon: 'brief',    section: 'finance' },
   { id: 'offertes',    label: 'Offertes',    icon: 'quotes',   section: 'finance' },
   { id: 'team',        label: 'Team',        icon: 'team',     section: 'bedrijf' },
   { id: 'instellingen',label: 'Instellingen',icon: 'settings', section: 'bedrijf' },
@@ -390,7 +392,7 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
               </div>
               <div className="tb-pop-menu">
                 <button onClick={() => { close(); onOpenProfile(); }}>{I.cust} Mijn profiel</button>
-                <button onClick={() => { close(); navigatePage('revenue'); }}>{I.revenue} Omzet & winst</button>
+                <button onClick={() => { close(); navigatePage('revenue'); }}>{I.chart} Financiën</button>
                 <div className="menu-divider" />
                 <button className="danger" onClick={() => { close(); onLogout(); }}>{I.logout} Uitloggen</button>
               </div>
@@ -484,8 +486,8 @@ function MeerMenu({ page, onNavigate, onClose, profile }) {
       label: 'Financieel',
       items: [
         { id: 'offertes', label: 'Offertes', icon: I.quotes },
-        { id: 'costs',    label: 'Kosten',   icon: I.costs },
-        { id: 'revenue',  label: 'Omzet',    icon: I.revenue },
+        { id: 'costs',    label: 'Kosten',    icon: I.costs },
+        { id: 'revenue',  label: 'Financiën', icon: I.chart },
       ],
     },
     ...(isMedewerker ? [] : [{
@@ -623,7 +625,8 @@ function AppInner() {
       werkbonnen:  { title: 'Werkbonnen',   sub: 'Uitvoeropdrachten op locatie' },
       uren:        { title: 'Uren',         sub: 'Urenregistratie per medewerker' },
       costs:       { title: 'Kosten',       sub: 'Kosten per klant en opdracht' },
-      revenue:     { title: 'Omzet & Winst',sub: 'Financieel overzicht' },
+      revenue:     { title: 'Financiën',    sub: 'Financieel overzicht' },
+      facturen:    { title: 'Facturen',      sub: 'Facturen aanmaken en beheren' },
       offertes:    { title: 'Offertes',     sub: 'Offertes aanmaken en beheren' },
       team:        { title: 'Team',         sub: 'Teamleden en uitnodigingen' },
       instellingen:{ title: 'Instellingen', sub: 'Bedrijfsprofiel en standaardwaarden' },
@@ -801,7 +804,8 @@ function AppInner() {
       case 'calendar':   return <CalendarPage openCustomer={openCustomer} openCalendarEvent={openCalendarEvent} preOpenActivityId={navIntent?.page === 'calendar' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'costs':       return <CostsPage />;
       case 'revenue':     return <RevenuePage />;
-      case 'offertes':    return <OffertesPage preOpenOfferteId={navIntent?.page === 'offertes' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
+      case 'facturen':    return <FacturenPage openCustomer={openCustomer} />;
+      case 'offertes':    return <OffertesPage openCustomer={openCustomer} preOpenOfferteId={navIntent?.page === 'offertes' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'werkbonnen':  return <WerkbonPage preOpenWerkbonId={navIntent?.page === 'werkbonnen' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'uren':        return <UrenPage />;
       case 'team':        return <TeamPage />;

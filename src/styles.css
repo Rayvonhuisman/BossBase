@@ -1,3 +1,12 @@
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+}
+
 :root {
   color-scheme: light;
   /* BossBase brand palette */
