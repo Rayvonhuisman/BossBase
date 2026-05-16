@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { createCustomer } from '../services/customerService.js';
 import { createDeal } from '../services/dealService.js';
 import { createActivity, updateActivity, deleteActivity, buildDueAt } from '../services/activityService.js';
+import { syncActivity } from '../services/googleCalendarService.js';
 import { useProfile } from '../lib/profileContext.jsx';
 import { createCalendarEvent } from '../services/calendarService.js';
 import { createJobCost } from '../services/jobCostService.js';
@@ -862,6 +863,21 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
   const role = profile?.role || 'medewerker';
   const canEdit = role === 'admin' || role === 'planner';
 
+  // Google Calendar per-activity sync state (read-only display + manual retry).
+  const [gStatus, setGStatus] = useState(activity?.googleSyncStatus || 'not_synced');
+  const [gErr, setGErr] = useState(activity?.googleSyncError || '');
+  const [gBusy, setGBusy] = useState(false);
+  const retryGoogleSync = async () => {
+    setGBusy(true);
+    try {
+      const r = await syncActivity(activity.id); // manual: auto=false
+      if (r?.ok || r?.skipped) { setGStatus(r.ok ? 'synced' : gStatus); setGErr(''); if (r.ok) toast.success('Gesynchroniseerd met Google Agenda'); }
+      else { setGStatus('error'); setGErr(r?.error || 'Onbekende fout'); toast.error('Sync mislukt'); }
+    } catch (e) {
+      setGStatus('error'); setGErr(e.message || 'Sync mislukt'); toast.error('Sync mislukt');
+    } finally { setGBusy(false); }
+  };
+
   const [form, setForm] = useState({
     title: activity?.title || '',
     type: activity?.type || 'task',
@@ -1025,6 +1041,24 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
             <label>Notities</label>
             <textarea value={form.notes} onChange={e => set('notes', e.target.value)} disabled={!canEdit || busy} />
           </div>
+          {activity?.dueAt && (
+            <div className="f s2" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '.78rem', color: 'var(--dmu)' }}>Google Agenda:</span>
+              {gBusy
+                ? <span className="badge b-gray">Wachten op sync…</span>
+                : gStatus === 'synced'
+                  ? <span className="badge b-green">Gesynchroniseerd</span>
+                  : gStatus === 'error'
+                    ? <span className="badge b-red">Sync-fout</span>
+                    : <span className="badge b-gray">Niet gesynchroniseerd</span>}
+              {gStatus === 'error' && !gBusy && (
+                <>
+                  <button className="btn btn-s btn-xs" onClick={retryGoogleSync}>Opnieuw synchroniseren</button>
+                  {gErr && <span style={{ fontSize: '.72rem', color: '#dc2626' }}>{gErr}</span>}
+                </>
+              )}
+            </div>
+          )}
         </div>
         <div className="fa">
           {canEdit && <button className="btn btn-ghost" onClick={handleDelete} disabled={busy}>{I.trash} Verwijderen</button>}

@@ -12,6 +12,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { listCustomers } from '../services/customerService.js';
 import { listDeals } from '../services/dealService.js';
 import { listActivities } from '../services/activityService.js';
+import { getConnectionStatus, startGoogleCalendarConnect, disconnectGoogleCalendar } from '../services/googleCalendarService.js';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { ActivityEditModal, NewCalendarEventModal, NewJobCostModal } from '../components/SharedModals.jsx';
@@ -26,6 +27,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityI
   const [activities, setActivities] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [showGoogle, setShowGoogle] = useState(false);
+  const [gcal, setGcal] = useState({ loading: true, connected: false, email: '', busy: false });
   const [editEvent, setEditEvent] = useState(null);
   const [editActivity, setEditActivity] = useState(null);
   const [showNew, setShowNew] = useState(false);
@@ -51,6 +53,42 @@ export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityI
       console.warn('[bb:dashboard] agenda-activiteit niet gevonden voor deep-open:', preOpenActivityId);
     }
   }, [preOpenActivityId, loading, activities]);
+
+  // Google Calendar connection status + handle the OAuth redirect result.
+  const loadGcalStatus = React.useCallback(() => {
+    getConnectionStatus()
+      .then(s => setGcal(g => ({ ...g, loading: false, connected: s.connected, email: s.email })))
+      .catch(() => setGcal(g => ({ ...g, loading: false })));
+  }, []);
+  React.useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const g = q.get('google');
+    if (g === 'connected') toast.success('Google Agenda gekoppeld');
+    else if (g === 'error') toast.error('Google-koppeling mislukt: ' + (q.get('google_msg') || 'onbekende fout'));
+    if (g) {
+      // Clean the query so a refresh doesn't re-toast.
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    loadGcalStatus();
+  }, [loadGcalStatus]);
+
+  const handleGcalConnect = async () => {
+    setGcal(g => ({ ...g, busy: true }));
+    try { await startGoogleCalendarConnect(); }
+    catch (e) { toast.error(e.message || 'Koppelen mislukt'); setGcal(g => ({ ...g, busy: false })); }
+  };
+  const handleGcalDisconnect = async () => {
+    if (!window.confirm('Google Agenda-koppeling verbreken?')) return;
+    setGcal(g => ({ ...g, busy: true }));
+    try {
+      await disconnectGoogleCalendar();
+      setGcal({ loading: false, connected: false, email: '', busy: false });
+      toast.success('Google Agenda ontkoppeld');
+    } catch (e) {
+      toast.error(e.message || 'Ontkoppelen mislukt');
+      setGcal(g => ({ ...g, busy: false }));
+    }
+  };
 
   const DAYS = ['Ma','Di','Wo','Do','Vr','Za','Zo'];
   const DATES = [4, 5, 6, 7, 8, 9, 10];
@@ -110,8 +148,19 @@ export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityI
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: 'white', border: '1px solid var(--border)', borderRadius: 'var(--r10)', marginBottom: 14, width: 'fit-content' }} className="afu2">
         {I.google}
         <span style={{ fontSize: '.8rem', color: 'var(--dmu)', fontWeight: 500 }}>Google Agenda</span>
-        <span className="badge b-gray">Niet verbonden</span>
-        <button className="btn btn-p btn-xs" onClick={() => setShowGoogle(true)}>Verbinden</button>
+        {gcal.loading ? (
+          <span className="badge b-gray">Laden…</span>
+        ) : gcal.connected ? (
+          <>
+            <span className="badge b-green">Verbonden{gcal.email ? ` · ${gcal.email}` : ''}</span>
+            <button className="btn btn-s btn-xs" disabled={gcal.busy} onClick={handleGcalDisconnect}>Koppeling verbreken</button>
+          </>
+        ) : (
+          <>
+            <span className="badge b-gray">Niet verbonden</span>
+            <button className="btn btn-p btn-xs" disabled={gcal.busy} onClick={handleGcalConnect}>Google Agenda koppelen</button>
+          </>
+        )}
       </div>
       {loading && <div className="card card-p">Agenda laden...</div>}
       {error && <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>}

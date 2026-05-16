@@ -2,6 +2,7 @@ import { supabase } from "../lib/supabase"
 import { withCompanyId } from "../lib/currentCompany"
 import { safeInsert } from "../lib/safeInsert"
 import { sanitizeName } from "./customerService"
+import { autoSyncActivitySafe, autoSyncDeleteSafe } from "./googleCalendarService"
 
 // Real DB columns: id, company_id, customer_id, deal_id, assigned_to, title, type,
 // due_at, completed (boolean), notes, created_at, updated_at.
@@ -82,6 +83,11 @@ export const toActivity = row => {
     completed,
     // Synthesize a display status the existing UI expects.
     status: completed ? "completed" : computeOpenStatus(row.due_at),
+    // Google Calendar sync state (columns added in migration 010).
+    googleEventId: row.google_event_id || null,
+    googleSyncStatus: row.google_sync_status || "not_synced",
+    googleSyncedAt: row.google_calendar_synced_at || null,
+    googleSyncError: row.google_sync_error || null,
     raw: row,
   }
 }
@@ -112,19 +118,33 @@ export async function createActivity(input) {
   const payload = await withCompanyId(mapActivityFormToPayload(input))
   const { data, error } = await safeInsert(supabase, "activities", payload, "*, customers(*)")
   if (error) throw error
-  return toActivity(data)
+  const activity = toActivity(data)
+  autoSyncActivitySafe(activity) // non-blocking BossBase -> Google
+  return activity
 }
 
 export async function updateActivity(id, input) {
   const payload = mapActivityFormToPayload(input)
   const { data, error } = await supabase.from("activities").update(payload).eq("id", id).select("*, customers(*)").single()
   if (error) throw error
-  return toActivity(data)
+  const activity = toActivity(data)
+  autoSyncActivitySafe(activity) // non-blocking BossBase -> Google
+  return activity
 }
 
 export async function deleteActivity(id) {
+  // Capture the linked Google event id before the row is gone, so we can
+  // remove the calendar event afterwards (best-effort, non-blocking).
+  let googleEventId = null
+  try {
+    const { data: pre } = await supabase
+      .from("activities").select("google_event_id").eq("id", id).maybeSingle()
+    googleEventId = pre?.google_event_id || null
+  } catch { /* column may not exist yet pre-migration — ignore */ }
+
   const { error } = await supabase.from("activities").delete().eq("id", id)
   if (error) throw error
+  autoSyncDeleteSafe(id, googleEventId)
 }
 
 export async function completeActivity(id) {
