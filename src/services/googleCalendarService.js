@@ -20,7 +20,17 @@ export async function getConnectionStatus() {
 // Starts the OAuth flow: ask the Edge Function for a consent URL, then send
 // the browser to Google. Google redirects back to /calendar?google=...
 export async function startGoogleCalendarConnect() {
-  const { data, error } = await supabase.functions.invoke("google-calendar-auth-url", { body: {} })
+  // The Edge Function verifies the caller via supabase.auth.getUser(), so it
+  // needs a valid *user* JWT. Without an explicit header, invoke() can fall
+  // back to the anon key (no user) → 401. Send the live session token.
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) {
+    throw new Error("Je sessie is verlopen. Log opnieuw in.")
+  }
+  const { data, error } = await supabase.functions.invoke("google-calendar-auth-url", {
+    body: {},
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  })
   if (error) throw error
   if (!data?.url) throw new Error("Geen Google-autorisatie-URL ontvangen")
   window.location.href = data.url
