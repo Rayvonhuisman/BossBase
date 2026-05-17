@@ -517,6 +517,67 @@ export function HoursPage() {
   );
 }
 
+// ── KOSTEN DETAIL MODAL ───────────────────────────────────────
+function KostenDetailModal({ cost, mbAdminId, onClose }) {
+  const isMoneybird = !!cost.externeRef;
+  const ref = cost.externeRef || '';
+  const mbId = ref.replace(/^purchase_|^receipt_|^mutation_/, '');
+  let mbUrl = null;
+  if (isMoneybird && mbAdminId) {
+    if (ref.startsWith('purchase_')) mbUrl = `https://moneybird.com/${mbAdminId}/documents/purchase_invoices/${mbId}`;
+    else if (ref.startsWith('receipt_')) mbUrl = `https://moneybird.com/${mbAdminId}/documents/receipts/${mbId}`;
+    else if (ref.startsWith('mutation_')) mbUrl = `https://moneybird.com/${mbAdminId}/financial_mutations/${mbId}`;
+  }
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-hd">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontWeight: 700, fontSize: '1rem' }}>Kostendetail</span>
+            {isMoneybird
+              ? <span style={{ fontSize: '.72rem', fontWeight: 700, color: '#fff', background: '#f97316', borderRadius: 5, padding: '2px 7px' }}>Moneybird</span>
+              : <span style={{ fontSize: '.72rem', fontWeight: 600, color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 5, padding: '2px 7px' }}>Handmatig</span>
+            }
+          </div>
+          <ModalX onClick={onClose} />
+        </div>
+        <div className="fg" style={{ gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 2 }}>Bedrag</div>
+              <div style={{ fontSize: '1.2rem', fontWeight: 800 }}>{fmt(cost.amt)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 2 }}>Datum</div>
+              <div style={{ fontWeight: 600 }}>{cost.date || '—'}</div>
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 2 }}>Leverancier / omschrijving</div>
+            <div>{cost.desc || '—'}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 2 }}>Categorie</div>
+            <span className="badge b-gray" style={{ textTransform: 'capitalize' }}>{cost.cat}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingTop: 4 }}>
+            {cost.bijlageUrl && (
+              <a href={cost.bijlageUrl} target="_blank" rel="noreferrer" className="btn btn-s btn-sm">
+                {I.paperclip} Bijlage bekijken
+              </a>
+            )}
+            {mbUrl && (
+              <a href={mbUrl} target="_blank" rel="noreferrer" className="btn btn-s btn-sm">
+                🐦 Bekijk in Moneybird
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── COSTS ────────────────────────────────────────────────────
 export function CostsPage() {
   const { refreshKey, bumpRefresh } = useProfile();
@@ -528,10 +589,18 @@ export function CostsPage() {
   const [filterCat, setFilterCat] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedCost, setSelectedCost] = useState(null);
+  const [mbAdminId, setMbAdminId] = useState('');
   React.useEffect(() => {
     setLoading(true);
-    Promise.all([listJobCosts(), listCustomers(), listDeals()])
-      .then(([costData, customerData, dealData]) => { setCosts(costData); setCustomers(customerData); setDeals(dealData); setError(''); })
+    Promise.all([listJobCosts(), listCustomers(), listDeals(), getConnection()])
+      .then(([costData, customerData, dealData, conn]) => {
+        setCosts(costData);
+        setCustomers(customerData);
+        setDeals(dealData);
+        if (conn?.administrationId) setMbAdminId(conn.administrationId);
+        setError('');
+      })
       .catch(err => setError(err.message || 'Kosten laden is mislukt.'))
       .finally(() => setLoading(false));
   }, [refreshKey]);
@@ -580,18 +649,23 @@ export function CostsPage() {
           </div>
         </div>
         <table className="dt">
-          <thead><tr><th>Klant</th><th>Categorie</th><th>Omschrijving</th><th>Bedrag</th><th>Datum</th><th></th></tr></thead>
+          <thead><tr><th>Klant</th><th>Categorie</th><th>Omschrijving</th><th>Bedrag</th><th>Datum</th><th>Bron</th></tr></thead>
           <tbody>
             {filtered.map(r => {
               const c = customers.find(x => x.id === r.custId);
               return (
-                <tr key={r.id}>
+                <tr key={r.id} onClick={() => setSelectedCost(r)} style={{ cursor: 'pointer' }}>
                   <td style={{ fontWeight: 600 }}>{r.klantType === 'algemeen' ? 'Algemeen' : (c?.name || '—')}</td>
                   <td><span className="badge b-gray" style={{ textTransform: 'capitalize' }}>{r.cat}</span></td>
                   <td>{r.desc}</td>
                   <td style={{ fontWeight: 700 }}>{fmt(r.amt)}</td>
                   <td style={{ color: 'var(--dl)', fontSize: '.8rem' }}>{r.date}</td>
-                  <td>{r.bijlageUrl ? <a href={r.bijlageUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--dl)', display: 'flex', alignItems: 'center' }}>{I.paperclip}</a> : null}</td>
+                  <td>
+                    {r.externeRef
+                      ? <span style={{ fontSize: '.7rem', fontWeight: 700, color: '#fff', background: '#f97316', borderRadius: 4, padding: '2px 6px' }}>MB</span>
+                      : <span style={{ fontSize: '.7rem', color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 6px' }}>—</span>
+                    }
+                  </td>
                 </tr>
               );
             })}
@@ -607,6 +681,13 @@ export function CostsPage() {
           customers={customers}
           deals={deals}
           onSaved={created => { setCosts(cs => [created, ...cs]); bumpRefresh?.(); }}
+        />
+      )}
+      {selectedCost && (
+        <KostenDetailModal
+          cost={selectedCost}
+          mbAdminId={mbAdminId}
+          onClose={() => setSelectedCost(null)}
         />
       )}
     </div>

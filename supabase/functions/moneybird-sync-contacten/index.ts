@@ -31,7 +31,7 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  console.log('Function started')
+  console.log('Function started: moneybird-sync-contacten')
   console.log('SUPABASE_URL:', Deno.env.get('SUPABASE_URL') ? 'set' : 'missing')
 
   try {
@@ -48,18 +48,11 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Niet ingelogd' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    const { factuur_id } = await req.json()
-    if (!factuur_id) {
-      return new Response(JSON.stringify({ error: 'factuur_id is verplicht' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-    }
-
-    // Get company_id from profile
     const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single()
     if (!profile?.company_id) {
       return new Response(JSON.stringify({ error: 'Geen bedrijf gevonden' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // Get Moneybird connection
     const { data: conn } = await supabase
       .from('accounting_connections')
       .select('api_token, administration_id')
@@ -73,40 +66,70 @@ serve(async (req) => {
 
     const token = conn.api_token
     const adminId = conn.administration_id
+    const companyId = profile.company_id
 
-    // Get factuur + customer
-    const { data: factuur } = await supabase
-      .from('facturen')
-      .select('*, customers(name, email, address, city, postal_code, phone, kvk, btw_number)')
-      .eq('id', factuur_id)
-      .single()
+    let imported = 0
+    let exported = 0
 
-    if (!factuur) {
-      return new Response(JSON.stringify({ error: 'Factuur niet gevonden' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    // ── A: MONEYBIRD → BOSSBASE ──────────────────────────────────────────────
+    const mbContacts = await mbFetch(token, adminId, '/contacts.json?per_page=100')
+
+    if (Array.isArray(mbContacts) && mbContacts.length > 0) {
+      const { data: existingCustomers } = await supabase
+        .from('customers')
+        .select('id, name, email, moneybird_id')
+        .eq('company_id', companyId)
+
+      const byEmail = new Map<string, any>()
+      const byName = new Map<string, any>()
+      for (const c of (existingCustomers || [])) {
+        if (c.email) byEmail.set(c.email.toLowerCase(), c)
+        if (c.name) byName.set(c.name.toLowerCase(), c)
+      }
+
+      for (const contact of mbContacts) {
+        const name = contact.company_name || [contact.firstname, contact.lastname].filter(Boolean).join(' ') || ''
+        if (!name.trim()) continue
+
+        const emailKey = (contact.email || '').toLowerCase()
+        const existing = (emailKey && byEmail.get(emailKey)) || byName.get(name.toLowerCase())
+
+        if (existing) {
+          if (!existing.moneybird_id) {
+            await supabase.from('customers').update({ moneybird_id: String(contact.id) }).eq('id', existing.id)
+          }
+        } else {
+          const { data: newCustomer } = await supabase.from('customers').insert({
+            company_id: companyId,
+            name: name.trim(),
+            email: contact.email || null,
+            phone: contact.phone || null,
+            address: contact.address1 || null,
+            city: contact.city || null,
+            moneybird_id: String(contact.id),
+          }).select().single()
+
+          if (newCustomer) {
+            imported++
+            if (emailKey) byEmail.set(emailKey, newCustomer)
+            byName.set(name.toLowerCase(), newCustomer)
+          }
+        }
+      }
     }
 
-    // Get factuurregels
-    const { data: regels } = await supabase
-      .from('factuur_regels')
+    console.log('Geïmporteerd van Moneybird:', imported)
+
+    // ── B: BOSSBASE → MONEYBIRD ──────────────────────────────────────────────
+    const { data: unsynced } = await supabase
+      .from('customers')
       .select('*')
-      .eq('factuur_id', factuur_id)
-      .order('volgorde', { ascending: true })
+      .eq('company_id', companyId)
+      .is('moneybird_id', null)
 
-    const customer = factuur.customers
-
-    // Find or create contact in Moneybird
-    let contactId: string | null = null
-
-    if (customer?.name) {
-      const contacts = await mbFetch(token, adminId, `/contacts.json?query=${encodeURIComponent(customer.name)}`)
-      const existing = Array.isArray(contacts) ? contacts.find((c: any) =>
-        c.company_name === customer.name || c.firstname === customer.name
-      ) : null
-
-      if (existing) {
-        contactId = existing.id
-      } else {
-        const newContact = await mbFetch(token, adminId, '/contacts.json', {
+    for (const customer of (unsynced || [])) {
+      try {
+        const mbContact = await mbFetch(token, adminId, '/contacts.json', {
           method: 'POST',
           body: JSON.stringify({
             contact: {
@@ -115,63 +138,22 @@ serve(async (req) => {
               phone: customer.phone || '',
               address1: customer.address || '',
               city: customer.city || '',
-              zipcode: customer.postal_code || '',
-              tax_number: customer.btw_number || '',
             },
           }),
         })
-        contactId = newContact?.id ?? null
+        if (mbContact?.id) {
+          await supabase.from('customers').update({ moneybird_id: String(mbContact.id) }).eq('id', customer.id)
+          exported++
+        }
+      } catch (err) {
+        console.error(`Export klant ${customer.id} mislukt:`, err.message)
       }
     }
 
-    // Build invoice lines
-    const invoiceDetails = (regels || []).map((r: any) => ({
-      description: r.omschrijving,
-      price: r.eenheidsprijs?.toString() ?? '0',
-      amount: r.type === 'vast' ? '1' : (r.aantal?.toString() ?? '1'),
-      tax_rate_id: null, // tax rates resolved separately if needed
-    }))
-
-    // Create sales invoice
-    const invoicePayload: any = {
-      sales_invoice: {
-        contact_id: contactId,
-        invoice_date: factuur.factuurdatum,
-        due_date: factuur.vervaldatum || null,
-        reference: factuur.betalingskenmerk || factuur.nummer,
-        details_attributes: invoiceDetails,
-      },
-    }
-
-    const mbInvoice = await mbFetch(token, adminId, '/sales_invoices.json', {
-      method: 'POST',
-      body: JSON.stringify(invoicePayload),
-    })
-
-    const mbInvoiceId = mbInvoice?.id
-
-    // If factuur is betaald, register payment
-    if (factuur.status === 'betaald' && mbInvoiceId) {
-      await mbFetch(token, adminId, `/sales_invoices/${mbInvoiceId}/payments.json`, {
-        method: 'POST',
-        body: JSON.stringify({
-          payment: {
-            payment_date: factuur.betaald_op || factuur.factuurdatum,
-            price: factuur.totaal_incl?.toString() ?? '0',
-          },
-        }),
-      })
-    }
-
-    // Update last_synced_at
-    await supabase
-      .from('accounting_connections')
-      .update({ last_synced_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq('company_id', profile.company_id)
-      .eq('provider', 'moneybird')
+    console.log('Geëxporteerd naar Moneybird:', exported)
 
     return new Response(
-      JSON.stringify({ success: true, moneybird_id: mbInvoiceId }),
+      JSON.stringify({ success: true, imported, exported }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (err) {

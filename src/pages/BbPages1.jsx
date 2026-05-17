@@ -4,6 +4,7 @@ import {
   fmt, custById, stageLabel, stageCol, Av, StatusBadge, ModalX,
 } from '../bb-shared.jsx';
 import { createCustomer, deleteCustomer, getCustomer, listCustomers, updateCustomer } from '../services/customerService.js';
+import { updateContactInMoneybird } from '../services/accountingService.js';
 import { buildDueAt, createActivity, listActivities, updateActivity } from '../services/activityService.js';
 import { createNote, listNotes } from '../services/noteService.js';
 import { listJobCosts } from '../services/jobCostService.js';
@@ -36,6 +37,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [showCostModal, setShowCostModal] = useState(false);
   const [selectedAct, setSelectedAct] = useState(null);
+  const [mbSyncing, setMbSyncing] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -119,6 +121,23 @@ export function CustomerPage({ custId, onClose, setPage }) {
     } catch { /* ignore */ }
   };
 
+  const syncWithMoneybird = async () => {
+    setMbSyncing(true);
+    try {
+      const result = await updateContactInMoneybird(c.id);
+      if (result?.success) {
+        setCustomer(prev => ({ ...prev, moneybirdId: result.moneybird_id }));
+        toast.success('Klant gesynchroniseerd met Moneybird');
+      } else {
+        toast.error(result?.error || 'Sync mislukt');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Sync mislukt');
+    } finally {
+      setMbSyncing(false);
+    }
+  };
+
   const TABS = ['overview','timeline','activities','quotes','costs','notes'];
   const TAB_LABELS = { overview: 'Overzicht', timeline: 'Tijdlijn', activities: 'Activiteiten', quotes: 'Offertes', costs: 'Kosten', notes: 'Notities' };
 
@@ -154,6 +173,15 @@ export function CustomerPage({ custId, onClose, setPage }) {
             <button className="btn btn-s btn-sm" onClick={() => setShowCostModal(true)}>{I.costs} Kosten</button>
             <button className="btn btn-s btn-sm" onClick={() => setEditing(true)}>{I.edit} Bewerken</button>
             <button className="btn btn-s btn-sm" onClick={() => setPage('customers')}>{I.arrow_r} Overzicht</button>
+            {c.moneybirdId ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '.75rem', color: '#059669', fontWeight: 600, padding: '4px 8px', background: '#d1fae5', borderRadius: 6 }}>
+                {I.check} Gesynchroniseerd met Moneybird
+              </span>
+            ) : (
+              <button className="btn btn-s btn-sm" onClick={syncWithMoneybird} disabled={mbSyncing}>
+                🐦 {mbSyncing ? 'Synchroniseren...' : 'Sync met Moneybird'}
+              </button>
+            )}
           </div>
         </div>
         {onClose && <button className="drawer-x" onClick={onClose}>{I.x}</button>}

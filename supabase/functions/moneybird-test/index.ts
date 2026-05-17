@@ -10,6 +10,9 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  console.log('Function started')
+  console.log('SUPABASE_URL:', Deno.env.get('SUPABASE_URL') ? 'set' : 'missing')
+
   try {
     const { api_token, administration_id } = await req.json()
 
@@ -31,23 +34,29 @@ serve(async (req) => {
     )
 
     if (res.status === 401) {
+      const body = await res.text().catch(() => '')
+      console.error(`Moneybird 401 Unauthorized: ${body}`)
       return new Response(
-        JSON.stringify({ success: false, error: 'Ongeldige API token' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: 'Ongeldige API token', detail: body }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
       )
     }
 
     if (res.status === 404) {
+      const body = await res.text().catch(() => '')
+      console.error(`Moneybird 404 Not Found: ${body}`)
       return new Response(
-        JSON.stringify({ success: false, error: 'Administratie-ID niet gevonden' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: 'Administratie-ID niet gevonden', detail: body }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
       )
     }
 
     if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      console.error(`Moneybird ${res.status} fout: ${body}`)
       return new Response(
-        JSON.stringify({ success: false, error: `Moneybird fout: ${res.status}` }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ success: false, error: `Moneybird fout: ${res.status}`, detail: body }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: res.status }
       )
     }
 
@@ -56,6 +65,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (err) {
+    console.error('Error:', err.message, err.stack)
     return new Response(
       JSON.stringify({ success: false, error: err.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }

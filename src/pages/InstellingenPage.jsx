@@ -18,6 +18,7 @@ import {
   saveConnection,
   testMoneybirdConnection,
   importKostenVanuitMoneybird,
+  syncContactenMetMoneybird,
 } from '../services/accountingService.js';
 
 const TEMPLATE_LABELS = {
@@ -85,6 +86,7 @@ export function InstellingenPage() {
   const [mbTesting, setMbTesting] = useState(false);
   const [mbSaving, setMbSaving] = useState(false);
   const [mbImporting, setMbImporting] = useState(false);
+  const [mbSyncingContacten, setMbSyncingContacten] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -272,7 +274,13 @@ export function InstellingenPage() {
     try {
       const result = await importKostenVanuitMoneybird();
       if (result?.success) {
-        toast.success(`${result.imported ?? 0} inkoopfacturen geïmporteerd`);
+        const imp = result.imported;
+        if (imp && typeof imp === 'object') {
+          const total = (imp.inkoopfacturen || 0) + (imp.bonnetjes || 0) + (imp.mutaties || 0) + (imp.verkoopfacturen || 0);
+          toast.success(`${total} items geïmporteerd (${imp.inkoopfacturen || 0} facturen, ${imp.bonnetjes || 0} bonnetjes, ${imp.mutaties || 0} mutaties, ${imp.verkoopfacturen || 0} verkoopfacturen)`);
+        } else {
+          toast.success(`${imp ?? 0} items geïmporteerd`);
+        }
         const refreshed = await getConnection();
         if (refreshed) setMbConnection(refreshed);
       } else {
@@ -282,6 +290,22 @@ export function InstellingenPage() {
       toast.error(err.message || 'Importeren mislukt');
     } finally {
       setMbImporting(false);
+    }
+  };
+
+  const handleMbSyncContacten = async () => {
+    setMbSyncingContacten(true);
+    try {
+      const result = await syncContactenMetMoneybird();
+      if (result?.success) {
+        toast.success(`${result.imported ?? 0} klanten geïmporteerd, ${result.exported ?? 0} geëxporteerd`);
+      } else {
+        toast.error(result?.error || 'Synchronisatie mislukt');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Synchronisatie mislukt');
+    } finally {
+      setMbSyncingContacten(false);
     }
   };
 
@@ -697,13 +721,22 @@ export function InstellingenPage() {
 
             <div className="fa" style={{ flexWrap: 'wrap', gap: 8 }}>
               {mbConnection?.apiToken && (
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={handleMbImport}
-                  disabled={mbImporting}
-                >
-                  {mbImporting ? 'Importeren...' : 'Kosten importeren'}
-                </button>
+                <>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleMbImport}
+                    disabled={mbImporting}
+                  >
+                    {mbImporting ? 'Importeren...' : 'Kosten importeren'}
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleMbSyncContacten}
+                    disabled={mbSyncingContacten}
+                  >
+                    {mbSyncingContacten ? 'Synchroniseren...' : 'Contacten synchroniseren'}
+                  </button>
+                </>
               )}
               {mbConnection?.lastSyncedAt && (
                 <span style={{ fontSize: '.75rem', color: 'var(--dl)', alignSelf: 'center', marginRight: 'auto' }}>

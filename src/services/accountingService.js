@@ -61,3 +61,19 @@ export async function importKostenVanuitMoneybird() {
   if (error) throw error
   return data
 }
+
+export async function syncContactenMetMoneybird() {
+  const { data, error } = await supabase.functions.invoke('moneybird-sync-contacten', {
+    body: {},
+  })
+  if (error) throw error
+  return data
+}
+
+export async function updateContactInMoneybird(customerId) {
+  const { data, error } = await supabase.functions.invoke('moneybird-update-contact', {
+    body: { customer_id: customerId },
+  })
+  if (error) throw error
+  return data
+}

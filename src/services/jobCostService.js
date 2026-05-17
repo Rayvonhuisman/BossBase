@@ -42,6 +42,7 @@ export const toJobCost = row => ({
   custId: row.deals?.customer_id ?? null,
   bijlageUrl: row.bijlage_url || null,
   klantType: row.klant_type || 'klant',
+  externeRef: row.externe_referentie || null,
   raw: row,
 })
 

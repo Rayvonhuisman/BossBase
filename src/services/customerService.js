@@ -24,6 +24,7 @@ const toCustomer = (row, index = 0) => ({
   notes: row.notes || "",
   logoUrl: row.logo_url || "",
   companyId: row.company_id || null,
+  moneybirdId: row.moneybird_id || null,
   // UI helpers — synthesized, not stored:
   av: index,
   stage: "new_lead",
@@ -75,14 +76,22 @@ export async function createCustomer(input) {
   const payload = await withCompanyId(base)
   const { data, error } = await safeInsert(supabase, "customers", payload)
   if (error) throw error
-  return toCustomer(data)
+  const customer = toCustomer(data)
+  // Fire-and-forget: sync naar Moneybird als er een koppeling is
+  supabase.functions.invoke('moneybird-update-contact', { body: { customer_id: customer.id } }).catch(() => {})
+  return customer
 }
 
 export async function updateCustomer(id, input) {
   const payload = mapCustomerFormToPayload(input)
   const { data, error } = await supabase.from("customers").update(payload).eq("id", id).select().single()
   if (error) throw error
-  return toCustomer(data)
+  const customer = toCustomer(data)
+  // Fire-and-forget: sync naar Moneybird als klant al gesynchroniseerd was
+  if (customer.moneybirdId) {
+    supabase.functions.invoke('moneybird-update-contact', { body: { customer_id: id } }).catch(() => {})
+  }
+  return customer
 }
 
 export async function deleteCustomer(id) {
