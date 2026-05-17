@@ -24,15 +24,6 @@ async function mbFetch(token: string, adminId: string, path: string) {
   return res.json()
 }
 
-async function fetchAttachmentUrl(token: string, adminId: string, path: string): Promise<string | null> {
-  try {
-    const attachments = await mbFetch(token, adminId, path)
-    if (Array.isArray(attachments) && attachments.length > 0) {
-      return attachments[0].download_url ?? null
-    }
-  } catch (_) { /* bijlagen zijn optioneel */ }
-  return null
-}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -95,7 +86,6 @@ serve(async (req) => {
 
     // ── 1. INKOOPFACTUREN ────────────────────────────────────────────────────
     let inkoopfacturenCount = 0
-    let aantalBijlagen = 0
     {
       const invoices = await mbFetch(token, adminId, '/documents/purchase_invoices.json?per_page=100&filter=state%3Aall')
       const toImport = Array.isArray(invoices)
@@ -104,18 +94,20 @@ serve(async (req) => {
 
       const rows = []
       for (const inv of toImport) {
-        const bijlageUrl = await fetchAttachmentUrl(token, adminId, `/documents/purchase_invoices/${inv.id}/attachments.json`)
-        if (bijlageUrl) aantalBijlagen++
+        const detail = await mbFetch(token, adminId, `/documents/purchase_invoices/${inv.id}.json`)
+        const inclTax = (detail.prices_are_incl_tax ?? inv.prices_are_incl_tax) === true
+        const amount = parseFloat((inclTax ? (detail.total_price_incl_tax ?? inv.total_price_incl_tax) : (detail.total_price_excl_tax ?? inv.total_price_excl_tax)) || inv.total_price || '0')
+        console.log('Gebruikt bedrag:', amount)
         rows.push({
           company_id: companyId,
           description: inv.reference || inv.contact?.company_name || 'Inkoopfactuur',
-          amount: parseFloat(inv.total_price_excl_tax || inv.total_price || '0'),
+          amount,
           category: 'Inkoopfactuur',
           cost_date: inv.date || null,
           externe_referentie: 'purchase_' + inv.id,
           klant_type: 'algemeen',
-          bijlage_url: bijlageUrl,
-          btw_inclusief: inv.prices_are_incl_tax === true ? true : inv.prices_are_incl_tax === false ? false : null,
+          btw_inclusief: inclTax ? true : inv.prices_are_incl_tax === false ? false : null,
+          moneybird_document_id: String(detail.id ?? inv.id),
         })
       }
 
@@ -125,25 +117,6 @@ serve(async (req) => {
         inkoopfacturenCount = rows.length
       }
       console.log('Inkoopfacturen geïmporteerd:', inkoopfacturenCount)
-
-      // Bestaande inkoopfacturen zonder bijlage bijwerken
-      const { data: missingBijlage } = await supabase
-        .from('job_costs')
-        .select('id, externe_referentie')
-        .eq('company_id', companyId)
-        .like('externe_referentie', 'purchase_%')
-        .is('bijlage_url', null)
-
-      for (const row of (missingBijlage || [])) {
-        const mbId = (row.externe_referentie as string).replace('purchase_', '')
-        const bijlageUrl = await fetchAttachmentUrl(token, adminId, `/documents/purchase_invoices/${mbId}/attachments.json`)
-        if (bijlageUrl) {
-          await supabase.from('job_costs').update({ bijlage_url: bijlageUrl }).eq('id', row.id)
-          aantalBijlagen++
-        }
-      }
-
-      console.log('Bijlagen geïmporteerd:', aantalBijlagen)
     }
 
     // ── 2. BONNETJES ─────────────────────────────────────────────────────────
@@ -156,17 +129,20 @@ serve(async (req) => {
 
       const rows = []
       for (const receipt of toImport) {
-        const bijlageUrl = await fetchAttachmentUrl(token, adminId, `/documents/receipts/${receipt.id}/attachments.json`)
+        const detail = await mbFetch(token, adminId, `/documents/receipts/${receipt.id}.json`)
+        const inclTax = (detail.prices_are_incl_tax ?? receipt.prices_are_incl_tax) === true
+        const amount = parseFloat((inclTax ? (detail.total_price_incl_tax ?? receipt.total_price_incl_tax) : (detail.total_price_excl_tax ?? receipt.total_price_excl_tax)) || receipt.total_price || '0')
+        console.log('Gebruikt bedrag:', amount)
         rows.push({
           company_id: companyId,
           description: receipt.reference || receipt.contact?.company_name || 'Bonnetje',
-          amount: parseFloat(receipt.total_price_excl_tax || receipt.total_price || '0'),
+          amount,
           category: 'Inkoopfactuur',
           cost_date: receipt.date || null,
           externe_referentie: 'receipt_' + receipt.id,
           klant_type: 'algemeen',
-          bijlage_url: bijlageUrl,
-          btw_inclusief: receipt.prices_are_incl_tax === true ? true : receipt.prices_are_incl_tax === false ? false : null,
+          btw_inclusief: inclTax ? true : receipt.prices_are_incl_tax === false ? false : null,
+          moneybird_document_id: String(detail.id ?? receipt.id),
         })
       }
 

@@ -48,6 +48,7 @@ export const toJobCost = row => ({
   klantType: row.klant_type || 'klant',
   externeRef: row.externe_referentie || null,
   btwInclusief: row.btw_inclusief ?? null,
+  moneybirdDocumentId: row.moneybird_document_id || null,
   raw: row,
 })
 

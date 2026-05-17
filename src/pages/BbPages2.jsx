@@ -534,14 +534,9 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
   const [deleting, setDeleting] = useState(false);
 
   const isMoneybird = !!cost.externeRef;
-  const ref = cost.externeRef || '';
-  const mbId = ref.replace(/^purchase_|^receipt_|^mutation_/, '');
-  let mbUrl = null;
-  if (isMoneybird && mbAdminId) {
-    if (ref.startsWith('purchase_')) mbUrl = `https://moneybird.com/${mbAdminId}/documents/purchase_invoices/${mbId}`;
-    else if (ref.startsWith('receipt_')) mbUrl = `https://moneybird.com/${mbAdminId}/documents/receipts/${mbId}`;
-    else if (ref.startsWith('mutation_')) mbUrl = `https://moneybird.com/${mbAdminId}/financial_mutations/${mbId}`;
-  }
+  const mbUrl = (isMoneybird && mbAdminId && cost.moneybirdDocumentId)
+    ? `https://moneybird.com/${mbAdminId}/documents/${cost.moneybirdDocumentId}`
+    : null;
 
   const save = async (field, value) => {
     try {
