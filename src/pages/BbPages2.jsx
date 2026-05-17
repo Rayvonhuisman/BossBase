@@ -578,7 +578,7 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontWeight: 700, fontSize: '1rem' }}>Kostendetail</span>
             {isMoneybird
-              ? <span style={{ fontSize: '.72rem', fontWeight: 700, color: '#fff', background: '#f97316', borderRadius: 5, padding: '2px 7px' }}>Moneybird</span>
+              ? <span style={{ fontSize: '.72rem', fontWeight: 700, color: '#fff', background: '#2563EB', borderRadius: 5, padding: '2px 7px' }}>Moneybird</span>
               : <span style={{ fontSize: '.72rem', fontWeight: 600, color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 5, padding: '2px 7px' }}>Handmatig</span>
             }
           </div>
@@ -749,7 +749,7 @@ export function CostsPage() {
                   <td style={{ color: 'var(--dl)', fontSize: '.8rem' }}>{r.date}</td>
                   <td>
                     {r.externeRef
-                      ? <span style={{ fontSize: '.7rem', fontWeight: 700, color: '#fff', background: '#f97316', borderRadius: 4, padding: '2px 6px' }}>MB</span>
+                      ? <span style={{ fontSize: '.7rem', fontWeight: 700, color: '#fff', background: '#2563EB', borderRadius: 4, padding: '2px 6px' }}>MB</span>
                       : <span style={{ fontSize: '.7rem', color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 6px' }}>—</span>
                     }
                   </td>
