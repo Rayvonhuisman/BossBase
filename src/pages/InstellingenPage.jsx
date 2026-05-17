@@ -19,6 +19,10 @@ import {
   testMoneybirdConnection,
   importKostenVanuitMoneybird,
   syncContactenMetMoneybird,
+  saveSnelStartConnection,
+  testSnelStartConnection,
+  importKostenVanuitSnelStart,
+  syncContactenMetSnelStart,
 } from '../services/accountingService.js';
 
 const TEMPLATE_LABELS = {
@@ -88,10 +92,18 @@ export function InstellingenPage() {
   const [mbImporting, setMbImporting] = useState(false);
   const [mbSyncingContacten, setMbSyncingContacten] = useState(false);
 
+  // SnelStart
+  const [ssConnection, setSsConnection] = useState(null);
+  const [ssForm, setSsForm] = useState({ subscriptionKey: '', secondaryKey: '', administrationId: '' });
+  const [ssTesting, setSsTesting] = useState(false);
+  const [ssSaving, setSsSaving] = useState(false);
+  const [ssImporting, setSsImporting] = useState(false);
+  const [ssSyncingContacten, setSsSyncingContacten] = useState(false);
+
   useEffect(() => {
     setLoading(true);
-    Promise.all([getBedrijfsinstellingen(), getEmailTemplates(), getPipelineStages(), getConnection()])
-      .then(([instellingen, emailTemplates, pipelineStages, mbConn]) => {
+    Promise.all([getBedrijfsinstellingen(), getEmailTemplates(), getPipelineStages(), getConnection(), getConnection('snelstart')])
+      .then(([instellingen, emailTemplates, pipelineStages, mbConn, ssConn]) => {
         if (instellingen) {
           setStandaardForm({
             uurtarief: instellingen.uurtarief ?? 55,
@@ -111,6 +123,10 @@ export function InstellingenPage() {
         if (mbConn) {
           setMbConnection(mbConn);
           setMbForm({ apiToken: mbConn.apiToken, administrationId: mbConn.administrationId });
+        }
+        if (ssConn) {
+          setSsConnection(ssConn);
+          setSsForm({ subscriptionKey: ssConn.subscriptionKey, secondaryKey: ssConn.secondaryKey, administrationId: ssConn.administrationId });
         }
       })
       .catch(err => toast.error(err.message || 'Laden mislukt'))
@@ -306,6 +322,79 @@ export function InstellingenPage() {
       toast.error(err.message || 'Synchronisatie mislukt');
     } finally {
       setMbSyncingContacten(false);
+    }
+  };
+
+  const handleSsTest = async () => {
+    if (!ssForm.subscriptionKey || !ssForm.secondaryKey) {
+      toast.error('Vul abonnementssleutel en maatwerksleutel in');
+      return;
+    }
+    setSsTesting(true);
+    try {
+      const result = await testSnelStartConnection(ssForm.subscriptionKey, ssForm.secondaryKey);
+      if (result?.success) {
+        toast.success('Verbinding met SnelStart gelukt');
+      } else {
+        toast.error(result?.error || 'Verbinding mislukt');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Verbinding mislukt');
+    } finally {
+      setSsTesting(false);
+    }
+  };
+
+  const handleSsSave = async () => {
+    if (!ssForm.subscriptionKey || !ssForm.secondaryKey) {
+      toast.error('Vul abonnementssleutel en maatwerksleutel in');
+      return;
+    }
+    setSsSaving(true);
+    try {
+      const saved = await saveSnelStartConnection(ssForm);
+      setSsConnection(saved);
+      toast.success('SnelStart-koppeling opgeslagen');
+    } catch (err) {
+      toast.error(err.message || 'Opslaan mislukt');
+    } finally {
+      setSsSaving(false);
+    }
+  };
+
+  const handleSsImport = async () => {
+    setSsImporting(true);
+    try {
+      const result = await importKostenVanuitSnelStart();
+      if (result?.success) {
+        const imp = result.imported;
+        const total = typeof imp === 'object' ? (imp.inkoopboekingen || 0) : (imp ?? 0);
+        toast.success(`${total} inkoopboekingen geïmporteerd`);
+        const refreshed = await getConnection('snelstart');
+        if (refreshed) setSsConnection(refreshed);
+      } else {
+        toast.error(result?.error || 'Importeren mislukt');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Importeren mislukt');
+    } finally {
+      setSsImporting(false);
+    }
+  };
+
+  const handleSsSyncContacten = async () => {
+    setSsSyncingContacten(true);
+    try {
+      const result = await syncContactenMetSnelStart();
+      if (result?.success) {
+        toast.success(`${result.imported ?? 0} contacten gesynchroniseerd`);
+      } else {
+        toast.error(result?.error || 'Synchroniseren mislukt');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Synchroniseren mislukt');
+    } finally {
+      setSsSyncingContacten(false);
     }
   };
 
@@ -759,6 +848,103 @@ export function InstellingenPage() {
                 disabled={mbSaving || !mbForm.apiToken || !mbForm.administrationId}
               >
                 {mbSaving ? 'Opslaan...' : 'Opslaan'}
+              </button>
+            </div>
+          </div>
+
+          {/* SnelStart */}
+          <div className="card card-p" style={{ border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+              <img
+                src="https://logo.clearbit.com/snelstart.nl"
+                alt="SnelStart"
+                style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 6 }}
+                onError={e => { e.currentTarget.style.display = 'none'; }}
+              />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: '.95rem', marginBottom: 2 }}>SnelStart</div>
+                <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>
+                  Importeer inkoopfacturen als kostenregels en synchroniseer contacten vanuit SnelStart.
+                </div>
+              </div>
+              <div style={{ flexShrink: 0 }}>
+                {ssConnection?.subscriptionKey ? (
+                  <span style={{ fontSize: '.75rem', color: '#059669', fontWeight: 600 }}>Verbonden</span>
+                ) : (
+                  <span style={{ fontSize: '.75rem', color: 'var(--dmu)' }}>Niet verbonden</span>
+                )}
+              </div>
+            </div>
+
+            <div className="fg" style={{ marginBottom: 14 }}>
+              <div className="f s2">
+                <label>Abonnementssleutel</label>
+                <input
+                  type="password"
+                  value={ssForm.subscriptionKey}
+                  onChange={e => setSsForm(f => ({ ...f, subscriptionKey: e.target.value }))}
+                  placeholder="SnelStart abonnementssleutel..."
+                />
+              </div>
+              <div className="f s2">
+                <label>Maatwerksleutel</label>
+                <input
+                  type="password"
+                  value={ssForm.secondaryKey}
+                  onChange={e => setSsForm(f => ({ ...f, secondaryKey: e.target.value }))}
+                  placeholder="SnelStart maatwerksleutel..."
+                />
+              </div>
+              <div className="f s2">
+                <label>
+                  Administratie-ID
+                  <span style={{ fontSize: '.73rem', color: 'var(--dl)', fontWeight: 400, marginLeft: 6 }}>Optioneel</span>
+                </label>
+                <input
+                  value={ssForm.administrationId}
+                  onChange={e => setSsForm(f => ({ ...f, administrationId: e.target.value }))}
+                  placeholder="bijv. 123456789"
+                />
+              </div>
+            </div>
+
+            <div className="fa" style={{ flexWrap: 'wrap', gap: 8 }}>
+              {ssConnection?.subscriptionKey && (
+                <>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleSsImport}
+                    disabled={ssImporting}
+                  >
+                    {ssImporting ? 'Importeren...' : 'Kosten importeren'}
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleSsSyncContacten}
+                    disabled={ssSyncingContacten}
+                  >
+                    {ssSyncingContacten ? 'Synchroniseren...' : 'Contacten synchroniseren'}
+                  </button>
+                </>
+              )}
+              {ssConnection?.lastSyncedAt && (
+                <span style={{ fontSize: '.75rem', color: 'var(--dl)', alignSelf: 'center', marginRight: 'auto' }}>
+                  Laatste sync: {new Date(ssConnection.lastSyncedAt).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={handleSsTest}
+                disabled={ssTesting || !ssForm.subscriptionKey || !ssForm.secondaryKey}
+              >
+                {ssTesting ? 'Testen...' : 'Verbinding testen'}
+              </button>
+              <button
+                className="btn btn-p btn-sm"
+                onClick={handleSsSave}
+                disabled={ssSaving || !ssForm.subscriptionKey || !ssForm.secondaryKey}
+              >
+                {ssSaving ? 'Opslaan...' : 'Opslaan'}
               </button>
             </div>
           </div>
