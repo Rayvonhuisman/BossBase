@@ -558,11 +558,11 @@ export function NewJobCostModal({ onClose, onSaved, customers, defaultCustId = '
   const addRegel = () => setRegels(rs => [...rs, newKostenRegel()]);
   const removeRegel = id => setRegels(rs => rs.filter(r => r.id !== id));
 
-  const MAX_FILE_SIZE = 5 * 1024 * 1024;
+  const MAX_FILE_SIZE = 10 * 1024 * 1024;
   const addFiles = files => {
     const next = [];
     for (const f of files) {
-      if (f.size > MAX_FILE_SIZE) { toast.error(`${f.name}: bestand is te groot. Maximum is 5MB.`); continue; }
+      if (f.size > MAX_FILE_SIZE) { toast.error(`${f.name}: bestand is te groot. Maximum is 10MB.`); continue; }
       next.push(f);
     }
     if (next.length) setBijlageFiles(prev => [...prev, ...next]);
@@ -823,7 +823,7 @@ export function NewJobCostModal({ onClose, onSaved, customers, defaultCustId = '
               </svg>
             </div>
             <div style={{ fontSize: '.82rem', color: 'var(--dk)', fontWeight: 500 }}>Sleep bestand hierheen of klik om te uploaden</div>
-            <div style={{ fontSize: '.74rem', color: 'var(--dl)', marginTop: 3 }}>JPG, PNG of PDF · Max 5MB per bestand</div>
+            <div style={{ fontSize: '.74rem', color: 'var(--dl)', marginTop: 3 }}>JPG, PNG of PDF · Max 10MB per bestand</div>
           </div>
           <input
             ref={fileInputRef}

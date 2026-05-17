@@ -26,6 +26,9 @@ export function mapJobCostFormToPayload(input = {}) {
   }
   if (input.bijlage_url !== undefined) payload.bijlage_url = input.bijlage_url
   if (input.klant_type !== undefined) payload.klant_type = input.klant_type
+  if (input.customer_id !== undefined || input.customerId !== undefined) {
+    payload.customer_id = input.customer_id ?? input.customerId ?? null
+  }
 
   return payload
 }
@@ -40,9 +43,11 @@ export const toJobCost = row => ({
   date: row.cost_date || row.created_at?.slice(0, 10) || "",
   // Best-effort linkage to a customer via the deal — populated by joins where needed.
   custId: row.deals?.customer_id ?? null,
+  customerId: row.customer_id || null,
   bijlageUrl: row.bijlage_url || null,
   klantType: row.klant_type || 'klant',
   externeRef: row.externe_referentie || null,
+  btwInclusief: row.btw_inclusief ?? null,
   raw: row,
 })
 
@@ -63,6 +68,18 @@ async function selectWithDealsFallback(query) {
 export async function listJobCosts() {
   const rows = await selectWithDealsFallback(supabase.from("job_costs"))
   return rows.map(toJobCost)
+}
+
+export async function deleteJobCost(id) {
+  const { error } = await supabase.from('job_costs').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function updateJobCost(id, input) {
+  const payload = mapJobCostFormToPayload(input)
+  const { data, error } = await supabase.from('job_costs').update(payload).eq('id', id).select('*').single()
+  if (error) throw error
+  return toJobCost(data)
 }
 
 export async function createJobCost(input) {

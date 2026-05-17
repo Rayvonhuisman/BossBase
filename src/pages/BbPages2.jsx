@@ -4,7 +4,7 @@ import {
   fmt, custById, Av, StatusBadge, ModalX, Logo,
 } from '../bb-shared.jsx';
 import { createCalendarEvent, listCalendarEvents, updateCalendarEvent } from '../services/calendarService.js';
-import { createJobCost, listJobCosts } from '../services/jobCostService.js';
+import { createJobCost, deleteJobCost, listJobCosts, updateJobCost } from '../services/jobCostService.js';
 import { getFacturen, getAllFactuurRegels } from '../services/factuurService.js';
 import { getConnection, syncFactuurNaarMoneybird } from '../services/accountingService.js';
 import { getOffertes } from '../services/offerteService.js';
@@ -518,7 +518,21 @@ export function HoursPage() {
 }
 
 // ── KOSTEN DETAIL MODAL ───────────────────────────────────────
-function KostenDetailModal({ cost, mbAdminId, onClose }) {
+const CAT_OPTIONS = [
+  { value: 'materiaal',       label: 'Materiaal' },
+  { value: 'arbeid',          label: 'Arbeid' },
+  { value: 'reiskosten',      label: 'Reiskosten' },
+  { value: 'Inkoopfactuur',   label: 'Inkoopfactuur' },
+  { value: 'Algemene kosten', label: 'Algemene kosten' },
+  { value: 'overig',          label: 'Overig' },
+];
+
+function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onClose }) {
+  const [cat, setCat] = useState(cost.cat);
+  const [custId, setCustId] = useState(cost.customerId || '');
+  const [savedField, setSavedField] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
   const isMoneybird = !!cost.externeRef;
   const ref = cost.externeRef || '';
   const mbId = ref.replace(/^purchase_|^receipt_|^mutation_/, '');
@@ -528,6 +542,40 @@ function KostenDetailModal({ cost, mbAdminId, onClose }) {
     else if (ref.startsWith('receipt_')) mbUrl = `https://moneybird.com/${mbAdminId}/documents/receipts/${mbId}`;
     else if (ref.startsWith('mutation_')) mbUrl = `https://moneybird.com/${mbAdminId}/financial_mutations/${mbId}`;
   }
+
+  const save = async (field, value) => {
+    try {
+      const updated = await updateJobCost(cost.id, { [field]: value || null });
+      onUpdate?.(updated);
+      setSavedField(field);
+      setTimeout(() => setSavedField(null), 2000);
+    } catch { /* silent */ }
+  };
+
+  const handleCatChange = e => {
+    setCat(e.target.value);
+    save('category', e.target.value);
+  };
+
+  const handleCustChange = e => {
+    const val = e.target.value;
+    setCustId(val);
+    save('customer_id', val || null);
+  };
+
+  const handleDelete = async () => {
+    const msg = cost.externeRef
+      ? 'Weet je zeker dat je deze kostenregel wilt verwijderen? Dit verwijdert alleen de regel in BossBase, niet in Moneybird.'
+      : 'Weet je zeker dat je deze kostenregel wilt verwijderen?';
+    if (!window.confirm(msg)) return;
+    setDeleting(true);
+    try {
+      await deleteJobCost(cost.id);
+      onDelete?.(cost.id);
+      onClose();
+    } catch { setDeleting(false); }
+  };
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
@@ -539,13 +587,17 @@ function KostenDetailModal({ cost, mbAdminId, onClose }) {
               : <span style={{ fontSize: '.72rem', fontWeight: 600, color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 5, padding: '2px 7px' }}>Handmatig</span>
             }
           </div>
-          <ModalX onClick={onClose} />
+          <ModalX onClose={onClose} />
         </div>
-        <div className="fg" style={{ gap: 10 }}>
+        <div className="fg" style={{ gap: 12 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
               <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 2 }}>Bedrag</div>
-              <div style={{ fontSize: '1.2rem', fontWeight: 800 }}>{fmt(cost.amt)}</div>
+              <div style={{ fontSize: '1.2rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}>
+                {fmt(cost.amt)}
+                {cost.btwInclusief === true && <span style={{ fontSize: '.68rem', color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 5px', fontWeight: 400 }}>incl. BTW</span>}
+                {cost.btwInclusief === false && <span style={{ fontSize: '.68rem', color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 5px', fontWeight: 400 }}>excl. BTW</span>}
+              </div>
             </div>
             <div>
               <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 2 }}>Datum</div>
@@ -557,10 +609,36 @@ function KostenDetailModal({ cost, mbAdminId, onClose }) {
             <div>{cost.desc || '—'}</div>
           </div>
           <div>
-            <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 2 }}>Categorie</div>
-            <span className="badge b-gray" style={{ textTransform: 'capitalize' }}>{cost.cat}</span>
+            <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 4 }}>
+              Categorie
+              {savedField === 'category' && <span style={{ marginLeft: 8, color: '#059669', fontSize: '.7rem', fontWeight: 700 }}>{I.check} Opgeslagen</span>}
+            </div>
+            <select
+              className="btn btn-s btn-sm"
+              style={{ padding: '5px 10px', width: '100%' }}
+              value={cat}
+              onChange={handleCatChange}
+            >
+              {CAT_OPTIONS.some(o => o.value === cat) ? null : <option value={cat}>{cat}</option>}
+              {CAT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingTop: 4 }}>
+          <div>
+            <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 4 }}>
+              Klant / project
+              {savedField === 'customer_id' && <span style={{ marginLeft: 8, color: '#059669', fontSize: '.7rem', fontWeight: 700 }}>{I.check} Opgeslagen</span>}
+            </div>
+            <select
+              className="btn btn-s btn-sm"
+              style={{ padding: '5px 10px', width: '100%' }}
+              value={custId}
+              onChange={handleCustChange}
+            >
+              <option value="">Algemeen</option>
+              {(customers || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingTop: 2 }}>
             {cost.bijlageUrl && (
               <a href={cost.bijlageUrl} target="_blank" rel="noreferrer" className="btn btn-s btn-sm">
                 {I.paperclip} Bijlage bekijken
@@ -571,6 +649,16 @@ function KostenDetailModal({ cost, mbAdminId, onClose }) {
                 🐦 Bekijk in Moneybird
               </a>
             )}
+          </div>
+          <div style={{ paddingTop: 4, borderTop: '1px solid var(--border)', marginTop: 4 }}>
+            <button
+              className="btn btn-s btn-sm"
+              style={{ color: '#dc2626', borderColor: '#fca5a5', background: 'transparent', width: '100%' }}
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              {deleting ? 'Verwijderen...' : 'Verwijderen'}
+            </button>
           </div>
         </div>
       </div>
@@ -649,22 +737,33 @@ export function CostsPage() {
           </div>
         </div>
         <table className="dt">
-          <thead><tr><th>Klant</th><th>Categorie</th><th>Omschrijving</th><th>Bedrag</th><th>Datum</th><th>Bron</th></tr></thead>
+          <thead><tr><th>Klant</th><th>Categorie</th><th>Omschrijving</th><th>Bedrag</th><th>Datum</th><th>Bron</th><th></th></tr></thead>
           <tbody>
             {filtered.map(r => {
               const c = customers.find(x => x.id === r.custId);
               return (
                 <tr key={r.id} onClick={() => setSelectedCost(r)} style={{ cursor: 'pointer' }}>
-                  <td style={{ fontWeight: 600 }}>{r.klantType === 'algemeen' ? 'Algemeen' : (c?.name || '—')}</td>
+                  <td style={{ fontWeight: 600 }}>{r.customerId ? (customers.find(x => x.id === r.customerId)?.name || '—') : r.klantType === 'algemeen' ? 'Algemeen' : (c?.name || '—')}</td>
                   <td><span className="badge b-gray" style={{ textTransform: 'capitalize' }}>{r.cat}</span></td>
                   <td>{r.desc}</td>
-                  <td style={{ fontWeight: 700 }}>{fmt(r.amt)}</td>
+                  <td style={{ fontWeight: 700 }}>
+                    {fmt(r.amt)}
+                    {r.btwInclusief === true && <span style={{ marginLeft: 5, fontSize: '.68rem', color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 5px', fontWeight: 400 }}>incl. BTW</span>}
+                    {r.btwInclusief === false && <span style={{ marginLeft: 5, fontSize: '.68rem', color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 5px', fontWeight: 400 }}>excl. BTW</span>}
+                  </td>
                   <td style={{ color: 'var(--dl)', fontSize: '.8rem' }}>{r.date}</td>
                   <td>
                     {r.externeRef
                       ? <span style={{ fontSize: '.7rem', fontWeight: 700, color: '#fff', background: '#f97316', borderRadius: 4, padding: '2px 6px' }}>MB</span>
                       : <span style={{ fontSize: '.7rem', color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 6px' }}>—</span>
                     }
+                  </td>
+                  <td onClick={e => e.stopPropagation()}>
+                    {r.bijlageUrl && (
+                      <a href={r.bijlageUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--dl)', fontSize: '1rem' }} title="Bijlage bekijken">
+                        {I.paperclip}
+                      </a>
+                    )}
                   </td>
                 </tr>
               );
@@ -687,6 +786,12 @@ export function CostsPage() {
         <KostenDetailModal
           cost={selectedCost}
           mbAdminId={mbAdminId}
+          customers={customers}
+          onUpdate={updated => {
+            setCosts(cs => cs.map(c => c.id === updated.id ? updated : c));
+            setSelectedCost(updated);
+          }}
+          onDelete={id => setCosts(cs => cs.filter(c => c.id !== id))}
           onClose={() => setSelectedCost(null)}
         />
       )}
@@ -772,7 +877,7 @@ export function RevenuePage() {
     setMbSyncing(true);
     let ok = 0; let fail = 0;
     for (const f of betaald) {
-      try { await syncFactuurNaarMoneybird(f.id); ok++; } catch { fail++; }
+      try { await syncFactuurNaarMoneybird(f.id); ok++; } catch (e) { console.error('Sync factuur mislukt:', f.id, e); fail++; }
     }
     setMbSyncing(false);
     if (fail === 0) toast.success(`${ok} factuur${ok !== 1 ? 'en' : ''} gesynchroniseerd`);

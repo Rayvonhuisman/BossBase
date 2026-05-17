@@ -77,7 +77,7 @@ serve(async (req) => {
     // Get factuur + customer
     const { data: factuur } = await supabase
       .from('facturen')
-      .select('*, customers(name, email, address, city, postal_code, phone, kvk, btw_number)')
+      .select('*, customers(name, email, address, city, phone)')
       .eq('id', factuur_id)
       .single()
 
@@ -115,8 +115,6 @@ serve(async (req) => {
               phone: customer.phone || '',
               address1: customer.address || '',
               city: customer.city || '',
-              zipcode: customer.postal_code || '',
-              tax_number: customer.btw_number || '',
             },
           }),
         })

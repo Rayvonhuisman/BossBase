@@ -95,6 +95,7 @@ serve(async (req) => {
 
     // ── 1. INKOOPFACTUREN ────────────────────────────────────────────────────
     let inkoopfacturenCount = 0
+    let aantalBijlagen = 0
     {
       const invoices = await mbFetch(token, adminId, '/documents/purchase_invoices.json?per_page=100&filter=state%3Aall')
       const toImport = Array.isArray(invoices)
@@ -104,6 +105,7 @@ serve(async (req) => {
       const rows = []
       for (const inv of toImport) {
         const bijlageUrl = await fetchAttachmentUrl(token, adminId, `/documents/purchase_invoices/${inv.id}/attachments.json`)
+        if (bijlageUrl) aantalBijlagen++
         rows.push({
           company_id: companyId,
           description: inv.reference || inv.contact?.company_name || 'Inkoopfactuur',
@@ -113,6 +115,7 @@ serve(async (req) => {
           externe_referentie: 'purchase_' + inv.id,
           klant_type: 'algemeen',
           bijlage_url: bijlageUrl,
+          btw_inclusief: inv.prices_are_incl_tax === true ? true : inv.prices_are_incl_tax === false ? false : null,
         })
       }
 
@@ -122,6 +125,25 @@ serve(async (req) => {
         inkoopfacturenCount = rows.length
       }
       console.log('Inkoopfacturen geïmporteerd:', inkoopfacturenCount)
+
+      // Bestaande inkoopfacturen zonder bijlage bijwerken
+      const { data: missingBijlage } = await supabase
+        .from('job_costs')
+        .select('id, externe_referentie')
+        .eq('company_id', companyId)
+        .like('externe_referentie', 'purchase_%')
+        .is('bijlage_url', null)
+
+      for (const row of (missingBijlage || [])) {
+        const mbId = (row.externe_referentie as string).replace('purchase_', '')
+        const bijlageUrl = await fetchAttachmentUrl(token, adminId, `/documents/purchase_invoices/${mbId}/attachments.json`)
+        if (bijlageUrl) {
+          await supabase.from('job_costs').update({ bijlage_url: bijlageUrl }).eq('id', row.id)
+          aantalBijlagen++
+        }
+      }
+
+      console.log('Bijlagen geïmporteerd:', aantalBijlagen)
     }
 
     // ── 2. BONNETJES ─────────────────────────────────────────────────────────
@@ -144,6 +166,7 @@ serve(async (req) => {
           externe_referentie: 'receipt_' + receipt.id,
           klant_type: 'algemeen',
           bijlage_url: bijlageUrl,
+          btw_inclusief: receipt.prices_are_incl_tax === true ? true : receipt.prices_are_incl_tax === false ? false : null,
         })
       }
 
@@ -158,10 +181,29 @@ serve(async (req) => {
     // ── 3. FINANCIËLE MUTATIES (uitgaven) ────────────────────────────────────
     let mutatiesCount = 0
     {
+      // Eenmalige cleanup: verwijder eerder geïmporteerde betalingsregistraties
+      await supabase
+        .from('job_costs')
+        .delete()
+        .eq('company_id', companyId)
+        .like('externe_referentie', 'mutation_%')
+        .like('description', 'Handmatig ingevoerde contante betaling voor:%')
+
       const mutations = await mbFetch(token, adminId, '/financial_mutations.json?filter=type%3Adebit&per_page=100')
+      let overgeslagen = 0
+
       const toImport = Array.isArray(mutations)
-        ? mutations.filter((m: any) => !existingCostRefs.has('mutation_' + m.id))
+        ? mutations.filter((m: any) => {
+            if (existingCostRefs.has('mutation_' + m.id)) return false
+            const desc: string = m.message || m.batch_reference || ''
+            if (desc.startsWith('Handmatig ingevoerde')) { overgeslagen++; return false }
+            const sourceType: string = m.source?.type ?? m.source_type ?? ''
+            if (sourceType === 'PurchaseInvoice' || sourceType === 'Receipt') { overgeslagen++; return false }
+            return true
+          })
         : []
+
+      console.log('Mutations overgeslagen (al als factuur geïmporteerd):', overgeslagen)
 
       const rows = toImport.map((m: any) => ({
         company_id: companyId,

@@ -68,17 +68,27 @@ serve(async (req) => {
     const adminId = conn.administration_id
     const companyId = profile.company_id
 
+    console.log('company_id ontvangen:', companyId)
+
     let imported = 0
     let exported = 0
 
     // ── A: MONEYBIRD → BOSSBASE ──────────────────────────────────────────────
     const mbContacts = await mbFetch(token, adminId, '/contacts.json?per_page=100')
 
-    if (Array.isArray(mbContacts) && mbContacts.length > 0) {
-      const { data: existingCustomers } = await supabase
+    console.log('Moneybird contacts response:', JSON.stringify(mbContacts))
+
+    const contactsList: any[] = Array.isArray(mbContacts) ? mbContacts : []
+
+    if (contactsList.length > 0) {
+      const { data: existingCustomers, error: custErr } = await supabase
         .from('customers')
         .select('id, name, email, moneybird_id')
         .eq('company_id', companyId)
+
+      console.log('Query resultaat:', existingCustomers?.length ?? 0, 'klanten gevonden')
+      if (custErr) console.error('Supabase customers query error:', custErr.message)
+      console.log('BossBase klanten:', existingCustomers?.length ?? 0)
 
       const byEmail = new Map<string, any>()
       const byName = new Map<string, any>()
@@ -87,12 +97,13 @@ serve(async (req) => {
         if (c.name) byName.set(c.name.toLowerCase(), c)
       }
 
-      for (const contact of mbContacts) {
+      for (const contact of contactsList) {
         const name = contact.company_name || [contact.firstname, contact.lastname].filter(Boolean).join(' ') || ''
         if (!name.trim()) continue
 
         const emailKey = (contact.email || '').toLowerCase()
-        const existing = (emailKey && byEmail.get(emailKey)) || byName.get(name.toLowerCase())
+        // Match op email als beschikbaar, anders op naam
+        const existing = (emailKey ? byEmail.get(emailKey) : null) ?? byName.get(name.toLowerCase()) ?? null
 
         if (existing) {
           if (!existing.moneybird_id) {
@@ -127,6 +138,9 @@ serve(async (req) => {
       .eq('company_id', companyId)
       .is('moneybird_id', null)
 
+    console.log('BossBase klanten zonder moneybird_id:', unsynced?.length ?? 0)
+    console.log('Query resultaat unsynced:', unsynced?.length ?? 0, 'klanten gevonden')
+
     for (const customer of (unsynced || [])) {
       try {
         const mbContact = await mbFetch(token, adminId, '/contacts.json', {
@@ -151,6 +165,7 @@ serve(async (req) => {
     }
 
     console.log('Geëxporteerd naar Moneybird:', exported)
+    console.log('Imported:', imported, 'Exported:', exported)
 
     return new Response(
       JSON.stringify({ success: true, imported, exported }),

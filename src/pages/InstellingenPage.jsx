@@ -664,9 +664,12 @@ export function InstellingenPage() {
           {/* Moneybird */}
           <div className="card card-p" style={{ border: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-              <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bgs)', borderRadius: 'var(--r8)', border: '1px solid var(--border)', flexShrink: 0, fontSize: '1.2rem' }}>
-                🐦
-              </div>
+              <img
+                src="https://www.moneybird.com/images/moneybird-logo.svg"
+                alt="Moneybird"
+                style={{ width: 120, height: 'auto', flexShrink: 0 }}
+                onError={e => { e.currentTarget.src = 'https://logo.clearbit.com/moneybird.com'; e.currentTarget.style.width = '32px'; }}
+              />
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: '.95rem', marginBottom: 2 }}>Moneybird</div>
                 <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>
