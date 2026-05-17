@@ -482,9 +482,10 @@ function MeerMenu({ page, onNavigate, onClose, profile }) {
     {
       label: 'Financieel',
       items: [
-        { id: 'offertes', label: 'Offertes', icon: I.quotes },
         { id: 'costs',    label: 'Kosten',    icon: I.costs },
         { id: 'revenue',  label: 'Financiën', icon: I.chart },
+        { id: 'facturen', label: 'Facturen',  icon: I.brief },
+        { id: 'offertes', label: 'Offertes',  icon: I.quotes },
       ],
     },
     ...(isMedewerker ? [] : [{
@@ -531,7 +532,7 @@ function MeerMenu({ page, onNavigate, onClose, profile }) {
 }
 
 // ── MOBILE BOTTOM NAV ─────────────────────────────────────────
-const MEER_PAGE_IDS = ['calendar','werkbonnen','uren','costs','revenue','offertes','team','instellingen'];
+const MEER_PAGE_IDS = ['calendar','werkbonnen','uren','costs','revenue','facturen','offertes','team','instellingen'];
 
 function MobileBottomNav({ page, setPage, badges = {}, profile }) {
   const [showMeer, setShowMeer] = useState(false);
