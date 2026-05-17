@@ -87,6 +87,7 @@ export function InstellingenPage() {
   const [mbConnection, setMbConnection] = useState(null);
   const [mbForm, setMbForm] = useState({ apiToken: '', administrationId: '' });
   const [mbShowToken, setMbShowToken] = useState(false);
+  const [mbEditing, setMbEditing] = useState(false);
   const [mbTesting, setMbTesting] = useState(false);
   const [mbSaving, setMbSaving] = useState(false);
   const [mbImporting, setMbImporting] = useState(false);
@@ -95,6 +96,7 @@ export function InstellingenPage() {
   // SnelStart
   const [ssConnection, setSsConnection] = useState(null);
   const [ssForm, setSsForm] = useState({ subscriptionKey: '', secondaryKey: '', administrationId: '' });
+  const [ssEditing, setSsEditing] = useState(false);
   const [ssTesting, setSsTesting] = useState(false);
   const [ssSaving, setSsSaving] = useState(false);
   const [ssImporting, setSsImporting] = useState(false);
@@ -277,6 +279,7 @@ export function InstellingenPage() {
     try {
       const saved = await saveConnection(mbForm);
       setMbConnection(saved);
+      setMbEditing(false);
       toast.success('Moneybird-koppeling opgeslagen');
     } catch (err) {
       toast.error(err.message || 'Opslaan mislukt');
@@ -354,6 +357,7 @@ export function InstellingenPage() {
     try {
       const saved = await saveSnelStartConnection(ssForm);
       setSsConnection(saved);
+      setSsEditing(false);
       toast.success('SnelStart-koppeling opgeslagen');
     } catch (err) {
       toast.error(err.message || 'Opslaan mislukt');
@@ -751,8 +755,8 @@ export function InstellingenPage() {
           </div>
 
           {/* Moneybird */}
-          <div className="card card-p" style={{ border: '1px solid var(--border)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+          <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
+            <div className="integ-card-hd" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
               <img
                 src="https://www.moneybird.com/images/moneybird-logo.svg"
                 alt="Moneybird"
@@ -779,19 +783,22 @@ export function InstellingenPage() {
                 <label>API token</label>
                 <div style={{ position: 'relative' }}>
                   <input
-                    type={mbShowToken ? 'text' : 'password'}
+                    type="password"
                     value={mbForm.apiToken}
                     onChange={e => setMbForm(f => ({ ...f, apiToken: e.target.value }))}
                     placeholder="Moneybird API token..."
-                    style={{ paddingRight: 40 }}
+                    disabled={!!(mbConnection?.apiToken && !mbEditing)}
+                    style={{ paddingRight: mbConnection?.apiToken && !mbEditing ? 0 : 40, opacity: mbConnection?.apiToken && !mbEditing ? 0.6 : 1 }}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setMbShowToken(v => !v)}
-                    style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dmu)', fontSize: '.8rem', padding: 0 }}
-                  >
-                    {mbShowToken ? 'Verberg' : 'Toon'}
-                  </button>
+                  {!(mbConnection?.apiToken && !mbEditing) && (
+                    <button
+                      type="button"
+                      onClick={() => setMbShowToken(v => !v)}
+                      style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dmu)', fontSize: '.8rem', padding: 0 }}
+                    >
+                      {mbShowToken ? 'Verberg' : 'Toon'}
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="f s2">
@@ -807,6 +814,8 @@ export function InstellingenPage() {
                   value={mbForm.administrationId}
                   onChange={e => setMbForm(f => ({ ...f, administrationId: e.target.value }))}
                   placeholder="bijv. 123456789"
+                  disabled={!!(mbConnection?.apiToken && !mbEditing)}
+                  style={{ opacity: mbConnection?.apiToken && !mbEditing ? 0.6 : 1 }}
                 />
               </div>
             </div>
@@ -835,26 +844,37 @@ export function InstellingenPage() {
                   Laatste sync: {new Date(mbConnection.lastSyncedAt).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </span>
               )}
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={handleMbTest}
-                disabled={mbTesting || !mbForm.apiToken || !mbForm.administrationId}
-              >
-                {mbTesting ? 'Testen...' : 'Verbinding testen'}
-              </button>
-              <button
-                className="btn btn-p btn-sm"
-                onClick={handleMbSave}
-                disabled={mbSaving || !mbForm.apiToken || !mbForm.administrationId}
-              >
-                {mbSaving ? 'Opslaan...' : 'Opslaan'}
-              </button>
+              {mbConnection?.apiToken && !mbEditing ? (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setMbEditing(true)}
+                >
+                  Wijzigen
+                </button>
+              ) : (
+                <>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleMbTest}
+                    disabled={mbTesting || !mbForm.apiToken || !mbForm.administrationId}
+                  >
+                    {mbTesting ? 'Testen...' : 'Verbinding testen'}
+                  </button>
+                  <button
+                    className="btn btn-p btn-sm"
+                    onClick={handleMbSave}
+                    disabled={mbSaving || !mbForm.apiToken || !mbForm.administrationId}
+                  >
+                    {mbSaving ? 'Opslaan...' : 'Opslaan'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
           {/* SnelStart */}
-          <div className="card card-p" style={{ border: '1px solid var(--border)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+          <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
+            <div className="integ-card-hd" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
               <img
                 src="https://logo.clearbit.com/snelstart.nl"
                 alt="SnelStart"
@@ -884,6 +904,8 @@ export function InstellingenPage() {
                   value={ssForm.subscriptionKey}
                   onChange={e => setSsForm(f => ({ ...f, subscriptionKey: e.target.value }))}
                   placeholder="SnelStart abonnementssleutel..."
+                  disabled={!!(ssConnection?.subscriptionKey && !ssEditing)}
+                  style={{ opacity: ssConnection?.subscriptionKey && !ssEditing ? 0.6 : 1 }}
                 />
               </div>
               <div className="f s2">
@@ -893,6 +915,8 @@ export function InstellingenPage() {
                   value={ssForm.secondaryKey}
                   onChange={e => setSsForm(f => ({ ...f, secondaryKey: e.target.value }))}
                   placeholder="SnelStart maatwerksleutel..."
+                  disabled={!!(ssConnection?.subscriptionKey && !ssEditing)}
+                  style={{ opacity: ssConnection?.subscriptionKey && !ssEditing ? 0.6 : 1 }}
                 />
               </div>
               <div className="f s2">
@@ -904,6 +928,8 @@ export function InstellingenPage() {
                   value={ssForm.administrationId}
                   onChange={e => setSsForm(f => ({ ...f, administrationId: e.target.value }))}
                   placeholder="bijv. 123456789"
+                  disabled={!!(ssConnection?.subscriptionKey && !ssEditing)}
+                  style={{ opacity: ssConnection?.subscriptionKey && !ssEditing ? 0.6 : 1 }}
                 />
               </div>
             </div>
@@ -932,20 +958,31 @@ export function InstellingenPage() {
                   Laatste sync: {new Date(ssConnection.lastSyncedAt).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </span>
               )}
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={handleSsTest}
-                disabled={ssTesting || !ssForm.subscriptionKey || !ssForm.secondaryKey}
-              >
-                {ssTesting ? 'Testen...' : 'Verbinding testen'}
-              </button>
-              <button
-                className="btn btn-p btn-sm"
-                onClick={handleSsSave}
-                disabled={ssSaving || !ssForm.subscriptionKey || !ssForm.secondaryKey}
-              >
-                {ssSaving ? 'Opslaan...' : 'Opslaan'}
-              </button>
+              {ssConnection?.subscriptionKey && !ssEditing ? (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setSsEditing(true)}
+                >
+                  Wijzigen
+                </button>
+              ) : (
+                <>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleSsTest}
+                    disabled={ssTesting || !ssForm.subscriptionKey || !ssForm.secondaryKey}
+                  >
+                    {ssTesting ? 'Testen...' : 'Verbinding testen'}
+                  </button>
+                  <button
+                    className="btn btn-p btn-sm"
+                    onClick={handleSsSave}
+                    disabled={ssSaving || !ssForm.subscriptionKey || !ssForm.secondaryKey}
+                  >
+                    {ssSaving ? 'Opslaan...' : 'Opslaan'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
 

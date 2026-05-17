@@ -110,9 +110,9 @@ ul{list-style:none}
 .sbi.active{background:rgba(29,219,98,.15);color:#1DDB62;font-weight:600;border-left-color:#1DDB62;border-top-left-radius:0;border-bottom-left-radius:0}
 .sbi-icon{width:17px;height:17px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .sbi-badge{margin-left:auto;background:#1DDB62;color:#0D0D0D;font-size:.6rem;font-weight:700;padding:1px 5px;border-radius:var(--r999);min-width:17px;text-align:center}
-.sb-user{border-top:1px solid #1f2020;padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer}
-.sb-user:hover{background:rgba(255,255,255,.05)}
-.sb-bottom{padding:6px 10px 4px;border-top:1px solid #1f2020}
+.sb-user{border-top:1px solid #1f2020;padding:10px 14px;display:flex;align-items:center;gap:10px}
+.sb-logout-btn{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.4);padding:6px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:color .15s ease}
+.sb-logout-btn:hover{color:#1DDB62}
 /* Sidebar logo — base word needs to be white on dark sidebar */
 .sb .logo-a{color:rgba(255,255,255,.9)}
 
@@ -472,7 +472,7 @@ ul{list-style:none}
 .tb-pop-user .av{border:2px solid rgba(29,219,98,.4)}
 
 /* Sidebar user clickable */
-.sb-user button{background:transparent;color:inherit;display:flex;flex:1;min-width:0;align-items:center;gap:10px;text-align:left}
+.sb-user button:not(.sb-logout-btn){background:transparent;color:inherit;display:flex;flex:1;min-width:0;align-items:center;gap:10px;text-align:left}
 
 /* Profile loading skeletons */
 @keyframes bbSkel{0%{background-position:-200px 0}100%{background-position:200px 0}}
