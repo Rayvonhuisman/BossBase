@@ -37,10 +37,13 @@ export async function listPipelineStages() {
 
 export async function listDeals() {
   // Join customers so the pipeline cards can show the customer name/city —
-  // toDeal reads row.customers?.name. Without the embed it was always blank.
+  // toDeal reads row.customers?.name. `deals` has TWO FKs to `customers`
+  // (deals_customer_id_fkey + fk_deals_customer, both on customer_id), so the
+  // FK must be named explicitly or PostgREST errors with "more than one
+  // relationship". Keep the embed key `customers` so toDeal stays unchanged.
   const { data, error } = await supabase
     .from("deals")
-    .select("*, customers(*)")
+    .select("*, customers!deals_customer_id_fkey(*)")
     .order("created_at", { ascending: false })
   if (error) throw error
   return (data || []).map(toDeal)
