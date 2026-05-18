@@ -427,18 +427,39 @@ export function Pipeline({ openCustomer, openDeal }) {
     ? SHOWN_STAGE_IDS
     : SHOWN_STAGE_IDS.filter(id => id === filter.stage);
 
-  const dealsInStage = stageId => filteredDeals.filter(d => d.stage === stageId);
+  // Deals whose stage_id is NULL or points to a stage that no longer exists
+  // must not silently disappear — funnel them into the first column so they
+  // stay visible and can be dragged to a real stage.
+  const stageIdSet = new Set(stages.map(s => s.id));
+  const firstStageId = SHOWN_STAGE_IDS[0];
+  const dealsInStage = stageId => filteredDeals.filter(d => {
+    if (d.stage === stageId) return true;
+    if (stageId === firstStageId && (!d.stage || !stageIdSet.has(d.stage))) return true;
+    return false;
+  });
 
   const totalShown = filteredDeals.length;
   const totalValue = filteredDeals.filter(d => d.stage !== 'lost').reduce((s, d) => s + d.value, 0);
 
+  // deals.stage_id is a UUID column — the old code passed the slug 'lost',
+  // which Postgres rejected as an invalid UUID (silent toast error). Resolve
+  // the real "Verloren" stage from the loaded DB stages instead.
+  const lostStage = stages.find(s => /verlor/i.test(s.label || ''))
+    || stages.find(s => /\blost\b/i.test(s.label || ''));
+
   const markLost = deal => { setLostDeal(deal); setShowLostModal(true); };
   const confirmLost = async () => {
+    if (!lostStage) {
+      toast.error('Geen "Verloren"-fase gevonden in de pipeline');
+      setShowLostModal(false); setLostDeal(null); setLostReason('');
+      return;
+    }
     try {
-      const updated = await updateDealStage(lostDeal.id, 'lost');
+      const updated = await updateDealStage(lostDeal.id, lostStage.id);
       setDeals(ds => ds.map(d => d.id === lostDeal.id ? updated : d));
       toast.success('Deal gemarkeerd als verloren');
     } catch (err) {
+      console.error('[bb:pipeline] markeer verloren mislukt', err);
       toast.error(err.message || 'Status bijwerken mislukt');
     }
     setShowLostModal(false); setLostDeal(null); setLostReason('');
@@ -448,6 +469,7 @@ export function Pipeline({ openCustomer, openDeal }) {
       const updated = await updateDealStage(deal.id, stageId);
       setDeals(ds => ds.map(d => d.id === deal.id ? updated : d));
     } catch (err) {
+      console.error('[bb:pipeline] deal verplaatsen mislukt', err);
       toast.error(err.message || 'Verplaatsen mislukt');
     }
   };

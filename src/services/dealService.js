@@ -36,9 +36,11 @@ export async function listPipelineStages() {
 }
 
 export async function listDeals() {
+  // Join customers so the pipeline cards can show the customer name/city —
+  // toDeal reads row.customers?.name. Without the embed it was always blank.
   const { data, error } = await supabase
     .from("deals")
-    .select("*")
+    .select("*, customers(*)")
     .order("created_at", { ascending: false })
   if (error) throw error
   return (data || []).map(toDeal)
