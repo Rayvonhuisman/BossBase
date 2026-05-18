@@ -99,9 +99,11 @@ ul{list-style:none}
 .sb::-webkit-scrollbar{display:none}
 .sb-logo{padding:18px 18px 14px;border-bottom:1px solid var(--sbb)}
 .logo{display:inline-flex;align-items:baseline;font-weight:800;font-size:1.3rem;letter-spacing:-.03em;position:relative}
-.logo-b{color:var(--p)}.logo-a{color:var(--dk)}
-.logo--w .logo-a{color:#f3f4f6}
-.logo-bar{position:absolute;bottom:-1px;left:4px;width:12px;height:2.5px;background:var(--p);border-radius:2px}
+.logo-b{color:var(--dk)}.logo-a{color:var(--p)}
+.logo--dark .logo-b{color:#fff}
+.logo--dark .logo-a{color:var(--p)}
+.logo-mark{flex-shrink:0;align-self:center;margin-right:9px;border-radius:7px;display:block}
+.logo-bar{display:none}
 .sb-nav{flex:1;padding:10px 10px 0;overflow-y:auto;scrollbar-width:none}
 .sb-nav::-webkit-scrollbar{display:none}
 .sb-section{font-size:.67rem;letter-spacing:.08em;color:rgba(255,255,255,.38);text-transform:uppercase;padding:14px 10px 5px;font-weight:600}
@@ -114,7 +116,7 @@ ul{list-style:none}
 .sb-user:hover{background:rgba(255,255,255,.05)}
 .sb-bottom{padding:6px 10px 4px;border-top:1px solid #1f2020}
 /* Sidebar logo — base word needs to be white on dark sidebar */
-.sb .logo-a{color:rgba(255,255,255,.9)}
+.sb .logo-a{color:var(--p)}
 
 /* ── TOPBAR ─────────────────────────────────────── */
 .topbar{height:var(--th);background:var(--bg);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;position:sticky;top:0;z-index:10}

@@ -16,6 +16,7 @@ import {
   Wrench,
   X
 } from 'lucide-react';
+import { Logo } from '../bb-shared.jsx';
 
 export const navItems = [
   { path: '/website',     label: 'Website',           icon: Globe2,            group: 'Publiek' },
@@ -46,7 +47,7 @@ export default function Sidebar({ route, navigate, open, onClose }) {
       <aside className={`sidebar ${open ? 'is-open' : ''}`}>
         <div className="brand-row">
           <button className="brand" onClick={() => navigate('/dashboard')}>
-            <span className="brand-word"><strong>Boss</strong><em>Base</em><i /></span>
+            <Logo />
           </button>
           <button className="icon-btn mobile-only" onClick={onClose} aria-label="Sluit navigatie">
             <X size={22} />

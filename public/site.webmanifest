@@ -1,0 +1,13 @@
+{
+  "name": "BossBase",
+  "short_name": "BossBase",
+  "description": "BossBase — Jij de baas, wij de basis",
+  "icons": [
+    { "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any" },
+    { "src": "/brand/icon-512.png", "type": "image/png", "sizes": "512x512" },
+    { "src": "/apple-touch-icon.png", "type": "image/png", "sizes": "180x180" }
+  ],
+  "theme_color": "#0D0D0D",
+  "background_color": "#0D0D0D",
+  "display": "standalone"
+}

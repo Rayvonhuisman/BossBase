@@ -167,11 +167,30 @@ export function StatusBadge({ status }) {
   return <span className={`badge ${cls}`}>{lbl}</span>;
 }
 
-export function Logo({ dark }) {
+export function Logo({ dark, size = 26 }) {
+  const c = dark
+    ? { box: '#FFFFFF', tile: '#0D0D0D', rx: 13 }
+    : { box: '#0D0D0D', tile: '#FFFFFF', rx: 22 };
   return (
-    <span className="logo">
+    <span className={`logo${dark ? ' logo--dark' : ''}`}>
+      <svg
+        className="logo-mark"
+        width={size}
+        height={size}
+        viewBox="0 0 64 64"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <rect width="64" height="64" rx={c.rx} fill={c.box} />
+        <rect x="14" y="14" width="9" height="36" rx="2.5" fill={c.tile} />
+        <rect x="26" y="14" width="11" height="14" rx="2.5" fill={c.tile} />
+        <rect x="40" y="14" width="10" height="14" rx="2.5" fill="#1DDB62" />
+        <rect x="26" y="31" width="20" height="3" rx="1.5" fill={c.tile} opacity=".55" />
+        <rect x="26" y="36" width="11" height="14" rx="2.5" fill={c.tile} />
+        <rect x="40" y="36" width="10" height="14" rx="2.5" fill={c.tile} />
+      </svg>
       <span className="logo-b">Boss</span>
-      <span className={`logo-a${dark ? ' logo--w' : ''}`}>Base</span>
+      <span className="logo-a">Base</span>
       <span className="logo-bar" />
     </span>
   );

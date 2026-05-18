@@ -74,7 +74,7 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loadin
       )}
       <aside className={`sb${open ? ' open' : ''}`}>
         <div className="sb-logo">
-          <Logo />
+          <Logo dark />
         </div>
 
         <nav className="sb-nav" ref={navRef}>

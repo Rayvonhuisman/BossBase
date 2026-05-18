@@ -6,6 +6,7 @@ import {
   KanbanSquare,
   Wrench
 } from 'lucide-react';
+import { Logo } from '../bb-shared.jsx';
 
 /* ── Duotone feature icons — BossBase green palette ── */
 const FeatureIcons = {
@@ -140,9 +141,7 @@ export default function MarketingWebsite({ navigate, isAuthenticated = false }) 
       <nav className="bb-nav">
         <div className="bb-nav-inner">
           <button className="bb-logo-btn" onClick={() => navigate('/')} aria-label="BossBase home">
-            <span className="bb-logo-boss">Boss</span>
-            <span className="bb-logo-base">Base</span>
-            <i className="bb-logo-line" />
+            <Logo />
           </button>
           <div className="bb-nav-links">
             <a href="#functies">Functies</a>
@@ -326,10 +325,8 @@ export default function MarketingWebsite({ navigate, isAuthenticated = false }) 
         <div className="bb-footer-inner">
           <div className="bb-footer-top">
             <div className="bb-footer-brand">
-              <button className="bb-logo-btn bb-logo-dark" onClick={() => navigate('/')}>
-                <span className="bb-logo-boss">Boss</span>
-                <span className="bb-logo-base">Base</span>
-                <i className="bb-logo-line" />
+              <button className="bb-logo-btn bb-logo-dark" onClick={() => navigate('/')} aria-label="BossBase home">
+                <Logo dark />
               </button>
               <p>Jij de baas, wij de basis. BossBase helpt vakbedrijven om aanvragen, offertes en planning op één plek te beheren.</p>
             </div>

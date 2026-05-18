@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="BossBase">
+  <rect width="64" height="64" rx="22" fill="#0D0D0D"/>
+  <rect x="14" y="14" width="9" height="36" rx="2.5" fill="#FFFFFF"/>
+  <rect x="26" y="14" width="11" height="14" rx="2.5" fill="#FFFFFF"/>
+  <rect x="40" y="14" width="10" height="14" rx="2.5" fill="#1DDB62"/>
+  <rect x="26" y="31" width="20" height="3" rx="1.5" fill="#FFFFFF" opacity=".55"/>
+  <rect x="26" y="36" width="11" height="14" rx="2.5" fill="#FFFFFF"/>
+  <rect x="40" y="36" width="10" height="14" rx="2.5" fill="#FFFFFF"/>
+</svg>

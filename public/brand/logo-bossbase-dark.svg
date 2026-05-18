@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 64" role="img" aria-label="BossBase">
+  <rect width="64" height="64" rx="13" fill="#FFFFFF"/>
+  <rect x="14" y="14" width="9" height="36" rx="2.5" fill="#0D0D0D"/>
+  <rect x="26" y="14" width="11" height="14" rx="2.5" fill="#0D0D0D"/>
+  <rect x="40" y="14" width="10" height="14" rx="2.5" fill="#1DDB62"/>
+  <rect x="26" y="31" width="20" height="3" rx="1.5" fill="#0D0D0D" opacity=".55"/>
+  <rect x="26" y="36" width="11" height="14" rx="2.5" fill="#0D0D0D"/>
+  <rect x="40" y="36" width="10" height="14" rx="2.5" fill="#0D0D0D"/>
+  <text x="80" y="33" dominant-baseline="central"
+        font-family="Manrope, system-ui, -apple-system, sans-serif"
+        font-size="40" letter-spacing="-1.4">
+    <tspan font-weight="800" fill="#FFFFFF">Boss</tspan><tspan font-weight="500" fill="#1DDB62">Base</tspan>
+  </text>
+</svg>

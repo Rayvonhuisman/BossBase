@@ -17,11 +17,59 @@ import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { ActivityEditModal, NewCalendarEventModal, NewJobCostModal } from '../components/SharedModals.jsx';
 
+// ── Local date helpers ───────────────────────────────────────
+// All comparisons use LOCAL date parts (never toISOString) so a day can't
+// shift across the UTC boundary. Weeks are Monday→Sunday (Dutch/EU).
+const NL_MONTHS = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
+const NL_DAYS_FULL = ['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
+const pad2 = n => String(n).padStart(2, '0');
+// YYYY-MM-DD from a Date, using local parts.
+function dateKey(d) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+// Normalise an event/activity date (date-only string OR ISO timestamp) to a
+// local day key for safe equality checks.
+function toDayKey(value) {
+  if (!value) return null;
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value) && value.length <= 10) return value.slice(0, 10);
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? (typeof value === 'string' ? value.slice(0, 10) : null) : dateKey(d);
+}
+function addDays(date, days) {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  d.setDate(d.getDate() + days);
+  return d;
+}
+// Monday of the week containing `date` (00:00 local).
+function getStartOfWeek(date) {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const dow = (d.getDay() + 6) % 7; // Mon=0 … Sun=6
+  d.setDate(d.getDate() - dow);
+  return d;
+}
+// ISO-8601 week number (week with the year's first Thursday is week 1).
+function getISOWeek(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7; // Sun=7
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum); // Thursday of this week
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+}
+
 // ── CALENDAR ─────────────────────────────────────────────────
 export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityId, onNavConsumed }) {
   const toast = useToast();
   const { refreshKey, bumpRefresh } = useProfile();
   const [view, setView] = useState('week');
+  // Monday of the visible week. Lazy initializer → on every fresh mount the
+  // Agenda opens on the *current* week (no stale week is carried over).
+  const [weekStart, setWeekStart] = useState(() => getStartOfWeek(new Date()));
+  // First-of-month anchor for the Month tab. Lazy init → opens on the real
+  // current month; stays independent of the Week tab's weekStart.
+  const [monthAnchor, setMonthAnchor] = useState(() => {
+    const n = new Date();
+    return new Date(n.getFullYear(), n.getMonth(), 1);
+  });
   const [showEvent, setShowEvent] = useState(null);
   const [events, setEvents] = useState([]);
   const [activities, setActivities] = useState([]);
@@ -91,14 +139,40 @@ export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityI
   };
 
   const DAYS = ['Ma','Di','Wo','Do','Vr','Za','Zo'];
-  const DATES = [4, 5, 6, 7, 8, 9, 10];
   const HOURS_LIST = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00'];
 
-  const MAY_2026 = [];
-  const startOffset = 4;
-  for (let i = 0; i < startOffset; i++) MAY_2026.push({ day: null, other: true });
-  for (let d = 1; d <= 31; d++) MAY_2026.push({ day: d, other: false });
-  while (MAY_2026.length % 7 !== 0) MAY_2026.push({ day: null, other: true });
+  // Derived from weekStart — the seven Mon→Sun dates of the visible week.
+  const weekDates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const todayKey = dateKey(new Date());
+  const isoWeek = getISOWeek(weekStart);
+  const cap = s => s.replace(/^./, c => c.toUpperCase());
+
+  // Month grid derived from monthAnchor: Monday-start, padded with
+  // leading/trailing days, sized to the exact number of weeks needed.
+  const mYear = monthAnchor.getFullYear();
+  const mMonth = monthAnchor.getMonth();
+  const monthGridStart = getStartOfWeek(new Date(mYear, mMonth, 1));
+  const daysInMonth = new Date(mYear, mMonth + 1, 0).getDate();
+  const leadDays = (new Date(mYear, mMonth, 1).getDay() + 6) % 7; // Mon=0
+  const monthCellCount = Math.ceil((leadDays + daysInMonth) / 7) * 7;
+  const monthCells = Array.from({ length: monthCellCount }, (_, i) => addDays(monthGridStart, i));
+
+  const headerLabel = view === 'month'
+    ? `${cap(NL_MONTHS[mMonth])} ${mYear}`
+    : `${cap(NL_MONTHS[weekStart.getMonth()])} ${weekStart.getFullYear()} · Week ${isoWeek}`;
+
+  // Nav buttons are shared across views → act on the active view.
+  const goPrev = () => view === 'month'
+    ? setMonthAnchor(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))
+    : setWeekStart(ws => addDays(ws, -7));
+  const goNext = () => view === 'month'
+    ? setMonthAnchor(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))
+    : setWeekStart(ws => addDays(ws, 7));
+  const goToday = () => {
+    const n = new Date();
+    setWeekStart(getStartOfWeek(n));
+    setMonthAnchor(new Date(n.getFullYear(), n.getMonth(), 1));
+  };
 
   const typeLabel = t => ({ job: 'Klus', activity: 'Activiteit', visit: 'Opname' }[t] || t);
 
@@ -129,11 +203,11 @@ export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityI
   return (
     <div>
       <div className="page-hd afu">
-        <div><h1>Agenda</h1><p>Mei 2026 · Week 19</p></div>
+        <div><h1>Agenda</h1><p>{headerLabel}</p></div>
         <div className="page-hd-actions">
-          <button className="btn btn-s btn-sm">{I.chev_l}</button>
-          <button className="btn btn-s btn-sm">Vandaag</button>
-          <button className="btn btn-s btn-sm">{I.chev_r}</button>
+          <button className="btn btn-s btn-sm" onClick={goPrev} aria-label={view === 'month' ? 'Vorige maand' : 'Vorige week'}>{I.chev_l}</button>
+          <button className="btn btn-s btn-sm" onClick={goToday}>Vandaag</button>
+          <button className="btn btn-s btn-sm" onClick={goNext} aria-label={view === 'month' ? 'Volgende maand' : 'Volgende week'}>{I.chev_r}</button>
           <div className="tabs">
             {['day','week','month'].map(v => (
               <button key={v} className={`tab${view === v ? ' active' : ''}`} onClick={() => setView(v)}>
@@ -169,12 +243,14 @@ export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityI
         <div className="afu3">
           <div className="cal-grid-month">
             {DAYS.map(d => <div key={d} className="cal-day-hdr">{d}</div>)}
-            {MAY_2026.map((cell, i) => {
-              const isToday = cell.day === 3;
-              const dayEvts = cell.day ? events.filter(e => parseInt(e.date.split('-')[2]) === cell.day) : [];
+            {monthCells.map(cell => {
+              const ck = dateKey(cell);
+              const otherMonth = cell.getMonth() !== mMonth;
+              const isToday = ck === todayKey;
+              const dayEvts = events.filter(e => toDayKey(e.date) === ck);
               return (
-                <div key={i} className={`cal-cell${cell.other ? ' other-month' : ''}${isToday ? ' today' : ''}`}>
-                  <div className="cal-day-num">{cell.day}</div>
+                <div key={ck} className={`cal-cell${otherMonth ? ' other-month' : ''}${isToday ? ' today' : ''}`}>
+                  <div className="cal-day-num">{cell.getDate()}</div>
                   {dayEvts.slice(0, 2).map(e => (
                     <div key={e.id} className={`cal-event cal-ev-${e.type}`} style={{ background: e.color, color: e.textColor }} onClick={() => handleEventClick(e)}>
                       {e.time} {e.title}
@@ -192,22 +268,26 @@ export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityI
         <div className="afu3" style={{ overflowX: 'auto' }}>
           <div className="cal-week-grid" style={{ minWidth: 700 }}>
             <div className="cal-week-hdr" style={{ borderRight: '1px solid var(--border)' }}></div>
-            {DAYS.map((d, i) => (
-              <div key={d} className={`cal-week-hdr${DATES[i] === 3 ? ' today-hdr' : ''}`}>
-                <div>{d}</div>
-                <div style={{ fontSize: '.9rem', fontWeight: DATES[i] === 3 ? 800 : 600, color: DATES[i] === 3 ? 'var(--p)' : 'var(--dk)' }}>{DATES[i]}</div>
-              </div>
-            ))}
+            {DAYS.map((d, i) => {
+              const dt = weekDates[i];
+              const isToday = dateKey(dt) === todayKey;
+              return (
+                <div key={d} className={`cal-week-hdr${isToday ? ' today-hdr' : ''}`}>
+                  <div>{d}</div>
+                  <div style={{ fontSize: '.9rem', fontWeight: isToday ? 800 : 600, color: isToday ? 'var(--p)' : 'var(--dk)' }}>{dt.getDate()}</div>
+                </div>
+              );
+            })}
             {HOURS_LIST.map(hour => (
               <React.Fragment key={hour}>
                 <div className="cal-time-slot">{hour}</div>
-                {DATES.map(date => {
-                  const slotEvts = events.filter(e => {
-                    const d = parseInt(e.date.split('-')[2]);
-                    return d === date && e.time && e.time.startsWith(hour.split(':')[0]);
-                  });
+                {weekDates.map(dt => {
+                  const dk = dateKey(dt);
+                  const slotEvts = events.filter(e =>
+                    toDayKey(e.date) === dk && e.time && e.time.startsWith(hour.split(':')[0]),
+                  );
                   return (
-                    <div key={`s-${date}-${hour}`} className="cal-slot">
+                    <div key={`s-${dk}-${hour}`} className="cal-slot">
                       {slotEvts.map(e => (
                         <div key={e.id} className="cal-block" style={{ background: e.color, color: e.textColor }} onClick={() => handleEventClick(e)}>
                           {e.title}
@@ -222,13 +302,18 @@ export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityI
         </div>
       )}
 
-      {!loading && !error && view === 'day' && (
+      {!loading && !error && view === 'day' && (() => {
+        const dayKey = todayKey;
+        const today = new Date();
+        const dayLabel = `${NL_DAYS_FULL[today.getDay()].replace(/^./, c => c.toUpperCase())} ${today.getDate()} ${NL_MONTHS[today.getMonth()]} ${today.getFullYear()}`;
+        const dayEvts = events.filter(e => toDayKey(e.date) === dayKey);
+        return (
         <div className="afu3">
-          <div style={{ fontSize: '.9rem', fontWeight: 700, marginBottom: 12, color: 'var(--dk)' }}>Zondag 3 mei 2026</div>
+          <div style={{ fontSize: '.9rem', fontWeight: 700, marginBottom: 12, color: 'var(--dk)' }}>{dayLabel}</div>
           <div className="card card-p">
-            {events.filter(e => parseInt(e.date.split('-')[2]) === 3).length === 0
+            {dayEvts.length === 0
               ? <div className="empty"><div className="empty-emoji">📅</div><div className="empty-title">Geen items vandaag</div></div>
-              : events.filter(e => parseInt(e.date.split('-')[2]) === 3).map(e => {
+              : dayEvts.map(e => {
                   return (
                     <div key={e.id} style={{ display: 'flex', gap: 14, padding: '12px 0', borderBottom: '1px solid #f3f4f6', cursor: 'pointer' }} onClick={() => handleEventClick(e)}>
                       <div style={{ width: 60, flexShrink: 0, textAlign: 'right', fontSize: '.8rem', color: 'var(--dl)', paddingTop: 3 }}>{e.time}</div>
@@ -248,7 +333,8 @@ export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityI
             }
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {showEvent && (
         <div className="overlay" onClick={e => e.target === e.currentTarget && setShowEvent(null)}>

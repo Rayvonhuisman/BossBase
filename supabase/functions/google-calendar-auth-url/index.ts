@@ -34,16 +34,30 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders })
 
   try {
-    const authHeader = req.headers.get("authorization") ?? ""
+    const authHeader = req.headers.get("Authorization") ?? req.headers.get("authorization") ?? ""
+    const hasBearer = authHeader.startsWith("Bearer ")
+    // Temporary safe diagnostics — booleans/messages only, never the token value.
+    console.log("[gcal-auth-url] authHeader present:", hasBearer)
+
+    if (!hasBearer) {
+      return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      })
+    }
+
+    const token = authHeader.slice("Bearer ".length)
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { authorization: authHeader } } },
+      { global: { headers: { Authorization: authHeader } } },
     )
 
-    const { data: { user }, error: authErr } = await supabase.auth.getUser()
+    // getUser() with NO arg does not read global.headers in an Edge Function
+    // (no persisted session) → always "no user". Pass the JWT explicitly.
+    const { data: { user }, error: authErr } = await supabase.auth.getUser(token)
+    console.log("[gcal-auth-url] getUser success:", !!user, "error:", authErr?.message ?? null)
     if (authErr || !user) {
-      return new Response(JSON.stringify({ error: "Niet ingelogd" }), {
+      return new Response(JSON.stringify({ error: "Unauthorized", details: authErr?.message ?? "No user" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       })
     }
