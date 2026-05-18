@@ -106,14 +106,8 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loadin
           })}
         </nav>
 
-        <div className="sb-bottom">
-          <button className="sbi" onClick={onLogout}>
-            <span className="sbi-icon">{I.logout}</span>Uitloggen
-          </button>
-        </div>
-
-        <div className="sb-user" title="Open profiel">
-          <button onClick={onOpenProfile} aria-label="Open profiel">
+        <div className="sb-user">
+          <button onClick={onOpenProfile} aria-label="Open profiel" style={{ flex: 1, minWidth: 0 }}>
             {loading && !initials
               ? <div className="av av-md av-0 bb-skel-av" />
               : <div className="av av-md av-0">{initials}</div>}
@@ -123,6 +117,9 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loadin
                 : <div className="user-name">{name || 'Profiel'}</div>}
               <div className="user-role">{loading && !profile ? 'Profiel laden…' : roleLabel}</div>
             </div>
+          </button>
+          <button className="sb-logout-btn" onClick={onLogout} aria-label="Uitloggen" title="Uitloggen">
+            {I.logout}
           </button>
         </div>
       </aside>
@@ -485,9 +482,10 @@ function MeerMenu({ page, onNavigate, onClose, profile }) {
     {
       label: 'Financieel',
       items: [
-        { id: 'offertes', label: 'Offertes', icon: I.quotes },
         { id: 'costs',    label: 'Kosten',    icon: I.costs },
         { id: 'revenue',  label: 'Financiën', icon: I.chart },
+        { id: 'facturen', label: 'Facturen',  icon: I.brief },
+        { id: 'offertes', label: 'Offertes',  icon: I.quotes },
       ],
     },
     ...(isMedewerker ? [] : [{
@@ -534,7 +532,7 @@ function MeerMenu({ page, onNavigate, onClose, profile }) {
 }
 
 // ── MOBILE BOTTOM NAV ─────────────────────────────────────────
-const MEER_PAGE_IDS = ['calendar','werkbonnen','uren','costs','revenue','offertes','team','instellingen'];
+const MEER_PAGE_IDS = ['calendar','werkbonnen','uren','costs','revenue','facturen','offertes','team','instellingen'];
 
 function MobileBottomNav({ page, setPage, badges = {}, profile }) {
   const [showMeer, setShowMeer] = useState(false);
