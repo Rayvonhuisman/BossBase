@@ -407,7 +407,7 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
                 onClick={() => setDemoMode(v => !v)}
                 title="Alleen zichtbaar in development"
               >
-                {demoMode ? '🟡 Demo aan' : '⚪ Demo uit'}
+                {demoMode ? 'Demo aan' : 'Demo uit'}
               </button>
             )}
             {!editMode && (

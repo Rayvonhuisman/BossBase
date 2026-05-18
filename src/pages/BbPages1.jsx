@@ -179,7 +179,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
               </span>
             ) : (
               <button className="btn btn-s btn-sm" onClick={syncWithMoneybird} disabled={mbSyncing}>
-                🐦 {mbSyncing ? 'Synchroniseren...' : 'Sync met Moneybird'}
+                {mbSyncing ? 'Synchroniseren...' : 'Sync met Moneybird'}
               </button>
             )}
           </div>
@@ -244,7 +244,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
               {cActs.filter(a => a.status !== 'done').slice(0, 2).map(a => (
                 <div key={a.id} className="act-item" style={{ paddingTop: 0, cursor: 'pointer' }} onClick={() => setSelectedAct(a)}>
                   <div className="act-icon visit" style={{ fontSize: '.85rem' }}>
-                    {({ call: '📞', email: '✉️', visit: '🏠', task: '✅', follow: '📋' })[a.type]}
+                    {({ call: I.call, email: I.mail, visit: I.map, task: I.check, follow: I.note })[a.type] || I.act}
                   </div>
                   <div>
                     <div className="act-title">{a.title}</div>
@@ -310,7 +310,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
           {cActs.length > 0 ? cActs.map(a => (
             <div key={a.id} className="act-item" style={{ cursor: 'pointer' }} onClick={() => setSelectedAct(a)}>
               <div className="act-icon visit" style={{ fontSize: '.85rem' }}>
-                {({ call: '📞', email: '✉️', visit: '🏠', task: '✅', follow: '📋' })[a.type]}
+                {({ call: I.call, email: I.mail, visit: I.map, task: I.check, follow: I.note })[a.type] || I.act}
               </div>
               <div style={{ flex: 1 }}>
                 <div className="act-title">{a.title}</div>
@@ -318,7 +318,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
               </div>
               <button className="btn btn-s btn-xs" onClick={e => { e.stopPropagation(); setSelectedAct(a); }}>Open</button>
             </div>
-          )) : <div className="empty"><div className="empty-emoji">📋</div><div className="empty-title">Geen activiteiten</div></div>}
+          )) : <div className="empty"><div className="empty-title">Geen activiteiten</div></div>}
         </div>
       )}
 
@@ -343,7 +343,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
               ))}
             </tbody>
           </table>
-          {cQuotes.length === 0 && <div className="empty"><div className="empty-emoji">📄</div><div className="empty-title">Geen offertes</div></div>}
+          {cQuotes.length === 0 && <div className="empty"><div className="empty-title">Geen offertes</div></div>}
         </div>
       )}
 
@@ -622,7 +622,7 @@ export function ActivitiesPage({ openCustomer, preOpenActivityId, onNavConsumed 
     const dateOk = !dateFilter || a.dueAt?.slice(0, 10) === dateFilter;
     return statusOk && dateOk;
   });
-  const actIcon = t => ({ call: '📞', email: '✉️', visit: '🏠', task: '✅', follow: '📋' }[t] || '📌');
+  const actIcon = t => ({ call: I.call, email: I.mail, visit: I.map, task: I.check, follow: I.note }[t] || I.act);
   const markDone = async a => {
     try {
       const updated = await updateActivity(a.id, { status: 'completed' });
@@ -677,7 +677,7 @@ export function ActivitiesPage({ openCustomer, preOpenActivityId, onNavConsumed 
         ) : error ? (
           <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>
         ) : filtered.length === 0 ? (
-          <div className="empty"><div className="empty-emoji">✅</div><div className="empty-title">Geen activiteiten</div><div className="empty-sub">Alles bijgewerkt!</div></div>
+          <div className="empty"><div className="empty-title">Geen activiteiten</div><div className="empty-sub">Alles bijgewerkt!</div></div>
         ) : (
           <div style={{ padding: '0 4px' }}>
             {filtered.map(a => {

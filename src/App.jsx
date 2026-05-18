@@ -310,7 +310,7 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
               </div>
               <div className="tb-pop-list">
                 {totalNotifs === 0 && (
-                  <div className="tb-pop-empty">Geen nieuwe notificaties 🎉</div>
+                  <div className="tb-pop-empty">Geen nieuwe notificaties</div>
                 )}
                 {notifData.overdue.map(a => (
                   <button key={`o-${a.id}`} className="tb-pop-item" onClick={() => { close(); setNotifActivity(a); }}>
@@ -613,7 +613,7 @@ function AppInner() {
 
   const PAGE_META = useMemo(() => {
     const name = displayName(profile, user);
-    const greet = name ? `Goedemorgen, ${name} 👋` : profileLoading ? 'Profiel laden…' : 'Welkom terug 👋';
+    const greet = name ? `Goedemorgen, ${name}` : profileLoading ? 'Profiel laden…' : 'Welkom terug';
     return {
       dashboard:  { title: 'Dashboard',    sub: greet },
       pipeline:   { title: 'Pipeline',     sub: 'Jouw sales & werk overzicht' },

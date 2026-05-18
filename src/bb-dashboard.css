@@ -267,19 +267,46 @@ ul{list-style:none}
 .drawer-x:hover{background:#f3f4f6;color:var(--dk)}
 
 /* PIPELINE */
-.pipe-wrap{display:flex;gap:12px;overflow-x:auto;padding-bottom:16px;min-height:calc(100vh - 180px)}
-.pipe-wrap::-webkit-scrollbar{height:5px}
-.pipe-wrap::-webkit-scrollbar-thumb{background:#e5e7eb;border-radius:99px}
-.pipe-col{background:var(--bgs);border-radius:var(--r12);border:1px solid var(--border);min-width:230px;max-width:230px;display:flex;flex-direction:column}
+/* Scroll container only: stays viewport-width, scrolls its wider inner board.
+   The inner .pipe-board is width:max-content so this ALWAYS overflows and a
+   horizontal scrollbar/swipe is available regardless of ancestor layout. */
+/* No scroll-snap: snapping made the first column jump abruptly out of view
+   and felt janky. Free, native momentum scroll instead. Subtle thin bar. */
+/* Native scrollbar hidden — the "06 Numeric" hairline above the board is the
+   primary position indicator. Still fully scrollable (trackpad/mouse/touch). */
+.pipe-wrap{width:100%;max-width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;scrollbar-width:none}
+.pipe-wrap::-webkit-scrollbar{height:0;width:0;display:none}
+.pipe-board{display:flex;gap:12px;width:max-content;min-width:max-content;min-height:calc(100vh - 170px);align-items:stretch;padding:2px 6px}
+/* "03 — Ghost": always present but faded (a lighter black), gently
+   strengthening on hover/focus — never fully disappears. Calm, no chrome. */
+.pipe-ghost-zone{width:100%}
+.pipe-ghost{padding:0 8px;margin:6px 0 14px}
+.pipe-ghost-track{position:relative;height:3px;border-radius:999px;background:var(--border);cursor:pointer;touch-action:none;opacity:.45;transition:opacity 220ms ease;outline:none}
+.pipe-ghost-zone:hover .pipe-ghost-track,
+.pipe-ghost-zone.is-hover .pipe-ghost-track{opacity:1}
+.pipe-ghost-track:focus-visible{opacity:1}
+.pipe-ghost-track:focus-visible::after{content:"";position:absolute;inset:-7px -3px;border:1px solid rgba(29,219,98,.45);border-radius:7px}
+.pipe-ghost-thumb{position:absolute;top:50%;transform:translateY(-50%);height:3px;border-radius:999px;background:var(--dk);opacity:.4;transition:opacity 220ms ease,left 90ms linear,width 90ms linear;cursor:grab}
+.pipe-ghost-track:active .pipe-ghost-thumb{cursor:grabbing}
+.pipe-ghost-zone:hover .pipe-ghost-thumb,
+.pipe-ghost-zone.is-hover .pipe-ghost-thumb,
+.pipe-ghost-track:focus-visible .pipe-ghost-thumb{opacity:.7}
+.pipe-col{background:var(--bgs);border-radius:var(--r12);border:1px solid var(--border);flex:0 0 300px;min-width:300px;max-width:320px;display:flex;flex-direction:column;transition:outline .12s ease,background .12s ease}
+.pipe-col-drop{outline:2px dashed var(--p);outline-offset:-3px;background:#f0fdf4}
 .pipe-col-hd{padding:12px 14px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
 .pipe-col-title{font-size:.8rem;font-weight:700;color:var(--dk);letter-spacing:-.01em}
 .pipe-col-cnt{font-size:.68rem;font-weight:600;color:var(--dl);background:white;padding:1px 7px;border-radius:var(--r999);border:1px solid var(--border)}
-.pipe-cards{padding:8px;display:flex;flex-direction:column;gap:6px;flex:1;overflow-y:auto;max-height:calc(100vh - 280px)}
+/* flex:1 + no max-height → the card area fills the full-height column, so the
+   whole column is one large drop target down to the bottom of the page. */
+.pipe-cards{padding:8px;display:flex;flex-direction:column;gap:6px;flex:1;overflow-y:auto;min-height:120px}
 .pipe-cards::-webkit-scrollbar{width:3px}
 .pipe-add{display:flex;align-items:center;gap:6px;padding:8px 12px;font-size:.78rem;color:var(--dl);border-top:1px solid var(--border);cursor:pointer;transition:all .15s ease}
 .pipe-add:hover{background:white;color:var(--p)}
-.pc{background:white;border:1px solid var(--border);border-radius:var(--r10);padding:12px;cursor:pointer;transition:all .18s ease;box-shadow:var(--shadow-xs)}
+.pc{background:white;border:1px solid var(--border);border-radius:var(--r10);padding:12px;cursor:grab;transition:all .18s ease;box-shadow:var(--shadow-xs)}
 .pc:hover{border-color:rgba(29,219,98,.35);transform:translateY(-1px);box-shadow:var(--shadow-orange);}
+.pc:active{cursor:grabbing}
+.pc-dragging{opacity:.45;cursor:grabbing;box-shadow:var(--shadow-orange);transform:none}
+.pc-dragging:hover{transform:none}
 .pc.highlight{border-color:var(--p);background:linear-gradient(160deg,#f0fdf4 0%,#fff 100%)}
 .pc-name{font-weight:700;font-size:.85rem;color:var(--dk);margin-bottom:3px}
 .pc-job{font-size:.78rem;color:var(--dmu);margin-bottom:8px;display:flex;align-items:center;gap:5px}
@@ -394,7 +421,7 @@ ul{list-style:none}
   .search{min-width:120px}
   .stats-row{grid-template-columns:1fr 1fr!important}
   .cust-page-layout{grid-template-columns:1fr}
-  .pipe-col{min-width:200px}
+  .pipe-col{flex:0 0 270px;min-width:270px;max-width:280px}
   .profit-row{grid-template-columns:1fr 1fr}
   .drawer{width:100vw}
 }

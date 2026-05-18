@@ -5,7 +5,7 @@ import { listActivities } from '../services/activityService.js';
 import { listCustomers } from '../services/customerService.js';
 import { useProfile, displayName } from '../lib/profileContext.jsx';
 import { useToast } from '../lib/toast.jsx';
-import { ActivityEditModal } from '../components/SharedModals.jsx';
+import { ActivityEditModal, NewLeadModal } from '../components/SharedModals.jsx';
 
 // DashboardHome is now at src/pages/dashboard/DashboardHome.jsx
 function _LegacyDashboardHome({ setPage, openCustomer }) {
@@ -43,13 +43,13 @@ function _LegacyDashboardHome({ setPage, openCustomer }) {
   const acceptedValue = deals.filter(d => ['approved', 'planned', 'in_progress', 'completed', 'paid'].includes(d.stage)).reduce((s, d) => s + d.value, 0);
   const customerById = id => customers.find(c => c.id === id);
 
-  const actIcon = t => ({ call: '📞', email: '✉️', visit: '🏠', task: '✅', follow: '📋' }[t] || '📌');
+  const actIcon = t => ({ call: I.call, email: I.mail, visit: I.map, task: I.check, follow: I.note }[t] || I.act);
   const actCls  = t => ({ call: 'call', email: 'email', visit: 'visit', task: 'task', follow: 'follow' }[t] || 'task');
 
   const greetName = displayName(profile, user);
   const greeting = greetName
-    ? `Goedemorgen, ${greetName} 👋`
-    : profileLoading ? 'Profiel laden…' : 'Welkom bij BossBase 👋';
+    ? `Goedemorgen, ${greetName}`
+    : profileLoading ? 'Profiel laden…' : 'Welkom bij BossBase';
   const todayStr = new Date().toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const subline = company?.name
     ? `${todayStr} · ${company.name}`
@@ -382,6 +382,55 @@ export function Pipeline({ openCustomer, openDeal }) {
     return () => window.removeEventListener('resize', check);
   }, []);
 
+  // "03 — Ghost" scroll control (from the Scrollbar Designs handoff): a thin
+  // rail + proportional thumb that is dormant (track hidden, thumb ~35%) and
+  // fades to full presence on hover. Native scrollbar hidden; pointer-drag the
+  // thumb/track to scrub. Trackpad/mouse/touch scroll still works everywhere.
+  const pipeWrapRef = useRef(null);
+  const trackRef = useRef(null);
+  const rafRef = useRef(0);
+  const [pipeScrollable, setPipeScrollable] = useState(false);
+  const [scrollPct, setScrollPct] = useState(0); // 0..1
+  const [thumbPct, setThumbPct] = useState(0.2); // visible/total ratio
+  const [ghostHover, setGhostHover] = useState(false);
+
+  const syncPipeScroll = () => {
+    if (rafRef.current) return; // coalesce — no setState spam per pixel
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0;
+      const el = pipeWrapRef.current;
+      if (!el) return;
+      const max = el.scrollWidth - el.clientWidth;
+      setPipeScrollable(max > 4);
+      setScrollPct(max > 0 ? el.scrollLeft / max : 0);
+      setThumbPct(el.scrollWidth > 0 ? Math.min(1, el.clientWidth / el.scrollWidth) : 1);
+    });
+  };
+  const scrubToPct = (pct, smooth) => {
+    const el = pipeWrapRef.current;
+    if (!el) return;
+    const max = el.scrollWidth - el.clientWidth;
+    el.scrollTo({ left: Math.max(0, Math.min(1, pct)) * max, behavior: smooth ? 'smooth' : 'auto' });
+  };
+  // Pointer maps to the thumb CENTRE so the rail tracks the cursor naturally.
+  const onTrackPointerDown = e => {
+    const r = trackRef.current.getBoundingClientRect();
+    const tw = Math.max(thumbPct, 0.08);
+    const pctFromX = cx => {
+      const raw = (cx - r.left) / r.width; // 0..1 across the rail
+      return (raw - tw / 2) / (1 - tw);     // account for thumb width
+    };
+    scrubToPct(pctFromX(e.clientX), false);
+    const move = ev => scrubToPct(pctFromX(ev.clientX), false);
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  const nudgePipe = dx => pipeWrapRef.current?.scrollBy({ left: dx, behavior: 'smooth' });
+
   const LOST_REASONS = [
     'Te duur','Geen reactie','Ander bedrijf gekozen','Datum niet mogelijk',
     'Buiten werkgebied','Klus te klein','Klus te groot','Klant geannuleerd',
@@ -422,7 +471,9 @@ export function Pipeline({ openCustomer, openDeal }) {
     });
   }, [deals, filter]);
 
-  const SHOWN_STAGE_IDS = stages.map(s => s.id).slice(0, 8);
+  // Show every stage as a column — the board scrolls horizontally so all
+  // fases stay reachable (previously capped at 8, hiding later stages).
+  const SHOWN_STAGE_IDS = stages.map(s => s.id);
   const visibleStages = filter.stage === 'all'
     ? SHOWN_STAGE_IDS
     : SHOWN_STAGE_IDS.filter(id => id === filter.stage);
@@ -474,6 +525,62 @@ export function Pipeline({ openCustomer, openDeal }) {
     }
   };
 
+  // ── Drag & drop (native HTML5, no library) ───────────────────────────────
+  // The browser suppresses the click that follows a real drag, so plain
+  // clicks on a card (open deal/customer) keep working while a drag moves it.
+  const [draggingId, setDraggingId] = useState(null);
+  const [dragOverStage, setDragOverStage] = useState(null);
+  const dragDealRef = useRef(null);
+
+  const onCardDragStart = (e, deal) => {
+    // Don't hijack drags that start on the inline controls (stage select,
+    // open/lost icon buttons) — those must stay clickable.
+    if (e.target.closest('button, select, input, a, .btn-icon')) {
+      e.preventDefault();
+      return;
+    }
+    dragDealRef.current = deal;
+    setDraggingId(deal.id);
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', deal.id); } catch { /* Safari */ }
+  };
+  const onCardDragEnd = () => {
+    dragDealRef.current = null;
+    setDraggingId(null);
+    setDragOverStage(null);
+  };
+  const onColDragOver = (e, stageId) => {
+    if (!dragDealRef.current) return;
+    e.preventDefault(); // required so onDrop can fire
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverStage !== stageId) setDragOverStage(stageId);
+  };
+  const onColDragLeave = (e, stageId) => {
+    // Ignore leave events caused by moving onto a child element.
+    if (e.currentTarget.contains(e.relatedTarget)) return;
+    setDragOverStage(s => (s === stageId ? null : s));
+  };
+  const onColDrop = async (e, targetStageId) => {
+    e.preventDefault();
+    const deal = dragDealRef.current;
+    dragDealRef.current = null;
+    setDraggingId(null);
+    setDragOverStage(null);
+    if (!deal || !targetStageId) return;
+    if (deal.stage === targetStageId) return; // dropped in same stage → no-op
+    const prevStage = deal.stage;
+    // Optimistic: move the card immediately, reconcile/rollback after the API.
+    setDeals(ds => ds.map(d => d.id === deal.id ? { ...d, stage: targetStageId } : d));
+    try {
+      const updated = await updateDealStage(deal.id, targetStageId);
+      setDeals(ds => ds.map(d => d.id === deal.id ? updated : d));
+    } catch (err) {
+      console.error('[bb:pipeline] drag-verplaatsen mislukt', err);
+      toast.error(err.message || 'Verplaatsen mislukt');
+      setDeals(ds => ds.map(d => d.id === deal.id ? { ...d, stage: prevStage } : d));
+    }
+  };
+
   const prioColor = p => ({ high: '#dc2626', med: '#e8784a', low: '#9ca3af' }[p] || '#9ca3af');
   const resetFilter = () => setFilter({ stage: 'all', status: 'open', priority: 'all', text: '' });
   const filterActive = filter.stage !== 'all' || filter.status !== 'open' || filter.priority !== 'all' || filter.text;
@@ -482,6 +589,13 @@ export function Pipeline({ openCustomer, openDeal }) {
     bumpRefresh?.();
     reload();
   };
+
+  // Re-measure the scroll range whenever the rendered board can change.
+  useEffect(() => {
+    const id = requestAnimationFrame(syncPipeScroll);
+    window.addEventListener('resize', syncPipeScroll);
+    return () => { cancelAnimationFrame(id); window.removeEventListener('resize', syncPipeScroll); };
+  }, [deals, stages, filter, isMobile, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{ height: '100%' }}>
@@ -564,12 +678,55 @@ export function Pipeline({ openCustomer, openDeal }) {
         />
       )}
 
-      {!loading && !error && totalShown > 0 && !isMobile && <div className="pipe-wrap afu2">
+      {!loading && !error && totalShown > 0 && !isMobile && (
+        <div
+          className={`pipe-ghost-zone${ghostHover ? ' is-hover' : ''}`}
+          onMouseEnter={() => setGhostHover(true)}
+          onMouseLeave={() => setGhostHover(false)}
+        >
+        {pipeScrollable && (
+          <div className="pipe-ghost afu2">
+            <div
+              ref={trackRef}
+              className="pipe-ghost-track"
+              onPointerDown={onTrackPointerDown}
+              role="scrollbar"
+              aria-orientation="horizontal"
+              aria-label="Pipeline horizontaal scrollen"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(scrollPct * 100)}
+              tabIndex={0}
+              onFocus={() => setGhostHover(true)}
+              onBlur={() => setGhostHover(false)}
+              onKeyDown={e => {
+                if (e.key === 'ArrowRight') { e.preventDefault(); nudgePipe(320); }
+                else if (e.key === 'ArrowLeft') { e.preventDefault(); nudgePipe(-320); }
+                else if (e.key === 'Home') { e.preventDefault(); scrubToPct(0, true); }
+                else if (e.key === 'End') { e.preventDefault(); scrubToPct(1, true); }
+              }}
+            >
+              <div
+                className="pipe-ghost-thumb"
+                style={{
+                  width: `${Math.max(thumbPct * 100, 8)}%`,
+                  left: `${scrollPct * (100 - Math.max(thumbPct * 100, 8))}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
+        <div className="pipe-wrap afu2" ref={pipeWrapRef} onScroll={syncPipeScroll}>
+        <div className="pipe-board">
         {visibleStages.map(stageId => {
           const stage = stages.find(s => s.id === stageId) || PIPELINE_STAGES.find(s => s.id === stageId) || { id: stageId, label: stageId, col: 'b-gray' };
           const stageDeals = dealsInStage(stageId);
           return (
-            <div key={stageId} className="pipe-col">
+            <div key={stageId}
+              className={`pipe-col${dragOverStage === stageId ? ' pipe-col-drop' : ''}`}
+              onDragOver={e => onColDragOver(e, stageId)}
+              onDragLeave={e => onColDragLeave(e, stageId)}
+              onDrop={e => onColDrop(e, stageId)}>
               <div className="pipe-col-hd">
                 <div>
                   <span className={`badge ${stage.col}`} style={{ marginBottom: 2 }}>{stage.label}</span>
@@ -581,7 +738,11 @@ export function Pipeline({ openCustomer, openDeal }) {
               </div>
               <div className="pipe-cards">
                 {stageDeals.map(deal => (
-                  <div key={deal.id} className={`pc${deal.priority === 'high' ? ' highlight' : ''}`}>
+                  <div key={deal.id}
+                    className={`pc${deal.priority === 'high' ? ' highlight' : ''}${draggingId === deal.id ? ' pc-dragging' : ''}`}
+                    draggable
+                    onDragStart={e => onCardDragStart(e, deal)}
+                    onDragEnd={onCardDragEnd}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 1, minWidth: 0 }}>
                         <Av name={deal.customerName || '?'} size="sm" idx={0} />
@@ -628,7 +789,10 @@ export function Pipeline({ openCustomer, openDeal }) {
             </div>
           );
         })}
-      </div>}
+        </div>
+        </div>
+        </div>
+      )}
 
       {showLostModal && (
         <div className="overlay" onClick={e => e.target === e.currentTarget && setShowLostModal(false)}>

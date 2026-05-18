@@ -25,7 +25,6 @@ export function DashboardWidgetGrid({ widgets, editMode, data, setPage, openCust
       ))}
       {widgets.length === 0 && (
         <div className="dw-empty-state">
-          <div className="empty-emoji">📊</div>
           <div className="empty-title">Geen widgets op je dashboard</div>
           <div className="empty-sub">Klik op "+ Blok toevoegen" om widgets toe te voegen</div>
         </div>

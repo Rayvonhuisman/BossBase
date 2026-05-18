@@ -19,7 +19,9 @@ const toDeal = row => ({
   stage: row.stage_id || row.pipeline_stage_id || row.stage,
   title: row.title || row.name || row.description || "Deal",
   city: row.city || row.customers?.city || "",
-  value: Number(row.value || row.amount || row.revenue || 0),
+  // Real money column is `expected_revenue` (then `final_revenue`); the older
+  // value/amount/revenue are kept only as defensive fallbacks.
+  value: Number(row.expected_revenue ?? row.final_revenue ?? row.value ?? row.amount ?? row.revenue ?? 0),
   priority: row.priority || "med",
   nextAct: row.next_activity || "",
   nextDate: row.next_date || "",
@@ -31,7 +33,10 @@ const toDeal = row => ({
 
 export async function listPipelineStages() {
   const { data, error } = await supabase.from("pipeline_stages").select("*").order("position", { ascending: true })
-  if (error) throw error
+  if (error) {
+    console.error("[bb:pipeline] listPipelineStages mislukt", { message: error.message, code: error.code })
+    throw error
+  }
   return (data || []).map((row, i) => toStage(row, i))
 }
 
@@ -45,13 +50,19 @@ export async function listDeals() {
     .from("deals")
     .select("*, customers!deals_customer_id_fkey(*)")
     .order("created_at", { ascending: false })
-  if (error) throw error
+  if (error) {
+    console.error("[bb:pipeline] listDeals mislukt", { message: error.message, code: error.code, details: error.details })
+    throw error
+  }
   return (data || []).map(toDeal)
 }
 
 export async function updateDealStage(dealId, stageId) {
   const { data, error } = await supabase.from("deals").update({ stage_id: stageId }).eq("id", dealId).select("*").single()
-  if (error) throw error
+  if (error) {
+    console.error("[bb:pipeline] updateDealStage mislukt", { message: error.message, code: error.code, dealId, stage_id: stageId })
+    throw error
+  }
   return toDeal(data)
 }
 
@@ -59,22 +70,33 @@ const isUuid = v => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{
 
 export async function createDeal(input) {
   const stageCandidate = input.stage_id || input.stage || null
+  const revenue = Number(input.value || input.amount || input.expected_revenue || 0)
+  // Map to the ACTUAL deals columns. The previous payload sent value/notes/
+  // priority — none of which exist (real columns: expected_revenue,
+  // description, no priority) — so safeInsert dropped them and the entered
+  // amount/description were silently lost.
   const base = {
     title: input.title,
     customer_id: input.customer_id || input.custId || null,
     // deals.stage_id is a UUID. Reject slug fallbacks ('new_lead', etc.) so
     // Postgres can fall back to its column default instead of erroring.
     stage_id: isUuid(stageCandidate) ? stageCandidate : null,
-    value: Number(input.value || input.amount || 0),
-    notes: input.notes || input.description || null,
-    priority: input.priority || "med",
+    expected_revenue: Number.isFinite(revenue) ? revenue : 0,
+    description: input.notes || input.description || null,
   }
   Object.keys(base).forEach(k => base[k] === null && delete base[k])
   const payload = await withCompanyId(base)
-  // safeInsert retries while dropping columns the schema doesn't have
-  // (e.g. `priority` if you haven't added it yet).
+  // safeInsert still guards against minor schema drift, but the primary
+  // columns are now correct so no data is lost and no retries are needed.
   const { data, error } = await safeInsert(supabase, "deals", payload, "*")
-  if (error) throw error
+  if (error) {
+    console.error("[bb:pipeline] createDeal mislukt", {
+      message: error.message, code: error.code, details: error.details,
+      keys: Object.keys(payload),
+      company_id: payload.company_id, customer_id: payload.customer_id, stage_id: payload.stage_id,
+    })
+    throw error
+  }
   return toDeal(data)
 }
 
