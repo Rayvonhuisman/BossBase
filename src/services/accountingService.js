@@ -8,6 +8,8 @@ const toConnection = row => row ? ({
   administrationId: row.administration_id || '',
   subscriptionKey: row.subscription_key || '',
   secondaryKey: row.secondary_key || '',
+  afasEnvironmentId: row.afas_environment_id || '',
+  afasToken: row.afas_token || '',
   lastSyncedAt: row.last_synced_at || null,
 }) : null
 
@@ -107,6 +109,46 @@ export async function importKostenVanuitSnelStart() {
 
 export async function syncContactenMetSnelStart() {
   const { data, error } = await supabase.functions.invoke('snelstart-sync-contacten', {
+    body: {},
+  })
+  if (error) throw error
+  return data
+}
+
+export async function saveAfasConnection({ environmentId, token }) {
+  const payload = await withCompanyId({
+    provider: 'afas',
+    afas_environment_id: environmentId,
+    afas_token: token,
+    updated_at: new Date().toISOString(),
+  })
+  const { data, error } = await supabase
+    .from('accounting_connections')
+    .upsert(payload, { onConflict: 'company_id,provider' })
+    .select()
+    .single()
+  if (error) throw error
+  return toConnection(data)
+}
+
+export async function testAfasConnection(environmentId, token) {
+  const { data, error } = await supabase.functions.invoke('afas-test', {
+    body: { environment_id: environmentId, token },
+  })
+  if (error) throw error
+  return data
+}
+
+export async function importKostenVanuitAfas() {
+  const { data, error } = await supabase.functions.invoke('afas-import-kosten', {
+    body: {},
+  })
+  if (error) throw error
+  return data
+}
+
+export async function syncContactenMetAfas() {
+  const { data, error } = await supabase.functions.invoke('afas-sync-contacten', {
     body: {},
   })
   if (error) throw error

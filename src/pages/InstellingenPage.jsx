@@ -23,6 +23,10 @@ import {
   testSnelStartConnection,
   importKostenVanuitSnelStart,
   syncContactenMetSnelStart,
+  saveAfasConnection,
+  testAfasConnection,
+  importKostenVanuitAfas,
+  syncContactenMetAfas,
 } from '../services/accountingService.js';
 
 const TEMPLATE_LABELS = {
@@ -102,10 +106,19 @@ export function InstellingenPage() {
   const [ssImporting, setSsImporting] = useState(false);
   const [ssSyncingContacten, setSsSyncingContacten] = useState(false);
 
+  // AFAS
+  const [afasConnection, setAfasConnection] = useState(null);
+  const [afasForm, setAfasForm] = useState({ environmentId: '', token: '' });
+  const [afasEditing, setAfasEditing] = useState(false);
+  const [afasTesting, setAfasTesting] = useState(false);
+  const [afasSaving, setAfasSaving] = useState(false);
+  const [afasImporting, setAfasImporting] = useState(false);
+  const [afasSyncingContacten, setAfasSyncingContacten] = useState(false);
+
   useEffect(() => {
     setLoading(true);
-    Promise.all([getBedrijfsinstellingen(), getEmailTemplates(), getPipelineStages(), getConnection(), getConnection('snelstart')])
-      .then(([instellingen, emailTemplates, pipelineStages, mbConn, ssConn]) => {
+    Promise.all([getBedrijfsinstellingen(), getEmailTemplates(), getPipelineStages(), getConnection(), getConnection('snelstart'), getConnection('afas')])
+      .then(([instellingen, emailTemplates, pipelineStages, mbConn, ssConn, afasConn]) => {
         if (instellingen) {
           setStandaardForm({
             uurtarief: instellingen.uurtarief ?? 55,
@@ -129,6 +142,10 @@ export function InstellingenPage() {
         if (ssConn) {
           setSsConnection(ssConn);
           setSsForm({ subscriptionKey: ssConn.subscriptionKey, secondaryKey: ssConn.secondaryKey, administrationId: ssConn.administrationId });
+        }
+        if (afasConn) {
+          setAfasConnection(afasConn);
+          setAfasForm({ environmentId: afasConn.afasEnvironmentId, token: afasConn.afasToken });
         }
       })
       .catch(err => toast.error(err.message || 'Laden mislukt'))
@@ -399,6 +416,78 @@ export function InstellingenPage() {
       toast.error(err.message || 'Synchroniseren mislukt');
     } finally {
       setSsSyncingContacten(false);
+    }
+  };
+
+  const handleAfasTest = async () => {
+    if (!afasForm.environmentId || !afasForm.token) {
+      toast.error('Vul Omgevings-ID en App token in');
+      return;
+    }
+    setAfasTesting(true);
+    try {
+      const result = await testAfasConnection(afasForm.environmentId, afasForm.token);
+      if (result?.success) {
+        toast.success('Verbinding met AFAS gelukt');
+      } else {
+        toast.error(result?.error || 'Verbinding mislukt');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Verbinding mislukt');
+    } finally {
+      setAfasTesting(false);
+    }
+  };
+
+  const handleAfasSave = async () => {
+    if (!afasForm.environmentId || !afasForm.token) {
+      toast.error('Vul Omgevings-ID en App token in');
+      return;
+    }
+    setAfasSaving(true);
+    try {
+      const saved = await saveAfasConnection(afasForm);
+      setAfasConnection(saved);
+      setAfasEditing(false);
+      toast.success('AFAS-koppeling opgeslagen');
+    } catch (err) {
+      toast.error(err.message || 'Opslaan mislukt');
+    } finally {
+      setAfasSaving(false);
+    }
+  };
+
+  const handleAfasImport = async () => {
+    setAfasImporting(true);
+    try {
+      const result = await importKostenVanuitAfas();
+      if (result?.success) {
+        toast.success(`${result.imported ?? 0} kosten geïmporteerd`);
+        const refreshed = await getConnection('afas');
+        if (refreshed) setAfasConnection(refreshed);
+      } else {
+        toast.error(result?.error || 'Importeren mislukt');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Importeren mislukt');
+    } finally {
+      setAfasImporting(false);
+    }
+  };
+
+  const handleAfasSyncContacten = async () => {
+    setAfasSyncingContacten(true);
+    try {
+      const result = await syncContactenMetAfas();
+      if (result?.success) {
+        toast.success(`${result.imported ?? 0} contacten gesynchroniseerd`);
+      } else {
+        toast.error(result?.error || 'Synchroniseren mislukt');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Synchroniseren mislukt');
+    } finally {
+      setAfasSyncingContacten(false);
     }
   };
 
@@ -980,6 +1069,116 @@ export function InstellingenPage() {
                     disabled={ssSaving || !ssForm.subscriptionKey || !ssForm.secondaryKey}
                   >
                     {ssSaving ? 'Opslaan...' : 'Opslaan'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* AFAS */}
+          <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
+            <div className="integ-card-hd" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+              <img
+                src="https://logo.clearbit.com/afas.nl"
+                alt="AFAS"
+                style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 6 }}
+                onError={e => { e.currentTarget.style.display = 'none'; }}
+              />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: '.95rem', marginBottom: 2 }}>AFAS</div>
+                <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>
+                  Koppel je AFAS Profit administratie met BossBase
+                </div>
+              </div>
+              <div style={{ flexShrink: 0 }}>
+                {afasConnection?.afasEnvironmentId ? (
+                  <span style={{ fontSize: '.75rem', color: '#059669', fontWeight: 600 }}>Verbonden</span>
+                ) : (
+                  <span style={{ fontSize: '.75rem', color: 'var(--dmu)' }}>Niet verbonden</span>
+                )}
+              </div>
+            </div>
+
+            <div className="fg" style={{ marginBottom: 14 }}>
+              <div className="f s2">
+                <label>
+                  Omgevings ID
+                  <span style={{ fontSize: '.73rem', color: 'var(--dl)', fontWeight: 400, marginLeft: 6 }}>
+                    Te vinden in de URL van je AFAS omgeving
+                  </span>
+                </label>
+                <input
+                  value={afasForm.environmentId}
+                  onChange={e => setAfasForm(f => ({ ...f, environmentId: e.target.value }))}
+                  placeholder="bijv. 12345"
+                  disabled={!!(afasConnection?.afasEnvironmentId && !afasEditing)}
+                  style={{ opacity: afasConnection?.afasEnvironmentId && !afasEditing ? 0.6 : 1 }}
+                />
+              </div>
+              <div className="f s2">
+                <label>
+                  App token
+                  <span style={{ fontSize: '.73rem', color: 'var(--dl)', fontWeight: 400, marginLeft: 6 }}>
+                    Genereer een token via AFAS → App Connector
+                  </span>
+                </label>
+                <input
+                  type="password"
+                  value={afasForm.token}
+                  onChange={e => setAfasForm(f => ({ ...f, token: e.target.value }))}
+                  placeholder="AFAS App token..."
+                  disabled={!!(afasConnection?.afasEnvironmentId && !afasEditing)}
+                  style={{ opacity: afasConnection?.afasEnvironmentId && !afasEditing ? 0.6 : 1 }}
+                />
+              </div>
+            </div>
+
+            <div className="fa" style={{ flexWrap: 'wrap', gap: 8 }}>
+              {afasConnection?.afasEnvironmentId && (
+                <>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleAfasImport}
+                    disabled={afasImporting}
+                  >
+                    {afasImporting ? 'Importeren...' : 'Kosten importeren'}
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleAfasSyncContacten}
+                    disabled={afasSyncingContacten}
+                  >
+                    {afasSyncingContacten ? 'Synchroniseren...' : 'Contacten synchroniseren'}
+                  </button>
+                </>
+              )}
+              {afasConnection?.lastSyncedAt && (
+                <span style={{ fontSize: '.75rem', color: 'var(--dl)', alignSelf: 'center', marginRight: 'auto' }}>
+                  Laatste sync: {new Date(afasConnection.lastSyncedAt).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+              {afasConnection?.afasEnvironmentId && !afasEditing ? (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setAfasEditing(true)}
+                >
+                  Wijzigen
+                </button>
+              ) : (
+                <>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleAfasTest}
+                    disabled={afasTesting || !afasForm.environmentId || !afasForm.token}
+                  >
+                    {afasTesting ? 'Testen...' : 'Verbinding testen'}
+                  </button>
+                  <button
+                    className="btn btn-p btn-sm"
+                    onClick={handleAfasSave}
+                    disabled={afasSaving || !afasForm.environmentId || !afasForm.token}
+                  >
+                    {afasSaving ? 'Opslaan...' : 'Opslaan'}
                   </button>
                 </>
               )}
