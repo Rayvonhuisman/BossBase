@@ -2,7 +2,7 @@ import { supabase } from "../lib/supabase"
 import { withCompanyId } from "../lib/currentCompany"
 
 // DB columns company_members: id, company_id, profile_id, email, full_name, phone,
-// role, status, hours_per_week, invited_at, accepted_at, created_at, updated_at
+// role, status, hours_per_week, avatar_url, invited_at, accepted_at, created_at, updated_at
 
 const toTeamMember = row => ({
   id: row.id,
@@ -14,6 +14,7 @@ const toTeamMember = row => ({
   role: row.role || "medewerker",
   status: row.status || "uitgenodigd",
   hoursPerWeek: Number(row.hours_per_week || 0),
+  avatarUrl: row.avatar_url || "",
   invitedAt: row.invited_at,
   acceptedAt: row.accepted_at || null,
   createdAt: row.created_at,

@@ -28,7 +28,6 @@ VALUES
   (gen_random_uuid(), '8131d2e8-4190-4b5e-8ff2-c0c5aac68aca', 'Betaald / Gesloten',11),
   (gen_random_uuid(), '8131d2e8-4190-4b5e-8ff2-c0c5aac68aca', 'Verloren',          12)
 ON CONFLICT DO NOTHING;
-
 -- Controleer het resultaat:
 SELECT id, name, position FROM pipeline_stages
 WHERE company_id = '8131d2e8-4190-4b5e-8ff2-c0c5aac68aca'

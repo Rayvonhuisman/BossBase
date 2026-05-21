@@ -22,22 +22,18 @@ FROM deals d
 LEFT JOIN customers c ON c.id = d.customer_id
 WHERE d.customer_id IS NOT NULL
   AND c.id IS NULL;
-
 -- 1B. Orphan deals: company_id gevuld maar bedrijf bestaat niet in companies
 SELECT d.id, d.company_id, d.title
 FROM deals d
 LEFT JOIN companies c ON c.id = d.company_id
 WHERE d.company_id IS NOT NULL
   AND c.id IS NULL;
-
 -- 1C. Orphan deals: stage_id gevuld maar fase bestaat niet in pipeline_stages
 SELECT d.id, d.stage_id, d.title
 FROM deals d
 LEFT JOIN pipeline_stages ps ON ps.id = d.stage_id
 WHERE d.stage_id IS NOT NULL
   AND ps.id IS NULL;
-
-
 -- =============================================================================
 -- STAP 2: FK CONSTRAINT — deals.customer_id → customers.id
 -- Wordt ALLEEN toegevoegd als de constraint nog niet bestaat.
@@ -61,8 +57,6 @@ BEGIN
     RAISE NOTICE 'FK fk_deals_customer bestaat al, overgeslagen.';
   END IF;
 END $$;
-
-
 -- =============================================================================
 -- STAP 3: FK CONSTRAINT — deals.company_id → companies.id
 -- Wordt ALLEEN toegevoegd als de constraint nog niet bestaat.
@@ -86,8 +80,6 @@ BEGIN
     RAISE NOTICE 'FK fk_deals_company bestaat al, overgeslagen.';
   END IF;
 END $$;
-
-
 -- =============================================================================
 -- STAP 4: FK CONSTRAINT — deals.stage_id → pipeline_stages.id
 -- Wordt ALLEEN toegevoegd als de constraint nog niet bestaat.
@@ -111,8 +103,6 @@ BEGIN
     RAISE NOTICE 'FK fk_deals_stage bestaat al, overgeslagen.';
   END IF;
 END $$;
-
-
 -- =============================================================================
 -- STAP 5: RLS POLICIES — deals
 -- Vervangt bestaande policies veilig via DROP POLICY IF EXISTS.
@@ -122,21 +112,18 @@ END $$;
 
 -- Zorg dat RLS aan staat op de deals tabel
 ALTER TABLE deals ENABLE ROW LEVEL SECURITY;
-
 -- SELECT: leden van dezelfde company mogen deals lezen
 DROP POLICY IF EXISTS "deals_select" ON deals;
 CREATE POLICY "deals_select" ON deals
   FOR SELECT USING (
     company_id = (SELECT company_id FROM profiles WHERE id = auth.uid())
   );
-
 -- INSERT: leden van dezelfde company mogen deals aanmaken
 DROP POLICY IF EXISTS "deals_insert" ON deals;
 CREATE POLICY "deals_insert" ON deals
   FOR INSERT WITH CHECK (
     company_id = (SELECT company_id FROM profiles WHERE id = auth.uid())
   );
-
 -- UPDATE: leden mogen eigen company-deals aanpassen, company_id mag niet veranderen
 DROP POLICY IF EXISTS "deals_update" ON deals;
 CREATE POLICY "deals_update" ON deals
@@ -147,7 +134,6 @@ CREATE POLICY "deals_update" ON deals
   WITH CHECK (
     company_id = (SELECT company_id FROM profiles WHERE id = auth.uid())
   );
-
 -- DELETE: alleen admins mogen deals verwijderen
 DROP POLICY IF EXISTS "deals_delete" ON deals;
 CREATE POLICY "deals_delete" ON deals
@@ -155,8 +141,6 @@ CREATE POLICY "deals_delete" ON deals
     company_id = (SELECT company_id FROM profiles WHERE id = auth.uid())
     AND (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin'
   );
-
-
 -- =============================================================================
 -- OPTIONELE VEILIGE OPRUIM-STATEMENTS (standaard uitgecommentarieerd)
 -- Activeer alleen als de orphan checks hierboven rijen teruggeven.
@@ -171,4 +155,4 @@ CREATE POLICY "deals_delete" ON deals
 -- Veilige NULL-reset voor orphan stage_id:
 -- UPDATE deals SET stage_id = NULL
 -- WHERE stage_id IS NOT NULL
---   AND stage_id NOT IN (SELECT id FROM pipeline_stages);
+--   AND stage_id NOT IN (SELECT id FROM pipeline_stages);;

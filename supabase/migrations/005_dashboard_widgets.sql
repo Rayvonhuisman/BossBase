@@ -13,34 +13,27 @@ CREATE TABLE IF NOT EXISTS dashboard_widgets (
   created_at  timestamptz DEFAULT now(),
   updated_at  timestamptz DEFAULT now()
 );
-
 ALTER TABLE dashboard_widgets ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "dw_select" ON dashboard_widgets FOR SELECT
   USING (
     user_id = auth.uid()
     AND company_id = (SELECT company_id FROM profiles WHERE id = auth.uid())
   );
-
 CREATE POLICY "dw_insert" ON dashboard_widgets FOR INSERT
   WITH CHECK (
     user_id = auth.uid()
     AND company_id = (SELECT company_id FROM profiles WHERE id = auth.uid())
   );
-
 CREATE POLICY "dw_update" ON dashboard_widgets FOR UPDATE
   USING  (user_id = auth.uid())
   WITH CHECK (user_id = auth.uid());
-
 CREATE POLICY "dw_delete" ON dashboard_widgets FOR DELETE
   USING (user_id = auth.uid());
-
 -- Keep updated_at in sync automatically
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN NEW.updated_at = now(); RETURN NEW; END;
 $$;
-
 DO $$
 BEGIN
   IF NOT EXISTS (

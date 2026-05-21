@@ -10,6 +10,23 @@ import {
   deactivateTeamMember,
   deleteTeamMember,
 } from '../services/teamService.js';
+import { uploadTeamMemberAvatar, removeTeamMemberAvatar } from '../services/avatarService.js';
+import { AvatarUpload } from '../components/AvatarUpload.jsx';
+
+function TeamAvatar({ member, idx, size = 'sm' }) {
+  if (member.avatarUrl) {
+    return (
+      <img
+        src={member.avatarUrl}
+        alt={member.fullName || member.email || 'Teamlid'}
+        className={`av av-${size}`}
+        style={{ objectFit: 'cover', background: 'var(--bgs)', border: '1px solid var(--border)' }}
+        onError={e => { e.currentTarget.replaceWith(Object.assign(document.createElement('span'), { className: `av av-${size} av-${idx % 6}`, textContent: initials(member.fullName || member.email || '?') })); }}
+      />
+    );
+  }
+  return <Av name={member.fullName || member.email || '?'} size={size} idx={idx % 6} />;
+}
 
 function InviteModal({ onClose, onSaved }) {
   const toast = useToast();
@@ -115,6 +132,7 @@ function EditModal({ member, onClose, onSaved }) {
     role: member.role || 'medewerker',
     hours_per_week: member.hoursPerWeek ?? 40,
   });
+  const [avatarUrl, setAvatarUrl] = useState(member.avatarUrl || '');
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -123,13 +141,33 @@ function EditModal({ member, onClose, onSaved }) {
     try {
       const result = await updateTeamMember(member.id, form);
       toast.success('Teamlid bijgewerkt');
-      onSaved?.(result);
+      onSaved?.({ ...result, avatarUrl: avatarUrl || result.avatarUrl });
       onClose();
     } catch (err) {
       toast.error(err.message || 'Opslaan mislukt');
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleAvatarUpload = async (file) => {
+    if (!member.companyId) throw new Error('Bedrijf niet bekend voor dit teamlid');
+    const newUrl = await uploadTeamMemberAvatar({
+      memberId: member.id,
+      companyId: member.companyId,
+      file,
+      previousUrl: avatarUrl,
+    });
+    setAvatarUrl(newUrl);
+    onSaved?.({ ...member, avatarUrl: newUrl });
+    toast.success('Foto bijgewerkt');
+  };
+
+  const handleAvatarRemove = async () => {
+    await removeTeamMemberAvatar({ memberId: member.id, previousUrl: avatarUrl });
+    setAvatarUrl('');
+    onSaved?.({ ...member, avatarUrl: '' });
+    toast.success('Foto verwijderd');
   };
 
   return (
@@ -141,6 +179,15 @@ function EditModal({ member, onClose, onSaved }) {
             <div className="modal-sub">{member.email}</div>
           </div>
           <ModalX onClose={onClose} />
+        </div>
+        <div style={{ marginBottom: 18 }}>
+          <AvatarUpload
+            src={avatarUrl}
+            name={form.full_name || member.email}
+            size="xl"
+            onUpload={handleAvatarUpload}
+            onRemove={avatarUrl ? handleAvatarRemove : null}
+          />
         </div>
         <div className="fg">
           <div className="f s2">
@@ -323,7 +370,7 @@ export function TeamPage() {
                 <tr key={member.id}>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                      <Av name={member.fullName || member.email || '?'} size="sm" idx={idx % 6} />
+                      <TeamAvatar member={member} idx={idx} size="sm" />
                       <div>
                         <div style={{ fontWeight: 600, fontSize: '.88rem' }}>
                           {member.fullName || <span style={{ color: 'var(--dl)', fontStyle: 'italic' }}>Geen naam</span>}

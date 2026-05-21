@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { I, Logo, initials } from './bb-shared.jsx';
 import { LoginPage, RegisterFlow } from './pages/BbAuth.jsx';
 import { DashboardHome } from './pages/dashboard/DashboardHome.jsx';
@@ -7,13 +8,15 @@ import { DealDetailDrawer } from './pages/dashboard/DealDetailDrawer.jsx';
 import { InvoiceDetailDrawer } from './pages/dashboard/InvoiceDetailDrawer.jsx';
 import { CalendarEventDetailDrawer } from './pages/dashboard/CalendarEventDetailDrawer.jsx';
 import { CustomerPage, CustomersPage, ActivitiesPage } from './pages/BbPages1.jsx';
+import { ActivitiesPageV2 } from './pages/ActivitiesPageV2.jsx';
 import { CalendarPage, CostsPage, RevenuePage } from './pages/BbPages2.jsx';
 import { InstellingenPage } from './pages/InstellingenPage.jsx';
 import { TeamPage } from './pages/TeamPage.jsx';
 import { OffertesPage } from './pages/OffertesPage.jsx';
 import { FacturenPage } from './pages/FacturenPage.jsx';
 import { UrenPage } from './pages/UrenPage.jsx';
-import { WerkbonPage } from './pages/WerkbonPage.jsx';
+import { WerkbonPageV2 as WerkbonPage } from './pages/WerkbonPageV2.jsx';
+import { ProjectsPage } from './pages/ProjectsPage.jsx';
 import MarketingWebsite from './pages/MarketingWebsite.jsx';
 import DemoPage from './pages/DemoPage.jsx';
 import { createMissingProfile, getSession, logout, onAuthStateChange } from './services/authService.js';
@@ -35,6 +38,7 @@ const NAV = [
   { id: 'customers',  label: 'Klanten',     icon: 'cust',    section: 'main' },
   { id: 'activities', label: 'Activiteiten',icon: 'act',     section: 'main' },
   { id: 'calendar',    label: 'Agenda',       icon: 'cal',      section: 'work' },
+  { id: 'projecten',   label: 'Projecten',   icon: 'projects', section: 'work' },
   { id: 'werkbonnen',  label: 'Werkbonnen',  icon: 'wo',       section: 'work' },
   { id: 'uren',        label: 'Uren',        icon: 'hours',    section: 'work' },
   { id: 'costs',       label: 'Kosten',      icon: 'costs',    section: 'finance' },
@@ -53,7 +57,7 @@ const SECTIONS = [
 ];
 
 // ── SIDEBAR ──────────────────────────────────────────────────
-function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loading, onOpenProfile, badges = {} }) {
+function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loading, onOpenProfile, badges = {}, collapsed, onToggleCollapsed }) {
   const go = id => { setPage(id); onClose(); };
   const initials = profileInitials(profile, user);
   const name = displayName(profile, user);
@@ -67,14 +71,43 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loadin
     if (active) active.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [page]);
 
+  // Sidebar-toggle tooltip — rendered as a real fixed-positioned element so
+  // it escapes the sidebar's overflow-x:hidden clipping (a pseudo-element
+  // would get cut off at the sidebar's right edge).
+  const [toggleTip, setToggleTip] = useState(null);
+  const showToggleTip = e => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setToggleTip({ x: r.right + 10, y: r.top + r.height / 2 });
+  };
+  const hideToggleTip = () => setToggleTip(null);
+
   return (
     <>
       {open && (
         <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.3)', zIndex: 199 }} />
       )}
-      <aside className={`sb${open ? ' open' : ''}`}>
+      <aside className={`sb${open ? ' open' : ''}${collapsed ? ' collapsed' : ''}`}>
         <div className="sb-logo">
           <Logo dark />
+          <button
+            type="button"
+            className="sb-toggle"
+            onClick={onToggleCollapsed}
+            onMouseEnter={showToggleTip}
+            onMouseLeave={hideToggleTip}
+            onFocus={showToggleTip}
+            onBlur={hideToggleTip}
+            aria-label={collapsed ? 'Zijbalk uitklappen' : 'Zijbalk inklappen'}
+            aria-pressed={collapsed}
+          >
+            <span className="sb-toggle-icon">{I.sb_panel}</span>
+          </button>
+          {toggleTip && createPortal(
+            <span className="sb-toggle-tip" style={{ left: toggleTip.x, top: toggleTip.y }}>
+              {collapsed ? 'Uitklappen' : 'Inklappen'}
+            </span>,
+            document.body
+          )}
         </div>
 
         <nav className="sb-nav" ref={navRef}>
@@ -90,17 +123,22 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loadin
             return (
               <div key={sec.id}>
                 <div className="sb-section">{sec.label}</div>
-                {items.map(item => (
-                  <button
-                    key={item.id}
-                    className={`sbi${page === item.id ? ' active' : ''}`}
-                    onClick={() => go(item.id)}
-                  >
-                    <span className="sbi-icon">{I[item.icon]}</span>
-                    {item.label}
-                    {badges[item.id] > 0 && <span className="sbi-badge">{badges[item.id]}</span>}
-                  </button>
-                ))}
+                {items.map(item => {
+                  const badge = badges[item.id] > 0 ? badges[item.id] : null;
+                  return (
+                    <button
+                      key={item.id}
+                      className={`sbi${page === item.id ? ' active' : ''}`}
+                      onClick={() => go(item.id)}
+                      title={collapsed ? item.label : undefined}
+                      aria-label={item.label}
+                    >
+                      <span className="sbi-icon">{I[item.icon]}</span>
+                      <span className="sbi-label">{item.label}</span>
+                      {badge && <span className="sbi-badge">{badge}</span>}
+                    </button>
+                  );
+                })}
               </div>
             );
           })}
@@ -110,7 +148,9 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loadin
           <button onClick={onOpenProfile} aria-label="Open profiel" style={{ flex: 1, minWidth: 0 }}>
             {loading && !initials
               ? <div className="av av-md av-0 bb-skel-av" />
-              : <div className="av av-md av-0">{initials}</div>}
+              : profile?.avatarUrl
+                ? <img src={profile.avatarUrl} alt={name || 'Profiel'} className="av av-md" style={{ objectFit: 'cover' }} />
+                : <div className="av av-md av-0">{initials}</div>}
             <div className="user-info" style={{ flex: 1, minWidth: 0 }}>
               {loading && !name
                 ? <div className="bb-skel bb-skel-line" style={{ width: '70%' }} />
@@ -371,15 +411,18 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
             className="tb-av"
             title={displayName(profile, user) || (loading ? 'Profiel laden…' : 'Profiel')}
             onClick={() => setOpenMenu(m => m === 'profile' ? null : 'profile')}
+            style={profile?.avatarUrl ? { backgroundImage: `url(${profile.avatarUrl})`, backgroundSize: 'cover', backgroundPosition: 'center', color: 'transparent' } : undefined}
           >
             {loading && !profileInitials(profile, user)
               ? <span className="bb-skel-av" style={{ width: '100%', height: '100%', borderRadius: '50%' }} />
-              : profileInitials(profile, user)}
+              : profile?.avatarUrl ? '' : profileInitials(profile, user)}
           </button>
           {openMenu === 'profile' && (
             <div className="tb-pop" style={{ minWidth: 240 }}>
               <div className="tb-pop-user">
-                <div className="av av-lg av-0">{profileInitials(profile, user)}</div>
+                {profile?.avatarUrl
+                  ? <img src={profile.avatarUrl} alt={displayName(profile, user) || 'Profiel'} className="av av-lg" style={{ objectFit: 'cover' }} />
+                  : <div className="av av-lg av-0">{profileInitials(profile, user)}</div>}
                 <div style={{ minWidth: 0 }}>
                   <div className="tb-pop-name">
                     {displayName(profile, user) || (loading ? 'Profiel laden…' : 'Profiel')}
@@ -475,6 +518,7 @@ function MeerMenu({ page, onNavigate, onClose, profile }) {
       label: 'Uitvoering',
       items: [
         { id: 'calendar',   label: 'Agenda',     icon: I.cal },
+        { id: 'projecten',  label: 'Projecten',  icon: I.projects },
         { id: 'werkbonnen', label: 'Werkbonnen', icon: I.wo },
         { id: 'uren',       label: 'Uren',       icon: I.hours },
       ],
@@ -532,7 +576,7 @@ function MeerMenu({ page, onNavigate, onClose, profile }) {
 }
 
 // ── MOBILE BOTTOM NAV ─────────────────────────────────────────
-const MEER_PAGE_IDS = ['calendar','werkbonnen','uren','costs','revenue','facturen','offertes','team','instellingen'];
+const MEER_PAGE_IDS = ['calendar','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','team','instellingen'];
 
 function MobileBottomNav({ page, setPage, badges = {}, profile }) {
   const [showMeer, setShowMeer] = useState(false);
@@ -591,6 +635,10 @@ function AppInner() {
   const [authReady,  setAuthReady]  = useState(false);
   const [page,       setPage]       = useState('dashboard');
   const [sbOpen,     setSbOpen]     = useState(false);
+  const [sbCollapsed, setSbCollapsed] = useState(() => {
+    try { return localStorage.getItem('bb.sidebarCollapsed') === '1'; }
+    catch { return false; }
+  });
   const [drawerCust, setDrawerCust] = useState(null);
   const [drawerDeal, setDrawerDeal] = useState(null);
   const [drawerInvoice, setDrawerInvoice] = useState(null);
@@ -620,6 +668,7 @@ function AppInner() {
       customers:  { title: 'Klanten',      sub: 'CRM — alle klantprofielen' },
       activities: { title: 'Activiteiten', sub: 'Openstaande acties en taken' },
       calendar:    { title: 'Agenda',        sub: 'Planning en afspraken' },
+      projecten:   { title: 'Projecten',    sub: 'Beheer projecten, uren, offertes en facturatie' },
       werkbonnen:  { title: 'Werkbonnen',   sub: 'Uitvoeropdrachten op locatie' },
       uren:        { title: 'Uren',         sub: 'Urenregistratie per medewerker' },
       costs:       { title: 'Kosten',       sub: 'Kosten per klant en opdracht' },
@@ -798,12 +847,13 @@ function AppInner() {
       case 'dashboard':  return <DashboardHome {...props} />;
       case 'pipeline':   return <Pipeline openCustomer={openCustomer} openDeal={openDeal} />;
       case 'customers':  return <CustomersPage openCustomer={openCustomer} />;
-      case 'activities': return <ActivitiesPage openCustomer={openCustomer} preOpenActivityId={navIntent?.page === 'activities' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
+      case 'activities': return <ActivitiesPageV2 openCustomer={openCustomer} preOpenActivityId={navIntent?.page === 'activities' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'calendar':   return <CalendarPage openCustomer={openCustomer} openCalendarEvent={openCalendarEvent} preOpenActivityId={navIntent?.page === 'calendar' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'costs':       return <CostsPage />;
       case 'revenue':     return <RevenuePage />;
       case 'facturen':    return <FacturenPage openCustomer={openCustomer} />;
       case 'offertes':    return <OffertesPage openCustomer={openCustomer} preOpenOfferteId={navIntent?.page === 'offertes' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
+      case 'projecten':   return <ProjectsPage openCustomer={openCustomer} openInvoice={openInvoice} setPage={navigatePage} preOpenProjectId={navIntent?.page === 'projecten' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'werkbonnen':  return <WerkbonPage preOpenWerkbonId={navIntent?.page === 'werkbonnen' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'uren':        return <UrenPage />;
       case 'team':        return <TeamPage />;
@@ -889,6 +939,12 @@ function AppInner() {
           loading={profileLoading}
           onOpenProfile={() => setOpenProfile(true)}
           badges={sidebarBadges}
+          collapsed={sbCollapsed}
+          onToggleCollapsed={() => setSbCollapsed(c => {
+            const next = !c;
+            try { localStorage.setItem('bb.sidebarCollapsed', next ? '1' : '0'); } catch { /* ignore */ }
+            return next;
+          })}
         />
 
         <div className="main">

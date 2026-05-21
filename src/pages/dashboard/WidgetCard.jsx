@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { I } from '../../bb-shared.jsx';
 import { getSupportedSizes } from '../../data/widgetRegistry.js';
 
@@ -207,78 +207,165 @@ function DKpiCard({ icon, value, label, sub, trend, tone = 'green', onClick }) {
   );
 }
 
-// ── Monthly revenue chart (area + grid, period seg) ───────────
-const REV_PERIODS = [6, 12, 24];
-function MonthlyRevenueChart({ charts, ux, onNav }) {
+// ── Monthly revenue chart — responsive (large vs full), smooth line ──
+function smoothLinePath(pts) {
+  if (pts.length < 2) return '';
+  if (pts.length === 2) return `M${pts[0][0]},${pts[0][1]} L${pts[1][0]},${pts[1][1]}`;
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    const t = 0.18; // tension — lower = smoother but flatter
+    const c1x = p1[0] + (p2[0] - p0[0]) * t;
+    const c1y = p1[1] + (p2[1] - p0[1]) * t;
+    const c2x = p2[0] - (p3[0] - p1[0]) * t;
+    const c2y = p2[1] - (p3[1] - p1[1]) * t;
+    d += ` C${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`;
+  }
+  return d;
+}
+function niceTop(max) {
+  if (max <= 0) return 1;
+  const mag = Math.pow(10, Math.floor(Math.log10(max)));
+  const norm = max / mag;
+  const step = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
+  return step * mag;
+}
+function useMeasuredWidth(initial = 600) {
+  const ref = useRef(null);
+  const [w, setW] = useState(initial);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const set = () => setW(Math.max(280, Math.round(el.getBoundingClientRect().width)));
+    set();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, w];
+}
+function MonthlyRevenueChart({ charts, widget, ux, onNav }) {
   const all = charts.monthlyRevenue || [];
-  const [period, setPeriod] = useState(all.length > 6 ? 12 : 6);
+  const size = widget?.size || 'large';
+  const isFull = size === 'full';
+  const [bodyRef, cw] = useMeasuredWidth(isFull ? 1100 : 560);
   const tip = (e, n) => ux && ux.tip && ux.tip(e, n);
   const off = () => ux && ux.off && ux.off();
-  if (!all.length) {
+
+  const hasData = all.length && all.some(m => (m.value || 0) > 0);
+  if (!hasData) {
     return (
       <>
-        <DHead title="Omzet per maand" subtitle="Nog geen omzetgegevens" right={<DMore />} />
-        <DEmpty msg="Geen grafiekdata" />
+        <DHead title="Omzet per maand" subtitle="Maandelijkse omzetontwikkeling" right={<DMore />} />
+        <div style={{ padding: '36px 20px 32px', textAlign: 'center' }}>
+          <div style={{
+            width: 52, height: 52, borderRadius: 14, background: C.greenSoft, color: C.greenInk,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px',
+          }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 20h18" /><path d="M6 17l4-5 3 3 5-7" />
+            </svg>
+          </div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Nog geen omzetdata beschikbaar</div>
+          <div style={{ fontSize: 12.5, color: C.textSub, marginTop: 4 }}>Markeer deals als betaald om je omzet hier te zien.</div>
+        </div>
       </>
     );
   }
-  const d = all.slice(-period);
-  const total = all.reduce((s, x) => s + (x.value || 0), 0);
-  const last = d[d.length - 1]?.value || 0;
-  const prev = d.length > 1 ? (d[d.length - 2]?.value || 0) : 0;
+
+  const data = all;
+  const total = data.reduce((s, x) => s + (x.value || 0), 0);
+  const last = data[data.length - 1]?.value || 0;
+  const prev = data.length > 1 ? (data[data.length - 2]?.value || 0) : 0;
   const change = prev ? Math.round(((last - prev) / prev) * 100) : 0;
-  const W = 720, H = 260, pad = { l: 44, r: 16, t: 18, b: 28 };
-  const max = Math.max(...d.map(x => x.value), 1);
-  const xStep = d.length > 1 ? (W - pad.l - pad.r) / (d.length - 1) : 0;
-  const pts = d.map((x, i) => [
-    d.length > 1 ? pad.l + i * xStep : (W - pad.r + pad.l) / 2,
-    H - pad.b - (x.value / max) * (H - pad.t - pad.b),
+  const best = data.reduce((b, m) => (m.value > b.value ? m : b), data[0]);
+  const avg = Math.round(total / data.length);
+
+  // Responsive dimensions — measured width prevents stretch distortion
+  const H = isFull ? 280 : 200;
+  const W = cw;
+  const pad = isFull
+    ? { l: 56, r: 22, t: 22, b: 32 }
+    : { l: 46, r: 16, t: 16, b: 28 };
+  const ticks = isFull ? 4 : 3;
+  const yMax = niceTop(Math.max(...data.map(x => x.value), 1));
+  const xStep = data.length > 1 ? (W - pad.l - pad.r) / (data.length - 1) : 0;
+  const pts = data.map((x, i) => [
+    data.length > 1 ? pad.l + i * xStep : (W - pad.r + pad.l) / 2,
+    H - pad.b - (x.value / yMax) * (H - pad.t - pad.b),
   ]);
-  const path = pts.map((p, i) => (i === 0 ? `M${p[0]},${p[1]}` : `L${p[0]},${p[1]}`)).join(' ');
-  const area = `${path} L${pts[pts.length - 1][0]},${H - pad.b} L${pts[0][0]},${H - pad.b} Z`;
+  const linePath = smoothLinePath(pts);
+  const areaPath = pts.length
+    ? `${linePath} L${pts[pts.length - 1][0]},${H - pad.b} L${pts[0][0]},${H - pad.b} Z`
+    : '';
+  const labelEvery = isFull ? 1 : (data.length > 8 ? 2 : 1);
+  const gradId = `bbOmzetGrad-${size}`;
+
   return (
     <>
       <DHead
         title="Omzet per maand"
-        subtitle={<><span style={{ color: C.greenInk, fontWeight: 700 }}>{change >= 0 ? '+' : ''}{change}%</span> vs. vorige periode · totaal {kEur(total)}</>}
-        right={<div style={{ display: 'flex', gap: 6 }}><DSeg options={['6M', '12M', '24M']} active={`${period}M`} onPick={o => setPeriod(parseInt(o))} /><DMore /></div>}
+        subtitle="Maandelijkse omzetontwikkeling"
+        right={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 10.5, color: C.textMute, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Deze maand</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 3, justifyContent: 'flex-end' }}>
+                <span style={{ fontSize: isFull ? 22 : 18, fontWeight: 800, color: C.text, letterSpacing: -0.4, lineHeight: 1 }}>{eur(last)}</span>
+                {prev > 0 && (
+                  <DBadge tone={change >= 0 ? 'green' : 'red'}>{change >= 0 ? '+' : ''}{change}%</DBadge>
+                )}
+              </div>
+            </div>
+            <DMore />
+          </div>
+        }
       />
-      <div className="dw-chart-body" style={{ padding: '8px 10px 14px', overflow: 'hidden' }}>
-        <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+      <div ref={bodyRef} className="dw-chart-body" style={{ padding: isFull ? '4px 18px 14px' : '2px 12px 10px', overflow: 'hidden' }}>
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', maxWidth: '100%' }}>
           <defs>
-            <linearGradient id="bbOmzetGrad" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor={C.green} stopOpacity="0.32" />
+            <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor={C.green} stopOpacity="0.30" />
               <stop offset="100%" stopColor={C.green} stopOpacity="0" />
             </linearGradient>
           </defs>
-          {[0, 1, 2, 3, 4].map(i => {
-            const y = pad.t + i * ((H - pad.t - pad.b) / 4);
-            const v = max - i * (max / 4);
+          {Array.from({ length: ticks + 1 }).map((_, i) => {
+            const y = pad.t + i * ((H - pad.t - pad.b) / ticks);
+            const v = yMax - (yMax / ticks) * i;
             return (
-              <g key={i}>
+              <g key={'g' + i}>
                 <line x1={pad.l} x2={W - pad.r} y1={y} y2={y} stroke={C.borderSoft} strokeWidth="1" />
-                <text x={pad.l - 8} y={y + 3} textAnchor="end" fontSize="10" fill={C.textMute} fontWeight="600">{kEur(v)}</text>
+                <text x={pad.l - 10} y={y + 4} textAnchor="end" fontSize="10.5" fill={C.textMute} fontWeight="600">{kEur(v)}</text>
               </g>
             );
           })}
-          <path d={area} fill="url(#bbOmzetGrad)" />
-          <path d={path} fill="none" stroke={C.green} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+          {areaPath && <path d={areaPath} fill={`url(#${gradId})`} />}
+          {linePath && <path d={linePath} fill="none" stroke={C.green} strokeWidth={isFull ? 2.6 : 2.2} strokeLinecap="round" strokeLinejoin="round" />}
           {pts.map((p, i) => {
             const lst = i === pts.length - 1;
             return (
-              <g key={i}>
-                {lst && <circle cx={p[0]} cy={p[1]} r={11} fill={C.green} opacity="0.18" />}
-                <circle cx={p[0]} cy={p[1]} r={lst ? 5.5 : 3.5} fill="#fff" stroke={C.green} strokeWidth={lst ? 2.6 : 2} />
+              <g key={'p' + i}>
+                {lst && <circle cx={p[0]} cy={p[1]} r={10} fill={C.green} opacity="0.18" />}
+                <circle cx={p[0]} cy={p[1]} r={lst ? 4.8 : 3} fill="#fff" stroke={C.green} strokeWidth={lst ? 2.4 : 1.8} />
               </g>
             );
           })}
-          {d.map((x, i) => (
-            <text key={i} x={d.length > 1 ? pad.l + i * xStep : (W - pad.r + pad.l) / 2} y={H - 8} textAnchor="middle"
-              fontSize="10.5" fill={i === d.length - 1 ? C.text : C.textMute} fontWeight={i === d.length - 1 ? 700 : 500}>{x.label}</text>
-          ))}
-          {d.map((x, i) => {
-            const cx = d.length > 1 ? pad.l + i * xStep : (W - pad.r + pad.l) / 2;
-            const bw = d.length > 1 ? xStep : (W - pad.l - pad.r);
+          {data.map((x, i) => {
+            const show = (i % labelEvery === 0) || i === data.length - 1;
+            if (!show) return null;
+            return (
+              <text key={'t' + i} x={data.length > 1 ? pad.l + i * xStep : (W - pad.r + pad.l) / 2} y={H - 10}
+                textAnchor="middle" fontSize="10.5" fill={i === data.length - 1 ? C.text : C.textMute}
+                fontWeight={i === data.length - 1 ? 700 : 500}>{x.label}</text>
+            );
+          })}
+          {data.map((x, i) => {
+            const cx = data.length > 1 ? pad.l + i * xStep : (W - pad.r + pad.l) / 2;
+            const bw = data.length > 1 ? xStep : (W - pad.l - pad.r);
             return (
               <rect key={'h' + i} x={cx - bw / 2} y={pad.t} width={bw} height={H - pad.t - pad.b} fill="transparent"
                 style={{ cursor: 'pointer' }}
@@ -288,7 +375,27 @@ function MonthlyRevenueChart({ charts, ux, onNav }) {
           })}
         </svg>
       </div>
+      {isFull && (
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
+          borderTop: `1px solid ${C.borderSoft}`, padding: '14px 22px 18px', gap: 16,
+        }}>
+          <RevStat label="Beste maand" value={eur(best.value)} sub={best.label} />
+          <RevStat label="Gemiddeld per maand" value={eur(avg)} sub={`${data.length} maanden`} />
+          <RevStat label="Totaal" value={eur(total)} sub="Hele periode" />
+        </div>
+      )}
     </>
+  );
+}
+
+function RevStat({ label, value, sub }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 10.5, color: C.textMute, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
+      <div style={{ fontSize: 16, fontWeight: 800, color: C.text, letterSpacing: -0.3, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
+      {sub && <div style={{ fontSize: 11.5, color: C.textSub, fontWeight: 600, marginTop: 2 }}>{sub}</div>}
+    </div>
   );
 }
 
@@ -964,7 +1071,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
 
     // ───────── Charts ─────────
     case 'monthly_revenue_chart':
-      return <MonthlyRevenueChart charts={charts} ux={ux} onNav={() => setPage('revenue')} />;
+      return <MonthlyRevenueChart charts={charts} widget={widget} ux={ux} onNav={() => setPage('revenue')} />;
 
     case 'monthly_profit_chart': {
       const rev = charts.monthlyRevenue || [];

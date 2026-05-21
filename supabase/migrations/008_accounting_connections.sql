@@ -9,20 +9,16 @@ CREATE TABLE IF NOT EXISTS accounting_connections (
   updated_at        timestamptz NOT NULL DEFAULT now(),
   UNIQUE (company_id, provider)
 );
-
 ALTER TABLE accounting_connections ENABLE ROW LEVEL SECURITY;
-
 CREATE POLICY "select_accounting_connections"
   ON accounting_connections FOR SELECT
   USING (company_id = (SELECT company_id FROM profiles WHERE id = auth.uid()));
-
 CREATE POLICY "insert_accounting_connections"
   ON accounting_connections FOR INSERT
   WITH CHECK (
     company_id = (SELECT company_id FROM profiles WHERE id = auth.uid())
     AND (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin'
   );
-
 CREATE POLICY "update_accounting_connections"
   ON accounting_connections FOR UPDATE
   USING (
@@ -33,7 +29,6 @@ CREATE POLICY "update_accounting_connections"
     company_id = (SELECT company_id FROM profiles WHERE id = auth.uid())
     AND (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin'
   );
-
 CREATE POLICY "delete_accounting_connections"
   ON accounting_connections FOR DELETE
   USING (

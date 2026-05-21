@@ -5,7 +5,6 @@ SELECT cron.unschedule('snelstart-import-kosten') WHERE EXISTS (
 SELECT cron.unschedule('snelstart-sync-contacten') WHERE EXISTS (
   SELECT 1 FROM cron.job WHERE jobname = 'snelstart-sync-contacten'
 );
-
 -- Kosten importeren: elke 5 minuten
 SELECT cron.schedule(
   'snelstart-import-kosten',
@@ -21,7 +20,6 @@ SELECT cron.schedule(
   );
   $$
 );
-
 -- Contacten synchroniseren: elke 5 minuten
 SELECT cron.schedule(
   'snelstart-sync-contacten',

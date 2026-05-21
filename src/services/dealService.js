@@ -58,7 +58,15 @@ export async function listDeals() {
 }
 
 export async function updateDealStage(dealId, stageId) {
-  const { data, error } = await supabase.from("deals").update({ stage_id: stageId }).eq("id", dealId).select("*").single()
+  // Mirror the customers join from listDeals so toDeal() can still resolve
+  // customerName/city after the update — without the join those fields go
+  // empty and pipeline cards lose klantnaam/locatie on drag-and-drop.
+  const { data, error } = await supabase
+    .from("deals")
+    .update({ stage_id: stageId })
+    .eq("id", dealId)
+    .select("*, customers!deals_customer_id_fkey(*)")
+    .single()
   if (error) {
     console.error("[bb:pipeline] updateDealStage mislukt", { message: error.message, code: error.code, dealId, stage_id: stageId })
     throw error
@@ -105,7 +113,7 @@ export async function updateDeal(dealId, input) {
     .from("deals")
     .update(input)
     .eq("id", dealId)
-    .select("*")
+    .select("*, customers!deals_customer_id_fkey(*)")
     .single()
   if (error) throw error
   return toDeal(data)

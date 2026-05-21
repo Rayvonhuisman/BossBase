@@ -1,7 +1,7 @@
 import { supabase } from "../lib/supabase"
 
 // Real DB columns:
-// profiles: id, company_id, full_name, role, created_at
+// profiles: id, company_id, full_name, role, avatar_url, created_at
 // companies: id, name, email, kvk, btw_number, phone, address, city, postal_code,
 //            website, logo_url, created_at, updated_at
 // `email` for the user lives on auth.user, not in profiles.
@@ -12,6 +12,7 @@ const toProfile = (row, user) => ({
   fullName: row.full_name || "",
   email: user?.email || "",
   role: row.role || "user",
+  avatarUrl: row.avatar_url || "",
   createdAt: row.created_at || null,
   raw: row,
 })

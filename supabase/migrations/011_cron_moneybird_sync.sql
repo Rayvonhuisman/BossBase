@@ -1,7 +1,6 @@
 -- Zorg dat pg_cron en pg_net extensies actief zijn
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
-
 -- Verwijder bestaande cron jobs als die er zijn
 SELECT cron.unschedule('moneybird-sync-kosten') WHERE EXISTS (
   SELECT 1 FROM cron.job WHERE jobname = 'moneybird-sync-kosten'
@@ -9,7 +8,6 @@ SELECT cron.unschedule('moneybird-sync-kosten') WHERE EXISTS (
 SELECT cron.unschedule('moneybird-sync-contacten') WHERE EXISTS (
   SELECT 1 FROM cron.job WHERE jobname = 'moneybird-sync-contacten'
 );
-
 -- Kosten en facturen importeren: elke nacht om 02:00
 SELECT cron.schedule(
   'moneybird-sync-kosten',
@@ -25,7 +23,6 @@ SELECT cron.schedule(
   );
   $$
 );
-
 -- Contacten synchroniseren: elke nacht om 02:30
 SELECT cron.schedule(
   'moneybird-sync-contacten',

@@ -14,6 +14,8 @@ import {
   deletePipelineStage,
 } from '../services/instellingenService.js';
 import { updateCompany } from '../services/profileService.js';
+import { uploadProfileAvatar, removeProfileAvatar } from '../services/avatarService.js';
+import { AvatarUpload } from '../components/AvatarUpload.jsx';
 import {
   getConnection,
   saveConnection,
@@ -51,7 +53,7 @@ export function InstellingenPage() {
   const { company, refresh, profile } = useProfile();
   const isAdmin = profile?.role === 'admin';
 
-  const [tab, setTab] = useState('bedrijf');
+  const [tab, setTab] = useState('profiel');
   const [loading, setLoading] = useState(true);
 
   // Bedrijfsprofiel
@@ -522,12 +524,34 @@ export function InstellingenPage() {
   };
 
   const TABS = [
+    { id: 'profiel', label: 'Mijn profiel' },
     { id: 'bedrijf', label: 'Bedrijfsprofiel' },
     { id: 'standaard', label: 'Standaardwaarden' },
     { id: 'templates', label: 'E-mailtemplates' },
     { id: 'pipeline', label: 'Pipeline' },
     { id: 'integraties', label: 'Integraties' },
   ];
+
+  const handleProfileAvatarUpload = async (file) => {
+    if (!profile?.id || !profile?.companyId) {
+      throw new Error('Profiel niet beschikbaar — log opnieuw in');
+    }
+    await uploadProfileAvatar({
+      profileId: profile.id,
+      companyId: profile.companyId,
+      file,
+      previousUrl: profile.avatarUrl,
+    });
+    await refresh();
+    toast.success('Profielfoto bijgewerkt');
+  };
+
+  const handleProfileAvatarRemove = async () => {
+    if (!profile?.id) return;
+    await removeProfileAvatar({ profileId: profile.id, previousUrl: profile.avatarUrl });
+    await refresh();
+    toast.success('Profielfoto verwijderd');
+  };
 
   return (
     <div>
@@ -548,6 +572,36 @@ export function InstellingenPage() {
 
       {loading && (
         <div className="card card-p" style={{ textAlign: 'center', color: 'var(--dl)' }}>Laden…</div>
+      )}
+
+      {!loading && tab === 'profiel' && (
+        <div className="card card-p afu3">
+          <div className="card-hd" style={{ marginBottom: 18 }}>
+            <div className="card-title">Mijn profiel</div>
+            <div className="card-sub">Je profielfoto wordt overal in BossBase getoond</div>
+          </div>
+          <AvatarUpload
+            src={profile?.avatarUrl}
+            name={profile?.fullName || profile?.email}
+            size="xl"
+            onUpload={handleProfileAvatarUpload}
+            onRemove={profile?.avatarUrl ? handleProfileAvatarRemove : null}
+          />
+          <div className="fg" style={{ marginTop: 22 }}>
+            <div className="f">
+              <label>Naam</label>
+              <input value={profile?.fullName || ''} disabled placeholder="Geen naam ingesteld" />
+            </div>
+            <div className="f">
+              <label>E-mail</label>
+              <input value={profile?.email || ''} disabled />
+            </div>
+            <div className="f">
+              <label>Rol</label>
+              <input value={profile?.role || ''} disabled />
+            </div>
+          </div>
+        </div>
       )}
 
       {!loading && tab === 'bedrijf' && (
