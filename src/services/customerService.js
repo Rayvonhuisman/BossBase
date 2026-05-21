@@ -2,8 +2,9 @@ import { supabase } from "../lib/supabase"
 import { withCompanyId } from "../lib/currentCompany"
 import { safeInsert } from "../lib/safeInsert"
 
-// Real DB columns: id, company_id, name, email, phone, address, city, logo_url, notes,
-// created_at, updated_at. UI may carry richer fields (company, source, type) — those are
+// Real DB columns: id, company_id, name, email, phone, address, postcode, city,
+// kvk_number, btw_number, iban, logo_url, notes, created_at, updated_at.
+// UI may carry richer fields (company, source, type) — those are
 // kept as local UI state and stripped here before talking to Supabase.
 
 // TODO: remove inappropriate demo customer data from Supabase (customer named "Niels is gay")
@@ -21,6 +22,10 @@ const toCustomer = (row, index = 0) => ({
   phone: row.phone || "",
   city: row.city || "",
   address: row.address || "",
+  postcode: row.postcode || "",
+  kvkNumber: row.kvk_number || "",
+  btwNumber: row.btw_number || "",
+  iban: row.iban || "",
   notes: row.notes || "",
   logoUrl: row.logo_url || "",
   companyId: row.company_id || null,
@@ -46,7 +51,11 @@ export function mapCustomerFormToPayload(form = {}) {
     email: form.email || null,
     phone: form.phone || null,
     address: form.address || null,
+    postcode: form.postcode || null,
     city: form.city || null,
+    kvk_number: form.kvkNumber || form.kvk_number || null,
+    btw_number: form.btwNumber || form.btw_number || null,
+    iban: form.iban || null,
     notes: form.notes || null,
     logo_url: form.logo_url || form.logoUrl || null,
   }

@@ -147,7 +147,10 @@ export async function updateCompany(id, input) {
     .update(allowed)
     .eq("id", id)
     .select()
-    .single()
-  if (error) throw error
-  return toCompany(data)
+    .maybeSingle()
+  if (error) {
+    console.error("[bb:updateCompany] query mislukt", { id, error })
+    throw error
+  }
+  return data ? toCompany(data) : null
 }

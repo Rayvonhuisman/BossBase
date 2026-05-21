@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Check, Edit2, X } from 'lucide-react';
 import {
   I, CUSTOMERS_DATA, DEALS, ACTIVITIES_DATA, QUOTES_DATA, COSTS_DATA,
   fmt, custById, stageLabel, stageCol, Av, StatusBadge, ModalX,
@@ -15,7 +16,7 @@ import { ActivityEditModal, NewActivityModal, NewCustomerModal, NewJobCostModal 
 
 // Customer form keeps friendly UI fields; service-layer maps to real DB columns.
 // `type` and `source` are local-only display state for now (no DB columns yet).
-const emptyCustomerForm = { name: '', company: '', email: '', phone: '', city: '', address: '', type: 'Zakelijk', source: 'Handmatig', notes: '' };
+const emptyCustomerForm = { name: '', company: '', email: '', phone: '', city: '', address: '', postcode: '', kvkNumber: '', btwNumber: '', iban: '', type: 'Zakelijk', source: 'Handmatig', notes: '' };
 
 // ── CUSTOMER DETAIL DRAWER ───────────────────────────────────
 export function CustomerPage({ custId, onClose, setPage }) {
@@ -27,9 +28,9 @@ export function CustomerPage({ custId, onClose, setPage }) {
   const [cCosts, setCosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [editing, setEditing] = useState(false);
-  const [savingCustomer, setSavingCustomer] = useState(false);
-  const [form, setForm] = useState(emptyCustomerForm);
+  const [editingField, setEditingField] = useState(null);
+  const [fieldDraft, setFieldDraft] = useState('');
+  const [savingField, setSavingField] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [activityTitle, setActivityTitle] = useState('');
   const [savingActivity, setSavingActivity] = useState(false);
@@ -46,7 +47,6 @@ export function CustomerPage({ custId, onClose, setPage }) {
       .then(([customer, activities, notes, costs]) => {
         if (!alive) return;
         setCustomer(customer);
-        setForm({ ...emptyCustomerForm, ...customer });
         setActs(activities.filter(a => a.custId === custId));
         setNotes(notes);
         setCosts(costs.filter(x => x.custId === custId));
@@ -66,18 +66,20 @@ export function CustomerPage({ custId, onClose, setPage }) {
   const totalCosts = cCosts.reduce((s, x) => s + x.amt, 0);
   const profit = c.paid - totalCosts;
   const margin = c.paid > 0 ? Math.round((profit / c.paid) * 100) : 0;
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const saveCustomer = async () => {
-    setSavingCustomer(true);
+  const startEdit = (key) => { setEditingField(key); setFieldDraft(c[key] || ''); };
+  const cancelEdit = () => { setEditingField(null); setFieldDraft(''); };
+  const saveField = async (key) => {
+    setSavingField(true);
     try {
-      const saved = await updateCustomer(c.id, form);
+      const saved = await updateCustomer(c.id, { ...c, [key]: fieldDraft });
       setCustomer(saved);
-      setEditing(false);
-      toast.success('Klantgegevens opgeslagen');
+      setEditingField(null);
+      setFieldDraft('');
+      toast.success('Opgeslagen');
     } catch (err) {
       toast.error(err.message || 'Opslaan mislukt');
     } finally {
-      setSavingCustomer(false);
+      setSavingField(false);
     }
   };
   const addActivity = async () => {
@@ -171,7 +173,6 @@ export function CustomerPage({ custId, onClose, setPage }) {
             {c.email && <a href={`mailto:${c.email}`} className="btn btn-s btn-sm">{I.mail} E-mail</a>}
             <button className="btn btn-s btn-sm" onClick={() => setShowActivityModal(true)}>{I.act} Activiteit</button>
             <button className="btn btn-s btn-sm" onClick={() => setShowCostModal(true)}>{I.costs} Kosten</button>
-            <button className="btn btn-s btn-sm" onClick={() => setEditing(true)}>{I.edit} Bewerken</button>
             <button className="btn btn-s btn-sm" onClick={() => setPage('customers')}>{I.arrow_r} Overzicht</button>
             {c.moneybirdId ? (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '.75rem', color: '#059669', fontWeight: 600, padding: '4px 8px', background: '#d1fae5', borderRadius: 6 }}>
@@ -214,29 +215,58 @@ export function CustomerPage({ custId, onClose, setPage }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div className="card card-p">
             <div style={{ fontWeight: 700, fontSize: '.9rem', marginBottom: 14 }}>Klantgegevens</div>
-            {editing ? (
-              <div className="fg">
-                <div className="f"><label>Naam</label><input value={form.name} onChange={e => set('name', e.target.value)} /></div>
-                <div className="f"><label>Bedrijf</label><input value={form.company} onChange={e => set('company', e.target.value)} /></div>
-                <div className="f"><label>E-mail</label><input value={form.email} onChange={e => set('email', e.target.value)} /></div>
-                <div className="f"><label>Telefoon</label><input value={form.phone} onChange={e => set('phone', e.target.value)} /></div>
-                <div className="f"><label>Stad</label><input value={form.city} onChange={e => set('city', e.target.value)} /></div>
-                <div className="f"><label>Type</label><input value={form.type} onChange={e => set('type', e.target.value)} /></div>
-                <div className="fa s2"><button className="btn btn-s" disabled={savingCustomer} onClick={() => { setForm({ ...emptyCustomerForm, ...c }); setEditing(false); }}>Annuleren</button><button className="btn btn-p" disabled={savingCustomer} onClick={saveCustomer}>{savingCustomer ? 'Opslaan...' : <>{I.check} Opslaan</>}</button></div>
-              </div>
-            ) : [
-              { label: 'Telefoon', val: c.phone },
-              { label: 'E-mail',   val: c.email },
-              { label: 'Stad',     val: c.city },
-              { label: 'Type',     val: c.type },
-              { label: 'Bron',     val: c.source },
-              { label: 'Pipeline', val: stageLabel(c.stage) },
-            ].map((r, i) => (
-              <div key={i} className="cust-info-row">
-                <span className="cust-info-label">{r.label}</span>
-                <span className="cust-info-val">{r.val}</span>
-              </div>
-            ))}
+            {[
+              { key: 'name',      label: 'Naam',        type: 'input' },
+              { key: 'email',     label: 'E-mail',      type: 'input' },
+              { key: 'phone',     label: 'Telefoon',    type: 'input' },
+              { key: 'address',   label: 'Adres',       type: 'input' },
+              { key: 'postcode',  label: 'Postcode',    type: 'input' },
+              { key: 'city',      label: 'Stad',        type: 'input' },
+              { key: 'kvkNumber', label: 'KvK-nummer',  type: 'input' },
+              { key: 'btwNumber', label: 'BTW-nummer',  type: 'input' },
+              { key: 'iban',      label: 'IBAN',        type: 'input' },
+              { key: 'type',      label: 'Type',        type: 'select', options: ['Particulier', 'Bedrijf', 'VvE', 'Aannemer'] },
+              { key: 'source',    label: 'Bron',        type: 'input' },
+            ].map(field => {
+              const isActive = editingField === field.key;
+              return (
+                <div key={field.key} className="cust-info-row" style={{ alignItems: 'center' }}>
+                  <span className="cust-info-label">{field.label}</span>
+                  {isActive ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+                      {field.type === 'select' ? (
+                        <select value={fieldDraft} onChange={e => setFieldDraft(e.target.value)} style={{ flex: 1, fontSize: '.82rem', padding: '2px 4px' }}>
+                          {field.options.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      ) : (
+                        <input
+                          autoFocus
+                          value={fieldDraft}
+                          onChange={e => setFieldDraft(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') saveField(field.key); if (e.key === 'Escape') cancelEdit(); }}
+                          style={{ flex: 1, fontSize: '.82rem', padding: '2px 6px' }}
+                        />
+                      )}
+                      <button onClick={() => saveField(field.key)} disabled={savingField} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#059669', display: 'flex', alignItems: 'center', padding: 2 }}>
+                        <Check size={14} />
+                      </button>
+                      <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2 }}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
+                      <span className="cust-info-val" style={{ flex: 1, color: c[field.key] ? undefined : 'var(--dl)' }}>
+                        {c[field.key] || '—'}
+                      </span>
+                      <button onClick={() => startEdit(field.key)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}>
+                        <Edit2 size={14} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div className="card card-p">
@@ -519,8 +549,9 @@ export function CustomersPage({ openCustomer }) {
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: '.78rem', color: 'var(--dmu)', marginBottom: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{I.mail} {c.email}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{I.map} {c.city}</div>
+                  {c.email && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{I.mail} {c.email}</div>}
+                  {c.phone && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{I.call} {c.phone}</div>}
+                  {c.city && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{I.map} {c.city}</div>}
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
                   <div>

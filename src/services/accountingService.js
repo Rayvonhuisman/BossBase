@@ -37,7 +37,7 @@ export async function saveConnection({ apiToken, administrationId, provider = 'm
     .from('accounting_connections')
     .upsert(payload, { onConflict: 'company_id,provider' })
     .select()
-    .single()
+    .maybeSingle()
   if (error) throw error
   return toConnection(data)
 }
@@ -86,7 +86,7 @@ export async function saveSnelStartConnection({ subscriptionKey, secondaryKey, a
     .from('accounting_connections')
     .upsert(payload, { onConflict: 'company_id,provider' })
     .select()
-    .single()
+    .maybeSingle()
   if (error) throw error
   return toConnection(data)
 }
@@ -126,7 +126,7 @@ export async function saveAfasConnection({ environmentId, token }) {
     .from('accounting_connections')
     .upsert(payload, { onConflict: 'company_id,provider' })
     .select()
-    .single()
+    .maybeSingle()
   if (error) throw error
   return toConnection(data)
 }

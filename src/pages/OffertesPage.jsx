@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Download } from 'lucide-react';
 import { I, ModalX, fmt } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -7,6 +8,7 @@ import {
 } from '../services/offerteService.js';
 import { listCustomers } from '../services/customerService.js';
 import { NewFactuurModal } from './FacturenPage.jsx';
+import { generateOffertePdf } from '../utils/generatePdf.js';
 
 const offerteBadge = status => {
   const map = { concept: 'b-concept', verzonden: 'b-sent', geaccepteerd: 'b-accepted', afgewezen: 'b-declined' };
@@ -362,7 +364,23 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved }) {
 // ── VIEW OFFERTE MODAL ───────────────────────────────────────────────────────
 
 function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur }) {
+  const { company } = useProfile();
   const customerName = offerte.customerName || customers.find(c => c.id == offerte.customerId)?.name || '—';
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  const handleDownloadPdf = async () => {
+    setPdfLoading(true);
+    try {
+      const customer = customers.find(c => String(c.id) === String(offerte.customerId));
+      const items = await getOfferteItems(offerte.id);
+      await generateOffertePdf(offerte, items, customer, company);
+    } catch (err) {
+      console.error('PDF genereren mislukt:', err);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   return (
     <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal modal-wide">
@@ -429,6 +447,9 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur }) {
           )}
         </div>
         <div className="fa">
+          <button className="btn btn-p" onClick={handleDownloadPdf} disabled={pdfLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Download size={15} />{pdfLoading ? 'Genereren...' : 'Download PDF'}
+          </button>
           <button className="btn btn-ghost" onClick={onClose}>Sluiten</button>
           {offerte.status === 'geaccepteerd' && onMaakFactuur && (
             <button className="btn btn-p" onClick={() => onMaakFactuur(offerte)}>{I.brief} Maak factuur</button>
@@ -693,6 +714,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onNavConsumed }) 
           prefill={factuurPrefill}
           onClose={() => setFactuurPrefill(null)}
           onSaved={() => setFactuurPrefill(null)}
+          openCustomer={openCustomer}
         />
       )}
     </div>

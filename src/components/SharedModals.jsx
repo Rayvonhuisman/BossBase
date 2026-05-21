@@ -37,7 +37,8 @@ const newKostenRegel = () => ({ id: Date.now() + Math.random(), omschrijving: ''
 export function NewCustomerModal({ onClose, onSaved }) {
   const toast = useToast();
   const [form, setForm] = useState({
-    name: '', company: '', email: '', phone: '', city: '', address: '',
+    name: '', company: '', email: '', phone: '', address: '', postcode: '', city: '',
+    kvkNumber: '', btwNumber: '', iban: '',
     type: 'Zakelijk', source: 'Handmatig', notes: '',
   });
   const [errors, setErrors] = useState({});
@@ -101,8 +102,24 @@ export function NewCustomerModal({ onClose, onSaved }) {
             <input value={form.address} onChange={e => set('address', e.target.value)} />
           </div>
           <div className="f">
+            <label>Postcode</label>
+            <input value={form.postcode} onChange={e => set('postcode', e.target.value)} placeholder="1234 AB" />
+          </div>
+          <div className="f">
             <label>Plaats</label>
             <input value={form.city} onChange={e => set('city', e.target.value)} />
+          </div>
+          <div className="f">
+            <label>KvK-nummer</label>
+            <input value={form.kvkNumber} onChange={e => set('kvkNumber', e.target.value)} placeholder="12345678" />
+          </div>
+          <div className="f">
+            <label>BTW-nummer</label>
+            <input value={form.btwNumber} onChange={e => set('btwNumber', e.target.value)} placeholder="NL123456789B01" />
+          </div>
+          <div className="f">
+            <label>IBAN</label>
+            <input value={form.iban} onChange={e => set('iban', e.target.value)} placeholder="NL00 BANK 0000 0000 00" />
           </div>
           <div className="f">
             <label>Type</label>

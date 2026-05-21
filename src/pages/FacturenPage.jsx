@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Download } from 'lucide-react';
 import { I, ModalX, fmt } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -7,6 +8,7 @@ import {
   generateFactuurNummer, getFactuurRegels, createFactuurRegel,
 } from '../services/factuurService.js';
 import { listCustomers } from '../services/customerService.js';
+import { generateFactuurPdf } from '../utils/generatePdf.js';
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -20,8 +22,8 @@ const displayStatus = f => (isVerlopen(f) ? 'verlopen' : f.status);
 
 const factuurBadge = f => {
   const s = displayStatus(f);
-  const map = { concept: 'b-concept', verzonden: 'b-sent', betaald: 'b-accepted', verlopen: 'b-declined' };
-  const labels = { concept: 'Concept', verzonden: 'Verzonden', betaald: 'Betaald', verlopen: 'Verlopen' };
+  const map = { aangemaakt: 'b-concept', concept: 'b-concept', verzonden: 'b-sent', betaald: 'b-accepted', verlopen: 'b-declined' };
+  const labels = { aangemaakt: 'Aangemaakt', concept: 'Aangemaakt', verzonden: 'Verzonden', betaald: 'Betaald', verlopen: 'Verlopen' };
   return <span className={`badge ${map[s] || 'b-gray'}`}>{labels[s] || s}</span>;
 };
 
@@ -187,7 +189,7 @@ function TotalenBlok({ regels }) {
 
 // ── NEW FACTUUR MODAL ─────────────────────────────────────────────────────────
 
-export function NewFactuurModal({ customers, prefill, onClose, onSaved }) {
+export function NewFactuurModal({ customers, prefill, onClose, onSaved, openCustomer }) {
   const toast = useToast();
   const [nummer, setNummer] = useState('');
   const [form, setForm] = useState({
@@ -199,6 +201,14 @@ export function NewFactuurModal({ customers, prefill, onClose, onSaved }) {
   const [regels, setRegels] = useState(prefill?.regels?.length ? prefill.regels : [emptyRegel()]);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const selectedCustomer = form.customer_id ? customers.find(c => String(c.id) === String(form.customer_id)) : null;
+  const missingFields = selectedCustomer ? [
+    !selectedCustomer.address && 'adres',
+    !selectedCustomer.city && 'plaats',
+    !selectedCustomer.email && 'e-mailadres',
+  ].filter(Boolean) : [];
+  const hasIncompleteCustomer = missingFields.length > 0;
 
   useEffect(() => {
     generateFactuurNummer().then(setNummer);
@@ -214,9 +224,10 @@ export function NewFactuurModal({ customers, prefill, onClose, onSaved }) {
 
   const submit = async () => {
     if (!form.customer_id) { toast.error('Selecteer een klant'); return; }
+    if (hasIncompleteCustomer) { toast.error('Vul eerst de klantgegevens aan voordat je een factuur aanmaakt'); return; }
     setSaving(true);
     try {
-      const created = await createFactuur({ ...form, nummer, betalingskenmerk: nummer, totaal_excl: totaalExcl, totaal_incl: totaalIncl });
+      const created = await createFactuur({ ...form, status: 'aangemaakt', nummer, betalingskenmerk: nummer, totaal_excl: totaalExcl, totaal_incl: totaalIncl });
       for (let i = 0; i < regels.length; i++) {
         const r = regels[i];
         if (!r.omschrijving.trim()) continue;
@@ -255,6 +266,23 @@ export function NewFactuurModal({ customers, prefill, onClose, onSaved }) {
               {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
+          {hasIncompleteCustomer && (
+            <div className="f s2">
+              <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#92400e', lineHeight: 1.5 }}>
+                <strong>Klantgegevens onvolledig</strong> — ontbrekend: {missingFields.join(', ')}.{' '}
+                Vul eerst de klantgegevens aan voordat je een factuur aanmaakt.
+                {openCustomer && selectedCustomer && (
+                  <button
+                    type="button"
+                    onClick={() => { onClose(); openCustomer(selectedCustomer.id); }}
+                    style={{ marginLeft: 8, background: 'none', border: 'none', padding: 0, color: '#b45309', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline', fontSize: 'inherit' }}
+                  >
+                    Ga naar klant
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
           <div className="f">
             <label>Factuurdatum</label>
             <input type="date" value={form.factuurdatum} onChange={e => set('factuurdatum', e.target.value)} />
@@ -279,7 +307,7 @@ export function NewFactuurModal({ customers, prefill, onClose, onSaved }) {
         </div>
         <div className="fa">
           <button className="btn btn-ghost" onClick={onClose}>Annuleren</button>
-          <button className="btn btn-p" onClick={submit} disabled={saving}>{saving ? 'Opslaan...' : 'Opslaan'}</button>
+          <button className="btn btn-p" onClick={submit} disabled={saving || hasIncompleteCustomer}>{saving ? 'Opslaan...' : 'Opslaan'}</button>
         </div>
       </div>
     </div>
@@ -291,7 +319,7 @@ export function NewFactuurModal({ customers, prefill, onClose, onSaved }) {
 function EditFactuurModal({ factuur, customers, onClose, onSaved }) {
   const toast = useToast();
   const [form, setForm] = useState({
-    status: factuur.status || 'concept',
+    status: factuur.status || 'aangemaakt',
     vervaldatum: factuur.vervaldatum || '',
     betalingskenmerk: factuur.betalingskenmerk || '',
     notities: factuur.notities || '',
@@ -323,7 +351,7 @@ function EditFactuurModal({ factuur, customers, onClose, onSaved }) {
           <div className="f s2">
             <label>Status</label>
             <select value={form.status} onChange={e => set('status', e.target.value)}>
-              <option value="concept">Concept</option>
+              <option value="aangemaakt">Aangemaakt</option>
               <option value="verzonden">Verzonden</option>
               <option value="betaald">Betaald</option>
             </select>
@@ -353,12 +381,26 @@ function EditFactuurModal({ factuur, customers, onClose, onSaved }) {
 // ── VIEW FACTUUR MODAL ────────────────────────────────────────────────────────
 
 function ViewFactuurModal({ factuur, customers, onClose }) {
+  const { company } = useProfile();
   const customerName = factuur.customerName || customers.find(c => c.id == factuur.customerId)?.name || '—';
   const [regels, setRegels] = useState([]);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   useEffect(() => {
     getFactuurRegels(factuur.id).then(setRegels).catch(() => {});
   }, [factuur.id]);
+
+  const handleDownloadPdf = async () => {
+    setPdfLoading(true);
+    try {
+      const customer = customers.find(c => String(c.id) === String(factuur.customerId));
+      await generateFactuurPdf(factuur, regels, customer, company);
+    } catch (err) {
+      console.error('PDF genereren mislukt:', err);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
 
   return (
     <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -422,6 +464,9 @@ function ViewFactuurModal({ factuur, customers, onClose }) {
           )}
         </div>
         <div className="fa">
+          <button className="btn btn-p" onClick={handleDownloadPdf} disabled={pdfLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Download size={15} />{pdfLoading ? 'Genereren...' : 'Download PDF'}
+          </button>
           <button className="btn btn-ghost" onClick={onClose}>Sluiten</button>
         </div>
       </div>
@@ -464,7 +509,7 @@ export function FacturenPage({ openCustomer }) {
 
   const filters = [
     { label: 'Alle', value: '' },
-    { label: 'Concept', value: 'concept' },
+    { label: 'Aangemaakt', value: 'aangemaakt' },
     { label: 'Verzonden', value: 'verzonden' },
     { label: 'Betaald', value: 'betaald' },
     { label: 'Verlopen', value: 'verlopen' },
@@ -616,6 +661,7 @@ export function FacturenPage({ openCustomer }) {
           customers={customers}
           onClose={() => setShowNew(false)}
           onSaved={saved => { handleSaved(saved); setShowNew(false); }}
+          openCustomer={openCustomer}
         />
       )}
       {editFactuur && (

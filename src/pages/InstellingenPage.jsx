@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { I, ModalX } from '../bb-shared.jsx';
+import { supabase } from '../lib/supabase.js';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import {
@@ -59,6 +60,7 @@ export function InstellingenPage() {
     address: '', city: '', postal_code: '', website: '',
   });
   const [savingBedrijf, setSavingBedrijf] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
 
   // Standaardwaarden
   const [standaardForm, setStandaardForm] = useState({
@@ -171,6 +173,34 @@ export function InstellingenPage() {
   const setBedrijf = (k, v) => setBedrijfForm(f => ({ ...f, [k]: v }));
   const setStandaard = (k, v) => setStandaardForm(f => ({ ...f, [k]: v }));
   const setTemplateField = (id, k, v) => setTemplateForms(f => ({ ...f, [id]: { ...f[id], [k]: v } }));
+
+  const uploadLogo = async (e) => {
+    const file = e.target.files?.[0];
+    const input = e.target;
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { toast.error('Maximum is 10MB'); return; }
+    const allowed = ['image/jpeg', 'image/png', 'image/svg+xml'];
+    if (!allowed.includes(file.type)) { toast.error('Alleen JPG, PNG en SVG zijn toegestaan'); return; }
+    setLogoUploading(true);
+    try {
+      const ext = file.name.split('.').pop().toLowerCase() || 'jpg';
+      const path = `${company.id}/logo.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('bedrijf-logos')
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (uploadError) throw uploadError;
+      const { data: { publicUrl } } = supabase.storage.from('bedrijf-logos').getPublicUrl(path);
+      await updateCompany(company.id, { logo_url: publicUrl });
+      await refresh();
+      toast.success('Logo geüpload');
+    } catch (err) {
+      console.error('[bb:uploadLogo]', err);
+      toast.error(err.message || 'Upload mislukt');
+    } finally {
+      setLogoUploading(false);
+      input.value = '';
+    }
+  };
 
   const saveBedrijf = async () => {
     if (!company?.id) return;
@@ -525,6 +555,27 @@ export function InstellingenPage() {
           <div className="card-hd" style={{ marginBottom: 18 }}>
             <div className="card-title">Bedrijfsprofiel</div>
             <div className="card-sub">Basisinformatie van je bedrijf</div>
+          </div>
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: '.78rem', fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 10 }}>Bedrijfslogo</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              {company?.logoUrl ? (
+                <img src={company.logoUrl} alt="Bedrijfslogo" style={{ width: 72, height: 72, objectFit: 'contain', borderRadius: 8, border: '1px solid var(--br)', background: 'var(--bgs)', padding: 8 }} />
+              ) : (
+                <div style={{ width: 72, height: 72, borderRadius: 8, border: '2px dashed var(--bstrong)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'var(--dl)', textAlign: 'center', flexShrink: 0 }}>
+                  Geen logo
+                </div>
+              )}
+              <div>
+                <label style={{ cursor: logoUploading ? 'default' : 'pointer' }}>
+                  <input type="file" accept="image/jpeg,image/png,image/svg+xml" style={{ display: 'none' }} onChange={uploadLogo} disabled={logoUploading} />
+                  <span className="btn btn-ghost" style={{ pointerEvents: logoUploading ? 'none' : 'auto', opacity: logoUploading ? 0.6 : 1 }}>
+                    {logoUploading ? 'Uploaden...' : 'Logo uploaden'}
+                  </span>
+                </label>
+                <div style={{ fontSize: 11, color: 'var(--dl)', marginTop: 4 }}>Max 10MB · JPG, PNG, SVG</div>
+              </div>
+            </div>
           </div>
           <div className="fg">
             <div className="f">
