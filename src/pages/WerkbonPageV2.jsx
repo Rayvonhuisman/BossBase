@@ -11,6 +11,7 @@ import {
   updateWerkbonNotities, getAllWerkbonTakenCounts,
 } from '../services/werkbonService.js';
 import { listCustomers } from '../services/customerService.js';
+import { getProjects } from '../services/projectsService.js';
 import { createUrenregel, getUrenregistratie, calculateHours } from '../services/urenService.js';
 import { createJobCost } from '../services/jobCostService.js';
 
@@ -68,12 +69,13 @@ const StatusBadge = ({ status, size }) => (
 
 // ─── NEW / EDIT WERKBON MODAL ───────────────────────────────────────────────
 
-function WerkbonModal({ mode, werkbon, customers, onClose, onSaved }) {
+function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSaved }) {
   const toast = useToast();
   const isEdit = mode === 'edit';
   const [form, setForm] = useState(() => ({
     titel: werkbon?.titel || '',
     customer_id: werkbon?.customerId || '',
+    project_id: werkbon?.projectId || '',
     omschrijving: werkbon?.omschrijving || '',
     gepland_op: werkbon?.geplandOp || '',
     starttijd: werkbon?.starttijd ? String(werkbon.starttijd).slice(0, 5) : '',
@@ -92,6 +94,7 @@ function WerkbonModal({ mode, werkbon, customers, onClose, onSaved }) {
       const payload = {
         titel: form.titel.trim(),
         customer_id: form.customer_id || null,
+        project_id: form.project_id || null,
         omschrijving: form.omschrijving || null,
         gepland_op: form.gepland_op || null,
         starttijd: form.starttijd || null,
@@ -151,6 +154,16 @@ function WerkbonModal({ mode, werkbon, customers, onClose, onSaved }) {
             <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)}>
               <option value="">— Geen klant —</option>
               {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="f">
+            <label>Project (optioneel)</label>
+            <select value={form.project_id} onChange={e => set('project_id', e.target.value)}>
+              <option value="">— Geen project —</option>
+              {(form.customer_id
+                ? projects.filter(p => !p.customerId || p.customerId === form.customer_id)
+                : projects
+              ).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
           <div className="f">
@@ -668,7 +681,7 @@ function NotitiesSection({ notities, onSave }) {
 
 // ─── MAIN PAGE ──────────────────────────────────────────────────────────────
 
-export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed } = {}) {
+export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage } = {}) {
   const toast = useToast();
   const { profile } = useProfile();
   const canManage = !profile || ['admin', 'planner'].includes(profile.role);
@@ -677,6 +690,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed } = {}) {
   const [err, setErr] = useState('');
   const [werkbonnen, setWerkbonnen] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [takenCounts, setTakenCounts] = useState({});
 
   // 'list' | 'detail'
@@ -703,14 +717,16 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed } = {}) {
     setLoading(true);
     setErr('');
     try {
-      const [list, cs, tc] = await Promise.all([
+      const [list, cs, tc, prs] = await Promise.all([
         getWerkbonnen(),
         listCustomers().catch(() => []),
         getAllWerkbonTakenCounts().catch(() => ({})),
+        getProjects().catch(() => []),
       ]);
       setWerkbonnen(list);
       setCustomers(cs);
       setTakenCounts(tc);
+      setProjects(prs);
     } catch (e) {
       setErr(e.message || 'Werkbonnen laden mislukt');
     } finally {
@@ -995,6 +1011,15 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed } = {}) {
             {/* Header */}
             <div className="wb2-card">
               <div style={{ padding: '16px 18px' }}>
+                {detail.projectId && detail.projectName && (
+                  <button
+                    type="button"
+                    onClick={() => setPage?.('projecten', { id: detail.projectId })}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: '#0F7A3F', background: '#E8FBEF', border: 'none', borderRadius: 6, padding: '3px 10px', marginBottom: 10, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    {I.brief} {detail.projectName} →
+                  </button>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                   <StatusBadge status={detail.status} />
                   <div style={{ flex: 1 }} />
@@ -1142,11 +1167,11 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed } = {}) {
         )}
 
         {showNew && (
-          <WerkbonModal mode="new" customers={customers} onClose={() => setShowNew(false)}
+          <WerkbonModal mode="new" customers={customers} projects={projects} onClose={() => setShowNew(false)}
             onSaved={saved => { onWerkbonSaved(saved); loadList(); }} />
         )}
         {editWerkbon && (
-          <WerkbonModal mode="edit" werkbon={editWerkbon} customers={customers}
+          <WerkbonModal mode="edit" werkbon={editWerkbon} customers={customers} projects={projects}
             onClose={() => setEditWerkbon(null)}
             onSaved={saved => { onWerkbonSaved(saved); setDetail(saved); setEditWerkbon(null); }} />
         )}
@@ -1230,7 +1255,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed } = {}) {
       )}
 
       {showNew && (
-        <WerkbonModal mode="new" customers={customers} onClose={() => setShowNew(false)}
+        <WerkbonModal mode="new" customers={customers} projects={projects} onClose={() => setShowNew(false)}
           onSaved={saved => { onWerkbonSaved(saved); loadList(); }} />
       )}
     </div>

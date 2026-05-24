@@ -16,13 +16,15 @@ import {
   PROJECT_STATUS,
   PROJECT_STATUS_OPTIONS,
 } from '../../services/projectsService.js';
+import { getWerkbonnenByProject, createWerkbon } from '../../services/werkbonService.js';
 
 const TABS = [
-  { id: 'overview', label: 'Overzicht' },
-  { id: 'offerte',  label: 'Offerte' },
-  { id: 'uren',     label: 'Uren' },
-  { id: 'facturen', label: 'Facturen' },
-  { id: 'notes',    label: 'Notities' },
+  { id: 'overview',   label: 'Overzicht' },
+  { id: 'offerte',    label: 'Offerte' },
+  { id: 'uren',       label: 'Uren' },
+  { id: 'facturen',   label: 'Facturen' },
+  { id: 'werkbonnen', label: 'Werkbonnen' },
+  { id: 'notes',      label: 'Notities' },
 ];
 
 const fmtDate = d => {
@@ -608,6 +610,132 @@ function NotesTab({ notes, onAdd, onDelete }) {
   );
 }
 
+// ── WERKBONNEN TAB ───────────────────────────────────────────────────────────
+
+const WB_STATUS_LABEL = { gepland: 'Gepland', in_uitvoering: 'In uitvoering', afgerond: 'Afgerond' };
+const WB_STATUS_COL   = { gepland: '#2563EB', in_uitvoering: '#D97706', afgerond: '#0F7A3F' };
+const WB_STATUS_BG    = { gepland: '#EFF4FF', in_uitvoering: '#FFF7E6', afgerond: '#E8FBEF' };
+
+const WB_DAY   = ['zo','ma','di','wo','do','vr','za'];
+const WB_MONTH = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+const wbShortDate = d => {
+  if (!d) return '—';
+  const dt = new Date(d + 'T00:00:00');
+  if (Number.isNaN(dt.valueOf())) return d;
+  return `${WB_DAY[dt.getDay()]} ${dt.getDate()} ${WB_MONTH[dt.getMonth()]}`;
+};
+
+function WerkbonnenTab({ project, werkbonnen, onCreated, canManage }) {
+  const toast = useToast();
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ titel: '', gepland_op: '' });
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const submit = async () => {
+    if (!form.titel.trim()) { toast.error('Titel is verplicht'); return; }
+    setSaving(true);
+    try {
+      const created = await createWerkbon({
+        titel: form.titel.trim(),
+        gepland_op: form.gepland_op || null,
+        project_id: project.id,
+        customer_id: project.customerId || null,
+      });
+      toast.success('Werkbon aangemaakt');
+      setForm({ titel: '', gepland_op: '' });
+      setShowForm(false);
+      onCreated?.(created);
+    } catch (e) {
+      toast.error(e.message || 'Aanmaken mislukt');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--dl)' }}>
+          Werkbonnen ({werkbonnen.length})
+        </div>
+        {canManage && !showForm && (
+          <button className="btn btn-s btn-sm" onClick={() => setShowForm(true)}>
+            {I.plus} Nieuwe werkbon
+          </button>
+        )}
+      </div>
+
+      {showForm && (
+        <div className="card card-p" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
+            <div className="f">
+              <label>Titel</label>
+              <input
+                type="text" autoFocus
+                placeholder="Bv. Installatie dakraam"
+                value={form.titel}
+                onChange={e => set('titel', e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && submit()}
+              />
+            </div>
+            <div className="f">
+              <label>Datum</label>
+              <input type="date" value={form.gepland_op} onChange={e => set('gepland_op', e.target.value)} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowForm(false)} disabled={saving}>Annuleren</button>
+            <button className="btn btn-p btn-sm" onClick={submit} disabled={saving || !form.titel.trim()}>
+              {saving ? 'Aanmaken…' : 'Werkbon aanmaken'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {werkbonnen.length === 0 && !showForm ? (
+        <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--dl)', fontSize: 13 }}>
+          Nog geen werkbonnen gekoppeld aan dit project.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {werkbonnen.map(w => {
+            const pct = w.taakTotal ? Math.round((w.taakDone / w.taakTotal) * 100) : 0;
+            return (
+              <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--br)', borderRadius: 8, background: '#fff' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {w.titel}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--dl)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {wbShortDate(w.geplandOp)}
+                    {w.taakTotal > 0 && (
+                      <>
+                        <span>·</span>
+                        <span>{w.taakDone}/{w.taakTotal} taken</span>
+                        <span style={{ display: 'inline-block', width: 36, height: 3, borderRadius: 3, background: 'var(--br)', overflow: 'hidden', verticalAlign: 'middle' }}>
+                          <span style={{ display: 'block', height: '100%', width: `${pct}%`, background: '#1DDB62' }} />
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999, whiteSpace: 'nowrap',
+                  background: WB_STATUS_BG[w.status] || '#f3f4f6',
+                  color: WB_STATUS_COL[w.status] || 'var(--dl)',
+                }}>
+                  {WB_STATUS_LABEL[w.status] || w.status}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── DRAWER WRAPPER ───────────────────────────────────────────────────────────
 
 export function ProjectDetailDrawer({
@@ -628,19 +756,22 @@ export function ProjectDetailDrawer({
   const [entries, setEntries] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [notes, setNotes] = useState([]);
+  const [werkbonnen, setWerkbonnen] = useState([]);
 
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [p, te, inv, nts] = await Promise.all([
+      const [p, te, inv, nts, wbs] = await Promise.all([
         getProjectById(projectId),
         getTimeEntries(projectId).catch(() => []),
         getProjectInvoices(projectId).catch(() => []),
         getProjectNotes(projectId).catch(() => []),
+        getWerkbonnenByProject(projectId).catch(() => []),
       ]);
       setEntries(te);
       setInvoices(inv);
       setNotes(nts);
+      setWerkbonnen(wbs);
       setProject(enrichProject(p, { timeEntries: te, invoices: inv }));
     } catch (e) {
       toast.error(e.message || 'Project laden mislukt');
@@ -772,6 +903,14 @@ export function ProjectDetailDrawer({
                   invoices={invoices}
                   openInvoice={openInvoice}
                   setPage={setPage}
+                />
+              )}
+              {tab === 'werkbonnen' && (
+                <WerkbonnenTab
+                  project={project}
+                  werkbonnen={werkbonnen}
+                  onCreated={wb => setWerkbonnen(prev => [...prev, wb])}
+                  canManage={canManage}
                 />
               )}
               {tab === 'notes' && (

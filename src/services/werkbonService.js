@@ -11,6 +11,7 @@ const toWerkbon = row => ({
   customerId: row.customer_id,
   dealId: row.deal_id,
   offerteId: row.offerte_id,
+  projectId: row.project_id || null,
   assignedTo: row.assigned_to,
   titel: row.titel || "",
   omschrijving: row.omschrijving || "",
@@ -26,6 +27,7 @@ const toWerkbon = row => ({
   // Joined relaties (optioneel)
   customerName: row.customers?.name || "",
   assignedName: row.profiles?.full_name || "",
+  projectName: row.projects?.name || "",
   raw: row,
 })
 
@@ -56,7 +58,7 @@ const toWerkbonMateriaal = row => ({
 export async function getWerkbonnen() {
   const { data, error } = await supabase
     .from("werkbonnen")
-    .select("*, customers(name), profiles(full_name)")
+    .select("*, customers(name), profiles(full_name), projects(name)")
     .order("gepland_op", { ascending: true })
   if (error) throw error
   return (data || []).map(toWerkbon)
@@ -65,7 +67,7 @@ export async function getWerkbonnen() {
 export async function getWerkbonById(id) {
   const { data, error } = await supabase
     .from("werkbonnen")
-    .select("*, customers(name), profiles(full_name)")
+    .select("*, customers(name), profiles(full_name), projects(name)")
     .eq("id", id)
     .single()
   if (error) throw error
@@ -77,6 +79,7 @@ export async function createWerkbon(input) {
     customer_id: input.customer_id || input.customerId || null,
     deal_id: input.deal_id || input.dealId || null,
     offerte_id: input.offerte_id || input.offerteId || null,
+    project_id: input.project_id || input.projectId || null,
     assigned_to: input.assigned_to || input.assignedTo || null,
     titel: input.titel,
     omschrijving: input.omschrijving || null,
@@ -94,7 +97,7 @@ export async function createWerkbon(input) {
   const { data, error } = await supabase
     .from("werkbonnen")
     .insert(payload)
-    .select("*, customers(name), profiles(full_name)")
+    .select("*, customers(name), profiles(full_name), projects(name)")
     .single()
   if (error) throw error
   return toWerkbon(data)
@@ -106,16 +109,18 @@ export async function updateWerkbon(id, input) {
   delete updates.customerId
   delete updates.dealId
   delete updates.offerteId
+  delete updates.projectId
   delete updates.assignedTo
   delete updates.geplandOp
   delete updates.customerName
   delete updates.assignedName
+  delete updates.projectName
 
   const { data, error } = await supabase
     .from("werkbonnen")
     .update(updates)
     .eq("id", id)
-    .select("*, customers(name), profiles(full_name)")
+    .select("*, customers(name), profiles(full_name), projects(name)")
     .single()
   if (error) throw error
   return toWerkbon(data)
@@ -343,6 +348,22 @@ export async function createWerkbonMeerwerk(input) {
 export async function deleteWerkbonMeerwerk(id) {
   const { error } = await supabase.from("werkbon_meerwerk").delete().eq("id", id)
   if (error) throw error
+}
+
+// ── WERKBONNEN PER PROJECT ───────────────────────────────────────────────────
+
+export async function getWerkbonnenByProject(projectId) {
+  const { data, error } = await supabase
+    .from("werkbonnen")
+    .select("*, customers(name), profiles(full_name), projects(name), werkbon_taken(afgerond)")
+    .eq("project_id", projectId)
+    .order("gepland_op", { ascending: true })
+  if (error) throw error
+  return (data || []).map(row => ({
+    ...toWerkbon(row),
+    taakTotal: (row.werkbon_taken || []).length,
+    taakDone: (row.werkbon_taken || []).filter(t => t.afgerond).length,
+  }))
 }
 
 // ── TAKEN COUNTS (batch, for list view) ─────────────────────────────────────

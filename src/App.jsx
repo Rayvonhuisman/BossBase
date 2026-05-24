@@ -854,7 +854,7 @@ function AppInner() {
       case 'facturen':    return <FacturenPage openCustomer={openCustomer} />;
       case 'offertes':    return <OffertesPage openCustomer={openCustomer} preOpenOfferteId={navIntent?.page === 'offertes' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'projecten':   return <ProjectsPage openCustomer={openCustomer} openInvoice={openInvoice} setPage={navigatePage} preOpenProjectId={navIntent?.page === 'projecten' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
-      case 'werkbonnen':  return <WerkbonPage preOpenWerkbonId={navIntent?.page === 'werkbonnen' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
+      case 'werkbonnen':  return <WerkbonPage preOpenWerkbonId={navIntent?.page === 'werkbonnen' ? navIntent.id : null} onNavConsumed={clearNavIntent} setPage={navigatePage} />;
       case 'uren':        return <UrenPage />;
       case 'team':        return <TeamPage />;
       case 'instellingen':return <InstellingenPage />;
