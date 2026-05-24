@@ -59,7 +59,7 @@ export function InstellingenPage() {
   // Bedrijfsprofiel
   const [bedrijfForm, setBedrijfForm] = useState({
     name: '', email: '', phone: '', kvk: '', btw_number: '',
-    address: '', city: '', postal_code: '', website: '',
+    address: '', city: '', postal_code: '', website: '', branding_color: '#f97316',
   });
   const [savingBedrijf, setSavingBedrijf] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
@@ -168,6 +168,7 @@ export function InstellingenPage() {
         city: company.city || '',
         postal_code: company.postalCode || '',
         website: company.website || '',
+        branding_color: company.brandingColor || '#f97316',
       });
     }
   }, [company]);
@@ -614,9 +615,11 @@ export function InstellingenPage() {
             <div style={{ fontSize: '.78rem', fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 10 }}>Bedrijfslogo</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               {company?.logoUrl ? (
-                <img src={company.logoUrl} alt="Bedrijfslogo" style={{ width: 72, height: 72, objectFit: 'contain', borderRadius: 8, border: '1px solid var(--br)', background: 'var(--bgs)', padding: 8 }} />
+                <div style={{ width: 120, height: 80, borderRadius: 8, border: '1px solid var(--br)', background: '#fff', padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <img src={company.logoUrl} alt="Bedrijfslogo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                </div>
               ) : (
-                <div style={{ width: 72, height: 72, borderRadius: 8, border: '2px dashed var(--bstrong)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'var(--dl)', textAlign: 'center', flexShrink: 0 }}>
+                <div style={{ width: 120, height: 80, borderRadius: 8, border: '2px dashed var(--bstrong)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'var(--dl)', textAlign: 'center', flexShrink: 0 }}>
                   Geen logo
                 </div>
               )}
@@ -630,6 +633,41 @@ export function InstellingenPage() {
                 <div style={{ fontSize: 11, color: 'var(--dl)', marginTop: 4 }}>Max 10MB · JPG, PNG, SVG</div>
               </div>
             </div>
+          </div>
+          <div className="f" style={{ marginBottom: 20 }}>
+            <label>Merkkleur</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div
+                onClick={() => document.getElementById('branding-color-input').click()}
+                style={{
+                  position: 'relative', width: 40, height: 40, borderRadius: 8, flexShrink: 0,
+                  background: /^#([0-9a-f]{3}){1,2}$/i.test(bedrijfForm.branding_color) ? bedrijfForm.branding_color : '#f97316',
+                  border: '1px solid #e5e7eb', cursor: 'pointer', transition: 'box-shadow .15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,.15)'}
+                onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}
+              >
+                <input
+                  id="branding-color-input"
+                  type="color"
+                  value={/^#([0-9a-f]{3}){1,2}$/i.test(bedrijfForm.branding_color) ? bedrijfForm.branding_color : '#f97316'}
+                  onChange={e => setBedrijf('branding_color', e.target.value)}
+                  style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'pointer' }}
+                />
+              </div>
+              <input
+                type="text"
+                value={bedrijfForm.branding_color}
+                onChange={e => {
+                  const v = e.target.value;
+                  setBedrijf('branding_color', v);
+                }}
+                maxLength={7}
+                placeholder="#f97316"
+                style={{ width: 110, fontFamily: 'monospace' }}
+              />
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--dmu)', marginTop: 5 }}>Gebruikt in offertes en facturen</div>
           </div>
           <div className="fg">
             <div className="f">

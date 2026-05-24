@@ -880,7 +880,7 @@ ul{list-style:none}
 /* Filter row ---------------------------------------------------- */
 .wb2-filter{display:flex;flex-direction:column;gap:10px}
 .wb2-filter-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.wb2-search{position:relative;flex:0 0 320px;min-width:220px}
+.wb2-search{position:relative;width:100%;max-width:400px}
 .wb2-search>span{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--dl);display:flex}
 .wb2-search input{width:100%;height:38px;padding:0 12px 0 36px;background:#fff;border:1px solid var(--br);border-radius:10px;font-size:13.5px;color:var(--dk);font-family:inherit;outline:none}
 .wb2-search input:focus{border-color:#1DDB62;box-shadow:0 0 0 3px rgba(29,219,98,.14)}
@@ -1105,6 +1105,66 @@ ul{list-style:none}
   .wb2-mat-body .wb2-mat-foot{min-width:auto;padding-top:8px}
   .wb2-mat-add-btn{width:32px;height:32px}
 }
+
+/* ── wb2 foto section ── */
+.wb2-foto-cats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.wb2-foto-cat{background:var(--bgs);border:1px solid var(--br);border-radius:10px;padding:10px}
+.wb2-foto-cat-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.wb2-foto-cat-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.wb2-foto-cat-count{font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px}
+.wb2-foto-thumb-row{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;min-height:4px}
+.wb2-foto-thumb{position:relative;width:56px;height:56px;border-radius:8px;overflow:hidden;border:1px solid var(--br);flex-shrink:0}
+.wb2-foto-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.wb2-foto-thumb-del{position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.6);border:0;color:#fff;cursor:pointer;display:grid;place-items:center;padding:0;font-size:13px;line-height:1;font-weight:700}
+.wb2-foto-thumb-del:hover{background:rgba(220,38,38,.85)}
+.wb2-foto-upload-btn{display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 8px;border:1.5px dashed var(--br);border-radius:8px;background:#fff;color:var(--dl);cursor:pointer;font-size:11px;font-weight:600;font-family:inherit;transition:all .12s;width:100%}
+.wb2-foto-upload-btn:hover:not(:disabled){background:#f0fdf4;border-color:#1DDB62;color:#0F7A3F}
+.wb2-foto-upload-btn:disabled{opacity:.5;cursor:wait}
+@media(max-width:600px){
+  .wb2-foto-cats{grid-template-columns:1fr}
+  .wb2-foto-thumb{width:64px;height:64px}
+}
+
+/* ── wb2 meerwerk section ── */
+.wb2-meerwerk-item{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid #EFF2EF;flex-wrap:wrap}
+.wb2-meerwerk-omschr{flex:1;color:var(--dk);font-weight:500;font-size:13px;min-width:120px}
+.wb2-meerwerk-akkoord{font-size:10.5px;color:#8A4A06;background:#FFF7E6;border-radius:6px;padding:2px 7px;white-space:nowrap}
+.wb2-meerwerk-prijs{font-variant-numeric:tabular-nums;font-weight:700;color:var(--dk);min-width:65px;text-align:right;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+.wb2-meerwerk-add{display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap}
+.wb2-meerwerk-add input{height:36px;padding:0 10px;background:#fff;border:1px solid var(--br);border-radius:9px;font-size:13px;font-family:inherit;outline:none;color:var(--dk)}
+.wb2-meerwerk-add input:focus{border-color:#1DDB62;box-shadow:0 0 0 3px rgba(29,219,98,.14)}
+.wb2-meerwerk-add input:first-child{flex:1;min-width:140px}
+
+/* ── wb2 klus afronden button ── */
+.wb2-complete-btn{width:100%;padding:18px;background:#1DDB62;border:0;border-radius:14px;color:#0A2912;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 6px 20px rgba(29,219,98,.28);transition:background .15s,transform .1s,box-shadow .15s;letter-spacing:-.01em;font-family:inherit}
+.wb2-complete-btn:hover:not(:disabled){background:#13a849;box-shadow:0 8px 24px rgba(29,219,98,.36)}
+.wb2-complete-btn:active:not(:disabled){transform:scale(.98)}
+.wb2-complete-btn:disabled{cursor:default}
+.wb2-complete-btn.done{background:#E8FBEF;color:#0F7A3F;box-shadow:none;font-size:14px}
+
+/* ── List cards (simplified view) ────────────────────────────────────── */
+.wb2-cards{display:flex;flex-direction:column;gap:8px}
+.wb2-list-card{background:#fff;border:1px solid var(--br);border-radius:12px;padding:14px 16px;cursor:pointer;transition:border-color .15s,box-shadow .15s;text-align:left;width:100%;font-family:inherit;color:inherit}
+.wb2-list-card:hover{border-color:#cfd3cf;box-shadow:0 2px 8px rgba(14,20,17,.06)}
+.wb2-list-card-row1{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:3px}
+.wb2-list-card-titel{font-size:15px;font-weight:600;color:var(--dk);min-width:0;flex:1}
+.wb2-list-card-customer{font-size:13px;color:var(--dl);margin-bottom:2px}
+.wb2-list-card-loc{font-size:12px;color:var(--dl);display:flex;align-items:center;gap:4px;margin-bottom:8px}
+.wb2-list-card-footer{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:6px}
+.wb2-list-card-date{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--dl)}
+.wb2-list-card-tasks{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--dl)}
+.wb2-list-card-bar{width:40px;height:3px;border-radius:3px;background:var(--br);overflow:hidden;display:inline-block;vertical-align:middle}
+.wb2-list-card-bar-fill{height:100%;background:#1DDB62;transition:width .25s;display:block}
+
+/* ── Detail page (navigate-in view) ──────────────────────────────────── */
+.wb2-detail-page{display:flex;flex-direction:column;gap:14px}
+.wb2-detail-back{display:inline-flex;align-items:center;gap:6px;color:var(--dl);font-size:13px;font-weight:600;cursor:pointer;background:none;border:0;padding:0;font-family:inherit;transition:color .12s}
+.wb2-detail-back:hover{color:var(--dk)}
+.wb2-action-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.wb2-action-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:14px 10px;background:#fff;border:1px solid var(--br);border-radius:12px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;color:var(--dk);transition:all .15s;text-align:center}
+.wb2-action-btn:hover:not(:disabled){background:var(--bgs);border-color:#cfd3cf}
+.wb2-action-btn:disabled{opacity:.45;cursor:not-allowed}
+.wb2-action-btn-ic{width:36px;height:36px;border-radius:10px;background:#E8FBEF;color:#0F7A3F;display:grid;place-items:center}
 
 /* ════════════════════════════════════════════════════════════════════════════
    ACTIVITIES PAGE V2 (.act2-*) — drop-in redesigned Activiteiten page

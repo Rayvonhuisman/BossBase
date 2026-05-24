@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Download } from 'lucide-react';
+import { Download, MoreVertical } from 'lucide-react';
 import { I, ModalX, fmt } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import {
-  getOffertes, createOfferte, updateOfferte, deleteOfferte, calculateOfferteTotals, createOfferteItem, getOfferteItems,
+  getOffertes, createOfferte, updateOfferte, deleteOfferte, calculateOfferteTotals, createOfferteItem, getOfferteItems, deleteOfferteItemsByOfferteId,
 } from '../services/offerteService.js';
 import { listCustomers } from '../services/customerService.js';
 import { NewFactuurModal } from './FacturenPage.jsx';
@@ -44,7 +44,7 @@ function BtwSelect({ r, setRegel }) {
         <option value="anders">Anders</option>
       </select>
       {r.btw === 'anders' && (
-        <input type="number" min="0" max="100" step="1" placeholder="%" value={r.btwAnders} onChange={e => setRegel(r.id, 'btwAnders', e.target.value)} style={{ width: 38, minWidth: 0, flexShrink: 0 }} />
+        <input type="number" min="0" max="100" step="1" placeholder="0" value={r.btwAnders} onChange={e => setRegel(r.id, 'btwAnders', e.target.value)} style={{ minWidth: 60, flexShrink: 0 }} />
       )}
     </div>
   );
@@ -260,34 +260,95 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved }) {
   const [form, setForm] = useState({
     customer_id: offerte.customerId || '',
     omschrijving: offerte.omschrijving || '',
-    arbeidsuren: offerte.arbeidsuren ?? 0,
-    uurtarief: offerte.uurtarief ?? 55,
-    materiaalkosten: offerte.materiaalkosten ?? 0,
-    reiskosten: offerte.reiskosten ?? 0,
     marge_pct: offerte.margePct ?? 25,
-    btw_pct: offerte.btwPct ?? 21,
     geldig_tot: offerte.geldigTot || '',
     notes: offerte.notes || '',
     status: offerte.status || 'concept',
   });
+  const [regels, setRegels] = useState([emptyRegel()]);
+  const [loadingRegels, setLoadingRegels] = useState(true);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const totals = calculateOfferteTotals(form);
+  useEffect(() => {
+    getOfferteItems(offerte.id).then(items => {
+      if (items.length > 0) {
+        setRegels(items.map(item => ({
+          id: crypto.randomUUID(),
+          omschrijving: item.omschrijving,
+          type: 'stuks',
+          aantal: item.aantal,
+          eenheidsprijs: item.prijsPer,
+          btw: '21',
+          btwAnders: '',
+        })));
+      }
+      setLoadingRegels(false);
+    }).catch(() => setLoadingRegels(false));
+  }, [offerte.id]);
+
+  const setRegel = (id, k, v) => setRegels(rs => rs.map(r => r.id === id ? { ...r, [k]: v } : r));
+  const addRegel = () => setRegels(rs => [...rs, emptyRegel()]);
+  const removeRegel = (id) => setRegels(rs => rs.filter(r => r.id !== id));
+
+  const getRegelprijs = r => {
+    if (r.type === 'vast') return Math.round(Number(r.eenheidsprijs || 0) * 100) / 100;
+    return Math.round(Number(r.aantal || 0) * Number(r.eenheidsprijs || 0) * 100) / 100;
+  };
+  const getEffBtw = r => r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw);
+
+  const margeFactor = 1 + Number(form.marge_pct || 0) / 100;
+  const subtotaalExcl = regels.reduce((s, r) => s + getRegelprijs(r), 0);
+  const totaalExcl = Math.round(subtotaalExcl * margeFactor * 100) / 100;
+  const btwPerTarief = {};
+  for (const r of regels) {
+    const pct = getEffBtw(r);
+    const base = getRegelprijs(r) * margeFactor;
+    const key = String(pct);
+    btwPerTarief[key] = Math.round(((btwPerTarief[key] || 0) + base * pct / 100) * 100) / 100;
+  }
+  const totaalIncl = Math.round((totaalExcl + Object.values(btwPerTarief).reduce((s, v) => s + v, 0)) * 100) / 100;
+
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+  const modalStyle = isMobile ? { width: '100vw', height: '100vh', maxWidth: '100vw', maxHeight: '100vh', borderRadius: 0, overflow: 'auto' } : { overflowX: 'hidden' };
+  const overlayStyle = isMobile ? { padding: 0, alignItems: 'flex-start' } : {};
+  const COLS = '78px minmax(0,1fr) 68px 84px 110px 84px 28px';
 
   const submit = async () => {
     setSaving(true);
     try {
-      const r = await updateOfferte(offerte.id, form);
+      const updated = await updateOfferte(offerte.id, {
+        customer_id: form.customer_id,
+        omschrijving: form.omschrijving,
+        marge_pct: Number(form.marge_pct),
+        geldig_tot: form.geldig_tot || null,
+        notes: form.notes,
+        status: form.status,
+        totaal_excl: totaalExcl,
+        totaal_incl: totaalIncl,
+      });
+      await deleteOfferteItemsByOfferteId(offerte.id);
+      for (let i = 0; i < regels.length; i++) {
+        const r = regels[i];
+        if (!r.omschrijving.trim()) continue;
+        await createOfferteItem({
+          offerte_id: offerte.id,
+          omschrijving: r.omschrijving,
+          aantal: r.type === 'vast' ? 1 : Number(r.aantal || 1),
+          prijs_per: Number(r.eenheidsprijs || 0),
+          subtotaal: getRegelprijs(r),
+          volgorde: i,
+        });
+      }
       toast.success('Offerte opgeslagen');
-      onSaved?.(r);
+      onSaved?.(updated);
       onClose();
     } catch (err) { toast.error(err.message || 'Mislukt'); } finally { setSaving(false); }
   };
 
   return (
-    <div className="overlay" onClick={e => e.target === e.currentTarget && !saving && onClose()}>
-      <div className="modal modal-wide">
+    <div className="overlay" style={overlayStyle} onClick={e => e.target === e.currentTarget && !saving && onClose()}>
+      <div className="modal modal-wide" style={modalStyle}>
         <div className="modal-hd">
           <div>
             <div className="modal-title">Offerte bewerken</div>
@@ -295,66 +356,137 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved }) {
           </div>
           <ModalX onClose={onClose} />
         </div>
-        <div className="fg">
-          <div className="f s2">
-            <label>Klant</label>
-            <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)}>
-              <option value="">— Selecteer klant —</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+        {loadingRegels ? (
+          <div style={{ padding: '32px', textAlign: 'center', color: 'var(--dl)' }}>Regelitems laden…</div>
+        ) : (
+          <div className="fg">
+            <div className="f s2">
+              <label>Klant</label>
+              <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)}>
+                <option value="">— Selecteer klant —</option>
+                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div className="f s2">
+              <label>Omschrijving</label>
+              <textarea rows={2} value={form.omschrijving} onChange={e => set('omschrijving', e.target.value)} />
+            </div>
+
+            <div className="f s2" style={{ flexDirection: 'column', gap: 6 }}>
+              <label style={{ marginBottom: 0 }}>Regelitems</label>
+              {isMobile ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {regels.map(r => {
+                    const cfg = TYPE_CFG[r.type] || TYPE_CFG.uren;
+                    return (
+                      <div key={r.id} style={{ border: '1px solid var(--bstrong)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          <select value={r.type} onChange={e => setRegel(r.id, 'type', e.target.value)} style={{ flex: 1 }}>
+                            {Object.entries(TYPE_CFG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                          </select>
+                          <button className="btn btn-xs btn-danger btn-icon" onClick={() => removeRegel(r.id)} disabled={regels.length === 1} title="Verwijderen">{I.trash}</button>
+                        </div>
+                        <input type="text" placeholder="Omschrijving" value={r.omschrijving} onChange={e => setRegel(r.id, 'omschrijving', e.target.value)} />
+                        <div style={{ display: 'grid', gridTemplateColumns: cfg.hasV1 ? '1fr 1fr' : '1fr', gap: 6 }}>
+                          {cfg.hasV1 && (
+                            <input type="number" min="0" step={cfg.v1Step} placeholder={cfg.v1Ph} value={r.aantal} onChange={e => setRegel(r.id, 'aantal', e.target.value)} />
+                          )}
+                          <input type="number" min="0" step="0.01" placeholder={cfg.v2Ph} value={r.eenheidsprijs} onChange={e => setRegel(r.id, 'eenheidsprijs', e.target.value)} />
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between' }}>
+                          <BtwSelect r={r} setRegel={setRegel} />
+                          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>{fmt(getRegelprijs(r))}</div>
+                            {cfg.regelLabel && Number(r.aantal) > 0 && Number(r.eenheidsprijs) > 0 && (
+                              <div style={{ fontSize: 10, color: 'var(--dl)' }}>{cfg.regelLabel(r)}</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: COLS, gap: 5, fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.04em', padding: '0 0 4px' }}>
+                    <span>Type</span><span>Omschrijving</span><span>Hoev.</span><span>Prijs</span><span>BTW</span><span style={{ textAlign: 'right' }}>Bedrag</span><span />
+                  </div>
+                  {regels.map(r => {
+                    const cfg = TYPE_CFG[r.type] || TYPE_CFG.uren;
+                    return (
+                      <div key={r.id} style={{ display: 'grid', gridTemplateColumns: COLS, gap: 5, alignItems: 'center', marginBottom: 5 }}>
+                        <select value={r.type} onChange={e => setRegel(r.id, 'type', e.target.value)} style={{ minWidth: 0 }}>
+                          {Object.entries(TYPE_CFG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                        </select>
+                        <input type="text" placeholder="Omschrijving" value={r.omschrijving} onChange={e => setRegel(r.id, 'omschrijving', e.target.value)} style={{ minWidth: 0 }} />
+                        <input type="number" min="0" step={cfg.v1Step} placeholder={cfg.v1Ph || ''}
+                          value={r.aantal} onChange={e => setRegel(r.id, 'aantal', e.target.value)}
+                          style={{ minWidth: 0, visibility: cfg.hasV1 ? 'visible' : 'hidden' }} />
+                        <input type="number" min="0" step="0.01" placeholder={cfg.v2Ph} value={r.eenheidsprijs} onChange={e => setRegel(r.id, 'eenheidsprijs', e.target.value)} style={{ minWidth: 0 }} />
+                        <BtwSelect r={r} setRegel={setRegel} />
+                        <div style={{ textAlign: 'right', overflow: 'hidden' }}>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--tx)', whiteSpace: 'nowrap' }}>{fmt(getRegelprijs(r))}</div>
+                          {cfg.regelLabel && Number(r.aantal) > 0 && Number(r.eenheidsprijs) > 0 && (
+                            <div style={{ fontSize: 10, color: 'var(--dl)', whiteSpace: 'nowrap' }}>{cfg.regelLabel(r)}</div>
+                          )}
+                        </div>
+                        <button className="btn btn-xs btn-danger btn-icon" onClick={() => removeRegel(r.id)} disabled={regels.length === 1} title="Verwijderen">{I.trash}</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div>
+                <button className="btn btn-ghost" style={{ fontSize: 13, padding: '4px 10px' }} onClick={addRegel}>{I.plus} Regel toevoegen</button>
+              </div>
+            </div>
+
+            <div className="f">
+              <label>Marge %</label>
+              <input type="number" min="0" max="100" step="1" value={form.marge_pct} onChange={e => set('marge_pct', e.target.value)} />
+            </div>
+            <div className="f">
+              <label>Status</label>
+              <select value={form.status} onChange={e => set('status', e.target.value)}>
+                <option value="concept">Concept</option>
+                <option value="verzonden">Verzonden</option>
+                <option value="geaccepteerd">Geaccepteerd</option>
+                <option value="afgewezen">Afgewezen</option>
+              </select>
+            </div>
+            <div className="f">
+              <label>Geldig tot</label>
+              <input type="date" value={form.geldig_tot} onChange={e => set('geldig_tot', e.target.value)} />
+            </div>
+
+            <div className="f s2" style={{ padding: '10px 14px', background: 'var(--pll)', borderRadius: 8, fontSize: 13 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--dl)' }}>Subtotaal excl. BTW</span>
+                  <span style={{ fontWeight: 500 }}>{fmt(totaalExcl)}</span>
+                </div>
+                {Object.entries(btwPerTarief).filter(([, bedrag]) => bedrag > 0).map(([pct, bedrag]) => (
+                  <div key={pct} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--dl)' }}>BTW {pct}%</span>
+                    <span>{fmt(bedrag)}</span>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 6, borderTop: '1px solid var(--br)', fontWeight: 700, fontSize: 14 }}>
+                  <span>Totaal incl. BTW</span>
+                  <span style={{ color: 'var(--p)' }}>{fmt(totaalIncl)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="f s2">
+              <label>Notities</label>
+              <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} />
+            </div>
           </div>
-          <div className="f s2">
-            <label>Omschrijving</label>
-            <textarea rows={2} value={form.omschrijving} onChange={e => set('omschrijving', e.target.value)} />
-          </div>
-          <div className="f">
-            <label>Arbeidsuren</label>
-            <input type="number" min="0" step="0.5" value={form.arbeidsuren} onChange={e => set('arbeidsuren', e.target.value)} />
-          </div>
-          <div className="f">
-            <label>Uurtarief (€)</label>
-            <input type="number" min="0" step="1" value={form.uurtarief} onChange={e => set('uurtarief', e.target.value)} />
-          </div>
-          <div className="f">
-            <label>Materiaalkosten (€)</label>
-            <input type="number" min="0" step="0.01" value={form.materiaalkosten} onChange={e => set('materiaalkosten', e.target.value)} />
-          </div>
-          <div className="f">
-            <label>Reiskosten (€)</label>
-            <input type="number" min="0" step="0.01" value={form.reiskosten} onChange={e => set('reiskosten', e.target.value)} />
-          </div>
-          <div className="f">
-            <label>Marge %</label>
-            <input type="number" min="0" max="100" step="1" value={form.marge_pct} onChange={e => set('marge_pct', e.target.value)} />
-          </div>
-          <div className="f">
-            <label>BTW %</label>
-            <input type="number" min="0" max="100" step="1" value={form.btw_pct} onChange={e => set('btw_pct', e.target.value)} />
-          </div>
-          <div className="f">
-            <label>Status</label>
-            <select value={form.status} onChange={e => set('status', e.target.value)}>
-              <option value="concept">Concept</option>
-              <option value="verzonden">Verzonden</option>
-              <option value="geaccepteerd">Geaccepteerd</option>
-              <option value="afgewezen">Afgewezen</option>
-            </select>
-          </div>
-          <div className="f">
-            <label>Geldig tot</label>
-            <input type="date" value={form.geldig_tot} onChange={e => set('geldig_tot', e.target.value)} />
-          </div>
-          <div className="f s2" style={{ alignSelf: 'end', padding: '8px 12px', background: 'var(--pll)', borderRadius: 8, fontSize: 13, color: 'var(--dl)' }}>
-            <span style={{ fontWeight: 600, color: 'var(--tx)' }}>Excl. BTW:</span> {fmt(totals.totaal_excl)} &nbsp;·&nbsp; <span style={{ fontWeight: 600, color: 'var(--tx)' }}>Incl. BTW:</span> {fmt(totals.totaal_incl)}
-          </div>
-          <div className="f s2">
-            <label>Notities</label>
-            <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} />
-          </div>
-        </div>
+        )}
         <div className="fa">
           <button className="btn btn-ghost" onClick={onClose}>Annuleren</button>
-          <button className="btn btn-p" onClick={submit} disabled={saving}>{saving ? 'Opslaan...' : 'Opslaan'}</button>
+          <button className="btn btn-p" onClick={submit} disabled={saving || loadingRegels}>{saving ? 'Opslaan...' : 'Opslaan'}</button>
         </div>
       </div>
     </div>
@@ -460,11 +592,13 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur }) {
   );
 }
 
+// ── ACTION MENU ───────────────────────────────────────────────────────────────
+
 // ── OFFERTES PAGE ────────────────────────────────────────────────────────────
 
 export function OffertesPage({ openCustomer, preOpenOfferteId, onNavConsumed }) {
   const toast = useToast();
-  const { profile } = useProfile();
+  const { profile, company } = useProfile();
   const canManageOffertes = profile?.role === 'admin' || profile?.role === 'planner';
   const [offertes, setOffertes] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -556,6 +690,19 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onNavConsumed }) 
       if (idx >= 0) { const next = [...prev]; next[idx] = saved; return next; }
       return [saved, ...prev];
     });
+  };
+
+  const handleDownloadPdfFromMenu = async (o) => {
+    try {
+      const [items, customerList] = await Promise.all([
+        getOfferteItems(o.id),
+        listCustomers(),
+      ]);
+      const customer = customerList.find(c => c.id === o.customerId) || null;
+      await generateOffertePdf(o, items, customer, company);
+    } catch (e) {
+      toast.error('PDF genereren mislukt: ' + e.message);
+    }
   };
 
   if (loading) return <div className="card card-p" style={{ textAlign: 'center', color: 'var(--dl)' }}>Laden…</div>;
@@ -671,7 +818,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onNavConsumed }) 
                       <td className="td">{fmtDate(o.geldigTot)}</td>
                       <td className="td">
                         <div style={{ display: 'flex', gap: 4 }}>
-                          <button className="btn btn-xs btn-ghost btn-icon" title="Bekijken" onClick={() => setViewOfferte(o)}>{I.eye}</button>
+                          <button className="btn btn-xs btn-ghost btn-icon" title="Bekijken" onClick={() => setViewOfferte(o)}><MoreVertical size={14} /></button>
                           {canManageOffertes && <button className="btn btn-xs btn-ghost btn-icon" title="Bewerken" onClick={() => setEditOfferte(o)}>{I.edit}</button>}
                           {canManageOffertes && <button className="btn btn-xs btn-danger btn-icon" title="Verwijderen" onClick={() => handleDelete(o)}>{I.trash}</button>}
                         </div>

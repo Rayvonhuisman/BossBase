@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabase"
-import { withCompanyId } from "../lib/currentCompany"
+import { getCompanyId, withCompanyId } from "../lib/currentCompany"
 
 // DB columns werkbonnen: id, company_id, customer_id, deal_id, offerte_id,
 // assigned_to, titel, omschrijving, status, gepland_op, starttijd, eindtijd,
@@ -20,6 +20,8 @@ const toWerkbon = row => ({
   eindtijd: row.eindtijd || null,
   locatie: row.locatie || "",
   notes: row.notes || "",
+  werkbonNotities: row.werkbon_notities || "",
+  afgerondOp: row.afgerond_op || null,
   createdAt: row.created_at,
   // Joined relaties (optioneel)
   customerName: row.customers?.name || "",
@@ -126,7 +128,7 @@ export async function deleteWerkbon(id) {
 
 /** Zet een werkbon op 'afgerond' en registreert de afrondtijd. */
 export async function completeWerkbon(id) {
-  return updateWerkbon(id, { status: "afgerond" })
+  return updateWerkbon(id, { status: "afgerond", afgerond_op: new Date().toISOString() })
 }
 
 // ── WERKBON TAKEN ────────────────────────────────────────────────────────────
@@ -246,4 +248,115 @@ export async function updateWerkbonMateriaal(id, input) {
 export async function deleteWerkbonMateriaal(id) {
   const { error } = await supabase.from("werkbon_materialen").delete().eq("id", id)
   if (error) throw error
+}
+
+// ── WERKBON NOTITIES ─────────────────────────────────────────────────────────
+
+export async function updateWerkbonNotities(id, notities) {
+  return updateWerkbon(id, { werkbon_notities: notities || null })
+}
+
+// ── WERKBON FOTOS ────────────────────────────────────────────────────────────
+
+const toWerkbonFoto = row => ({
+  id: row.id,
+  werkbonId: row.werkbon_id,
+  companyId: row.company_id,
+  url: row.url,
+  categorie: row.categorie,
+  createdAt: row.created_at,
+})
+
+export async function getWerkbonFotos(werkbonId) {
+  const { data, error } = await supabase
+    .from("werkbon_fotos")
+    .select("*")
+    .eq("werkbon_id", werkbonId)
+    .order("created_at", { ascending: true })
+  if (error) throw error
+  return (data || []).map(toWerkbonFoto)
+}
+
+export async function uploadWerkbonFoto(werkbonId, file, categorie) {
+  const companyId = await getCompanyId()
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase()
+  const path = `${companyId}/${werkbonId}/${crypto.randomUUID()}.${ext}`
+
+  const { error: uploadError } = await supabase.storage
+    .from("werkbon-fotos")
+    .upload(path, file, { contentType: file.type || "image/jpeg" })
+  if (uploadError) throw uploadError
+
+  const { data: urlData } = supabase.storage.from("werkbon-fotos").getPublicUrl(path)
+
+  const payload = await withCompanyId({ werkbon_id: werkbonId, url: urlData.publicUrl, categorie })
+  const { data, error } = await supabase.from("werkbon_fotos").insert(payload).select().single()
+  if (error) throw error
+  return toWerkbonFoto(data)
+}
+
+export async function deleteWerkbonFoto(id, url) {
+  const idx = (url || "").indexOf("/werkbon-fotos/")
+  if (idx !== -1) {
+    const storagePath = url.slice(idx + "/werkbon-fotos/".length)
+    await supabase.storage.from("werkbon-fotos").remove([storagePath]).catch(() => {})
+  }
+  const { error } = await supabase.from("werkbon_fotos").delete().eq("id", id)
+  if (error) throw error
+}
+
+// ── WERKBON MEERWERK ─────────────────────────────────────────────────────────
+
+const toWerkbonMeerwerk = row => ({
+  id: row.id,
+  werkbonId: row.werkbon_id,
+  companyId: row.company_id,
+  omschrijving: row.omschrijving || "",
+  prijs: Number(row.prijs || 0),
+  createdAt: row.created_at,
+})
+
+export async function getWerkbonMeerwerk(werkbonId) {
+  const { data, error } = await supabase
+    .from("werkbon_meerwerk")
+    .select("*")
+    .eq("werkbon_id", werkbonId)
+    .order("created_at", { ascending: true })
+  if (error) throw error
+  return (data || []).map(toWerkbonMeerwerk)
+}
+
+export async function createWerkbonMeerwerk(input) {
+  const base = {
+    werkbon_id: input.werkbon_id || input.werkbonId,
+    omschrijving: input.omschrijving,
+    prijs: Number(input.prijs || 0),
+  }
+  if (!base.werkbon_id) throw new Error("werkbon_id is verplicht")
+  if (!base.omschrijving) throw new Error("omschrijving is verplicht")
+  const payload = await withCompanyId(base)
+  const { data, error } = await supabase.from("werkbon_meerwerk").insert(payload).select().single()
+  if (error) throw error
+  return toWerkbonMeerwerk(data)
+}
+
+export async function deleteWerkbonMeerwerk(id) {
+  const { error } = await supabase.from("werkbon_meerwerk").delete().eq("id", id)
+  if (error) throw error
+}
+
+// ── TAKEN COUNTS (batch, for list view) ─────────────────────────────────────
+
+export async function getAllWerkbonTakenCounts() {
+  const { data, error } = await supabase
+    .from("werkbon_taken")
+    .select("werkbon_id, afgerond")
+  if (error) throw error
+  const counts = {}
+  for (const row of data || []) {
+    if (!counts[row.werkbon_id]) counts[row.werkbon_id] = { total: 0, done: 0 }
+    counts[row.werkbon_id].total++
+    if (row.afgerond) counts[row.werkbon_id].done++
+  }
+  return counts
 }

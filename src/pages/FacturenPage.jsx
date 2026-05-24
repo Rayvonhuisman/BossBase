@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Download } from 'lucide-react';
+import { Download, MoreVertical } from 'lucide-react';
 import { I, ModalX, fmt } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import {
   getFacturen, createFactuur, updateFactuur, deleteFactuur,
   generateFactuurNummer, getFactuurRegels, createFactuurRegel,
+  generateCreditFactuurNummer, createCreditFactuur,
 } from '../services/factuurService.js';
 import { listCustomers } from '../services/customerService.js';
 import { generateFactuurPdf } from '../utils/generatePdf.js';
@@ -57,9 +58,9 @@ function BtwSelect({ r, setRegel }) {
         <option value="anders">Anders</option>
       </select>
       {r.btw === 'anders' && (
-        <input type="number" min="0" max="100" step="1" placeholder="%" value={r.btwAnders}
+        <input type="number" min="0" max="100" step="1" placeholder="0" value={r.btwAnders}
           onChange={e => setRegel(r.id, 'btwAnders', e.target.value)}
-          style={{ width: 38, minWidth: 0, flexShrink: 0 }} />
+          style={{ minWidth: 60, flexShrink: 0 }} />
       )}
     </div>
   );
@@ -378,13 +379,164 @@ function EditFactuurModal({ factuur, customers, onClose, onSaved }) {
   );
 }
 
+// ── CREDITEER MODAL ──────────────────────────────────────────────────────────
+
+function CrediteerModal({ factuur, regels, onClose, onSuccess }) {
+  const toast = useToast();
+  const [mode, setMode] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState(null);
+  const [selectedRegels, setSelectedRegels] = useState(() =>
+    regels.map(r => ({ ...r, selected: true, aantalCredit: r.aantal, prijsCredit: Math.abs(r.eenheidsprijs) }))
+  );
+
+  const handleVolledig = async () => {
+    setSaving(true);
+    try {
+      const credit = await createCreditFactuur(factuur.id, regels, factuur);
+      setSuccess(credit.nummer);
+    } catch (err) { toast.error(err.message || 'Mislukt'); } finally { setSaving(false); }
+  };
+
+  const handleGedeeltelijk = async () => {
+    const teCrediteren = selectedRegels.filter(r => r.selected).map(r => ({
+      ...r,
+      aantal: Number(r.aantalCredit),
+      eenheidsprijs: Math.abs(Number(r.prijsCredit)),
+      regelprijs: r.type === 'vast'
+        ? Math.abs(Number(r.prijsCredit))
+        : Number(r.aantalCredit) * Math.abs(Number(r.prijsCredit)),
+    }));
+    if (!teCrediteren.length) { toast.error('Selecteer minimaal één regel'); return; }
+    setSaving(true);
+    try {
+      const credit = await createCreditFactuur(factuur.id, teCrediteren, factuur);
+      setSuccess(credit.nummer);
+    } catch (err) { toast.error(err.message || 'Mislukt'); } finally { setSaving(false); }
+  };
+
+  if (success) {
+    return (
+      <div className="overlay" onClick={e => e.target === e.currentTarget && (onSuccess?.(), onClose())}>
+        <div className="modal">
+          <div className="modal-hd">
+            <div className="modal-title">Creditfactuur aangemaakt</div>
+            <ModalX onClose={() => { onSuccess?.(); onClose(); }} />
+          </div>
+          <div style={{ padding: '32px 24px', textAlign: 'center' }}>
+            <div style={{ fontSize: 36, marginBottom: 12, color: '#22c55e' }}>✓</div>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{success}</div>
+            <div style={{ fontSize: 13, color: 'var(--dl)' }}>Creditfactuur succesvol aangemaakt</div>
+          </div>
+          <div className="fa">
+            <button className="btn btn-p" onClick={() => { onSuccess?.(); onClose(); }}>Sluiten</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && !saving && onClose()}>
+      <div className="modal modal-wide">
+        <div className="modal-hd">
+          <div>
+            <div className="modal-title">Crediteer factuur</div>
+            <div className="modal-sub">{factuur.nummer}</div>
+          </div>
+          <ModalX onClose={onClose} />
+        </div>
+
+        {mode === null && (
+          <>
+            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 13, color: 'var(--dl)', marginBottom: 4 }}>Kies hoe je deze factuur wilt crediteren:</div>
+              <button className="btn btn-ghost" style={{ padding: '14px 16px', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 3, height: 'auto' }} onClick={() => setMode('volledig')}>
+                <span style={{ fontWeight: 600 }}>Volledig crediteren</span>
+                <span style={{ fontSize: 12, color: 'var(--dl)', fontWeight: 400 }}>Crediteer alle regelitems voor het volledige bedrag</span>
+              </button>
+              <button className="btn btn-ghost" style={{ padding: '14px 16px', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 3, height: 'auto' }} onClick={() => setMode('gedeeltelijk')}>
+                <span style={{ fontWeight: 600 }}>Gedeeltelijk crediteren</span>
+                <span style={{ fontSize: 12, color: 'var(--dl)', fontWeight: 400 }}>Kies welke regelitems en voor welk bedrag je wilt crediteren</span>
+              </button>
+            </div>
+            <div className="fa">
+              <button className="btn btn-ghost" onClick={onClose}>Annuleren</button>
+            </div>
+          </>
+        )}
+
+        {mode === 'volledig' && (
+          <>
+            <div style={{ padding: '20px 24px' }}>
+              <div style={{ fontSize: 13, color: 'var(--tx)', marginBottom: 14 }}>
+                Een creditfactuur wordt aangemaakt voor alle {regels.length} regelitem{regels.length !== 1 ? 's' : ''} van factuur {factuur.nummer}.
+              </div>
+              <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#991b1b' }}>
+                Totaal te crediteren: <strong>{fmt(factuur.totaalIncl)}</strong>
+              </div>
+            </div>
+            <div className="fa">
+              <button className="btn btn-ghost" onClick={() => setMode(null)}>Terug</button>
+              <button className="btn btn-danger" onClick={handleVolledig} disabled={saving}>
+                {saving ? 'Aanmaken...' : 'Volledig crediteren'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {mode === 'gedeeltelijk' && (
+          <>
+            <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {selectedRegels.map((r, i) => (
+                <div key={r.id} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '10px 12px', background: r.selected ? 'var(--pll)' : 'var(--bgs)', borderRadius: 8, border: '1px solid var(--br)' }}>
+                  <input type="checkbox" checked={r.selected}
+                    onChange={e => setSelectedRegels(prev => prev.map((sr, si) => si === i ? { ...sr, selected: e.target.checked } : sr))}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.omschrijving}</div>
+                    <div style={{ fontSize: 11, color: 'var(--dl)' }}>{TYPE_CFG[r.type]?.label}</div>
+                  </div>
+                  {r.type !== 'vast' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end' }}>
+                      <label style={{ fontSize: 10, color: 'var(--dl)' }}>Aantal</label>
+                      <input type="number" min="0" step="0.01" value={r.aantalCredit} disabled={!r.selected}
+                        onChange={e => setSelectedRegels(prev => prev.map((sr, si) => si === i ? { ...sr, aantalCredit: e.target.value } : sr))}
+                        style={{ width: 72 }} />
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end' }}>
+                    <label style={{ fontSize: 10, color: 'var(--dl)' }}>Prijs</label>
+                    <input type="number" min="0" step="0.01" value={r.prijsCredit} disabled={!r.selected}
+                      onChange={e => setSelectedRegels(prev => prev.map((sr, si) => si === i ? { ...sr, prijsCredit: e.target.value } : sr))}
+                      style={{ width: 84 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="fa">
+              <button className="btn btn-ghost" onClick={() => setMode(null)}>Terug</button>
+              <button className="btn btn-danger" onClick={handleGedeeltelijk} disabled={saving}>
+                {saving ? 'Aanmaken...' : 'Creditfactuur aanmaken'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── VIEW FACTUUR MODAL ────────────────────────────────────────────────────────
 
-function ViewFactuurModal({ factuur, customers, onClose }) {
-  const { company } = useProfile();
+function ViewFactuurModal({ factuur, customers, onClose, onRefresh }) {
+  const { company, profile } = useProfile();
+  const canManage = profile?.role === 'admin' || profile?.role === 'planner';
+  const canCrediteer = canManage && (factuur.status === 'verzonden' || factuur.status === 'betaald') && !factuur.gecrediteerd && !factuur.isCredit;
   const customerName = factuur.customerName || customers.find(c => c.id == factuur.customerId)?.name || '—';
   const [regels, setRegels] = useState([]);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [showCrediteer, setShowCrediteer] = useState(false);
 
   useEffect(() => {
     getFactuurRegels(factuur.id).then(setRegels).catch(() => {});
@@ -394,7 +546,8 @@ function ViewFactuurModal({ factuur, customers, onClose }) {
     setPdfLoading(true);
     try {
       const customer = customers.find(c => String(c.id) === String(factuur.customerId));
-      await generateFactuurPdf(factuur, regels, customer, company);
+      const factuurForPdf = factuur.isCredit ? { ...factuur, creditNote: factuur.notities } : factuur;
+      await generateFactuurPdf(factuurForPdf, regels, customer, company);
     } catch (err) {
       console.error('PDF genereren mislukt:', err);
     } finally {
@@ -464,21 +617,36 @@ function ViewFactuurModal({ factuur, customers, onClose }) {
           )}
         </div>
         <div className="fa">
+          {canCrediteer && (
+            <button className="btn btn-danger" onClick={() => setShowCrediteer(true)}>
+              Crediteer factuur
+            </button>
+          )}
           <button className="btn btn-p" onClick={handleDownloadPdf} disabled={pdfLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <Download size={15} />{pdfLoading ? 'Genereren...' : 'Download PDF'}
           </button>
           <button className="btn btn-ghost" onClick={onClose}>Sluiten</button>
         </div>
       </div>
+      {showCrediteer && (
+        <CrediteerModal
+          factuur={factuur}
+          regels={regels}
+          onClose={() => setShowCrediteer(false)}
+          onSuccess={() => { onRefresh?.(); onClose(); }}
+        />
+      )}
     </div>
   );
 }
+
+// ── ACTION MENU ───────────────────────────────────────────────────────────────
 
 // ── FACTUREN PAGE ─────────────────────────────────────────────────────────────
 
 export function FacturenPage({ openCustomer }) {
   const toast = useToast();
-  const { profile } = useProfile();
+  const { profile, company } = useProfile();
   const canManage = profile?.role === 'admin' || profile?.role === 'planner';
   const [facturen, setFacturen] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -489,6 +657,7 @@ export function FacturenPage({ openCustomer }) {
   const [showNew, setShowNew] = useState(false);
   const [editFactuur, setEditFactuur] = useState(null);
   const [viewFactuur, setViewFactuur] = useState(null);
+  const [crediteerData, setCrediteerData] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -513,9 +682,11 @@ export function FacturenPage({ openCustomer }) {
     { label: 'Verzonden', value: 'verzonden' },
     { label: 'Betaald', value: 'betaald' },
     { label: 'Verlopen', value: 'verlopen' },
+    { label: 'Gecrediteerd', value: 'gecrediteerd' },
   ];
 
   const filtered = facturen.filter(f => {
+    if (activeFilter === 'gecrediteerd') return f.gecrediteerd || f.isCredit;
     const ds = displayStatus(f);
     if (activeFilter && ds !== activeFilter) return false;
     if (search) {
@@ -541,6 +712,22 @@ export function FacturenPage({ openCustomer }) {
       if (idx >= 0) { const next = [...prev]; next[idx] = saved; return next; }
       return [saved, ...prev];
     });
+  };
+
+  const handleDownloadPdfFromMenu = async f => {
+    try {
+      const regels = await getFactuurRegels(f.id);
+      const customer = customers.find(c => String(c.id) === String(f.customerId));
+      const factuurForPdf = f.isCredit ? { ...f, creditNote: f.notities } : f;
+      await generateFactuurPdf(factuurForPdf, regels, customer, company);
+    } catch { toast.error('PDF genereren mislukt'); }
+  };
+
+  const handleCrediteerFromMenu = async f => {
+    try {
+      const regels = await getFactuurRegels(f.id);
+      setCrediteerData({ factuur: f, regels });
+    } catch { toast.error('Regelitems laden mislukt'); }
   };
 
   if (loading) return <div className="card card-p" style={{ textAlign: 'center', color: 'var(--dl)' }}>Laden…</div>;
@@ -627,6 +814,7 @@ export function FacturenPage({ openCustomer }) {
                     <tr key={f.id}>
                       <td className="td">
                         <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: 13 }}>{f.nummer}</span>
+                        {f.isCredit && <span className="badge" style={{ background: '#fee2e2', color: '#dc2626', marginLeft: 6, fontSize: 10 }}>CF</span>}
                       </td>
                       <td className="td">
                         <button
@@ -638,11 +826,14 @@ export function FacturenPage({ openCustomer }) {
                       </td>
                       <td className="td" style={{ textAlign: 'right' }}>{fmt(f.totaalExcl)}</td>
                       <td className="td" style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(f.totaalIncl)}</td>
-                      <td className="td">{factuurBadge(f)}</td>
+                      <td className="td">
+                        {factuurBadge(f)}
+                        {f.gecrediteerd && <span className="badge b-gray" style={{ marginLeft: 4, fontSize: 10 }}>Gecrediteerd</span>}
+                      </td>
                       <td className="td" style={{ color: isVerlopen(f) ? '#dc2626' : 'inherit' }}>{fmtDate(f.vervaldatum)}</td>
                       <td className="td">
                         <div style={{ display: 'flex', gap: 4 }}>
-                          <button className="btn btn-xs btn-ghost btn-icon" title="Bekijken" onClick={() => setViewFactuur(f)}>{I.eye}</button>
+                          <button className="btn btn-xs btn-ghost btn-icon" title="Bekijken" onClick={() => setViewFactuur(f)}><MoreVertical size={14} /></button>
                           {canManage && <button className="btn btn-xs btn-ghost btn-icon" title="Bewerken" onClick={() => setEditFactuur(f)}>{I.edit}</button>}
                           {canManage && <button className="btn btn-xs btn-danger btn-icon" title="Verwijderen" onClick={() => handleDelete(f)}>{I.trash}</button>}
                         </div>
@@ -677,6 +868,15 @@ export function FacturenPage({ openCustomer }) {
           factuur={viewFactuur}
           customers={customers}
           onClose={() => setViewFactuur(null)}
+          onRefresh={load}
+        />
+      )}
+      {crediteerData && (
+        <CrediteerModal
+          factuur={crediteerData.factuur}
+          regels={crediteerData.regels}
+          onClose={() => setCrediteerData(null)}
+          onSuccess={() => { load(); setCrediteerData(null); }}
         />
       )}
     </div>

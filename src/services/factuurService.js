@@ -17,6 +17,9 @@ const toFactuur = row => ({
   betaaldOp: row.betaald_op || null,
   createdAt: row.created_at,
   customerName: row.customers?.name || '',
+  isCredit: row.is_credit || false,
+  creditVanFactuurId: row.credit_van_factuur_id || null,
+  gecrediteerd: row.gecrediteerd || false,
 })
 
 const toRegel = row => ({
@@ -37,6 +40,15 @@ export async function generateFactuurNummer() {
     .select('id', { count: 'exact', head: true })
   if (error) return 'BB-F000'
   return `BB-F${String((count || 0) + 1).padStart(3, '0')}`
+}
+
+export async function generateCreditFactuurNummer() {
+  const { count, error } = await supabase
+    .from('facturen')
+    .select('id', { count: 'exact', head: true })
+    .eq('is_credit', true)
+  if (error) return 'BB-CF001'
+  return `BB-CF${String((count || 0) + 1).padStart(3, '0')}`
 }
 
 export async function getFacturen() {
@@ -119,6 +131,49 @@ export async function getAllFactuurRegels() {
     .select('*')
   if (error) throw error
   return (data || []).map(toRegel)
+}
+
+export async function createCreditFactuur(origineleFactuurId, regels, origineleFactuur) {
+  const nummer = await generateCreditFactuurNummer()
+  const totaalExcl = -Math.abs(Math.round(regels.reduce((s, r) => s + Math.abs(Number(r.regelprijs || 0)), 0) * 100) / 100)
+  const totaalBtw = Math.round(regels.reduce((s, r) => s + Math.abs(Number(r.regelprijs || 0)) * Number(r.btwPct || 21) / 100, 0) * 100) / 100
+  const totaalIncl = -(Math.abs(totaalExcl) + totaalBtw)
+  const base = {
+    customer_id: origineleFactuur.customerId,
+    nummer,
+    factuurdatum: new Date().toISOString().slice(0, 10),
+    status: 'verzonden',
+    notities: `Creditering van factuur ${origineleFactuur.nummer}`,
+    is_credit: true,
+    credit_van_factuur_id: origineleFactuurId,
+    totaal_excl: Math.round(totaalExcl * 100) / 100,
+    totaal_incl: Math.round(totaalIncl * 100) / 100,
+  }
+  const payload = await withCompanyId(base)
+  const { data, error } = await supabase
+    .from('facturen')
+    .insert(payload)
+    .select('*, customers(name)')
+    .single()
+  if (error) throw error
+  const creditFactuur = toFactuur(data)
+  for (let i = 0; i < regels.length; i++) {
+    const r = regels[i]
+    await createFactuurRegel({
+      factuur_id: creditFactuur.id,
+      type: r.type,
+      omschrijving: r.omschrijving,
+      aantal: r.type === 'vast' ? 1 : Number(r.aantal || 1),
+      eenheidsprijs: -Math.abs(Number(r.eenheidsprijs || 0)),
+      btw_pct: Number(r.btwPct || 21),
+      volgorde: i,
+    })
+  }
+  await supabase
+    .from('facturen')
+    .update({ gecrediteerd: true, updated_at: new Date().toISOString() })
+    .eq('id', origineleFactuurId)
+  return creditFactuur
 }
 
 export async function createFactuurRegel(input) {

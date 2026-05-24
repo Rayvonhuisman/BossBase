@@ -3,12 +3,16 @@ import { I, ModalX } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import {
-  getWerkbonnen, getWerkbonById, createWerkbon, updateWerkbon, completeWerkbon,
+  getWerkbonnen, getWerkbonById, createWerkbon, updateWerkbon,
   getWerkbonTaken, createWerkbonTaak, toggleWerkbonTaak, deleteWerkbonTaak,
   getWerkbonMaterialen, createWerkbonMateriaal, deleteWerkbonMateriaal,
+  getWerkbonFotos, uploadWerkbonFoto, deleteWerkbonFoto,
+  getWerkbonMeerwerk, createWerkbonMeerwerk, deleteWerkbonMeerwerk,
+  updateWerkbonNotities, getAllWerkbonTakenCounts,
 } from '../services/werkbonService.js';
 import { listCustomers } from '../services/customerService.js';
 import { createUrenregel, getUrenregistratie, calculateHours } from '../services/urenService.js';
+import { createJobCost } from '../services/jobCostService.js';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 
@@ -22,7 +26,6 @@ const fmtDate = d => {
 
 const fmtEur = n => `€ ${Number(n || 0).toFixed(2).replace('.', ',')}`;
 
-// Postgres `time` columns come back as "HH:MM:SS" — strip seconds for UI.
 const fmtTime = t => (t ? String(t).slice(0, 5) : '');
 
 const DAY_LABEL = ['zo','ma','di','wo','do','vr','za'];
@@ -35,32 +38,6 @@ const shortDate = d => {
   return `${DAY_LABEL[dt.getDay()]} ${dt.getDate()} ${MONTH_LABEL[dt.getMonth()]}`;
 };
 
-const relativeDate = d => {
-  if (!d) return '—';
-  const t = TODAY();
-  if (d === t) return 'Vandaag';
-  const today = new Date(t + 'T00:00:00');
-  const dt = new Date(d + 'T00:00:00');
-  const diff = Math.round((dt - today) / 86400000);
-  if (diff === 1) return 'Morgen';
-  if (diff === -1) return 'Gisteren';
-  if (diff < 0) return 'Te laat';
-  if (diff < 7) return shortDate(d);
-  return 'Volgende week';
-};
-
-const urgencyFor = w => {
-  const t = TODAY();
-  if (w.status === 'afgerond') return 'thisWeek';
-  if (!w.geplandOp) return 'later';
-  if (w.geplandOp < t) return 'overdue';
-  if (w.geplandOp === t) return 'today';
-  const today = new Date(t + 'T00:00:00');
-  const dt = new Date(w.geplandOp + 'T00:00:00');
-  const diff = Math.round((dt - today) / 86400000);
-  return diff <= 7 ? 'thisWeek' : 'later';
-};
-
 const STATUS_LABEL = {
   gepland: 'Gepland',
   in_uitvoering: 'In uitvoering',
@@ -71,26 +48,6 @@ const STATUS_TONE = {
   gepland: 'blue',
   in_uitvoering: 'amber',
   afgerond: 'green',
-};
-
-const URGENCY_LABEL = {
-  overdue: 'Te laat',
-  today: 'Vandaag',
-  thisWeek: 'Deze week',
-  later: 'Later',
-};
-
-const initials = name => {
-  if (!name) return '?';
-  return name.split(' ').filter(Boolean).map(p => p[0].toUpperCase()).slice(0, 2).join('');
-};
-
-const colorFromString = str => {
-  // Stable pastel color from a string (gives each monteur a consistent tint)
-  if (!str) return '#9AA39E';
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) % 360;
-  return `hsl(${h}, 65%, 64%)`;
 };
 
 // ─── BADGES ─────────────────────────────────────────────────────────────────
@@ -108,10 +65,6 @@ const StatusBadge = ({ status, size }) => (
     {STATUS_LABEL[status] || status || 'Onbekend'}
   </WB2Badge>
 );
-const UrgencyBadge = ({ urgency, size }) => {
-  const tone = urgency === 'overdue' ? 'red' : urgency === 'today' ? 'green' : 'gray';
-  return <WB2Badge tone={tone} size={size}>{URGENCY_LABEL[urgency]}</WB2Badge>;
-};
 
 // ─── NEW / EDIT WERKBON MODAL ───────────────────────────────────────────────
 
@@ -123,7 +76,6 @@ function WerkbonModal({ mode, werkbon, customers, onClose, onSaved }) {
     customer_id: werkbon?.customerId || '',
     omschrijving: werkbon?.omschrijving || '',
     gepland_op: werkbon?.geplandOp || '',
-    // Strip seconds so <input type="time"> reliably pre-fills.
     starttijd: werkbon?.starttijd ? String(werkbon.starttijd).slice(0, 5) : '',
     eindtijd: werkbon?.eindtijd ? String(werkbon.eindtijd).slice(0, 5) : '',
     locatie: werkbon?.locatie || '',
@@ -237,63 +189,35 @@ function WerkbonModal({ mode, werkbon, customers, onClose, onSaved }) {
   );
 }
 
-// ─── LIST ROW ───────────────────────────────────────────────────────────────
+// ─── LIST CARD ──────────────────────────────────────────────────────────────
 
-function WerkbonRow({ w, selected, taken, materialenTotal, onClick }) {
-  const u = urgencyFor(w);
-  const total = taken?.length || 0;
-  const done = (taken || []).filter(t => t.afgerond).length;
+function WerkbonListCard({ w, takenCount, onClick }) {
+  const { total = 0, done = 0 } = takenCount || {};
   const pct = total ? Math.round((done / total) * 100) : 0;
-  const monteurInitial = initials(w.assignedName);
-  const monteurColor = colorFromString(w.assignedName);
-  const shortId = `WB-${String(w.id || '').slice(0, 4).toUpperCase()}`;
-
   return (
-    <button
-      className={`wb2-row${selected ? ' selected' : ''}`}
-      onClick={onClick}
-      type="button"
-    >
-      <div className={`wb2-row-stripe ${u}`} />
-      <div className="wb2-row-main">
-        <div className="wb2-row-meta">
-          <span className="wb2-row-id">{shortId}</span>
-          <StatusBadge status={w.status} size="sm" />
-          {u === 'overdue' && <UrgencyBadge urgency="overdue" size="sm" />}
-          {u === 'today' && w.status !== 'in_uitvoering' && <UrgencyBadge urgency="today" size="sm" />}
-        </div>
-        <div className="wb2-row-title">{w.titel || '—'}</div>
-        <div className="wb2-row-sub">
-          {w.customerName && (
-            <span>{I.cust}<span>{w.customerName}</span></span>
-          )}
-          {w.locatie && (
-            <span>{I.map}<span>{w.locatie}</span></span>
-          )}
-        </div>
+    <button className="wb2-list-card" onClick={onClick} type="button">
+      <div className="wb2-list-card-row1">
+        <div className="wb2-list-card-titel">{w.titel || '—'}</div>
+        <StatusBadge status={w.status} size="sm" />
       </div>
-      <div className="wb2-row-right">
-        <div className="wb2-row-when">
-          {I.cal}
-          <span className={`wb2-date${u === 'overdue' ? ' overdue' : ''}`}>{relativeDate(w.geplandOp)}</span>
-          {(w.starttijd || w.eindtijd) && (
-            <span className="wb2-time">{fmtTime(w.starttijd)}{w.starttijd && w.eindtijd ? '–' : ''}{fmtTime(w.eindtijd)}</span>
-          )}
-        </div>
-        <div className="wb2-row-progress">
-          <div className="wb2-row-tasks" title={`${done}/${total} taken`}>
-            {I.check}{done}/{total}
-            <div className="wb2-bar"><span className={pct === 100 ? 'full' : ''} style={{ width: `${pct}%` }} /></div>
-          </div>
-          <div className="wb2-row-material" title="Materiaal">
-            {materialenTotal > 0 ? fmtEur(materialenTotal) : '—'}
-          </div>
-          {w.assignedName && (
-            <div className="wb2-monteur" title={w.assignedName} style={{ background: monteurColor }}>
-              {monteurInitial}
-            </div>
-          )}
-        </div>
+      {w.customerName && <div className="wb2-list-card-customer">{w.customerName}</div>}
+      {w.locatie && (
+        <div className="wb2-list-card-loc">{I.map} {w.locatie}</div>
+      )}
+      <div className="wb2-list-card-footer">
+        {w.geplandOp && (
+          <span className="wb2-list-card-date">
+            {I.cal} {shortDate(w.geplandOp)}{w.starttijd ? ` · ${fmtTime(w.starttijd)}` : ''}
+          </span>
+        )}
+        {total > 0 && (
+          <span className="wb2-list-card-tasks">
+            {I.check} {done}/{total}
+            <span className="wb2-list-card-bar">
+              <span className="wb2-list-card-bar-fill" style={{ width: `${pct}%` }} />
+            </span>
+          </span>
+        )}
       </div>
     </button>
   );
@@ -310,7 +234,6 @@ function HoursQuickAdd({ werkbon, customers, onSaved }) {
   const [eind, setEind] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Reset when werkbon changes
   useEffect(() => {
     setStart('');
     setEind('');
@@ -376,7 +299,6 @@ function HoursQuickAdd({ werkbon, customers, onSaved }) {
             className="wb2-hours-input"
             value={start}
             onChange={e => setStart(e.target.value)}
-            placeholder="—"
           />
         </div>
         <div className="wb2-hours-field">
@@ -386,7 +308,6 @@ function HoursQuickAdd({ werkbon, customers, onSaved }) {
             className="wb2-hours-input"
             value={eind}
             onChange={e => setEind(e.target.value)}
-            placeholder="—"
           />
         </div>
       </div>
@@ -581,49 +502,165 @@ function MaterialenSection({ materialen, onAdd, onDelete }) {
   );
 }
 
-// ─── HOURS LIST (registered for this werkbon) ───────────────────────────────
+// ─── FOTO SECTION ───────────────────────────────────────────────────────────
 
-function UrenListSection({ uren }) {
-  if (uren.length === 0) {
-    return (
-      <div className="wb2-card">
-        <div className="wb2-card-hd"><div className="wb2-card-hd-title">Geregistreerde uren</div></div>
-        <div className="wb2-card-body" style={{ color: 'var(--dl)', fontSize: 13 }}>
-          Nog geen uren geboekt op deze werkbon.
-        </div>
-      </div>
-    );
-  }
-  const totalArbeid = uren.filter(u => u.type === 'arbeid').reduce((s, u) => s + u.uren, 0);
-  const totalReis = uren.filter(u => u.type === 'reiskosten').reduce((s, u) => s + u.uren, 0);
+const FOTO_CATS = [
+  { key: 'voor',    label: 'Voor',    color: '#2563EB', bg: '#EFF4FF' },
+  { key: 'tijdens', label: 'Tijdens', color: '#D97706', bg: '#FFF7E6' },
+  { key: 'na',      label: 'Na',      color: '#0F7A3F', bg: '#E8FBEF' },
+];
+
+function FotoSection({ fotos, onUpload, onDelete }) {
+  const inputRefs = useRef({});
+  const [uploading, setUploading] = useState({});
+
+  const handleFileChange = async (cat, e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setUploading(u => ({ ...u, [cat]: true }));
+    try { await onUpload(file, cat); }
+    finally { setUploading(u => ({ ...u, [cat]: false })); }
+  };
 
   return (
     <div className="wb2-card">
-      <div className="wb2-card-hd">
-        <div className="wb2-card-hd-title">Geregistreerde uren</div>
-        <div className="wb2-card-hd-spacer" />
-        <span style={{ fontSize: 12, color: 'var(--dl)' }}>
-          {totalArbeid.toFixed(2).replace('.', ',')}u arbeid
-          {totalReis > 0 && <> · {totalReis.toFixed(2).replace('.', ',')}u reis</>}
-        </span>
-      </div>
+      <div className="wb2-card-hd"><div className="wb2-card-hd-title">Foto's · {fotos.length}</div></div>
       <div className="wb2-card-body">
-        {uren.map(u => (
-          <div key={u.id} className="wb2-uren-item">
-            <div className={`wb2-uren-ic${u.type === 'reiskosten' ? ' travel' : ''}`}>
-              {u.type === 'reiskosten' ? I.map : I.clock}
-            </div>
-            <div className="wb2-uren-main">
-              <div className="wb2-uren-title">
-                {u.type === 'reiskosten' ? 'Reiskosten' : 'Arbeid'} · {shortDate(u.datum)}
+        <div className="wb2-foto-cats">
+          {FOTO_CATS.map(cat => {
+            const catFotos = fotos.filter(f => f.categorie === cat.key);
+            return (
+              <div key={cat.key} className="wb2-foto-cat">
+                <div className="wb2-foto-cat-hd">
+                  <span className="wb2-foto-cat-label" style={{ color: cat.color }}>{cat.label}</span>
+                  {catFotos.length > 0 && (
+                    <span className="wb2-foto-cat-count" style={{ background: cat.bg, color: cat.color }}>{catFotos.length}</span>
+                  )}
+                </div>
+                <div className="wb2-foto-thumb-row">
+                  {catFotos.map(f => (
+                    <div key={f.id} className="wb2-foto-thumb">
+                      <a href={f.url} target="_blank" rel="noopener noreferrer">
+                        <img src={f.url} alt={cat.label} loading="lazy" />
+                      </a>
+                      <button className="wb2-foto-thumb-del" onClick={() => onDelete(f)} title="Verwijderen">×</button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  className="wb2-foto-upload-btn"
+                  disabled={uploading[cat.key]}
+                  onClick={() => inputRefs.current[cat.key]?.click()}
+                >
+                  {I.camera} {uploading[cat.key] ? 'Uploaden…' : 'Foto toevoegen'}
+                </button>
+                <input
+                  ref={el => { inputRefs.current[cat.key] = el; }}
+                  type="file" accept="image/*" capture="environment" hidden
+                  onChange={e => handleFileChange(cat.key, e)}
+                />
               </div>
-              <div className="wb2-uren-sub">{u.notitie || u.medewerkerNaam || '—'}</div>
-            </div>
-            <div className="wb2-uren-time">
-              {u.startTijd && u.eindTijd ? `${fmtTime(u.startTijd)}–${fmtTime(u.eindTijd)}` : `${u.uren.toFixed(2).replace('.', ',')}u`}
-            </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MEERWERK SECTION ────────────────────────────────────────────────────────
+
+function MeerwerkSection({ meerwerk, onAdd, onDelete }) {
+  const [form, setForm] = useState({ omschrijving: '', prijs: '' });
+  const [adding, setAdding] = useState(false);
+
+  const total = meerwerk.reduce((s, m) => s + Number(m.prijs || 0), 0);
+
+  const submit = async () => {
+    if (!form.omschrijving.trim()) return;
+    setAdding(true);
+    try {
+      await onAdd({ omschrijving: form.omschrijving.trim(), prijs: Number(form.prijs) || 0 });
+      setForm({ omschrijving: '', prijs: '' });
+    } finally { setAdding(false); }
+  };
+
+  return (
+    <div className="wb2-card">
+      <div className="wb2-card-hd"><div className="wb2-card-hd-title">Meerwerk</div></div>
+      <div className="wb2-card-body">
+        {meerwerk.length === 0 && (
+          <div style={{ color: 'var(--dl)', fontSize: 13, padding: '6px 0 10px' }}>
+            Geen meerwerk geregistreerd.
+          </div>
+        )}
+        {meerwerk.map(m => (
+          <div key={m.id} className="wb2-meerwerk-item">
+            <div className="wb2-meerwerk-omschr">{m.omschrijving}</div>
+            <span className="wb2-meerwerk-akkoord">Klant akkoord gevraagd</span>
+            <div className="wb2-meerwerk-prijs">{fmtEur(m.prijs)}</div>
+            <button className="wb2-taak-del" onClick={() => onDelete(m)}>{I.trash}</button>
           </div>
         ))}
+        {meerwerk.length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, paddingTop: 10, borderTop: '1px solid #EFF2EF', marginTop: 2 }}>
+            <span style={{ fontSize: 12, color: 'var(--dl)' }}>Totaal meerwerk</span>
+            <span style={{ fontWeight: 700, fontSize: 16, fontVariantNumeric: 'tabular-nums' }}>{fmtEur(total)}</span>
+          </div>
+        )}
+        <div className="wb2-meerwerk-add">
+          <input
+            type="text" placeholder="Omschrijving meerwerk…"
+            value={form.omschrijving}
+            onChange={e => setForm(f => ({ ...f, omschrijving: e.target.value }))}
+            onKeyDown={e => e.key === 'Enter' && submit()}
+          />
+          <input
+            type="number" min="0" step="0.01" placeholder="€ 0,00"
+            value={form.prijs}
+            onChange={e => setForm(f => ({ ...f, prijs: e.target.value }))}
+            style={{ width: 110 }}
+          />
+          <button className="btn btn-s btn-sm" onClick={submit} disabled={adding || !form.omschrijving.trim()}>
+            {I.plus} Toevoegen
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── NOTITIES SECTION ────────────────────────────────────────────────────────
+
+function NotitiesSection({ notities, onSave }) {
+  const [value, setValue] = useState(notities || '');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setValue(notities || ''); }, [notities]);
+
+  const save = async () => {
+    setSaving(true);
+    try { await onSave(value); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="wb2-card">
+      <div className="wb2-card-hd"><div className="wb2-card-hd-title">Notities uitvoerder</div></div>
+      <div className="wb2-card-body">
+        <textarea
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          placeholder="Bijzonderheden, bevindingen, aandachtspunten voor de baas…"
+          rows={4}
+          style={{ width: '100%', resize: 'vertical', borderRadius: 10, border: '1px solid var(--br)', padding: '10px 12px', fontSize: 13.5, fontFamily: 'inherit', lineHeight: 1.6, outline: 'none' }}
+        />
+        <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+          <button className="btn btn-s btn-sm" onClick={save} disabled={saving}>
+            {saving ? 'Opslaan…' : 'Notities opslaan'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -640,32 +677,25 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed } = {}) {
   const [err, setErr] = useState('');
   const [werkbonnen, setWerkbonnen] = useState([]);
   const [customers, setCustomers] = useState([]);
-  const [counts, setCounts] = useState({ all: 0, gepland: 0, in_uitvoering: 0, afgerond: 0 });
+  const [takenCounts, setTakenCounts] = useState({});
 
-  // Per-werkbon lightweight aggregates (taken count, materiaal total) so the
-  // list rows can show progress + euro without fetching detail data for each.
-  const [aggregates, setAggregates] = useState({}); // { [id]: { taken: [...], materialenTotal: n } }
-
-  // Detail panel state — heavier data only loaded when a werkbon is selected
+  // 'list' | 'detail'
+  const [view, setView] = useState('list');
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
   const [taken, setTaken] = useState([]);
   const [materialen, setMaterialen] = useState([]);
   const [uren, setUren] = useState([]);
+  const [fotos, setFotos] = useState([]);
+  const [meerwerk, setMeerwerk] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [showHoursAdd, setShowHoursAdd] = useState(false);
 
-  // Filters
   const [statusFilter, setStatusFilter] = useState('all');
-  const [dateFilter, setDateFilter] = useState('all');
   const [search, setSearch] = useState('');
 
-  // Modals
   const [showNew, setShowNew] = useState(false);
   const [editWerkbon, setEditWerkbon] = useState(null);
-
-  // Hidden file input for "Foto toevoegen" action — kept simple (no upload
-  // pipeline yet); selecting a file just acknowledges the choice.
-  const photoRef = useRef(null);
 
   // ── LOAD ────────────────────────────────────────────────────────────────
 
@@ -673,23 +703,14 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed } = {}) {
     setLoading(true);
     setErr('');
     try {
-      const [list, cs] = await Promise.all([
+      const [list, cs, tc] = await Promise.all([
         getWerkbonnen(),
         listCustomers().catch(() => []),
+        getAllWerkbonTakenCounts().catch(() => ({})),
       ]);
       setWerkbonnen(list);
       setCustomers(cs);
-      setCounts({
-        all: list.length,
-        gepland: list.filter(w => w.status === 'gepland').length,
-        in_uitvoering: list.filter(w => w.status === 'in_uitvoering').length,
-        afgerond: list.filter(w => w.status === 'afgerond').length,
-      });
-      // Preselect first or first in-progress werkbon
-      if (list.length && !selectedId) {
-        const preferred = list.find(w => w.status === 'in_uitvoering') || list[0];
-        setSelectedId(preferred.id);
-      }
+      setTakenCounts(tc);
     } catch (e) {
       setErr(e.message || 'Werkbonnen laden mislukt');
     } finally {
@@ -699,118 +720,102 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed } = {}) {
 
   useEffect(() => { loadList(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Deep-open from navIntent
   useEffect(() => {
     if (!preOpenWerkbonId || loading) return;
     if (werkbonnen.some(w => w.id === preOpenWerkbonId)) {
-      setSelectedId(preOpenWerkbonId);
+      openDetail(preOpenWerkbonId);
       onNavConsumed?.();
     }
   }, [preOpenWerkbonId, loading, werkbonnen]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load detail when selection changes
   useEffect(() => {
     if (!selectedId) { setDetail(null); return; }
     let alive = true;
     setDetailLoading(true);
+    setShowHoursAdd(false);
     Promise.all([
       getWerkbonById(selectedId).catch(() => null),
       getWerkbonTaken(selectedId).catch(() => []),
       getWerkbonMaterialen(selectedId).catch(() => []),
       getUrenregistratie({ werkbonId: selectedId }).catch(() => []),
-    ]).then(([w, t, m, u]) => {
+      getWerkbonFotos(selectedId).catch(() => []),
+      getWerkbonMeerwerk(selectedId).catch(() => []),
+    ]).then(([w, t, m, u, f, mw]) => {
       if (!alive) return;
       setDetail(w);
       setTaken(t);
       setMaterialen(m);
       setUren(u);
-      // Update aggregate cache for this id
-      setAggregates(prev => ({
+      setFotos(f);
+      setMeerwerk(mw);
+      setTakenCounts(prev => ({
         ...prev,
-        [selectedId]: {
-          taken: t.map(x => ({ afgerond: x.afgerond })),
-          materialenTotal: m.reduce((s, x) => s + (x.subtotaal || x.aantal * x.prijsPer || 0), 0),
-        },
+        [selectedId]: { total: t.length, done: t.filter(x => x.afgerond).length },
       }));
     }).finally(() => { if (alive) setDetailLoading(false); });
     return () => { alive = false; };
   }, [selectedId]);
 
-  // ── FILTER ──────────────────────────────────────────────────────────────
+  const openDetail = id => { setSelectedId(id); setView('detail'); };
+  const goBack = () => setView('list');
+
+  // ── DERIVED ─────────────────────────────────────────────────────────────
+
+  const counts = useMemo(() => ({
+    all: werkbonnen.length,
+    gepland: werkbonnen.filter(w => w.status === 'gepland').length,
+    in_uitvoering: werkbonnen.filter(w => w.status === 'in_uitvoering').length,
+    afgerond: werkbonnen.filter(w => w.status === 'afgerond').length,
+  }), [werkbonnen]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return werkbonnen.filter(w => {
       if (statusFilter !== 'all' && w.status !== statusFilter) return false;
-      const u = urgencyFor(w);
-      if (dateFilter === 'today' && !(u === 'today' || u === 'overdue')) return false;
-      if (dateFilter === 'overdue' && u !== 'overdue') return false;
-      if (dateFilter === 'week' && u === 'later') return false;
       if (!q) return true;
-      const hay = `${w.titel} ${w.customerName} ${w.locatie}`.toLowerCase();
-      return hay.includes(q);
+      return `${w.titel} ${w.customerName} ${w.locatie}`.toLowerCase().includes(q);
     });
-  }, [werkbonnen, statusFilter, dateFilter, search]);
-
-  // KPIs (use full list, not filtered)
-  const kpi = useMemo(() => {
-    const t = TODAY();
-    const overdue = werkbonnen.filter(w => urgencyFor(w) === 'overdue' && w.status !== 'afgerond');
-    const today = werkbonnen.filter(w => w.geplandOp === t && w.status !== 'afgerond');
-    const inProgress = werkbonnen.filter(w => w.status === 'in_uitvoering');
-    // "Afgerond deze week" — within last 7 days based on gepland_op
-    const lastWeek = new Date(); lastWeek.setDate(lastWeek.getDate() - 7);
-    const lastWeekStr = lastWeek.toISOString().slice(0, 10);
-    const doneThisWeek = werkbonnen.filter(w => w.status === 'afgerond' && w.geplandOp && w.geplandOp >= lastWeekStr);
-    return { today: today.length, overdue: overdue.length, inProgress: inProgress.length, doneThisWeek: doneThisWeek.length };
-  }, [werkbonnen]);
+  }, [werkbonnen, statusFilter, search]);
 
   // ── DETAIL ACTIONS ──────────────────────────────────────────────────────
 
-  const refreshAggregateForId = async id => {
-    try {
-      const [t, m] = await Promise.all([
-        getWerkbonTaken(id).catch(() => []),
-        getWerkbonMaterialen(id).catch(() => []),
-      ]);
-      setAggregates(prev => ({
-        ...prev,
-        [id]: {
-          taken: t.map(x => ({ afgerond: x.afgerond })),
-          materialenTotal: m.reduce((s, x) => s + (x.subtotaal || x.aantal * x.prijsPer || 0), 0),
-        },
-      }));
-    } catch { /* ignore */ }
+  const refreshTakenCountForCurrent = newTaken => {
+    if (!selectedId) return;
+    setTakenCounts(prev => ({
+      ...prev,
+      [selectedId]: { total: newTaken.length, done: newTaken.filter(x => x.afgerond).length },
+    }));
   };
 
   const handleToggleTaak = async t => {
     try {
       const updated = await toggleWerkbonTaak(t.id, !t.afgerond);
-      setTaken(prev => prev.map(x => x.id === t.id ? updated : x));
-      refreshAggregateForId(selectedId);
+      const newTaken = taken.map(x => x.id === t.id ? updated : x);
+      setTaken(newTaken);
+      refreshTakenCountForCurrent(newTaken);
     } catch (e) {
       toast.error(e.message || 'Bijwerken mislukt');
     }
   };
+
   const handleAddTaak = async omschrijving => {
     try {
-      const created = await createWerkbonTaak({
-        werkbon_id: selectedId,
-        omschrijving,
-        volgorde: taken.length,
-      });
-      setTaken(prev => [...prev, created]);
-      refreshAggregateForId(selectedId);
+      const created = await createWerkbonTaak({ werkbon_id: selectedId, omschrijving, volgorde: taken.length });
+      const newTaken = [...taken, created];
+      setTaken(newTaken);
+      refreshTakenCountForCurrent(newTaken);
     } catch (e) {
       toast.error(e.message || 'Taak toevoegen mislukt');
     }
   };
+
   const handleDeleteTaak = async t => {
     if (!confirm(`Taak "${t.omschrijving}" verwijderen?`)) return;
     try {
       await deleteWerkbonTaak(t.id);
-      setTaken(prev => prev.filter(x => x.id !== t.id));
-      refreshAggregateForId(selectedId);
+      const newTaken = taken.filter(x => x.id !== t.id);
+      setTaken(newTaken);
+      refreshTakenCountForCurrent(newTaken);
     } catch (e) {
       toast.error(e.message || 'Verwijderen mislukt');
     }
@@ -820,50 +825,123 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed } = {}) {
     try {
       const created = await createWerkbonMateriaal({ werkbon_id: selectedId, ...input });
       setMaterialen(prev => [...prev, created]);
-      refreshAggregateForId(selectedId);
+      if (detail?.customerId && created.subtotaal > 0) {
+        createJobCost({
+          description: `Materiaal: ${created.naam}`,
+          amount: created.subtotaal,
+          category: 'Materiaal',
+          cost_date: new Date().toISOString().slice(0, 10),
+          customer_id: detail.customerId,
+        }).catch(() => {});
+      }
     } catch (e) {
       toast.error(e.message || 'Materiaal toevoegen mislukt');
     }
   };
+
   const handleDeleteMaterial = async m => {
     if (!confirm(`Materiaal "${m.naam}" verwijderen?`)) return;
     try {
       await deleteWerkbonMateriaal(m.id);
       setMaterialen(prev => prev.filter(x => x.id !== m.id));
-      refreshAggregateForId(selectedId);
     } catch (e) {
       toast.error(e.message || 'Verwijderen mislukt');
     }
   };
 
   const handleComplete = async () => {
-    if (!detail) return;
-    if (!confirm(`Werkbon "${detail.titel}" afronden?`)) return;
+    if (!detail || detail.status === 'afgerond') return;
+    if (!confirm('Weet je zeker dat je de klus wil afronden?')) return;
     try {
-      const updated = await completeWerkbon(detail.id);
+      const updated = await updateWerkbon(detail.id, {
+        status: 'afgerond',
+        afgerond_op: new Date().toISOString(),
+      });
       setDetail(updated);
       setWerkbonnen(prev => prev.map(w => w.id === updated.id ? updated : w));
-      toast.success('Werkbon afgerond');
+      toast.success('Klus afgerond!');
     } catch (e) {
       toast.error(e.message || 'Afronden mislukt');
     }
   };
 
+  const handleCycleStatus = async () => {
+    if (!detail || !canManage || detail.status === 'afgerond') return;
+    const next = detail.status === 'gepland' ? 'in_uitvoering' : 'afgerond';
+    if (next === 'afgerond' && !confirm('Weet je zeker dat je de klus wil afronden?')) return;
+    try {
+      const updated = await updateWerkbon(detail.id, {
+        status: next,
+        ...(next === 'afgerond' ? { afgerond_op: new Date().toISOString() } : {}),
+      });
+      setDetail(updated);
+      setWerkbonnen(prev => prev.map(w => w.id === updated.id ? updated : w));
+      toast.success(next === 'afgerond' ? 'Klus afgerond!' : 'Status: In uitvoering');
+    } catch (e) {
+      toast.error(e.message || 'Status bijwerken mislukt');
+    }
+  };
+
+  const handleUploadFoto = async (file, categorie) => {
+    try {
+      const created = await uploadWerkbonFoto(selectedId, file, categorie);
+      setFotos(prev => [...prev, created]);
+      toast.success('Foto opgeslagen');
+    } catch (e) {
+      toast.error(e.message || 'Upload mislukt');
+    }
+  };
+
+  const handleDeleteFoto = async foto => {
+    if (!confirm('Foto verwijderen?')) return;
+    try {
+      await deleteWerkbonFoto(foto.id, foto.url);
+      setFotos(prev => prev.filter(f => f.id !== foto.id));
+    } catch (e) {
+      toast.error(e.message || 'Verwijderen mislukt');
+    }
+  };
+
+  const handleAddMeerwerk = async input => {
+    try {
+      const created = await createWerkbonMeerwerk({ werkbon_id: selectedId, ...input });
+      setMeerwerk(prev => [...prev, created]);
+    } catch (e) {
+      toast.error(e.message || 'Meerwerk toevoegen mislukt');
+    }
+  };
+
+  const handleDeleteMeerwerk = async m => {
+    if (!confirm(`Meerwerk "${m.omschrijving}" verwijderen?`)) return;
+    try {
+      await deleteWerkbonMeerwerk(m.id);
+      setMeerwerk(prev => prev.filter(x => x.id !== m.id));
+    } catch (e) {
+      toast.error(e.message || 'Verwijderen mislukt');
+    }
+  };
+
+  const handleSaveNotities = async notities => {
+    try {
+      const updated = await updateWerkbonNotities(detail.id, notities);
+      setDetail(updated);
+      toast.success('Notities opgeslagen');
+    } catch (e) {
+      toast.error(e.message || 'Opslaan mislukt');
+    }
+  };
+
   const handlePhonePick = () => {
     if (!detail) return;
-    // Use known phone from customers list if available
     const cust = customers.find(c => c.id === detail.customerId);
     const phone = cust?.phone || '';
     if (!phone) { toast.info('Geen telefoonnummer bekend voor deze klant'); return; }
     window.location.href = `tel:${phone.replace(/\s+/g, '')}`;
   };
+
   const handleRoute = () => {
     if (!detail?.locatie) { toast.info('Geen locatie bekend voor deze werkbon'); return; }
-    const q = encodeURIComponent(detail.locatie);
-    window.open(`https://maps.google.com/?q=${q}`, '_blank', 'noopener');
-  };
-  const handlePhotoPick = () => {
-    photoRef.current?.click();
+    window.open(`https://maps.google.com/?q=${encodeURIComponent(detail.locatie)}`, '_blank', 'noopener');
   };
 
   const refreshUren = async () => {
@@ -877,12 +955,10 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed } = {}) {
   const onWerkbonSaved = saved => {
     setWerkbonnen(prev => {
       const idx = prev.findIndex(w => w.id === saved.id);
-      if (idx >= 0) {
-        const next = [...prev]; next[idx] = saved; return next;
-      }
+      if (idx >= 0) { const next = [...prev]; next[idx] = saved; return next; }
       return [saved, ...prev];
     });
-    setSelectedId(saved.id);
+    openDetail(saved.id);
   };
 
   // ── RENDER ──────────────────────────────────────────────────────────────
@@ -891,342 +967,271 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed } = {}) {
     return <div className="card card-p" style={{ textAlign: 'center', color: 'var(--dl)' }}>Werkbonnen laden…</div>;
   }
 
+  // ── DETAIL VIEW ─────────────────────────────────────────────────────────
+
+  if (view === 'detail' && selectedId) {
+    const totalArbeid = uren.filter(u => u.type === 'arbeid').reduce((s, u) => s + u.uren, 0);
+
+    return (
+      <div className="wb2-page">
+        <div className="wb2-head">
+          <button className="wb2-detail-back" onClick={goBack} type="button">
+            ← Werkbonnen
+          </button>
+          <div className="wb2-head-spacer" />
+          {canManage && (
+            <button className="btn btn-p" onClick={() => setShowNew(true)} type="button">
+              {I.plus} Nieuwe werkbon
+            </button>
+          )}
+        </div>
+
+        {detailLoading && !detail && (
+          <div className="card card-p" style={{ textAlign: 'center', color: 'var(--dl)' }}>Detail laden…</div>
+        )}
+
+        {detail && (
+          <div className="wb2-detail-page">
+            {/* Header */}
+            <div className="wb2-card">
+              <div style={{ padding: '16px 18px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <StatusBadge status={detail.status} />
+                  <div style={{ flex: 1 }} />
+                  {canManage && (
+                    <button className="btn btn-s btn-sm" onClick={() => setEditWerkbon(detail)} type="button">
+                      {I.edit} Bewerken
+                    </button>
+                  )}
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-.02em', color: 'var(--dk)', marginBottom: 3 }}>
+                  {detail.customerName || detail.titel}
+                </div>
+                {detail.customerName && (
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--dmu)', marginBottom: 6 }}>
+                    {detail.titel}
+                  </div>
+                )}
+                {detail.locatie && (
+                  <div style={{ fontSize: 13, color: 'var(--dl)', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
+                    {I.map} {detail.locatie}
+                  </div>
+                )}
+                {(detail.geplandOp || detail.starttijd) && (
+                  <div style={{ fontSize: 13, color: 'var(--dl)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    {I.cal}
+                    {detail.geplandOp ? shortDate(detail.geplandOp) : '—'}
+                    {(detail.starttijd || detail.eindtijd)
+                      ? ` · ${fmtTime(detail.starttijd) || '—'}${detail.eindtijd ? ` – ${fmtTime(detail.eindtijd)}` : ''}`
+                      : ''}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 3 action buttons */}
+            <div className="wb2-action-row">
+              <button className="wb2-action-btn" onClick={handlePhonePick} disabled={!detail.customerId} type="button">
+                <div className="wb2-action-btn-ic">{I.call}</div>
+                Bel klant
+              </button>
+              <button className="wb2-action-btn" onClick={handleRoute} disabled={!detail.locatie} type="button">
+                <div className="wb2-action-btn-ic">{I.map}</div>
+                Route
+              </button>
+              <button
+                className="wb2-action-btn"
+                onClick={handleCycleStatus}
+                disabled={!canManage || detail.status === 'afgerond'}
+                type="button"
+              >
+                <div className="wb2-action-btn-ic">{detail.status === 'gepland' ? I.flag : I.check}</div>
+                {detail.status === 'gepland' ? 'Start klus' : detail.status === 'in_uitvoering' ? 'Afronden' : 'Afgerond ✓'}
+              </button>
+            </div>
+
+            {/* Omschrijving */}
+            {(detail.omschrijving || detail.notes) && (
+              <div className="wb2-card">
+                <div className="wb2-card-hd"><div className="wb2-card-hd-title">Omschrijving</div></div>
+                <div className="wb2-card-body">
+                  {detail.omschrijving && (
+                    <div style={{ fontSize: 13.5, color: 'var(--dmu)', lineHeight: 1.6, whiteSpace: 'pre-wrap', marginBottom: detail.notes ? 10 : 0 }}>
+                      {detail.omschrijving}
+                    </div>
+                  )}
+                  {detail.notes && (
+                    <div className="wb2-note">
+                      <span className="wb2-note-ic">{I.bell}</span>
+                      <div className="wb2-note-txt"><b>Interne notitie:</b> {detail.notes}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Taken */}
+            <TakenSection taken={taken} onToggle={handleToggleTaak} onAdd={handleAddTaak} onDelete={handleDeleteTaak} />
+
+            {/* Uren met toggle voor quick-add */}
+            <div className="wb2-card">
+              <div className="wb2-card-hd">
+                <div className="wb2-card-hd-title">
+                  Uren{totalArbeid > 0 ? ` · ${totalArbeid.toFixed(1).replace('.', ',')}u` : ''}
+                </div>
+                <div className="wb2-card-hd-spacer" />
+                <button className="wb2-card-action" type="button" onClick={() => setShowHoursAdd(v => !v)}>
+                  {showHoursAdd ? 'Sluiten' : <>{I.plus} Boeken</>}
+                </button>
+              </div>
+              {showHoursAdd && (
+                <div style={{ padding: '14px 16px', borderBottom: uren.length ? '1px solid #EFF2EF' : 'none' }}>
+                  <HoursQuickAdd werkbon={detail} customers={customers} onSaved={() => { refreshUren(); setShowHoursAdd(false); }} />
+                </div>
+              )}
+              {uren.length === 0 && !showHoursAdd && (
+                <div className="wb2-card-body" style={{ color: 'var(--dl)', fontSize: 13 }}>
+                  Nog geen uren geboekt op deze werkbon.
+                </div>
+              )}
+              {uren.map(u => (
+                <div key={u.id} className="wb2-uren-item" style={{ padding: '10px 16px' }}>
+                  <div className={`wb2-uren-ic${u.type === 'reiskosten' ? ' travel' : ''}`}>
+                    {u.type === 'reiskosten' ? I.map : I.clock}
+                  </div>
+                  <div className="wb2-uren-main">
+                    <div className="wb2-uren-title">{u.type === 'reiskosten' ? 'Reiskosten' : 'Arbeid'} · {shortDate(u.datum)}</div>
+                    <div className="wb2-uren-sub">{u.notitie || u.medewerkerNaam || '—'}</div>
+                  </div>
+                  <div className="wb2-uren-time">
+                    {u.startTijd && u.eindTijd
+                      ? `${fmtTime(u.startTijd)}–${fmtTime(u.eindTijd)}`
+                      : `${u.uren.toFixed(2).replace('.', ',')}u`}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Foto's */}
+            <FotoSection fotos={fotos} onUpload={handleUploadFoto} onDelete={handleDeleteFoto} />
+
+            {/* Materialen */}
+            <MaterialenSection materialen={materialen} onAdd={handleAddMaterial} onDelete={handleDeleteMaterial} />
+
+            {/* Meerwerk */}
+            <MeerwerkSection meerwerk={meerwerk} onAdd={handleAddMeerwerk} onDelete={handleDeleteMeerwerk} />
+
+            {/* Notities */}
+            <NotitiesSection notities={detail.werkbonNotities} onSave={handleSaveNotities} />
+
+            {/* Afronden */}
+            {detail.status !== 'afgerond' && canManage && (
+              <button className="wb2-complete-btn" onClick={handleComplete} type="button">
+                {I.check} Klus afronden
+              </button>
+            )}
+            {detail.status === 'afgerond' && (
+              <button className="wb2-complete-btn done" disabled type="button">
+                {I.check} Klus afgerond
+                {detail.afgerondOp
+                  ? ` · ${new Date(detail.afgerondOp).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                  : ''}
+              </button>
+            )}
+          </div>
+        )}
+
+        {showNew && (
+          <WerkbonModal mode="new" customers={customers} onClose={() => setShowNew(false)}
+            onSaved={saved => { onWerkbonSaved(saved); loadList(); }} />
+        )}
+        {editWerkbon && (
+          <WerkbonModal mode="edit" werkbon={editWerkbon} customers={customers}
+            onClose={() => setEditWerkbon(null)}
+            onSaved={saved => { onWerkbonSaved(saved); setDetail(saved); setEditWerkbon(null); }} />
+        )}
+      </div>
+    );
+  }
+
+  // ── LIST VIEW ────────────────────────────────────────────────────────────
+
   return (
-    <div className={`wb2-page${selectedId ? ' has-selection' : ''}`}>
-      {/* Header */}
+    <div className="wb2-page">
       <div className="wb2-head">
         <div>
           <h1>Werkbonnen</h1>
-          <div className="wb2-head-sub">Plan, volg en rond werkzaamheden af</div>
           {err && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 4 }}>{err}</div>}
         </div>
         <div className="wb2-head-spacer" />
-        <span className="wb2-sync">{I.clock} Live data</span>
         {canManage && (
-          <button className="btn btn-p" onClick={() => setShowNew(true)}>
+          <button className="btn btn-p" onClick={() => setShowNew(true)} type="button">
             {I.plus} Nieuwe werkbon
           </button>
         )}
       </div>
 
-      {/* Stats */}
-      <div className="wb2-stats">
-        <div className={`wb2-sc${kpi.today > 0 ? ' accent-green' : ''}`}>
-          <div className="wb2-sc-top">{I.flag} Vandaag gepland</div>
-          <div className="wb2-sc-val">{kpi.today}</div>
-          <div className="wb2-sc-sub">{kpi.inProgress > 0 ? `${kpi.inProgress} in uitvoering` : 'Geen openstaande werkbonnen'}</div>
-        </div>
-        <div className={`wb2-sc${kpi.overdue > 0 ? ' accent-red' : ''}`}>
-          <div className="wb2-sc-top">{I.bell} Te laat</div>
-          <div className="wb2-sc-val">{kpi.overdue}</div>
-          <div className="wb2-sc-sub">{kpi.overdue > 0 ? 'Direct oppakken' : 'Geen achterstand'}</div>
-        </div>
-        <div className={`wb2-sc${kpi.inProgress > 0 ? ' accent-amber' : ''}`}>
-          <div className="wb2-sc-top">{I.trend} In uitvoering nu</div>
-          <div className="wb2-sc-val">{kpi.inProgress}</div>
-          <div className="wb2-sc-sub">{kpi.inProgress > 0 ? 'Monteurs aan het werk' : 'Geen actieve klussen'}</div>
-        </div>
-        <div className="wb2-sc">
-          <div className="wb2-sc-top">{I.check} Afgerond deze week</div>
-          <div className="wb2-sc-val">{kpi.doneThisWeek}</div>
-          <div className="wb2-sc-sub">Laatste 7 dagen</div>
-        </div>
-        <div className="wb2-sc">
-          <div className="wb2-sc-top">{I.hours} Totaal werkbonnen</div>
-          <div className="wb2-sc-val">{counts.all}</div>
-          <div className="wb2-sc-sub">{counts.gepland} gepland · {counts.afgerond} afgerond</div>
-        </div>
+      <div className="wb2-search">
+        <span>{I.search}</span>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Zoek op titel, klant of locatie…"
+        />
       </div>
 
-      {/* Filters */}
-      <div className="wb2-filter">
-        <div className="wb2-filter-row">
-          <div className="wb2-search">
-            <span>{I.search}</span>
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Zoek op titel, klant of locatie…"
-            />
-          </div>
-          <div className="wb2-chips">
-            {[
-              ['all', 'Alle', counts.all, null],
-              ['gepland', 'Gepland', counts.gepland, '#2563EB'],
-              ['in_uitvoering', 'In uitvoering', counts.in_uitvoering, '#D97706'],
-              ['afgerond', 'Afgerond', counts.afgerond, '#13a849'],
-            ].map(([id, label, c, dot]) => (
-              <button
-                key={id}
-                className={`wb2-chip${statusFilter === id ? ' active' : ''}`}
-                onClick={() => setStatusFilter(id)}
-              >
-                {dot && <span className="wb2-chip-dot" style={{ background: dot }} />}
-                {label}
-                <span className="wb2-chip-count">{c}</span>
+      <div className="wb2-chips">
+        {[
+          ['all', 'Alle', counts.all, null],
+          ['gepland', 'Gepland', counts.gepland, '#2563EB'],
+          ['in_uitvoering', 'In uitvoering', counts.in_uitvoering, '#D97706'],
+          ['afgerond', 'Afgerond', counts.afgerond, '#13a849'],
+        ].map(([id, label, c, dot]) => (
+          <button
+            key={id}
+            className={`wb2-chip${statusFilter === id ? ' active' : ''}`}
+            onClick={() => setStatusFilter(id)}
+            type="button"
+          >
+            {dot && <span className="wb2-chip-dot" style={{ background: dot }} />}
+            {label}
+            <span className="wb2-chip-count">{c}</span>
+          </button>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="wb2-empty">
+          <div className="wb2-empty-ic">{I.brief}</div>
+          <div className="wb2-empty-title">Geen werkbonnen gevonden</div>
+          <div className="wb2-empty-sub">Pas de filters aan of maak een nieuwe werkbon aan.</div>
+          <div className="wb2-empty-actions">
+            <button className="btn btn-s" onClick={() => { setSearch(''); setStatusFilter('all'); }} type="button">
+              {I.x} Filters wissen
+            </button>
+            {canManage && (
+              <button className="btn btn-p" onClick={() => setShowNew(true)} type="button">
+                {I.plus} Nieuwe werkbon
               </button>
-            ))}
+            )}
           </div>
         </div>
-        <div className="wb2-filter-row">
-          <span className="wb2-period-label">Periode</span>
-          {[
-            ['today', 'Vandaag'],
-            ['week', 'Deze week'],
-            ['overdue', 'Te laat'],
-            ['all', 'Alles'],
-          ].map(([id, label]) => (
-            <button
-              key={id}
-              className={`wb2-chip${dateFilter === id ? ' active' : ''}`}
-              onClick={() => setDateFilter(id)}
-            >{label}</button>
+      ) : (
+        <div className="wb2-cards">
+          {filtered.map(w => (
+            <WerkbonListCard
+              key={w.id}
+              w={w}
+              takenCount={takenCounts[w.id]}
+              onClick={() => openDetail(w.id)}
+            />
           ))}
-          <div style={{ flex: 1 }} />
-          <span style={{ fontSize: 12, color: 'var(--dl)' }}>{filtered.length} resultaten</span>
         </div>
-      </div>
-
-      {/* List + Detail */}
-      <div className="wb2-grid">
-        {/* LIST */}
-        <div className="wb2-list">
-          <div className="wb2-list-meta">
-            {filtered.length} werkbonnen
-            <div style={{ flex: 1 }} />
-            <span style={{ fontWeight: 500, color: 'var(--dl)' }}>
-              {Array.from(new Set(werkbonnen.filter(w => w.assignedTo).map(w => w.assignedTo))).length} monteurs actief
-            </span>
-          </div>
-          {filtered.length === 0 && (
-            <div className="wb2-empty">
-              <div className="wb2-empty-ic">{I.brief}</div>
-              <div className="wb2-empty-title">Geen werkbonnen gevonden</div>
-              <div className="wb2-empty-sub">
-                Pas de filters aan of maak een nieuwe werkbon aan.
-              </div>
-              <div className="wb2-empty-actions">
-                <button className="btn btn-s" onClick={() => { setSearch(''); setStatusFilter('all'); setDateFilter('all'); }}>
-                  {I.x} Filters wissen
-                </button>
-                {canManage && (
-                  <button className="btn btn-p" onClick={() => setShowNew(true)}>{I.plus} Nieuwe werkbon</button>
-                )}
-              </div>
-            </div>
-          )}
-          {filtered.map(w => {
-            const agg = aggregates[w.id];
-            return (
-              <WerkbonRow
-                key={w.id}
-                w={w}
-                selected={w.id === selectedId}
-                taken={agg?.taken}
-                materialenTotal={agg?.materialenTotal || 0}
-                onClick={() => setSelectedId(w.id)}
-              />
-            );
-          })}
-        </div>
-
-        {/* DETAIL */}
-        <div className="wb2-detail">
-          {!detail && !detailLoading && (
-            <div className="wb2-empty" style={{ padding: '40px 24px' }}>
-              <div className="wb2-empty-ic">{I.brief}</div>
-              <div className="wb2-empty-title">Geen werkbon geselecteerd</div>
-              <div className="wb2-empty-sub">Kies links een werkbon om de details te bekijken.</div>
-            </div>
-          )}
-          {detailLoading && !detail && (
-            <div className="card card-p" style={{ textAlign: 'center', color: 'var(--dl)' }}>Detail laden…</div>
-          )}
-          {detail && (
-            <>
-              {/* Hero */}
-              <div className="wb2-hero">
-                <div className="wb2-hero-meta">
-                  <span className="wb2-row-id">WB-{String(detail.id).slice(0, 4).toUpperCase()}</span>
-                  <StatusBadge status={detail.status} />
-                  {urgencyFor(detail) === 'overdue' && <UrgencyBadge urgency="overdue" />}
-                  <div className="wb2-hero-meta-spacer" />
-                  {canManage && (
-                    <button className="btn btn-s btn-sm" onClick={() => setEditWerkbon(detail)}>{I.edit} Bewerken</button>
-                  )}
-                </div>
-                <h2 className="wb2-hero-title">{detail.titel || '—'}</h2>
-                <div className="wb2-hero-sub">
-                  {detail.customerName || 'Geen klant'}{detail.locatie ? ` · ${detail.locatie}` : ''}
-                </div>
-
-                <div className="wb2-actions">
-                  <button className="wb2-action" onClick={handlePhonePick} disabled={!detail.customerId}>
-                    <div className="wb2-action-ic">{I.call}</div>
-                    <div className="wb2-action-label">Bel klant</div>
-                    <div className="wb2-action-sub">
-                      {customers.find(c => c.id === detail.customerId)?.phone || 'Geen nummer'}
-                    </div>
-                  </button>
-                  <button className="wb2-action" onClick={handleRoute} disabled={!detail.locatie}>
-                    <div className="wb2-action-ic">{I.map}</div>
-                    <div className="wb2-action-label">Route openen</div>
-                    <div className="wb2-action-sub">{detail.locatie ? 'Maps in nieuw tabblad' : 'Geen locatie'}</div>
-                  </button>
-                  <button className="wb2-action" onClick={handlePhotoPick}>
-                    <div className="wb2-action-ic">{I.camera}</div>
-                    <div className="wb2-action-label">Foto toevoegen</div>
-                    <div className="wb2-action-sub">Camera of upload</div>
-                  </button>
-                  <button
-                    className="wb2-action accent"
-                    onClick={() => {
-                      const el = document.querySelector('.wb2-hours');
-                      if (!el) return;
-                      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                      // Focus the first empty time input so the user can type immediately
-                      setTimeout(() => {
-                        const inputs = el.querySelectorAll('.wb2-hours-input');
-                        const empty = Array.from(inputs).find(i => !i.value) || inputs[0];
-                        empty?.focus();
-                      }, 350);
-                    }}
-                  >
-                    <div className="wb2-action-ic">{I.clock}</div>
-                    <div className="wb2-action-label">Uren boeken</div>
-                    <div className="wb2-action-sub">{uren.length} regel{uren.length === 1 ? '' : 's'} vandaag</div>
-                  </button>
-                  <button className="wb2-action" onClick={handleComplete} disabled={detail.status === 'afgerond' || !canManage}>
-                    <div className="wb2-action-ic">{I.check}</div>
-                    <div className="wb2-action-label">{detail.status === 'afgerond' ? 'Afgerond' : 'Afronden'}</div>
-                    <div className="wb2-action-sub">
-                      {taken.length ? `${taken.filter(t => t.afgerond).length}/${taken.length} taken` : 'Geen taken'}
-                    </div>
-                  </button>
-                </div>
-                <input ref={photoRef} type="file" accept="image/*" capture="environment" hidden onChange={() => toast.info('Foto-upload nog niet gekoppeld.')} />
-              </div>
-
-              {/* Two-column: details + hours */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <div className="wb2-card">
-                  <div className="wb2-card-hd"><div className="wb2-card-hd-title">Werkbon-details</div></div>
-                  <div className="wb2-card-body" style={{ paddingTop: 4 }}>
-                    <div className="wb2-info">
-                      <span className="wb2-info-ic">{I.cal}</span>
-                      <span className="wb2-info-lbl">Datum</span>
-                      <span className="wb2-info-val">
-                        {detail.geplandOp
-                          ? `${shortDate(detail.geplandOp)}${detail.starttijd || detail.eindtijd ? ` · ${fmtTime(detail.starttijd) || '—'}${detail.eindtijd ? ` – ${fmtTime(detail.eindtijd)}` : ''}` : ''}`
-                          : '—'}
-                      </span>
-                    </div>
-                    <div className="wb2-info">
-                      <span className="wb2-info-ic">{I.map}</span>
-                      <span className="wb2-info-lbl">Locatie</span>
-                      <span className="wb2-info-val">{detail.locatie || '—'}</span>
-                    </div>
-                    <div className="wb2-info">
-                      <span className="wb2-info-ic">{I.cust}</span>
-                      <span className="wb2-info-lbl">Monteur</span>
-                      <span className="wb2-info-val">
-                        {detail.assignedName ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                            <span className="wb2-monteur" style={{ background: colorFromString(detail.assignedName) }}>
-                              {initials(detail.assignedName)}
-                            </span>
-                            {detail.assignedName}
-                          </span>
-                        ) : <span style={{ color: 'var(--dl)' }}>Niet toegewezen</span>}
-                      </span>
-                    </div>
-                    <div className="wb2-info">
-                      <span className="wb2-info-ic">{I.flag}</span>
-                      <span className="wb2-info-lbl">Status</span>
-                      <span className="wb2-info-val" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                        <StatusBadge status={detail.status} />
-                        {urgencyFor(detail) === 'overdue' && <UrgencyBadge urgency="overdue" />}
-                      </span>
-                    </div>
-                    {detail.omschrijving && (
-                      <div className="wb2-omschrijving">
-                        <div className="wb2-omschrijving-lbl">Omschrijving</div>
-                        <div className="wb2-omschrijving-txt">{detail.omschrijving}</div>
-                      </div>
-                    )}
-                    {detail.notes && (
-                      <div className="wb2-note">
-                        <span className="wb2-note-ic">{I.bell}</span>
-                        <div className="wb2-note-txt"><b>Interne notitie:</b> {detail.notes}</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <HoursQuickAdd werkbon={detail} customers={customers} onSaved={refreshUren} />
-              </div>
-
-              <TakenSection
-                taken={taken}
-                onToggle={handleToggleTaak}
-                onAdd={handleAddTaak}
-                onDelete={handleDeleteTaak}
-              />
-              <MaterialenSection
-                materialen={materialen}
-                onAdd={handleAddMaterial}
-                onDelete={handleDeleteMaterial}
-              />
-              <UrenListSection uren={uren} />
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Mobile sticky action bar — visible only on narrow viewports when a werkbon is selected */}
-      {detail && (
-        <>
-          <div className="wb2-sticky-bar">
-            <button className="wb2-sticky-tile" onClick={handlePhonePick} disabled={!detail.customerId}>
-              <div className="wb2-sticky-tile-ic">{I.call}</div>
-              Bel
-            </button>
-            <button className="wb2-sticky-tile" onClick={handleRoute} disabled={!detail.locatie}>
-              <div className="wb2-sticky-tile-ic">{I.map}</div>
-              Route
-            </button>
-            <button className="wb2-sticky-tile" onClick={handlePhotoPick}>
-              <div className="wb2-sticky-tile-ic">{I.camera}</div>
-              Foto
-            </button>
-            <button className="wb2-sticky-tile accent" onClick={() => {
-              const el = document.querySelector('.wb2-hours');
-              el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }}>
-              <div className="wb2-sticky-tile-ic">{I.clock}</div>
-              Uren
-            </button>
-          </div>
-          <div className="content-bottom-pad" />
-        </>
       )}
 
       {showNew && (
-        <WerkbonModal
-          mode="new"
-          customers={customers}
-          onClose={() => setShowNew(false)}
-          onSaved={saved => { onWerkbonSaved(saved); loadList(); }}
-        />
-      )}
-      {editWerkbon && (
-        <WerkbonModal
-          mode="edit"
-          werkbon={editWerkbon}
-          customers={customers}
-          onClose={() => setEditWerkbon(null)}
-          onSaved={saved => { onWerkbonSaved(saved); setDetail(saved); }}
-        />
+        <WerkbonModal mode="new" customers={customers} onClose={() => setShowNew(false)}
+          onSaved={saved => { onWerkbonSaved(saved); loadList(); }} />
       )}
     </div>
   );

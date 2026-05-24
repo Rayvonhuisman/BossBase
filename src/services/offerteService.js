@@ -231,3 +231,8 @@ export async function deleteOfferteItem(id) {
   const { error } = await supabase.from("offerte_items").delete().eq("id", id)
   if (error) throw error
 }
+
+export async function deleteOfferteItemsByOfferteId(offerteId) {
+  const { error } = await supabase.from("offerte_items").delete().eq("offerte_id", offerteId)
+  if (error) throw error
+}

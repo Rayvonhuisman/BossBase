@@ -1,6 +1,15 @@
 import jsPDF from 'jspdf';
 
 const euro = n => `€ ${Number(n || 0).toFixed(2).replace('.', ',')}`;
+
+function hexToRgb(hex) {
+  const h = (hex || '#f97316').replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return [isNaN(r) ? 249 : r, isNaN(g) ? 115 : g, isNaN(b) ? 22 : b];
+}
+
 const fmtDate = d => {
   if (!d) return '—';
   const parts = String(d).slice(0, 10).split('-');
@@ -9,13 +18,11 @@ const fmtDate = d => {
 };
 
 const C = {
-  accent:      [234, 88, 12],
-  accentLight: [255, 237, 213],
-  dark:        [17, 24, 39],
-  gray:        [107, 114, 128],
-  light:       [249, 250, 251],
-  border:      [229, 231, 235],
-  white:       [255, 255, 255],
+  dark:   [17, 24, 39],
+  gray:   [107, 114, 128],
+  light:  [249, 250, 251],
+  border: [229, 231, 235],
+  white:  [255, 255, 255],
 };
 
 async function imgToBase64(url) {
@@ -36,6 +43,9 @@ async function imgToBase64(url) {
 async function buildPdf(doc, type, document, regels, customer, company) {
   const W = 210, M = 18, CW = W - 2 * M;
 
+  const accent = hexToRgb(company?.brandingColor);
+  const accentLight = accent.map(v => Math.round(v + (255 - v) * 0.88));
+
   const tc = (c) => doc.setTextColor(c[0], c[1], c[2]);
   const fc = (c) => doc.setFillColor(c[0], c[1], c[2]);
   const dc = (c) => doc.setDrawColor(c[0], c[1], c[2]);
@@ -53,7 +63,19 @@ async function buildPdf(doc, type, document, regels, customer, company) {
         const ext = match?.[1]?.toLowerCase();
         const fmtMap = { jpeg: 'JPEG', jpg: 'JPEG', png: 'PNG', gif: 'GIF', webp: 'WEBP' };
         const imgFmt = fmtMap[ext] || 'JPEG';
-        doc.addImage(logoData, imgFmt, M, y, 32, 16, '', 'FAST');
+        const imgDims = await new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+          img.onerror = () => resolve(null);
+          img.src = logoData;
+        });
+        if (imgDims) {
+          const maxWidth = 60, maxHeight = 30;
+          const ratio = Math.min(maxWidth / imgDims.w, maxHeight / imgDims.h);
+          const logoW = imgDims.w * ratio;
+          const logoH = imgDims.h * ratio;
+          doc.addImage(logoData, imgFmt, M, y, logoW, logoH, '', 'FAST');
+        }
       } catch {}
     }
   }
@@ -78,7 +100,7 @@ async function buildPdf(doc, type, document, regels, customer, company) {
   y = Math.max(y + 26, ry + 4);
 
   // Accentlijn
-  dc(C.accent);
+  dc(accent);
   doc.setLineWidth(0.7);
   doc.line(M, y, W - M, y);
   y += 10;
@@ -88,11 +110,18 @@ async function buildPdf(doc, type, document, regels, customer, company) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(22);
   tc(C.dark);
-  doc.text(type === 'factuur' ? 'FACTUUR' : 'OFFERTE', M, y);
+  const docTitle = document.isCredit ? 'CREDITFACTUUR' : (type === 'factuur' ? 'FACTUUR' : 'OFFERTE');
+  doc.text(docTitle, M, y);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  tc(C.gray);
+  tc(accent);
   doc.text(document.nummer || '', M, y + 7);
+  if (document.isCredit && document.creditNote) {
+    tc(C.gray);
+    doc.setFontSize(8.5);
+    doc.text(document.creditNote, M, y + 14);
+    y += 6;
+  }
   y += 18;
 
   // ── KLANT + DOCUMENT INFO (twee kolommen) ──────────────────────────────────
@@ -103,7 +132,7 @@ async function buildPdf(doc, type, document, regels, customer, company) {
   // Links: "AAN" + klantgegevens
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.5);
-  tc(C.accent);
+  tc(accent);
   doc.text('AAN', M, y);
   y += 5;
 
@@ -154,7 +183,7 @@ async function buildPdf(doc, type, document, regels, customer, company) {
   const HEADERS = ['Omschrijving', 'Aantal', 'Eenheidsprijs', 'BTW', 'Bedrag'];
 
   // Tabel header
-  fc(C.dark);
+  fc(accent);
   doc.rect(M, y, CW, ROW_H, 'F');
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
@@ -213,14 +242,14 @@ async function buildPdf(doc, type, document, regels, customer, company) {
 
   const totRow = (label, val, isFinal = false) => {
     if (isFinal) {
-      fc(C.accentLight);
+      fc(accentLight);
       doc.rect(totLeft - 4, y - 4.5, totW + 4, 8, 'F');
     }
     doc.setFont('helvetica', isFinal ? 'bold' : 'normal');
     doc.setFontSize(isFinal ? 10 : 8.5);
     tc(isFinal ? C.dark : C.gray);
     doc.text(label, totLeft, y);
-    tc(isFinal ? C.accent : C.dark);
+    tc(isFinal ? accent : C.dark);
     doc.text(val, W - M, y, { align: 'right' });
     y += 7;
   };
