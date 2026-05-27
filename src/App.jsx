@@ -14,7 +14,7 @@ import { InstellingenPage } from './pages/InstellingenPage.jsx';
 import { TeamPage } from './pages/TeamPage.jsx';
 import { OffertesPage } from './pages/OffertesPage.jsx';
 import { FacturenPage } from './pages/FacturenPage.jsx';
-import { UrenPage } from './pages/UrenPage.jsx';
+import { UrenPageV2 as UrenPage } from './pages/UrenPageV2.jsx';
 import { WerkbonPageV2 as WerkbonPage } from './pages/WerkbonPageV2.jsx';
 import { ProjectsPage } from './pages/ProjectsPage.jsx';
 import MarketingWebsite from './pages/MarketingWebsite.jsx';

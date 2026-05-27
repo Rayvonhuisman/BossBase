@@ -1,0 +1,764 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useToast } from '../lib/toast.jsx';
+import { useProfile } from '../lib/profileContext.jsx';
+import {
+  getUrenregistratie, createUrenregel, updateUrenregel, deleteUrenregel,
+} from '../services/urenService.js';
+import { listCustomers } from '../services/customerService.js';
+
+// ── Date / time helpers ─────────────────────────────────────────────────────
+const todayIso = () => new Date().toISOString().slice(0, 10);
+const fmtNL = iso => { if (!iso) return '—'; const [y, m, d] = iso.split('-'); return `${d}-${m}-${y}`; };
+const MONTHS_NL = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+const DAYS_NL = ['Zondag','Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag'];
+
+const parseIso = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const toIso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+const dayLabel = iso => {
+  const t = todayIso();
+  if (iso === t) return 'Vandaag';
+  const y = new Date(); y.setDate(y.getDate() - 1);
+  if (iso === toIso(y)) return 'Gisteren';
+  return DAYS_NL[parseIso(iso).getDay()];
+};
+
+const trimTime = t => (t ? String(t).slice(0, 5) : t);
+const fmtTimeRange = (s, e) => {
+  if (!s && !e) return '—';
+  return `${trimTime(s) || '—'} – ${trimTime(e) || '—'}`;
+};
+
+const computeUren = (start, end) => {
+  if (!start || !end) return null;
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  if ([sh, sm, eh, em].some(v => Number.isNaN(v))) return null;
+  const diff = (eh * 60 + em) - (sh * 60 + sm);
+  if (diff <= 0) return null;
+  return Math.round((diff / 60) * 100) / 100;
+};
+
+const fmtUren = n => (n == null || Number.isNaN(n)) ? '—' : Number(n).toFixed(2);
+
+// ── Period filter ───────────────────────────────────────────────────────────
+const periodRange = (period) => {
+  const now = new Date();
+  if (period === 'vandaag') return { van: toIso(now), tot: toIso(now) };
+  if (period === 'week') {
+    const wd = (now.getDay() + 6) % 7;
+    const mon = new Date(now); mon.setDate(now.getDate() - wd);
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    return { van: toIso(mon), tot: toIso(sun) };
+  }
+  if (period === 'maand') {
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return { van: toIso(first), tot: toIso(last) };
+  }
+  return {};
+};
+
+const periodLabel = p => ({ alles: 'Alle tijd', vandaag: 'Vandaag', week: 'Deze week', maand: 'Deze maand' }[p] || 'periode');
+
+// ── Avatar derivation (existing data has only medewerkerNaam string) ────────
+const initialsOf = name => (name || '').split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+const AVATAR_TINTS = ['#fde68a', '#bfdbfe', '#fecaca', '#c7d2fe', '#bbf7d0', '#fbcfe8', '#fef08a', '#a7f3d0'];
+const tintOf = name => {
+  if (!name) return '#e5e7eb';
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_TINTS[h % AVATAR_TINTS.length];
+};
+
+// ── Sort: newest datum first, then newest created_at first ──────────────────
+const sortRows = rows => [...rows].sort((a, b) => {
+  if (a.datum !== b.datum) return a.datum < b.datum ? 1 : -1;
+  const ac = a.createdAt || '', bc = b.createdAt || '';
+  return ac < bc ? 1 : -1;
+});
+
+// ── Inline icons (match design's stroke 1.75) ───────────────────────────────
+const Ic = {
+  Clock:   <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>,
+  Users:   <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 20v-2a4 4 0 0 0-3-3.87"/><path d="M15 3.13a4 4 0 0 1 0 7.75"/></svg>,
+  Trend:   <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>,
+  Plus:    <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>,
+  Edit:    <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+  Trash:   <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>,
+  Close:   <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>,
+  Chev:    <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6"/></svg>,
+  Check:   <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>,
+  Alert:   <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>,
+};
+
+// ── Small reusable bits ─────────────────────────────────────────────────────
+function TypeBadge({ type }) {
+  const cls = type === 'arbeid' ? 'uren2-badge-arbeid'
+    : type === 'reiskosten' ? 'uren2-badge-reis'
+    : 'uren2-badge-overig';
+  const label = type === 'arbeid' ? 'Arbeid' : type === 'reiskosten' ? 'Reiskosten' : 'Overig';
+  return <span className={`uren2-badge ${cls}`}>{label}</span>;
+}
+
+function Avatar({ name, size = 26 }) {
+  if (!name) {
+    return <span className="uren2-avatar uren2-avatar-empty" style={{ width: size, height: size, fontSize: size * 0.36 }}>—</span>;
+  }
+  return (
+    <span className="uren2-avatar" style={{ width: size, height: size, background: tintOf(name), fontSize: size * 0.36 }}>
+      {initialsOf(name)}
+    </span>
+  );
+}
+
+function IconBtn({ icon, title, danger, onClick }) {
+  return (
+    <button
+      type="button"
+      className={`uren2-iconbtn${danger ? ' uren2-iconbtn-danger' : ''}`}
+      title={title}
+      aria-label={title}
+      onClick={onClick}
+    >{icon}</button>
+  );
+}
+
+function PeriodTabs({ value, onChange }) {
+  const tabs = [
+    { id: 'alles', label: 'Alles' },
+    { id: 'vandaag', label: 'Vandaag' },
+    { id: 'week', label: 'Deze week' },
+    { id: 'maand', label: 'Deze maand' },
+  ];
+  return (
+    <div className="uren2-tabs" role="tablist">
+      {tabs.map(t => (
+        <button
+          key={t.id}
+          role="tab"
+          aria-selected={value === t.id}
+          className={`uren2-tab${value === t.id ? ' is-active' : ''}`}
+          onClick={() => onChange(t.id)}
+        >{t.label}</button>
+      ))}
+    </div>
+  );
+}
+
+function Dropdown({ value, options, onChange, placeholder, width, size = 'md', ariaLabel }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+  const cur = options.find(o => o.value === value);
+  return (
+    <div ref={ref} className={`uren2-dropdown ${size === 'sm' ? 'is-sm' : ''}`} style={width ? { width } : null}>
+      <button
+        type="button"
+        className="uren2-dropdown-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        onClick={() => setOpen(o => !o)}
+      >
+        <span className="uren2-dropdown-value">{cur ? cur.label : (placeholder || 'Kies…')}</span>
+        <span className={`uren2-dropdown-chev${open ? ' is-open' : ''}`}>{Ic.Chev}</span>
+      </button>
+      {open && (
+        <div className="uren2-dropdown-menu" role="listbox">
+          {options.map(o => {
+            const active = o.value === value;
+            return (
+              <button
+                key={String(o.value)}
+                role="option"
+                aria-selected={active}
+                className={`uren2-dropdown-opt${active ? ' is-active' : ''}`}
+                onClick={() => { onChange(o.value); setOpen(false); }}
+              >
+                <span className="uren2-dropdown-opt-label">{o.label}</span>
+                {active && <span className="uren2-dropdown-opt-check">{Ic.Check}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function KpiCard({ icon, label, value, unit, hint }) {
+  return (
+    <div className="uren2-kpi">
+      <div className="uren2-kpi-top">
+        <div className="uren2-kpi-icon">{icon}</div>
+        <span className="uren2-kpi-label">{label}</span>
+      </div>
+      <div className="uren2-kpi-val-row">
+        <span className="uren2-kpi-val">{value}</span>
+        {unit && <span className="uren2-kpi-unit">{unit}</span>}
+      </div>
+      {hint && <div className="uren2-kpi-hint">{hint}</div>}
+    </div>
+  );
+}
+
+function EmptyState({ message }) {
+  return (
+    <div className="uren2-empty">
+      <div className="uren2-empty-icon">{Ic.Clock}</div>
+      <p className="uren2-empty-msg">{message || 'Geen urenregistraties gevonden'}</p>
+    </div>
+  );
+}
+
+// ── Desktop table ───────────────────────────────────────────────────────────
+function UrenTable({ rows, onEdit, onDelete }) {
+  if (!rows.length) return <EmptyState />;
+  return (
+    <div className="uren2-table-wrap">
+      <table className="uren2-table">
+        <thead>
+          <tr>
+            <th className="uren2-th uren2-th-date">Datum</th>
+            <th className="uren2-th">Medewerker</th>
+            <th className="uren2-th uren2-th-type">Type</th>
+            <th className="uren2-th uren2-th-time">Start–Eind</th>
+            <th className="uren2-th uren2-th-hours">Uren</th>
+            <th className="uren2-th">Klant</th>
+            <th className="uren2-th">Notitie</th>
+            <th className="uren2-th uren2-th-actions">Acties</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.id} className="uren2-tr">
+              <td className="uren2-td uren2-td-date">{fmtNL(r.datum)}</td>
+              <td className="uren2-td">
+                {r.medewerkerNaam ? (
+                  <span className="uren2-md">
+                    <Avatar name={r.medewerkerNaam} size={26} />
+                    <span>{r.medewerkerNaam}</span>
+                  </span>
+                ) : <span className="uren2-muted">—</span>}
+              </td>
+              <td className="uren2-td"><TypeBadge type={r.type} /></td>
+              <td className={`uren2-td uren2-td-time${r.startTijd ? '' : ' uren2-muted'}`}>
+                {fmtTimeRange(r.startTijd, r.eindTijd)}
+              </td>
+              <td className="uren2-td uren2-td-hours">{fmtUren(r.uren)}</td>
+              <td className={`uren2-td${r.customerName ? '' : ' uren2-muted'}`}>{r.customerName || '—'}</td>
+              <td className="uren2-td uren2-td-note">
+                <div className="uren2-note-ellipsis" title={r.notitie || ''}>{r.notitie || '—'}</div>
+              </td>
+              <td className="uren2-td uren2-td-actions">
+                <span className="uren2-row-actions">
+                  <IconBtn icon={Ic.Edit} title="Bewerken" onClick={() => onEdit(r)} />
+                  <IconBtn icon={Ic.Trash} title="Verwijderen" danger onClick={() => onDelete(r)} />
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── Mobile stacked cards (grouped by date) ──────────────────────────────────
+function MobileList({ rows, onEdit, onDelete }) {
+  if (!rows.length) return <EmptyState />;
+  const groups = useMemo(() => {
+    const map = new Map();
+    for (const r of rows) {
+      if (!map.has(r.datum)) map.set(r.datum, []);
+      map.get(r.datum).push(r);
+    }
+    return [...map.entries()]
+      .sort((a, b) => a[0] < b[0] ? 1 : -1)
+      .map(([datum, items]) => ({
+        datum,
+        items,
+        totalUren: items.reduce((s, r) => s + (Number(r.uren) || 0), 0),
+      }));
+  }, [rows]);
+
+  return (
+    <div className="uren2-mlist">
+      {groups.map(g => (
+        <div key={g.datum} className="uren2-mgroup">
+          <div className="uren2-mgroup-hd">
+            <span className="uren2-mgroup-day">
+              {dayLabel(g.datum)} <span className="uren2-mgroup-date">{fmtNL(g.datum)}</span>
+            </span>
+            <span className="uren2-mgroup-total">{g.totalUren.toFixed(2)} uur</span>
+          </div>
+          {g.items.map(r => (
+            <div key={r.id} className="uren2-mcard">
+              <div className="uren2-mcard-top">
+                <div className="uren2-mcard-md">
+                  <Avatar name={r.medewerkerNaam} size={32} />
+                  <div className="uren2-mcard-md-text">
+                    <div className={`uren2-mcard-name${r.medewerkerNaam ? '' : ' uren2-muted'}`}>
+                      {r.medewerkerNaam || '—'}
+                    </div>
+                    <div className="uren2-mcard-badge"><TypeBadge type={r.type} /></div>
+                  </div>
+                </div>
+                <div className="uren2-mcard-hrs">
+                  <div className="uren2-mcard-hrs-val">{fmtUren(r.uren)}</div>
+                  <div className="uren2-mcard-hrs-unit">uur</div>
+                </div>
+              </div>
+              <div className="uren2-mcard-meta">
+                <span>{fmtTimeRange(r.startTijd, r.eindTijd)}</span>
+                <span className={r.customerName ? '' : 'uren2-muted'}>{r.customerName || '—'}</span>
+              </div>
+              {r.notitie && <div className="uren2-mcard-note">{r.notitie}</div>}
+              <div className="uren2-mcard-actions">
+                <IconBtn icon={Ic.Edit} title="Bewerken" onClick={() => onEdit(r)} />
+                <IconBtn icon={Ic.Trash} title="Verwijderen" danger onClick={() => onDelete(r)} />
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Modal shell ─────────────────────────────────────────────────────────────
+function ModalShell({ open, onClose, busy, mobile, children, maxWidth = 640 }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = e => { if (e.key === 'Escape' && !busy) onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose, busy]);
+  if (!open) return null;
+  return (
+    <div
+      className={`uren2-overlay${mobile ? ' is-mobile' : ''}`}
+      onMouseDown={e => { if (e.target === e.currentTarget && !busy) onClose(); }}
+    >
+      <div
+        className={`uren2-modal${mobile ? ' is-mobile' : ''}`}
+        style={{ maxWidth: mobile ? '100%' : maxWidth }}
+        role="dialog"
+        aria-modal="true"
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── Register / Edit modal ───────────────────────────────────────────────────
+function UrenModal({ open, mode, initial, klanten, profiles, onClose, onSave, mobile }) {
+  const empty = useMemo(() => ({
+    datum: todayIso(),
+    type: 'arbeid',
+    start_tijd: '',
+    eind_tijd: '',
+    customer_id: '',
+    notitie: '',
+  }), []);
+  const [form, setForm] = useState(empty);
+  const [touched, setTouched] = useState({});
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    if (initial) {
+      setForm({
+        datum: initial.datum || todayIso(),
+        type: initial.type || 'arbeid',
+        start_tijd: trimTime(initial.startTijd) || '',
+        eind_tijd: trimTime(initial.eindTijd) || '',
+        customer_id: initial.customerId || '',
+        notitie: initial.notitie || '',
+      });
+    } else {
+      setForm(empty);
+    }
+    setTouched({});
+    setBusy(false);
+  }, [open, initial, empty]);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const hint = computeUren(form.start_tijd, form.eind_tijd);
+  const datumInvalid = touched.datum && !form.datum;
+  const timeInvalid = form.start_tijd && form.eind_tijd && hint === null;
+  const canSave = !!form.datum && !busy && !timeInvalid;
+
+  const submit = async () => {
+    setTouched(t => ({ ...t, datum: true }));
+    if (!form.datum || timeInvalid) return;
+    setBusy(true);
+    try {
+      await onSave(form);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = e => {
+      if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && canSave) {
+        e.preventDefault();
+        submit();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  const klantOptions = [{ value: '', label: 'Geen klant' }, ...klanten.map(k => ({ value: k.id, label: k.name }))];
+  const typeOptions = [
+    { value: 'arbeid', label: 'Arbeid' },
+    { value: 'reiskosten', label: 'Reiskosten' },
+    { value: 'overig', label: 'Overig' },
+  ];
+
+  const editMedewerker = initial?.medewerkerNaam || '—';
+
+  return (
+    <ModalShell open={open} onClose={onClose} busy={busy} mobile={mobile}>
+      <div className="uren2-modal-hd">
+        {mobile && <div className="uren2-modal-grabber" />}
+        <div className="uren2-modal-title-wrap">
+          <h2 className="uren2-modal-title">{mode === 'edit' ? 'Uren bewerken' : 'Uren registreren'}</h2>
+          <p className="uren2-modal-sub">
+            {mode === 'edit' ? `Medewerker: ${editMedewerker}` : 'Nieuwe urenregistratie toevoegen'}
+          </p>
+        </div>
+        <IconBtn icon={Ic.Close} title="Sluiten" onClick={() => !busy && onClose()} />
+      </div>
+
+      <div className="uren2-modal-body">
+        <div className="uren2-form">
+          <div className="uren2-field">
+            <label className="uren2-label" htmlFor="uren2-datum">Datum <span className="uren2-req">*</span></label>
+            <input
+              id="uren2-datum"
+              type="date"
+              className={`uren2-input${datumInvalid ? ' is-invalid' : ''}`}
+              value={form.datum}
+              onChange={e => set('datum', e.target.value)}
+              onBlur={() => setTouched(t => ({ ...t, datum: true }))}
+            />
+            {datumInvalid && <div className="uren2-error">Datum is verplicht</div>}
+          </div>
+          <div className="uren2-field">
+            <label className="uren2-label">Type</label>
+            <Dropdown value={form.type} options={typeOptions} onChange={v => set('type', v)} ariaLabel="Type" />
+          </div>
+
+          <div className="uren2-field">
+            <label className="uren2-label" htmlFor="uren2-start">Starttijd</label>
+            <input
+              id="uren2-start"
+              type="time"
+              className="uren2-input"
+              value={form.start_tijd}
+              onChange={e => set('start_tijd', e.target.value)}
+            />
+          </div>
+          <div className="uren2-field">
+            <label className="uren2-label" htmlFor="uren2-eind">Eindtijd</label>
+            <input
+              id="uren2-eind"
+              type="time"
+              className={`uren2-input${timeInvalid ? ' is-invalid' : ''}`}
+              value={form.eind_tijd}
+              onChange={e => set('eind_tijd', e.target.value)}
+            />
+            {hint !== null && <div className="uren2-hint">≈ {hint.toFixed(2)} uur</div>}
+            {timeInvalid && <div className="uren2-error">Eindtijd moet later zijn dan starttijd</div>}
+          </div>
+
+          <div className="uren2-field uren2-field-full">
+            <label className="uren2-label">Klant</label>
+            <Dropdown value={form.customer_id} options={klantOptions} onChange={v => set('customer_id', v)} ariaLabel="Klant" />
+          </div>
+
+          <div className="uren2-field uren2-field-full">
+            <label className="uren2-label" htmlFor="uren2-notitie">Notitie</label>
+            <textarea
+              id="uren2-notitie"
+              className="uren2-textarea"
+              rows={2}
+              value={form.notitie}
+              onChange={e => set('notitie', e.target.value)}
+              placeholder="Optionele notitie..."
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className={`uren2-modal-ft${mobile ? ' is-mobile' : ''}`}>
+        <button
+          type="button"
+          className={`uren2-btn ${mobile ? 'uren2-btn-secondary' : 'uren2-btn-ghost'}`}
+          onClick={onClose}
+          disabled={busy}
+        >Annuleren</button>
+        <button
+          type="button"
+          className="uren2-btn uren2-btn-primary"
+          onClick={submit}
+          disabled={!canSave}
+        >{busy ? 'Opslaan…' : 'Opslaan'}</button>
+      </div>
+    </ModalShell>
+  );
+}
+
+// ── Page ────────────────────────────────────────────────────────────────────
+export function UrenPageV2() {
+  const toast = useToast();
+  const { profile } = useProfile();
+  const [allRows, setAllRows] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const [period, setPeriod] = useState('alles');
+  const [employee, setEmployee] = useState('all');
+
+  const [modal, setModal] = useState(null);            // { mode: 'register'|'edit', initial }
+  const [confirmRow, setConfirmRow] = useState(null);
+
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 767);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= 767);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  // Initial load: fetch all rows + customers
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    Promise.all([getUrenregistratie(), listCustomers()])
+      .then(([r, c]) => { if (!alive) return; setAllRows(r); setCustomers(c); setError(''); })
+      .catch(err => { if (!alive) return; setError(err.message || 'Laden mislukt'); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, []);
+
+  // Period-filtered rows (client-side, on already-loaded data)
+  const rowsPeriod = useMemo(() => {
+    if (period === 'alles') return allRows;
+    const { van, tot } = periodRange(period);
+    return allRows.filter(r => {
+      const d = r.datum;
+      return d && d >= van && d <= tot;
+    });
+  }, [allRows, period]);
+
+  // KPI: counts over period (NOT employee)
+  const kpis = useMemo(() => {
+    const totaal = rowsPeriod.reduce((s, r) => s + (Number(r.uren) || 0), 0);
+    const medewerkers = new Set(rowsPeriod.map(r => r.profileId).filter(Boolean)).size;
+    const dagen = new Set(rowsPeriod.map(r => r.datum)).size;
+    const gemPerDag = dagen ? totaal / dagen : 0;
+    return {
+      totaal: Math.round(totaal * 100) / 100,
+      medewerkers,
+      gemPerDag: Math.round(gemPerDag * 100) / 100,
+      dagen,
+    };
+  }, [rowsPeriod]);
+
+  // Visible rows: period + employee + sort
+  const visible = useMemo(() => {
+    let xs = rowsPeriod;
+    if (employee !== 'all') xs = xs.filter(r => r.profileId === employee);
+    return sortRows(xs);
+  }, [rowsPeriod, employee]);
+
+  // Employee options: unique medewerkers from current period, alphabetical
+  const employeeOptions = useMemo(() => {
+    const seen = new Map();
+    for (const r of allRows) {
+      if (r.profileId && r.medewerkerNaam && !seen.has(r.profileId)) seen.set(r.profileId, r.medewerkerNaam);
+    }
+    const opts = [...seen.entries()]
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([id, name]) => ({ value: id, label: name }));
+    return [{ value: 'all', label: 'Alle medewerkers' }, ...opts];
+  }, [allRows]);
+
+  // Save handler (works for both register + edit)
+  const handleSave = async (form) => {
+    const payload = {
+      datum: form.datum,
+      start_tijd: form.start_tijd || null,
+      eind_tijd: form.eind_tijd || null,
+      type: form.type,
+      customer_id: form.customer_id || null,
+      notitie: form.notitie || null,
+    };
+    try {
+      if (modal.mode === 'edit' && modal.initial) {
+        const saved = await updateUrenregel(modal.initial.id, payload);
+        setAllRows(rs => rs.map(r => r.id === saved.id ? saved : r));
+        toast.success('Uren opgeslagen');
+      } else {
+        const saved = await createUrenregel({ ...payload, profile_id: profile?.id });
+        setAllRows(rs => [saved, ...rs]);
+        toast.success('Uren geregistreerd');
+      }
+      setModal(null);
+    } catch (err) {
+      toast.error(err.message || 'Opslaan mislukt');
+    }
+  };
+
+  // Optimistic delete with rollback
+  const handleDelete = async (row) => {
+    const prev = allRows;
+    setAllRows(rs => rs.filter(r => r.id !== row.id));
+    setConfirmRow(null);
+    try {
+      await deleteUrenregel(row.id);
+      toast.success('Uren verwijderd');
+    } catch (err) {
+      setAllRows(prev);
+      toast.error(err.message || 'Verwijderen mislukt');
+    }
+  };
+
+  return (
+    <div className="uren2-page">
+      {/* Header */}
+      <div className="uren2-hd">
+        <div className="uren2-hd-text">
+          <h1 className="uren2-h1">Urenregistratie</h1>
+          <p className="uren2-sub">Bekijk, filter en beheer urenregistraties van je team</p>
+        </div>
+        <button
+          type="button"
+          className="uren2-btn uren2-btn-primary uren2-hd-cta"
+          onClick={() => setModal({ mode: 'register', initial: null })}
+        >
+          <span className="uren2-btn-ic">{Ic.Plus}</span>
+          Uren registreren
+        </button>
+      </div>
+
+      {error && (
+        <div className="uren2-error-strip">
+          <span className="uren2-error-strip-ic">{Ic.Alert}</span>
+          Kon urenregistraties niet laden — {error}
+        </div>
+      )}
+
+      {/* KPIs */}
+      <div className="uren2-kpis">
+        <KpiCard
+          icon={Ic.Clock}
+          label="Totaal uren"
+          value={kpis.totaal.toFixed(2)}
+          unit="uur"
+          hint={`Som over ${periodLabel(period).toLowerCase()}`}
+        />
+        <KpiCard
+          icon={Ic.Users}
+          label="Medewerkers"
+          value={String(kpis.medewerkers)}
+          hint={`Uniek binnen ${periodLabel(period).toLowerCase()}`}
+        />
+        <KpiCard
+          icon={Ic.Trend}
+          label="Gem. per dag"
+          value={kpis.gemPerDag.toFixed(2)}
+          unit="uur"
+          hint={`Over ${kpis.dagen} ${kpis.dagen === 1 ? 'dag' : 'dagen'}`}
+        />
+      </div>
+
+      {/* Filter + table/list */}
+      <div className="uren2-card">
+        <div className="uren2-filter-bar">
+          <PeriodTabs value={period} onChange={setPeriod} />
+          <div className="uren2-filter-right">
+            {!loading && (
+              <span className="uren2-count">
+                {visible.length} {visible.length === 1 ? 'registratie' : 'registraties'}
+              </span>
+            )}
+            <Dropdown
+              value={employee}
+              options={employeeOptions}
+              onChange={setEmployee}
+              width={isMobile ? '100%' : 210}
+              ariaLabel="Filter op medewerker"
+            />
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="uren2-loading">Laden…</div>
+        ) : isMobile ? (
+          <MobileList rows={visible} onEdit={r => setModal({ mode: 'edit', initial: r })} onDelete={r => setConfirmRow(r)} />
+        ) : (
+          <UrenTable rows={visible} onEdit={r => setModal({ mode: 'edit', initial: r })} onDelete={r => setConfirmRow(r)} />
+        )}
+      </div>
+
+      {/* FAB on mobile */}
+      {isMobile && (
+        <button
+          type="button"
+          className="uren2-fab"
+          aria-label="Uren registreren"
+          onClick={() => setModal({ mode: 'register', initial: null })}
+        >{Ic.Plus}</button>
+      )}
+
+      {/* Modals */}
+      <UrenModal
+        open={!!modal}
+        mode={modal?.mode || 'register'}
+        initial={modal?.initial || null}
+        klanten={customers}
+        onClose={() => setModal(null)}
+        onSave={handleSave}
+        mobile={isMobile}
+      />
+
+      {/* Delete confirm */}
+      <ModalShell
+        open={!!confirmRow}
+        onClose={() => setConfirmRow(null)}
+        mobile={isMobile}
+        maxWidth={420}
+      >
+        <div className="uren2-confirm">
+          <div className="uren2-confirm-ic">{Ic.Trash}</div>
+          <h2 className="uren2-confirm-title">Deze urenregistratie verwijderen?</h2>
+          {confirmRow && (
+            <p className="uren2-confirm-sub">
+              {fmtNL(confirmRow.datum)} · {confirmRow.medewerkerNaam || '—'} · {fmtUren(confirmRow.uren)} uur
+              {confirmRow.customerName ? ` · ${confirmRow.customerName}` : ''}
+            </p>
+          )}
+        </div>
+        <div className="uren2-modal-ft">
+          <button type="button" className="uren2-btn uren2-btn-ghost" onClick={() => setConfirmRow(null)}>Annuleren</button>
+          <button type="button" className="uren2-btn uren2-btn-danger" onClick={() => handleDelete(confirmRow)}>Verwijderen</button>
+        </div>
+      </ModalShell>
+    </div>
+  );
+}
+
+export default UrenPageV2;
