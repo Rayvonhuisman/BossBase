@@ -633,7 +633,15 @@ function AppInner() {
   const [route,      setRoute]      = useState(() => window.location.pathname || '/');
   const [session,    setSession]    = useState(null);
   const [authReady,  setAuthReady]  = useState(false);
-  const [page,       setPage]       = useState('dashboard');
+  const [page,       setPage]       = useState(() => {
+    const path = window.location.pathname;
+    if (path.startsWith('/dashboard/')) {
+      const sub = path.slice('/dashboard/'.length).split('/')[0];
+      const VALID = ['pipeline','customers','activities','calendar','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','team','instellingen'];
+      if (VALID.includes(sub)) return sub;
+    }
+    return 'dashboard';
+  });
   const [sbOpen,     setSbOpen]     = useState(false);
   const [sbCollapsed, setSbCollapsed] = useState(() => {
     try { return localStorage.getItem('bb.sidebarCollapsed') === '1'; }
@@ -681,7 +689,17 @@ function AppInner() {
   }, [profile, user, profileLoading]);
 
   useEffect(() => {
-    const onPop = () => setRoute(window.location.pathname || '/');
+    const onPop = () => {
+      const path = window.location.pathname;
+      setRoute(path || '/');
+      if (path.startsWith('/dashboard/')) {
+        const sub = path.slice('/dashboard/'.length).split('/')[0];
+        const VALID = ['pipeline','customers','activities','calendar','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','team','instellingen'];
+        setPage(VALID.includes(sub) ? sub : 'dashboard');
+      } else if (path === '/dashboard') {
+        setPage('dashboard');
+      }
+    };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
@@ -777,7 +795,12 @@ function AppInner() {
   // specific record via its own existing modal. Cleared once consumed.
   const navigatePage  = (p, intent) => {
     setPage(p);
-    setNavIntent(intent && intent.id ? { page: p, id: intent.id } : null);
+    const pagePath = p === 'dashboard' ? '/dashboard' : `/dashboard/${p}`;
+    if (window.location.pathname !== pagePath) {
+      window.history.pushState({}, '', pagePath);
+    }
+    const hasIntent = intent && (intent.id || intent.dealId);
+    setNavIntent(hasIntent ? { page: p, ...intent } : null);
     closeCustomer();
     closeDeal();
     closeInvoice();
@@ -845,14 +868,14 @@ function AppInner() {
     const props = { setPage: navigatePage, openCustomer, openDeal, openInvoice, openCalendarEvent };
     switch (page) {
       case 'dashboard':  return <DashboardHome {...props} />;
-      case 'pipeline':   return <Pipeline openCustomer={openCustomer} openDeal={openDeal} />;
+      case 'pipeline':   return <Pipeline openCustomer={openCustomer} openDeal={openDeal} setPage={navigatePage} />;
       case 'customers':  return <CustomersPage openCustomer={openCustomer} />;
       case 'activities': return <ActivitiesPageV2 openCustomer={openCustomer} preOpenActivityId={navIntent?.page === 'activities' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'calendar':   return <CalendarPage openCustomer={openCustomer} openCalendarEvent={openCalendarEvent} preOpenActivityId={navIntent?.page === 'calendar' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'costs':       return <CostsPage />;
       case 'revenue':     return <RevenuePage />;
       case 'facturen':    return <FacturenPage openCustomer={openCustomer} />;
-      case 'offertes':    return <OffertesPage openCustomer={openCustomer} preOpenOfferteId={navIntent?.page === 'offertes' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
+      case 'offertes':    return <OffertesPage openCustomer={openCustomer} preOpenOfferteId={navIntent?.page === 'offertes' ? navIntent.id : null} preFillDealId={navIntent?.page === 'offertes' ? navIntent.dealId : null} onNavConsumed={clearNavIntent} />;
       case 'projecten':   return <ProjectsPage openCustomer={openCustomer} openInvoice={openInvoice} setPage={navigatePage} preOpenProjectId={navIntent?.page === 'projecten' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'werkbonnen':  return <WerkbonPage preOpenWerkbonId={navIntent?.page === 'werkbonnen' ? navIntent.id : null} onNavConsumed={clearNavIntent} setPage={navigatePage} />;
       case 'uren':        return <UrenPage />;
@@ -920,9 +943,10 @@ function AppInner() {
 
   const meta = PAGE_META[page] || PAGE_META.dashboard;
 
+  const today = new Date().toISOString().slice(0, 10);
   const sidebarBadges = {
-    pipeline: globalDeals.length > 0 ? globalDeals.length : 0,
-    activities: globalActivities.filter(a => a.status !== 'completed' && a.status !== 'done').length,
+    pipeline: globalDeals.filter(d => d.stage === 'new_lead').length,
+    activities: globalActivities.filter(a => a.status !== 'completed' && a.status !== 'done' && a.dueAt?.slice(0, 10) === today).length,
   };
 
   return (

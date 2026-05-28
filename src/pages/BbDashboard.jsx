@@ -3,6 +3,8 @@ import { I, PIPELINE_STAGES, fmt, Av, ModalX } from '../bb-shared.jsx';
 import { listDeals, listPipelineStages, updateDealStage } from '../services/dealService.js';
 import { listActivities } from '../services/activityService.js';
 import { listCustomers } from '../services/customerService.js';
+import { createProject } from '../services/projectsService.js';
+import { listNotes, createNote } from '../services/noteService.js';
 import { useProfile, displayName } from '../lib/profileContext.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { ActivityEditModal, NewLeadModal } from '../components/SharedModals.jsx';
@@ -222,9 +224,8 @@ function MoveStageSheet({ deal, stages, moveDeal, onClose, setActiveIdx }) {
 }
 
 // ── MOBILE PIPELINE (swipeable carousel) ─────────────────────
-function MobilePipeline({ stages, dealsInStage, openCustomer, openDeal, moveDeal, markLost, setNewStage, setShowNew }) {
+function MobilePipeline({ stages, dealsInStage, openCustomer, moveDeal, markLost, setNewStage, setShowNew, customers }) {
   const [activeIdx, setActiveIdx] = useState(0);
-  const [movingDeal, setMovingDeal] = useState(null);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
   const tabsRef = useRef(null);
@@ -235,8 +236,6 @@ function MobilePipeline({ stages, dealsInStage, openCustomer, openDeal, moveDeal
     const el = tabsRef.current?.children[idx];
     el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   }, [idx]);
-
-  const prioColor = p => ({ high: '#dc2626', med: '#e8784a', low: '#9ca3af' }[p] || '#9ca3af');
 
   const handleTouchStart = e => {
     touchStartX.current = e.touches[0].clientX;
@@ -310,29 +309,36 @@ function MobilePipeline({ stages, dealsInStage, openCustomer, openDeal, moveDeal
               </button>
             </div>
           )}
-          {stageDeals.map(deal => (
-            <div key={deal.id} className={`pipe-mob-card${deal.priority === 'high' ? ' highlight' : ''}`}>
-              <div className="pipe-mob-card-top">
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="pipe-mob-card-name" onClick={() => openCustomer(deal.custId)}>
-                    {deal.customerName || 'Klant'}
+          {stageDeals.map(deal => {
+            const cust = customers?.find(c => c.id === deal.custId);
+            return (
+              <div key={deal.id} className="pipe-mob-card" style={{ cursor: 'pointer' }} onClick={() => openCustomer(deal.custId)}>
+                <div style={{ fontWeight: 700, fontSize: '.85rem', color: 'var(--dk)', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {deal.customerName || 'Klant'}
+                </div>
+                {deal.title && (
+                  <div style={{ fontSize: '.78rem', color: 'var(--dl)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>
+                    {deal.title}
                   </div>
-                  {deal.title && <div className="pipe-mob-card-title" style={{ cursor: 'pointer' }} onClick={() => openDeal ? openDeal(deal.id) : openCustomer(deal.custId)}>{deal.title}</div>}
-                  {deal.city && <div className="pipe-mob-card-city">{I.map} {deal.city}</div>}
-                </div>
-                <span className="pipe-mob-prio" style={{ background: prioColor(deal.priority) }} title={`Prioriteit: ${deal.priority}`} />
+                )}
+                {cust?.email && (
+                  <div style={{ fontSize: '.73rem', color: 'var(--dl)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {cust.email}
+                  </div>
+                )}
+                {cust?.phone && (
+                  <div style={{ fontSize: '.73rem', color: 'var(--dl)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {cust.phone}
+                  </div>
+                )}
+                {deal.value > 0 && (
+                  <div style={{ marginTop: 6, fontSize: '.82rem', fontWeight: 700, color: '#0F7A3F' }}>
+                    {fmt(deal.value)}
+                  </div>
+                )}
               </div>
-              {deal.nextAct && <div className="pipe-mob-card-act">→ {deal.nextAct}</div>}
-              <div className="pipe-mob-card-footer">
-                <span className="pipe-mob-card-value">{fmt(deal.value)}</span>
-                <div className="pipe-mob-card-btns">
-                  <button className="btn btn-xs btn-ghost" title="Open klant" onClick={() => openCustomer(deal.custId)}>{I.eye}</button>
-                  <button className="btn btn-xs btn-s" onClick={() => setMovingDeal(deal)}>Verplaatsen</button>
-                  <button className="btn btn-xs btn-danger btn-icon" title="Markeer verloren" onClick={() => markLost(deal)}>{I.x}</button>
-                </div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Add lead to this stage */}
@@ -341,22 +347,243 @@ function MobilePipeline({ stages, dealsInStage, openCustomer, openDeal, moveDeal
         </button>
       </div>
 
-      {/* Move stage bottom sheet */}
-      {movingDeal && (
-        <MoveStageSheet
-          deal={movingDeal}
-          stages={stages}
-          moveDeal={moveDeal}
-          onClose={() => setMovingDeal(null)}
-          setActiveIdx={setActiveIdx}
-        />
-      )}
+    </div>
+  );
+}
+
+// ── DEAL DETAIL MODAL ────────────────────────────────────────
+function DealDetailModal({ deal, stages, customers, onClose, setPage }) {
+  const toast = useToast();
+  const [notes, setNotes] = useState([]);
+  const [noteText, setNoteText] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [showMaakProject, setShowMaakProject] = useState(false);
+
+  const customer = customers.find(c => c.id === deal.custId);
+  const stage = stages.find(s => s.id === deal.stage);
+  const stageOrder = stage?.order || 0;
+
+  const orderOf = label => stages.find(s => new RegExp(`^${label}$`, 'i').test((s.label || '').trim()))?.order ?? 999;
+  const offerteOrder  = orderOf('offerte maken');
+  const akkoordOrder  = orderOf('akkoord');
+  const geplandOrder  = orderOf('gepland');
+  const afgerondOrder = orderOf('afgerond');
+
+  const showMaakOfferte  = stageOrder >= offerteOrder  && stageOrder < orderOf('verloren');
+  const showMaakProjBtn  = stageOrder >= akkoordOrder  && stageOrder < orderOf('verloren');
+  const showWerkbon      = stageOrder >= geplandOrder  && stageOrder < orderOf('verloren');
+  const showMaakFactuur  = stageOrder >= afgerondOrder && stageOrder < orderOf('verloren');
+  const hasActions = showMaakOfferte || showMaakProjBtn || showWerkbon || showMaakFactuur;
+
+  useEffect(() => {
+    listNotes().then(all => setNotes(all.filter(n => n.dealId === deal.id))).catch(() => {});
+  }, [deal.id]);
+
+  const saveNote = async () => {
+    const body = noteText.trim();
+    if (!body) return;
+    setSaving(true);
+    try {
+      const n = await createNote({ customer_id: deal.custId || null, deal_id: deal.id, body });
+      setNotes(prev => [n, ...prev]);
+      setNoteText('');
+    } catch (e) {
+      toast.error(e.message || 'Opslaan mislukt');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (showMaakProject) {
+    return (
+      <MaakProjectModal
+        deal={deal}
+        customers={customers}
+        onClose={() => setShowMaakProject(false)}
+        setPage={setPage}
+      />
+    );
+  }
+
+  const DL = { fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--dl)', marginBottom: 6 };
+
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 460 }}>
+        <div className="modal-hd">
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div className="modal-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {deal.customerName || 'Klant'}
+            </div>
+            {deal.title && <div className="modal-sub" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{deal.title}</div>}
+          </div>
+          <ModalX onClose={onClose} />
+        </div>
+
+        <div style={{ padding: '0 24px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Stage + waarde */}
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            {stage && <span className={`badge ${stage.col}`}>{stage.label}</span>}
+            {deal.value > 0 && (
+              <span style={{ fontSize: 15, fontWeight: 700, color: '#0F7A3F' }}>{fmt(deal.value)}</span>
+            )}
+          </div>
+
+          {/* Klantgegevens */}
+          {customer && (customer.email || customer.phone) && (
+            <div>
+              <div style={DL}>Klantgegevens</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {customer.email && (
+                  <a href={`mailto:${customer.email}`} style={{ fontSize: 13, color: 'var(--tx)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {I.mail} {customer.email}
+                  </a>
+                )}
+                {customer.phone && (
+                  <a href={`tel:${customer.phone}`} style={{ fontSize: 13, color: 'var(--tx)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {I.call} {customer.phone}
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Notities */}
+          <div>
+            <div style={DL}>Notities</div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <input
+                style={{ flex: 1 }}
+                value={noteText}
+                placeholder="Notitie toevoegen…"
+                onChange={e => setNoteText(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !saving && saveNote()}
+              />
+              <button className="btn btn-s btn-sm" onClick={saveNote} disabled={saving || !noteText.trim()}>
+                Opslaan
+              </button>
+            </div>
+            {notes.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--dl)' }}>Nog geen notities</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 160, overflowY: 'auto' }}>
+                {notes.map(n => (
+                  <div key={n.id} style={{ padding: '8px 10px', background: 'var(--bgs)', borderRadius: 8, fontSize: 13, border: '1px solid var(--br)' }}>
+                    <div style={{ color: 'var(--dk)', whiteSpace: 'pre-wrap' }}>{n.body}</div>
+                    <div style={{ fontSize: 11, color: 'var(--dl)', marginTop: 3 }}>
+                      {String(n.createdAt || '').slice(0, 10)}{n.author ? ` · ${n.author}` : ''}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Acties */}
+          {hasActions && (
+            <div>
+              <div style={DL}>Acties</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {showMaakOfferte && (
+                  <button className="btn btn-s" onClick={() => { onClose(); setPage?.('offertes', { dealId: deal.id }); }}>
+                    {I.brief} Maak offerte
+                  </button>
+                )}
+                {showMaakProjBtn && (
+                  <button className="btn btn-s" onClick={() => setShowMaakProject(true)}>
+                    {I.brief} Maak project aan
+                  </button>
+                )}
+                {showWerkbon && (
+                  <button className="btn btn-s" onClick={() => { onClose(); setPage?.('werkbonnen'); }}>
+                    {I.check} Nieuwe werkbon
+                  </button>
+                )}
+                {showMaakFactuur && (
+                  <button className="btn btn-s" onClick={() => { onClose(); setPage?.('facturen'); }}>
+                    {I.euro} Maak factuur
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── MAAK PROJECT MODAL ───────────────────────────────────────
+function MaakProjectModal({ deal, customers, onClose, setPage }) {
+  const toast = useToast();
+  const [form, setForm] = useState({
+    name: deal.title || '',
+    customer_id: deal.custId || '',
+    project_value: deal.value || 0,
+  });
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const submit = async () => {
+    if (!form.name.trim()) { toast.error('Projectnaam is verplicht'); return; }
+    setSaving(true);
+    try {
+      const created = await createProject({
+        name: form.name.trim(),
+        customer_id: form.customer_id || null,
+        deal_id: deal.id,
+        project_value: Number(form.project_value || 0),
+      });
+      toast.success('Project aangemaakt');
+      onClose();
+      setPage?.('projecten', { id: created.id });
+    } catch (e) {
+      toast.error(e.message || 'Aanmaken mislukt');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && !saving && onClose()}>
+      <div className="modal" style={{ maxWidth: 420 }}>
+        <div className="modal-hd">
+          <div>
+            <div className="modal-title">Project aanmaken</div>
+            <div className="modal-sub">{deal.customerName} — {deal.title}</div>
+          </div>
+          <ModalX onClose={onClose} />
+        </div>
+        <div className="fg">
+          <div className="f s2">
+            <label>Projectnaam *</label>
+            <input type="text" value={form.name} onChange={e => set('name', e.target.value)} autoFocus />
+          </div>
+          <div className="f s2">
+            <label>Klant</label>
+            <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)}>
+              <option value="">— Geen —</option>
+              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="f s2">
+            <label>Projectwaarde (€)</label>
+            <input type="number" min="0" step="0.01" value={form.project_value} onChange={e => set('project_value', e.target.value)} />
+          </div>
+        </div>
+        <div className="fa">
+          <button className="btn btn-ghost" onClick={onClose}>Annuleren</button>
+          <button className="btn btn-p" onClick={submit} disabled={saving || !form.name.trim()}>
+            {saving ? 'Aanmaken...' : 'Project aanmaken'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
 // ── PIPELINE ─────────────────────────────────────────────────
-export function Pipeline({ openCustomer, openDeal }) {
+export function Pipeline({ openCustomer, openDeal, setPage }) {
   const toast = useToast();
   const { refreshKey, bumpRefresh } = useProfile();
   const [deals, setDeals] = useState([]);
@@ -374,6 +601,8 @@ export function Pipeline({ openCustomer, openDeal }) {
 
   const [showNew, setShowNew] = useState(false);
   const [newStage, setNewStage] = useState(null);
+  const [maakProjectDeal, setMaakProjectDeal] = useState(null);
+  const [hideLost, setHideLost] = useState(() => localStorage.getItem('pipeline_hide_lost') === 'true');
 
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 767);
   useEffect(() => {
@@ -474,9 +703,16 @@ export function Pipeline({ openCustomer, openDeal }) {
   // Show every stage as a column — the board scrolls horizontally so all
   // fases stay reachable (previously capped at 8, hiding later stages).
   const SHOWN_STAGE_IDS = stages.map(s => s.id);
-  const visibleStages = filter.stage === 'all'
+  const lostStageId = (stages.find(s => /verlor/i.test(s.label || '')) || stages.find(s => /\blost\b/i.test(s.label || '')))?.id;
+  const toggleHideLost = () => setHideLost(v => {
+    const next = !v;
+    localStorage.setItem('pipeline_hide_lost', String(next));
+    return next;
+  });
+  const visibleStages = (filter.stage === 'all'
     ? SHOWN_STAGE_IDS
-    : SHOWN_STAGE_IDS.filter(id => id === filter.stage);
+    : SHOWN_STAGE_IDS.filter(id => id === filter.stage)
+  ).filter(id => !(hideLost && id === lostStageId));
 
   // Deals whose stage_id is NULL or points to a stage that no longer exists
   // must not silently disappear — funnel them into the first column so they
@@ -492,11 +728,9 @@ export function Pipeline({ openCustomer, openDeal }) {
   const totalShown = filteredDeals.length;
   const totalValue = filteredDeals.filter(d => d.stage !== 'lost').reduce((s, d) => s + d.value, 0);
 
-  // deals.stage_id is a UUID column — the old code passed the slug 'lost',
-  // which Postgres rejected as an invalid UUID (silent toast error). Resolve
-  // the real "Verloren" stage from the loaded DB stages instead.
-  const lostStage = stages.find(s => /verlor/i.test(s.label || ''))
-    || stages.find(s => /\blost\b/i.test(s.label || ''));
+  // deals.stage_id is a UUID column — resolve the real "Verloren" stage object
+  // for use in confirmLost (lostStageId is already derived above for filtering).
+  const lostStage = stages.find(s => s.id === lostStageId);
 
   const markLost = deal => { setLostDeal(deal); setShowLostModal(true); };
   const confirmLost = async () => {
@@ -581,7 +815,6 @@ export function Pipeline({ openCustomer, openDeal }) {
     }
   };
 
-  const prioColor = p => ({ high: '#dc2626', med: '#e8784a', low: '#9ca3af' }[p] || '#9ca3af');
   const resetFilter = () => setFilter({ stage: 'all', status: 'open', priority: 'all', text: '' });
   const filterActive = filter.stage !== 'all' || filter.status !== 'open' || filter.priority !== 'all' || filter.text;
 
@@ -670,11 +903,11 @@ export function Pipeline({ openCustomer, openDeal }) {
           stages={filter.stage === 'all' ? stages : stages.filter(s => s.id === filter.stage)}
           dealsInStage={dealsInStage}
           openCustomer={openCustomer}
-          openDeal={openDeal}
           moveDeal={moveDeal}
           markLost={markLost}
           setNewStage={setNewStage}
           setShowNew={setShowNew}
+          customers={customers}
         />
       )}
 
@@ -734,53 +967,55 @@ export function Pipeline({ openCustomer, openDeal }) {
                     {fmt(stageDeals.reduce((s, d) => s + d.value, 0))}
                   </div>
                 </div>
-                <span className="pipe-col-cnt">{stageDeals.length}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span className="pipe-col-cnt">{stageDeals.length}</span>
+                  {stageId === lostStageId && (
+                    <button
+                      className="btn-icon"
+                      style={{ opacity: 0.5, lineHeight: 1 }}
+                      title="Verloren kolom verbergen"
+                      onClick={e => { e.stopPropagation(); toggleHideLost(); }}
+                    >{I.eye}</button>
+                  )}
+                </div>
               </div>
               <div className="pipe-cards">
-                {stageDeals.map(deal => (
-                  <div key={deal.id}
-                    className={`pc${deal.priority === 'high' ? ' highlight' : ''}${draggingId === deal.id ? ' pc-dragging' : ''}`}
-                    draggable
-                    onDragStart={e => onCardDragStart(e, deal)}
-                    onDragEnd={onCardDragEnd}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 1, minWidth: 0 }}>
-                        <Av name={deal.customerName || '?'} size="sm" idx={0} />
-                        <div style={{ minWidth: 0 }}>
-                          <div className="pc-name" style={{ cursor: 'pointer' }} onClick={() => openCustomer(deal.custId)}>{deal.customerName || 'Klant'}</div>
+                {stageDeals.map(deal => {
+                  const cust = customers.find(c => c.id === deal.custId);
+                  return (
+                    <div key={deal.id}
+                      className={`pc${draggingId === deal.id ? ' pc-dragging' : ''}`}
+                      style={{ cursor: 'pointer' }}
+                      draggable
+                      onDragStart={e => onCardDragStart(e, deal)}
+                      onDragEnd={onCardDragEnd}
+                      onClick={() => openCustomer(deal.custId)}>
+                      <div style={{ fontWeight: 700, fontSize: '.85rem', color: 'var(--dk)', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {deal.customerName || 'Klant'}
+                      </div>
+                      {deal.title && (
+                        <div style={{ fontSize: '.78rem', color: 'var(--dl)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>
+                          {deal.title}
                         </div>
-                      </div>
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: prioColor(deal.priority), flexShrink: 0, marginTop: 4 }} title={`Prioriteit: ${deal.priority}`} />
+                      )}
+                      {cust?.email && (
+                        <div style={{ fontSize: '.73rem', color: 'var(--dl)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {cust.email}
+                        </div>
+                      )}
+                      {cust?.phone && (
+                        <div style={{ fontSize: '.73rem', color: 'var(--dl)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {cust.phone}
+                        </div>
+                      )}
+                      {deal.value > 0 && (
+                        <div style={{ marginTop: 6, fontSize: '.82rem', fontWeight: 700, color: '#0F7A3F' }}>
+                          {fmt(deal.value)}
+                        </div>
+                      )}
                     </div>
-                    <div className="pc-job" style={{ cursor: 'pointer' }} title="Open deal" onClick={() => openDeal ? openDeal(deal.id) : openCustomer(deal.custId)}>{I.map} <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{deal.title}</span></div>
-                    {deal.city && <div style={{ fontSize: '.73rem', color: 'var(--dl)', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-                      {I.map} {deal.city}
-                    </div>}
-                    <div className="pc-meta">
-                      <span className="pc-amount">{fmt(deal.value)}</span>
-                      <span className="pc-date">{deal.nextDate}</span>
-                    </div>
-                    {deal.nextAct && (
-                      <div style={{ marginTop: 8, padding: '5px 8px', background: 'var(--bgs)', borderRadius: 'var(--r6)', fontSize: '.72rem', color: 'var(--dmu)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <span style={{ color: 'var(--p)' }}>→</span> {deal.nextAct}
-                      </div>
-                    )}
-                    <div className="pc-foot">
-                      <div className="pc-icons">
-                        {deal.notes > 0 && <span title={`${deal.notes} notities`} style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '.68rem' }}>{I.note} {deal.notes}</span>}
-                        {deal.files > 0 && <span title={`${deal.files} bestanden`} style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '.68rem' }}>{I.paperclip} {deal.files}</span>}
-                        {deal.acts > 0 && <span title={`${deal.acts} activiteiten`} style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '.68rem' }}>{I.act} {deal.acts}</span>}
-                      </div>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <select className="btn btn-s btn-xs" value={deal.stage} onChange={e => moveDeal(deal, e.target.value)}>
-                          {stages.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                        </select>
-                        <button className="btn-icon" style={{ width: 22, height: 22 }} title="Open klant" onClick={() => openCustomer(deal.custId)}>{I.eye}</button>
-                        <button className="btn-icon" style={{ width: 22, height: 22, color: '#dc2626' }} title="Markeer verloren" onClick={() => markLost(deal)}>{I.x}</button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {stageDeals.length === 0 && (
                   <div style={{ fontSize: '.74rem', color: 'var(--dl)', textAlign: 'center', padding: '12px 6px' }}>Geen items</div>
                 )}
@@ -791,6 +1026,17 @@ export function Pipeline({ openCustomer, openDeal }) {
         })}
         </div>
         </div>
+        {hideLost && lostStageId && (
+          <div style={{ padding: '10px 16px 4px' }}>
+            <button
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '.75rem', color: 'var(--dl)', background: 'var(--bg2)', border: '1px solid var(--brd)', borderRadius: 20, padding: '4px 10px', cursor: 'pointer' }}
+              onClick={toggleHideLost}
+            >
+              {I.eye_off}
+              Verloren ({deals.filter(d => d.stage === lostStageId).length}) — klik om te tonen
+            </button>
+          </div>
+        )}
         </div>
       )}
 
@@ -834,6 +1080,14 @@ export function Pipeline({ openCustomer, openDeal }) {
           stages={stages}
           defaultStage={newStage || ''}
           onSaved={onSaved}
+        />
+      )}
+      {maakProjectDeal && (
+        <MaakProjectModal
+          deal={maakProjectDeal}
+          customers={customers}
+          onClose={() => setMaakProjectDeal(null)}
+          setPage={setPage}
         />
       )}
     </div>
