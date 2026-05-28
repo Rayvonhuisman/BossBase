@@ -7,6 +7,7 @@ import {
   getOffertes, createOfferte, updateOfferte, deleteOfferte, calculateOfferteTotals, createOfferteItem, getOfferteItems, deleteOfferteItemsByOfferteId,
 } from '../services/offerteService.js';
 import { listCustomers } from '../services/customerService.js';
+import { listDeals } from '../services/dealService.js';
 import { NewFactuurModal } from './FacturenPage.jsx';
 import { generateOffertePdf } from '../utils/generatePdf.js';
 
@@ -50,9 +51,9 @@ function BtwSelect({ r, setRegel }) {
   );
 }
 
-function NewOfferteModal({ customers, onClose, onSaved }) {
+export function NewOfferteModal({ customers, deals = [], prefillDealId = null, prefillCustomerId = null, onClose, onSaved }) {
   const toast = useToast();
-  const [form, setForm] = useState({ customer_id: '', omschrijving: '', marge_pct: 25, geldig_tot: '', notes: '' });
+  const [form, setForm] = useState({ customer_id: prefillCustomerId || '', deal_id: prefillDealId || '', omschrijving: '', marge_pct: 25, geldig_tot: '', notes: '' });
   const [regels, setRegels] = useState([emptyRegel()]);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -122,11 +123,22 @@ function NewOfferteModal({ customers, onClose, onSaved }) {
         <div className="fg">
           <div className="f s2">
             <label>Klant *</label>
-            <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)}>
+            <select value={form.customer_id} onChange={e => { set('customer_id', e.target.value); set('deal_id', ''); }}>
               <option value="">— Selecteer klant —</option>
               {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
+          {form.customer_id && (
+            <div className="f s2">
+              <label>Deal (optioneel)</label>
+              <select value={form.deal_id} onChange={e => set('deal_id', e.target.value)}>
+                <option value="">— Geen deal —</option>
+                {deals.filter(d => d.custId === form.customer_id).map(d => (
+                  <option key={d.id} value={d.id}>{d.title}{d.value > 0 ? ` · €${Number(d.value).toLocaleString('nl-NL')}` : ''}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="f s2">
             <label>Omschrijving</label>
             <textarea rows={2} value={form.omschrijving} onChange={e => set('omschrijving', e.target.value)} placeholder="Korte omschrijving van de werkzaamheden" />
@@ -596,25 +608,27 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur }) {
 
 // ── OFFERTES PAGE ────────────────────────────────────────────────────────────
 
-export function OffertesPage({ openCustomer, preOpenOfferteId, onNavConsumed }) {
+export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, onNavConsumed }) {
   const toast = useToast();
   const { profile, company } = useProfile();
   const canManageOffertes = profile?.role === 'admin' || profile?.role === 'planner';
   const [offertes, setOffertes] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [deals, setDeals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('');
   const [showNew, setShowNew] = useState(false);
+  const [newDealId, setNewDealId] = useState(null);
   const [editOfferte, setEditOfferte] = useState(null);
   const [viewOfferte, setViewOfferte] = useState(null);
   const [factuurPrefill, setFactuurPrefill] = useState(null);
 
   const load = () => {
     setLoading(true);
-    Promise.all([getOffertes(), listCustomers()])
-      .then(([o, c]) => { setOffertes(o); setCustomers(c); setError(''); })
+    Promise.all([getOffertes(), listCustomers(), listDeals().catch(() => [])])
+      .then(([o, c, d]) => { setOffertes(o); setCustomers(c); setDeals(d); setError(''); })
       .catch(err => setError(err.message || 'Laden mislukt'))
       .finally(() => setLoading(false));
   };
@@ -632,6 +646,14 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onNavConsumed }) 
       console.warn('[bb:dashboard] offerte niet gevonden voor deep-open:', preOpenOfferteId);
     }
   }, [preOpenOfferteId, loading, offertes]);
+
+  // Auto-open nieuw offerte modal met deal vooringevuld (vanuit pipeline/deal drawer)
+  useEffect(() => {
+    if (!preFillDealId || loading) return;
+    setNewDealId(preFillDealId);
+    setShowNew(true);
+    onNavConsumed && onNavConsumed();
+  }, [preFillDealId, loading]);
 
   const filters = [
     { label: 'Alle', value: '' },
@@ -835,8 +857,10 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onNavConsumed }) 
       {showNew && (
         <NewOfferteModal
           customers={customers}
-          onClose={() => setShowNew(false)}
-          onSaved={saved => { handleSaved(saved); }}
+          deals={deals}
+          prefillDealId={newDealId}
+          onClose={() => { setShowNew(false); setNewDealId(null); }}
+          onSaved={saved => { handleSaved(saved); setNewDealId(null); }}
         />
       )}
       {editOfferte && (

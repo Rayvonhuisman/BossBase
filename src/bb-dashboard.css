@@ -992,6 +992,7 @@ ul{list-style:none}
 .wb2-hours-secondary{background:rgba(255,255,255,.08);color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:10px 14px;font-weight:600;font-size:13.5px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px}
 .wb2-hours-secondary:hover{background:rgba(255,255,255,.12)}
 .wb2-hours-tip{margin-top:10px;font-size:11.5px;opacity:.55}
+.drawer.klant-fullscreen{position:fixed!important;left:var(--fs-left,232px)!important;top:0!important;right:0!important;bottom:0!important;width:calc(100vw - var(--fs-left,232px))!important;max-width:none!important;height:100vh!important;z-index:9999!important;overflow-y:auto!important;animation:none!important;transform:none!important;box-shadow:none!important}
 .wb2-hours-tip b{color:#fff;font-weight:600}
 
 /* Tasks (checklist) -------------------------------------------- */

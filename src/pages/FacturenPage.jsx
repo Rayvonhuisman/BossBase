@@ -9,6 +9,7 @@ import {
   generateCreditFactuurNummer, createCreditFactuur,
 } from '../services/factuurService.js';
 import { listCustomers } from '../services/customerService.js';
+import { getProjects } from '../services/projectsService.js';
 import { generateFactuurPdf } from '../utils/generatePdf.js';
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
@@ -190,11 +191,12 @@ function TotalenBlok({ regels }) {
 
 // ── NEW FACTUUR MODAL ─────────────────────────────────────────────────────────
 
-export function NewFactuurModal({ customers, prefill, onClose, onSaved, openCustomer }) {
+export function NewFactuurModal({ customers, projects = [], prefill, onClose, onSaved, openCustomer }) {
   const toast = useToast();
   const [nummer, setNummer] = useState('');
   const [form, setForm] = useState({
     customer_id: prefill?.customer_id || '',
+    project_id: prefill?.project_id || '',
     factuurdatum: TODAY(),
     vervaldatum: '',
     notities: '',
@@ -228,7 +230,7 @@ export function NewFactuurModal({ customers, prefill, onClose, onSaved, openCust
     if (hasIncompleteCustomer) { toast.error('Vul eerst de klantgegevens aan voordat je een factuur aanmaakt'); return; }
     setSaving(true);
     try {
-      const created = await createFactuur({ ...form, status: 'aangemaakt', nummer, betalingskenmerk: nummer, totaal_excl: totaalExcl, totaal_incl: totaalIncl });
+      const created = await createFactuur({ ...form, project_id: form.project_id || null, status: 'aangemaakt', nummer, betalingskenmerk: nummer, totaal_excl: totaalExcl, totaal_incl: totaalIncl });
       for (let i = 0; i < regels.length; i++) {
         const r = regels[i];
         if (!r.omschrijving.trim()) continue;
@@ -262,11 +264,22 @@ export function NewFactuurModal({ customers, prefill, onClose, onSaved, openCust
         <div className="fg">
           <div className="f s2">
             <label>Klant *</label>
-            <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)}>
+            <select value={form.customer_id} onChange={e => { set('customer_id', e.target.value); set('project_id', ''); }}>
               <option value="">— Selecteer klant —</option>
               {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
+          {form.customer_id && projects.filter(p => p.customerId === form.customer_id).length > 0 && (
+            <div className="f s2">
+              <label>Project (optioneel)</label>
+              <select value={form.project_id} onChange={e => set('project_id', e.target.value)}>
+                <option value="">— Geen project —</option>
+                {projects.filter(p => p.customerId === form.customer_id).map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           {hasIncompleteCustomer && (
             <div className="f s2">
               <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#92400e', lineHeight: 1.5 }}>
@@ -650,6 +663,7 @@ export function FacturenPage({ openCustomer }) {
   const canManage = profile?.role === 'admin' || profile?.role === 'planner';
   const [facturen, setFacturen] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -661,8 +675,8 @@ export function FacturenPage({ openCustomer }) {
 
   const load = () => {
     setLoading(true);
-    Promise.all([getFacturen(), listCustomers()])
-      .then(([f, c]) => { setFacturen(f); setCustomers(c); setError(''); })
+    Promise.all([getFacturen(), listCustomers(), getProjects().catch(() => [])])
+      .then(([f, c, p]) => { setFacturen(f); setCustomers(c); setProjects(p); setError(''); })
       .catch(err => setError(err.message || 'Laden mislukt'))
       .finally(() => setLoading(false));
   };
@@ -850,6 +864,7 @@ export function FacturenPage({ openCustomer }) {
       {showNew && (
         <NewFactuurModal
           customers={customers}
+          projects={projects}
           onClose={() => setShowNew(false)}
           onSaved={saved => { handleSaved(saved); setShowNew(false); }}
           openCustomer={openCustomer}

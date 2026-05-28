@@ -248,7 +248,12 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
       </Section>
 
       {/* Offertes */}
-      <Section title={`Offertes (${offs.length})`}>
+      <Section title={`Offertes (${offs.length})`}
+        action={deal.custId && (
+          <button className="btn btn-s btn-xs" onClick={() => { onClose(); setPage('offertes', { dealId: deal.id }); }}>
+            + Nieuwe offerte
+          </button>
+        )}>
         {offs.length === 0 && <div style={{ fontSize: 13, color: '#9ca3af' }}>Geen gekoppelde offertes</div>}
         {offs.map(o => (
           <button key={o.id} onClick={() => setPage('offertes', { id: o.id })} style={{

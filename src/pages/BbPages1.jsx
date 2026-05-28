@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, Edit2, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Edit2, Maximize2, Minimize2, X } from 'lucide-react';
 import {
   I, CUSTOMERS_DATA, DEALS, ACTIVITIES_DATA, QUOTES_DATA, COSTS_DATA,
   fmt, custById, stageLabel, stageCol, Av, StatusBadge, ModalX,
@@ -10,6 +10,11 @@ import { buildDueAt, createActivity, listActivities, updateActivity } from '../s
 import { createNote, listNotes } from '../services/noteService.js';
 import { listJobCosts } from '../services/jobCostService.js';
 import { listDeals } from '../services/dealService.js';
+import { getOffertes } from '../services/offerteService.js';
+import { getFacturen } from '../services/factuurService.js';
+import { createProject, getProjects } from '../services/projectsService.js';
+import { NewOfferteModal } from './OffertesPage.jsx';
+import { NewFactuurModal } from './FacturenPage.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { ActivityEditModal, NewActivityModal, NewCustomerModal, NewJobCostModal } from '../components/SharedModals.jsx';
@@ -39,21 +44,72 @@ export function CustomerPage({ custId, onClose, setPage }) {
   const [showCostModal, setShowCostModal] = useState(false);
   const [selectedAct, setSelectedAct] = useState(null);
   const [mbSyncing, setMbSyncing] = useState(false);
+  const [cOffertes, setOffertes] = useState([]);
+  const [cFacturen, setFacturen] = useState([]);
+  const [cProjecten, setProjecten] = useState([]);
+  const [klantgegevensOpen, setKlantgegevensOpen] = useState(false);
+  const [showNewOfferte, setShowNewOfferte] = useState(false);
+  const [showNewFactuur, setShowNewFactuur] = useState(false);
+  const [showNewProject, setShowNewProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [savingProject, setSavingProject] = useState(false);
+  const [fullscreen, setFullscreen] = useState(() => localStorage.getItem('customer_fullscreen') === 'true');
+  const [sbWidth, setSbWidth] = useState(232);
+
+  useEffect(() => {
+    const el = document.querySelector('.sb');
+    if (el) setSbWidth(el.offsetWidth);
+  }, []);
+
+  useEffect(() => {
+    const drawer = document.querySelector('.drawer');
+    if (!drawer) return;
+    if (fullscreen) {
+      drawer.style.setProperty('--fs-left', `${sbWidth}px`);
+      drawer.classList.add('klant-fullscreen');
+    } else {
+      drawer.classList.remove('klant-fullscreen');
+      drawer.style.removeProperty('--fs-left');
+    }
+    return () => {
+      const d = document.querySelector('.drawer');
+      if (d) {
+        d.classList.remove('klant-fullscreen');
+        d.style.removeProperty('--fs-left');
+      }
+    };
+  }, [fullscreen, sbWidth]);
+
+  const toggleFullscreen = () => {
+    const next = !fullscreen;
+    if (next) {
+      const el = document.querySelector('.sb');
+      if (el) setSbWidth(el.offsetWidth);
+    }
+    setFullscreen(next);
+    localStorage.setItem('customer_fullscreen', String(next));
+  };
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    Promise.all([getCustomer(custId), listActivities(), listNotes(custId), listJobCosts()])
-      .then(([customer, activities, notes, costs]) => {
-        if (!alive) return;
-        setCustomer(customer);
-        setActs(activities.filter(a => a.custId === custId));
-        setNotes(notes);
-        setCosts(costs.filter(x => x.custId === custId));
-        setError('');
-      })
-      .catch(err => alive && setError(err.message || 'Klant laden is mislukt.'))
-      .finally(() => alive && setLoading(false));
+    Promise.all([
+      getCustomer(custId), listActivities(), listNotes(custId), listJobCosts(),
+      getOffertes().catch(() => []), getFacturen().catch(() => []), getProjects().catch(() => []),
+    ])
+    .then(([customer, activities, notes, costs, allOffertes, allFacturen, allProjecten]) => {
+      if (!alive) return;
+      setCustomer(customer);
+      setActs(activities.filter(a => a.custId === custId));
+      setNotes(notes);
+      setCosts(costs.filter(x => x.custId === custId));
+      setOffertes(allOffertes.filter(o => o.customerId === custId));
+      setFacturen(allFacturen.filter(f => f.customerId === custId));
+      setProjecten(allProjecten.filter(p => p.customerId === custId));
+      setError('');
+    })
+    .catch(err => alive && setError(err.message || 'Klant laden is mislukt.'))
+    .finally(() => alive && setLoading(false));
     return () => { alive = false; };
   }, [custId]);
 
@@ -123,6 +179,23 @@ export function CustomerPage({ custId, onClose, setPage }) {
     } catch { /* ignore */ }
   };
 
+  const addProject = async () => {
+    const name = newProjectName.trim();
+    if (!name) return;
+    setSavingProject(true);
+    try {
+      const created = await createProject({ name, customer_id: c.id });
+      setProjecten(ps => [created, ...ps]);
+      setNewProjectName('');
+      setShowNewProject(false);
+      toast.success('Project aangemaakt');
+    } catch (err) {
+      toast.error(err.message || 'Aanmaken mislukt');
+    } finally {
+      setSavingProject(false);
+    }
+  };
+
   const syncWithMoneybird = async () => {
     setMbSyncing(true);
     try {
@@ -140,17 +213,17 @@ export function CustomerPage({ custId, onClose, setPage }) {
     }
   };
 
-  const TABS = ['overview','timeline','activities','quotes','costs','notes'];
-  const TAB_LABELS = { overview: 'Overzicht', timeline: 'Tijdlijn', activities: 'Activiteiten', quotes: 'Offertes', costs: 'Kosten', notes: 'Notities' };
+  const TABS = ['overview', 'timeline', 'quotes', 'costs', 'facturen'];
+  const TAB_LABELS = { overview: 'Overzicht', timeline: 'Tijdlijn', quotes: 'Offertes', costs: 'Kosten', facturen: 'Facturen' };
 
   const TIMELINE = [
     { label: 'Lead aangemaakt',     date: '8 apr 2026',  note: 'Via website formulier',                     filled: true },
     { label: 'Eerste contact',      date: '9 apr 2026',  note: 'Gebeld — interesse bevestigd',              filled: true },
     { label: 'Opname gedaan',       date: '14 apr 2026', note: 'Locatie bekeken, maatwerk besproken',       filled: true },
-    { label: 'Offerte aangemaakt',  date: '18 apr 2026', note: `${cQuotes[0]?.id || 'BB-001'} — ${fmt(cQuotes[0]?.amount || 0)}`, filled: true },
+    { label: 'Offerte aangemaakt',  date: '18 apr 2026', note: `${cOffertes[0]?.nummer || 'BB-001'} — ${fmt(cOffertes[0]?.totaalIncl || 0)}`, filled: true },
     { label: 'Offerte verstuurd',   date: '20 apr 2026', note: 'Per e-mail naar klant',                     filled: true },
-    { label: 'Offerte bekeken',     date: '21 apr 2026', note: 'Klant heeft de offerte geopend',            filled: cQuotes[0]?.status !== 'draft' },
-    { label: 'Offerte geaccepteerd',date: cQuotes[0]?.status === 'accepted' ? '23 apr 2026' : '—', note: 'Online akkoord gegeven', filled: cQuotes[0]?.status === 'accepted' },
+    { label: 'Offerte bekeken',     date: '21 apr 2026', note: 'Klant heeft de offerte geopend',            filled: cOffertes[0]?.status !== 'concept' },
+    { label: 'Offerte geaccepteerd',date: cOffertes[0]?.status === 'geaccepteerd' ? '23 apr 2026' : '—', note: 'Online akkoord gegeven', filled: cOffertes[0]?.status === 'geaccepteerd' },
     { label: 'Job gepland',         date: ['planned','in_progress','completed'].includes(c.stage) ? '28 apr 2026' : '—', note: 'Ingepland via agenda', filled: ['planned','in_progress','completed'].includes(c.stage) },
     { label: 'Uitvoering gestart',  date: ['in_progress','completed'].includes(c.stage) ? '30 apr 2026' : '—', note: 'Werkbon geopend door medewerker', filled: ['in_progress','completed'].includes(c.stage) },
     { label: 'Job afgerond',        date: c.stage === 'completed' ? '3 mei 2026' : '—', note: 'Werkbon gesloten, uren geregistreerd', filled: c.stage === 'completed' },
@@ -160,6 +233,14 @@ export function CustomerPage({ custId, onClose, setPage }) {
     <div>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 20 }}>
+        <button
+          className="btn-icon"
+          style={{ flexShrink: 0, marginTop: 2, color: 'var(--dl)' }}
+          onClick={toggleFullscreen}
+          title={fullscreen ? 'Kleiner weergeven' : 'Volledig scherm'}
+        >
+          {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
         <Av name={c.name} size="xl" idx={c.av} />
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
@@ -185,7 +266,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
             )}
           </div>
         </div>
-        {onClose && <button className="drawer-x" onClick={onClose}>{I.x}</button>}
+        {fullscreen && onClose && <button className="drawer-x" onClick={onClose}>{I.x}</button>}
       </div>
 
       {/* Quick stats */}
@@ -203,18 +284,18 @@ export function CustomerPage({ custId, onClose, setPage }) {
         ))}
       </div>
 
-      {/* Tabs */}
-      <div className="tabs" style={{ marginBottom: 16 }}>
-        {TABS.map(t => (
-          <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>{TAB_LABELS[t]}</button>
-        ))}
-      </div>
-
-      {/* Overview */}
-      {tab === 'overview' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-          <div className="card card-p">
-            <div style={{ fontWeight: 700, fontSize: '.9rem', marginBottom: 14 }}>Klantgegevens</div>
+      {/* Klantgegevens — collapsible, outside tabs */}
+      <div className="card card-p" style={{ marginBottom: 16 }}>
+        <div
+          style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}
+          onClick={() => setKlantgegevensOpen(o => !o)}
+        >
+          <div style={{ fontWeight: 700, fontSize: '.9rem', flex: 1 }}>Klantgegevens</div>
+          <Edit2 size={14} style={{ color: 'var(--dl)', flexShrink: 0 }} />
+          {klantgegevensOpen ? <ChevronDown size={16} style={{ color: 'var(--dl)', flexShrink: 0 }} /> : <ChevronRight size={16} style={{ color: 'var(--dl)', flexShrink: 0 }} />}
+        </div>
+        {klantgegevensOpen && (
+          <div style={{ marginTop: 12 }}>
             {[
               { key: 'name',      label: 'Naam',        type: 'input' },
               { key: 'email',     label: 'E-mail',      type: 'input' },
@@ -268,37 +349,132 @@ export function CustomerPage({ custId, onClose, setPage }) {
               );
             })}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div className="card card-p">
-              <div style={{ fontWeight: 700, fontSize: '.9rem', marginBottom: 10 }}>Openstaande activiteit</div>
-              {cActs.filter(a => a.status !== 'done').slice(0, 2).map(a => (
-                <div key={a.id} className="act-item" style={{ paddingTop: 0, cursor: 'pointer' }} onClick={() => setSelectedAct(a)}>
-                  <div className="act-icon visit" style={{ fontSize: '.85rem' }}>
-                    {({ call: I.call, email: I.mail, visit: I.map, task: I.check, follow: I.note })[a.type] || I.act}
-                  </div>
-                  <div>
-                    <div className="act-title">{a.title}</div>
-                    <div className="act-meta">{a.date} · {a.time}</div>
-                  </div>
-                </div>
-              ))}
-              {cActs.filter(a => a.status !== 'done').length === 0 && (
-                <div style={{ fontSize: '.8rem', color: 'var(--dl)' }}>Geen openstaande activiteiten</div>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="tabs" style={{ marginBottom: 16 }}>
+        {TABS.map(t => (
+          <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>{TAB_LABELS[t]}</button>
+        ))}
+      </div>
+
+      {/* Overview */}
+      {tab === 'overview' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Basisgegevens compact */}
+          <div className="card card-p">
+            <div style={{ fontWeight: 700, fontSize: '.9rem', marginBottom: 10 }}>Basisgegevens</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '.85rem' }}>
+              <div style={{ fontWeight: 600 }}>{c.name}</div>
+              {c.phone && (
+                <a href={`tel:${c.phone}`} style={{ color: 'var(--tx)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {I.call} {c.phone}
+                </a>
+              )}
+              {c.email && (
+                <a href={`mailto:${c.email}`} style={{ color: 'var(--tx)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {I.mail} {c.email}
+                </a>
               )}
             </div>
-            <div className="card card-p">
-              <div style={{ fontWeight: 700, fontSize: '.9rem', marginBottom: 10 }}>Laatste offerte</div>
-              {cQuotes.slice(0, 1).map(q => (
-                <div key={q.id}>
-                  <div style={{ fontWeight: 600, fontSize: '.85rem', marginBottom: 4 }}>{q.title}</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <StatusBadge status={q.status} />
-                    <span style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--dk)' }}>{fmt(q.amount)}</span>
-                  </div>
-                </div>
-              ))}
-              {cQuotes.length === 0 && <div style={{ fontSize: '.8rem', color: 'var(--dl)' }}>Nog geen offertes</div>}
+          </div>
+
+          {/* Activiteiten */}
+          <div className="card card-p">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Activiteiten</div>
+              <button className="btn-icon" title="Activiteit toevoegen" onClick={() => setShowActivityModal(true)} style={{ fontSize: 18, lineHeight: 1 }}>+</button>
             </div>
+            {cActs.length === 0 && <div style={{ fontSize: '.8rem', color: 'var(--dl)' }}>Geen activiteiten</div>}
+            {cActs.map(a => (
+              <div key={a.id} className="act-item" style={{ cursor: 'pointer' }} onClick={() => setSelectedAct(a)}>
+                <div className="act-icon visit" style={{ fontSize: '.85rem' }}>
+                  {({ call: I.call, email: I.mail, visit: I.map, task: I.check, follow: I.note })[a.type] || I.act}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div className="act-title">{a.title}</div>
+                  <div className="act-meta"><span>{a.date}</span><span>·</span><span>{a.time}</span><StatusBadge status={a.status} /></div>
+                </div>
+                <button className="btn btn-s btn-xs" onClick={e => { e.stopPropagation(); setSelectedAct(a); }}>Open</button>
+              </div>
+            ))}
+          </div>
+
+          {/* Offertes */}
+          <div className="card card-p">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Offertes</div>
+              <button className="btn-icon" title="Offerte toevoegen" onClick={() => setShowNewOfferte(true)} style={{ fontSize: 18, lineHeight: 1 }}>+</button>
+            </div>
+            {cOffertes.length === 0 && <div style={{ fontSize: '.8rem', color: 'var(--dl)' }}>Geen offertes</div>}
+            {cOffertes.map(o => (
+              <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: '.83rem' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, color: 'var(--dl)', fontSize: '.75rem' }}>{o.nummer}</div>
+                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.omschrijving || '—'}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  <span style={{ fontWeight: 700 }}>{fmt(o.totaalIncl)}</span>
+                  <StatusBadge status={o.status} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Facturen */}
+          <div className="card card-p">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Facturen</div>
+              <button className="btn-icon" title="Factuur toevoegen" onClick={() => setShowNewFactuur(true)} style={{ fontSize: 18, lineHeight: 1 }}>+</button>
+            </div>
+            {cFacturen.length === 0 && <div style={{ fontSize: '.8rem', color: 'var(--dl)' }}>Geen facturen</div>}
+            {cFacturen.map(f => (
+              <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: '.83rem' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, color: 'var(--dl)', fontSize: '.75rem' }}>{f.nummer}</div>
+                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.notities || '—'}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  <span style={{ fontWeight: 700 }}>{fmt(f.totaalIncl)}</span>
+                  <StatusBadge status={f.status} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Projecten */}
+          <div className="card card-p">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Projecten</div>
+              <button className="btn-icon" title="Project toevoegen" onClick={() => setShowNewProject(true)} style={{ fontSize: 18, lineHeight: 1 }}>+</button>
+            </div>
+            {showNewProject && (
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <input
+                  style={{ flex: 1 }}
+                  placeholder="Projectnaam..."
+                  value={newProjectName}
+                  onChange={e => setNewProjectName(e.target.value)}
+                  autoFocus
+                  onKeyDown={e => { if (e.key === 'Enter') addProject(); if (e.key === 'Escape') { setShowNewProject(false); setNewProjectName(''); } }}
+                />
+                <button className="btn btn-p btn-xs" disabled={savingProject || !newProjectName.trim()} onClick={addProject}>Aanmaken</button>
+                <button className="btn btn-ghost btn-xs" onClick={() => { setShowNewProject(false); setNewProjectName(''); }}>Annuleer</button>
+              </div>
+            )}
+            {cProjecten.length === 0 && !showNewProject && <div style={{ fontSize: '.8rem', color: 'var(--dl)' }}>Geen projecten</div>}
+            {cProjecten.map(p => (
+              <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: '.83rem' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  {p.projectValue > 0 && <span style={{ fontWeight: 700 }}>{fmt(p.projectValue)}</span>}
+                  <StatusBadge status={p.status} />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -324,56 +500,29 @@ export function CustomerPage({ custId, onClose, setPage }) {
         </div>
       )}
 
-      {/* Activities */}
-      {tab === 'activities' && (
-        <div className="card card-p">
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
-            <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Activiteiten</div>
-            <button className="btn btn-p btn-xs" onClick={() => setShowActivityModal(true)}>{I.plus} Met details toevoegen</button>
-          </div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            <input style={{ flex: 1 }} value={activityTitle} onChange={e => setActivityTitle(e.target.value)} placeholder="Snelle activiteit..." />
-            <button className="btn btn-p btn-xs" disabled={savingActivity || !activityTitle.trim()} onClick={addActivity}>
-              {savingActivity ? 'Opslaan...' : <>{I.plus} Snel toevoegen</>}
-            </button>
-          </div>
-          {cActs.length > 0 ? cActs.map(a => (
-            <div key={a.id} className="act-item" style={{ cursor: 'pointer' }} onClick={() => setSelectedAct(a)}>
-              <div className="act-icon visit" style={{ fontSize: '.85rem' }}>
-                {({ call: I.call, email: I.mail, visit: I.map, task: I.check, follow: I.note })[a.type] || I.act}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div className="act-title">{a.title}</div>
-                <div className="act-meta"><span>{a.date}</span><span>·</span><span>{a.time}</span><StatusBadge status={a.status} /></div>
-              </div>
-              <button className="btn btn-s btn-xs" onClick={e => { e.stopPropagation(); setSelectedAct(a); }}>Open</button>
-            </div>
-          )) : <div className="empty"><div className="empty-title">Geen activiteiten</div></div>}
-        </div>
-      )}
-
       {/* Quotes */}
       {tab === 'quotes' && (
         <div className="tw">
           <div className="tw-hd">
             <div className="card-title">Offertes</div>
-            <button className="btn btn-p btn-xs">{I.plus} Nieuwe offerte</button>
+            <button className="btn btn-p btn-xs" onClick={() => setShowNewOfferte(true)}>{I.plus} Nieuwe offerte</button>
           </div>
           <table className="dt">
-            <thead><tr><th>#</th><th>Omschrijving</th><th>Bedrag</th><th>Datum</th><th>Status</th></tr></thead>
+            <thead><tr><th>#</th><th>Omschrijving</th><th>Bedrag</th><th>Status</th></tr></thead>
             <tbody>
-              {cQuotes.map(q => (
-                <tr key={q.id}>
-                  <td style={{ color: 'var(--dl)', fontWeight: 600 }}>{q.id}</td>
-                  <td>{q.title}</td>
-                  <td style={{ fontWeight: 700 }}>{fmt(q.amount)}</td>
-                  <td style={{ color: 'var(--dl)' }}>{q.date}</td>
-                  <td><StatusBadge status={q.status} /></td>
+              {cOffertes.map(o => (
+                <tr key={o.id}>
+                  <td style={{ color: 'var(--dl)', fontWeight: 600 }}>{o.nummer}</td>
+                  <td>{o.omschrijving || '—'}</td>
+                  <td style={{ fontWeight: 700 }}>{fmt(o.totaalIncl)}</td>
+                  <td><StatusBadge status={o.status} /></td>
                 </tr>
               ))}
+              {cOffertes.length === 0 && (
+                <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--dl)', padding: 20 }}>Geen offertes</td></tr>
+              )}
             </tbody>
           </table>
-          {cQuotes.length === 0 && <div className="empty"><div className="empty-title">Geen offertes</div></div>}
         </div>
       )}
 
@@ -417,28 +566,30 @@ export function CustomerPage({ custId, onClose, setPage }) {
         </div>
       )}
 
-      {/* Notes */}
-      {tab === 'notes' && (
-        <div className="card card-p">
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
-            <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Interne notities</div>
+      {/* Facturen */}
+      {tab === 'facturen' && (
+        <div className="tw">
+          <div className="tw-hd">
+            <div className="card-title">Facturen</div>
+            <button className="btn btn-p btn-xs" onClick={() => setShowNewFactuur(true)}>{I.plus} Nieuwe factuur</button>
           </div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            <input style={{ flex: 1 }} value={noteText} onChange={e => setNoteText(e.target.value)} placeholder="Nieuwe notitie..." />
-            <button className="btn btn-p btn-xs" disabled={savingNote || !noteText.trim()} onClick={addNote}>
-              {savingNote ? 'Opslaan...' : <>{I.plus} Opslaan</>}
-            </button>
-          </div>
-          {cNotes.map((n, i) => (
-            <div key={n.id || i} style={{ padding: '12px 0', borderBottom: '1px solid #f3f4f6' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{ fontWeight: 600, fontSize: '.82rem' }}>{n.author || 'Notitie'}</span>
-                <span style={{ fontSize: '.73rem', color: 'var(--dl)' }}>{n.createdAt?.slice(0, 10) || ''}</span>
-              </div>
-              <div style={{ fontSize: '.85rem', color: 'var(--dm)', lineHeight: 1.55 }}>{n.body}</div>
-            </div>
-          ))}
-          {cNotes.length === 0 && <div className="empty"><div className="empty-title">Geen notities</div></div>}
+          <table className="dt">
+            <thead><tr><th>#</th><th>Notities</th><th>Bedrag</th><th>Datum</th><th>Status</th></tr></thead>
+            <tbody>
+              {cFacturen.map(f => (
+                <tr key={f.id}>
+                  <td style={{ color: 'var(--dl)', fontWeight: 600 }}>{f.nummer}</td>
+                  <td>{f.notities || '—'}</td>
+                  <td style={{ fontWeight: 700 }}>{fmt(f.totaalIncl)}</td>
+                  <td style={{ color: 'var(--dl)' }}>{f.factuurdatum || '—'}</td>
+                  <td><StatusBadge status={f.status} /></td>
+                </tr>
+              ))}
+              {cFacturen.length === 0 && (
+                <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--dl)', padding: 20 }}>Geen facturen</td></tr>
+              )}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -471,6 +622,22 @@ export function CustomerPage({ custId, onClose, setPage }) {
           customers={[c]}
           defaultCustId={c.id}
           onSaved={() => { reloadCosts(); setTab('costs'); }}
+        />
+      )}
+      {showNewOfferte && (
+        <NewOfferteModal
+          customers={[c]}
+          prefillCustomerId={c.id}
+          onClose={() => setShowNewOfferte(false)}
+          onSaved={saved => { setOffertes(os => [saved, ...os]); setShowNewOfferte(false); }}
+        />
+      )}
+      {showNewFactuur && (
+        <NewFactuurModal
+          customers={[c]}
+          prefill={{ customer_id: c.id }}
+          onClose={() => setShowNewFactuur(false)}
+          onSaved={saved => { setFacturen(fs => [saved, ...fs]); setShowNewFactuur(false); }}
         />
       )}
     </div>
@@ -534,10 +701,10 @@ export function CustomersPage({ openCustomer }) {
       {loading && <div className="card card-p">Klanten laden...</div>}
       {!loading && filtered.length === 0 && <div className="empty"><div className="empty-title">Geen klanten gevonden</div><div className="empty-sub">Maak je eerste klant aan of pas je zoekopdracht aan.</div></div>}
       {!loading && filtered.length > 0 && (view === 'grid' ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }} className="afu2 cust-card-grid">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, alignItems: 'stretch' }} className="afu2 cust-card-grid">
           {filtered.map(c => {
             return (
-              <div key={c.id} className="card card-p" style={{ cursor: 'pointer', transition: 'all .18s ease' }}
+              <div key={c.id} className="card card-p" style={{ cursor: 'pointer', transition: 'all .18s ease', display: 'flex', flexDirection: 'column' }}
                 onClick={() => openCustomer(c.id)}
                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.borderColor = 'rgba(29,219,98,.3)'; }}
                 onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.borderColor = ''; }}>
@@ -553,7 +720,7 @@ export function CustomersPage({ openCustomer }) {
                   {c.phone && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{I.call} {c.phone}</div>}
                   {c.city && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{I.map} {c.city}</div>}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 'auto' }}>
                   <div>
                     <div style={{ fontSize: '.68rem', color: 'var(--dl)' }}>Geoffreerd</div>
                     <div style={{ fontWeight: 700, fontSize: '.88rem' }}>{fmt(c.total)}</div>
@@ -563,7 +730,6 @@ export function CustomersPage({ openCustomer }) {
                     <div style={{ fontWeight: 700, fontSize: '.88rem', color: c.paid > 0 ? '#059669' : 'var(--dk)' }}>{fmt(c.paid)}</div>
                   </div>
                   <button className="btn-icon" title="Verwijderen" onClick={e => { e.stopPropagation(); remove(c.id); }}>{I.trash}</button>
-                  <span className={`badge ${stageCol(c.stage)}`} style={{ fontSize: '.65rem' }}>{stageLabel(c.stage)}</span>
                 </div>
               </div>
             );

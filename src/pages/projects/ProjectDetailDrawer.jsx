@@ -17,6 +17,7 @@ import {
   PROJECT_STATUS_OPTIONS,
 } from '../../services/projectsService.js';
 import { getWerkbonnenByProject, createWerkbon } from '../../services/werkbonService.js';
+import { NewFactuurModal } from '../FacturenPage.jsx';
 
 const TABS = [
   { id: 'overview',   label: 'Overzicht' },
@@ -486,7 +487,8 @@ function UrenTab({ project, entries, onAdd, onDelete, canManage }) {
 
 // ── FACTUREN TAB ─────────────────────────────────────────────────────────────
 
-function FacturenTab({ project, invoices, openInvoice, setPage }) {
+function FacturenTab({ project, invoices, openInvoice, customers, onNew }) {
+  const [showNewFactuur, setShowNewFactuur] = useState(false);
   return (
     <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div className="card card-p" style={{ padding: 14, background: '#fafafa' }}>
@@ -513,16 +515,13 @@ function FacturenTab({ project, invoices, openInvoice, setPage }) {
           <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--dl)' }}>
             Facturen ({invoices.length})
           </div>
-          <button className="btn btn-s btn-sm" onClick={() => setPage?.('facturen')}>
+          <button className="btn btn-s btn-sm" onClick={() => setShowNewFactuur(true)}>
             {I.plus} Nieuwe factuur
           </button>
         </div>
         {invoices.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--dl)', fontSize: 13 }}>
             Nog geen facturen aangemaakt voor dit project.
-            <div style={{ fontSize: 12, marginTop: 6 }}>
-              Maak een factuur aan vanuit de Facturen-pagina en koppel deze aan dit project (kolom <code>project_id</code>).
-            </div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -545,6 +544,16 @@ function FacturenTab({ project, invoices, openInvoice, setPage }) {
           </div>
         )}
       </div>
+
+      {showNewFactuur && (
+        <NewFactuurModal
+          customers={customers}
+          projects={[{ id: project.id, name: project.name, customerId: project.customerId }]}
+          prefill={{ customer_id: project.customerId || '', project_id: project.id }}
+          onClose={() => setShowNewFactuur(false)}
+          onSaved={saved => { setShowNewFactuur(false); onNew?.(saved); }}
+        />
+      )}
     </div>
   );
 }
@@ -902,7 +911,13 @@ export function ProjectDetailDrawer({
                   project={project}
                   invoices={invoices}
                   openInvoice={openInvoice}
-                  setPage={setPage}
+                  customers={customers}
+                  onNew={saved => {
+                    const next = [{ id: saved.id, nummer: saved.nummer, status: saved.status, factuurdatum: saved.factuurdatum, vervaldatum: saved.vervaldatum, totaalIncl: saved.totaalIncl, totaalExcl: saved.totaalExcl }, ...invoices];
+                    setInvoices(next);
+                    recompute(entries, next);
+                    onChanged?.();
+                  }}
                 />
               )}
               {tab === 'werkbonnen' && (

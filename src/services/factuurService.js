@@ -6,6 +6,7 @@ const toFactuur = row => ({
   id: row.id,
   companyId: row.company_id,
   customerId: row.customer_id,
+  projectId: row.project_id || null,
   nummer: row.nummer || '',
   factuurdatum: row.factuurdatum || null,
   vervaldatum: row.vervaldatum || null,
@@ -64,6 +65,7 @@ export async function createFactuur(input) {
   const nummer = input.nummer || (await generateFactuurNummer())
   const base = {
     customer_id: input.customer_id || null,
+    project_id: input.project_id || input.projectId || null,
     nummer,
     factuurdatum: input.factuurdatum || new Date().toISOString().slice(0, 10),
     vervaldatum: input.vervaldatum || null,
