@@ -869,7 +869,17 @@ function AppInner() {
     switch (page) {
       case 'dashboard':  return <DashboardHome {...props} />;
       case 'pipeline':   return <Pipeline openCustomer={openCustomer} openDeal={openDeal} setPage={navigatePage} />;
-      case 'customers':  return <CustomersPage openCustomer={openCustomer} />;
+      case 'customers':
+        return drawerCust !== null ? (
+          <div className="cust-split">
+            <div className="cust-split-list">
+              <CustomersPage openCustomer={openCustomer} />
+            </div>
+            <div className="cust-split-panel">
+              <CustomerPage custId={drawerCust} onClose={closeCustomer} setPage={navigatePage} />
+            </div>
+          </div>
+        ) : <CustomersPage openCustomer={openCustomer} />;
       case 'activities': return <ActivitiesPageV2 openCustomer={openCustomer} preOpenActivityId={navIntent?.page === 'activities' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'calendar':   return <CalendarPage openCustomer={openCustomer} openCalendarEvent={openCalendarEvent} preOpenActivityId={navIntent?.page === 'calendar' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'costs':       return <CostsPage />;
@@ -984,7 +994,7 @@ function AppInner() {
             navigatePage={navigatePage}
             refreshKey={refreshKey}
           />
-          <div className="content">
+          <div className={`content${page === 'customers' && drawerCust !== null ? ' content-split' : ''}`}>
             {showProfileMissing ? (
               <div className="bb-profile-missing">
                 <div className="bb-profile-missing-card">
@@ -1042,7 +1052,7 @@ function AppInner() {
           profile={profile}
         />
 
-        {drawerCust !== null && (
+        {drawerCust !== null && page !== 'customers' && (
           <CustomerDrawer
             custId={drawerCust}
             onClose={closeCustomer}

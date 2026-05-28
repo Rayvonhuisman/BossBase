@@ -13,7 +13,7 @@ import { listDeals } from '../services/dealService.js';
 import { getOffertes } from '../services/offerteService.js';
 import { getFacturen } from '../services/factuurService.js';
 import { getProjects } from '../services/projectsService.js';
-import { NewOfferteModal } from './OffertesPage.jsx';
+import { NewOfferteModal, OfferteBadge } from './OffertesPage.jsx';
 import { NewFactuurModal, FactuurBadge } from './FacturenPage.jsx';
 import { NewProjectModal, ProjectBadge } from './ProjectsPage.jsx';
 import { useToast } from '../lib/toast.jsx';
@@ -59,7 +59,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
   }, []);
 
   useEffect(() => {
-    const drawer = document.querySelector('.drawer');
+    const drawer = document.querySelector('.drawer') || document.querySelector('.cust-split-panel');
     if (!drawer) return;
     if (fullscreen) {
       drawer.style.setProperty('--fs-left', `${sbWidth}px`);
@@ -69,7 +69,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
       drawer.style.removeProperty('--fs-left');
     }
     return () => {
-      const d = document.querySelector('.drawer');
+      const d = document.querySelector('.drawer') || document.querySelector('.cust-split-panel');
       if (d) {
         d.classList.remove('klant-fullscreen');
         d.style.removeProperty('--fs-left');
@@ -96,13 +96,24 @@ export function CustomerPage({ custId, onClose, setPage }) {
     ])
     .then(([customer, activities, notes, costs, allOffertes, allFacturen, allProjecten]) => {
       if (!alive) return;
+      console.log('[debug] custId vergelijken met:', custId, typeof custId);
+      console.log('[debug] offerte customerId velden:', allOffertes.map(o => o.customerId));
+      console.log('[debug] offerte keys[0]:', allOffertes[0] ? Object.keys(allOffertes[0]) : 'geen offertes');
+      console.log('[debug] factuur customerId velden:', allFacturen.map(f => f.customerId));
+      console.log('[debug] factuur keys[0]:', allFacturen[0] ? Object.keys(allFacturen[0]) : 'geen facturen');
+      console.log('[debug] project customerId velden:', allProjecten.map(p => p.customerId));
+      console.log('[debug] project keys[0]:', allProjecten[0] ? Object.keys(allProjecten[0]) : 'geen projecten');
+      const filteredOffertes = allOffertes.filter(o => o.customerId === custId);
+      const filteredFacturen = allFacturen.filter(f => f.customerId === custId);
+      const filteredProjecten = allProjecten.filter(p => p.customerId === custId);
+      console.log('[debug] na filter → offertes:', filteredOffertes.length, 'facturen:', filteredFacturen.length, 'projecten:', filteredProjecten.length);
       setCustomer(customer);
       setActs(activities.filter(a => a.custId === custId));
       setNotes(notes);
       setCosts(costs.filter(x => x.custId === custId));
-      setOffertes(allOffertes.filter(o => o.customerId === custId));
-      setFacturen(allFacturen.filter(f => f.customerId === custId));
-      setProjecten(allProjecten.filter(p => p.customerId === custId));
+      setOffertes(filteredOffertes);
+      setFacturen(filteredFacturen);
+      setProjecten(filteredProjecten);
       setError('');
     })
     .catch(err => alive && setError(err.message || 'Klant laden is mislukt.'))
@@ -288,7 +299,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                   <span style={{ fontWeight: 700 }}>{fmt(o.totaalIncl)}</span>
-                  <StatusBadge status={o.status} />
+                  <OfferteBadge status={o.status} />
                 </div>
               </div>
             ))}
@@ -374,7 +385,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
                     <td style={{ color: 'var(--dl)', fontWeight: 600 }}>{o.nummer}</td>
                     <td>{o.omschrijving || '—'}</td>
                     <td style={{ fontWeight: 700 }}>{fmt(o.totaalIncl)}</td>
-                    <td><StatusBadge status={o.status} /></td>
+                    <td><OfferteBadge status={o.status} /></td>
                   </tr>
                 ))}
               </tbody>

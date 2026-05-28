@@ -17,6 +17,8 @@ const offerteBadge = status => {
   return <span className={`badge ${map[status] || 'b-gray'}`}>{labels[status] || status}</span>;
 };
 
+export function OfferteBadge({ status }) { return offerteBadge(status); }
+
 const fmtDate = d => {
   if (!d) return '—';
   const [y, m, day] = d.split('-');
