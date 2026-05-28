@@ -130,9 +130,9 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
           </div>
           {form.customer_id && (
             <div className="f s2">
-              <label>Deal (optioneel)</label>
+              <label>Project (optioneel)</label>
               <select value={form.deal_id} onChange={e => set('deal_id', e.target.value)}>
-                <option value="">— Geen deal —</option>
+                <option value="">— Geen project —</option>
                 {deals.filter(d => d.custId === form.customer_id).map(d => (
                   <option key={d.id} value={d.id}>{d.title}{d.value > 0 ? ` · €${Number(d.value).toLocaleString('nl-NL')}` : ''}</option>
                 ))}

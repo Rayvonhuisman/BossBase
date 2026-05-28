@@ -1877,3 +1877,9 @@ ul{list-style:none}
   .uren2-modal{ max-width:none }
   .uren2-modal-ft{ background:#fff }
 }
+
+.sync-indicator{position:relative;display:inline-flex;align-items:center;cursor:default}
+.sync-indicator::after{content:attr(data-tooltip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;font-size:.72rem;white-space:nowrap;padding:4px 8px;border-radius:6px;pointer-events:none;opacity:0;transition:opacity .15s ease;transition-delay:0s}
+.sync-indicator:hover::after{opacity:1;transition-delay:.3s}
+
+.es{font-size:.8rem;color:var(--dl);text-align:center;width:100%;padding:24px 0}

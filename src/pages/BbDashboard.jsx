@@ -464,7 +464,7 @@ function DealDetailModal({ deal, stages, customers, onClose, setPage }) {
               </button>
             </div>
             {notes.length === 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--dl)' }}>Nog geen notities</div>
+              <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Nog geen notities</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 160, overflowY: 'auto' }}>
                 {notes.map(n => (
@@ -712,7 +712,7 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
   const visibleStages = (filter.stage === 'all'
     ? SHOWN_STAGE_IDS
     : SHOWN_STAGE_IDS.filter(id => id === filter.stage)
-  ).filter(id => !(hideLost && id === lostStageId));
+  );
 
   // Deals whose stage_id is NULL or points to a stage that no longer exists
   // must not silently disappear — funnel them into the first column so they
@@ -742,7 +742,7 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
     try {
       const updated = await updateDealStage(lostDeal.id, lostStage.id);
       setDeals(ds => ds.map(d => d.id === lostDeal.id ? updated : d));
-      toast.success('Deal gemarkeerd als verloren');
+      toast.success('Project gemarkeerd als verloren');
     } catch (err) {
       console.error('[bb:pipeline] markeer verloren mislukt', err);
       toast.error(err.message || 'Status bijwerken mislukt');
@@ -954,6 +954,16 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
         {visibleStages.map(stageId => {
           const stage = stages.find(s => s.id === stageId) || PIPELINE_STAGES.find(s => s.id === stageId) || { id: stageId, label: stageId, col: 'b-gray' };
           const stageDeals = dealsInStage(stageId);
+          if (hideLost && stageId === lostStageId) {
+            return (
+              <div key={stageId} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', width: 36, minWidth: 36, flexShrink: 0, paddingTop: 10, cursor: 'pointer', opacity: 0.5 }}
+                title="Verloren tonen"
+                onClick={toggleHideLost}>
+                {I.eye_off}
+                <span style={{ writingMode: 'vertical-rl', fontSize: '.7rem', color: 'var(--dl)', marginTop: 8, letterSpacing: 1 }}>Verloren</span>
+              </div>
+            );
+          }
           return (
             <div key={stageId}
               className={`pipe-col${dragOverStage === stageId ? ' pipe-col-drop' : ''}`}
@@ -1026,17 +1036,6 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
         })}
         </div>
         </div>
-        {hideLost && lostStageId && (
-          <div style={{ padding: '10px 16px 4px' }}>
-            <button
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '.75rem', color: 'var(--dl)', background: 'var(--bg2)', border: '1px solid var(--brd)', borderRadius: 20, padding: '4px 10px', cursor: 'pointer' }}
-              onClick={toggleHideLost}
-            >
-              {I.eye_off}
-              Verloren ({deals.filter(d => d.stage === lostStageId).length}) — klik om te tonen
-            </button>
-          </div>
-        )}
         </div>
       )}
 

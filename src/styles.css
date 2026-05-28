@@ -109,6 +109,31 @@ textarea:disabled {
   outline-offset: 2px;
 }
 
+/* ─── Global input / textarea / select base ─────────── */
+input:not([type=checkbox]):not([type=radio]),
+textarea,
+select {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: white;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:not([type=checkbox]):not([type=radio]):focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: #1DDB62;
+  box-shadow: 0 0 0 3px rgba(29, 219, 98, 0.14);
+}
+
+input:not([type=checkbox]):not([type=radio]):focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+}
+
 /* ─── Scrollbar ─────────────────────────────────────── */
 
 ::-webkit-scrollbar        { width: 8px; height: 8px; }

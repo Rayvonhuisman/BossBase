@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, Edit2, Maximize2, Minimize2, X } from 'lucide-react';
+import { Check, Edit2, Maximize2, Minimize2, X } from 'lucide-react';
 import {
   I, CUSTOMERS_DATA, DEALS, ACTIVITIES_DATA, QUOTES_DATA, COSTS_DATA,
   fmt, custById, stageLabel, stageCol, Av, StatusBadge, ModalX,
@@ -12,9 +12,10 @@ import { listJobCosts } from '../services/jobCostService.js';
 import { listDeals } from '../services/dealService.js';
 import { getOffertes } from '../services/offerteService.js';
 import { getFacturen } from '../services/factuurService.js';
-import { createProject, getProjects } from '../services/projectsService.js';
+import { getProjects } from '../services/projectsService.js';
 import { NewOfferteModal } from './OffertesPage.jsx';
 import { NewFactuurModal } from './FacturenPage.jsx';
+import { NewProjectModal } from './ProjectsPage.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { ActivityEditModal, NewActivityModal, NewCustomerModal, NewJobCostModal } from '../components/SharedModals.jsx';
@@ -43,16 +44,12 @@ export function CustomerPage({ custId, onClose, setPage }) {
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [showCostModal, setShowCostModal] = useState(false);
   const [selectedAct, setSelectedAct] = useState(null);
-  const [mbSyncing, setMbSyncing] = useState(false);
   const [cOffertes, setOffertes] = useState([]);
   const [cFacturen, setFacturen] = useState([]);
   const [cProjecten, setProjecten] = useState([]);
-  const [klantgegevensOpen, setKlantgegevensOpen] = useState(false);
   const [showNewOfferte, setShowNewOfferte] = useState(false);
   const [showNewFactuur, setShowNewFactuur] = useState(false);
   const [showNewProject, setShowNewProject] = useState(false);
-  const [newProjectName, setNewProjectName] = useState('');
-  const [savingProject, setSavingProject] = useState(false);
   const [fullscreen, setFullscreen] = useState(() => localStorage.getItem('customer_fullscreen') === 'true');
   const [sbWidth, setSbWidth] = useState(232);
 
@@ -179,42 +176,8 @@ export function CustomerPage({ custId, onClose, setPage }) {
     } catch { /* ignore */ }
   };
 
-  const addProject = async () => {
-    const name = newProjectName.trim();
-    if (!name) return;
-    setSavingProject(true);
-    try {
-      const created = await createProject({ name, customer_id: c.id });
-      setProjecten(ps => [created, ...ps]);
-      setNewProjectName('');
-      setShowNewProject(false);
-      toast.success('Project aangemaakt');
-    } catch (err) {
-      toast.error(err.message || 'Aanmaken mislukt');
-    } finally {
-      setSavingProject(false);
-    }
-  };
-
-  const syncWithMoneybird = async () => {
-    setMbSyncing(true);
-    try {
-      const result = await updateContactInMoneybird(c.id);
-      if (result?.success) {
-        setCustomer(prev => ({ ...prev, moneybirdId: result.moneybird_id }));
-        toast.success('Klant gesynchroniseerd met Moneybird');
-      } else {
-        toast.error(result?.error || 'Sync mislukt');
-      }
-    } catch (err) {
-      toast.error(err.message || 'Sync mislukt');
-    } finally {
-      setMbSyncing(false);
-    }
-  };
-
-  const TABS = ['overview', 'timeline', 'quotes', 'costs', 'facturen'];
-  const TAB_LABELS = { overview: 'Overzicht', timeline: 'Tijdlijn', quotes: 'Offertes', costs: 'Kosten', facturen: 'Facturen' };
+  const TABS = ['overview', 'quotes', 'costs', 'projecten', 'timeline', 'klantgegevens'];
+  const TAB_LABELS = { overview: 'Overzicht', quotes: 'Offertes', costs: 'Kosten', projecten: 'Projecten', timeline: 'Tijdlijn', klantgegevens: 'Klantgegevens' };
 
   const TIMELINE = [
     { label: 'Lead aangemaakt',     date: '8 apr 2026',  note: 'Via website formulier',                     filled: true },
@@ -245,24 +208,19 @@ export function CustomerPage({ custId, onClose, setPage }) {
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
             <h2 style={{ fontWeight: 800, fontSize: '1.25rem', letterSpacing: '-.025em' }}>{c.name}</h2>
-            <span className={`badge ${stageCol(c.stage)}`}>{stageLabel(c.stage)}</span>
             <span className={`badge ${c.type === 'Zakelijk' ? 'b-blue' : 'b-gray'}`}>{c.type}</span>
           </div>
           <div style={{ fontSize: '.82rem', color: 'var(--dmu)', marginBottom: 10 }}>{c.company} · {c.city}</div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-start', marginLeft: 0, paddingLeft: 0 }}>
             {c.phone && <a href={`tel:${c.phone}`} className="btn btn-s btn-sm">{I.call} {c.phone}</a>}
             {c.email && <a href={`mailto:${c.email}`} className="btn btn-s btn-sm">{I.mail} E-mail</a>}
-            <button className="btn btn-s btn-sm" onClick={() => setShowActivityModal(true)}>{I.act} Activiteit</button>
-            <button className="btn btn-s btn-sm" onClick={() => setShowCostModal(true)}>{I.costs} Kosten</button>
-            <button className="btn btn-s btn-sm" onClick={() => setPage('customers')}>{I.arrow_r} Overzicht</button>
-            {c.moneybirdId ? (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '.75rem', color: '#059669', fontWeight: 600, padding: '4px 8px', background: '#d1fae5', borderRadius: 6 }}>
-                {I.check} Gesynchroniseerd met Moneybird
+            {(c.moneybirdId || c.afasId || c.snelstartId) && (
+              <span
+                className="sync-indicator"
+                data-tooltip={c.moneybirdId ? 'Gesynchroniseerd met Moneybird' : c.afasId ? 'Gesynchroniseerd met AFAS' : 'Gesynchroniseerd met SnelStart'}
+              >
+                <Check size={15} style={{ color: '#059669' }} />
               </span>
-            ) : (
-              <button className="btn btn-s btn-sm" onClick={syncWithMoneybird} disabled={mbSyncing}>
-                {mbSyncing ? 'Synchroniseren...' : 'Sync met Moneybird'}
-              </button>
             )}
           </div>
         </div>
@@ -284,74 +242,6 @@ export function CustomerPage({ custId, onClose, setPage }) {
         ))}
       </div>
 
-      {/* Klantgegevens — collapsible, outside tabs */}
-      <div className="card card-p" style={{ marginBottom: 16 }}>
-        <div
-          style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}
-          onClick={() => setKlantgegevensOpen(o => !o)}
-        >
-          <div style={{ fontWeight: 700, fontSize: '.9rem', flex: 1 }}>Klantgegevens</div>
-          <Edit2 size={14} style={{ color: 'var(--dl)', flexShrink: 0 }} />
-          {klantgegevensOpen ? <ChevronDown size={16} style={{ color: 'var(--dl)', flexShrink: 0 }} /> : <ChevronRight size={16} style={{ color: 'var(--dl)', flexShrink: 0 }} />}
-        </div>
-        {klantgegevensOpen && (
-          <div style={{ marginTop: 12 }}>
-            {[
-              { key: 'name',      label: 'Naam',        type: 'input' },
-              { key: 'email',     label: 'E-mail',      type: 'input' },
-              { key: 'phone',     label: 'Telefoon',    type: 'input' },
-              { key: 'address',   label: 'Adres',       type: 'input' },
-              { key: 'postcode',  label: 'Postcode',    type: 'input' },
-              { key: 'city',      label: 'Stad',        type: 'input' },
-              { key: 'kvkNumber', label: 'KvK-nummer',  type: 'input' },
-              { key: 'btwNumber', label: 'BTW-nummer',  type: 'input' },
-              { key: 'iban',      label: 'IBAN',        type: 'input' },
-              { key: 'type',      label: 'Type',        type: 'select', options: ['Particulier', 'Bedrijf', 'VvE', 'Aannemer'] },
-              { key: 'source',    label: 'Bron',        type: 'input' },
-            ].map(field => {
-              const isActive = editingField === field.key;
-              return (
-                <div key={field.key} className="cust-info-row" style={{ alignItems: 'center' }}>
-                  <span className="cust-info-label">{field.label}</span>
-                  {isActive ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
-                      {field.type === 'select' ? (
-                        <select value={fieldDraft} onChange={e => setFieldDraft(e.target.value)} style={{ flex: 1, fontSize: '.82rem', padding: '2px 4px' }}>
-                          {field.options.map(o => <option key={o} value={o}>{o}</option>)}
-                        </select>
-                      ) : (
-                        <input
-                          autoFocus
-                          value={fieldDraft}
-                          onChange={e => setFieldDraft(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter') saveField(field.key); if (e.key === 'Escape') cancelEdit(); }}
-                          style={{ flex: 1, fontSize: '.82rem', padding: '2px 6px' }}
-                        />
-                      )}
-                      <button onClick={() => saveField(field.key)} disabled={savingField} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#059669', display: 'flex', alignItems: 'center', padding: 2 }}>
-                        <Check size={14} />
-                      </button>
-                      <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2 }}>
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
-                      <span className="cust-info-val" style={{ flex: 1, color: c[field.key] ? undefined : 'var(--dl)' }}>
-                        {c[field.key] || '—'}
-                      </span>
-                      <button onClick={() => startEdit(field.key)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}>
-                        <Edit2 size={14} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
       {/* Tabs */}
       <div className="tabs" style={{ marginBottom: 16 }}>
         {TABS.map(t => (
@@ -362,31 +252,13 @@ export function CustomerPage({ custId, onClose, setPage }) {
       {/* Overview */}
       {tab === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Basisgegevens compact */}
-          <div className="card card-p">
-            <div style={{ fontWeight: 700, fontSize: '.9rem', marginBottom: 10 }}>Basisgegevens</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '.85rem' }}>
-              <div style={{ fontWeight: 600 }}>{c.name}</div>
-              {c.phone && (
-                <a href={`tel:${c.phone}`} style={{ color: 'var(--tx)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {I.call} {c.phone}
-                </a>
-              )}
-              {c.email && (
-                <a href={`mailto:${c.email}`} style={{ color: 'var(--tx)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {I.mail} {c.email}
-                </a>
-              )}
-            </div>
-          </div>
-
           {/* Activiteiten */}
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Activiteiten</div>
-              <button className="btn-icon" title="Activiteit toevoegen" onClick={() => setShowActivityModal(true)} style={{ fontSize: 18, lineHeight: 1 }}>+</button>
+              <button onClick={() => setShowActivityModal(true)} style={{ width: 28, height: 28, borderRadius: '50%', background: '#1DDB62', border: 'none', color: '#fff', fontSize: 18, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0 }}>{I.plus}</button>
             </div>
-            {cActs.length === 0 && <div style={{ fontSize: '.8rem', color: 'var(--dl)' }}>Geen activiteiten</div>}
+            {cActs.length === 0 && <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Geen activiteiten</div>}
             {cActs.map(a => (
               <div key={a.id} className="act-item" style={{ cursor: 'pointer' }} onClick={() => setSelectedAct(a)}>
                 <div className="act-icon visit" style={{ fontSize: '.85rem' }}>
@@ -405,9 +277,9 @@ export function CustomerPage({ custId, onClose, setPage }) {
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Offertes</div>
-              <button className="btn-icon" title="Offerte toevoegen" onClick={() => setShowNewOfferte(true)} style={{ fontSize: 18, lineHeight: 1 }}>+</button>
+              <button onClick={() => setShowNewOfferte(true)} style={{ width: 28, height: 28, borderRadius: '50%', background: '#1DDB62', border: 'none', color: '#fff', fontSize: 18, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0 }}>{I.plus}</button>
             </div>
-            {cOffertes.length === 0 && <div style={{ fontSize: '.8rem', color: 'var(--dl)' }}>Geen offertes</div>}
+            {cOffertes.length === 0 && <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Geen offertes</div>}
             {cOffertes.map(o => (
               <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: '.83rem' }}>
                 <div style={{ minWidth: 0 }}>
@@ -426,9 +298,9 @@ export function CustomerPage({ custId, onClose, setPage }) {
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Facturen</div>
-              <button className="btn-icon" title="Factuur toevoegen" onClick={() => setShowNewFactuur(true)} style={{ fontSize: 18, lineHeight: 1 }}>+</button>
+              <button onClick={() => setShowNewFactuur(true)} style={{ width: 28, height: 28, borderRadius: '50%', background: '#1DDB62', border: 'none', color: '#fff', fontSize: 18, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0 }}>{I.plus}</button>
             </div>
-            {cFacturen.length === 0 && <div style={{ fontSize: '.8rem', color: 'var(--dl)' }}>Geen facturen</div>}
+            {cFacturen.length === 0 && <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Geen facturen</div>}
             {cFacturen.map(f => (
               <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: '.83rem' }}>
                 <div style={{ minWidth: 0 }}>
@@ -447,23 +319,9 @@ export function CustomerPage({ custId, onClose, setPage }) {
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Projecten</div>
-              <button className="btn-icon" title="Project toevoegen" onClick={() => setShowNewProject(true)} style={{ fontSize: 18, lineHeight: 1 }}>+</button>
+              <button onClick={() => setShowNewProject(true)} style={{ width: 28, height: 28, borderRadius: '50%', background: '#1DDB62', border: 'none', color: '#fff', fontSize: 18, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0 }}>{I.plus}</button>
             </div>
-            {showNewProject && (
-              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                <input
-                  style={{ flex: 1 }}
-                  placeholder="Projectnaam..."
-                  value={newProjectName}
-                  onChange={e => setNewProjectName(e.target.value)}
-                  autoFocus
-                  onKeyDown={e => { if (e.key === 'Enter') addProject(); if (e.key === 'Escape') { setShowNewProject(false); setNewProjectName(''); } }}
-                />
-                <button className="btn btn-p btn-xs" disabled={savingProject || !newProjectName.trim()} onClick={addProject}>Aanmaken</button>
-                <button className="btn btn-ghost btn-xs" onClick={() => { setShowNewProject(false); setNewProjectName(''); }}>Annuleer</button>
-              </div>
-            )}
-            {cProjecten.length === 0 && !showNewProject && <div style={{ fontSize: '.8rem', color: 'var(--dl)' }}>Geen projecten</div>}
+            {cProjecten.length === 0 && <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Geen projecten</div>}
             {cProjecten.map(p => (
               <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: '.83rem' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -507,22 +365,24 @@ export function CustomerPage({ custId, onClose, setPage }) {
             <div className="card-title">Offertes</div>
             <button className="btn btn-p btn-xs" onClick={() => setShowNewOfferte(true)}>{I.plus} Nieuwe offerte</button>
           </div>
-          <table className="dt">
-            <thead><tr><th>#</th><th>Omschrijving</th><th>Bedrag</th><th>Status</th></tr></thead>
-            <tbody>
-              {cOffertes.map(o => (
-                <tr key={o.id}>
-                  <td style={{ color: 'var(--dl)', fontWeight: 600 }}>{o.nummer}</td>
-                  <td>{o.omschrijving || '—'}</td>
-                  <td style={{ fontWeight: 700 }}>{fmt(o.totaalIncl)}</td>
-                  <td><StatusBadge status={o.status} /></td>
-                </tr>
-              ))}
-              {cOffertes.length === 0 && (
-                <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--dl)', padding: 20 }}>Geen offertes</td></tr>
-              )}
-            </tbody>
-          </table>
+          {cOffertes.length > 0 && (
+            <table className="dt">
+              <thead><tr><th>#</th><th>Omschrijving</th><th>Bedrag</th><th>Status</th></tr></thead>
+              <tbody>
+                {cOffertes.map(o => (
+                  <tr key={o.id}>
+                    <td style={{ color: 'var(--dl)', fontWeight: 600 }}>{o.nummer}</td>
+                    <td>{o.omschrijving || '—'}</td>
+                    <td style={{ fontWeight: 700 }}>{fmt(o.totaalIncl)}</td>
+                    <td><StatusBadge status={o.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {cOffertes.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '24px 0', color: '#9ca3af' }}>Geen offertes</div>
+          )}
         </div>
       )}
 
@@ -546,50 +406,110 @@ export function CustomerPage({ custId, onClose, setPage }) {
               <div className="card-title">Kostenregels</div>
               <button className="btn btn-p btn-xs" onClick={() => setShowCostModal(true)}>{I.plus} Kosten toevoegen</button>
             </div>
-            <table className="dt">
-              <thead><tr><th>Categorie</th><th>Omschrijving</th><th>Bedrag</th><th>Datum</th></tr></thead>
-              <tbody>
-                {cCosts.map(r => (
-                  <tr key={r.id}>
-                    <td><span className="badge b-gray" style={{ textTransform: 'capitalize' }}>{r.cat}</span></td>
-                    <td>{r.desc}</td>
-                    <td style={{ fontWeight: 700 }}>{fmt(r.amt)}</td>
-                    <td style={{ color: 'var(--dl)' }}>{r.date}</td>
-                  </tr>
-                ))}
-                {cCosts.length === 0 && (
-                  <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--dl)', padding: 20 }}>Nog geen kosten geboekt</td></tr>
-                )}
-              </tbody>
-            </table>
+            {cCosts.length > 0 && (
+              <table className="dt">
+                <thead><tr><th>Categorie</th><th>Omschrijving</th><th>Bedrag</th><th>Datum</th></tr></thead>
+                <tbody>
+                  {cCosts.map(r => (
+                    <tr key={r.id}>
+                      <td><span className="badge b-gray" style={{ textTransform: 'capitalize' }}>{r.cat}</span></td>
+                      <td>{r.desc}</td>
+                      <td style={{ fontWeight: 700 }}>{fmt(r.amt)}</td>
+                      <td style={{ color: 'var(--dl)' }}>{r.date}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {cCosts.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '24px 0', color: '#9ca3af' }}>Nog geen kosten geboekt</div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Facturen */}
-      {tab === 'facturen' && (
+      {/* Projecten tab */}
+      {tab === 'projecten' && (
         <div className="tw">
           <div className="tw-hd">
-            <div className="card-title">Facturen</div>
-            <button className="btn btn-p btn-xs" onClick={() => setShowNewFactuur(true)}>{I.plus} Nieuwe factuur</button>
+            <div className="card-title">Projecten</div>
+            <button className="btn btn-p btn-xs" onClick={() => setShowNewProject(true)}>{I.plus} Nieuw project</button>
           </div>
-          <table className="dt">
-            <thead><tr><th>#</th><th>Notities</th><th>Bedrag</th><th>Datum</th><th>Status</th></tr></thead>
-            <tbody>
-              {cFacturen.map(f => (
-                <tr key={f.id}>
-                  <td style={{ color: 'var(--dl)', fontWeight: 600 }}>{f.nummer}</td>
-                  <td>{f.notities || '—'}</td>
-                  <td style={{ fontWeight: 700 }}>{fmt(f.totaalIncl)}</td>
-                  <td style={{ color: 'var(--dl)' }}>{f.factuurdatum || '—'}</td>
-                  <td><StatusBadge status={f.status} /></td>
-                </tr>
-              ))}
-              {cFacturen.length === 0 && (
-                <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--dl)', padding: 20 }}>Geen facturen</td></tr>
-              )}
-            </tbody>
-          </table>
+          {cProjecten.length > 0 && (
+            <table className="dt">
+              <thead><tr><th>Naam</th><th>Waarde</th><th>Status</th></tr></thead>
+              <tbody>
+                {cProjecten.map(p => (
+                  <tr key={p.id}>
+                    <td style={{ fontWeight: 600 }}>{p.name}</td>
+                    <td style={{ fontWeight: 700 }}>{p.projectValue > 0 ? fmt(p.projectValue) : '—'}</td>
+                    <td><StatusBadge status={p.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {cProjecten.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '24px 0', color: '#9ca3af' }}>Geen projecten</div>
+          )}
+        </div>
+      )}
+
+      {/* Klantgegevens tab */}
+      {tab === 'klantgegevens' && (
+        <div className="card card-p">
+          {[
+            { key: 'name',      label: 'Naam',        type: 'input' },
+            { key: 'email',     label: 'E-mail',      type: 'input' },
+            { key: 'phone',     label: 'Telefoon',    type: 'input' },
+            { key: 'address',   label: 'Adres',       type: 'input' },
+            { key: 'postcode',  label: 'Postcode',    type: 'input' },
+            { key: 'city',      label: 'Stad',        type: 'input' },
+            { key: 'kvkNumber', label: 'KvK-nummer',  type: 'input' },
+            { key: 'btwNumber', label: 'BTW-nummer',  type: 'input' },
+            { key: 'iban',      label: 'IBAN',        type: 'input' },
+            { key: 'type',      label: 'Type',        type: 'select', options: ['Particulier', 'Bedrijf', 'VvE', 'Aannemer'] },
+            { key: 'source',    label: 'Bron',        type: 'input' },
+          ].map(field => {
+            const isActive = editingField === field.key;
+            return (
+              <div key={field.key} className="cust-info-row" style={{ alignItems: 'center' }}>
+                <span className="cust-info-label">{field.label}</span>
+                {isActive ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+                    {field.type === 'select' ? (
+                      <select value={fieldDraft} onChange={e => setFieldDraft(e.target.value)} style={{ flex: 1, fontSize: '.82rem', padding: '2px 4px' }}>
+                        {field.options.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    ) : (
+                      <input
+                        autoFocus
+                        value={fieldDraft}
+                        onChange={e => setFieldDraft(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') saveField(field.key); if (e.key === 'Escape') cancelEdit(); }}
+                        style={{ flex: 1, fontSize: '.82rem', padding: '2px 6px' }}
+                      />
+                    )}
+                    <button onClick={() => saveField(field.key)} disabled={savingField} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#059669', display: 'flex', alignItems: 'center', padding: 2 }}>
+                      <Check size={14} />
+                    </button>
+                    <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2 }}>
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
+                    <span className="cust-info-val" style={{ flex: 1, color: c[field.key] ? undefined : 'var(--dl)' }}>
+                      {c[field.key] || '—'}
+                    </span>
+                    <button onClick={() => startEdit(field.key)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}>
+                      <Edit2 size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -638,6 +558,16 @@ export function CustomerPage({ custId, onClose, setPage }) {
           prefill={{ customer_id: c.id }}
           onClose={() => setShowNewFactuur(false)}
           onSaved={saved => { setFacturen(fs => [saved, ...fs]); setShowNewFactuur(false); }}
+        />
+      )}
+      {showNewProject && (
+        <NewProjectModal
+          customers={[c]}
+          deals={[]}
+          offertes={cOffertes}
+          prefillCustomerId={c.id}
+          onClose={() => setShowNewProject(false)}
+          onSaved={saved => { setProjecten(ps => [saved, ...ps]); setShowNewProject(false); }}
         />
       )}
     </div>

@@ -57,12 +57,12 @@ function ProgressBar({ pct, tone }) {
 
 // ── NEW PROJECT MODAL ────────────────────────────────────────────────────────
 
-function NewProjectModal({ onClose, onSaved, customers, deals, offertes }) {
+export function NewProjectModal({ onClose, onSaved, customers, deals, offertes, prefillCustomerId = null }) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: '',
-    customer_id: '',
+    customer_id: prefillCustomerId || '',
     deal_id: '',
     offerte_id: '',
     status: 'concept',
@@ -163,9 +163,9 @@ function NewProjectModal({ onClose, onSaved, customers, deals, offertes }) {
             </select>
           </div>
           <div className="f">
-            <label>Deal</label>
+            <label>Project</label>
             <select value={form.deal_id} onChange={e => set('deal_id', e.target.value)}>
-              <option value="">— Geen deal —</option>
+              <option value="">— Geen project —</option>
               {filteredDeals.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
             </select>
           </div>

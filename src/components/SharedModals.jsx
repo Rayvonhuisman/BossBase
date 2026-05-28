@@ -405,9 +405,9 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
           </div>
           {deals && (
             <div className="f">
-              <label>Deal</label>
+              <label>Project</label>
               <select value={form.dealId || ''} onChange={e => set('dealId', e.target.value)}>
-                <option value="">Geen deal</option>
+                <option value="">Geen project</option>
                 {dealsForCust.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
               </select>
             </div>
@@ -1039,9 +1039,9 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
           </div>
           {deals && (
             <div className="f">
-              <label>Deal</label>
+              <label>Project</label>
               <select value={form.dealId || ''} onChange={e => set('dealId', e.target.value)} disabled={!canEdit || busy}>
-                <option value="">Geen deal</option>
+                <option value="">Geen project</option>
                 {dealsForCust.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
               </select>
             </div>

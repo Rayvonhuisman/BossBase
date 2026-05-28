@@ -151,7 +151,7 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
   if (loading) {
     return (
       <div style={{ padding: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}><div style={{ fontWeight: 800 }}>Deal laden…</div>{HeadClose}</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}><div style={{ fontWeight: 800 }}>Project laden…</div>{HeadClose}</div>
       </div>
     );
   }
@@ -160,8 +160,8 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
       <div style={{ padding: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 800 }}>Deal niet gevonden</div>
-            <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>{err || 'Deze deal bestaat niet of is niet beschikbaar.'}</div>
+            <div style={{ fontSize: 16, fontWeight: 800 }}>Project niet gevonden</div>
+            <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>{err || 'Dit project bestaat niet of is niet beschikbaar.'}</div>
             <button className="btn btn-s btn-sm" style={{ marginTop: 14 }} onClick={() => { onClose(); setPage('pipeline'); }}>Naar pipeline</button>
           </div>
           {HeadClose}
@@ -232,7 +232,7 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
       {/* Activiteiten */}
       <Section title={`Activiteiten (${acts.length})`}
         action={<button className="btn btn-s btn-xs" onClick={() => requestNewActivity && requestNewActivity({ defaultCustId: deal.custId, defaultDealId: deal.id })}>+ Nieuwe activiteit</button>}>
-        {acts.length === 0 && <div style={{ fontSize: 13, color: '#9ca3af' }}>Geen gekoppelde activiteiten</div>}
+        {acts.length === 0 && <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Geen gekoppelde activiteiten</div>}
         {acts.map(a => (
           <button key={a.id} onClick={() => setPage('activities', { id: a.id })} style={{
             width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10,
@@ -254,7 +254,7 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
             + Nieuwe offerte
           </button>
         )}>
-        {offs.length === 0 && <div style={{ fontSize: 13, color: '#9ca3af' }}>Geen gekoppelde offertes</div>}
+        {offs.length === 0 && <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Geen gekoppelde offertes</div>}
         {offs.map(o => (
           <button key={o.id} onClick={() => setPage('offertes', { id: o.id })} style={{
             width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10,
@@ -277,7 +277,7 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
             onKeyDown={e => { if (e.key === 'Enter') addNote(); }} />
           <button className="btn btn-s btn-sm" disabled={addingNote || !noteText.trim()} onClick={addNote}>Toevoegen</button>
         </div>
-        {notes.length === 0 && <div style={{ fontSize: 13, color: '#9ca3af' }}>Nog geen notities</div>}
+        {notes.length === 0 && <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Nog geen notities</div>}
         {notes.map(n => (
           <div key={n.id} style={{ padding: '10px 12px', border: '1px solid #eef0f2', borderRadius: 9, background: '#f7f8f7', marginBottom: 6 }}>
             <div style={{ fontSize: 13, color: '#0a0a0a', whiteSpace: 'pre-wrap' }}>{n.body}</div>

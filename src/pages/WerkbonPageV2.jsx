@@ -375,9 +375,7 @@ function TakenSection({ taken, onToggle, onAdd, onDelete }) {
       <div className="wb2-card-body">
         <div className="wb2-progress"><span style={{ width: `${pct}%` }} /></div>
         {taken.length === 0 && (
-          <div style={{ color: 'var(--dl)', fontSize: 13, padding: '6px 0 10px' }}>
-            Nog geen taken — voeg de eerste hieronder toe.
-          </div>
+          <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Nog geen taken — voeg de eerste hieronder toe.</div>
         )}
         {taken.map(t => (
           <div key={t.id} className="wb2-taak">
@@ -450,9 +448,7 @@ function MaterialenSection({ materialen, onAdd, onDelete }) {
             <div />
           </div>
           {materialen.length === 0 && (
-            <div style={{ color: 'var(--dl)', fontSize: 13, padding: '14px 4px' }}>
-              Nog geen materialen toegevoegd.
-            </div>
+            <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Nog geen materialen toegevoegd.</div>
           )}
           {materialen.map(m => {
             const sub = m.subtotaal || m.aantal * m.prijsPer;
@@ -604,9 +600,7 @@ function MeerwerkSection({ meerwerk, onAdd, onDelete }) {
       <div className="wb2-card-hd"><div className="wb2-card-hd-title">Meerwerk</div></div>
       <div className="wb2-card-body">
         {meerwerk.length === 0 && (
-          <div style={{ color: 'var(--dl)', fontSize: 13, padding: '6px 0 10px' }}>
-            Geen meerwerk geregistreerd.
-          </div>
+          <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Geen meerwerk geregistreerd.</div>
         )}
         {meerwerk.map(m => (
           <div key={m.id} className="wb2-meerwerk-item">
@@ -1115,9 +1109,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage } = {})
                 </div>
               )}
               {uren.length === 0 && !showHoursAdd && (
-                <div className="wb2-card-body" style={{ color: 'var(--dl)', fontSize: 13 }}>
-                  Nog geen uren geboekt op deze werkbon.
-                </div>
+                <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Nog geen uren geboekt op deze werkbon.</div>
               )}
               {uren.map(u => (
                 <div key={u.id} className="wb2-uren-item" style={{ padding: '10px 16px' }}>
