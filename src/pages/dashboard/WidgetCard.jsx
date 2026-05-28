@@ -2,23 +2,22 @@ import { useState, useRef, useEffect } from 'react';
 import { I } from '../../bb-shared.jsx';
 import { getSupportedSizes } from '../../data/widgetRegistry.js';
 
-// ── Design tokens (BossBase Desktop handoff) ──────────────────
+// ── Design tokens (BossBase widget redesign v2) ───────────────
+// CSS classes (.bb-widget, .bb-kpi, .feed-row, .chip, .pill-tabs, …)
+// live in src/bb-dashboard.css scoped under .dw-grid.
 const C = {
-  green: '#22c55e', greenDark: '#16a34a', greenSoft: '#dcfce7',
-  greenSofter: '#f0fdf4', greenInk: '#15803d',
-  ink: '#0a0a0a', text: '#0a0a0a', textSub: '#6b7280', textMute: '#9ca3af',
-  border: '#e7e9ec', borderSoft: '#eef0f2', track: '#f1f3f5',
-  blue: '#2563eb', blueBg: '#dbeafe', red: '#dc2626', redBg: '#fee2e2',
-  amber: '#d97706', amberBg: '#fef3c7', purple: '#7c3aed', purpleBg: '#ede9fe',
-};
-
-const TONES = {
-  green:  { bg: C.greenSoft, fg: C.greenInk, sign: '↗' },
-  blue:   { bg: C.blueBg,    fg: C.blue,     sign: '·' },
-  red:    { bg: C.redBg,     fg: C.red,      sign: '↘' },
-  amber:  { bg: C.amberBg,   fg: C.amber,    sign: '!' },
-  purple: { bg: C.purpleBg,  fg: C.purple,   sign: '·' },
-  neutral:{ bg: '#f3f4f6',   fg: '#4b5563',  sign: '·' },
+  p: '#1DDB62', pd: '#15A34A', pll: '#f0fdf4', pl: '#d1fae5',
+  dk: '#0D0D0D', dm: '#374151', dmu: '#6b7280', dl: '#9ca3af',
+  border: '#f0ede9', track: '#f1f3f5',
+  success: '#059669', successBg: '#ecfdf5',
+  info:    '#2563eb', infoBg:    '#eff6ff',
+  warn:    '#dc2626', warnBg:    '#fef2f2',
+  neutral: '#6b7280', neutralBg: '#f3f4f6',
+  purple:  '#7c3aed', purpleBg:  '#f5f3ff',
+  orange:  '#c2410c', orangeBg:  '#fff4ec',
+  teal:    '#0d9488', tealBg:    '#f0fdfa',
+  amber:   '#b45309', amberBg:   '#fffbeb',
+  green: '#1DDB62', greenDark: '#15A34A', greenSoft: '#d1fae5', greenSofter: '#f0fdf4', greenInk: '#15803d',
 };
 
 const eur  = n => '€ ' + (Number(n) || 0).toLocaleString('nl-NL');
@@ -28,14 +27,9 @@ const kEur = n => {
   return '€ ' + n.toLocaleString('nl-NL');
 };
 const initialsOf = s => (s || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
-// Local (not UTC) YYYY-MM-DD key — prevents day-column shift in the agenda week.
 function toLocalDateKey(dateLike) {
   if (!dateLike) return null;
-  // Date-only strings ("2026-05-12") are already a local day key; keep as-is
-  // so a midnight-UTC parse can't roll them back a day.
-  if (typeof dateLike === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateLike.slice(0, 10)) && dateLike.length <= 10) {
-    return dateLike.slice(0, 10);
-  }
+  if (typeof dateLike === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateLike.slice(0, 10)) && dateLike.length <= 10) return dateLike.slice(0, 10);
   const d = new Date(dateLike);
   if (Number.isNaN(d.getTime())) return typeof dateLike === 'string' ? dateLike.slice(0, 10) : null;
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -46,10 +40,26 @@ const relAgo = iso => {
   if (isNaN(ms)) return null;
   const h = Math.floor(ms / 36e5);
   if (h < 1) return 'zojuist';
-  if (h < 24) return `${h} uur`;
+  if (h < 24) return `${h}u`;
   const d = Math.floor(h / 24);
-  return d === 1 ? '1 dag' : `${d} dagen`;
+  return d === 1 ? '1 dag' : `${d}d`;
 };
+const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+
+// avatar color tone derived from a string (stable hash)
+function avatarTone(name) {
+  const palette = [
+    { bg: '#ecfdf5', fg: '#059669' },
+    { bg: '#eff6ff', fg: '#2563eb' },
+    { bg: '#f5f3ff', fg: '#7c3aed' },
+    { bg: '#fff4ec', fg: '#c2410c' },
+    { bg: '#f0fdfa', fg: '#0d9488' },
+    { bg: '#fffbeb', fg: '#b45309' },
+  ];
+  let h = 0;
+  for (let i = 0; i < (name || '').length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return palette[h % palette.length];
+}
 
 // ── Size toggle labels (edit mode) ────────────────────────────
 const SIZE_OPTIONS = [
@@ -62,14 +72,25 @@ const SIZE_OPTIONS = [
 function WidgetControls({ size, supportedSizes, onMoveUp, onMoveDown, onResize, onRemove, isFirst, isLast }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const sizeOptions = SIZE_OPTIONS.filter(o => supportedSizes.includes(o.value));
+  // Prevent the controls subtree from initiating an HTML5 drag on the
+  // parent .dw-widget. draggable={false} suppresses drag-from-this-element;
+  // onMouseDown+stopPropagation prevents the parent from receiving the
+  // mousedown that would later turn into a dragstart.
+  const stopMouse = e => e.stopPropagation();
   return (
-    <div className="dw-controls" onClick={e => e.stopPropagation()}>
+    <div
+      className="dw-controls"
+      draggable={false}
+      onClick={e => e.stopPropagation()}
+      onMouseDown={stopMouse}
+      onDragStart={e => { e.preventDefault(); e.stopPropagation(); }}
+    >
       <button className="dw-ctrl-btn" onClick={onMoveUp}   disabled={isFirst} title="Omhoog">▲</button>
       <button className="dw-ctrl-btn" onClick={onMoveDown} disabled={isLast}  title="Omlaag">▼</button>
       <div style={{ position: 'relative' }}>
         <button className="dw-ctrl-btn dw-ctrl-menu" onClick={() => setMenuOpen(v => !v)} title="Opties">•••</button>
         {menuOpen && (
-          <div className="dw-ctrl-dropdown" onClick={() => setMenuOpen(false)}>
+          <div className="dw-ctrl-dropdown" onClick={() => setMenuOpen(false)} onMouseDown={stopMouse}>
             <div className="dw-ctrl-section">Grootte</div>
             <div className="dw-size-row">
               {sizeOptions.map(o => (
@@ -87,152 +108,121 @@ function WidgetControls({ size, supportedSizes, onMoveUp, onMoveDown, onResize, 
   );
 }
 
-// ── Design primitives ─────────────────────────────────────────
-function DHead({ title, subtitle, right }) {
+// ── Class-based primitives ────────────────────────────────────
+function WHead({ eyebrow, title, sub, right, bordered = true }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, padding: '18px 20px 14px' }}>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: C.text, letterSpacing: -0.2 }}>{title}</div>
-        {subtitle != null && <div style={{ fontSize: 12.5, color: C.textSub, marginTop: 2 }}>{subtitle}</div>}
+    <div className={`bb-widget-head${bordered ? ' bordered' : ''}`}>
+      <div className="text">
+        {eyebrow && <span className="bb-widget-eyebrow">{eyebrow}</span>}
+        {title && <h3 className="bb-widget-title">{title}</h3>}
+        {sub != null && <p className="bb-widget-sub">{sub}</p>}
       </div>
-      {right}
+      {right && <div className="actions">{right}</div>}
     </div>
   );
 }
 
-function DMore() {
+function WFoot({ meta, linkText, onLink }) {
   return (
-    <span style={{
-      width: 28, height: 28, borderRadius: 8, border: `1px solid ${C.border}`, background: '#fff',
-      color: C.textMute, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-    }}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>
+    <div className="bb-widget-foot">
+      <span className="foot-meta">{meta}</span>
+      {linkText && (
+        <button className="foot-link" onClick={onLink}>
+          {linkText}
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Chip({ tone = 'neutral', noDot = false, children, style }) {
+  return <span className={`chip chip-${tone}${noDot ? ' no-dot' : ''}`} style={style}>{children}</span>;
+}
+
+function Delta({ dir = 'up', children }) {
+  const arrow = dir === 'up' ? '▲' : dir === 'down' ? '▼' : '·';
+  return <span className={`delta ${dir}`}>{arrow} {children}</span>;
+}
+
+function Avatar({ name, size = 34 }) {
+  return (
+    <div className="bbw-avatar" style={{ width: size, height: size, fontSize: size * 0.36 }}>
+      {initialsOf(name)}
+    </div>
+  );
+}
+
+function AvatarSq({ name }) {
+  const t = avatarTone(name);
+  return (
+    <span className="avatar-sq" style={{ '--avBg': t.bg, '--avFg': t.fg }}>
+      {initialsOf(name)}
     </span>
   );
 }
 
-function DLink({ children, onClick }) {
+function MoreBtn({ onClick }) {
   return (
-    <button onClick={onClick} style={{
-      fontSize: 12.5, color: C.greenInk, fontWeight: 700, background: 'none', border: 'none',
-      cursor: 'pointer', padding: 0, whiteSpace: 'nowrap',
-    }}>{children}</button>
+    <button className="bbw-icon-btn" onClick={onClick} aria-label="Meer">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>
+    </button>
   );
 }
 
-function DSeg({ options, active, onPick }) {
+function Seg({ options, active, onPick }) {
   return (
-    <div style={{ display: 'inline-flex', padding: 3, background: C.borderSoft, borderRadius: 9 }}>
+    <div className="pill-tabs">
       {options.map(o => (
-        <button key={o} onClick={() => onPick && onPick(o)} style={{
-          padding: '5px 11px', borderRadius: 6, border: 'none', cursor: 'pointer',
-          background: o === active ? '#fff' : 'transparent',
-          color: o === active ? C.text : C.textSub, fontWeight: 700, fontSize: 11.5,
-          boxShadow: o === active ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
-        }}>{o}</button>
+        <button key={o} className={`pill-tab sm${o === active ? ' active' : ''}`} onClick={() => onPick && onPick(o)}>{o}</button>
       ))}
     </div>
   );
 }
 
-function DBadge({ tone = 'neutral', children, style }) {
-  const t = TONES[tone] || TONES.neutral;
+// KPI card (full bb-kpi)
+function KpiCard({ icon, label, value, sub, tone = 'green', onClick }) {
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 999,
-      background: t.bg, color: t.fg, fontSize: 10.5, fontWeight: 700, lineHeight: 1.3, whiteSpace: 'nowrap', ...style,
-    }}>{children}</span>
+    <div className={`bb-kpi kpi-${tone}`} onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}>
+      <div className="bb-kpi-label">
+        {icon && <span className="tile">{icon}</span>}
+        {label}
+      </div>
+      <div className="bb-kpi-value">{value}</div>
+      {sub && <div className="bb-kpi-sub">{sub}</div>}
+    </div>
   );
 }
 
-function DAvatar({ name, size = 36 }) {
+function EmptyState({ title, text }) {
   return (
-    <div style={{
-      width: size, height: size, borderRadius: 999, background: C.greenSoft, color: C.greenInk,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontWeight: 700, fontSize: size * 0.36, flexShrink: 0, letterSpacing: 0.2,
-    }}>{initialsOf(name)}</div>
+    <div className="empty">
+      <div className="empty-art">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+      </div>
+      {title && <h4 className="empty-title">{title}</h4>}
+      {text && <p className="empty-text">{text}</p>}
+    </div>
   );
 }
 
-function DEmpty({ msg }) {
-  return <div style={{ padding: '28px 20px', textAlign: 'center', color: C.textMute, fontSize: 13 }}>{msg}</div>;
-}
-
-// Tooltip content card (used inside the WidgetCard hover overlay)
-function TipBox({ title, rows }) {
+function Tt({ title, rows }) {
   const r = (rows || []).filter(Boolean);
   return (
     <div style={{ whiteSpace: 'nowrap' }}>
-      <div style={{ fontSize: 11.5, fontWeight: 800, color: C.text, marginBottom: r.length ? 5 : 0 }}>{title}</div>
+      <div style={{ fontSize: 11.5, fontWeight: 800, color: C.dk, marginBottom: r.length ? 5 : 0 }}>{title}</div>
       {r.map((x, i) => (
         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 12, lineHeight: 1.5 }}>
-          <span style={{ color: C.textSub }}>{x.k}</span>
-          <span style={{ fontWeight: 700, color: x.c || C.text }}>{x.v}</span>
+          <span style={{ color: C.dmu }}>{x.k}</span>
+          <span style={{ fontWeight: 700, color: x.c || C.dk }}>{x.v}</span>
         </div>
       ))}
     </div>
   );
 }
-const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 
-function rowStyle(first) {
-  return { display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', borderTop: first ? 'none' : `1px solid ${C.borderSoft}` };
-}
-
-// ── KPI card ──────────────────────────────────────────────────
-function DKpiCard({ icon, value, label, sub, trend, tone = 'green', onClick }) {
-  const tm = TONES[tone] || TONES.green;
-  return (
-    <div
-      onClick={onClick}
-      className={onClick ? 'dw-kpi-click' : undefined}
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onKeyDown={onClick ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
-      style={{ padding: 22, height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}
-    >
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <div style={{ width: 44, height: 44, borderRadius: 12, background: C.green, color: C.ink, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</div>
-        {trend != null && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 999, background: tm.bg, color: tm.fg, fontSize: 11.5, fontWeight: 700 }}>
-            <span style={{ fontSize: 10 }}>{tm.sign}</span>{trend}
-          </span>
-        )}
-      </div>
-      <div style={{ marginTop: 24, fontSize: 32, fontWeight: 800, letterSpacing: -1, lineHeight: 1, color: C.text }}>{value}</div>
-      <div style={{ marginTop: 6, fontSize: 13, color: C.textSub }}>{label}</div>
-      {sub && <div style={{ marginTop: 10, fontSize: 11.5, color: C.textMute, fontWeight: 600 }}>{sub}</div>}
-    </div>
-  );
-}
-
-// ── Monthly revenue chart — responsive (large vs full), smooth line ──
-function smoothLinePath(pts) {
-  if (pts.length < 2) return '';
-  if (pts.length === 2) return `M${pts[0][0]},${pts[0][1]} L${pts[1][0]},${pts[1][1]}`;
-  let d = `M${pts[0][0]},${pts[0][1]}`;
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[i - 1] || pts[i];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[i + 2] || p2;
-    const t = 0.18; // tension — lower = smoother but flatter
-    const c1x = p1[0] + (p2[0] - p0[0]) * t;
-    const c1y = p1[1] + (p2[1] - p0[1]) * t;
-    const c2x = p2[0] - (p3[0] - p1[0]) * t;
-    const c2y = p2[1] - (p3[1] - p1[1]) * t;
-    d += ` C${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`;
-  }
-  return d;
-}
-function niceTop(max) {
-  if (max <= 0) return 1;
-  const mag = Math.pow(10, Math.floor(Math.log10(max)));
-  const norm = max / mag;
-  const step = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
-  return step * mag;
-}
+// Measure container width (for responsive charts)
 function useMeasuredWidth(initial = 600) {
   const ref = useRef(null);
   const [w, setW] = useState(initial);
@@ -248,216 +238,96 @@ function useMeasuredWidth(initial = 600) {
   }, []);
   return [ref, w];
 }
-function MonthlyRevenueChart({ charts, widget, ux, onNav }) {
-  const all = charts.monthlyRevenue || [];
-  const size = widget?.size || 'large';
-  const isFull = size === 'full';
-  const [bodyRef, cw] = useMeasuredWidth(isFull ? 1100 : 560);
-  const tip = (e, n) => ux && ux.tip && ux.tip(e, n);
-  const off = () => ux && ux.off && ux.off();
 
-  const hasData = all.length && all.some(m => (m.value || 0) > 0);
-  if (!hasData) {
-    return (
-      <>
-        <DHead title="Omzet per maand" subtitle="Maandelijkse omzetontwikkeling" right={<DMore />} />
-        <div style={{ padding: '36px 20px 32px', textAlign: 'center' }}>
-          <div style={{
-            width: 52, height: 52, borderRadius: 14, background: C.greenSoft, color: C.greenInk,
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px',
-          }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 20h18" /><path d="M6 17l4-5 3 3 5-7" />
-            </svg>
-          </div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Nog geen omzetdata beschikbaar</div>
-          <div style={{ fontSize: 12.5, color: C.textSub, marginTop: 4 }}>Markeer deals als betaald om je omzet hier te zien.</div>
-        </div>
-      </>
-    );
+function smoothLinePath(pts) {
+  if (pts.length < 2) return '';
+  if (pts.length === 2) return `M${pts[0][0]},${pts[0][1]} L${pts[1][0]},${pts[1][1]}`;
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    const t = 0.18;
+    const c1x = p1[0] + (p2[0] - p0[0]) * t;
+    const c1y = p1[1] + (p2[1] - p0[1]) * t;
+    const c2x = p2[0] - (p3[0] - p1[0]) * t;
+    const c2y = p2[1] - (p3[1] - p1[1]) * t;
+    d += ` C${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`;
   }
-
-  const data = all;
-  const total = data.reduce((s, x) => s + (x.value || 0), 0);
-  const last = data[data.length - 1]?.value || 0;
-  const prev = data.length > 1 ? (data[data.length - 2]?.value || 0) : 0;
-  const change = prev ? Math.round(((last - prev) / prev) * 100) : 0;
-  const best = data.reduce((b, m) => (m.value > b.value ? m : b), data[0]);
-  const avg = Math.round(total / data.length);
-
-  // Responsive dimensions — measured width prevents stretch distortion
-  const H = isFull ? 280 : 200;
-  const W = cw;
-  const pad = isFull
-    ? { l: 56, r: 22, t: 22, b: 32 }
-    : { l: 46, r: 16, t: 16, b: 28 };
-  const ticks = isFull ? 4 : 3;
-  const yMax = niceTop(Math.max(...data.map(x => x.value), 1));
-  const xStep = data.length > 1 ? (W - pad.l - pad.r) / (data.length - 1) : 0;
-  const pts = data.map((x, i) => [
-    data.length > 1 ? pad.l + i * xStep : (W - pad.r + pad.l) / 2,
-    H - pad.b - (x.value / yMax) * (H - pad.t - pad.b),
-  ]);
-  const linePath = smoothLinePath(pts);
-  const areaPath = pts.length
-    ? `${linePath} L${pts[pts.length - 1][0]},${H - pad.b} L${pts[0][0]},${H - pad.b} Z`
-    : '';
-  const labelEvery = isFull ? 1 : (data.length > 8 ? 2 : 1);
-  const gradId = `bbOmzetGrad-${size}`;
-
-  return (
-    <>
-      <DHead
-        title="Omzet per maand"
-        subtitle="Maandelijkse omzetontwikkeling"
-        right={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 10.5, color: C.textMute, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Deze maand</div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 3, justifyContent: 'flex-end' }}>
-                <span style={{ fontSize: isFull ? 22 : 18, fontWeight: 800, color: C.text, letterSpacing: -0.4, lineHeight: 1 }}>{eur(last)}</span>
-                {prev > 0 && (
-                  <DBadge tone={change >= 0 ? 'green' : 'red'}>{change >= 0 ? '+' : ''}{change}%</DBadge>
-                )}
-              </div>
-            </div>
-            <DMore />
-          </div>
-        }
-      />
-      <div ref={bodyRef} className="dw-chart-body" style={{ padding: isFull ? '4px 18px 14px' : '2px 12px 10px', overflow: 'hidden' }}>
-        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', maxWidth: '100%' }}>
-          <defs>
-            <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor={C.green} stopOpacity="0.30" />
-              <stop offset="100%" stopColor={C.green} stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          {Array.from({ length: ticks + 1 }).map((_, i) => {
-            const y = pad.t + i * ((H - pad.t - pad.b) / ticks);
-            const v = yMax - (yMax / ticks) * i;
-            return (
-              <g key={'g' + i}>
-                <line x1={pad.l} x2={W - pad.r} y1={y} y2={y} stroke={C.borderSoft} strokeWidth="1" />
-                <text x={pad.l - 10} y={y + 4} textAnchor="end" fontSize="10.5" fill={C.textMute} fontWeight="600">{kEur(v)}</text>
-              </g>
-            );
-          })}
-          {areaPath && <path d={areaPath} fill={`url(#${gradId})`} />}
-          {linePath && <path d={linePath} fill="none" stroke={C.green} strokeWidth={isFull ? 2.6 : 2.2} strokeLinecap="round" strokeLinejoin="round" />}
-          {pts.map((p, i) => {
-            const lst = i === pts.length - 1;
-            return (
-              <g key={'p' + i}>
-                {lst && <circle cx={p[0]} cy={p[1]} r={10} fill={C.green} opacity="0.18" />}
-                <circle cx={p[0]} cy={p[1]} r={lst ? 4.8 : 3} fill="#fff" stroke={C.green} strokeWidth={lst ? 2.4 : 1.8} />
-              </g>
-            );
-          })}
-          {data.map((x, i) => {
-            const show = (i % labelEvery === 0) || i === data.length - 1;
-            if (!show) return null;
-            return (
-              <text key={'t' + i} x={data.length > 1 ? pad.l + i * xStep : (W - pad.r + pad.l) / 2} y={H - 10}
-                textAnchor="middle" fontSize="10.5" fill={i === data.length - 1 ? C.text : C.textMute}
-                fontWeight={i === data.length - 1 ? 700 : 500}>{x.label}</text>
-            );
-          })}
-          {data.map((x, i) => {
-            const cx = data.length > 1 ? pad.l + i * xStep : (W - pad.r + pad.l) / 2;
-            const bw = data.length > 1 ? xStep : (W - pad.l - pad.r);
-            return (
-              <rect key={'h' + i} x={cx - bw / 2} y={pad.t} width={bw} height={H - pad.t - pad.b} fill="transparent"
-                style={{ cursor: 'pointer' }}
-                onMouseMove={e => tip(e, <TipBox title={x.label} rows={[{ k: 'Omzet', v: eur(x.value) }]} />)}
-                onMouseLeave={off} onClick={() => onNav && onNav()} />
-            );
-          })}
-        </svg>
-      </div>
-      {isFull && (
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
-          borderTop: `1px solid ${C.borderSoft}`, padding: '14px 22px 18px', gap: 16,
-        }}>
-          <RevStat label="Beste maand" value={eur(best.value)} sub={best.label} />
-          <RevStat label="Gemiddeld per maand" value={eur(avg)} sub={`${data.length} maanden`} />
-          <RevStat label="Totaal" value={eur(total)} sub="Hele periode" />
-        </div>
-      )}
-    </>
-  );
+  return d;
+}
+function niceTop(max) {
+  if (max <= 0) return 1;
+  const mag = Math.pow(10, Math.floor(Math.log10(max)));
+  const norm = max / mag;
+  const step = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
+  return step * mag;
 }
 
-function RevStat({ label, value, sub }) {
-  return (
-    <div style={{ minWidth: 0 }}>
-      <div style={{ fontSize: 10.5, color: C.textMute, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
-      <div style={{ fontSize: 16, fontWeight: 800, color: C.text, letterSpacing: -0.3, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
-      {sub && <div style={{ fontSize: 11.5, color: C.textSub, fontWeight: 600, marginTop: 2 }}>{sub}</div>}
-    </div>
-  );
-}
+// ── Activity-type → row icon class ────────────────────────────
+const actIcoClass = t => ({
+  call: 'ic-call', email: 'ic-email', visit: 'ic-visit',
+  task: 'ic-task', follow: 'ic-follow', followup: 'ic-follow',
+  note: 'ic-note', deal: 'ic-deal',
+}[t] || 'ic-task');
 
-function EmptyList({ msg }) { return <DEmpty msg={msg} />; }
+const actIcoSvg = t => {
+  const base = { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2 };
+  switch (t) {
+    case 'call':   return <svg {...base}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>;
+    case 'email':  return <svg {...base}><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 6-10 7L2 6"/></svg>;
+    case 'visit':  return <svg {...base}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>;
+    case 'follow': return <svg {...base}><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>;
+    default:       return <svg {...base}><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>;
+  }
+};
 
 // ── Widget content renderer ───────────────────────────────────
 function renderContent(type, data, widget, setPage, openCustomer, onSettingsChange, ux, openDeal, openInvoice, openCalendarEvent) {
   const { deals = [], activities = [], customers = [], offertes = [], werkbonnen = [], calendarEvents = [], loading } = data;
   const charts = data.charts || {};
-  if (loading) return <div style={{ padding: '20px 20px', color: C.textMute, fontSize: 13 }}>Laden…</div>;
+  if (loading) return (
+    <div className="bb-widget">
+      <WHead bordered={false} title="Laden…" right={<div className="spinner" />} />
+      <div style={{ padding: '14px 16px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {[0, 1, 2].map(i => (
+          <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div className="skel" style={{ width: 36, height: 36, borderRadius: 10 }} />
+            <div style={{ flex: 1 }}>
+              <div className="skel" style={{ height: 10, width: '72%', marginBottom: 8 }} />
+              <div className="skel" style={{ height: 8, width: '48%' }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   const customerById = id => customers.find(c => c.id === id);
   const today = new Date().toISOString().slice(0, 10);
   const isOpenAct = a => a.status !== 'completed' && a.status !== 'done';
-
-  // Hover tooltip helpers
   const tip = (e, node) => ux && ux.tip && ux.tip(e, node);
   const off = () => ux && ux.off && ux.off();
   const hov = node => ({ onMouseMove: e => tip(e, node), onMouseLeave: off });
-  // Navigation helper: open the linked customer, else fall back to a page
   const goCustOr = (custId, page) => () => { if (custId) openCustomer(custId); else setPage(page); };
-  // Deal: open the Deal Detail Drawer when an id exists, else customer drawer, else pipeline
   const goDeal = d => () => {
     if (d && d.id && openDeal) openDeal(d.id);
     else if (d && d.custId) openCustomer(d.custId);
     else setPage('pipeline');
   };
-  // Invoice = accepted offerte (no separate invoices table). Open the
-  // invoice detail drawer when an id exists, else fall back to the Omzet page.
-  const goInvoice = o => () => {
-    if (o && o.id && openInvoice) openInvoice(o.id);
-    else setPage('revenue');
-  };
-  // Open a specific record via its page's existing modal (id intent),
-  // with a safe fallback to the overview page when no id is available.
+  const goInvoice = o => () => { if (o && o.id && openInvoice) openInvoice(o.id); else setPage('revenue'); };
   const open = {
     offerte:  o => o && o.id ? setPage('offertes', { id: o.id }) : setPage('offertes'),
     werkbon:  w => w && w.id ? setPage('werkbonnen', { id: w.id }) : setPage('werkbonnen'),
     activity: a => a && a.id ? setPage('activities', { id: a.id }) : (a && a.custId ? openCustomer(a.custId) : setPage('activities')),
-    agenda:   a => a && a.id ? setPage('activities', { id: a.id }) : (a && a.custId ? openCustomer(a.custId) : setPage('calendar')),
   };
-  // Unified agenda item: activity → ActivityEditModal (via deep-open),
-  // loose calendar_event → CalendarEventDetailDrawer, else fallback.
   const openAgendaItem = it => () => {
-    if (it.kind === 'event') {
-      if (it.id && openCalendarEvent) openCalendarEvent(it.id);
-      else setPage('calendar');
-    } else if (it.activityId || it.id) {
-      setPage('activities', { id: it.activityId || it.id });
-    } else if (it.custId) {
-      openCustomer(it.custId);
-    } else {
-      setPage('calendar');
-    }
+    if (it.kind === 'event') { if (it.id && openCalendarEvent) openCalendarEvent(it.id); else setPage('calendar'); }
+    else if (it.activityId || it.id) setPage('activities', { id: it.activityId || it.id });
+    else if (it.custId) openCustomer(it.custId);
+    else setPage('calendar');
   };
-  // Accessible clickable wrapper: pointer + keyboard (Enter/Space) + role.
-  const clk = fn => ({
-    onClick: fn,
-    role: 'button',
-    tabIndex: 0,
-    onKeyDown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } },
-  });
 
   switch (type) {
 
@@ -465,31 +335,31 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     case 'open_pipeline_value': {
       const open = deals.filter(d => !['lost', 'completed', 'paid'].includes(d.stage));
       const val = open.reduce((s, d) => s + (d.value || 0), 0);
-      return <DKpiCard icon={I.brief} value={kEur(val)} label="Open pipeline" trend="Live" tone="green" sub={`${open.length} deals open`} onClick={() => setPage('pipeline')} />;
+      return <KpiCard tone="green" icon={I.brief} label="Open pipeline" value={kEur(val)} sub={<><span>{open.length} deals</span><span>·</span><Delta dir="up">Live</Delta></>} onClick={() => setPage('pipeline')} />;
     }
     case 'accepted_value': {
       const acc = deals.filter(d => ['approved', 'planned', 'in_progress', 'completed', 'paid'].includes(d.stage));
       const val = acc.reduce((s, d) => s + (d.value || 0), 0);
-      return <DKpiCard icon={I.euro} value={kEur(val)} label="Geaccepteerd" trend="Live" tone="green" sub={`${acc.length} deals`} onClick={() => setPage('pipeline')} />;
+      return <KpiCard tone="success" icon={I.euro} label="Geaccepteerd" value={kEur(val)} sub={<><span>{acc.length} deals</span><span>·</span><Delta dir="up">Akkoord</Delta></>} onClick={() => setPage('pipeline')} />;
     }
     case 'customers':
-      return <DKpiCard icon={I.cust} value={customers.length} label="Klanten" trend="Live" tone="green" sub={`${customers.length} actief`} onClick={() => setPage('customers')} />;
+      return <KpiCard tone="info" icon={I.cust} label="Klanten" value={customers.length} sub={`${customers.length} actief in CRM`} onClick={() => setPage('customers')} />;
 
     case 'costs_per_job': {
       const done = deals.filter(d => ['completed', 'paid'].includes(d.stage));
       const avg = done.length ? done.reduce((s, d) => s + (d.value || 0) * 0.35, 0) / done.length : 0;
-      return <DKpiCard icon={I.costs} value={avg > 0 ? kEur(avg) : '—'} label="Kosten per klus" trend={done.length ? `${done.length} klussen` : null} tone="neutral" sub="gemiddeld per afgeronde klus" onClick={() => setPage('costs')} />;
+      return <KpiCard tone="neutral" icon={I.costs} label="Kosten per klus" value={avg > 0 ? kEur(avg) : '—'} sub={done.length ? `gemiddeld · ${done.length} klussen` : 'geen afgeronde klussen'} onClick={() => setPage('costs')} />;
     }
     case 'costs_month': {
       const now = new Date();
       const md = deals.filter(d => ['paid', 'completed'].includes(d.stage) && d.createdAt && new Date(d.createdAt).getMonth() === now.getMonth());
       const val = md.reduce((s, d) => s + (d.value || 0) * 0.35, 0);
-      return <DKpiCard icon={I.costs} value={val > 0 ? kEur(val) : '—'} label="Kosten deze maand" trend="~35%" tone="neutral" sub="vs. vorige maand" onClick={() => setPage('costs')} />;
+      return <KpiCard tone="amber" icon={I.costs} label="Kosten deze maand" value={val > 0 ? kEur(val) : '—'} sub={<><span>~35% marge</span><span>·</span><span>{md.length} klussen</span></>} onClick={() => setPage('costs')} />;
     }
     case 'billable': {
       const b = deals.filter(d => ['approved', 'planned', 'in_progress'].includes(d.stage));
       const val = b.reduce((s, d) => s + (d.value || 0), 0);
-      return <DKpiCard icon={I.euro} value={val > 0 ? kEur(val) : '—'} label="Te factureren" trend={b.length ? `${b.length} klussen` : null} tone="amber" onClick={() => setPage('revenue')} />;
+      return <KpiCard tone="warn" icon={I.euro} label="Te factureren" value={val > 0 ? kEur(val) : '—'} sub={b.length ? `${b.length} klussen klaar` : 'niets in de wacht'} onClick={() => setPage('revenue')} />;
     }
 
     case 'revenue_month': {
@@ -497,23 +367,26 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const md = deals.filter(d => ['paid', 'completed'].includes(d.stage) && d.createdAt && new Date(d.createdAt).getMonth() === now.getMonth());
       const val = md.reduce((s, d) => s + (d.value || 0), 0);
       const series = (charts.monthlyRevenue || []);
-      const spark = series.slice(-5);
+      const spark = series.slice(-6);
       const prevVal = series.length > 1 ? series[series.length - 2].value : 0;
       const cur = series.length ? series[series.length - 1].value : val;
       const change = prevVal ? Math.round(((cur - prevVal) / prevVal) * 100) : 0;
       const sMax = Math.max(...spark.map(s => s.value), 1);
       return (
-        <div className="dw-kpi-click" {...clk(() => setPage('revenue'))} style={{ padding: 22, height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: C.green, color: C.ink, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{I.revenue}</div>
-            <DBadge tone={change >= 0 ? 'green' : 'red'} style={{ fontSize: 11.5, padding: '4px 10px' }}>{change >= 0 ? '+' : ''}{change}%</DBadge>
+        <div className="bb-kpi kpi-success" onClick={() => setPage('revenue')} role="button" tabIndex={0}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPage('revenue'); } }}>
+          <div className="bb-kpi-label">
+            <span className="tile">{I.revenue}</span>
+            Omzet deze maand
           </div>
-          <div style={{ marginTop: 20 }}>
-            <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: -1, lineHeight: 1 }}>{eur(val)}</div>
-            <div style={{ fontSize: 13, color: C.textSub, marginTop: 6 }}>Omzet deze maand</div>
+          <div className="bb-kpi-value">{eur(val)}</div>
+          <div className="bb-kpi-sub">
+            <span>vs. vorige maand</span>
+            <span>·</span>
+            <Delta dir={change >= 0 ? 'up' : 'down'}>{change >= 0 ? '+' : ''}{change}%</Delta>
           </div>
           {spark.length >= 2 && (
-            <svg width="100%" height="36" viewBox="0 0 100 36" preserveAspectRatio="none" style={{ marginTop: 14 }}>
+            <svg className="bb-kpi-spark" viewBox="0 0 100 36" preserveAspectRatio="none">
               {(() => {
                 const p = spark.map((s, i) => [i * (100 / (spark.length - 1)), 30 - (s.value / sMax) * 24]);
                 const ln = p.map((q, i) => (i === 0 ? `M${q[0]},${q[1]}` : `L${q[0]},${q[1]}`)).join(' ');
@@ -521,9 +394,6 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
               })()}
             </svg>
           )}
-          <div style={{ marginTop: 'auto', paddingTop: 14, borderTop: `1px solid ${C.borderSoft}`, display: 'flex', justifyContent: 'space-between' }}>
-            <div><div style={{ fontSize: 10.5, color: C.textMute, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Vorige</div><div style={{ fontSize: 13.5, fontWeight: 700, marginTop: 2 }}>{prevVal ? eur(prevVal) : '—'}</div></div>
-          </div>
         </div>
       );
     }
@@ -533,24 +403,28 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const md = deals.filter(d => ['paid', 'completed'].includes(d.stage) && d.createdAt && new Date(d.createdAt).getMonth() === now.getMonth());
       const val = md.reduce((s, d) => s + (d.value || 0) * 0.28, 0);
       const target = 9700;
-      const pct = Math.min(100, Math.round((val / target) * 100));
+      const p = Math.min(100, Math.round((val / target) * 100));
       return (
-        <div className="dw-kpi-click" {...clk(() => setPage('revenue'))} style={{ padding: 22, height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: C.green, color: C.ink, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{I.trend}</div>
-            <DBadge tone="green" style={{ fontSize: 11.5, padding: '4px 10px' }}>marge ~28%</DBadge>
+        <div className="bb-kpi kpi-green" onClick={() => setPage('revenue')} role="button" tabIndex={0}
+          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPage('revenue'); } }}>
+          <div className="bb-kpi-label">
+            <span className="tile">{I.trend}</span>
+            Winst deze maand
           </div>
-          <div style={{ marginTop: 20 }}>
-            <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: -1, lineHeight: 1 }}>{eur(val)}</div>
-            <div style={{ fontSize: 13, color: C.textSub, marginTop: 6 }}>Winst deze maand</div>
+          <div className="bb-kpi-value">{eur(val)}</div>
+          <div className="bb-kpi-sub">
+            <span>marge ~28%</span>
+            <span>·</span>
+            <Delta dir="up">van doel {eur(target)}</Delta>
           </div>
-          <div style={{ marginTop: 18, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ flex: 1, height: 8, borderRadius: 999, background: C.track, overflow: 'hidden' }}>
-              <div style={{ width: `${pct}%`, height: '100%', background: C.green }} />
+          <div style={{ marginTop: 'auto', paddingTop: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ flex: 1, height: 6, borderRadius: 999, background: C.track, overflow: 'hidden' }}>
+                <div style={{ width: `${p}%`, height: '100%', background: C.green, borderRadius: 999, transition: 'width .6s cubic-bezier(.22,1,.36,1)' }} />
+              </div>
+              <span style={{ fontSize: 11.5, color: C.dmu, fontWeight: 700 }}>{p}%</span>
             </div>
-            <span style={{ fontSize: 11.5, color: C.textSub, fontWeight: 700 }}>{pct}%</span>
           </div>
-          <div style={{ marginTop: 8, fontSize: 11.5, color: C.textSub }}>van doel {eur(target)}</div>
         </div>
       );
     }
@@ -560,34 +434,40 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const items = activities.filter(a => isOpenAct(a) && (a.dueAt?.slice(0, 10) === today || a.status === 'today' || a.status === 'overdue')).slice(0, 8);
       const overdue = activities.filter(a => isOpenAct(a) && a.dueAt && a.dueAt.slice(0, 10) < today).length;
       if (widget.size === 'small') {
-        return <DKpiCard icon={I.act} value={items.length} label="Acties vandaag" trend={overdue > 0 ? `${overdue} laat` : 'op tijd'} tone={overdue > 0 ? 'amber' : 'green'} sub={`${items.length} vandaag · ${overdue} te laat`} onClick={() => setPage('activities')} />;
+        return <KpiCard tone={overdue > 0 ? 'warn' : 'info'} icon={I.act} label="Acties vandaag" value={items.length} sub={overdue > 0 ? <>{overdue} <Delta dir="down">te laat</Delta></> : 'alles op tijd'} onClick={() => setPage('activities')} />;
       }
       return (
-        <>
-          <DHead title="Acties vandaag" subtitle={`${items.length} openstaand · ${overdue} te laat`}
-            right={<DLink onClick={() => setPage('activities')}>Alle activiteiten →</DLink>} />
-          <div>
-            {items.map((a, i) => {
-              const c = customerById(a.custId);
-              const od = a.status === 'overdue' || (a.dueAt && a.dueAt.slice(0, 10) < today);
-              const tn = od ? 'red' : (a.dueAt?.slice(0, 10) === today ? 'blue' : 'neutral');
-              const lbl = od ? 'Te laat' : (a.dueAt?.slice(0, 10) === today ? 'Vandaag' : (a.time || a.dueAt?.slice(0, 10) || '—'));
-              return (
-                <div key={a.id} className="dw-row" {...clk(() => open.activity(a))} style={{ ...rowStyle(i === 0), gap: 14 }}>
-                  <div style={{ width: 22, height: 22, borderRadius: 6, border: `1.6px solid ${C.border}`, background: '#fff', flexShrink: 0 }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</div>
-                    <div style={{ fontSize: 11.5, color: C.textSub, marginTop: 2 }}>
-                      {c && <span style={{ color: C.greenInk, fontWeight: 600 }}>{c.name}</span>}{c && ' · '}{a.time || a.dueAt?.slice(0, 10) || '—'}
+        <div className="bb-widget">
+          <WHead title="Acties vandaag" sub={`${items.length} openstaand · ${overdue} te laat`}
+            right={<><Chip tone={overdue > 0 ? 'warn' : 'success'} noDot={overdue === 0}>{overdue > 0 ? `${overdue} te laat` : 'Op schema'}</Chip><MoreBtn /></>} />
+          {items.length === 0 ? (
+            <EmptyState title="Geen acties vandaag" text="Tijd om vooruit te plannen of even adem te halen." />
+          ) : (
+            <div className="feed">
+              {items.map(a => {
+                const c = customerById(a.custId);
+                const od = a.status === 'overdue' || (a.dueAt && a.dueAt.slice(0, 10) < today);
+                return (
+                  <button key={a.id} className={`feed-row ${actIcoClass(a.type)}`} onClick={() => open.activity(a)}>
+                    <span className="feed-bar" />
+                    <span className="feed-icon">{actIcoSvg(a.type)}</span>
+                    <div className="feed-main">
+                      <div className="feed-title">{a.title}{c && <> · <strong>{c.name}</strong></>}</div>
+                      <div className="feed-meta">
+                        <span>{a.time || a.dueAt?.slice(0, 10) || '—'}</span>
+                        {a.type && (<><span className="sep">·</span><span>{a.type}</span></>)}
+                      </div>
                     </div>
-                  </div>
-                  <DBadge tone={tn}>{lbl}</DBadge>
-                </div>
-              );
-            })}
-            {items.length === 0 && <DEmpty msg="Geen acties vandaag" />}
-          </div>
-        </>
+                    <div className="feed-aside">
+                      <Chip tone={od ? 'warn' : (a.dueAt?.slice(0, 10) === today ? 'info' : 'neutral')}>{od ? 'Te laat' : (a.dueAt?.slice(0, 10) === today ? 'Vandaag' : (a.time || '—'))}</Chip>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <WFoot meta={`${items.length} open · ${overdue} te laat`} linkText="Alle activiteiten" onLink={() => setPage('activities')} />
+        </div>
       );
     }
 
@@ -595,29 +475,42 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     case 'overdue_tasks': {
       const items = activities.filter(a => isOpenAct(a) && a.dueAt && a.dueAt.slice(0, 10) < today).slice(0, 6);
       if (widget.size === 'small') {
-        return <DKpiCard icon={I.clock} value={items.length} label="Taken te laat" trend={items.length ? 'actie nodig' : 'op tijd'} tone={items.length ? 'red' : 'green'} sub={items.length ? `${items.length} over datum` : 'alles op tijd'} onClick={() => setPage('activities')} />;
+        return <KpiCard tone={items.length ? 'warn' : 'success'} icon={I.clock} label="Taken te laat" value={items.length} sub={items.length ? `${items.length} over datum` : 'alles op tijd'} onClick={() => setPage('activities')} />;
       }
       return (
-        <>
-          <DHead title="Taken te laat" subtitle={<><span style={{ color: C.red, fontWeight: 700 }}>{items.length} activiteiten</span> over datum</>} right={<DMore />} />
-          <div>
-            {items.map((a, i) => {
-              const c = customerById(a.custId);
-              const od = Math.max(1, Math.floor((new Date(today) - new Date(a.dueAt.slice(0, 10))) / 864e5));
-              return (
-                <div key={a.id} className="dw-row" onClick={() => open.activity(a)} style={{ ...rowStyle(i === 0), gap: 14 }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 10, background: C.redBg, color: C.red, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontWeight: 800, fontSize: 12 }}>{od}d</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</div>
-                    <div style={{ fontSize: 11.5, color: C.textSub, marginTop: 2 }}>{c?.name || '—'} · gepland {a.dueAt?.slice(0, 10)}</div>
+        <div className="bb-widget">
+          <WHead title="Taken te laat" sub={<><strong style={{ color: C.warn }}>{items.length}</strong> activiteiten over datum</>} right={<><Chip tone="warn">Actie nodig</Chip><MoreBtn /></>} />
+          {items.length === 0 ? (
+            <EmptyState title="Niets te laat" text="Mooi werk — geen openstaande achterstand." />
+          ) : (
+            <div className="feed">
+              {items.map(a => {
+                const c = customerById(a.custId);
+                const od = Math.max(1, Math.floor((new Date(today) - new Date(a.dueAt.slice(0, 10))) / 864e5));
+                const openIt = () => open.activity(a);
+                return (
+                  <div key={a.id} className="feed-row ic-overdue" role="button" tabIndex={0}
+                    onClick={openIt}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openIt(); } }}>
+                    <span className="feed-bar" />
+                    <span className="feed-icon" style={{ fontWeight: 800, fontSize: 12 }}>{od}d</span>
+                    <div className="feed-main">
+                      <div className="feed-title">{a.title}</div>
+                      <div className="feed-meta">
+                        {c && <><strong>{c.name}</strong><span className="sep">·</span></>}
+                        <span>gepland {a.dueAt?.slice(0, 10)}</span>
+                      </div>
+                    </div>
+                    <div className="feed-aside">
+                      <button className="bbw-btn sm ghost" onClick={e => { e.stopPropagation(); openIt(); }}>Plan</button>
+                    </div>
                   </div>
-                  <button onClick={e => { e.stopPropagation(); open.activity(a); }} style={{ padding: '7px 12px', borderRadius: 9, border: `1px solid ${C.border}`, background: '#fff', fontSize: 12, fontWeight: 700, color: C.text, cursor: 'pointer' }}>Plan</button>
-                </div>
-              );
-            })}
-            {items.length === 0 && <DEmpty msg="Geen te late taken" />}
-          </div>
-        </>
+                );
+              })}
+            </div>
+          )}
+          <WFoot meta={`${items.length} achterstallig`} linkText="Alle activiteiten" onLink={() => setPage('activities')} />
+        </div>
       );
     }
 
@@ -628,7 +521,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const totalVal = allLeads.reduce((s, d) => s + (d.value || 0), 0);
       const items = allLeads.slice(0, 6);
       if (widget.size === 'small') {
-        return <DKpiCard icon={I.pipe} value={count} label="Nieuwe leads" trend={count ? kEur(totalVal) : null} tone="green" sub="deze week" onClick={() => setPage('pipeline')} />;
+        return <KpiCard tone="info" icon={I.pipe} label="Nieuwe leads" value={count} sub={count ? `${kEur(totalVal)} potentieel` : 'geen leads deze week'} onClick={() => setPage('pipeline')} />;
       }
       const WK = 7 * 864e5, nm = Date.now();
       const dated = allLeads.filter(d => d.createdAt);
@@ -636,29 +529,39 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const lastWk = dated.filter(d => { const a = nm - new Date(d.createdAt).getTime(); return a >= WK && a < 2 * WK; }).length;
       const delta = thisWk - lastWk;
       return (
-        <>
-          <DHead title="Nieuwe leads" subtitle={`${thisWk} deze week · ${delta >= 0 ? '+' : ''}${delta} vs. vorige`}
-            right={<DLink onClick={() => setPage('pipeline')}>Alle leads →</DLink>} />
-          <div>
-            {items.map((d, i) => {
-              const c = customerById(d.custId);
-              const name = c?.name || d.customerName || 'Onbekende klant';
-              const ago = relAgo(d.createdAt);
-              return (
-                <div key={d.id} className="dw-row" {...clk(goDeal(d))} style={rowStyle(i === 0)}>
-                  <DAvatar name={name} size={36} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
-                    <div style={{ fontSize: 11.5, color: C.textSub, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.title}{d.city ? ` · ${d.city}` : ''}</div>
-                  </div>
-                  {d.source && <DBadge tone="blue">{d.source}</DBadge>}
-                  {ago && <div style={{ fontSize: 11, color: C.textMute, fontWeight: 600, width: 70, textAlign: 'right', flexShrink: 0 }}>{ago} geleden</div>}
-                </div>
-              );
-            })}
-            {items.length === 0 && <DEmpty msg="Geen nieuwe leads" />}
-          </div>
-        </>
+        <div className="bb-widget">
+          <WHead title="Nieuwe leads" sub={`${thisWk} deze week · ${delta >= 0 ? '+' : ''}${delta} t.o.v. vorige`}
+            right={<><Chip tone="info" noDot>{count} totaal</Chip><MoreBtn /></>} />
+          {items.length === 0 ? (
+            <EmptyState title="Geen nieuwe leads" text="Tijd om je netwerk aan te spreken." />
+          ) : (
+            <div className="feed">
+              {items.map(d => {
+                const c = customerById(d.custId);
+                const name = c?.name || d.customerName || 'Onbekende klant';
+                const ago = relAgo(d.createdAt);
+                return (
+                  <button key={d.id} className="feed-row ic-lead" onClick={goDeal(d)}>
+                    <span className="feed-bar" />
+                    <span className="feed-icon"><AvatarSq name={name} /></span>
+                    <div className="feed-main">
+                      <div className="feed-title">{name}</div>
+                      <div className="feed-meta">
+                        <span>{d.title}</span>
+                        {d.city && (<><span className="sep">·</span><span>{d.city}</span></>)}
+                      </div>
+                    </div>
+                    <div className="feed-aside">
+                      {d.source && <Chip tone="info" noDot>{d.source}</Chip>}
+                      {ago && <span>{ago}</span>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <WFoot meta={`${kEur(totalVal)} potentieel`} linkText="Alle leads" onLink={() => setPage('pipeline')} />
+        </div>
       );
     }
 
@@ -669,11 +572,11 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const totalVal = all.reduce((s, d) => s + (d.value || 0), 0);
       const items = all.slice(0, 6);
       const stageMeta = {
-        contact:     { label: 'Contact nodig',  tone: 'amber' },
-        quote_sent:  { label: 'Offerte verst.', tone: 'neutral' },
-        approved:    { label: 'Akkoord',        tone: 'green' },
-        planned:     { label: 'Gepland',        tone: 'blue' },
-        in_progress: { label: 'In uitvoering',  tone: 'blue' },
+        contact:     { label: 'Contact',       tone: 'amber' },
+        quote_sent:  { label: 'Offerte verz.', tone: 'neutral' },
+        approved:    { label: 'Akkoord',       tone: 'success' },
+        planned:     { label: 'Gepland',       tone: 'info' },
+        in_progress: { label: 'In uitvoering', tone: 'purple' },
       };
       const nextAct = custId => {
         const na = activities.filter(a => a.custId === custId && isOpenAct(a) && a.dueAt).sort((x, y) => new Date(x.dueAt) - new Date(y.dueAt))[0];
@@ -681,36 +584,41 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
         const diff = Math.round((new Date(na.dueAt.slice(0, 10)) - new Date(today)) / 864e5);
         return diff < 0 ? `${Math.abs(diff)}d te laat` : diff === 0 ? 'vandaag' : diff === 1 ? 'morgen' : `over ${diff}d`;
       };
-      const cols = '1fr 1.4fr 0.9fr 1fr 0.9fr';
       return (
-        <>
-          <DHead title="Actieve deals" subtitle={`${count} deals · ${eur(totalVal)} totaal`}
-            right={<div style={{ display: 'flex', gap: 6 }}><DSeg options={['Alle', 'Mijn', 'Team']} active="Alle" /><DMore /></div>} />
-          <div style={{ display: 'grid', gridTemplateColumns: cols, gap: 10, padding: '8px 20px', background: '#f7f8f7', fontSize: 10.5, color: C.textMute, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase', borderTop: `1px solid ${C.borderSoft}` }}>
-            <div>Klant</div><div>Project</div><div>Fase</div><div>Volgende actie</div><div style={{ textAlign: 'right' }}>Waarde</div>
-          </div>
-          {items.map(d => {
-            const c = customerById(d.custId);
-            const name = c?.name || d.customerName || '?';
-            const sm = stageMeta[d.stage] || { label: d.stage, tone: 'neutral' };
-            const nx = nextAct(d.custId);
-            return (
-              <div key={d.id} className="dw-row" {...clk(goDeal(d))} style={{ display: 'grid', gridTemplateColumns: cols, gap: 10, alignItems: 'center', padding: '12px 20px', borderTop: `1px solid ${C.borderSoft}` }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                  <DAvatar name={name} size={30} />
-                  <span style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-                </div>
-                <div style={{ fontSize: 12.5, color: C.textSub, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.title}</div>
-                <div><DBadge tone={sm.tone}>{sm.label}</DBadge></div>
-                <div style={{ fontSize: 11.5, color: C.textSub }}>
-                  {nx ? <span style={{ color: C.amber, fontWeight: 600 }}>{nx}</span> : <span style={{ color: C.textMute }}>—</span>}
-                </div>
-                <div style={{ textAlign: 'right', fontSize: 14, fontWeight: 800, color: C.greenInk, letterSpacing: -0.2 }}>{eur(d.value)}</div>
-              </div>
-            );
-          })}
-          {items.length === 0 && <DEmpty msg="Geen actieve deals" />}
-        </>
+        <div className="bb-widget">
+          <WHead title="Actieve deals" sub={`${count} deals · ${eur(totalVal)}`}
+            right={<><Seg options={['Alle', 'Mijn', 'Team']} active="Alle" /><MoreBtn /></>} />
+          {items.length === 0 ? (
+            <EmptyState title="Geen actieve deals" text="Push een lead verder of voeg een nieuwe deal toe." />
+          ) : (
+            <div className="feed">
+              {items.map(d => {
+                const c = customerById(d.custId);
+                const name = c?.name || d.customerName || '?';
+                const sm = stageMeta[d.stage] || { label: d.stage, tone: 'neutral' };
+                const nx = nextAct(d.custId);
+                return (
+                  <button key={d.id} className="feed-row ic-deal" onClick={goDeal(d)}>
+                    <span className="feed-bar" />
+                    <span className="feed-icon"><AvatarSq name={name} /></span>
+                    <div className="feed-main">
+                      <div className="feed-title">{name}</div>
+                      <div className="feed-meta">
+                        <span>{d.title}</span>
+                        {nx && (<><span className="sep">·</span><span style={{ color: C.amber }}>{nx}</span></>)}
+                      </div>
+                    </div>
+                    <div className="feed-aside">
+                      <Chip tone={sm.tone}>{sm.label}</Chip>
+                      <span style={{ fontWeight: 800, color: C.dk, fontVariantNumeric: 'tabular-nums' }}>{eur(d.value)}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <WFoot meta={`${count} totaal · ${eur(totalVal)}`} linkText="Alle deals" onLink={() => setPage('pipeline')} />
+        </div>
       );
     }
 
@@ -726,32 +634,39 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
         return Math.max(0, Math.round((new Date(today) - new Date(String(raw).slice(0, 10))) / 864e5));
       };
       return (
-        <>
-          <DHead title="Open offertes" subtitle={`${count} offertes · ${eur(totalValue)}`}
-            right={<DLink onClick={() => setPage('offertes')}>Alle →</DLink>} />
-          <div>
-            {items.map((o, i) => {
-              const age = ageDays(o);
-              return (
-                <div key={o.id} className="dw-row" {...clk(() => open.offerte(o))} style={rowStyle(i === 0)}>
-                  <div style={{ width: 38, height: 38, borderRadius: 10, background: C.greenSofter, color: C.greenInk, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{I.quotes || I.euro}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {o.nummer && <span style={{ fontSize: 11, fontWeight: 700, color: C.textMute, fontFamily: 'ui-monospace,Menlo,monospace' }}>{o.nummer}</span>}
-                      <DBadge tone={o.status === 'verzonden' ? 'blue' : 'neutral'}>{o.status}</DBadge>
+        <div className="bb-widget">
+          <WHead title="Open offertes" sub={`${count} offertes · ${eur(totalValue)}`} right={<MoreBtn />} />
+          {items.length === 0 ? (
+            <EmptyState title="Geen open offertes" text="Alles is verstuurd of geaccepteerd." />
+          ) : (
+            <div className="feed">
+              {items.map(o => {
+                const age = ageDays(o);
+                return (
+                  <button key={o.id} className="feed-row ic-deal" onClick={() => open.offerte(o)}>
+                    <span className="feed-bar" />
+                    <span className="feed-icon">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                    </span>
+                    <div className="feed-main">
+                      <div className="feed-title">{o.customerName || o.omschrijving || 'Geen klant'}</div>
+                      <div className="feed-meta">
+                        {o.nummer && <span style={{ fontFamily: 'ui-monospace,Menlo,monospace' }}>{o.nummer}</span>}
+                        <span className="sep">·</span>
+                        <Chip tone={o.status === 'verzonden' ? 'info' : 'neutral'}>{o.status}</Chip>
+                      </div>
                     </div>
-                    <div style={{ fontSize: 13.5, fontWeight: 700, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.customerName || o.omschrijving || 'Geen klant'}</div>
-                  </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 800, color: C.greenInk, letterSpacing: -0.2 }}>{eur(o.totaalIncl || 0)}</div>
-                    {age != null && <div style={{ fontSize: 10.5, color: C.textMute, marginTop: 2, fontWeight: 600 }}>{age}d oud</div>}
-                  </div>
-                </div>
-              );
-            })}
-            {items.length === 0 && <DEmpty msg="Geen open offertes" />}
-          </div>
-        </>
+                    <div className="feed-aside">
+                      <span style={{ fontWeight: 800, color: C.dk, fontVariantNumeric: 'tabular-nums' }}>{eur(o.totaalIncl || 0)}</span>
+                      {age != null && <span>{age}d oud</span>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <WFoot meta={`${count} · ${eur(totalValue)}`} linkText="Alle offertes" onLink={() => setPage('offertes')} />
+        </div>
       );
     }
 
@@ -759,100 +674,119 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     case 'open_facturen': {
       const items = offertes.filter(o => o.status === 'geaccepteerd').slice(0, 6);
       const totalOpen = items.reduce((s, o) => s + (o.totaalIncl || 0), 0);
-      const late = items.filter((_, idx) => idx % 2 === 1).length; // unknown real due-dates → no fabrication of "te laat"
       return (
-        <>
-          <DHead title="Openstaande facturen" subtitle={`${items.length} facturen · ${eur(totalOpen)}`} right={<DMore />} />
-          <div>
-            {items.map((o, idx) => {
-              const ref = o.nummer || `F-${String(idx + 1).padStart(3, '0')}`;
-              return (
-                <div key={o.id} className="dw-row" {...clk(goInvoice(o))} style={rowStyle(idx === 0)}>
-                  <div style={{ width: 38, height: 38, borderRadius: 10, background: C.greenSofter, color: C.greenInk, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: 'ui-monospace,Menlo,monospace', fontWeight: 800, fontSize: 11 }}>{String(ref).slice(0, 2)}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.customerName || 'Geen klant'}</span>
-                      <DBadge tone="amber">Open</DBadge>
+        <div className="bb-widget">
+          <WHead title="Openstaande facturen" sub={`${items.length} facturen · ${eur(totalOpen)}`} right={<MoreBtn />} />
+          {items.length === 0 ? (
+            <EmptyState title="Niets openstaand" text="Alle geaccepteerde offertes zijn afgehandeld." />
+          ) : (
+            <div className="feed">
+              {items.map((o, idx) => {
+                const ref = o.nummer || `F-${String(idx + 1).padStart(3, '0')}`;
+                return (
+                  <button key={o.id} className="feed-row ic-invoice" onClick={goInvoice(o)}>
+                    <span className="feed-bar" />
+                    <span className="feed-icon" style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontWeight: 800, fontSize: 10.5 }}>{String(ref).slice(0, 2)}</span>
+                    <div className="feed-main">
+                      <div className="feed-title">{o.customerName || 'Geen klant'}</div>
+                      <div className="feed-meta">
+                        <span style={{ fontFamily: 'ui-monospace,Menlo,monospace' }}>{ref}</span>
+                        <span className="sep">·</span>
+                        <Chip tone="amber">Open</Chip>
+                      </div>
                     </div>
-                    <div style={{ fontSize: 11.5, color: C.textSub, marginTop: 2, fontFamily: 'ui-monospace,Menlo,monospace' }}>{ref}</div>
-                  </div>
-                  <div style={{ fontSize: 13.5, fontWeight: 800, color: C.greenInk, letterSpacing: -0.2, flexShrink: 0 }}>{eur(o.totaalIncl || 0)}</div>
-                </div>
-              );
-            })}
-            {items.length === 0 && <DEmpty msg="Geen openstaande facturen" />}
-          </div>
-        </>
+                    <div className="feed-aside">
+                      <span style={{ fontWeight: 800, color: C.dk, fontVariantNumeric: 'tabular-nums' }}>{eur(o.totaalIncl || 0)}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <WFoot meta={`Totaal ${eur(totalOpen)}`} linkText="Alle facturen" onLink={() => setPage('revenue')} />
+        </div>
       );
     }
 
     // ───────── Werkbonnen vandaag ─────────
     case 'werkbonnen_today': {
       const items = werkbonnen.filter(w => w.geplandOp === today || w.datum === today).slice(0, 6);
-      const tone = s => ({ afgerond: 'green', in_uitvoering: 'amber', gepland: 'blue' }[s] || 'neutral');
+      const tone = s => ({ afgerond: 'success', in_uitvoering: 'amber', gepland: 'info' }[s] || 'neutral');
       const label = s => ({ afgerond: 'Afgerond', in_uitvoering: 'Onderweg', gepland: 'Gepland' }[s] || s);
       if (widget.size === 'small') {
-        return <DKpiCard icon={I.wo} value={items.length} label="Werkbonnen" trend="vandaag" tone="green" sub={`${items.length} gepland`} onClick={() => setPage('werkbonnen')} />;
+        return <KpiCard tone="info" icon={I.wo} label="Werkbonnen" value={items.length} sub={items.length ? `${items.length} vandaag gepland` : 'geen vandaag'} onClick={() => setPage('werkbonnen')} />;
       }
       return (
-        <>
-          <DHead title="Werkbonnen vandaag" subtitle={`${items.length} bonnen gepland`} right={<DMore />} />
-          <div>
-            {items.map((w, idx) => {
-              const ref = `WB-${String(idx + 1).padStart(3, '0')}`;
-              return (
-                <div key={w.id} className="dw-row" {...clk(() => open.werkbon(w))} style={{ padding: '12px 20px', borderTop: idx === 0 ? 'none' : `1px solid ${C.borderSoft}` }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: C.textMute, fontFamily: 'ui-monospace,Menlo,monospace' }}>{ref}</span>
-                    <DBadge tone={tone(w.status)}>{label(w.status)}</DBadge>
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 700 }}>{w.customerName || w.titel || w.title || '—'}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: C.textSub, marginTop: 2 }}>
-                    {I.map}<span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.locatie || '—'}</span>
-                  </div>
-                </div>
-              );
-            })}
-            {items.length === 0 && <DEmpty msg="Geen werkbonnen vandaag" />}
-          </div>
-        </>
+        <div className="bb-widget">
+          <WHead title="Werkbonnen vandaag" sub={`${items.length} bonnen gepland`} right={<MoreBtn />} />
+          {items.length === 0 ? (
+            <EmptyState title="Geen werkbonnen vandaag" text="Niets ingepland. Voeg er een toe vanaf de werkbonnenpagina." />
+          ) : (
+            <div className="feed">
+              {items.map((w, idx) => {
+                const ref = w.nummer || `WB-${String(idx + 1).padStart(3, '0')}`;
+                return (
+                  <button key={w.id} className="feed-row ic-werkbon" onClick={() => open.werkbon(w)}>
+                    <span className="feed-bar" />
+                    <span className="feed-icon">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 17l9 4 9-4M3 12l9 4 9-4"/></svg>
+                    </span>
+                    <div className="feed-main">
+                      <div className="feed-title">{w.customerName || w.titel || w.title || '—'}</div>
+                      <div className="feed-meta">
+                        <span style={{ fontFamily: 'ui-monospace,Menlo,monospace' }}>{ref}</span>
+                        {w.locatie && (<><span className="sep">·</span><span>{w.locatie}</span></>)}
+                      </div>
+                    </div>
+                    <div className="feed-aside">
+                      <Chip tone={tone(w.status)}>{label(w.status)}</Chip>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <WFoot meta={`${items.length} vandaag`} linkText="Alle werkbonnen" onLink={() => setPage('werkbonnen')} />
+        </div>
       );
     }
 
-    // ───────── Uren deze week ─────────
+    // ───────── Uren registratie (deze week) ─────────
     case 'uren_registratie': {
       const daily = charts.dailyHours || [];
       const total = daily.reduce((s, d) => s + (d.value || 0), 0);
       const target = 40;
       const pctDoel = Math.round((total / target) * 100);
       if (widget.size === 'small') {
-        return <DKpiCard icon={I.hours} value={`${total}u`} label="Uren deze week" trend={`${pctDoel}% doel`} tone="green" sub={`van ${target}u doel`} onClick={() => setPage('uren')} />;
+        return <KpiCard tone="green" icon={I.hours} label="Uren deze week" value={`${total}u`} sub={<><span>van {target}u</span><span>·</span><Delta dir={pctDoel >= 100 ? 'up' : 'flat'}>{pctDoel}%</Delta></>} onClick={() => setPage('uren')} />;
       }
       const max = Math.max(...daily.map(d => d.value), 8);
       const todIdx = (new Date().getDay() + 6) % 7;
+      const dayLabels = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'];
+      const showDays = daily.length ? daily : dayLabels.map(l => ({ label: l, value: 0 }));
       return (
-        <>
-          <DHead title="Uren deze week" subtitle={`Doel ${target}u · ${daily.length ? (total / daily.length).toFixed(1) : 0}u/dag gem.`} right={<DMore />} />
-          <div style={{ padding: '0 20px 18px' }}>
+        <div className="bb-widget">
+          <WHead title="Uren deze week" sub={`Doel ${target}u · ${daily.length ? (total / daily.length).toFixed(1) : 0}u/dag gem.`} right={<><Chip tone={pctDoel >= 100 ? 'success' : 'neutral'} noDot>{pctDoel}%</Chip><MoreBtn /></>} />
+          <div style={{ padding: '6px 16px 18px' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: -1 }}>{total}u</div>
-              <div style={{ fontSize: 13, color: C.textSub }}>van {target}u · <span style={{ color: C.greenInk, fontWeight: 700 }}>{pctDoel}%</span></div>
+              <div className="bb-kpi-value" style={{ marginTop: 0 }}>{total}u</div>
+              <div style={{ fontSize: 12.5, color: C.dmu }}>van {target}u</div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginTop: 16, height: 110 }}>
-              {(daily.length ? daily : Array.from({ length: 7 }, (_, i) => ({ label: ['ma','di','wo','do','vr','za','zo'][i], value: 0 }))).map((d, i) => {
-                const h = Math.max(4, (d.value / max) * 90);
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginTop: 14, height: 100 }}>
+              {showDays.map((d, i) => {
+                const h = Math.max(4, (d.value / max) * 88);
                 const isT = i === todIdx;
                 return (
                   <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                    <div style={{ fontSize: 10.5, color: isT ? C.text : C.textMute, fontWeight: 700 }}>{d.value > 0 ? `${d.value}u` : ''}</div>
-                    <div style={{ width: '100%', height: h, borderRadius: 8, background: isT ? C.green : (d.value > 0 ? C.greenSoft : C.track) }} />
-                    <div style={{ fontSize: 11, color: isT ? C.text : C.textMute, fontWeight: isT ? 700 : 500 }}>{d.label}</div>
+                    <div style={{ fontSize: 10.5, color: isT ? C.dk : C.dmu, fontWeight: 700 }}>{d.value > 0 ? `${d.value}u` : ''}</div>
+                    <div style={{ width: '100%', height: h, borderRadius: 6, background: isT ? C.green : (d.value > 0 ? C.greenSoft : C.track) }} />
+                    <div style={{ fontSize: 11, color: isT ? C.dk : C.dmu, fontWeight: isT ? 700 : 500 }}>{d.label}</div>
                   </div>
                 );
               })}
             </div>
           </div>
-        </>
+        </div>
       );
     }
 
@@ -866,14 +800,12 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
         const iso = toLocalDateKey(dt);
         return { iso, day: DN[i], num: dt.getDate(), isToday: iso === todayKey };
       });
-      const tcol = { call: C.blue, email: C.green, visit: C.purple, task: C.amber, follow: C.red };
+      const evClass = { call: 'ev-info', email: 'ev-green', visit: 'ev-purple', task: 'ev-orange', follow: 'ev-warn' };
       const inWeek = iso => iso && iso >= cols[0].iso && iso <= cols[6].iso;
-      // Activities in deze week
       const actItems = activities
         .map(a => ({ a, iso: a.dueAt ? toLocalDateKey(a.dueAt) : null }))
         .filter(({ a, iso }) => isOpenAct(a) && inWeek(iso))
         .map(({ a, iso }) => ({ kind: 'activity', id: a.id, activityId: a.id, title: a.title, time: a.time || '', iso, atype: a.type, custId: a.custId, dealId: a.dealId }));
-      // Losse calendar_events zonder activity-koppeling (voorkomt dubbele items)
       const evItems = (calendarEvents || [])
         .map(e => ({ e, iso: toLocalDateKey(e.startAt || e.date) }))
         .filter(({ e, iso }) => !e.activityId && e.id && inWeek(iso))
@@ -884,72 +816,68 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
         .sort((x, y) => (x.time || '99:99').localeCompare(y.time || '99:99'))
         .slice(0, 4);
       return (
-        <>
-          <DHead title="Agenda deze week" subtitle={`${weekItems.length} agenda-items deze week`}
-            right={<div style={{ display: 'flex', gap: 6 }}><DSeg options={['Week', 'Maand']} active="Week" /><DMore /></div>} />
-          <div style={{ padding: '0 14px 18px' }}>
-            {weekItems.length === 0 ? (
-              <DEmpty msg="Geen agenda-items deze week" />
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 6 }}>
-                {cols.map((col, i) => {
-                  const dayItems = itemsOn(col.iso);
-                  return (
-                    <div key={i} style={{ background: col.isToday ? C.greenSofter : '#f7f8f7', border: `1px solid ${col.isToday ? C.green : C.borderSoft}`, borderRadius: 10, padding: '10px 8px', minHeight: 160 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <span style={{ fontSize: 10.5, color: C.textMute, textTransform: 'uppercase', fontWeight: 700, letterSpacing: 0.4 }}>{col.day}</span>
-                        <span style={{ width: 22, height: 22, borderRadius: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: col.isToday ? C.green : 'transparent', color: col.isToday ? C.ink : C.text, fontWeight: 800, fontSize: 12 }}>{col.num}</span>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        {dayItems.map((it, k) => {
-                          const accent = it.kind === 'event' ? C.textMute : (tcol[it.atype] || C.border);
-                          return (
-                            <div key={k} {...clk(openAgendaItem(it))} title={it.kind === 'event' ? 'Los agenda-item' : 'Activiteit'} style={{ padding: '5px 6px', borderRadius: 6, background: '#fff', borderLeft: `3px solid ${accent}`, fontSize: 10.5, color: C.text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}>
-                              {it.time && <span style={{ color: C.textSub, fontSize: 10, marginRight: 4 }}>{it.time}</span>}{it.title}
-                            </div>
-                          );
-                        })}
-                      </div>
+        <div className="bb-widget">
+          <WHead eyebrow="Agenda" title="Deze week" sub={`${weekItems.length} agenda-items`}
+            right={<Seg options={['Week', 'Maand']} active="Week" />} />
+          {weekItems.length === 0 ? (
+            <EmptyState title="Geen agenda-items deze week" text="Plan een afspraak vanuit een klant of activiteit." />
+          ) : (
+            <div className="agenda-week">
+              {cols.map((col, i) => {
+                const dayItems = itemsOn(col.iso);
+                return (
+                  <div key={i} className={`agenda-day-col${col.isToday ? ' today' : ''}`}>
+                    <div className="agenda-day-head">
+                      <span className="agenda-dow">{col.day}</span>
+                      <span className="agenda-dom">{col.num}</span>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </>
+                    <div className="agenda-events">
+                      {dayItems.map((it, k) => (
+                        <button key={k} className={`event-pill ${it.kind === 'event' ? 'ev-teal' : (evClass[it.atype] || 'ev-info')}`} onClick={openAgendaItem(it)}>
+                          {it.time && <span className="event-time">{it.time}</span>}
+                          <span className="event-title">{it.title}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       );
     }
 
     // ───────── Laatste klantactiviteit ─────────
     case 'last_customer_activity': {
       const sorted = [...activities].sort((a, b) => new Date(b.dueAt || 0) - new Date(a.dueAt || 0)).slice(0, 6);
-      const dot = t => ({ call: C.blue, email: C.green, visit: C.purple, task: C.amber, follow: C.red }[t] || C.green);
       return (
-        <>
-          <DHead title="Laatste klantactiviteit" subtitle="Realtime" right={<DMore />} />
-          <div style={{ padding: '4px 20px 18px' }}>
-            {sorted.map((a, i) => {
-              const c = customerById(a.custId);
-              const ago = relAgo(a.dueAt);
-              return (
-                <div key={a.id} className="dw-row" {...clk(() => open.activity(a))} style={{ display: 'flex', gap: 12, padding: '9px 6px', borderRadius: 8 }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <span style={{ width: 10, height: 10, borderRadius: 999, background: dot(a.type), marginTop: 5, boxShadow: '0 0 0 3px #f7f8f7' }} />
-                    {i < sorted.length - 1 && <span style={{ flex: 1, width: 2, background: C.borderSoft, marginTop: 2, minHeight: 14 }} />}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, color: C.text }}>
-                      <span style={{ fontWeight: 700 }}>{c?.name || 'Onbekende klant'}</span>
-                      <span style={{ color: C.textSub }}> — {a.title}</span>
+        <div className="bb-widget">
+          <WHead title="Laatste klantactiviteit" sub="Realtime feed" right={<><Chip tone="green" noDot>● Live</Chip><MoreBtn /></>} />
+          {sorted.length === 0 ? (
+            <EmptyState title="Geen klantactiviteiten" text="Acties op klanten verschijnen hier." />
+          ) : (
+            <div className="feed">
+              {sorted.map(a => {
+                const c = customerById(a.custId);
+                const ago = relAgo(a.dueAt);
+                return (
+                  <button key={a.id} className={`feed-row compact ${actIcoClass(a.type)}`} onClick={() => open.activity(a)}>
+                    <span className="feed-bar" />
+                    <span className="feed-icon">{actIcoSvg(a.type)}</span>
+                    <div className="feed-main">
+                      <div className="feed-title"><strong>{c?.name || 'Onbekende klant'}</strong> — {a.title}</div>
+                      <div className="feed-meta">
+                        {a.type && <span>{a.type}</span>}
+                        {ago && (<><span className="sep">·</span><span>{ago} geleden</span></>)}
+                      </div>
                     </div>
-                    <div style={{ fontSize: 11, color: C.textMute, marginTop: 2, fontWeight: 600 }}>{ago ? `${ago} geleden` : '—'}</div>
-                  </div>
-                </div>
-              );
-            })}
-            {sorted.length === 0 && <DEmpty msg="Geen klantactiviteiten" />}
-          </div>
-        </>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       );
     }
 
@@ -959,95 +887,121 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const when = iso => {
         if (!iso) return { txt: 'plan actie', tone: 'neutral' };
         const diff = Math.round((new Date(iso.slice(0, 10)) - new Date(today)) / 864e5);
-        if (diff < 0) return { txt: `${Math.abs(diff)}d te laat`, tone: 'red' };
+        if (diff < 0) return { txt: `${Math.abs(diff)}d te laat`, tone: 'warn' };
         if (diff === 0) return { txt: 'vandaag', tone: 'amber' };
         if (diff === 1) return { txt: 'morgen', tone: 'amber' };
-        if (diff <= 3) return { txt: `over ${diff}d`, tone: 'blue' };
+        if (diff <= 3) return { txt: `over ${diff}d`, tone: 'info' };
         return { txt: `over ${diff}d`, tone: 'neutral' };
       };
       return (
-        <>
-          <DHead title="Lead opvolging" subtitle={`${leadDeals.length} leads te bellen`} right={<DMore />} />
-          <div>
-            {leadDeals.map((d, i) => {
-              const c = customerById(d.custId);
-              const name = c?.name || d.customerName || '?';
-              const na = activities.filter(a => a.custId === d.custId && isOpenAct(a) && a.type === 'call').sort((x, y) => new Date(x.dueAt) - new Date(y.dueAt))[0];
-              const w = when(na?.dueAt);
-              const wc = TONES[w.tone].fg;
-              return (
-                <div key={d.id} className="dw-row" onClick={goDeal(d)} style={rowStyle(i === 0)}>
-                  <DAvatar name={name} size={34} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
-                    <div style={{ fontSize: 11.5, color: C.textSub }}>{d.title ? `${d.title} · ` : ''}bel <span style={{ color: wc, fontWeight: 700 }}>{w.txt}</span></div>
+        <div className="bb-widget">
+          <WHead title="Lead opvolging" sub={`${leadDeals.length} leads te bellen`} right={<MoreBtn />} />
+          {leadDeals.length === 0 ? (
+            <EmptyState title="Geen leads te bellen" text="Alle opvolging is bij." />
+          ) : (
+            <div className="feed">
+              {leadDeals.map(d => {
+                const c = customerById(d.custId);
+                const name = c?.name || d.customerName || '?';
+                const na = activities.filter(a => a.custId === d.custId && isOpenAct(a) && a.type === 'call').sort((x, y) => new Date(x.dueAt) - new Date(y.dueAt))[0];
+                const w = when(na?.dueAt);
+                const openIt = goDeal(d);
+                return (
+                  <div key={d.id} className="feed-row ic-follow" role="button" tabIndex={0}
+                    onClick={openIt}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openIt(); } }}>
+                    <span className="feed-bar" />
+                    <span className="feed-icon"><AvatarSq name={name} /></span>
+                    <div className="feed-main">
+                      <div className="feed-title">{name}</div>
+                      <div className="feed-meta">
+                        {d.title && <span>{d.title}</span>}
+                        <span className="sep">·</span>
+                        <span>bel </span>
+                        <Chip tone={w.tone}>{w.txt}</Chip>
+                      </div>
+                    </div>
+                    <div className="feed-aside">
+                      <button className="bbw-btn call sm" onClick={e => { e.stopPropagation(); if (c) openCustomer(d.custId); else setPage('pipeline'); }} aria-label={`${name} bellen`} title={`${name} bellen`}>
+                        {I.call}
+                      </button>
+                    </div>
                   </div>
-                  <button onClick={e => { e.stopPropagation(); if (c) openCustomer(d.custId); else setPage('pipeline'); }} aria-label={`${name} bellen`} title={`${name} bellen`} style={{ width: 38, height: 38, borderRadius: 10, border: 'none', background: C.green, color: C.ink, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 8px rgba(34,197,94,0.25)', flexShrink: 0 }}>{I.call}</button>
-                </div>
-              );
-            })}
-            {leadDeals.length === 0 && <DEmpty msg="Geen leads te bellen" />}
-          </div>
-        </>
+                );
+              })}
+            </div>
+          )}
+        </div>
       );
     }
 
     // ───────── Conversie overzicht ─────────
     case 'conversion_overview': {
       const stages = [
-        { key: 'new_lead',    label: 'Nieuwe lead',      c: C.green },
-        { key: 'contact',     label: 'Contact',          c: C.greenDark },
-        { key: 'quote_sent',  label: 'Offerte gestuurd', c: C.blue },
-        { key: 'approved',    label: 'Akkoord',          c: C.purple },
-        { key: 'completed',   label: 'Gewonnen',         c: C.amber },
+        { key: 'new_lead',    label: 'Nieuwe lead',      c: '#9ca3af' },
+        { key: 'contact',     label: 'Contact',          c: '#60a5fa' },
+        { key: 'quote_sent',  label: 'Offerte gestuurd', c: '#a78bfa' },
+        { key: 'approved',    label: 'Akkoord',          c: '#fb923c' },
+        { key: 'completed',   label: 'Gewonnen',         c: C.green },
       ];
       const counts = stages.map(s => deals.filter(d => d.stage === s.key).length);
       const max = Math.max(...counts, 1);
       const totalLeads = counts[0] || 0;
       const won = counts[counts.length - 1] || 0;
       const conv = totalLeads ? Math.round((won / totalLeads) * 100) : 0;
+      const totalVal = deals.reduce((s, d) => s + (d.value || 0), 0);
       return (
-        <>
-          <DHead title="Conversie overzicht" subtitle={`${deals.length} deals · ${conv}% conversie`} right={<DMore />} />
-          <div style={{ padding: '4px 20px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="bb-widget">
+          <WHead eyebrow="Pipeline" title="Deals per fase" right={<><Chip tone="neutral" noDot>{eur(totalVal)} totaal</Chip><MoreBtn /></>} />
+          <div style={{ padding: '8px 0 14px' }}>
             {stages.map((s, i) => (
-              <div key={s.key}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
-                  <span style={{ fontSize: 12.5, color: C.text, fontWeight: 600 }}>{s.label}</span>
-                  <span style={{ fontSize: 13, color: C.text, fontWeight: 800 }}>{counts[i]}</span>
+              <div key={s.key} className="pipe-row" onClick={() => setPage('pipeline')}>
+                <div>
+                  <div className="pipe-label">{s.label}</div>
+                  <div className="pipe-meta">{counts[i]} deals</div>
                 </div>
-                <div style={{ height: 10, borderRadius: 999, background: C.track, overflow: 'hidden' }}>
-                  <div style={{ width: `${(counts[i] / max) * 100}%`, height: '100%', background: s.c, borderRadius: 999 }} />
+                <div className="pipe-bar">
+                  <div className="pipe-fill" style={{
+                    width: `${(counts[i] / max) * 100}%`,
+                    background: s.c,
+                    boxShadow: s.c === C.green ? 'var(--shadow-green)' : 'none',
+                  }} />
                 </div>
+                <div className="pipe-val">{counts[i]}</div>
               </div>
             ))}
           </div>
-        </>
+          <WFoot meta={`Win rate ${conv}%`} linkText="Open pipeline" onLink={() => setPage('pipeline')} />
+        </div>
       );
     }
 
     // ───────── Snelle acties ─────────
     case 'quick_actions': {
       const acts = [
-        { icon: I.pipe,   l: 'Nieuwe lead',  t: C.green,     go: 'pipeline' },
-        { icon: I.act,    l: 'Activiteit',   t: C.blue,      go: 'activities' },
-        { icon: I.quotes, l: 'Offerte maken',t: C.purple,    go: 'offertes' },
-        { icon: I.wo,     l: 'Werkbon',      t: C.amber,     go: 'werkbonnen' },
-        { icon: I.cust,   l: 'Nieuwe klant', t: C.green,     go: 'customers' },
-        { icon: I.hours,  l: 'Uren boeken',  t: C.greenDark, go: 'activities' },
+        { icon: I.pipe,   l: 'Nieuwe lead',    d: 'voeg toe aan pipeline', tone: { qaBg: '#ecfdf5', qaFg: '#059669' }, go: 'pipeline', primary: true },
+        { icon: I.act,    l: 'Activiteit',     d: 'plan een belactie',     tone: { qaBg: '#eff6ff', qaFg: '#2563eb' }, go: 'activities' },
+        { icon: I.quotes, l: 'Offerte',        d: 'nieuwe offerte maken',  tone: { qaBg: '#f5f3ff', qaFg: '#7c3aed' }, go: 'offertes' },
+        { icon: I.wo,     l: 'Werkbon',        d: 'nieuwe werkbon',        tone: { qaBg: '#fffbeb', qaFg: '#b45309' }, go: 'werkbonnen' },
+        { icon: I.cust,   l: 'Klant',          d: 'klantbestand uitbreiden', tone: { qaBg: '#f0fdfa', qaFg: '#0d9488' }, go: 'customers' },
+        { icon: I.hours,  l: 'Uren boeken',    d: 'urenregistratie',       tone: { qaBg: '#f0fdf4', qaFg: '#15803d' }, go: 'activities' },
       ];
       return (
-        <>
-          <DHead title="Snelle acties" subtitle="Veelgebruikt" right={<DMore />} />
-          <div style={{ padding: '0 16px 18px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+        <div className="bb-widget">
+          <WHead title="Snelle acties" sub="Veelgebruikt" right={<MoreBtn />} />
+          <div className="qa-grid">
             {acts.map((a, i) => (
-              <button key={i} onClick={() => setPage(a.go)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '14px 8px', borderRadius: 12, border: `1px solid ${C.borderSoft}`, background: '#f7f8f7', color: C.text, cursor: 'pointer', fontSize: 11.5, fontWeight: 700 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: '#fff', color: a.t, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${C.borderSoft}` }}>{a.icon}</div>
-                {a.l}
+              <button key={i} className={`qa-btn${a.primary ? ' primary' : ''}`} onClick={() => setPage(a.go)}
+                style={{ '--qaBg': a.tone.qaBg, '--qaFg': a.tone.qaFg }}>
+                <span className="qa-tile">{a.icon}</span>
+                <div>
+                  <div className="qa-label">{a.l}</div>
+                  <div className="qa-desc">{a.d}</div>
+                </div>
               </button>
             ))}
           </div>
-        </>
+        </div>
       );
     }
 
@@ -1055,17 +1009,17 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     case 'notes': {
       const content = widget.settings?.content || '';
       return (
-        <>
-          <DHead title="Notities" subtitle="Persoonlijk notitieblok" right={<DMore />} />
-          <div style={{ padding: '0 20px 18px', height: 'calc(100% - 64px)', boxSizing: 'border-box' }}>
+        <div className="bb-widget">
+          <WHead title="Notities" sub="Persoonlijk notitieblok" right={<MoreBtn />} />
+          <div style={{ padding: '6px 16px 16px', flex: 1, display: 'flex', flexDirection: 'column' }}>
             <textarea
+              className="notes-field"
               defaultValue={content}
               placeholder="Schrijf hier je notities…"
               onBlur={e => onSettingsChange({ ...widget.settings, content: e.target.value })}
-              style={{ width: '100%', height: '100%', minHeight: 120, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px', fontSize: 12.5, color: C.text, resize: 'none', outline: 'none', fontFamily: 'inherit', lineHeight: 1.5, boxSizing: 'border-box' }}
             />
           </div>
-        </>
+        </div>
       );
     }
 
@@ -1078,7 +1032,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const prof = charts.monthlyProfit || [];
       const n = Math.min(6, Math.max(rev.length, prof.length));
       const rv = rev.slice(-n), pf = prof.slice(-n);
-      if (!rv.length && !pf.length) return (<><DHead title="Winst per maand" right={<DMore />} /><DEmpty msg="Geen grafiekdata" /></>);
+      if (!rv.length && !pf.length) return <div className="bb-widget"><WHead title="Winst per maand" right={<MoreBtn />} /><EmptyState title="Geen grafiekdata" text="Markeer deals als betaald om data te zien." /></div>;
       const rows = (rv.length ? rv : pf).map((_, i) => ({
         label: (rv[i] || pf[i]).label,
         omzet: rv[i]?.value ?? (pf[i]?.value || 0),
@@ -1087,36 +1041,36 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const max = Math.max(...rows.map(r => r.omzet), 1);
       const totalP = rows.reduce((s, r) => s + r.winst, 0);
       return (
-        <>
-          <DHead title="Winst per maand" subtitle={`Totaal ${kEur(totalP)} · stabiele groei`}
-            right={<div style={{ display: 'flex', gap: 6 }}><DSeg options={['6M', '12M']} active="6M" /><DMore /></div>} />
-          <div className="dw-chart-body" style={{ padding: '14px 20px 6px', display: 'flex', alignItems: 'flex-end', gap: 16, height: 200, overflow: 'hidden' }}>
+        <div className="bb-widget">
+          <WHead eyebrow="Winst" title="Winst per maand" sub={`Totaal ${kEur(totalP)} · stabiele groei`}
+            right={<><Seg options={['6M', '12M']} active="6M" /><MoreBtn /></>} />
+          <div style={{ padding: '14px 16px 6px', display: 'flex', alignItems: 'flex-end', gap: 16, height: 220 }}>
             {rows.map((d, i) => {
               const totalH = (d.omzet / max) * 150;
               const profitH = (Math.max(0, d.winst) / max) * 150;
               const last = i === rows.length - 1;
               const kosten = Math.max(0, d.omzet - d.winst);
               return (
-                <div key={i} {...hov(<TipBox title={d.label} rows={[
+                <div key={i} {...hov(<Tt title={d.label} rows={[
                   { k: 'Omzet', v: eur(d.omzet) },
                   { k: 'Winst', v: eur(d.winst), c: C.greenInk },
                   { k: 'Kosten', v: eur(kosten) },
                   { k: 'Marge', v: `${pct(d.winst, d.omzet)}%` },
                 ]} />)} onClick={() => setPage('revenue')} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                  <span style={{ fontSize: 10.5, color: last ? C.greenInk : C.textMute, fontWeight: 700 }}>{kEur(d.winst)}</span>
+                  <span style={{ fontSize: 10.5, color: last ? C.greenInk : C.dmu, fontWeight: 700 }}>{kEur(d.winst)}</span>
                   <div style={{ width: '100%', height: Math.max(6, totalH), borderRadius: 8, background: C.greenSoft, display: 'flex', flexDirection: 'column-reverse', overflow: 'hidden' }}>
                     <div style={{ width: '100%', height: profitH, background: C.green }} />
                   </div>
-                  <span style={{ fontSize: 11, color: last ? C.text : C.textMute, fontWeight: last ? 700 : 500 }}>{d.label}</span>
+                  <span style={{ fontSize: 11, color: last ? C.dk : C.dmu, fontWeight: last ? 700 : 500 }}>{d.label}</span>
                 </div>
               );
             })}
           </div>
-          <div style={{ padding: '8px 20px 18px', display: 'flex', gap: 16, fontSize: 11.5, color: C.textSub }}>
+          <div style={{ padding: '6px 16px 14px', display: 'flex', gap: 16, fontSize: 11.5, color: C.dmu }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: C.green }} />Winst</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: C.greenSoft }} />Omzet</span>
           </div>
-        </>
+        </div>
       );
     }
 
@@ -1125,54 +1079,57 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const max = Math.max(...d.map(x => x.value), 1);
       const total = d.reduce((s, x) => s + x.value, 0);
       return (
-        <>
-          <DHead title="Pipeline per fase" subtitle={`Totaal ${eur(total)}`} right={<DMore />} />
-          <div className="dw-chart-body" style={{ padding: '8px 20px 18px', display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
+        <div className="bb-widget">
+          <WHead eyebrow="Pipeline" title="Waarde per fase" sub={`Totaal ${eur(total)}`} right={<MoreBtn />} />
+          <div style={{ padding: '8px 0 14px' }}>
             {d.length ? d.map((s, i) => (
-              <div key={i} {...hov(<TipBox title={s.label} rows={[{ k: 'Waarde', v: eur(s.value) }, { k: 'Aandeel', v: `${pct(s.value, total)}%` }]} />)} onClick={() => setPage('pipeline')} style={{ cursor: 'pointer' }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 999, background: s.color || C.green, transform: 'translateY(-1px)' }} />
-                  <span style={{ fontSize: 13, color: C.text, fontWeight: 600, flex: 1 }}>{s.label}</span>
-                  <span style={{ fontSize: 13.5, color: C.text, fontWeight: 800, letterSpacing: -0.2 }}>{eur(s.value)}</span>
+              <div key={i} className="pipe-row" {...hov(<Tt title={s.label} rows={[{ k: 'Waarde', v: eur(s.value) }, { k: 'Aandeel', v: `${pct(s.value, total)}%` }]} />)} onClick={() => setPage('pipeline')}>
+                <div>
+                  <div className="pipe-label">{s.label}</div>
+                  <div className="pipe-meta">{pct(s.value, total)}% van totaal</div>
                 </div>
-                <div style={{ height: 10, borderRadius: 999, background: C.track, overflow: 'hidden' }}>
-                  <div style={{ width: `${(s.value / max) * 100}%`, height: '100%', background: s.color || C.green, opacity: 0.9 }} />
+                <div className="pipe-bar">
+                  <div className="pipe-fill" style={{ width: `${(s.value / max) * 100}%`, background: s.color || C.green }} />
                 </div>
+                <div className="pipe-val">{eur(s.value)}</div>
               </div>
-            )) : <DEmpty msg="Geen grafiekdata" />}
+            )) : <EmptyState title="Geen grafiekdata" text="Voeg deals toe om verdeling te zien." />}
           </div>
-        </>
+        </div>
       );
     }
 
     case 'conversion_funnel': {
       const d = charts.conversionFunnel || [];
       return (
-        <>
-          <DHead title="Conversie funnel" subtitle={d.length ? `${d[0].value} leads · ${d[d.length - 1].pct}% win rate` : null} right={<DMore />} />
-          <div className="dw-chart-body" style={{ padding: '8px 20px 18px', display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden' }}>
-            {d.length ? d.map((s, i) => {
-              const w = 30 + (s.pct || 0) * 0.7;
-              const drop = i > 0 && d[i - 1].value ? Math.round((1 - s.value / d[i - 1].value) * 100) : 0;
-              return (
-                <div key={i} {...hov(<TipBox title={s.label} rows={[
-                  { k: 'Aantal', v: `${s.value} leads` },
-                  { k: 'Conversie', v: `${s.pct}%` },
-                  i > 0 ? { k: 'Drop-off', v: `−${drop}%`, c: C.red } : null,
-                ]} />)} onClick={() => setPage('pipeline')} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-                  <div style={{ fontSize: 12.5, color: C.text, width: 90, fontWeight: 700 }}>{s.label}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ width: `${w}%`, height: 32, borderRadius: 8, background: `linear-gradient(90deg, ${C.green}, ${C.greenDark})`, opacity: 0.35 + (i / d.length) * 0.65, display: 'flex', alignItems: 'center', paddingLeft: 14, color: '#fff', fontSize: 14, fontWeight: 800 }}>{s.value}</div>
+        <div className="bb-widget">
+          <WHead eyebrow="Trechter" title="Conversie funnel" sub={d.length ? `${d[0].value} leads · ${d[d.length - 1].pct}% win rate` : null} right={<MoreBtn />} />
+          {d.length ? (
+            <div className="funnel">
+              {d.map((s, i) => {
+                const w = Math.max(30, s.pct || 0);
+                const drop = i > 0 && d[i - 1].value ? Math.round((1 - s.value / d[i - 1].value) * 100) : 0;
+                return (
+                  <div key={i} className="funnel-step" {...hov(<Tt title={s.label} rows={[
+                    { k: 'Aantal', v: `${s.value} leads` },
+                    { k: 'Conversie', v: `${s.pct}%` },
+                    i > 0 ? { k: 'Drop-off', v: `−${drop}%`, c: C.warn } : null,
+                  ]} />)} onClick={() => setPage('pipeline')}
+                    style={{ '--funW': `${w}%`, '--funFill': i === d.length - 1 ? C.greenSoft : '#dbeafe' }}>
+                    <div className="funnel-main">
+                      <span className="funnel-label">{s.label}</span>
+                      <span className="funnel-count">· {s.value} leads</span>
+                    </div>
+                    <div>
+                      <div className="funnel-pct">{s.pct}%</div>
+                      {i > 0 && <div className="funnel-drop">−{drop}% drop</div>}
+                    </div>
                   </div>
-                  <div style={{ width: 80, textAlign: 'right' }}>
-                    <div style={{ fontSize: 13, color: C.text, fontWeight: 800 }}>{s.pct}%</div>
-                    {i > 0 && <div style={{ fontSize: 10.5, color: C.red, fontWeight: 600 }}>−{drop}% drop</div>}
-                  </div>
-                </div>
-              );
-            }) : <DEmpty msg="Geen grafiekdata" />}
-          </div>
-        </>
+                );
+              })}
+            </div>
+          ) : <EmptyState title="Geen funnel data" text="Funnel verschijnt zodra er leads zijn." />}
+        </div>
       );
     }
 
@@ -1182,40 +1139,38 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const R = 56, CC = 2 * Math.PI * R;
       let acc = 0;
       return (
-        <>
-          <DHead title="Facturen status" subtitle={`${total} facturen`} right={<DMore />} />
-          <div className="dw-chart-body" style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '8px 20px 22px', overflow: 'hidden' }}>
-            {segs.length ? (
-              <>
-                <svg width="150" height="150" viewBox="0 0 150 150" style={{ flexShrink: 0 }}>
-                  <circle cx="75" cy="75" r={R} fill="none" stroke={C.track} strokeWidth="18" />
-                  {segs.map((s, i) => {
-                    const len = total ? (s.value / total) * CC : 0;
-                    const el = (
-                      <circle key={i} cx="75" cy="75" r={R} fill="none" stroke={s.color || C.green} strokeWidth="18"
-                        strokeDasharray={`${len} ${CC - len}`} strokeDashoffset={-acc} transform="rotate(-90 75 75)"
-                        style={{ cursor: 'pointer' }} onClick={() => setPage('revenue')}
-                        {...hov(<TipBox title={s.label} rows={[{ k: 'Facturen', v: s.value }, { k: 'Aandeel', v: `${pct(s.value, total)}%` }]} />)} />
-                    );
-                    acc += len; return el;
-                  })}
-                  <text x="75" y="72" textAnchor="middle" fontSize="26" fontWeight="800" fill={C.text}>{total}</text>
-                  <text x="75" y="90" textAnchor="middle" fontSize="10" fill={C.textSub} fontWeight="700" letterSpacing="0.5">FACTUREN</text>
-                </svg>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {segs.map((s, i) => (
-                    <div key={i} {...hov(<TipBox title={s.label} rows={[{ k: 'Facturen', v: s.value }, { k: 'Aandeel', v: `${pct(s.value, total)}%` }]} />)} onClick={() => setPage('revenue')} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                      <span style={{ width: 12, height: 12, borderRadius: 3, background: s.color || C.green }} />
-                      <span style={{ fontSize: 13, color: C.text, flex: 1 }}>{s.label}</span>
-                      <span style={{ fontSize: 11.5, color: C.textSub }}>{total ? Math.round((s.value / total) * 100) : 0}%</span>
-                      <span style={{ fontSize: 13, color: C.text, fontWeight: 800, width: 24, textAlign: 'right' }}>{s.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : <DEmpty msg="Geen grafiekdata" />}
-          </div>
-        </>
+        <div className="bb-widget">
+          <WHead eyebrow="Facturen" title="Status overzicht" sub={`${total} facturen`} right={<MoreBtn />} />
+          {segs.length ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '8px 16px 18px' }}>
+              <svg width="150" height="150" viewBox="0 0 150 150" style={{ flexShrink: 0 }}>
+                <circle cx="75" cy="75" r={R} fill="none" stroke={C.track} strokeWidth="18" />
+                {segs.map((s, i) => {
+                  const len = total ? (s.value / total) * CC : 0;
+                  const el = (
+                    <circle key={i} cx="75" cy="75" r={R} fill="none" stroke={s.color || C.green} strokeWidth="18"
+                      strokeDasharray={`${len} ${CC - len}`} strokeDashoffset={-acc} transform="rotate(-90 75 75)"
+                      style={{ cursor: 'pointer' }} onClick={() => setPage('revenue')}
+                      {...hov(<Tt title={s.label} rows={[{ k: 'Facturen', v: s.value }, { k: 'Aandeel', v: `${pct(s.value, total)}%` }]} />)} />
+                  );
+                  acc += len; return el;
+                })}
+                <text x="75" y="72" textAnchor="middle" fontSize="26" fontWeight="800" fill={C.dk}>{total}</text>
+                <text x="75" y="90" textAnchor="middle" fontSize="10" fill={C.dmu} fontWeight="700" letterSpacing="0.5">FACTUREN</text>
+              </svg>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {segs.map((s, i) => (
+                  <div key={i} {...hov(<Tt title={s.label} rows={[{ k: 'Facturen', v: s.value }, { k: 'Aandeel', v: `${pct(s.value, total)}%` }]} />)} onClick={() => setPage('revenue')} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                    <span style={{ width: 12, height: 12, borderRadius: 3, background: s.color || C.green }} />
+                    <span style={{ fontSize: 13, color: C.dk, flex: 1 }}>{s.label}</span>
+                    <span style={{ fontSize: 11.5, color: C.dmu }}>{pct(s.value, total)}%</span>
+                    <span style={{ fontSize: 13, color: C.dk, fontWeight: 800, width: 24, textAlign: 'right' }}>{s.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : <EmptyState title="Geen factuurdata" text="Maak een factuur om verdeling te zien." />}
+        </div>
       );
     }
 
@@ -1225,21 +1180,21 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const total = cats.reduce((s, c) => s + c.value, 0);
       const tight = widget.size === 'medium';
       return (
-        <>
-          <DHead title="Kosten per klant" subtitle={`${eur(total)} totaal`} right={<DMore />} />
-          <div className="dw-chart-body" style={{ padding: '14px 20px 18px', display: 'flex', alignItems: 'flex-end', gap: 14, height: 220, overflow: 'hidden' }}>
+        <div className="bb-widget">
+          <WHead eyebrow="Kosten" title="Per klant" sub={`${eur(total)} totaal`} right={<MoreBtn />} />
+          <div style={{ padding: '14px 16px 18px', display: 'flex', alignItems: 'flex-end', gap: 14, height: 220 }}>
             {cats.length ? cats.map((c, i) => {
               const h = Math.max(8, (c.value / max) * 150);
               return (
-                <div key={i} {...hov(<TipBox title={c.label} rows={[{ k: 'Kosten', v: eur(c.value) }, { k: 'Aandeel', v: `${pct(c.value, total)}%` }]} />)} onClick={() => setPage('costs')} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                  {!tight && <div style={{ fontSize: 10.5, color: C.text, fontWeight: 700 }}>{kEur(c.value)}</div>}
-                  <div style={{ width: '100%', height: h, borderRadius: 8, background: i === 0 ? C.green : C.text }} />
-                  <div style={{ fontSize: 11, color: C.textSub, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>{c.label}</div>
+                <div key={i} {...hov(<Tt title={c.label} rows={[{ k: 'Kosten', v: eur(c.value) }, { k: 'Aandeel', v: `${pct(c.value, total)}%` }]} />)} onClick={() => setPage('costs')} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  {!tight && <div style={{ fontSize: 10.5, color: C.dk, fontWeight: 700 }}>{kEur(c.value)}</div>}
+                  <div style={{ width: '100%', height: h, borderRadius: 8, background: i === 0 ? C.green : '#374151' }} />
+                  <div style={{ fontSize: 11, color: C.dmu, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>{c.label}</div>
                 </div>
               );
-            }) : <DEmpty msg="Geen grafiekdata" />}
+            }) : <EmptyState title="Geen kostendata" text="Voeg kosten toe per klus." />}
           </div>
-        </>
+        </div>
       );
     }
 
@@ -1249,26 +1204,30 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const avg = wk.length ? Math.round(wk.reduce((s, d) => s + d.value, 0) / wk.length) : 0;
       const tight = widget.size === 'medium';
       return (
-        <>
-          <DHead title="Uren per week" subtitle={`${wk.length} weken · gem. ${avg}u/week`} right={<DMore />} />
-          <div className="dw-chart-body" style={{ padding: '16px 20px 6px', display: 'flex', alignItems: 'flex-end', gap: 16, height: 200, position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', left: 20, right: 20, top: `${(1 - target / max) * 150 + 16}px`, borderTop: `1.5px dashed ${C.red}`, opacity: 0.6 }} />
-            {wk.length ? wk.map((d, i) => {
-              const h = (d.value / max) * 150;
-              const last = i === wk.length - 1;
-              return (
-                <div key={i} {...hov(<TipBox title={d.label} rows={[{ k: 'Uren', v: `${d.value} uur` }, { k: 'Doel', v: `${target} uur` }]} />)} onClick={() => setPage('uren')} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                  {!tight && <span style={{ fontSize: 11, color: C.text, fontWeight: 700 }}>{d.value}u</span>}
-                  <div style={{ width: '100%', height: Math.max(4, h), borderRadius: 8, background: d.value >= target ? C.green : (last ? C.amber : C.greenSoft) }} />
-                  <span style={{ fontSize: 11, color: last ? C.text : C.textSub, fontWeight: last ? 700 : 500 }}>{d.label}</span>
-                </div>
-              );
-            }) : <DEmpty msg="Geen urendata" />}
-          </div>
-          <div style={{ padding: '6px 20px 16px', fontSize: 11, color: C.red, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 14, borderTop: `1.5px dashed ${C.red}` }} /> Doel {target}u/week
-          </div>
-        </>
+        <div className="bb-widget">
+          <WHead eyebrow="Uren" title="Per week" sub={`${wk.length} weken · gem. ${avg}u/week`} right={<><Chip tone={avg >= target ? 'success' : 'neutral'} noDot>{avg}u/wk</Chip><MoreBtn /></>} />
+          {wk.length ? (
+            <>
+              <div style={{ padding: '14px 16px 6px', display: 'flex', alignItems: 'flex-end', gap: 16, height: 200, position: 'relative' }}>
+                <div style={{ position: 'absolute', left: 16, right: 16, top: `${(1 - target / max) * 150 + 14}px`, borderTop: `1.5px dashed ${C.warn}`, opacity: 0.6 }} />
+                {wk.map((d, i) => {
+                  const h = (d.value / max) * 150;
+                  const last = i === wk.length - 1;
+                  return (
+                    <div key={i} {...hov(<Tt title={d.label} rows={[{ k: 'Uren', v: `${d.value} uur` }, { k: 'Doel', v: `${target} uur` }]} />)} onClick={() => setPage('uren')} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                      {!tight && <span style={{ fontSize: 11, color: C.dk, fontWeight: 700 }}>{d.value}u</span>}
+                      <div style={{ width: '100%', height: Math.max(4, h), borderRadius: 8, background: d.value >= target ? C.green : (last ? C.amber : C.greenSoft) }} />
+                      <span style={{ fontSize: 11, color: last ? C.dk : C.dmu, fontWeight: last ? 700 : 500 }}>{d.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ padding: '6px 16px 14px', fontSize: 11, color: C.warn, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 14, borderTop: `1.5px dashed ${C.warn}` }} /> Doel {target}u/week
+              </div>
+            </>
+          ) : <EmptyState title="Geen urendata" text="Boek uren om hier de week-trend te zien." />}
+        </div>
       );
     }
 
@@ -1276,26 +1235,28 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const d = charts.activitiesPerDay || [];
       const max = Math.max(...d.map(x => x.value), 1);
       const total = d.reduce((s, x) => s + x.value, 0);
-      const peak = d.reduce((m, x, i) => x.value > d[m].value ? i : m, 0);
+      const peak = d.length ? d.reduce((m, x, i) => x.value > d[m].value ? i : m, 0) : 0;
       const tight = widget.size === 'medium';
       return (
-        <>
-          <DHead title="Activiteiten per dag" subtitle={`${total} activiteiten deze week`} right={<DMore />} />
-          <div className="dw-chart-body" style={{ padding: '14px 20px 18px', display: 'flex', alignItems: 'flex-end', gap: 14, height: 200, overflow: 'hidden' }}>
-            {d.length ? d.map((x, i) => {
-              const h = Math.max(6, (x.value / max) * 150);
-              const hot = i === peak;
-              const dayFull = { ma: 'Maandag', di: 'Dinsdag', wo: 'Woensdag', do: 'Donderdag', vr: 'Vrijdag', za: 'Zaterdag', zo: 'Zondag' }[x.label] || x.label;
-              return (
-                <div key={i} {...hov(<TipBox title={dayFull} rows={[{ k: 'Activiteiten', v: x.value }]} />)} onClick={() => setPage('activities')} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                  {!tight && <div style={{ fontSize: 10.5, color: hot ? C.greenInk : C.textMute, fontWeight: 700 }}>{x.value}</div>}
-                  <div style={{ width: '100%', height: h, borderRadius: 8, background: hot ? C.green : C.greenSoft }} />
-                  <div style={{ fontSize: 11.5, color: hot ? C.text : C.textMute, fontWeight: hot ? 700 : 500 }}>{x.label}</div>
-                </div>
-              );
-            }) : <DEmpty msg="Geen grafiekdata" />}
-          </div>
-        </>
+        <div className="bb-widget">
+          <WHead eyebrow="Activiteiten" title="Per dag" sub={`${total} deze week`} right={<MoreBtn />} />
+          {d.length ? (
+            <div style={{ padding: '14px 16px 18px', display: 'flex', alignItems: 'flex-end', gap: 14, height: 200 }}>
+              {d.map((x, i) => {
+                const h = Math.max(6, (x.value / max) * 150);
+                const hot = i === peak;
+                const dayFull = { ma: 'Maandag', di: 'Dinsdag', wo: 'Woensdag', do: 'Donderdag', vr: 'Vrijdag', za: 'Zaterdag', zo: 'Zondag' }[x.label] || x.label;
+                return (
+                  <div key={i} {...hov(<Tt title={dayFull} rows={[{ k: 'Activiteiten', v: x.value }]} />)} onClick={() => setPage('activities')} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                    {!tight && <div style={{ fontSize: 10.5, color: hot ? C.greenInk : C.dmu, fontWeight: 700 }}>{x.value}</div>}
+                    <div style={{ width: '100%', height: h, borderRadius: 8, background: hot ? C.green : C.greenSoft }} />
+                    <div style={{ fontSize: 11.5, color: hot ? C.dk : C.dmu, fontWeight: hot ? 700 : 500 }}>{x.label}</div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : <EmptyState title="Geen activiteitsdata" text="Plan activiteiten om patronen te zien." />}
+        </div>
       );
     }
 
@@ -1303,30 +1264,28 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const src = charts.leadSource || [];
       const total = src.reduce((s, x) => s + x.value, 0) || 1;
       return (
-        <>
-          <DHead title="Lead bronnen" subtitle={`${total} leads · 30 dagen`} right={<DMore />} />
-          <div className="dw-chart-body" style={{ padding: '8px 20px 18px', overflow: 'hidden' }}>
-            {src.length ? (
-              <>
-                <div style={{ display: 'flex', height: 16, borderRadius: 999, overflow: 'hidden' }}>
-                  {src.map((s, i) => (
-                    <div key={i} {...hov(<TipBox title={s.label} rows={[{ k: 'Leads', v: s.value }, { k: 'Aandeel', v: `${pct(s.value, total)}%` }]} />)} onClick={() => setPage('pipeline')} style={{ flex: s.value, background: s.color || C.green, cursor: 'pointer' }} />
-                  ))}
-                </div>
-                <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {src.map((s, i) => (
-                    <div key={i} {...hov(<TipBox title={s.label} rows={[{ k: 'Leads', v: s.value }, { k: 'Aandeel', v: `${pct(s.value, total)}%` }]} />)} onClick={() => setPage('pipeline')} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                      <span style={{ width: 10, height: 10, borderRadius: 999, background: s.color || C.green }} />
-                      <span style={{ fontSize: 12.5, color: C.text, flex: 1 }}>{s.label}</span>
-                      <span style={{ fontSize: 11.5, color: C.textMute }}>{Math.round((s.value / total) * 100)}%</span>
-                      <span style={{ fontSize: 13, color: C.text, fontWeight: 700, width: 28, textAlign: 'right' }}>{s.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : <DEmpty msg="Geen grafiekdata" />}
-          </div>
-        </>
+        <div className="bb-widget">
+          <WHead eyebrow="Leads" title="Bronnen" sub={`${total} leads · 30 dagen`} right={<MoreBtn />} />
+          {src.length ? (
+            <div style={{ padding: '8px 16px 18px' }}>
+              <div style={{ display: 'flex', height: 16, borderRadius: 999, overflow: 'hidden' }}>
+                {src.map((s, i) => (
+                  <div key={i} {...hov(<Tt title={s.label} rows={[{ k: 'Leads', v: s.value }, { k: 'Aandeel', v: `${pct(s.value, total)}%` }]} />)} onClick={() => setPage('pipeline')} style={{ flex: s.value, background: s.color || C.green, cursor: 'pointer' }} />
+                ))}
+              </div>
+              <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {src.map((s, i) => (
+                  <div key={i} {...hov(<Tt title={s.label} rows={[{ k: 'Leads', v: s.value }, { k: 'Aandeel', v: `${pct(s.value, total)}%` }]} />)} onClick={() => setPage('pipeline')} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 999, background: s.color || C.green }} />
+                    <span style={{ fontSize: 12.5, color: C.dk, flex: 1 }}>{s.label}</span>
+                    <span style={{ fontSize: 11.5, color: C.dmu }}>{pct(s.value, total)}%</span>
+                    <span style={{ fontSize: 13, color: C.dk, fontWeight: 700, width: 28, textAlign: 'right' }}>{s.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : <EmptyState title="Geen bron-data" text="Vul lead-bron in op nieuwe leads." />}
+        </div>
       );
     }
 
@@ -1334,36 +1293,158 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const items = charts.topCustomers || [];
       const max = items.length ? items[0].value : 1;
       return (
-        <>
-          <DHead title="Top klanten op omzet" subtitle="Jaar tot nu" right={<DMore />} />
-          <div className="dw-chart-body" style={{ padding: '8px 20px 18px', display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
-            {items.length ? items.map((it, i) => {
-              const cid = it.customerId || customers.find(c => c.name === it.label)?.id;
-              return (
-              <div key={i} className="dw-row" {...clk(() => cid ? openCustomer(cid) : setPage('customers'))}
-                {...hov(<TipBox title={it.label} rows={[{ k: 'Omzet', v: eur(it.value) }]} />)}
-                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '2px 0', borderRadius: 8 }}>
-                <DAvatar name={it.label} size={34} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.label}</span>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: C.greenInk, letterSpacing: -0.2, flexShrink: 0 }}>{eur(it.value)}</span>
-                  </div>
-                  <div style={{ marginTop: 6, height: 6, borderRadius: 999, background: C.track, overflow: 'hidden' }}>
-                    <div style={{ width: `${(it.value / max) * 100}%`, height: '100%', background: C.green }} />
-                  </div>
-                </div>
-              </div>
-              );
-            }) : <DEmpty msg="Geen klantdata" />}
-          </div>
-        </>
+        <div className="bb-widget">
+          <WHead eyebrow="Top 5" title="Beste klanten" sub="Jaar tot nu" right={<MoreBtn />} />
+          {items.length ? (
+            <div>
+              {items.map((it, i) => {
+                const cid = it.customerId || customers.find(c => c.name === it.label)?.id;
+                return (
+                  <button key={i} className={`rank-row${i === 0 ? ' gold' : ''}`}
+                    onClick={() => cid ? openCustomer(cid) : setPage('customers')}
+                    {...hov(<Tt title={it.label} rows={[{ k: 'Omzet', v: eur(it.value) }]} />)}>
+                    <span className="rank-num">{String(i + 1).padStart(2, '0')}</span>
+                    <AvatarSq name={it.label} />
+                    <div>
+                      <div className="rank-name">{it.label}</div>
+                      <div className="rank-bar"><div className="rank-bar-fill" style={{ width: `${(it.value / max) * 100}%` }} /></div>
+                    </div>
+                    <div className="rank-val">{eur(it.value)}</div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : <EmptyState title="Geen klantdata" text="Sluit deals om je top klanten hier te zien." />}
+          <WFoot meta={`Top ${items.length} van ${customers.length}`} linkText="Alle klanten" onLink={() => setPage('customers')} />
+        </div>
       );
     }
 
     default:
-      return <div style={{ padding: '20px', color: C.textMute, fontSize: 13, textAlign: 'center' }}>Widget "{type}" is nog niet beschikbaar.</div>;
+      return <div className="bb-widget"><div style={{ padding: 20, color: C.dmu, fontSize: 13, textAlign: 'center' }}>Widget "{type}" is nog niet beschikbaar.</div></div>;
   }
+}
+
+// ── Monthly Revenue Chart — responsive, brand neon ────────────
+function MonthlyRevenueChart({ charts, widget, ux, onNav }) {
+  const all = charts.monthlyRevenue || [];
+  const size = widget?.size || 'large';
+  const isFull = size === 'full';
+  const [bodyRef, cw] = useMeasuredWidth(isFull ? 1100 : 560);
+  const tip = (e, n) => ux && ux.tip && ux.tip(e, n);
+  const off = () => ux && ux.off && ux.off();
+
+  const hasData = all.length && all.some(m => (m.value || 0) > 0);
+  if (!hasData) {
+    return (
+      <div className="bb-widget">
+        <WHead eyebrow="Omzet" title="Per maand" sub="Maandelijkse omzetontwikkeling" right={<MoreBtn />} />
+        <EmptyState title="Nog geen omzetdata" text="Markeer deals als betaald om je omzet hier te zien." />
+      </div>
+    );
+  }
+
+  const data = all;
+  const total = data.reduce((s, x) => s + (x.value || 0), 0);
+  const last = data[data.length - 1]?.value || 0;
+  const prev = data.length > 1 ? (data[data.length - 2]?.value || 0) : 0;
+  const change = prev ? Math.round(((last - prev) / prev) * 100) : 0;
+  const best = data.reduce((b, m) => (m.value > b.value ? m : b), data[0]);
+  const avg = Math.round(total / data.length);
+  const H = isFull ? 280 : 220;
+  const W = cw;
+  const pad = isFull ? { l: 56, r: 22, t: 22, b: 32 } : { l: 48, r: 18, t: 18, b: 30 };
+  const ticks = isFull ? 4 : 3;
+  const yMax = niceTop(Math.max(...data.map(x => x.value), 1));
+  const xStep = data.length > 1 ? (W - pad.l - pad.r) / (data.length - 1) : 0;
+  const pts = data.map((x, i) => [
+    data.length > 1 ? pad.l + i * xStep : (W - pad.r + pad.l) / 2,
+    H - pad.b - (x.value / yMax) * (H - pad.t - pad.b),
+  ]);
+  const linePath = smoothLinePath(pts);
+  const areaPath = pts.length ? `${linePath} L${pts[pts.length - 1][0]},${H - pad.b} L${pts[0][0]},${H - pad.b} Z` : '';
+  const labelEvery = isFull ? 1 : (data.length > 8 ? 2 : 1);
+  const gradId = `bbOmzetGrad-${size}`;
+  return (
+    <div className="bb-widget">
+      <WHead eyebrow="Omzet" title="Per maand" sub="Maandelijkse omzetontwikkeling"
+        right={<><Seg options={['6M', '12M']} active="6M" /><MoreBtn /></>} />
+      <div style={{ padding: '6px 16px 4px', display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
+        <div>
+          <div className="bb-widget-eyebrow" style={{ fontSize: 10.5 }}>Deze maand</div>
+          <div className="bb-kpi-value" style={{ marginTop: 4 }}>{eur(last)}</div>
+        </div>
+        {prev > 0 && <Delta dir={change >= 0 ? 'up' : 'down'}>{change >= 0 ? '+' : ''}{change}% vs vorige</Delta>}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 14, fontSize: 12, color: C.dmu }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 2, background: C.green }} /> Deze periode</span>
+        </div>
+      </div>
+      <div ref={bodyRef} style={{ padding: isFull ? '4px 16px 14px' : '2px 12px 12px' }}>
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', maxWidth: '100%' }}>
+          <defs>
+            <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor={C.green} stopOpacity="0.22" />
+              <stop offset="100%" stopColor={C.green} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {Array.from({ length: ticks + 1 }).map((_, i) => {
+            const y = pad.t + i * ((H - pad.t - pad.b) / ticks);
+            const v = yMax - (yMax / ticks) * i;
+            return (
+              <g key={'g' + i}>
+                <line className="grid-line" x1={pad.l} x2={W - pad.r} y1={y} y2={y} />
+                <text className="axis-text" x={pad.l - 10} y={y + 4} textAnchor="end">{kEur(v)}</text>
+              </g>
+            );
+          })}
+          {areaPath && <path d={areaPath} fill={`url(#${gradId})`} />}
+          {linePath && <path d={linePath} fill="none" stroke={C.green} strokeWidth={isFull ? 2.6 : 2.4} strokeLinecap="round" strokeLinejoin="round" />}
+          {pts.map((p, i) => {
+            const lst = i === pts.length - 1;
+            return (
+              <g key={'p' + i}>
+                {lst && <circle cx={p[0]} cy={p[1]} r={10} fill={C.green} opacity="0.18" />}
+                <circle cx={p[0]} cy={p[1]} r={lst ? 4.6 : 3} fill="#fff" stroke={C.green} strokeWidth={lst ? 2.4 : 2} />
+              </g>
+            );
+          })}
+          {data.map((x, i) => {
+            const show = (i % labelEvery === 0) || i === data.length - 1;
+            if (!show) return null;
+            return (
+              <text key={'t' + i} className="axis-text" x={data.length > 1 ? pad.l + i * xStep : (W - pad.r + pad.l) / 2} y={H - 10} textAnchor="middle">{x.label}</text>
+            );
+          })}
+          {data.map((x, i) => {
+            const cx = data.length > 1 ? pad.l + i * xStep : (W - pad.r + pad.l) / 2;
+            const bw = data.length > 1 ? xStep : (W - pad.l - pad.r);
+            return (
+              <rect key={'h' + i} x={cx - bw / 2} y={pad.t} width={bw} height={H - pad.t - pad.b} fill="transparent"
+                style={{ cursor: 'pointer' }}
+                onMouseMove={e => tip(e, <Tt title={x.label} rows={[{ k: 'Omzet', v: eur(x.value) }]} />)}
+                onMouseLeave={off} onClick={() => onNav && onNav()} />
+            );
+          })}
+        </svg>
+      </div>
+      {isFull && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderTop: `1px solid ${C.border}`, padding: '14px 22px 18px', gap: 16 }}>
+          <RevStat label="Beste maand" value={eur(best.value)} sub={best.label} />
+          <RevStat label="Gemiddeld / maand" value={eur(avg)} sub={`${data.length} maanden`} />
+          <RevStat label="Totaal" value={eur(total)} sub="Hele periode" />
+        </div>
+      )}
+    </div>
+  );
+}
+function RevStat({ label, value, sub }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div className="bb-widget-eyebrow" style={{ fontSize: 10.5 }}>{label}</div>
+      <div style={{ fontSize: 16, fontWeight: 800, color: C.dk, letterSpacing: -0.3, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
+      {sub && <div style={{ fontSize: 11.5, color: C.dmu, fontWeight: 600, marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
 }
 
 // ── Six-dot drag handle ───────────────────────────────────────
@@ -1377,12 +1458,19 @@ function DragDots() {
   );
 }
 
-// ── WidgetCard ────────────────────────────────────────────────
-export function WidgetCard({ widget, editMode, isFirst, isLast, onMoveUp, onMoveDown, onResize, onRemove, onSettingsChange, data, setPage, openCustomer, openDeal, openInvoice, openCalendarEvent }) {
+// ── WidgetCard wrapper ────────────────────────────────────────
+export function WidgetCard({
+  widget, editMode, isFirst, isLast,
+  onMoveUp, onMoveDown, onResize, onRemove, onSettingsChange,
+  data, setPage, openCustomer, openDeal, openInvoice, openCalendarEvent,
+  // Drag-and-drop wiring from DashboardWidgetGrid (edit mode only):
+  index, dragIdx, overIdx, onDragStart, onDragOver, onDragEnd, onDrop,
+}) {
   const supportedSizes = getSupportedSizes(widget.widget_type);
   const hostRef = useRef(null);
   const [tipState, setTipState] = useState(null);
   const showTip = (e, node) => {
+    if (editMode) return; // no chart tooltips while reordering
     const host = hostRef.current;
     if (!host || !node) return;
     const r = host.getBoundingClientRect();
@@ -1392,16 +1480,65 @@ export function WidgetCard({ widget, editMode, isFirst, isLast, onMoveUp, onMove
   };
   const hideTip = () => setTipState(null);
   const ux = { tip: showTip, off: hideTip };
+
+  const isDragging = editMode && dragIdx === index;
+  const isDropTarget = editMode && dragIdx != null && dragIdx !== index && overIdx === index;
+
+  // Centralized edit-mode click guard. Any click that bubbles up to the
+  // wrapper while in edit mode is killed — pages do not navigate, drawers
+  // do not open, row click handlers don't fire. We whitelist clicks
+  // originating inside .dw-controls or .dw-drag-handle so the up/down/menu
+  // buttons (and the size/remove dropdown) stay fully interactive.
+  const editClickGuard = editMode
+    ? {
+        onClickCapture: e => {
+          if (e.target.closest('.dw-controls, .dw-drag-handle')) return;
+          e.preventDefault();
+          e.stopPropagation();
+        },
+      }
+    : null;
+
+  // HTML5 drag handlers (desktop). On touch, native draggable does not
+  // fire — that is an accepted limitation; the up/down buttons in
+  // WidgetControls remain the touch-friendly reorder path.
+  const dragHandlers = editMode ? {
+    draggable: true,
+    onDragStart: e => {
+      // Required to enable the drop targets in some browsers
+      try { e.dataTransfer.setData('text/plain', String(index)); } catch {}
+      e.dataTransfer.effectAllowed = 'move';
+      onDragStart && onDragStart(index);
+    },
+    onDragOver: e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      onDragOver && onDragOver(index);
+    },
+    onDragEnd: () => { onDragEnd && onDragEnd(); },
+    onDrop: e => {
+      e.preventDefault();
+      e.stopPropagation();
+      onDrop && onDrop();
+    },
+  } : null;
+
+  const cls = [
+    'dw-widget',
+    editMode ? 'edit' : '',
+    isDragging ? 'dw-widget--dragging' : '',
+    isDropTarget ? 'dw-widget--drop-target' : '',
+  ].filter(Boolean).join(' ');
+
   return (
-    <div ref={hostRef} className={`dw-widget${editMode ? ' edit' : ''}`} data-size={widget.size} style={{ position: 'relative' }}>
+    <div ref={hostRef} className={cls} data-size={widget.size} {...editClickGuard} {...dragHandlers}>
       {editMode && (
         <>
-          <div className="dw-edit-overlay" />
-          <div className="dw-drag-handle" title="Verplaatsen"><DragDots /></div>
+          <div className="dw-drag-handle" title="Sleep om te verplaatsen"><DragDots /></div>
           <WidgetControls size={widget.size} supportedSizes={supportedSizes} onMoveUp={onMoveUp} onMoveDown={onMoveDown} onResize={onResize} onRemove={onRemove} isFirst={isFirst} isLast={isLast} />
         </>
       )}
-      <div className="card" style={{ height: '100%', overflow: 'hidden' }}>
+      <div className="card" style={{ height: '100%' }}>
         {renderContent(widget.widget_type, data, widget, setPage, openCustomer, onSettingsChange, ux, openDeal, openInvoice, openCalendarEvent)}
       </div>
       {!editMode && tipState && (

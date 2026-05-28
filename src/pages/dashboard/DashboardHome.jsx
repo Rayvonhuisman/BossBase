@@ -341,6 +341,21 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
     setCurrentLayout('custom');
   }, []);
 
+  // Reorder via drag-and-drop in edit mode. fromIdx → toIdx; the
+  // dropped item is spliced into the new slot, others shift accordingly.
+  // Persisted only when the user clicks "Opslaan" (same flow as moveUp/Down).
+  const reorder = useCallback((fromIdx, toIdx) => {
+    if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0) return;
+    setWidgets(ws => {
+      if (fromIdx >= ws.length || toIdx >= ws.length) return ws;
+      const next = [...ws];
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      return next;
+    });
+    setCurrentLayout('custom');
+  }, []);
+
   const remove = useCallback(idx => {
     setWidgets(ws => ws.filter((_, i) => i !== idx));
     setCurrentLayout('custom');
@@ -449,6 +464,7 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
             onMoveDown={moveDown}
             onResize={resize}
             onRemove={remove}
+            onReorder={reorder}
             onSettingsChange={updateSettings}
           />
         ) : (
