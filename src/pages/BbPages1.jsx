@@ -14,8 +14,8 @@ import { getOffertes } from '../services/offerteService.js';
 import { getFacturen } from '../services/factuurService.js';
 import { getProjects } from '../services/projectsService.js';
 import { NewOfferteModal } from './OffertesPage.jsx';
-import { NewFactuurModal } from './FacturenPage.jsx';
-import { NewProjectModal } from './ProjectsPage.jsx';
+import { NewFactuurModal, FactuurBadge } from './FacturenPage.jsx';
+import { NewProjectModal, ProjectBadge } from './ProjectsPage.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { ActivityEditModal, NewActivityModal, NewCustomerModal, NewJobCostModal } from '../components/SharedModals.jsx';
@@ -309,7 +309,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                   <span style={{ fontWeight: 700 }}>{fmt(f.totaalIncl)}</span>
-                  <StatusBadge status={f.status} />
+                  <FactuurBadge f={f} />
                 </div>
               </div>
             ))}
@@ -329,7 +329,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                   {p.projectValue > 0 && <span style={{ fontWeight: 700 }}>{fmt(p.projectValue)}</span>}
-                  <StatusBadge status={p.status} />
+                  <ProjectBadge status={p.status} />
                 </div>
               </div>
             ))}
@@ -443,7 +443,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
                   <tr key={p.id}>
                     <td style={{ fontWeight: 600 }}>{p.name}</td>
                     <td style={{ fontWeight: 700 }}>{p.projectValue > 0 ? fmt(p.projectValue) : '—'}</td>
-                    <td><StatusBadge status={p.status} /></td>
+                    <td><ProjectBadge status={p.status} /></td>
                   </tr>
                 ))}
               </tbody>

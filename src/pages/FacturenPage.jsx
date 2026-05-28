@@ -29,6 +29,8 @@ const factuurBadge = f => {
   return <span className={`badge ${map[s] || 'b-gray'}`}>{labels[s] || s}</span>;
 };
 
+export function FactuurBadge({ f }) { return factuurBadge(f); }
+
 const fmtDate = d => {
   if (!d) return '—';
   const [y, m, day] = d.split('-');
