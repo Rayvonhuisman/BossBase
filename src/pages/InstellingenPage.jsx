@@ -112,7 +112,7 @@ export function InstellingenPage() {
 
   // AFAS
   const [afasConnection, setAfasConnection] = useState(null);
-  const [afasForm, setAfasForm] = useState({ environmentId: '', token: '' });
+  const [afasForm, setAfasForm] = useState({ environmentId: '', token: '', subdomain: '' });
   const [afasEditing, setAfasEditing] = useState(false);
   const [afasTesting, setAfasTesting] = useState(false);
   const [afasSaving, setAfasSaving] = useState(false);
@@ -149,7 +149,7 @@ export function InstellingenPage() {
         }
         if (afasConn) {
           setAfasConnection(afasConn);
-          setAfasForm({ environmentId: afasConn.afasEnvironmentId, token: afasConn.afasToken });
+          setAfasForm({ environmentId: afasConn.afasEnvironmentId, token: afasConn.afasToken, subdomain: afasConn.afasSubdomain });
         }
       })
       .catch(err => toast.error(err.message || 'Laden mislukt'))
@@ -453,13 +453,13 @@ export function InstellingenPage() {
   };
 
   const handleAfasTest = async () => {
-    if (!afasForm.environmentId || !afasForm.token) {
-      toast.error('Vul Omgevings-ID en App token in');
+    if (!afasForm.environmentId || !afasForm.token || !afasForm.subdomain) {
+      toast.error('Vul Omgevings-ID, subdomein en App token in');
       return;
     }
     setAfasTesting(true);
     try {
-      const result = await testAfasConnection(afasForm.environmentId, afasForm.token);
+      const result = await testAfasConnection(afasForm.environmentId, afasForm.token, afasForm.subdomain);
       if (result?.success) {
         toast.success('Verbinding met AFAS gelukt');
       } else {
@@ -473,8 +473,8 @@ export function InstellingenPage() {
   };
 
   const handleAfasSave = async () => {
-    if (!afasForm.environmentId || !afasForm.token) {
-      toast.error('Vul Omgevings-ID en App token in');
+    if (!afasForm.environmentId || !afasForm.token || !afasForm.subdomain) {
+      toast.error('Vul Omgevings-ID, subdomein en App token in');
       return;
     }
     setAfasSaving(true);
@@ -1260,6 +1260,21 @@ export function InstellingenPage() {
               </div>
               <div className="f s2">
                 <label>
+                  Subdomein
+                  <span style={{ fontSize: '.73rem', color: 'var(--dl)', fontWeight: 400, marginLeft: 6 }}>
+                    Te vinden in de URL van je AFAS omgeving
+                  </span>
+                </label>
+                <input
+                  value={afasForm.subdomain}
+                  onChange={e => setAfasForm(f => ({ ...f, subdomain: e.target.value }))}
+                  placeholder='bijv. "rest" of "accept"'
+                  disabled={!!(afasConnection?.afasEnvironmentId && !afasEditing)}
+                  style={{ opacity: afasConnection?.afasEnvironmentId && !afasEditing ? 0.6 : 1 }}
+                />
+              </div>
+              <div className="f s2">
+                <label>
                   App token
                   <span style={{ fontSize: '.73rem', color: 'var(--dl)', fontWeight: 400, marginLeft: 6 }}>
                     Genereer een token via AFAS → App Connector
@@ -1312,14 +1327,14 @@ export function InstellingenPage() {
                   <button
                     className="btn btn-ghost btn-sm"
                     onClick={handleAfasTest}
-                    disabled={afasTesting || !afasForm.environmentId || !afasForm.token}
+                    disabled={afasTesting || !afasForm.environmentId || !afasForm.subdomain || !afasForm.token}
                   >
                     {afasTesting ? 'Testen...' : 'Verbinding testen'}
                   </button>
                   <button
                     className="btn btn-p btn-sm"
                     onClick={handleAfasSave}
-                    disabled={afasSaving || !afasForm.environmentId || !afasForm.token}
+                    disabled={afasSaving || !afasForm.environmentId || !afasForm.subdomain || !afasForm.token}
                   >
                     {afasSaving ? 'Opslaan...' : 'Opslaan'}
                   </button>

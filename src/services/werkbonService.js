@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase"
 import { getCompanyId, withCompanyId } from "../lib/currentCompany"
 
+
 // DB columns werkbonnen: id, company_id, customer_id, deal_id, offerte_id,
 // assigned_to, titel, omschrijving, status, gepland_op, starttijd, eindtijd,
 // locatie, notes, created_at, updated_at

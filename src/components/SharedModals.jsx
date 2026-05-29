@@ -556,7 +556,7 @@ export function NewCalendarEventModal({ onClose, onSaved, customers, defaultDate
 }
 
 // ── NEW JOB COST MODAL ───────────────────────────────────────
-export function NewJobCostModal({ onClose, onSaved, customers, defaultCustId = '' }) {
+export function NewJobCostModal({ onClose, onSaved, customers, defaultCustId = '', lockCustomer = false }) {
   const toast = useToast();
   const [form, setForm] = useState({
     customer_id: defaultCustId,
@@ -670,7 +670,11 @@ export function NewJobCostModal({ onClose, onSaved, customers, defaultCustId = '
         <div className="fg">
           <div className="f">
             <label>Klant</label>
-            <select value={form.customer_id} onChange={e => setField('customer_id', e.target.value)}>
+            <select
+              value={form.customer_id}
+              onChange={e => setField('customer_id', e.target.value)}
+              disabled={lockCustomer || Boolean(defaultCustId)}
+            >
               <option value="">Algemeen</option>
               {(customers || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>

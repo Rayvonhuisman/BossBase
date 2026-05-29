@@ -956,7 +956,7 @@ function AppInner() {
   const today = new Date().toISOString().slice(0, 10);
   const sidebarBadges = {
     pipeline: globalDeals.filter(d => d.stage === 'new_lead').length,
-    activities: globalActivities.filter(a => a.status !== 'completed' && a.status !== 'done' && a.dueAt?.slice(0, 10) === today).length,
+    activities: globalActivities.filter(a => a.status !== 'completed' && a.status !== 'done' && a.dueAt?.slice(0, 10) <= today).length,
   };
 
   return (

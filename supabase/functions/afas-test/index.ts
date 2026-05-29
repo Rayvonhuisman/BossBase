@@ -18,17 +18,17 @@ serve(async (req) => {
   console.log('Function started: afas-test')
 
   try {
-    const { environment_id, token } = await req.json()
+    const { environment_id, token, subdomain } = await req.json()
 
-    if (!environment_id || !token) {
+    if (!environment_id || !token || !subdomain) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Omgevings-ID en App token zijn verplicht' }),
+        JSON.stringify({ success: false, error: 'Omgevings-ID, subdomein en App token zijn verplicht' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
 
     const base64Token = buildAfasToken(token)
-    const url = `https://${environment_id}.rest.afas.online/profitrestservices/metainfo`
+    const url = `https://${environment_id}.${subdomain}.afasonline.nl/profitrestservices/metainfo`
 
     const res = await fetch(url, {
       headers: {

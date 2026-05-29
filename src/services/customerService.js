@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase"
 import { withCompanyId } from "../lib/currentCompany"
 import { safeInsert } from "../lib/safeInsert"
+import { logTijdlijnSafe } from "./klantTijdlijnService"
 
 // Real DB columns: id, company_id, name, email, phone, address, postcode, city,
 // kvk_number, btw_number, iban, logo_url, notes, created_at, updated_at.
@@ -27,6 +28,7 @@ const toCustomer = (row, index = 0) => ({
   btwNumber: row.btw_number || "",
   iban: row.iban || "",
   notes: row.notes || "",
+  notities: row.notities || "",
   logoUrl: row.logo_url || "",
   companyId: row.company_id || null,
   moneybirdId: row.moneybird_id || null,
@@ -86,8 +88,8 @@ export async function createCustomer(input) {
   const { data, error } = await safeInsert(supabase, "customers", payload)
   if (error) throw error
   const customer = toCustomer(data)
-  // Fire-and-forget: sync naar Moneybird als er een koppeling is
   supabase.functions.invoke('moneybird-update-contact', { body: { customer_id: customer.id } }).catch(() => {})
+  logTijdlijnSafe(customer.id, 'klant_aangemaakt', 'Klant toegevoegd aan het systeem')
   return customer
 }
 
@@ -96,11 +98,21 @@ export async function updateCustomer(id, input) {
   const { data, error } = await supabase.from("customers").update(payload).eq("id", id).select().single()
   if (error) throw error
   const customer = toCustomer(data)
-  // Fire-and-forget: sync naar Moneybird als klant al gesynchroniseerd was
   if (customer.moneybirdId) {
     supabase.functions.invoke('moneybird-update-contact', { body: { customer_id: id } }).catch(() => {})
   }
   return customer
+}
+
+export async function updateCustomerNotities(id, notities) {
+  const { data, error } = await supabase
+    .from("customers")
+    .update({ notities: notities || null })
+    .eq("id", id)
+    .select()
+    .single()
+  if (error) throw error
+  return toCustomer(data)
 }
 
 export async function deleteCustomer(id) {

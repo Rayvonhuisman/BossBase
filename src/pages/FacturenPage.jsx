@@ -752,7 +752,7 @@ export function FacturenPage({ openCustomer }) {
     <div>
       <div className="page-hd afu">
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Facturen</h1>
+          <h1>Facturen</h1>
           {error && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 4 }}>{error}</div>}
         </div>
         <div className="page-hd-actions">
@@ -789,15 +789,15 @@ export function FacturenPage({ openCustomer }) {
         </div>
 
         <div className="card">
-          <div style={{ padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid var(--br)' }}>
-            <div className="tabs" style={{ flex: 1 }}>
+          <div className="tw-filter">
+            <div className="tabs">
               {filters.map(f => (
                 <button key={f.value} className={`tab${activeFilter === f.value ? ' active' : ''}`} onClick={() => setActiveFilter(f.value)}>
                   {f.label}
                 </button>
               ))}
             </div>
-            <div className="search" style={{ minWidth: 0, width: 220 }}>
+            <div className="search">
               <span style={{ color: 'var(--dl)', display: 'flex', flexShrink: 0 }}>{I.search}</span>
               <input placeholder="Zoek factuur..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>

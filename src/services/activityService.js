@@ -4,6 +4,7 @@ import { safeInsert } from "../lib/safeInsert"
 import { sanitizeName } from "./customerService"
 import { autoSyncActivitySafe, autoSyncDeleteSafe } from "./googleCalendarService"
 
+
 // Real DB columns: id, company_id, customer_id, deal_id, assigned_to, title, type,
 // due_at, completed (boolean), notes, created_at, updated_at.
 // UI uses a richer "status" string ('open' | 'today' | 'overdue' | 'completed' | 'done').
@@ -119,7 +120,7 @@ export async function createActivity(input) {
   const { data, error } = await safeInsert(supabase, "activities", payload, "*, customers(*)")
   if (error) throw error
   const activity = toActivity(data)
-  autoSyncActivitySafe(activity) // non-blocking BossBase -> Google
+  autoSyncActivitySafe(activity)
   return activity
 }
 
@@ -128,7 +129,7 @@ export async function updateActivity(id, input) {
   const { data, error } = await supabase.from("activities").update(payload).eq("id", id).select("*, customers(*)").single()
   if (error) throw error
   const activity = toActivity(data)
-  autoSyncActivitySafe(activity) // non-blocking BossBase -> Google
+  autoSyncActivitySafe(activity)
   return activity
 }
 

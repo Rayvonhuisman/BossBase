@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase"
 import { withCompanyId } from "../lib/currentCompany"
 
+
 // Real DB columns: id, company_id, deal_id, description, amount, category,
 // cost_date, created_at, updated_at.
 

@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
 import { withCompanyId, getCompanyId } from '../lib/currentCompany'
+import { logTijdlijnSafe } from './klantTijdlijnService'
 
 // =============================================================================
 // projects / time_entries / project_notes  service-laag
@@ -92,6 +93,17 @@ export async function getProjects() {
   return (data || []).map(toProject)
 }
 
+export async function getProjectsByCustomer(customerId) {
+  if (!customerId) return []
+  const { data, error } = await supabase
+    .from('projects')
+    .select('*, customers(name), deals(title), offertes(nummer, totaal_incl, arbeidsuren)')
+    .eq('customer_id', customerId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data || []).map(toProject)
+}
+
 export async function getProjectById(id) {
   const { data, error } = await supabase
     .from('projects')
@@ -136,7 +148,12 @@ export async function createProject(input) {
     .select('*, customers(name), deals(title), offertes(nummer, totaal_incl, arbeidsuren)')
     .single()
   if (error) throw error
-  return toProject(data)
+  const project = toProject(data)
+  if (project.customerId) {
+    logTijdlijnSafe(project.customerId, 'project_aangemaakt',
+      `Project aangemaakt: ${project.name}`, { name: project.name })
+  }
+  return project
 }
 
 export async function updateProject(projectId, patch) {
@@ -174,7 +191,14 @@ export async function updateProject(projectId, patch) {
     .select('*, customers(name), deals(title), offertes(nummer, totaal_incl, arbeidsuren)')
     .single()
   if (error) throw error
-  return toProject(data)
+  const project = toProject(data)
+  if (project.customerId && updates.status) {
+    const statusLabel = PROJECT_STATUS[updates.status]?.label || updates.status
+    logTijdlijnSafe(project.customerId, 'project_status_gewijzigd',
+      `Project status gewijzigd naar ${statusLabel}`,
+      { name: project.name, status: updates.status })
+  }
+  return project
 }
 
 export async function deleteProject(projectId) {

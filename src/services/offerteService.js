@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase"
 import { withCompanyId } from "../lib/currentCompany"
+import { logTijdlijnSafe } from "./klantTijdlijnService"
 
 // DB columns: id, company_id, customer_id, deal_id, nummer, omschrijving, status,
 // arbeidsuren, uurtarief, materiaalkosten, reiskosten, marge_pct, btw_pct,
@@ -90,6 +91,17 @@ export async function getOffertes() {
   return (data || []).map(toOfferte)
 }
 
+export async function getOffertesByCustomer(customerId) {
+  if (!customerId) return []
+  const { data, error } = await supabase
+    .from("offertes")
+    .select("*, customers(name)")
+    .eq("customer_id", customerId)
+    .order("created_at", { ascending: false })
+  if (error) throw error
+  return (data || []).map(toOfferte)
+}
+
 export async function getOfferteById(id) {
   const { data, error } = await supabase
     .from("offertes")
@@ -130,7 +142,13 @@ export async function createOfferte(input) {
     .select("*, customers(name)")
     .single()
   if (error) throw error
-  return toOfferte(data)
+  const offerte = toOfferte(data)
+  if (offerte.customerId) {
+    const bedrag = offerte.totaalIncl.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    logTijdlijnSafe(offerte.customerId, 'offerte_aangemaakt',
+      `Offerte ${offerte.nummer} aangemaakt (€${bedrag})`, { nummer: offerte.nummer, totaalIncl: offerte.totaalIncl })
+  }
+  return offerte
 }
 
 export async function updateOfferte(id, input) {
@@ -163,7 +181,17 @@ export async function updateOfferte(id, input) {
     .select("*, customers(name)")
     .single()
   if (error) throw error
-  return toOfferte(data)
+  const offerte = toOfferte(data)
+  if (offerte.customerId && input.status) {
+    const statusMap = {
+      verzonden:    ['offerte_verzonden',    `Offerte ${offerte.nummer} verzonden naar klant`],
+      geaccepteerd: ['offerte_geaccepteerd', `Offerte ${offerte.nummer} geaccepteerd`],
+      afgewezen:    ['offerte_afgewezen',    `Offerte ${offerte.nummer} afgewezen`],
+    }
+    const entry = statusMap[input.status]
+    if (entry) logTijdlijnSafe(offerte.customerId, entry[0], entry[1], { nummer: offerte.nummer })
+  }
+  return offerte
 }
 
 export async function deleteOfferte(id) {

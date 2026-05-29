@@ -385,8 +385,8 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
     <div>
       <div className="page-hd afu">
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Projecten</h1>
-          <p style={{ margin: '4px 0 0' }}>Beheer projecten, uren, offertes en facturatie</p>
+          <h1>Projecten</h1>
+          <p>Beheer projecten, uren, offertes en facturatie</p>
           {err && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 4 }}>{err}</div>}
         </div>
         <div className="page-hd-actions">
@@ -402,7 +402,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
         {/* KPI cards */}
         <div className="stats-row" style={{ gridTemplateColumns: 'repeat(5,1fr)', marginBottom: 20 }}>
           <div className="sc">
-            <div className="sc-top"><div className="sc-icon">{I.brief}</div></div>
+            <div className="sc-top"><div className="sc-icon">{I.projects}</div></div>
             <div className="sc-val">{kpi.active}</div>
             <div className="sc-label">Actieve projecten</div>
           </div>
@@ -429,8 +429,8 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
         </div>
 
         <div className="card">
-          <div style={{ padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid var(--br)' }}>
-            <div className="tabs" style={{ flex: '1 1 auto', minWidth: 0, overflowX: 'auto' }}>
+          <div className="tw-filter">
+            <div className="tabs">
               {filterTabs.map(f => (
                 <button
                   key={f.value}
@@ -442,27 +442,17 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
               ))}
             </div>
             <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-              <select
-                value={invoiceFilter}
-                onChange={e => setInvoiceFilter(e.target.value)}
-                style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--br)', background: '#fff', fontSize: 12 }}
-                aria-label="Filter facturatie"
-              >
+              <select value={invoiceFilter} onChange={e => setInvoiceFilter(e.target.value)} className="filter-select" aria-label="Filter facturatie">
                 <option value="all">Alle facturatie</option>
                 <option value="unbilled">Nog te factureren</option>
                 <option value="billed">Al gefactureerd</option>
               </select>
-              <select
-                value={riskFilter}
-                onChange={e => setRiskFilter(e.target.value)}
-                style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--br)', background: '#fff', fontSize: 12 }}
-                aria-label="Filter risico"
-              >
+              <select value={riskFilter} onChange={e => setRiskFilter(e.target.value)} className="filter-select" aria-label="Filter risico">
                 <option value="all">Alle health</option>
                 <option value="risk_only">Alleen risico</option>
               </select>
             </div>
-            <div className="search" style={{ minWidth: 0, width: 220 }}>
+            <div className="search">
               <span style={{ color: 'var(--dl)', display: 'flex', flexShrink: 0 }}>{I.search}</span>
               <input placeholder="Zoek project, klant…" value={search} onChange={e => setSearch(e.target.value)} />
             </div>

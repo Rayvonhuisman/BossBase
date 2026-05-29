@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase'
 import { withCompanyId } from '../lib/currentCompany'
 import { syncFactuurNaarMoneybird } from './accountingService'
+import { logTijdlijnSafe } from './klantTijdlijnService'
 
 const toFactuur = row => ({
   id: row.id,
@@ -61,6 +62,17 @@ export async function getFacturen() {
   return (data || []).map(toFactuur)
 }
 
+export async function getFacturenByCustomer(customerId) {
+  if (!customerId) return []
+  const { data, error } = await supabase
+    .from('facturen')
+    .select('*, customers(name)')
+    .eq('customer_id', customerId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data || []).map(toFactuur)
+}
+
 export async function createFactuur(input) {
   const nummer = input.nummer || (await generateFactuurNummer())
   const base = {
@@ -83,7 +95,13 @@ export async function createFactuur(input) {
     .select('*, customers(name)')
     .single()
   if (error) throw error
-  return toFactuur(data)
+  const factuur = toFactuur(data)
+  if (factuur.customerId) {
+    const bedrag = factuur.totaalIncl.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    logTijdlijnSafe(factuur.customerId, 'factuur_aangemaakt',
+      `Factuur ${factuur.nummer} aangemaakt (€${bedrag})`, { nummer: factuur.nummer, totaalIncl: factuur.totaalIncl })
+  }
+  return factuur
 }
 
 export async function updateFactuur(id, input) {
@@ -108,6 +126,15 @@ export async function updateFactuur(id, input) {
   const result = toFactuur(data)
   if (input.status === 'betaald') {
     syncFactuurNaarMoneybird(id).catch(() => {})
+  }
+  if (result.customerId && input.status) {
+    const bedrag = result.totaalIncl.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const statusMap = {
+      verzonden: ['factuur_verzonden', `Factuur ${result.nummer} verzonden naar klant`],
+      betaald:   ['factuur_betaald',   `Factuur ${result.nummer} betaald (€${bedrag})`],
+    }
+    const entry = statusMap[input.status]
+    if (entry) logTijdlijnSafe(result.customerId, entry[0], entry[1], { nummer: result.nummer })
   }
   return result
 }
@@ -159,6 +186,10 @@ export async function createCreditFactuur(origineleFactuurId, regels, origineleF
     .single()
   if (error) throw error
   const creditFactuur = toFactuur(data)
+  if (creditFactuur.customerId) {
+    logTijdlijnSafe(creditFactuur.customerId, 'creditfactuur_aangemaakt',
+      `Creditfactuur ${creditFactuur.nummer} aangemaakt`, { nummer: creditFactuur.nummer })
+  }
   for (let i = 0; i < regels.length; i++) {
     const r = regels[i]
     await createFactuurRegel({

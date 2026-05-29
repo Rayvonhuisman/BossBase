@@ -1,24 +1,130 @@
-import { useEffect, useState } from 'react';
-import { Check, Edit2, Maximize2, Minimize2, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Bold, Calendar, Check, Edit2, Euro, FileText, Folder, Italic, List, ListOrdered, Maximize2, Minimize2, PenLine, Plus, RotateCcw, ShoppingCart, Underline, User, Wrench, X } from 'lucide-react';
 import {
   I, CUSTOMERS_DATA, DEALS, ACTIVITIES_DATA, QUOTES_DATA, COSTS_DATA,
   fmt, custById, stageLabel, stageCol, Av, StatusBadge, ModalX,
 } from '../bb-shared.jsx';
 import { createCustomer, deleteCustomer, getCustomer, listCustomers, updateCustomer } from '../services/customerService.js';
+import { getKlantNotities, addKlantNotitie, getTijdlijnByCustomer } from '../services/klantTijdlijnService.js';
 import { updateContactInMoneybird } from '../services/accountingService.js';
 import { buildDueAt, createActivity, listActivities, updateActivity } from '../services/activityService.js';
 import { createNote, listNotes } from '../services/noteService.js';
 import { listJobCosts } from '../services/jobCostService.js';
 import { listDeals } from '../services/dealService.js';
-import { getOffertes } from '../services/offerteService.js';
-import { getFacturen } from '../services/factuurService.js';
-import { getProjects } from '../services/projectsService.js';
+import { getOffertesByCustomer } from '../services/offerteService.js';
+import { getFacturenByCustomer } from '../services/factuurService.js';
+import { getProjectsByCustomer } from '../services/projectsService.js';
 import { NewOfferteModal, OfferteBadge } from './OffertesPage.jsx';
 import { NewFactuurModal, FactuurBadge } from './FacturenPage.jsx';
 import { NewProjectModal, ProjectBadge } from './ProjectsPage.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { ActivityEditModal, NewActivityModal, NewCustomerModal, NewJobCostModal } from '../components/SharedModals.jsx';
+
+const EMPTY_FORMATS = { bold: false, italic: false, underline: false, insertUnorderedList: false, insertOrderedList: false };
+
+function NotitieEditor({ editorRef, minHeight = 200, maxHeight, placeholder, onHasContent }) {
+  const [focused, setFocused] = useState(false);
+  const [isEmpty, setIsEmpty] = useState(true);
+  const [activeFormats, setActiveFormats] = useState(EMPTY_FORMATS);
+  const isFocused = useRef(false);
+
+  const updateActiveState = () => {
+    setActiveFormats({
+      bold:                document.queryCommandState('bold'),
+      italic:              document.queryCommandState('italic'),
+      underline:           document.queryCommandState('underline'),
+      insertUnorderedList: document.queryCommandState('insertUnorderedList'),
+      insertOrderedList:   document.queryCommandState('insertOrderedList'),
+    });
+  };
+
+  useEffect(() => {
+    const onSelectionChange = () => { if (isFocused.current) updateActiveState(); };
+    document.addEventListener('selectionchange', onSelectionChange);
+    return () => document.removeEventListener('selectionchange', onSelectionChange);
+  }, []);
+
+  const exec = cmd => {
+    editorRef.current?.focus();
+    document.execCommand(cmd, false, null);
+    updateActiveState();
+  };
+
+  const handleInput = () => {
+    const hasText = Boolean(editorRef.current?.textContent?.trim());
+    setIsEmpty(!hasText);
+    onHasContent?.(hasText);
+    updateActiveState();
+  };
+
+  const TOOLBAR = [
+    { cmd: 'bold',               icon: <Bold size={13} />,        title: 'Vet (Ctrl+B)' },
+    { cmd: 'italic',             icon: <Italic size={13} />,      title: 'Cursief (Ctrl+I)' },
+    { cmd: 'underline',          icon: <Underline size={13} />,   title: 'Onderstrepen (Ctrl+U)' },
+    null,
+    { cmd: 'insertUnorderedList', icon: <List size={13} />,        title: 'Bullet lijst' },
+    { cmd: 'insertOrderedList',  icon: <ListOrdered size={13} />, title: 'Genummerde lijst' },
+  ];
+
+  return (
+    <div style={{
+      border: `1px solid ${focused ? '#1DDB62' : 'var(--border)'}`,
+      borderRadius: 'var(--r8)', overflow: 'hidden', background: 'var(--bg)',
+      transition: 'border-color .15s',
+    }}>
+      <div style={{
+        display: 'flex', gap: 1, padding: '4px 6px',
+        borderBottom: '1px solid var(--border)', background: 'var(--bgs)',
+        alignItems: 'center', flexWrap: 'wrap',
+      }}>
+        {TOOLBAR.map((item, i) =>
+          !item ? (
+            <div key={i} style={{ width: 1, background: 'var(--border)', height: 14, margin: '0 3px', alignSelf: 'center', flexShrink: 0 }} />
+          ) : (
+            <button
+              key={i}
+              type="button"
+              title={item.title}
+              className={`bb-tb-btn${activeFormats[item.cmd] ? ' active' : ''}`}
+              onMouseDown={e => { e.preventDefault(); exec(item.cmd); }}
+            >
+              {item.icon}
+            </button>
+          )
+        )}
+      </div>
+      <div style={{ position: 'relative' }}>
+        {isEmpty && placeholder && (
+          <div style={{
+            position: 'absolute', top: 10, left: 12,
+            color: '#9ca3af', fontSize: '.85rem',
+            pointerEvents: 'none', userSelect: 'none', lineHeight: 1.6,
+          }}>
+            {placeholder}
+          </div>
+        )}
+        <div
+          ref={editorRef}
+          contentEditable
+          suppressContentEditableWarning
+          className="bb-notitie-editor"
+          onInput={handleInput}
+          onKeyUp={updateActiveState}
+          onMouseUp={updateActiveState}
+          onFocus={() => { isFocused.current = true; setFocused(true); updateActiveState(); }}
+          onBlur={() => { isFocused.current = false; setFocused(false); setActiveFormats(EMPTY_FORMATS); }}
+          style={{
+            minHeight, maxHeight, padding: '10px 12px',
+            outline: 'none', fontSize: '.85rem', lineHeight: 1.6,
+            color: 'var(--dk)', fontFamily: 'inherit',
+            overflowY: maxHeight ? 'auto' : undefined,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
 
 // Customer form keeps friendly UI fields; service-layer maps to real DB columns.
 // `type` and `source` are local-only display state for now (no DB columns yet).
@@ -50,6 +156,17 @@ export function CustomerPage({ custId, onClose, setPage }) {
   const [showNewOfferte, setShowNewOfferte] = useState(false);
   const [showNewFactuur, setShowNewFactuur] = useState(false);
   const [showNewProject, setShowNewProject] = useState(false);
+  const [klantNotities, setKlantNotities] = useState([]);
+  const [tijdlijn, setTijdlijn] = useState([]);
+  const notitiesEditorRef = useRef(null);
+  const overzichtEditorRef = useRef(null);
+  const [notitiesHasContent, setNotitiesHasContent] = useState(false);
+  const [overzichtHasContent, setOverzichtHasContent] = useState(false);
+  const [savingNotitie, setSavingNotitie] = useState(false);
+  const [savingOverzicht, setSavingOverzicht] = useState(false);
+  const [showNotitiesInput, setShowNotitiesInput] = useState(false);
+  const [showOverzichtInput, setShowOverzichtInput] = useState(false);
+  const [notitiesVisible, setNotitiesVisible] = useState(10);
   const [fullscreen, setFullscreen] = useState(() => localStorage.getItem('customer_fullscreen') === 'true');
   const [sbWidth, setSbWidth] = useState(232);
 
@@ -92,28 +209,26 @@ export function CustomerPage({ custId, onClose, setPage }) {
     setLoading(true);
     Promise.all([
       getCustomer(custId), listActivities(), listNotes(custId), listJobCosts(),
-      getOffertes().catch(() => []), getFacturen().catch(() => []), getProjects().catch(() => []),
+      getOffertesByCustomer(custId).catch(() => []),
+      getFacturenByCustomer(custId).catch(() => []),
+      getProjectsByCustomer(custId).catch(() => []),
+      getKlantNotities(custId).catch(() => []),
+      getTijdlijnByCustomer(custId).catch(() => []),
     ])
-    .then(([customer, activities, notes, costs, allOffertes, allFacturen, allProjecten]) => {
+    .then(([customer, activities, notes, costs, offertes, facturen, projecten, notities, tl]) => {
       if (!alive) return;
-      console.log('[debug] custId vergelijken met:', custId, typeof custId);
-      console.log('[debug] offerte customerId velden:', allOffertes.map(o => o.customerId));
-      console.log('[debug] offerte keys[0]:', allOffertes[0] ? Object.keys(allOffertes[0]) : 'geen offertes');
-      console.log('[debug] factuur customerId velden:', allFacturen.map(f => f.customerId));
-      console.log('[debug] factuur keys[0]:', allFacturen[0] ? Object.keys(allFacturen[0]) : 'geen facturen');
-      console.log('[debug] project customerId velden:', allProjecten.map(p => p.customerId));
-      console.log('[debug] project keys[0]:', allProjecten[0] ? Object.keys(allProjecten[0]) : 'geen projecten');
-      const filteredOffertes = allOffertes.filter(o => o.customerId === custId);
-      const filteredFacturen = allFacturen.filter(f => f.customerId === custId);
-      const filteredProjecten = allProjecten.filter(p => p.customerId === custId);
-      console.log('[debug] na filter → offertes:', filteredOffertes.length, 'facturen:', filteredFacturen.length, 'projecten:', filteredProjecten.length);
       setCustomer(customer);
+      setKlantNotities(notities);
+      setTijdlijn(tl);
       setActs(activities.filter(a => a.custId === custId));
       setNotes(notes);
-      setCosts(costs.filter(x => x.custId === custId));
-      setOffertes(filteredOffertes);
-      setFacturen(filteredFacturen);
-      setProjecten(filteredProjecten);
+      setCosts(costs.filter(x => x.custId === custId || x.customerId === custId));
+      setOffertes(offertes);
+      setFacturen(facturen);
+      setProjecten(projecten);
+      setNotitiesVisible(10);
+      setShowNotitiesInput(false);
+      setShowOverzichtInput(false);
       setError('');
     })
     .catch(err => alive && setError(err.message || 'Klant laden is mislukt.'))
@@ -127,9 +242,15 @@ export function CustomerPage({ custId, onClose, setPage }) {
 
   const cDeals  = [];
   const cQuotes = [];
+  const totalGeoffreerd = cOffertes
+    .filter(o => ['concept', 'verzonden', 'geaccepteerd'].includes(o.status))
+    .reduce((s, o) => s + o.totaalIncl, 0);
+  const totalBetaald = cFacturen
+    .filter(f => f.status === 'betaald')
+    .reduce((s, f) => s + f.totaalIncl, 0);
   const totalCosts = cCosts.reduce((s, x) => s + x.amt, 0);
-  const profit = c.paid - totalCosts;
-  const margin = c.paid > 0 ? Math.round((profit / c.paid) * 100) : 0;
+  const profit = totalBetaald - totalCosts;
+  const margin = totalBetaald > 0 ? Math.round((profit / totalBetaald) * 100) : 0;
   const startEdit = (key) => { setEditingField(key); setFieldDraft(c[key] || ''); };
   const cancelEdit = () => { setEditingField(null); setFieldDraft(''); };
   const saveField = async (key) => {
@@ -183,28 +304,95 @@ export function CustomerPage({ custId, onClose, setPage }) {
   const reloadCosts = async () => {
     try {
       const costs = await listJobCosts();
-      setCosts(costs.filter(x => x.custId === custId));
+      setCosts(costs.filter(x => x.custId === custId || x.customerId === custId));
     } catch { /* ignore */ }
   };
 
-  const TABS = ['overview', 'quotes', 'costs', 'projecten', 'timeline', 'klantgegevens'];
-  const TAB_LABELS = { overview: 'Overzicht', quotes: 'Offertes', costs: 'Kosten', projecten: 'Projecten', timeline: 'Tijdlijn', klantgegevens: 'Klantgegevens' };
+  const TABS = ['overview', 'notities', 'quotes', 'costs', 'projecten', 'timeline', 'klantgegevens'];
+  const TAB_LABELS = { overview: 'Overzicht', notities: 'Notities', quotes: 'Offertes', costs: 'Kosten', projecten: 'Projecten', timeline: 'Tijdlijn', klantgegevens: 'Klantgegevens' };
 
-  const TIMELINE = [
-    { label: 'Lead aangemaakt',     date: '8 apr 2026',  note: 'Via website formulier',                     filled: true },
-    { label: 'Eerste contact',      date: '9 apr 2026',  note: 'Gebeld — interesse bevestigd',              filled: true },
-    { label: 'Opname gedaan',       date: '14 apr 2026', note: 'Locatie bekeken, maatwerk besproken',       filled: true },
-    { label: 'Offerte aangemaakt',  date: '18 apr 2026', note: `${cOffertes[0]?.nummer || 'BB-001'} — ${fmt(cOffertes[0]?.totaalIncl || 0)}`, filled: true },
-    { label: 'Offerte verstuurd',   date: '20 apr 2026', note: 'Per e-mail naar klant',                     filled: true },
-    { label: 'Offerte bekeken',     date: '21 apr 2026', note: 'Klant heeft de offerte geopend',            filled: cOffertes[0]?.status !== 'concept' },
-    { label: 'Offerte geaccepteerd',date: cOffertes[0]?.status === 'geaccepteerd' ? '23 apr 2026' : '—', note: 'Online akkoord gegeven', filled: cOffertes[0]?.status === 'geaccepteerd' },
-    { label: 'Job gepland',         date: ['planned','in_progress','completed'].includes(c.stage) ? '28 apr 2026' : '—', note: 'Ingepland via agenda', filled: ['planned','in_progress','completed'].includes(c.stage) },
-    { label: 'Uitvoering gestart',  date: ['in_progress','completed'].includes(c.stage) ? '30 apr 2026' : '—', note: 'Werkbon geopend door medewerker', filled: ['in_progress','completed'].includes(c.stage) },
-    { label: 'Job afgerond',        date: c.stage === 'completed' ? '3 mei 2026' : '—', note: 'Werkbon gesloten, uren geregistreerd', filled: c.stage === 'completed' },
-  ];
+  const fmtNotitieDate = iso => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })
+      + ' · ' + d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const clearEditor = ref => { if (ref.current) ref.current.innerHTML = ''; };
+
+  const addNotitie = async (editorRef, setHasContent, setSaving, onDone) => {
+    const html = editorRef.current?.innerHTML || '';
+    if (!editorRef.current?.textContent?.trim()) return;
+    setSaving(true);
+    try {
+      const created = await addKlantNotitie(c.id, html);
+      setKlantNotities(list => [created, ...list]);
+      setTijdlijn(list => [created, ...list]);
+      clearEditor(editorRef);
+      setHasContent(false);
+      onDone?.();
+      toast.success('Notitie opgeslagen');
+    } catch (err) {
+      toast.error(err.message || 'Opslaan mislukt');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const cancelNotitie = (editorRef, setHasContent, closeFn) => {
+    clearEditor(editorRef);
+    setHasContent(false);
+    closeFn();
+  };
+
+  const fmtTijdlijnDate = iso => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const dag = ['zo','ma','di','wo','do','vr','za'][d.getDay()];
+    const mnd = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'][d.getMonth()];
+    return `${dag} ${d.getDate()} ${mnd} · ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  };
+
+  const TIJDLIJN_ICON = {
+    klant_aangemaakt:         <User size={14} />,
+    offerte_aangemaakt:       <FileText size={14} />,
+    offerte_verzonden:        <FileText size={14} />,
+    offerte_geaccepteerd:     <FileText size={14} />,
+    offerte_afgewezen:        <FileText size={14} />,
+    factuur_aangemaakt:       <Euro size={14} />,
+    factuur_verzonden:        <Euro size={14} />,
+    factuur_betaald:          <Euro size={14} />,
+    creditfactuur_aangemaakt: <RotateCcw size={14} />,
+    project_aangemaakt:       <Folder size={14} />,
+    project_status_gewijzigd: <Folder size={14} />,
+    notitie_toegevoegd:       <PenLine size={14} />,
+  };
+
+  const TIJDLIJN_KLEUR = type => {
+    if (type.startsWith('klant'))   return '#3b82f6';
+    if (type.startsWith('offerte')) return '#f97316';
+    if (type.startsWith('factuur')) return '#10b981';
+    if (type.startsWith('credit'))  return '#ef4444';
+    if (type.startsWith('project')) return '#6366f1';
+    if (type.startsWith('notitie')) return '#10b981';
+    return 'var(--dl)';
+  };
 
   return (
     <div>
+
+      {/* Sticky sluit-knop — altijd rechtsboven zichtbaar */}
+      {onClose && (
+        <button
+          className="drawer-x"
+          onClick={onClose}
+          title="Sluiten"
+          style={{ position: 'sticky', top: 16, float: 'right', zIndex: 20, marginBottom: -36, marginLeft: 8 }}
+        >
+          {I.x}
+        </button>
+      )}
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 20 }}>
         <button
@@ -235,14 +423,13 @@ export function CustomerPage({ custId, onClose, setPage }) {
             )}
           </div>
         </div>
-        {fullscreen && onClose && <button className="drawer-x" onClick={onClose}>{I.x}</button>}
       </div>
 
       {/* Quick stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
         {[
-          { label: 'Totaal geoffreerd', val: fmt(c.total) },
-          { label: 'Betaald',           val: fmt(c.paid),    green: c.paid > 0 },
+          { label: 'Totaal geoffreerd', val: fmt(totalGeoffreerd) },
+          { label: 'Betaald',           val: fmt(totalBetaald),    green: totalBetaald > 0 },
           { label: 'Totale kosten',     val: fmt(totalCosts) },
           { label: 'Winst',             val: fmt(profit),    green: profit > 0, red: profit < 0 },
         ].map((s, i) => (
@@ -263,6 +450,63 @@ export function CustomerPage({ custId, onClose, setPage }) {
       {/* Overview */}
       {tab === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Notities blok */}
+          <div className="card card-p">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: klantNotities.length > 0 || showOverzichtInput ? 10 : 0 }}>
+              <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Notities</div>
+              {!showOverzichtInput && (
+                <button
+                  onClick={() => setShowOverzichtInput(true)}
+                  style={{ width: 28, height: 28, borderRadius: '50%', background: '#1DDB62', border: 'none', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0 }}
+                >
+                  {I.plus}
+                </button>
+              )}
+            </div>
+            <div className={`notitie-input-wrap${showOverzichtInput ? ' open' : ''}`}>
+              <div>
+                <NotitieEditor
+                  editorRef={overzichtEditorRef}
+                  minHeight={80}
+                  maxHeight={120}
+                  placeholder="Schrijf een notitie..."
+                  onHasContent={setOverzichtHasContent}
+                />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6, paddingBottom: 2 }}>
+                  <button
+                    className="btn btn-s btn-xs"
+                    onClick={() => cancelNotitie(overzichtEditorRef, setOverzichtHasContent, () => setShowOverzichtInput(false))}
+                  >
+                    Annuleren
+                  </button>
+                  <button
+                    className="btn btn-p btn-xs"
+                    disabled={savingOverzicht || !overzichtHasContent}
+                    onClick={() => addNotitie(overzichtEditorRef, setOverzichtHasContent, setSavingOverzicht, () => setShowOverzichtInput(false))}
+                  >
+                    {savingOverzicht ? 'Toevoegen...' : 'Toevoegen'}
+                  </button>
+                </div>
+              </div>
+            </div>
+            {klantNotities.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {klantNotities.slice(0, 2).map(n => (
+                  <div key={n.id} style={{ padding: '8px 10px', background: 'var(--bgs)', borderRadius: 'var(--r8)', border: '1px solid var(--border)' }}>
+                    <div dangerouslySetInnerHTML={{ __html: n.omschrijving }} className="bb-notitie-content" style={{ fontSize: '.83rem', color: 'var(--dk)', lineHeight: 1.5 }} />
+                    <div style={{ fontSize: '.7rem', color: 'var(--dl)', marginTop: 4 }}>{fmtNotitieDate(n.aangemaaktop)}</div>
+                  </div>
+                ))}
+                <button
+                  onClick={() => setTab('notities')}
+                  style={{ alignSelf: 'flex-start', background: 'none', border: 'none', cursor: 'pointer', fontSize: '.8rem', color: 'var(--p)', fontWeight: 600, padding: '2px 0' }}
+                >
+                  Alle notities →{klantNotities.length > 2 ? ` (${klantNotities.length})` : ''}
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Activiteiten */}
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -348,30 +592,128 @@ export function CustomerPage({ custId, onClose, setPage }) {
         </div>
       )}
 
-      {/* Timeline */}
-      {tab === 'timeline' && (
-        <div className="card card-p">
-          <div className="tl">
-            {TIMELINE.map((item, i) => (
-              <div key={i} className="tl-item">
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, width: 18 }}>
-                  <div className={`tl-dot${item.filled ? ' filled' : ''}`} />
-                  {i < TIMELINE.length - 1 && <div className="tl-line" />}
-                </div>
-                <div className="tl-content">
-                  <div className="tl-label" style={{ color: item.filled ? 'var(--dk)' : 'var(--dl)' }}>{item.label}</div>
-                  <div className="tl-date">{item.date}</div>
-                  {item.note && <div className="tl-note">{item.note}</div>}
+      {/* Notities tab */}
+      {tab === 'notities' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="card card-p">
+            <div style={{ fontWeight: 700, fontSize: '.9rem', marginBottom: showNotitiesInput ? 12 : 0 }}>Notities</div>
+            {!showNotitiesInput && (
+              <div
+                onClick={() => setShowNotitiesInput(true)}
+                style={{ cursor: 'pointer', padding: '10px 2px', color: '#9ca3af', fontSize: '.84rem', fontStyle: 'italic' }}
+              >
+                Klik om een notitie toe te voegen...
+              </div>
+            )}
+            <div className={`notitie-input-wrap${showNotitiesInput ? ' open' : ''}`}>
+              <div>
+                <NotitieEditor
+                  editorRef={notitiesEditorRef}
+                  minHeight={150}
+                  placeholder="Schrijf hier je notitie over deze klant..."
+                  onHasContent={setNotitiesHasContent}
+                />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 10, paddingBottom: 2 }}>
+                  <button
+                    className="btn btn-s btn-sm"
+                    onClick={() => cancelNotitie(notitiesEditorRef, setNotitiesHasContent, () => setShowNotitiesInput(false))}
+                  >
+                    Annuleren
+                  </button>
+                  <button
+                    className="btn btn-p btn-sm"
+                    disabled={savingNotitie || !notitiesHasContent}
+                    onClick={() => addNotitie(notitiesEditorRef, setNotitiesHasContent, setSavingNotitie, () => setShowNotitiesInput(false))}
+                  >
+                    {savingNotitie ? 'Opslaan...' : 'Opslaan'}
+                  </button>
                 </div>
               </div>
-            ))}
+            </div>
           </div>
+
+          {klantNotities.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {klantNotities.slice(0, notitiesVisible).map(n => (
+                <div key={n.id} className="card card-p" style={{ padding: '12px 16px' }}>
+                  <div dangerouslySetInnerHTML={{ __html: n.omschrijving }} className="bb-notitie-content" style={{ fontSize: '.85rem', color: 'var(--dk)', lineHeight: 1.6 }} />
+                  <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginTop: 6, fontWeight: 600 }}>
+                    {fmtNotitieDate(n.aangemaaktop)}
+                  </div>
+                </div>
+              ))}
+              {klantNotities.length > notitiesVisible && (
+                <button
+                  className="btn btn-s btn-sm"
+                  style={{ alignSelf: 'center' }}
+                  onClick={() => setNotitiesVisible(v => v + 10)}
+                >
+                  Laad {Math.min(10, klantNotities.length - notitiesVisible)} meer
+                </button>
+              )}
+            </div>
+          )}
+
+          {klantNotities.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '24px 0', color: '#9ca3af', fontSize: '.84rem' }}>
+              Nog geen notities
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Timeline */}
+      {tab === 'timeline' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {tijdlijn.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#9ca3af', fontSize: '.84rem' }}>
+              Nog geen activiteit gelogd
+            </div>
+          )}
+          {tijdlijn.map((item, i) => {
+            const kleur = TIJDLIJN_KLEUR(item.type);
+            const icon = TIJDLIJN_ICON[item.type] || <PenLine size={14} />;
+            const isLast = i === tijdlijn.length - 1;
+            return (
+              <div key={item.id} style={{ display: 'flex', gap: 12, position: 'relative', paddingBottom: isLast ? 0 : 4 }}>
+                {/* Lijn + icoon */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, width: 32 }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: '50%',
+                    background: kleur + '18', border: `1.5px solid ${kleur}40`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: kleur, flexShrink: 0, zIndex: 1,
+                  }}>
+                    {icon}
+                  </div>
+                  {!isLast && (
+                    <div style={{ width: 1, flex: 1, minHeight: 16, background: 'var(--border)', marginTop: 2, marginBottom: 0 }} />
+                  )}
+                </div>
+                {/* Content */}
+                <div style={{
+                  flex: 1, background: 'var(--bgs)', border: '1px solid var(--border)',
+                  borderRadius: 'var(--r8)', padding: '8px 12px',
+                  marginBottom: isLast ? 0 : 6, minWidth: 0,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 3 }}>
+                    <div style={{ fontSize: '.83rem', fontWeight: 600, color: 'var(--dk)', lineHeight: 1.4 }}>
+                      {item.omschrijving}
+                    </div>
+                    <div style={{ fontSize: '.7rem', color: 'var(--dl)', flexShrink: 0, paddingTop: 1 }}>
+                      {fmtTijdlijnDate(item.aangemaaktop)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
       {/* Quotes */}
       {tab === 'quotes' && (
-        <div className="tw">
+        <div className="tw" style={{ overflowX: 'auto' }}>
           <div className="tw-hd">
             <div className="card-title">Offertes</div>
             <button className="btn btn-p btn-xs" onClick={() => setShowNewOfferte(true)}>{I.plus} Nieuwe offerte</button>
@@ -382,10 +724,10 @@ export function CustomerPage({ custId, onClose, setPage }) {
               <tbody>
                 {cOffertes.map(o => (
                   <tr key={o.id}>
-                    <td style={{ color: 'var(--dl)', fontWeight: 600 }}>{o.nummer}</td>
-                    <td>{o.omschrijving || '—'}</td>
-                    <td style={{ fontWeight: 700 }}>{fmt(o.totaalIncl)}</td>
-                    <td><OfferteBadge status={o.status} /></td>
+                    <td style={{ color: 'var(--dl)', fontWeight: 600, whiteSpace: 'nowrap' }}>{o.nummer}</td>
+                    <td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.omschrijving || '—'}</td>
+                    <td style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{fmt(o.totaalIncl)}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}><OfferteBadge status={o.status} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -403,7 +745,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 14 }}>
             {[
               { label: 'Totale kosten',    val: fmt(totalCosts) },
-              { label: 'Omzet (betaald)',  val: fmt(c.paid) },
+              { label: 'Omzet (betaald)',  val: fmt(totalBetaald) },
               { label: 'Winst / marge',    val: `${fmt(profit)} (${margin}%)`, green: profit > 0 },
             ].map((s, i) => (
               <div key={i} className="sc" style={{ padding: '14px 16px' }}>
@@ -412,7 +754,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
               </div>
             ))}
           </div>
-          <div className="tw">
+          <div className="tw" style={{ overflowX: 'auto' }}>
             <div className="tw-hd">
               <div className="card-title">Kostenregels</div>
               <button className="btn btn-p btn-xs" onClick={() => setShowCostModal(true)}>{I.plus} Kosten toevoegen</button>
@@ -441,7 +783,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
 
       {/* Projecten tab */}
       {tab === 'projecten' && (
-        <div className="tw">
+        <div className="tw" style={{ overflowX: 'auto' }}>
           <div className="tw-hd">
             <div className="card-title">Projecten</div>
             <button className="btn btn-p btn-xs" onClick={() => setShowNewProject(true)}>{I.plus} Nieuw project</button>
@@ -452,9 +794,9 @@ export function CustomerPage({ custId, onClose, setPage }) {
               <tbody>
                 {cProjecten.map(p => (
                   <tr key={p.id}>
-                    <td style={{ fontWeight: 600 }}>{p.name}</td>
-                    <td style={{ fontWeight: 700 }}>{p.projectValue > 0 ? fmt(p.projectValue) : '—'}</td>
-                    <td><ProjectBadge status={p.status} /></td>
+                    <td style={{ fontWeight: 600, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</td>
+                    <td style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{p.projectValue > 0 ? fmt(p.projectValue) : '—'}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}><ProjectBadge status={p.status} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -529,7 +871,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
           onClose={() => setShowActivityModal(false)}
           customers={[c]}
           defaultCustId={c.id}
-          onSaved={() => { reloadActivities(); setTab('activities'); }}
+          onSaved={() => { reloadActivities(); }}
         />
       )}
       {selectedAct && (
@@ -552,7 +894,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
           onClose={() => setShowCostModal(false)}
           customers={[c]}
           defaultCustId={c.id}
-          onSaved={() => { reloadCosts(); setTab('costs'); }}
+          onSaved={() => { reloadCosts(); }}
         />
       )}
       {showNewOfferte && (
@@ -590,7 +932,7 @@ export function CustomersPage({ openCustomer }) {
   const toast = useToast();
   const { refreshKey, bumpRefresh } = useProfile();
   const [search, setSearch] = useState('');
-  const [view, setView] = useState('grid');
+  const [view, setView] = useState(() => localStorage.getItem('customers_view') || 'grid');
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -626,8 +968,8 @@ export function CustomersPage({ openCustomer }) {
         <div><h1>Klanten</h1><p>{customers.length} klanten in je CRM</p></div>
         <div className="page-hd-actions">
           <div className="tabs">
-            <button className={`tab${view === 'grid' ? ' active' : ''}`} onClick={() => setView('grid')}>Kaarten</button>
-            <button className={`tab${view === 'table' ? ' active' : ''}`} onClick={() => setView('table')}>Tabel</button>
+            <button className={`tab${view === 'grid' ? ' active' : ''}`} onClick={() => { setView('grid'); localStorage.setItem('customers_view', 'grid'); }}>Kaarten</button>
+            <button className={`tab${view === 'table' ? ' active' : ''}`} onClick={() => { setView('table'); localStorage.setItem('customers_view', 'table'); }}>Tabel</button>
           </div>
           <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>{I.plus} Nieuwe klant</button>
         </div>
@@ -679,14 +1021,13 @@ export function CustomersPage({ openCustomer }) {
       ) : (
         <div className="tw afu2">
           <table className="dt">
-            <thead><tr><th>Klant</th><th>Bedrijf</th><th>Stad</th><th>Pipeline</th><th>Totaal</th><th>Betaald</th><th></th></tr></thead>
+            <thead><tr><th>Klant</th><th>Telefoonnummer</th><th>Stad</th><th>Totaal</th><th>Betaald</th><th></th></tr></thead>
             <tbody>
               {filtered.map(c => (
                 <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => openCustomer(c.id)}>
                   <td><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Av name={c.name} size="sm" idx={c.av} /><span style={{ fontWeight: 600 }}>{c.name}</span></div></td>
-                  <td style={{ color: 'var(--dmu)' }}>{c.company}</td>
+                  <td style={{ color: 'var(--dmu)' }}>{c.phone || '—'}</td>
                   <td>{c.city}</td>
-                  <td><span className={`badge ${stageCol(c.stage)}`}>{stageLabel(c.stage)}</span></td>
                   <td style={{ fontWeight: 700 }}>{fmt(c.total)}</td>
                   <td style={{ fontWeight: 700, color: '#059669' }}>{fmt(c.paid)}</td>
                   <td><button className="btn-icon" onClick={e => { e.stopPropagation(); openCustomer(c.id); }}>{I.arrow_r}</button><button className="btn-icon" onClick={e => { e.stopPropagation(); remove(c.id); }}>{I.trash}</button></td>

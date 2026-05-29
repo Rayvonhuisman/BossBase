@@ -10,6 +10,7 @@ const toConnection = row => row ? ({
   secondaryKey: row.secondary_key || '',
   afasEnvironmentId: row.afas_environment_id || '',
   afasToken: row.afas_token || '',
+  afasSubdomain: row.afas_subdomain || '',
   lastSyncedAt: row.last_synced_at || null,
 }) : null
 
@@ -115,11 +116,12 @@ export async function syncContactenMetSnelStart() {
   return data
 }
 
-export async function saveAfasConnection({ environmentId, token }) {
+export async function saveAfasConnection({ environmentId, token, subdomain }) {
   const payload = await withCompanyId({
     provider: 'afas',
     afas_environment_id: environmentId,
     afas_token: token,
+    afas_subdomain: subdomain || null,
     updated_at: new Date().toISOString(),
   })
   const { data, error } = await supabase
@@ -131,9 +133,9 @@ export async function saveAfasConnection({ environmentId, token }) {
   return toConnection(data)
 }
 
-export async function testAfasConnection(environmentId, token) {
+export async function testAfasConnection(environmentId, token, subdomain) {
   const { data, error } = await supabase.functions.invoke('afas-test', {
-    body: { environment_id: environmentId, token },
+    body: { environment_id: environmentId, token, subdomain },
   })
   if (error) throw error
   return data

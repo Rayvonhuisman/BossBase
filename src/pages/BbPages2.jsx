@@ -794,12 +794,13 @@ export function CostsPage() {
       {error && <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>}
       <div className="stats-row afu2" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
         {[
-          { label: 'Totale kosten',    val: fmt(total) },
-          { label: 'Materiaalkosten',  val: fmt(filtered.filter(c => c.cat === 'materiaal').reduce((s, c) => s + c.amt, 0)) },
-          { label: 'Arbeidskosten',    val: fmt(filtered.filter(c => c.cat === 'arbeid').reduce((s, c) => s + c.amt, 0)) },
-          { label: 'Reiskosten',       val: fmt(filtered.filter(c => c.cat === 'reiskosten').reduce((s, c) => s + c.amt, 0)) },
+          { label: 'Totale kosten',    val: fmt(total),                                                                             icon: I.costs  },
+          { label: 'Materiaalkosten',  val: fmt(filtered.filter(c => c.cat === 'materiaal').reduce((s, c) => s + c.amt, 0)),        icon: I.brief  },
+          { label: 'Arbeidskosten',    val: fmt(filtered.filter(c => c.cat === 'arbeid').reduce((s, c) => s + c.amt, 0)),           icon: I.hours  },
+          { label: 'Reiskosten',       val: fmt(filtered.filter(c => c.cat === 'reiskosten').reduce((s, c) => s + c.amt, 0)),       icon: I.map    },
         ].map((s, i) => (
-          <div key={i} className="sc" style={{ padding: '16px 18px' }}>
+          <div key={i} className="sc">
+            <div className="sc-top"><div className="sc-icon">{s.icon}</div></div>
             <div className="sc-val">{s.val}</div>
             <div className="sc-label">{s.label}</div>
           </div>
