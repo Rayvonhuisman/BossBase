@@ -891,6 +891,7 @@ export function RevenuePage() {
   const [offertes, setOffertes] = useState([]);
   const [allRegels, setAllRegels] = useState([]);
   const [chartMode, setChartMode] = useState('gefactureerd');
+  const [chartPeriod, setChartPeriod] = useState('maand');
   const [loading, setLoading] = useState(true);
   const [mbConnection, setMbConnection] = useState(null);
   const [mbSyncing, setMbSyncing] = useState(false);
@@ -926,18 +927,62 @@ export function RevenuePage() {
   // ── CHART DATA ────────────────────────────────────────────────
   const chartData = React.useMemo(() => {
     const now = new Date();
+    const toIso = d => d.toISOString().slice(0, 10);
+    const DAY_NL = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
+
+    if (chartPeriod === 'week') {
+      return Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(now); d.setDate(d.getDate() - 6 + i);
+        const key = toIso(d);
+        return {
+          label: DAY_NL[d.getDay()],
+          gefactureerd: facturen.filter(f => f.status !== 'concept' && f.factuurdatum === key).reduce((s, f) => s + f.totaalIncl, 0),
+          ontvangen:    facturen.filter(f => f.status === 'betaald' && f.betaaldOp === key).reduce((s, f) => s + f.totaalIncl, 0),
+          kosten:       costsData.filter(c => c.date === key).reduce((s, c) => s + c.amt, 0),
+        };
+      });
+    }
+
+    if (chartPeriod === 'maand') {
+      return Array.from({ length: 30 }, (_, i) => {
+        const d = new Date(now); d.setDate(d.getDate() - 29 + i);
+        const key = toIso(d);
+        return {
+          label: String(d.getDate()),
+          gefactureerd: facturen.filter(f => f.status !== 'concept' && f.factuurdatum === key).reduce((s, f) => s + f.totaalIncl, 0),
+          ontvangen:    facturen.filter(f => f.status === 'betaald' && f.betaaldOp === key).reduce((s, f) => s + f.totaalIncl, 0),
+          kosten:       costsData.filter(c => c.date === key).reduce((s, c) => s + c.amt, 0),
+        };
+      });
+    }
+
+    if (chartPeriod === 'kwartaal') {
+      return Array.from({ length: 13 }, (_, i) => {
+        const wEnd = new Date(now); wEnd.setDate(wEnd.getDate() - (12 - i) * 7);
+        const wStart = new Date(wEnd); wStart.setDate(wEnd.getDate() - 6);
+        const start = toIso(wStart), end = toIso(wEnd);
+        const label = `${wStart.getDate()} ${wStart.toLocaleDateString('nl-NL', { month: 'short' }).replace('.', '')}`;
+        return {
+          label,
+          gefactureerd: facturen.filter(f => f.status !== 'concept' && f.factuurdatum >= start && f.factuurdatum <= end).reduce((s, f) => s + f.totaalIncl, 0),
+          ontvangen:    facturen.filter(f => f.status === 'betaald' && f.betaaldOp >= start && f.betaaldOp <= end).reduce((s, f) => s + f.totaalIncl, 0),
+          kosten:       costsData.filter(c => c.date >= start && c.date <= end).reduce((s, c) => s + c.amt, 0),
+        };
+      });
+    }
+
+    // jaar (default) — afgelopen 12 maanden
     return Array.from({ length: 12 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const label = d.toLocaleDateString('nl-NL', { month: 'short' }).replace('.', '');
       return {
-        maand: label,
+        label: d.toLocaleDateString('nl-NL', { month: 'short' }).replace('.', ''),
         gefactureerd: facturen.filter(f => f.status !== 'concept' && f.factuurdatum?.startsWith(key)).reduce((s, f) => s + f.totaalIncl, 0),
         ontvangen:    facturen.filter(f => f.status === 'betaald' && f.betaaldOp?.startsWith(key)).reduce((s, f) => s + f.totaalIncl, 0),
         kosten:       costsData.filter(c => c.date?.startsWith(key)).reduce((s, c) => s + c.amt, 0),
       };
     });
-  }, [facturen, costsData]);
+  }, [facturen, costsData, chartPeriod]);
 
   // ── BTW ───────────────────────────────────────────────────────
   const qFactuurIds = new Set(facturen.filter(f => f.status !== 'concept' && f.factuurdatum >= qStart && f.factuurdatum <= qEnd).map(f => f.id));
@@ -989,13 +1034,22 @@ export function RevenuePage() {
     { id: 'kosten',       label: 'Kosten' },
   ];
 
+  const CHART_PERIODS = [
+    { id: 'week',     label: 'Week' },
+    { id: 'maand',    label: 'Maand' },
+    { id: 'kwartaal', label: 'Kwartaal' },
+    { id: 'jaar',     label: 'Jaar' },
+  ];
+
+  const CHART_PERIOD_LABELS = { week: 'afgelopen 7 dagen', maand: 'afgelopen 30 dagen', kwartaal: 'afgelopen kwartaal', jaar: 'afgelopen 12 maanden' };
+
   const KPI = [
-    { label: 'Omzet deze maand',  val: fmt(omzetMaand),     sub: 'Verzonden + betaald (incl. BTW)' },
-    { label: 'Ontvangen',         val: fmt(ontvangenMaand), sub: 'Betaalde facturen deze maand' },
-    { label: 'Openstaand',        val: fmt(openstaand),     sub: 'Verzonden, nog te ontvangen',     color: '#e8784a' },
-    { label: 'Te verwachten',     val: fmt(teVerwachten),   sub: 'Geaccepteerde offertes' },
-    { label: 'Kosten deze maand', val: fmt(kostenMaand),    sub: 'Alle kostenregels deze maand',    color: '#dc2626' },
-    { label: 'Nettoresultaat',    val: fmt(netto),          sub: `${marge}% marge deze maand`,      color: netto >= 0 ? '#059669' : '#dc2626' },
+    { label: 'Omzet deze maand',  val: fmt(omzetMaand),     sub: 'Verzonden + betaald (incl. BTW)', icon: I.chart   },
+    { label: 'Ontvangen',         val: fmt(ontvangenMaand), sub: 'Betaalde facturen deze maand',    icon: I.check   },
+    { label: 'Openstaand',        val: fmt(openstaand),     sub: 'Verzonden, nog te ontvangen',     icon: I.clock,  color: '#e8784a' },
+    { label: 'Te verwachten',     val: fmt(teVerwachten),   sub: 'Geaccepteerde offertes',          icon: I.quotes  },
+    { label: 'Kosten deze maand', val: fmt(kostenMaand),    sub: 'Alle kostenregels deze maand',    icon: I.costs },
+    { label: 'Nettoresultaat',    val: fmt(netto),          sub: `${marge}% marge deze maand`,      icon: I.revenue, color: netto >= 0 ? '#059669' : '#dc2626' },
   ];
 
   return (
@@ -1011,21 +1065,29 @@ export function RevenuePage() {
 
       <div className="stats-row afu2" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
         {KPI.map((k, i) => (
-          <div key={i} className="sc" style={{ padding: '16px 18px' }}>
+          <div key={i} className="sc">
+            <div className="sc-top"><div className="sc-icon">{k.icon}</div></div>
             <div className="sc-val" style={k.color ? { color: k.color } : {}}>{k.val}</div>
             <div className="sc-label">{k.label}</div>
-            <div style={{ fontSize: '.7rem', color: 'var(--dl)', marginTop: 2 }}>{k.sub}</div>
+            <div className="sc-sub">{k.sub}</div>
           </div>
         ))}
       </div>
 
-      <div className="tw afu3" style={{ padding: '16px 18px' }}>
-        <div className="tw-hd" style={{ marginBottom: 14 }}>
-          <div className="card-title">Omzetgrafiek — afgelopen 12 maanden</div>
-          <div className="tabs">
-            {CHART_MODES.map(m => (
-              <button key={m.id} className={`tab${chartMode === m.id ? ' active' : ''}`} onClick={() => setChartMode(m.id)}>{m.label}</button>
-            ))}
+      <div className="tw afu3" style={{ marginBottom: 20 }}>
+        <div className="tw-hd" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+          <div className="card-title" style={{ flex: '1 1 auto' }}>Omzetgrafiek — {CHART_PERIOD_LABELS[chartPeriod]}</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div className="tabs">
+              {CHART_PERIODS.map(p => (
+                <button key={p.id} className={`tab${chartPeriod === p.id ? ' active' : ''}`} onClick={() => setChartPeriod(p.id)}>{p.label}</button>
+              ))}
+            </div>
+            <div className="tabs">
+              {CHART_MODES.map(m => (
+                <button key={m.id} className={`tab${chartMode === m.id ? ' active' : ''}`} onClick={() => setChartMode(m.id)}>{m.label}</button>
+              ))}
+            </div>
           </div>
         </div>
         <div style={{ overflowX: 'auto' }}>
@@ -1033,7 +1095,7 @@ export function RevenuePage() {
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-                <XAxis dataKey="maand" tick={{ fontSize: 11, fill: 'var(--dl)' }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--dl)' }} axisLine={false} tickLine={false} interval={chartPeriod === 'maand' ? 4 : 0} />
                 <YAxis
                   tickFormatter={v => v === 0 ? '€0' : `€${(v / 1000).toFixed(0)}k`}
                   tick={{ fontSize: 11, fill: 'var(--dl)' }}
@@ -1051,7 +1113,7 @@ export function RevenuePage() {
         </div>
       </div>
 
-      <div className="afu3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div className="afu3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
         <div className="sc" style={{ padding: '16px 18px' }}>
           <div style={{ fontWeight: 700, fontSize: '.88rem', marginBottom: 12, color: 'var(--dk)' }}>BTW {qLabel}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

@@ -6,8 +6,9 @@ const corsHeaders = {
 }
 
 function buildAfasToken(token: string): string {
-  const xml = `<token><version>1</version><data>${token}</data></token>`
-  return btoa(xml)
+  const tokenXml = `<token><version>1</version><data>${token}</data></token>`
+  const base64Token = btoa(tokenXml)
+  return base64Token
 }
 
 serve(async (req) => {
@@ -28,19 +29,32 @@ serve(async (req) => {
     }
 
     const base64Token = buildAfasToken(token)
+    const authHeader = `AfasToken ${base64Token}`
     const url = `https://${environment_id}.${subdomain}.afasonline.nl/profitrestservices/metainfo`
 
-    const res = await fetch(url, {
-      headers: {
-        'Authorization': `AfasToken ${base64Token}`,
-      },
-    })
+    console.log('AFAS test URL:', url)
+
+    let res: Response
+    try {
+      res = await fetch(url, {
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/json',
+        },
+      })
+    } catch (fetchErr) {
+      console.error('AFAS fetch error (network/DNS):', fetchErr.message)
+      return new Response(
+        JSON.stringify({ success: false, error: `Netwerk fout: ${fetchErr.message}`, url }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      )
+    }
 
     if (!res.ok) {
       const body = await res.text().catch(() => '')
-      console.error(`AFAS metainfo ${res.status}: ${body}`)
+      console.error(`AFAS metainfo HTTP ${res.status}:`, body)
       return new Response(
-        JSON.stringify({ success: false, error: `AFAS fout: ${res.status}`, detail: body }),
+        JSON.stringify({ success: false, error: `AFAS fout: ${res.status}`, detail: body, url }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       )
     }
@@ -52,7 +66,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (err) {
-    console.error('Error:', err.message, err.stack)
+    console.error('Unexpected error:', err.message, err.stack)
     return new Response(
       JSON.stringify({ success: false, error: err.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }

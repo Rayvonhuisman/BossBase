@@ -781,11 +781,11 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
 
         <div className="card">
           <div className="tw-filter">
-            <div className="tabs">
+            <div className="bb-filter-tabs">
               {filters.map(f => (
                 <button
                   key={f.value}
-                  className={`tab${activeFilter === f.value ? ' active' : ''}`}
+                  className={`bb-filter-tab${activeFilter === f.value ? ' on' : ''}`}
                   onClick={() => setActiveFilter(f.value)}
                 >
                   {f.label}

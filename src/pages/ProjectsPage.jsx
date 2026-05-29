@@ -430,11 +430,11 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
 
         <div className="card">
           <div className="tw-filter">
-            <div className="tabs">
+            <div className="bb-filter-tabs">
               {filterTabs.map(f => (
                 <button
                   key={f.value}
-                  className={`tab${statusFilter === f.value ? ' active' : ''}`}
+                  className={`bb-filter-tab${statusFilter === f.value ? ' on' : ''}`}
                   onClick={() => setStatusFilter(f.value)}
                 >
                   {f.label}

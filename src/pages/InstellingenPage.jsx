@@ -118,6 +118,8 @@ export function InstellingenPage() {
   const [afasSaving, setAfasSaving] = useState(false);
   const [afasImporting, setAfasImporting] = useState(false);
   const [afasSyncingContacten, setAfasSyncingContacten] = useState(false);
+  const [afasTested, setAfasTested] = useState(false);
+  const [afasShowToken, setAfasShowToken] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -150,6 +152,9 @@ export function InstellingenPage() {
         if (afasConn) {
           setAfasConnection(afasConn);
           setAfasForm({ environmentId: afasConn.afasEnvironmentId, token: afasConn.afasToken, subdomain: afasConn.afasSubdomain });
+          if (afasConn.afasEnvironmentId && afasConn.afasToken && afasConn.afasSubdomain) {
+            setAfasTested(true);
+          }
         }
       })
       .catch(err => toast.error(err.message || 'Laden mislukt'))
@@ -461,6 +466,7 @@ export function InstellingenPage() {
     try {
       const result = await testAfasConnection(afasForm.environmentId, afasForm.token, afasForm.subdomain);
       if (result?.success) {
+        setAfasTested(true);
         toast.success('Verbinding met AFAS gelukt');
       } else {
         toast.error(result?.error || 'Verbinding mislukt');
@@ -1104,8 +1110,8 @@ export function InstellingenPage() {
             </div>
           </div>
 
-          {/* SnelStart */}
-          <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
+          {/* SnelStart tijdelijk verborgen - certificering nog nodig */}
+          {false && <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
             <div className="integ-card-hd" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
               <img
                 src="https://logo.clearbit.com/snelstart.nl"
@@ -1216,7 +1222,7 @@ export function InstellingenPage() {
                 </>
               )}
             </div>
-          </div>
+          </div>}
 
           {/* AFAS */}
           <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
@@ -1234,7 +1240,7 @@ export function InstellingenPage() {
                 </div>
               </div>
               <div style={{ flexShrink: 0 }}>
-                {afasConnection?.afasEnvironmentId ? (
+                {afasTested ? (
                   <span style={{ fontSize: '.75rem', color: '#059669', fontWeight: 600 }}>Verbonden</span>
                 ) : (
                   <span style={{ fontSize: '.75rem', color: 'var(--dmu)' }}>Niet verbonden</span>
@@ -1254,8 +1260,8 @@ export function InstellingenPage() {
                   value={afasForm.environmentId}
                   onChange={e => setAfasForm(f => ({ ...f, environmentId: e.target.value }))}
                   placeholder="bijv. 12345"
-                  disabled={!!(afasConnection?.afasEnvironmentId && !afasEditing)}
-                  style={{ opacity: afasConnection?.afasEnvironmentId && !afasEditing ? 0.6 : 1 }}
+                  disabled={!!(afasTested && !afasEditing)}
+                  style={{ opacity: afasTested && !afasEditing ? 0.6 : 1 }}
                 />
               </div>
               <div className="f s2">
@@ -1269,8 +1275,8 @@ export function InstellingenPage() {
                   value={afasForm.subdomain}
                   onChange={e => setAfasForm(f => ({ ...f, subdomain: e.target.value }))}
                   placeholder='bijv. "rest" of "accept"'
-                  disabled={!!(afasConnection?.afasEnvironmentId && !afasEditing)}
-                  style={{ opacity: afasConnection?.afasEnvironmentId && !afasEditing ? 0.6 : 1 }}
+                  disabled={!!(afasTested && !afasEditing)}
+                  style={{ opacity: afasTested && !afasEditing ? 0.6 : 1 }}
                 />
               </div>
               <div className="f s2">
@@ -1280,19 +1286,30 @@ export function InstellingenPage() {
                     Genereer een token via AFAS → App Connector
                   </span>
                 </label>
-                <input
-                  type="password"
-                  value={afasForm.token}
-                  onChange={e => setAfasForm(f => ({ ...f, token: e.target.value }))}
-                  placeholder="AFAS App token..."
-                  disabled={!!(afasConnection?.afasEnvironmentId && !afasEditing)}
-                  style={{ opacity: afasConnection?.afasEnvironmentId && !afasEditing ? 0.6 : 1 }}
-                />
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={afasShowToken ? 'text' : 'password'}
+                    value={afasForm.token}
+                    onChange={e => setAfasForm(f => ({ ...f, token: e.target.value }))}
+                    placeholder="AFAS App token..."
+                    disabled={!!(afasTested && !afasEditing)}
+                    style={{ paddingRight: afasTested && !afasEditing ? 0 : 40, opacity: afasTested && !afasEditing ? 0.6 : 1 }}
+                  />
+                  {!(afasTested && !afasEditing) && (
+                    <button
+                      type="button"
+                      onClick={() => setAfasShowToken(v => !v)}
+                      style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dmu)', fontSize: '.8rem', padding: 0 }}
+                    >
+                      {afasShowToken ? 'Verberg' : 'Toon'}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
             <div className="fa" style={{ flexWrap: 'wrap', gap: 8 }}>
-              {afasConnection?.afasEnvironmentId && (
+              {afasConnection?.afasToken && (
                 <>
                   <button
                     className="btn btn-ghost btn-sm"
@@ -1315,10 +1332,10 @@ export function InstellingenPage() {
                   Laatste sync: {new Date(afasConnection.lastSyncedAt).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </span>
               )}
-              {afasConnection?.afasEnvironmentId && !afasEditing ? (
+              {afasTested && !afasEditing ? (
                 <button
                   className="btn btn-ghost btn-sm"
-                  onClick={() => setAfasEditing(true)}
+                  onClick={() => { setAfasEditing(true); setAfasTested(false); }}
                 >
                   Wijzigen
                 </button>

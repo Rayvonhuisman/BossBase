@@ -1188,8 +1188,8 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage } = {})
         )}
       </div>
 
-      <div className="wb2-search">
-        <span>{I.search}</span>
+      <div className="search" style={{ width: '100%', maxWidth: 400, marginBottom: 8 }}>
+        <span style={{ color: 'var(--dl)', display: 'flex', flexShrink: 0 }}>{I.search}</span>
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}

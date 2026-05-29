@@ -975,11 +975,9 @@ export function CustomersPage({ openCustomer }) {
         </div>
       </div>
       {error && <div className="card card-p" style={{ color: '#dc2626', marginBottom: 14 }}>{error}</div>}
-      <div className="card" style={{ padding: '10px 14px', marginBottom: 14 }}>
-        <div className="search" style={{ minWidth: 0, maxWidth: 360 }}>
-          {I.search}
-          <input placeholder="Zoek op naam of bedrijf…" value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
+      <div className="search afu2" style={{ maxWidth: 360, marginBottom: 14 }}>
+        {I.search}
+        <input placeholder="Zoek op naam of bedrijf…" value={search} onChange={e => setSearch(e.target.value)} />
       </div>
       {loading && <div className="card card-p">Klanten laden...</div>}
       {!loading && filtered.length === 0 && <div className="empty"><div className="empty-title">Geen klanten gevonden</div><div className="empty-sub">Maak je eerste klant aan of pas je zoekopdracht aan.</div></div>}
@@ -1122,12 +1120,12 @@ export function ActivitiesPage({ openCustomer, preOpenActivityId, onNavConsumed 
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }} className="afu2">
-        <div className="tabs">
+        <div className="bb-filter-tabs">
           {filters.map(f => (
-            <button key={f.id} className={`tab${filter === f.id ? ' active' : ''}`} onClick={() => setFilter(f.id)}>
+            <button key={f.id} className={`bb-filter-tab${filter === f.id ? ' on' : ''}`} onClick={() => setFilter(f.id)}>
               {f.label}
               {f.id !== 'all' && (
-                <span style={{ marginLeft: 5, background: '#f3f4f6', color: 'var(--dl)', fontSize: '.65rem', padding: '1px 5px', borderRadius: 'var(--r999)', fontWeight: 700 }}>
+                <span className="bb-filter-tab-count">
                   {f.id === 'completed'
                     ? acts.filter(a => ['completed', 'done'].includes(a.status)).length
                     : acts.filter(a => !['completed', 'done'].includes(a.status)).length}
@@ -1240,9 +1238,9 @@ export function QuotesPage({ openCustomer }) {
       </div>
 
       <div style={{ marginBottom: 14 }} className="afu2">
-        <div className="tabs">
+        <div className="bb-filter-tabs">
           {tabs.map(t => (
-            <button key={t.id} className={`tab${filter === t.id ? ' active' : ''}`} onClick={() => setFilter(t.id)}>{t.label}</button>
+            <button key={t.id} className={`bb-filter-tab${filter === t.id ? ' on' : ''}`} onClick={() => setFilter(t.id)}>{t.label}</button>
           ))}
         </div>
       </div>

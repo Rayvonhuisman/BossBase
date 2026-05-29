@@ -790,9 +790,9 @@ export function FacturenPage({ openCustomer }) {
 
         <div className="card">
           <div className="tw-filter">
-            <div className="tabs">
+            <div className="bb-filter-tabs">
               {filters.map(f => (
-                <button key={f.value} className={`tab${activeFilter === f.value ? ' active' : ''}`} onClick={() => setActiveFilter(f.value)}>
+                <button key={f.value} className={`bb-filter-tab${activeFilter === f.value ? ' on' : ''}`} onClick={() => setActiveFilter(f.value)}>
                   {f.label}
                 </button>
               ))}
