@@ -6,7 +6,7 @@ import {
 import { createCalendarEvent, listCalendarEvents, updateCalendarEvent } from '../services/calendarService.js';
 import { createJobCost, deleteJobCost, listJobCosts, updateJobCost } from '../services/jobCostService.js';
 import { getFacturen, getAllFactuurRegels } from '../services/factuurService.js';
-import { getConnection, syncFactuurNaarMoneybird } from '../services/accountingService.js';
+import { getConnection } from '../services/accountingService.js';
 import { getOffertes } from '../services/offerteService.js';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { listCustomers } from '../services/customerService.js';
@@ -894,7 +894,7 @@ export function RevenuePage() {
   const [chartPeriod, setChartPeriod] = useState('maand');
   const [loading, setLoading] = useState(true);
   const [mbConnection, setMbConnection] = useState(null);
-  const [mbSyncing, setMbSyncing] = useState(false);
+
 
   const TODAY = new Date().toISOString().slice(0, 10);
   const THIS_MONTH = TODAY.slice(0, 7);
@@ -916,9 +916,10 @@ export function RevenuePage() {
   }, [refreshKey]);
 
   // ── KPI ──────────────────────────────────────────────────────
-  const omzetMaand     = facturen.filter(f => f.status !== 'concept' && f.factuurdatum?.startsWith(THIS_MONTH)).reduce((s, f) => s + f.totaalIncl, 0);
-  const ontvangenMaand = facturen.filter(f => f.status === 'betaald' && f.betaaldOp?.startsWith(THIS_MONTH)).reduce((s, f) => s + f.totaalIncl, 0);
-  const openstaand     = facturen.filter(f => f.status === 'verzonden').reduce((s, f) => s + f.totaalIncl, 0);
+  const isRealFactuur = f => !f.isCredit && !f.gecrediteerd;
+  const omzetMaand     = facturen.filter(f => isRealFactuur(f) && f.status !== 'concept' && f.factuurdatum?.startsWith(THIS_MONTH)).reduce((s, f) => s + f.totaalIncl, 0);
+  const ontvangenMaand = facturen.filter(f => isRealFactuur(f) && f.status === 'betaald' && f.betaaldOp?.startsWith(THIS_MONTH)).reduce((s, f) => s + f.totaalIncl, 0);
+  const openstaand     = facturen.filter(f => isRealFactuur(f) && f.status === 'verzonden').reduce((s, f) => s + f.totaalIncl, 0);
   const teVerwachten   = offertes.filter(o => o.status === 'geaccepteerd').reduce((s, o) => s + o.totaalIncl, 0);
   const kostenMaand    = costsData.filter(c => c.date?.startsWith(THIS_MONTH)).reduce((s, c) => s + c.amt, 0);
   const netto          = ontvangenMaand - kostenMaand;
@@ -936,8 +937,8 @@ export function RevenuePage() {
         const key = toIso(d);
         return {
           label: DAY_NL[d.getDay()],
-          gefactureerd: facturen.filter(f => f.status !== 'concept' && f.factuurdatum === key).reduce((s, f) => s + f.totaalIncl, 0),
-          ontvangen:    facturen.filter(f => f.status === 'betaald' && f.betaaldOp === key).reduce((s, f) => s + f.totaalIncl, 0),
+          gefactureerd: facturen.filter(f => isRealFactuur(f) && f.status !== 'concept' && f.factuurdatum === key).reduce((s, f) => s + f.totaalIncl, 0),
+          ontvangen:    facturen.filter(f => isRealFactuur(f) && f.status === 'betaald' && f.betaaldOp === key).reduce((s, f) => s + f.totaalIncl, 0),
           kosten:       costsData.filter(c => c.date === key).reduce((s, c) => s + c.amt, 0),
         };
       });
@@ -949,8 +950,8 @@ export function RevenuePage() {
         const key = toIso(d);
         return {
           label: String(d.getDate()),
-          gefactureerd: facturen.filter(f => f.status !== 'concept' && f.factuurdatum === key).reduce((s, f) => s + f.totaalIncl, 0),
-          ontvangen:    facturen.filter(f => f.status === 'betaald' && f.betaaldOp === key).reduce((s, f) => s + f.totaalIncl, 0),
+          gefactureerd: facturen.filter(f => isRealFactuur(f) && f.status !== 'concept' && f.factuurdatum === key).reduce((s, f) => s + f.totaalIncl, 0),
+          ontvangen:    facturen.filter(f => isRealFactuur(f) && f.status === 'betaald' && f.betaaldOp === key).reduce((s, f) => s + f.totaalIncl, 0),
           kosten:       costsData.filter(c => c.date === key).reduce((s, c) => s + c.amt, 0),
         };
       });
@@ -964,8 +965,8 @@ export function RevenuePage() {
         const label = `${wStart.getDate()} ${wStart.toLocaleDateString('nl-NL', { month: 'short' }).replace('.', '')}`;
         return {
           label,
-          gefactureerd: facturen.filter(f => f.status !== 'concept' && f.factuurdatum >= start && f.factuurdatum <= end).reduce((s, f) => s + f.totaalIncl, 0),
-          ontvangen:    facturen.filter(f => f.status === 'betaald' && f.betaaldOp >= start && f.betaaldOp <= end).reduce((s, f) => s + f.totaalIncl, 0),
+          gefactureerd: facturen.filter(f => isRealFactuur(f) && f.status !== 'concept' && f.factuurdatum >= start && f.factuurdatum <= end).reduce((s, f) => s + f.totaalIncl, 0),
+          ontvangen:    facturen.filter(f => isRealFactuur(f) && f.status === 'betaald' && f.betaaldOp >= start && f.betaaldOp <= end).reduce((s, f) => s + f.totaalIncl, 0),
           kosten:       costsData.filter(c => c.date >= start && c.date <= end).reduce((s, c) => s + c.amt, 0),
         };
       });
@@ -977,15 +978,15 @@ export function RevenuePage() {
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       return {
         label: d.toLocaleDateString('nl-NL', { month: 'short' }).replace('.', ''),
-        gefactureerd: facturen.filter(f => f.status !== 'concept' && f.factuurdatum?.startsWith(key)).reduce((s, f) => s + f.totaalIncl, 0),
-        ontvangen:    facturen.filter(f => f.status === 'betaald' && f.betaaldOp?.startsWith(key)).reduce((s, f) => s + f.totaalIncl, 0),
+        gefactureerd: facturen.filter(f => isRealFactuur(f) && f.status !== 'concept' && f.factuurdatum?.startsWith(key)).reduce((s, f) => s + f.totaalIncl, 0),
+        ontvangen:    facturen.filter(f => isRealFactuur(f) && f.status === 'betaald' && f.betaaldOp?.startsWith(key)).reduce((s, f) => s + f.totaalIncl, 0),
         kosten:       costsData.filter(c => c.date?.startsWith(key)).reduce((s, c) => s + c.amt, 0),
       };
     });
   }, [facturen, costsData, chartPeriod]);
 
   // ── BTW ───────────────────────────────────────────────────────
-  const qFactuurIds = new Set(facturen.filter(f => f.status !== 'concept' && f.factuurdatum >= qStart && f.factuurdatum <= qEnd).map(f => f.id));
+  const qFactuurIds = new Set(facturen.filter(f => isRealFactuur(f) && f.status !== 'concept' && f.factuurdatum >= qStart && f.factuurdatum <= qEnd).map(f => f.id));
   const qRegels     = allRegels.filter(r => qFactuurIds.has(r.factuurId));
   const btw21 = Math.round(qRegels.filter(r => r.btwPct === 21).reduce((s, r) => s + r.regelprijs * 0.21, 0) * 100) / 100;
   const btw9  = Math.round(qRegels.filter(r => r.btwPct === 9).reduce((s, r) => s + r.regelprijs * 0.09, 0) * 100) / 100;
@@ -997,21 +998,6 @@ export function RevenuePage() {
     const margin = c.paid > 0 ? Math.round((profit / c.paid) * 100) : 0;
     return { ...c, costs, profit, margin };
   });
-
-  const handleMbSync = async () => {
-    const betaald = facturen.filter(f => f.status === 'betaald');
-    if (betaald.length === 0) { toast.info('Geen betaalde facturen om te synchroniseren'); return; }
-    setMbSyncing(true);
-    let ok = 0; let fail = 0;
-    for (const f of betaald) {
-      try { await syncFactuurNaarMoneybird(f.id); ok++; } catch (e) { console.error('Sync factuur mislukt:', f.id, e); fail++; }
-    }
-    setMbSyncing(false);
-    if (fail === 0) toast.success(`${ok} factuur${ok !== 1 ? 'en' : ''} gesynchroniseerd`);
-    else toast.error(`${ok} gesynchroniseerd, ${fail} mislukt`);
-    const refreshed = await getConnection().catch(() => null);
-    if (refreshed) setMbConnection(refreshed);
-  };
 
   const handleExport = () => {
     if (rows.length === 0) { toast.info('Geen financiële data om te exporteren'); return; }
@@ -1187,15 +1173,6 @@ export function RevenuePage() {
                 : 'Geen boekhoudpakket gekoppeld · Stel dit in via Instellingen → Integraties'}
             </div>
           </div>
-          {mbConnection?.apiToken && (
-            <button
-              className="btn btn-s btn-sm"
-              onClick={handleMbSync}
-              disabled={mbSyncing}
-            >
-              {mbSyncing ? 'Synchroniseren...' : 'Synchroniseer betaalde facturen'}
-            </button>
-          )}
         </div>
         {!mbConnection?.apiToken && (
           <div style={{ padding: '16px 0 4px', fontSize: '.84rem', color: 'var(--dl)' }}>

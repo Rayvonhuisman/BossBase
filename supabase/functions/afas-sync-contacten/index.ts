@@ -6,13 +6,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const AFAS_SUBDOMAIN = 'sb20'
+
 function buildAfasToken(token: string): string {
   const xml = `<token><version>1</version><data>${token}</data></token>`
   return btoa(xml)
 }
 
-async function afasFetch(environmentId: string, subdomain: string, base64Token: string, connector: string) {
-  const url = `https://${environmentId}.${subdomain}.afasonline.nl/profitrestservices/connectors/${connector}`
+async function afasFetch(environmentId: string, base64Token: string, connector: string) {
+  const url = `https://${environmentId}.${AFAS_SUBDOMAIN}.afasonline.nl/profitrestservices/connectors/${connector}`
   const res = await fetch(url, {
     headers: {
       'Authorization': `AfasToken ${base64Token}`,
@@ -55,19 +57,19 @@ serve(async (req) => {
 
     const { data: conn } = await supabase
       .from('accounting_connections')
-      .select('afas_environment_id, afas_token, afas_subdomain')
+      .select('afas_environment_id, afas_token')
       .eq('company_id', profile.company_id)
       .eq('provider', 'afas')
       .maybeSingle()
 
-    if (!conn?.afas_environment_id || !conn?.afas_token || !conn?.afas_subdomain) {
-      return new Response(JSON.stringify({ error: 'AFAS niet geconfigureerd (omgevings-ID, subdomein en token verplicht)' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    if (!conn?.afas_environment_id || !conn?.afas_token) {
+      return new Response(JSON.stringify({ error: 'AFAS niet geconfigureerd (omgevings-ID en token verplicht)' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     const base64Token = buildAfasToken(conn.afas_token)
     const companyId = profile.company_id
 
-    const result = await afasFetch(conn.afas_environment_id, conn.afas_subdomain, base64Token, 'KnContact')
+    const result = await afasFetch(conn.afas_environment_id, base64Token, 'KnContact')
     const contacten = Array.isArray(result?.rows) ? result.rows : (Array.isArray(result) ? result : [])
     console.log('AFAS KnContact opgehaald:', contacten.length)
 

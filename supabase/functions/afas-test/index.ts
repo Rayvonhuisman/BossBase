@@ -5,10 +5,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const AFAS_SUBDOMAIN = 'sb20'
+
 function buildAfasToken(token: string): string {
   const tokenXml = `<token><version>1</version><data>${token}</data></token>`
-  const base64Token = btoa(tokenXml)
-  return base64Token
+  return btoa(tokenXml)
 }
 
 serve(async (req) => {
@@ -19,18 +20,18 @@ serve(async (req) => {
   console.log('Function started: afas-test')
 
   try {
-    const { environment_id, token, subdomain } = await req.json()
+    const { environment_id, token } = await req.json()
 
-    if (!environment_id || !token || !subdomain) {
+    if (!environment_id || !token) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Omgevings-ID, subdomein en App token zijn verplicht' }),
+        JSON.stringify({ success: false, error: 'Omgevings-ID en App token zijn verplicht' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
 
     const base64Token = buildAfasToken(token)
     const authHeader = `AfasToken ${base64Token}`
-    const url = `https://${environment_id}.${subdomain}.afasonline.nl/profitrestservices/metainfo`
+    const url = `https://${environment_id}.${AFAS_SUBDOMAIN}.afasonline.nl/profitrestservices/metainfo`
 
     console.log('AFAS test URL:', url)
 

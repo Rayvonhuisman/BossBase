@@ -246,7 +246,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
     .filter(o => ['concept', 'verzonden', 'geaccepteerd'].includes(o.status))
     .reduce((s, o) => s + o.totaalIncl, 0);
   const totalBetaald = cFacturen
-    .filter(f => f.status === 'betaald')
+    .filter(f => !f.isCredit && !f.gecrediteerd && f.status === 'betaald')
     .reduce((s, f) => s + f.totaalIncl, 0);
   const totalCosts = cCosts.reduce((s, x) => s + x.amt, 0);
   const profit = totalBetaald - totalCosts;
