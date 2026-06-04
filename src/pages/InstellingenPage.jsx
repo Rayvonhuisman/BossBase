@@ -28,6 +28,7 @@ import {
   syncContactenMetSnelStart,
   saveAfasConnection,
   testAfasConnection,
+  setAfasConnected,
   importKostenVanuitAfas,
   syncContactenMetAfas,
 } from '../services/accountingService.js';
@@ -152,9 +153,7 @@ export function InstellingenPage() {
         if (afasConn) {
           setAfasConnection(afasConn);
           setAfasForm({ environmentId: afasConn.afasEnvironmentId, token: afasConn.afasToken });
-          if (afasConn.afasEnvironmentId && afasConn.afasToken) {
-            setAfasTested(true);
-          }
+          if (afasConn.afasIsConnected) setAfasTested(true);
         }
       })
       .catch(err => toast.error(err.message || 'Laden mislukt'))
@@ -467,6 +466,7 @@ export function InstellingenPage() {
       const result = await testAfasConnection(afasForm.environmentId, afasForm.token);
       if (result?.success) {
         setAfasTested(true);
+        setAfasConnected(true).catch(() => {});
         toast.success('Verbinding met AFAS gelukt');
       } else {
         toast.error(result?.error || 'Verbinding mislukt');
@@ -519,7 +519,12 @@ export function InstellingenPage() {
     try {
       const result = await syncContactenMetAfas();
       if (result?.success) {
-        toast.success(`${result.imported ?? 0} contacten gesynchroniseerd`);
+        const parts = [];
+        if ((result.importedFromAfas ?? 0) > 0) parts.push(`${result.importedFromAfas} geïmporteerd uit AFAS`);
+        if ((result.exportedToAfas ?? 0) > 0) parts.push(`${result.exportedToAfas} geëxporteerd naar AFAS`);
+        if ((result.exportFailures ?? 0) > 0) parts.push(`${result.exportFailures} export mislukt (schrijfrechten)`);
+        if (parts.length === 0) parts.push('Niets te synchroniseren');
+        toast.success(parts.join(' · '));
       } else {
         toast.error(result?.error || 'Synchroniseren mislukt');
       }
@@ -995,12 +1000,6 @@ export function InstellingenPage() {
           {/* Moneybird */}
           <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
             <div className="integ-card-hd" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-              <img
-                src="https://www.moneybird.com/images/moneybird-logo.svg"
-                alt="Moneybird"
-                style={{ width: 120, height: 'auto', flexShrink: 0 }}
-                onError={e => { e.currentTarget.src = 'https://logo.clearbit.com/moneybird.com'; e.currentTarget.style.width = '32px'; }}
-              />
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: '.95rem', marginBottom: 2 }}>Moneybird</div>
                 <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>
@@ -1236,12 +1235,14 @@ export function InstellingenPage() {
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 700, fontSize: '.95rem', marginBottom: 2 }}>AFAS</div>
                 <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>
-                  Koppel je AFAS Profit administratie met BossBase
+                  Koppel je AFAS administratie met BossBase
                 </div>
               </div>
               <div style={{ flexShrink: 0 }}>
                 {afasTested ? (
                   <span style={{ fontSize: '.75rem', color: '#059669', fontWeight: 600 }}>Verbonden</span>
+                ) : afasConnection?.afasToken ? (
+                  <span style={{ fontSize: '.75rem', color: 'var(--dl)', fontWeight: 600 }}>Niet getest</span>
                 ) : (
                   <span style={{ fontSize: '.75rem', color: 'var(--dmu)' }}>Niet verbonden</span>
                 )}
@@ -1300,6 +1301,7 @@ export function InstellingenPage() {
                     className="btn btn-ghost btn-sm"
                     onClick={handleAfasImport}
                     disabled={afasImporting}
+                    title="Vereist de 'Inkoop' connectorbundel in AFAS SB"
                   >
                     {afasImporting ? 'Importeren...' : 'Kosten importeren'}
                   </button>

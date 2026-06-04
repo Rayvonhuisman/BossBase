@@ -6,6 +6,7 @@ import { useProfile } from '../lib/profileContext.jsx';
 import {
   getOffertes, createOfferte, updateOfferte, deleteOfferte, calculateOfferteTotals, createOfferteItem, getOfferteItems, deleteOfferteItemsByOfferteId,
 } from '../services/offerteService.js';
+import { getBedrijfsinstellingen } from '../services/instellingenService.js';
 import { listCustomers } from '../services/customerService.js';
 import { listDeals } from '../services/dealService.js';
 import { NewFactuurModal } from './FacturenPage.jsx';
@@ -36,6 +37,7 @@ const TYPE_CFG = {
   m2:    { label: 'm²',    v1Ph: '0 m²',   v2Ph: '0,00', hasV1: true,  v1Step: '0.01', regelLabel: r => `${r.aantal}m² × €${r.eenheidsprijs}` },
   stuks: { label: 'Stuks', v1Ph: '0 st.',  v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal}st. × €${r.eenheidsprijs}` },
   vast:  { label: 'Vast',  v1Ph: null,     v2Ph: '0,00', hasV1: false, v1Step: '1',    regelLabel: null },
+  km:    { label: 'Km',    v1Ph: '0 km',   v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal}km × €${r.eenheidsprijs}` },
 };
 
 function BtwSelect({ r, setRegel }) {
@@ -58,10 +60,36 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
   const [form, setForm] = useState({ customer_id: prefillCustomerId || '', deal_id: prefillDealId || '', omschrijving: '', marge_pct: 25, geldig_tot: '', notes: '' });
   const [regels, setRegels] = useState([emptyRegel()]);
   const [saving, setSaving] = useState(false);
+  const [instDefaults, setInstDefaults] = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const setRegel = (id, k, v) => setRegels(rs => rs.map(r => r.id === id ? { ...r, [k]: v } : r));
-  const addRegel = () => setRegels(rs => [...rs, emptyRegel()]);
+  useEffect(() => {
+    getBedrijfsinstellingen().then(s => {
+      if (!s) return;
+      setInstDefaults(s);
+      const d = new Date();
+      d.setDate(d.getDate() + (s.offerteGeldigDagen || 14));
+      const geldig = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      setForm(f => ({ ...f, marge_pct: s.standaardMarge, geldig_tot: geldig }));
+      setRegels(rs => rs.map((r, i) => i === 0 ? {
+        ...r, btw: String(s.btwPct),
+        eenheidsprijs: r.type === 'uren' ? s.uurtarief : r.type === 'km' ? s.reiskostenPerKm : r.eenheidsprijs,
+      } : r));
+    }).catch(() => {});
+  }, []);
+
+  const setRegel = (id, k, v) => setRegels(rs => rs.map(r => {
+    if (r.id !== id) return r;
+    if (k === 'type' && (v === 'uren' || v === 'km')) {
+      const price = v === 'uren' ? (instDefaults?.uurtarief ?? 0) : (instDefaults?.reiskostenPerKm ?? 0);
+      return { ...r, type: v, eenheidsprijs: price };
+    }
+    return { ...r, [k]: v };
+  }));
+  const addRegel = () => setRegels(rs => [...rs, {
+    id: crypto.randomUUID(), omschrijving: '', type: 'uren', aantal: 1,
+    eenheidsprijs: instDefaults?.uurtarief ?? 0, btw: String(instDefaults?.btwPct ?? 21), btwAnders: '',
+  }]);
   const removeRegel = (id) => setRegels(rs => rs.filter(r => r.id !== id));
 
   const getRegelprijs = r => {

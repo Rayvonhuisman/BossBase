@@ -6,30 +6,22 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const AFAS_SUBDOMAIN = 'sb20'
+const AFAS_BASE = 'sb20.afasfocus.nl'
 
-function buildAfasToken(token: string): string {
-  const xml = `<token><version>1</version><data>${token}</data></token>`
-  return btoa(xml)
-}
-
-async function afasFetch(environmentId: string, base64Token: string, connector: string) {
-  const url = `https://${environmentId}.${AFAS_SUBDOMAIN}.afasonline.nl/profitrestservices/connectors/${connector}`
+async function getAccessToken(environmentId: string, appToken: string): Promise<string> {
+  const url = `https://${AFAS_BASE}/${environmentId}/authentication/getaccesstoken`
   const res = await fetch(url, {
-    headers: {
-      'Authorization': `AfasToken ${base64Token}`,
-      'Content-Type': 'application/json',
-    },
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({ apptoken: appToken }),
   })
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    console.error(`AFAS ${connector} ${res.status}: ${body}`)
-    throw new Error(`AFAS ${res.status}: ${body}`)
-  }
-  return res.json()
+  const text = await res.text()
+  if (!res.ok) throw new Error(`Token exchange HTTP ${res.status}: ${text.substring(0, 200)}`)
+  let data: Record<string, string>
+  try { data = JSON.parse(text) } catch { throw new Error(`Token exchange: geen JSON: ${text.substring(0, 200)}`) }
+  if (!data.access_token) throw new Error(`Geen access_token in response: ${text.substring(0, 200)}`)
+  return data.access_token
 }
-
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -65,64 +57,58 @@ serve(async (req) => {
       .maybeSingle()
 
     if (!conn?.afas_environment_id || !conn?.afas_token) {
-      return new Response(JSON.stringify({ error: 'AFAS niet geconfigureerd (omgevings-ID en token verplicht)' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      return new Response(JSON.stringify({ error: 'AFAS niet geconfigureerd' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    const base64Token = buildAfasToken(conn.afas_token)
-    const companyId = profile.company_id
+    const accessToken = await getAccessToken(conn.afas_environment_id, conn.afas_token)
 
-    const { data: existingCosts } = await supabase
-      .from('job_costs')
-      .select('externe_referentie')
-      .eq('company_id', companyId)
-      .not('externe_referentie', 'is', null)
+    const reqHeaders = {
+      'Authorization': `Bearer ${accessToken}`,
+      'Accept': 'application/json',
+      'Accept-Version': '1.0',
+    }
 
-    const existingRefs = new Set((existingCosts || []).map((r: any) => r.externe_referentie))
+    const endpoints = [
+      'purchaseinvoice',
+      'purchaseinvoices',
+      'invoices',
+      'financialentries',
+      'salesjournalentry',
+    ]
 
-    let imported = 0
+    const attempts: { url: string; status: number }[] = []
 
-    await sleep(500)
-    const result = await afasFetch(conn.afas_environment_id, base64Token, 'FiEntries')
-    const rows_raw = Array.isArray(result?.rows) ? result.rows : (Array.isArray(result) ? result : [])
-    console.log('AFAS FiEntries opgehaald:', rows_raw.length)
+    for (const ep of endpoints) {
+      const url = `https://${AFAS_BASE}/${conn.afas_environment_id}/api/${ep}`
+      console.log(`Probeer: ${url}`)
+      const res = await fetch(url, { headers: reqHeaders })
+      const text = await res.text()
+      console.log(`${ep} → HTTP ${res.status}`)
+      console.log(`${ep} → body: ${text.substring(0, 3000)}`)
+      attempts.push({ url, status: res.status })
 
-    const toImport = rows_raw.filter((r: any) => !existingRefs.has('afas_' + r.EntryId))
-
-    const rows = toImport.map((r: any) => {
-      const amount = Math.abs(parseFloat(r.Amount ?? r.Bedrag ?? r.amount ?? '0'))
-      const btwBedrag = parseFloat(r.VatAmount ?? r.BtwBedrag ?? '0')
-      const btw_inclusief = btwBedrag !== 0 ? true : null
-      return {
-        company_id: companyId,
-        description: r.Description ?? r.Omschrijving ?? r.description ?? 'AFAS inkoop',
-        amount,
-        category: 'Inkoopfactuur',
-        cost_date: r.Date ? String(r.Date).slice(0, 10) : (r.Datum ? String(r.Datum).slice(0, 10) : null),
-        externe_referentie: 'afas_' + r.EntryId,
-        klant_type: 'algemeen',
-        btw_inclusief,
+      if (res.ok) {
+        let data: any
+        try { data = JSON.parse(text) } catch {
+          console.log(`${ep} → geen geldige JSON, volgende proberen`)
+          continue
+        }
+        console.log(`Geslaagd via /${ep}`)
+        console.log(`Keys: ${typeof data === 'object' && data !== null ? Object.keys(data).join(', ') : typeof data}`)
+        return new Response(
+          JSON.stringify({ success: true, endpoint: ep, data }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
       }
-    })
-
-    if (rows.length > 0) {
-      const { error: insertErr } = await supabase.from('job_costs').insert(rows)
-      if (insertErr) throw insertErr
-      imported = rows.length
     }
 
-    console.log('AFAS kosten geïmporteerd:', imported)
-
-    await supabase
-      .from('accounting_connections')
-      .update({ last_synced_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq('company_id', companyId)
-      .eq('provider', 'afas')
-
+    console.log('Alle endpoints mislukt:', JSON.stringify(attempts))
     return new Response(
-      JSON.stringify({ success: true, imported }),
+      JSON.stringify({ success: false, error: 'Geen werkend endpoint gevonden', attempts }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
-  } catch (err) {
+
+  } catch (err: any) {
     console.error('Error:', err.message, err.stack)
     return new Response(
       JSON.stringify({ success: false, error: err.message }),

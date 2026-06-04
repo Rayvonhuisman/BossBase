@@ -10,6 +10,7 @@ import {
 } from '../services/factuurService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
+import { getBedrijfsinstellingen } from '../services/instellingenService.js';
 import { generateFactuurPdf } from '../utils/generatePdf.js';
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
@@ -46,10 +47,12 @@ const TYPE_CFG = {
   m2:    { label: 'm²',    v1Ph: '0 m²',   v2Ph: '0,00', hasV1: true,  v1Step: '0.01', regelLabel: r => `${r.aantal}m² × €${r.eenheidsprijs}` },
   stuks: { label: 'Stuks', v1Ph: '0 st.',  v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal}st. × €${r.eenheidsprijs}` },
   vast:  { label: 'Vast',  v1Ph: null,     v2Ph: '0,00', hasV1: false, v1Step: '1',    regelLabel: null },
+  km:    { label: 'Km',    v1Ph: '0 km',   v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal}km × €${r.eenheidsprijs}` },
 };
 
-const emptyRegel = () => ({
-  id: crypto.randomUUID(), omschrijving: '', type: 'uren', aantal: 1, eenheidsprijs: 0, btw: '21', btwAnders: '',
+const emptyRegel = (defaults) => ({
+  id: crypto.randomUUID(), omschrijving: '', type: 'uren', aantal: 1,
+  eenheidsprijs: defaults?.uurtarief ?? 0, btw: String(defaults?.btwPct ?? 21), btwAnders: '',
 });
 
 function BtwSelect({ r, setRegel }) {
@@ -85,9 +88,16 @@ function useRegelTotals(regels) {
   return { getRegelprijs, totaalExcl, btwPerTarief, totaalIncl };
 }
 
-function RegelItemsForm({ regels, setRegels }) {
-  const setRegel = (id, k, v) => setRegels(rs => rs.map(r => r.id === id ? { ...r, [k]: v } : r));
-  const addRegel = () => setRegels(rs => [...rs, emptyRegel()]);
+function RegelItemsForm({ regels, setRegels, defaults }) {
+  const setRegel = (id, k, v) => setRegels(rs => rs.map(r => {
+    if (r.id !== id) return r;
+    if (k === 'type' && (v === 'uren' || v === 'km')) {
+      const price = v === 'uren' ? (defaults?.uurtarief ?? 0) : (defaults?.reiskostenPerKm ?? 0);
+      return { ...r, type: v, eenheidsprijs: price };
+    }
+    return { ...r, [k]: v };
+  }));
+  const addRegel = () => setRegels(rs => [...rs, emptyRegel(defaults)]);
   const removeRegel = id => setRegels(rs => rs.filter(r => r.id !== id));
   const { getRegelprijs } = useRegelTotals(regels);
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
@@ -205,7 +215,25 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
   });
   const [regels, setRegels] = useState(prefill?.regels?.length ? prefill.regels : [emptyRegel()]);
   const [saving, setSaving] = useState(false);
+  const [instDefaults, setInstDefaults] = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    getBedrijfsinstellingen().then(s => {
+      if (!s) return;
+      setInstDefaults(s);
+      const d = new Date();
+      d.setDate(d.getDate() + (s.offerteGeldigDagen || 14));
+      const verval = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      set('vervaldatum', verval);
+      if (!prefill?.regels?.length) {
+        setRegels(rs => rs.map((r, i) => i === 0 ? {
+          ...r, btw: String(s.btwPct),
+          eenheidsprijs: r.type === 'uren' ? s.uurtarief : r.type === 'km' ? s.reiskostenPerKm : r.eenheidsprijs,
+        } : r));
+      }
+    }).catch(() => {});
+  }, []);
 
   const selectedCustomer = form.customer_id ? customers.find(c => String(c.id) === String(form.customer_id)) : null;
   const missingFields = selectedCustomer ? [
@@ -308,7 +336,7 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
             <input type="date" value={form.vervaldatum} onChange={e => set('vervaldatum', e.target.value)} />
           </div>
 
-          <RegelItemsForm regels={regels} setRegels={setRegels} />
+          <RegelItemsForm regels={regels} setRegels={setRegels} defaults={instDefaults} />
           <div className="f">
             <label>Betalingskenmerk</label>
             <div style={{ padding: '9px 11px', border: '1px solid var(--bstrong)', borderRadius: 'var(--r8)', fontSize: '.85rem', color: 'var(--dl)', background: 'var(--bgs)' }}>
