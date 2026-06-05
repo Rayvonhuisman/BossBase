@@ -425,6 +425,8 @@ serve(async (req) => {
       company_email: (company?.email as string) || null,
       totaal,
       signed_at: now,
+      signed_by_name: name,
+      signed_by_email: email,
     }
 
     // PDF meegeven als base64 als generatie geslaagd is

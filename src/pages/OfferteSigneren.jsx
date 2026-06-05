@@ -118,7 +118,7 @@ export default function OfferteSigneren({ token }) {
       setDone(true)
 
       // Bevestigingsmails versturen (best-effort — blokkeert success niet)
-      verstuurBevestigingsmails(result, form.name, form.email).catch(e =>
+      verstuurBevestigingsmails(result).catch(e =>
         console.warn('Bevestigingsmail mislukt:', e.message)
       )
     } catch (err) {
@@ -128,7 +128,9 @@ export default function OfferteSigneren({ token }) {
     }
   }
 
-  const verstuurBevestigingsmails = async (result, signerName, signerEmail) => {
+  const verstuurBevestigingsmails = async (result) => {
+    const signerName = result.signed_by_name || ''
+    const signerEmail = result.signed_by_email || ''
     const attachment = result.signed_pdf_base64
       ? [{ filename: result.signed_pdf_filename, content: result.signed_pdf_base64 }]
       : []
@@ -138,7 +140,7 @@ export default function OfferteSigneren({ token }) {
     const totaal = result.totaal || ''
     const omschrijving = result.offerte_omschrijving || ''
 
-    // Mail 1 → klant
+    // Mail 1 → signed_by_email (adres ingevuld bij ondertekening)
     await sendEmail({
       to: signerEmail,
       subject: `Bevestiging: offerte ${nummer} ondertekend`,
@@ -153,7 +155,7 @@ export default function OfferteSigneren({ token }) {
       attachments: attachment,
     })
 
-    // Mail 2 → eigenaar
+    // Mail 2 → bedrijfsemailadres (eigenaar notificatie)
     if (result.company_email) {
       await sendEmail({
         to: result.company_email,
