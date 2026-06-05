@@ -555,7 +555,7 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
 
 // ── VIEW OFFERTE MODAL ───────────────────────────────────────────────────────
 
-function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur }) {
+function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMail }) {
   const { company } = useProfile();
   const customerName = offerte.customerName || customers.find(c => c.id == offerte.customerId)?.name || '—';
   const [pdfLoading, setPdfLoading] = useState(false);
