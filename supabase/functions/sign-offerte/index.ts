@@ -1,4 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { encodeBase64 } from 'https://deno.land/std@0.168.0/encoding/base64.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { PDFDocument, rgb, StandardFonts } from 'https://esm.sh/pdf-lib@1.17.1'
 
@@ -13,16 +14,6 @@ function dataUrlToBytes(dataUrl: string): Uint8Array {
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
   return bytes
-}
-
-function uint8ArrayToBase64(bytes: Uint8Array): string {
-  let binary = ''
-  const chunkSize = 8192
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, i + chunkSize)
-    binary += String.fromCharCode(...chunk)
-  }
-  return btoa(binary)
 }
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -156,7 +147,6 @@ async function generateSignedPdf(
   let cx = ML
   COL_W.forEach(w => { COL_X.push(cx); cx += w })
 
-  // Header rij
   page.drawRectangle({ x: ML, y: y - ROW_H + 4, width: CW, height: ROW_H, color: accent })
   const HEADERS = ['Omschrijving', 'Aantal', 'Eenheidsprijs', 'BTW', 'Bedrag']
   HEADERS.forEach((h, i) => {
@@ -167,7 +157,6 @@ async function generateSignedPdf(
   })
   y -= ROW_H
 
-  // Item rijen
   items.forEach((item, idx) => {
     if (y < 140) return
     if (idx % 2 === 0) {
@@ -179,11 +168,11 @@ async function generateSignedPdf(
       omschr = omschr.slice(0, -4) + '...'
     }
     const btwPct = item.btw_pct !== undefined ? item.btw_pct : (offerte.btw_pct ?? 21)
-    const bedragText = euro(item.subtotaal as number ?? 0)
+    const bedragText = euro((item.subtotaal as number) ?? 0)
 
     drawText(omschr, COL_X[0] + 4, y - ROW_H + 9, { size: 8 })
     drawText(item.type === 'vast' ? '—' : String(item.aantal ?? 1), COL_X[1] + 4, y - ROW_H + 9, { size: 8 })
-    drawText(euro(item.prijs_per as number ?? 0), COL_X[2] + 4, y - ROW_H + 9, { size: 8 })
+    drawText(euro((item.prijs_per as number) ?? 0), COL_X[2] + 4, y - ROW_H + 9, { size: 8 })
     drawText(`${btwPct}%`, COL_X[3] + 4, y - ROW_H + 9, { size: 8 })
     drawText(bedragText, COL_X[4] + COL_W[4] - 4 - font.widthOfTextAtSize(bedragText, 8), y - ROW_H + 9, { size: 8 })
 
@@ -224,7 +213,6 @@ async function generateSignedPdf(
   }
 
   // ── HANDTEKENING SECTIE ───────────────────────────────────────────────────────
-  // Nieuwe pagina als er geen ruimte is
   if (y < 200) {
     page = pdfDoc.addPage([595, PAGE_H])
     y = PAGE_H - 60
@@ -248,7 +236,6 @@ async function generateSignedPdf(
     y -= 13
   }
 
-  // Handtekening afbeelding
   if (signatureDataUrl?.startsWith('data:image/png')) {
     try {
       const sigBytes = dataUrlToBytes(signatureDataUrl)
@@ -258,13 +245,11 @@ async function generateSignedPdf(
       drawText('Handtekening:', ML, y, { font: fontBold, size: 8.5, color: gray })
       y -= sigDims.height + 4
       page.drawImage(sigImage, { x: ML, y, width: sigDims.width, height: sigDims.height })
-      y -= 8
-    } catch (_) {
-      // afbeelding kon niet worden ingesloten
+    } catch (imgErr) {
+      console.error('Handtekening insluitfout:', imgErr)
     }
   }
 
-  // Footer
   const footerText = 'Gegenereerd door BossBase'
   page.drawText(footerText, {
     x: MR - font.widthOfTextAtSize(footerText, 7),
@@ -283,22 +268,33 @@ async function sendEmail(
   html: string,
   fromName?: string,
   attachments?: Array<{ filename: string; content: string }>,
-) {
+): Promise<{ ok: boolean; error?: string }> {
   const apiKey = Deno.env.get('RESEND_API_KEY')
   const fromEmail = Deno.env.get('RESEND_FROM_EMAIL') || 'noreply@bossbase.nl'
-  if (!apiKey) return
+  if (!apiKey) return { ok: false, error: 'RESEND_API_KEY niet ingesteld' }
   const from = fromName ? `${fromName} <${fromEmail}>` : fromEmail
   const body: Record<string, unknown> = { from, to, subject, html }
   if (attachments?.length) body.attachments = attachments
-  await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const resBody = await res.text()
+      return { ok: false, error: `Resend ${res.status}: ${resBody}` }
+    }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: String(err) }
+  }
 }
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
+
+  const warnings: string[] = []
 
   try {
     const { sign_token, name, email, signature_data_url } = await req.json()
@@ -313,34 +309,46 @@ serve(async (req) => {
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const admin = createClient(supabaseUrl, serviceKey)
 
-    // Fetch offerte by token (extra velden voor PDF)
+    // ── STAP 1: Offerte ophalen ───────────────────────────────────────────────
     const { data: offerte, error: offerteErr } = await admin
       .from('offertes')
       .select('id, nummer, omschrijving, totaal_incl, totaal_excl, btw_pct, notities, created_at, company_id, customer_id, signed_at, geldig_tot')
       .eq('sign_token', sign_token)
       .maybeSingle()
 
-    if (offerteErr || !offerte) {
-      return new Response(JSON.stringify({ success: false, error: 'Offerte niet gevonden' }), {
+    if (offerteErr) {
+      return new Response(JSON.stringify({ success: false, error: `DB fout bij ophalen offerte: ${offerteErr.message}` }), {
+        status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+      })
+    }
+    if (!offerte) {
+      return new Response(JSON.stringify({ success: false, error: 'Offerte niet gevonden voor dit token' }), {
         status: 404, headers: { ...CORS, 'Content-Type': 'application/json' },
       })
     }
-
     if (offerte.signed_at) {
       return new Response(JSON.stringify({ success: false, error: 'Offerte is al ondertekend' }), {
         status: 409, headers: { ...CORS, 'Content-Type': 'application/json' },
       })
     }
 
-    // Upload handtekening afbeelding naar storage
+    // ── STAP 2: Handtekening uploaden naar storage ────────────────────────────
     const sigFilename = `${offerte.id}.png`
-    const sigBytes = dataUrlToBytes(signature_data_url)
+    let sigBytes: Uint8Array
+    try {
+      sigBytes = dataUrlToBytes(signature_data_url)
+    } catch (err) {
+      return new Response(JSON.stringify({ success: false, error: `Handtekening data ongeldig: ${err}` }), {
+        status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+      })
+    }
+
     const { error: uploadErr } = await admin.storage
       .from('signatures')
       .upload(sigFilename, sigBytes, { contentType: 'image/png', upsert: true })
 
     if (uploadErr) {
-      return new Response(JSON.stringify({ success: false, error: 'Upload mislukt: ' + uploadErr.message }), {
+      return new Response(JSON.stringify({ success: false, error: `Storage upload mislukt (signatures): ${uploadErr.message}` }), {
         status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
       })
     }
@@ -348,9 +356,9 @@ serve(async (req) => {
     const { data: publicUrl } = admin.storage.from('signatures').getPublicUrl(sigFilename)
     const signatureUrl = publicUrl.publicUrl
 
-    // Update offerte status
+    // ── STAP 3: Offerte updaten ───────────────────────────────────────────────
     const now = new Date().toISOString()
-    await admin.from('offertes').update({
+    const { error: updateErr } = await admin.from('offertes').update({
       signed_at: now,
       signature_url: signatureUrl,
       signed_by_name: name,
@@ -358,127 +366,168 @@ serve(async (req) => {
       status: 'geaccepteerd',
     }).eq('id', offerte.id)
 
-    // Haal company, customer en items op (parallel)
-    const [{ data: company }, { data: customer }, { data: items }] = await Promise.all([
-      admin.from('companies')
-        .select('name, email, address, postal_code, city, kvk, btw_number, branding_color, logo_url')
-        .eq('id', offerte.company_id)
-        .maybeSingle(),
-      admin.from('customers')
-        .select('name, email, address, postal_code, city')
-        .eq('id', offerte.customer_id)
-        .maybeSingle(),
-      admin.from('offerte_items')
-        .select('omschrijving, aantal, prijs_per, subtotaal, btw_pct, type')
-        .eq('offerte_id', offerte.id)
-        .order('id'),
-    ])
+    if (updateErr) {
+      return new Response(JSON.stringify({ success: false, error: `Offerte update mislukt: ${updateErr.message}` }), {
+        status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+      })
+    }
 
-    // Genereer gesigneerde PDF
-    const pdfBytes = await generateSignedPdf(
-      offerte,
-      items || [],
-      company || {},
-      customer || {},
-      name,
-      email,
-      now,
-      signature_data_url,
-    )
+    // ── STAP 4: Company/customer/items ophalen ────────────────────────────────
+    // Vanaf hier is signing geslaagd. Fouten zijn waarschuwingen, geen fatale fouten.
+    let company: Record<string, unknown> = {}
+    let customer: Record<string, unknown> = {}
+    let items: Record<string, unknown>[] = []
 
-    // Upload gesigneerde PDF naar storage
+    try {
+      const [companyRes, customerRes, itemsRes] = await Promise.all([
+        admin.from('companies')
+          .select('name, email, address, postal_code, city, kvk, btw_number, branding_color, logo_url')
+          .eq('id', offerte.company_id)
+          .maybeSingle(),
+        admin.from('customers')
+          .select('name, email, address, postal_code, city')
+          .eq('id', offerte.customer_id)
+          .maybeSingle(),
+        admin.from('offerte_items')
+          .select('omschrijving, aantal, prijs_per, subtotaal, btw_pct, type')
+          .eq('offerte_id', offerte.id)
+          .order('id'),
+      ])
+      if (companyRes.error) warnings.push(`Company ophalen: ${companyRes.error.message}`)
+      else company = companyRes.data || {}
+      if (customerRes.error) warnings.push(`Customer ophalen: ${customerRes.error.message}`)
+      else customer = customerRes.data || {}
+      if (itemsRes.error) warnings.push(`Items ophalen: ${itemsRes.error.message}`)
+      else items = itemsRes.data || []
+    } catch (err) {
+      warnings.push(`Data ophalen mislukt: ${err}`)
+    }
+
+    // ── STAP 5: PDF genereren ─────────────────────────────────────────────────
+    let attachment: Array<{ filename: string; content: string }> | undefined
     const pdfFilename = `offerte-${offerte.nummer}-ondertekend.pdf`
-    await admin.storage
-      .from('signed-offertes')
-      .upload(pdfFilename, pdfBytes, { contentType: 'application/pdf', upsert: true })
 
-    // PDF als base64 voor e-mailbijlage
-    const pdfBase64 = uint8ArrayToBase64(pdfBytes)
-    const attachment = [{ filename: pdfFilename, content: pdfBase64 }]
+    try {
+      const pdfBytes = await generateSignedPdf(
+        offerte,
+        items,
+        company,
+        customer,
+        name,
+        email,
+        now,
+        signature_data_url,
+      )
 
-    const bedrijfNaam = company?.name || 'BossBase'
+      // Upload PDF naar storage
+      const { error: pdfUploadErr } = await admin.storage
+        .from('signed-offertes')
+        .upload(pdfFilename, pdfBytes, { contentType: 'application/pdf', upsert: true })
+
+      if (pdfUploadErr) {
+        warnings.push(`PDF upload mislukt (signed-offertes): ${pdfUploadErr.message}`)
+      }
+
+      // Base64 voor bijlage — gebruik Deno std encodeBase64
+      const pdfBase64 = encodeBase64(pdfBytes)
+      attachment = [{ filename: pdfFilename, content: pdfBase64 }]
+    } catch (pdfErr) {
+      warnings.push(`PDF genereren mislukt: ${pdfErr}`)
+    }
+
+    // ── STAP 6: E-mails versturen ─────────────────────────────────────────────
+    const bedrijfNaam = (company?.name as string) || 'BossBase'
     const totaal = new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(offerte.totaal_incl || 0)
     const appUrl = Deno.env.get('APP_URL') || 'https://app.bossbase.nl'
 
-    // Laad offerte_geaccepteerd template
-    const { data: tpls } = await admin
-      .from('email_templates')
-      .select('onderwerp, body, auto_versturen')
-      .eq('type', 'offerte_geaccepteerd')
-      .eq('company_id', offerte.company_id)
-      .eq('actief', true)
-      .limit(1)
-    const tpl = tpls?.[0]
+    try {
+      const { data: tpls } = await admin
+        .from('email_templates')
+        .select('onderwerp, body, auto_versturen')
+        .eq('type', 'offerte_geaccepteerd')
+        .eq('company_id', offerte.company_id)
+        .eq('actief', true)
+        .limit(1)
+      const tpl = tpls?.[0]
 
-    const vars: Record<string, string> = {
-      klant_naam: name,
-      bedrijfsnaam: bedrijfNaam,
-      offerte_nummer: offerte.nummer,
-      totaal_bedrag: totaal,
+      const vars: Record<string, string> = {
+        klant_naam: name,
+        bedrijfsnaam: bedrijfNaam,
+        offerte_nummer: offerte.nummer,
+        totaal_bedrag: totaal,
+      }
+      const substituteVars = (tmpl: string) =>
+        tmpl.replace(/\{\{(\w+)\}\}/g, (_: string, k: string) => vars[k] ?? `{{${k}}}`)
+      const bodyToHtml = (b: string) =>
+        b.split('\n').map((l: string) =>
+          l.trim() === '' ? '<br>' : `<p style="margin:0 0 6px 0">${l.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`
+        ).join('')
+
+      const klantSubject = tpl?.auto_versturen
+        ? substituteVars(tpl.onderwerp)
+        : `Bevestiging ondertekening offerte ${offerte.nummer}`
+
+      const klantHtml = tpl?.auto_versturen
+        ? bodyToHtml(substituteVars(tpl.body))
+        : `<p>Beste ${name},</p>
+           <p>Bedankt voor het ondertekenen van offerte <strong>${offerte.nummer}</strong>.</p>
+           <p>Omschrijving: ${offerte.omschrijving || '—'}<br>Totaal: <strong>${totaal}</strong></p>
+           ${attachment ? '<p>In de bijlage vindt u de ondertekende offerte.</p>' : ''}
+           <p>We nemen zo snel mogelijk contact met u op.</p>
+           <p>Met vriendelijke groet,<br>${bedrijfNaam}</p>`
+
+      // Bevestiging naar klant
+      const mailKlant = await sendEmail(email, klantSubject, klantHtml, bedrijfNaam, attachment)
+      if (!mailKlant.ok) warnings.push(`Klantmail mislukt: ${mailKlant.error}`)
+
+      // Notificatie naar eigenaar
+      if (company?.email) {
+        const mailEigenaar = await sendEmail(
+          company.email as string,
+          `Offerte ${offerte.nummer} ondertekend door ${name}`,
+          `<p>Goed nieuws! Offerte <strong>${offerte.nummer}</strong> is zojuist ondertekend.</p>
+           <p>Ondertekend door: <strong>${name}</strong> (${email})<br>
+              Datum en tijd: ${new Date(now).toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' })}<br>
+              Totaal: <strong>${totaal}</strong></p>
+           ${attachment ? '<p>De ondertekende offerte is als bijlage toegevoegd.</p>' : ''}
+           <p>Ga naar <a href="${appUrl}/dashboard/offertes">BossBase</a> voor meer details.</p>`,
+          bedrijfNaam,
+          attachment,
+        )
+        if (!mailEigenaar.ok) warnings.push(`Eigenaarmail mislukt: ${mailEigenaar.error}`)
+      }
+
+      // Log naar sent_emails
+      const logRows = [
+        {
+          company_id: offerte.company_id,
+          to_email: email,
+          subject: klantSubject,
+          related_type: 'offerte',
+          related_id: offerte.id,
+          status: 'sent',
+        },
+        ...(company?.email ? [{
+          company_id: offerte.company_id,
+          to_email: company.email,
+          subject: `Offerte ${offerte.nummer} ondertekend door ${name}`,
+          related_type: 'offerte',
+          related_id: offerte.id,
+          status: 'sent',
+        }] : []),
+      ]
+      const { error: logErr } = await admin.from('sent_emails').insert(logRows)
+      if (logErr) warnings.push(`E-mail log mislukt: ${logErr.message}`)
+    } catch (emailErr) {
+      warnings.push(`E-mail stap mislukt: ${emailErr}`)
     }
-    const substituteVars = (tmpl: string) =>
-      tmpl.replace(/\{\{(\w+)\}\}/g, (_: string, k: string) => vars[k] ?? `{{${k}}}`)
-    const bodyToHtml = (body: string) =>
-      body.split('\n').map((l: string) =>
-        l.trim() === '' ? '<br>' : `<p style="margin:0 0 6px 0">${l.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`
-      ).join('')
 
-    // 1. BEVESTIGINGSMAIL NAAR KLANT
-    const klantSubject = tpl?.auto_versturen
-      ? substituteVars(tpl.onderwerp)
-      : `Bevestiging ondertekening offerte ${offerte.nummer}`
-
-    const klantHtml = tpl?.auto_versturen
-      ? bodyToHtml(substituteVars(tpl.body))
-      : `<p>Beste ${name},</p>
-         <p>Bedankt voor het ondertekenen van offerte <strong>${offerte.nummer}</strong>.</p>
-         <p>Omschrijving: ${offerte.omschrijving || '—'}<br>Totaal: <strong>${totaal}</strong></p>
-         <p>In de bijlage vindt u de ondertekende offerte.</p>
-         <p>We nemen zo snel mogelijk contact met u op.</p>
-         <p>Met vriendelijke groet,<br>${bedrijfNaam}</p>`
-
-    await sendEmail(email, klantSubject, klantHtml, bedrijfNaam, attachment)
-
-    // 2. NOTIFICATIEMAIL NAAR EIGENAAR
-    if (company?.email) {
-      await sendEmail(
-        company.email,
-        `Offerte ${offerte.nummer} ondertekend door ${name}`,
-        `<p>Goed nieuws! Offerte <strong>${offerte.nummer}</strong> is zojuist ondertekend.</p>
-         <p>Ondertekend door: <strong>${name}</strong> (${email})<br>
-            Datum en tijd: ${new Date(now).toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' })}<br>
-            Totaal: <strong>${totaal}</strong></p>
-         <p>De ondertekende offerte is als bijlage toegevoegd.</p>
-         <p>Ga naar <a href="${appUrl}/dashboard/offertes">BossBase</a> voor meer details.</p>`,
-        bedrijfNaam,
-        attachment,
-      )
-    }
-
-    // Log naar sent_emails
-    await admin.from('sent_emails').insert([
-      {
-        company_id: offerte.company_id,
-        to_email: email,
-        subject: klantSubject,
-        related_type: 'offerte',
-        related_id: offerte.id,
-        status: 'sent',
-      },
-      ...(company?.email ? [{
-        company_id: offerte.company_id,
-        to_email: company.email,
-        subject: `Offerte ${offerte.nummer} ondertekend door ${name}`,
-        related_type: 'offerte',
-        related_id: offerte.id,
-        status: 'sent',
-      }] : []),
-    ])
-
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    })
+    return new Response(
+      JSON.stringify({ success: true, ...(warnings.length ? { warnings } : {}) }),
+      { headers: { ...CORS, 'Content-Type': 'application/json' } },
+    )
   } catch (err) {
+    console.error('sign-offerte onverwachte fout:', err)
     return new Response(JSON.stringify({ success: false, error: String(err) }), {
       status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
     })

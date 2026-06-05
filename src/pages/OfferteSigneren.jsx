@@ -239,7 +239,7 @@ export default function OfferteSigneren({ token }) {
           <InfoBlok label="Klant" value={klant?.name || '—'} />
           <InfoBlok label="Datum" value={fmtDate(offerte.created_at || offerte.geldig_tot)} />
           <InfoBlok label="Geldig tot" value={fmtDate(offerte.geldig_tot)} />
-          <InfoBlok label="Totaalbedrag incl. BTW" value={fmt(offerte.totaal_incl)} accent={brandColor} />
+          <InfoBlok label="Totaalbedrag incl. BTW" value={fmt(offerte.totaal_incl)} />
         </div>
 
         {offerte.omschrijving && (
@@ -267,7 +267,7 @@ export default function OfferteSigneren({ token }) {
               ))}
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 14px', background: '#f9fafb', fontWeight: 700 }}>
                 <span>Totaal incl. BTW</span>
-                <span style={{ color: brandColor }}>{fmt(offerte.totaal_incl)}</span>
+                <span style={{ color: '#111827' }}>{fmt(offerte.totaal_incl)}</span>
               </div>
             </div>
           </div>
