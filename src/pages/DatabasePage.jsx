@@ -52,6 +52,42 @@ const hasActiveFilters = f => {
 const CB = { width: 15, height: 15, cursor: 'pointer', flexShrink: 0, accentColor: 'var(--p)' };
 const COLS = '32px 1fr 160px 150px 56px 110px';
 
+// ── ICONS ────────────────────────────────────────────────────
+const IconMail = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+    <polyline points="22,6 12,13 2,6"/>
+  </svg>
+);
+const IconExcel = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <rect x="3" y="3" width="18" height="18" rx="2"/>
+    <path d="M3 9h18M3 15h18M9 3v18M15 3v18" strokeLinecap="round"/>
+  </svg>
+);
+const IconCsv = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+    <path d="M14 2v6h6M8 13h8M8 17h5" strokeLinecap="round"/>
+  </svg>
+);
+const IconBookmark = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const IconChevDown = () => (
+  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+    <path d="M2 4l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const IconSearch = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="11" cy="11" r="8"/>
+    <path d="M21 21l-4.35-4.35" strokeLinecap="round"/>
+  </svg>
+);
+
 // ── STATUS BADGE ─────────────────────────────────────────────
 const STATUS_BADGE = {
   'in_uitvoering': { bg: '#FFEDD5', color: '#C2410C' },
@@ -86,7 +122,204 @@ const FLBL = {
   textTransform: 'uppercase', letterSpacing: '.08em',
 };
 
-// ── FILTER SECTION ───────────────────────────────────────────
+// ── QUICK DROPDOWN (FilterBar) ───────────────────────────────
+function QuickDropdown({ label, options, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+  const active = value && value !== 'alles' && value !== '' && (!Array.isArray(value) || value.length > 0);
+  const activeLabel = active
+    ? (options.find(o => o.value === value || (Array.isArray(value) && value.includes(o.value)))?.label || label)
+    : label;
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 5,
+          height: 32, padding: '0 11px', borderRadius: 7,
+          border: `1px solid ${active ? 'var(--p)' : 'var(--br)'}`,
+          background: active ? 'var(--pll)' : 'white',
+          fontSize: '.78rem', fontWeight: active ? 600 : 400,
+          color: active ? 'var(--pd)' : 'var(--dm)', cursor: 'pointer', whiteSpace: 'nowrap',
+        }}
+      >
+        {activeLabel} <IconChevDown />
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0,
+          background: 'white', border: '1px solid var(--br)', borderRadius: 10,
+          boxShadow: '0 4px 16px rgba(0,0,0,.10)', minWidth: 160, zIndex: 40, overflow: 'hidden',
+        }}>
+          {options.map(o => (
+            <button
+              key={o.value}
+              onClick={() => { onChange(o.value); setOpen(false); }}
+              style={{
+                width: '100%', padding: '8px 13px', background: 'none', border: 'none',
+                textAlign: 'left', fontSize: '.82rem', cursor: 'pointer',
+                color: (Array.isArray(value) ? value.includes(o.value) : value === o.value) ? 'var(--pd)' : 'var(--dk)',
+                fontWeight: (Array.isArray(value) ? value.includes(o.value) : value === o.value) ? 700 : 400,
+                borderBottom: '1px solid #F3F4F6',
+              }}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── FILTER BAR ───────────────────────────────────────────────
+function FilterBar({
+  quickTab, setQuickTab,
+  searchQuery, setSearchQuery,
+  filters, setFilter,
+  stadsUniek, active, onClearAll,
+}) {
+  const stadOptions = [
+    { value: '', label: 'Alle steden' },
+    ...stadsUniek.map(s => ({ value: s, label: s })),
+  ];
+  const projectStatusOptions = [
+    { value: '', label: 'Alle statussen' },
+    { value: 'in_uitvoering', label: 'In uitvoering' },
+    { value: 'afgerond', label: 'Afgerond' },
+    { value: 'concept', label: 'Concept' },
+    { value: 'gepauzeerd', label: 'Gepauzeerd' },
+    { value: 'geannuleerd', label: 'Geannuleerd' },
+  ];
+  const contactOptions = [
+    { value: '', label: 'Alle periodes' },
+    { value: '7', label: 'Ouder dan 7 dagen' },
+    { value: '30', label: 'Ouder dan 30 dagen' },
+    { value: '90', label: 'Ouder dan 90 dagen' },
+    { value: '180', label: 'Ouder dan 180 dagen' },
+  ];
+  const moneybirdOptions = [
+    { value: 'alles', label: 'Alles' },
+    { value: 'ja', label: 'Gesynchroniseerd' },
+    { value: 'nee', label: 'Niet gesynchroniseerd' },
+  ];
+  const tabs = [
+    { id: 'alle', label: 'Alle' },
+    { id: 'actief', label: 'Actief' },
+    { id: 'inactief', label: 'Inactief' },
+    { id: 'geen_projecten', label: 'Geen projecten' },
+  ];
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 0,
+      background: 'white', borderRadius: 'var(--r12)',
+      border: '1px solid var(--br)', boxShadow: 'var(--shadow-xs)',
+      padding: '10px 16px', flexWrap: 'wrap', rowGap: 8,
+    }}>
+      {/* Status tabs */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        {tabs.map(t => {
+          const on = quickTab === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setQuickTab(t.id)}
+              style={{
+                padding: '5px 13px', borderRadius: 999, border: 'none',
+                background: on ? 'var(--dk)' : 'transparent',
+                color: on ? '#fff' : 'var(--dmu)',
+                fontSize: '.8rem', fontWeight: on ? 600 : 400, cursor: 'pointer',
+                transition: 'all .12s',
+              }}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Divider */}
+      <div style={{ width: 1, height: 22, background: 'var(--br)', margin: '0 10px', flexShrink: 0 }} />
+
+      {/* Quick filters */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <QuickDropdown
+          label="Stad / regio"
+          options={stadOptions}
+          value={filters.stad}
+          onChange={v => setFilter('stad', v)}
+        />
+        <QuickDropdown
+          label="Project status"
+          options={projectStatusOptions}
+          value={filters.projectStatussen[0] || ''}
+          onChange={v => setFilter('projectStatussen', v ? [v] : [])}
+        />
+        <QuickDropdown
+          label="Laatste contact"
+          options={contactOptions}
+          value={filters.laatsteContactDagen}
+          onChange={v => setFilter('laatsteContactDagen', v)}
+        />
+        <QuickDropdown
+          label="Moneybird sync"
+          options={moneybirdOptions}
+          value={filters.heeftMoneybird}
+          onChange={v => setFilter('heeftMoneybird', v)}
+        />
+      </div>
+
+      {/* Spacer */}
+      <div style={{ flex: 1, minWidth: 12 }} />
+
+      {/* Search + clear */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: '#F9FAFB', border: '1px solid var(--br)', borderRadius: 7,
+          padding: '0 10px', width: 200, height: 32,
+        }}>
+          <span style={{ color: 'var(--dl)', flexShrink: 0, display: 'flex' }}><IconSearch /></span>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Zoek klant..."
+            style={{
+              border: 'none', background: 'transparent', outline: 'none',
+              fontSize: '.78rem', color: 'var(--dk)', width: '100%',
+            }}
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl)', display: 'flex', padding: 0 }}>
+              {I.x}
+            </button>
+          )}
+        </div>
+        {active && (
+          <button
+            onClick={onClearAll}
+            style={{
+              fontSize: '.78rem', fontWeight: 500, color: 'var(--pd)',
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              whiteSpace: 'nowrap', padding: '0 4px',
+            }}
+          >
+            Filters wissen
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── FILTER SECTION (sidebar) ─────────────────────────────────
 function FilterSection({ title, children, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
@@ -169,6 +402,8 @@ export function DatabasePage({ openCustomer }) {
   const [loading, setLoading]         = useState(true);
 
   const [filters, setFilters]         = useState(EMPTY_FILTERS);
+  const [quickTab, setQuickTab]       = useState('alle');
+  const [searchQuery, setSearchQuery] = useState('');
   const [segments, setSegments]       = useState(() => {
     try { return JSON.parse(localStorage.getItem('bb_db_segments') || '[]'); } catch { return []; }
   });
@@ -261,6 +496,14 @@ export function DatabasePage({ openCustomer }) {
   const filteredCustomers = useMemo(() => {
     return customers.filter(c => {
       const rel = byCustomer[c.id] || { projects: [], facturen: [], offertes: [], deals: [], activities: [], emails: [], uren: [] };
+
+      // Search query
+      if (searchQuery && !c.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+
+      // Quick tabs
+      if (quickTab === 'actief' && !rel.projects.some(p => p.status === 'in_uitvoering')) return false;
+      if (quickTab === 'inactief' && rel.projects.some(p => p.status === 'in_uitvoering')) return false;
+      if (quickTab === 'geen_projecten' && rel.projects.length > 0) return false;
 
       if (filters.stad && !(c.city || '').toLowerCase().includes(filters.stad.toLowerCase())) return false;
       if (filters.aanmaakVan && c.createdAt?.slice(0,10) < filters.aanmaakVan) return false;
@@ -356,7 +599,7 @@ export function DatabasePage({ openCustomer }) {
 
       return true;
     });
-  }, [customers, byCustomer, filters, urenData]);
+  }, [customers, byCustomer, filters, urenData, quickTab, searchQuery]);
 
   // ── Pagination ───────────────────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / PER_PAGE));
@@ -471,7 +714,7 @@ export function DatabasePage({ openCustomer }) {
     return m;
   }, [customers, byCustomer]);
 
-  const active = hasActiveFilters(filters);
+  const active = hasActiveFilters(filters) || quickTab !== 'alle' || Boolean(searchQuery);
   const stadsUniek = useMemo(() => [...new Set(customers.map(c => c.city).filter(Boolean))].sort(), [customers]);
   const templateTypes = [...new Set(templates.map(t => t.type))];
   const OFFERTE_STATUSSEN = [
@@ -488,6 +731,13 @@ export function DatabasePage({ openCustomer }) {
   const PROJECT_STATUSSEN = Object.entries(PROJECT_STATUS).map(([id, v]) => ({ id, label: v.label }));
   const teamOpties = teamMembers.map(m => ({ id: m.id, label: m.full_name }));
   const noEmail = selectedCustomers.filter(c => !c.email);
+
+  const clearAll = () => {
+    setFilters(EMPTY_FILTERS);
+    setQuickTab('alle');
+    setSearchQuery('');
+    setCurrentPage(1);
+  };
 
   if (loading) return (
     <div className="card card-p afu2" style={{ textAlign: 'center', color: 'var(--dl)', padding: 48 }}>
@@ -507,11 +757,6 @@ export function DatabasePage({ openCustomer }) {
           </p>
         </div>
         <div className="page-hd-actions">
-          {active && (
-            <button className="btn btn-ghost btn-sm" onClick={() => { setFilters(EMPTY_FILTERS); setCurrentPage(1); }}>
-              {I.x} Filters wissen
-            </button>
-          )}
           <button className="btn btn-s btn-sm" onClick={() => setShowSaveSegment(s => !s)}>
             Segment opslaan
           </button>
@@ -568,6 +813,21 @@ export function DatabasePage({ openCustomer }) {
           <button className="btn btn-ghost btn-sm" onClick={() => setShowSaveSegment(false)}>Annuleren</button>
         </div>
       )}
+
+      {/* ── FilterBar ── */}
+      <div className="afu2" style={{ marginBottom: 12 }}>
+        <FilterBar
+          quickTab={quickTab}
+          setQuickTab={t => { setQuickTab(t); setCurrentPage(1); }}
+          searchQuery={searchQuery}
+          setSearchQuery={q => { setSearchQuery(q); setCurrentPage(1); }}
+          filters={filters}
+          setFilter={setFilter}
+          stadsUniek={stadsUniek}
+          active={active}
+          onClearAll={clearAll}
+        />
+      </div>
 
       {/* ── Body: filter sidebar + results ── */}
       <div className="afu2" style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 16, alignItems: 'start' }}>
@@ -748,7 +1008,7 @@ export function DatabasePage({ openCustomer }) {
             <div style={{ fontSize: '.68rem', fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Klant</div>
             <div style={{ fontSize: '.68rem', fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Laatste project</div>
             <div style={{ fontSize: '.68rem', fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Laatste mail</div>
-            <div style={{ fontSize: '.68rem', fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.06em', textAlign: 'center' }}>Projecten</div>
+            <div style={{ fontSize: '.68rem', fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.06em', textAlign: 'center' }}>Proj.</div>
             <div style={{ fontSize: '.68rem', fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.06em', textAlign: 'right' }}>Omzet</div>
           </div>
 
@@ -823,7 +1083,7 @@ export function DatabasePage({ openCustomer }) {
             );
           })}
 
-          {/* Pagination inside card */}
+          {/* Pagination */}
           {totalPages > 1 && (
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -866,7 +1126,7 @@ export function DatabasePage({ openCustomer }) {
         </div>
       </div>
 
-      {/* ── Bulk action bar with 3-dots menu ── */}
+      {/* ── Bulk action bar ── */}
       {selected.size > 0 && (
         <div style={{
           position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
@@ -898,39 +1158,34 @@ export function DatabasePage({ openCustomer }) {
                 display: 'flex', alignItems: 'center', gap: 6,
               }}
             >
-              Acties <span style={{ letterSpacing: 2, fontSize: '.78rem' }}>•••</span>
+              Acties {I.meer}
             </button>
             {showBulkMenu && (
               <div style={{
                 position: 'absolute', bottom: 'calc(100% + 8px)', right: 0,
                 background: 'white', borderRadius: 'var(--r12)',
                 border: '1px solid var(--br)', boxShadow: '0 8px 24px rgba(0,0,0,.14)',
-                minWidth: 234, overflow: 'hidden', zIndex: 60,
+                minWidth: 220, overflow: 'hidden', zIndex: 60,
               }}>
                 {[
-                  { icon: '✉', label: 'E-mail versturen', action: () => { setShowBulkMenu(false); setShowMailModal(true); } },
-                  { icon: '📊', label: 'Exporteren als Excel', action: exportExcel },
-                  { icon: '📋', label: 'Exporteren als CSV', action: exportCsv },
-                  { icon: '🏷', label: 'Label toevoegen', action: null, disabled: true, sub: 'Binnenkort beschikbaar' },
-                  { icon: '🗂', label: 'Segment opslaan van selectie', action: () => { setShowBulkMenu(false); setShowSaveSegment(true); } },
+                  { icon: <IconMail />, label: 'E-mail versturen', action: () => { setShowBulkMenu(false); setShowMailModal(true); } },
+                  { icon: <IconExcel />, label: 'Exporteren als Excel', action: exportExcel },
+                  { icon: <IconCsv />, label: 'Exporteren als CSV', action: exportCsv },
+                  { icon: <IconBookmark />, label: 'Segment opslaan', action: () => { setShowBulkMenu(false); setShowSaveSegment(true); } },
                 ].map((item, idx) => (
                   <button
                     key={idx}
-                    onClick={item.disabled ? undefined : item.action}
-                    disabled={item.disabled}
+                    onClick={item.action}
                     style={{
                       width: '100%', display: 'flex', alignItems: 'center', gap: 10,
                       padding: '10px 14px', background: 'none', border: 'none',
-                      textAlign: 'left', cursor: item.disabled ? 'default' : 'pointer',
-                      fontSize: '.84rem', color: item.disabled ? 'var(--dl)' : 'var(--dk)',
-                      borderBottom: idx < 4 ? '1px solid #F3F4F6' : 'none',
+                      textAlign: 'left', cursor: 'pointer',
+                      fontSize: '.84rem', color: 'var(--dk)',
+                      borderBottom: idx < 3 ? '1px solid #F3F4F6' : 'none',
                     }}
                   >
-                    <span style={{ fontSize: '1rem', width: 22, flexShrink: 0 }}>{item.icon}</span>
-                    <div>
-                      <div>{item.label}</div>
-                      {item.sub && <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginTop: 1 }}>{item.sub}</div>}
-                    </div>
+                    <span style={{ color: 'var(--dl)', display: 'flex', flexShrink: 0 }}>{item.icon}</span>
+                    {item.label}
                   </button>
                 ))}
               </div>
