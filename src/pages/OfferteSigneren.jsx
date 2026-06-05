@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { signOfferte } from '../services/emailService.js'
+import { previewOffertePdf } from '../utils/generatePdf.js'
 
 const fmt = n =>
   new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0)
@@ -22,6 +23,7 @@ export default function OfferteSigneren({ token }) {
   const [signing, setSigning] = useState(false)
   const [done, setDone] = useState(false)
   const [hasSignature, setHasSignature] = useState(false)
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   const canvasRef = useRef(null)
   const drawing = useRef(false)
@@ -118,6 +120,53 @@ export default function OfferteSigneren({ token }) {
       alert('Er is iets misgegaan: ' + err.message)
     } finally {
       setSigning(false)
+    }
+  }
+
+  const handlePreviewPdf = async () => {
+    setPdfLoading(true)
+    try {
+      const mappedOfferte = {
+        nummer: offerte.nummer,
+        createdAt: offerte.created_at,
+        geldigTot: offerte.geldig_tot,
+        totaalExcl: offerte.totaal_excl,
+        totaalIncl: offerte.totaal_incl,
+        btwPct: offerte.btw_pct,
+        omschrijving: offerte.omschrijving,
+        notes: offerte.notes,
+      }
+      const mappedItems = (items || []).map(item => ({
+        omschrijving: item.omschrijving,
+        aantal: item.aantal,
+        prijsPer: item.prijs_per,
+        btwPct: item.btw_pct,
+        subtotaal: item.subtotaal,
+        type: item.type,
+      }))
+      const mappedCompany = {
+        name: company?.name,
+        address: company?.address,
+        postalCode: company?.postal_code,
+        city: company?.city,
+        email: company?.email,
+        kvk: company?.kvk,
+        btwNumber: company?.btw_number,
+        brandingColor: company?.branding_color,
+        logoUrl: company?.logo_url,
+      }
+      const mappedKlant = {
+        name: klant?.name,
+        address: klant?.address,
+        postalCode: klant?.postal_code,
+        city: klant?.city,
+        email: klant?.email,
+      }
+      await previewOffertePdf(mappedOfferte, mappedItems, mappedKlant, mappedCompany)
+    } catch (err) {
+      alert('PDF genereren mislukt: ' + err.message)
+    } finally {
+      setPdfLoading(false)
     }
   }
 
@@ -223,6 +272,27 @@ export default function OfferteSigneren({ token }) {
             </div>
           </div>
         )}
+
+        {/* PDF bekijken */}
+        <button
+          onClick={handlePreviewPdf}
+          disabled={pdfLoading}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            width: '100%', padding: '11px 16px', marginBottom: 20,
+            background: '#fff', border: '1.5px solid #e5e7eb', borderRadius: 10,
+            fontSize: '.9rem', fontWeight: 600, color: '#374151',
+            cursor: pdfLoading ? 'not-allowed' : 'pointer',
+            transition: 'border-color .15s, background .15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = '#9ca3af'; e.currentTarget.style.background = '#f9fafb'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.background = '#fff'; }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+          </svg>
+          {pdfLoading ? 'PDF laden…' : 'Bekijk offerte als PDF'}
+        </button>
 
         {/* Gegevens invullen */}
         <div style={{ marginBottom: 20 }}>
