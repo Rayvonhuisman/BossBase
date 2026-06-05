@@ -9,7 +9,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
-    const { to, subject, html, from_name } = await req.json()
+    const { to, subject, html, from_name, attachments } = await req.json()
 
     if (!to || !subject || !html) {
       return new Response(JSON.stringify({ success: false, error: 'to, subject en html zijn verplicht' }), {
@@ -29,13 +29,16 @@ serve(async (req) => {
       })
     }
 
+    const payload: Record<string, unknown> = { from: fromLabel, to, subject, html }
+    if (Array.isArray(attachments) && attachments.length > 0) payload.attachments = attachments
+
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ from: fromLabel, to, subject, html }),
+      body: JSON.stringify(payload),
     })
 
     const data = await res.json()
