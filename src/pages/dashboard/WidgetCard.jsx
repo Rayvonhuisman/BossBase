@@ -9,7 +9,7 @@ const C = {
   p: '#1DDB62', pd: '#15A34A', pll: '#f0fdf4', pl: '#d1fae5',
   dk: '#0D0D0D', dm: '#374151', dmu: '#6b7280', dl: '#9ca3af',
   border: '#f0ede9', track: '#f1f3f5',
-  success: '#059669', successBg: '#ecfdf5',
+  success: '#15A34A', successBg: '#ecfdf5',
   info:    '#2563eb', infoBg:    '#eff6ff',
   warn:    '#dc2626', warnBg:    '#fef2f2',
   neutral: '#6b7280', neutralBg: '#f3f4f6',
@@ -17,7 +17,7 @@ const C = {
   orange:  '#c2410c', orangeBg:  '#fff4ec',
   teal:    '#0d9488', tealBg:    '#f0fdfa',
   amber:   '#b45309', amberBg:   '#fffbeb',
-  green: '#1DDB62', greenDark: '#15A34A', greenSoft: '#d1fae5', greenSofter: '#f0fdf4', greenInk: '#15803d',
+  green: '#1DDB62', greenDark: '#15A34A', greenSoft: '#d1fae5', greenSofter: '#f0fdf4', greenInk: '#15A34A',
 };
 
 const eur  = n => '€ ' + (Number(n) || 0).toLocaleString('nl-NL');
@@ -49,7 +49,7 @@ const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 // avatar color tone derived from a string (stable hash)
 function avatarTone(name) {
   const palette = [
-    { bg: '#ecfdf5', fg: '#059669' },
+    { bg: '#ecfdf5', fg: '#15A34A' },
     { bg: '#eff6ff', fg: '#2563eb' },
     { bg: '#f5f3ff', fg: '#7c3aed' },
     { bg: '#fff4ec', fg: '#c2410c' },
@@ -979,12 +979,12 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     // ───────── Snelle acties ─────────
     case 'quick_actions': {
       const acts = [
-        { icon: I.pipe,   l: 'Nieuwe lead',    d: 'voeg toe aan pipeline', tone: { qaBg: '#ecfdf5', qaFg: '#059669' }, go: 'pipeline', primary: true },
+        { icon: I.pipe,   l: 'Nieuwe lead',    d: 'voeg toe aan pipeline', tone: { qaBg: '#ecfdf5', qaFg: '#15A34A' }, go: 'pipeline', primary: true },
         { icon: I.act,    l: 'Activiteit',     d: 'plan een belactie',     tone: { qaBg: '#eff6ff', qaFg: '#2563eb' }, go: 'activities' },
         { icon: I.quotes, l: 'Offerte',        d: 'nieuwe offerte maken',  tone: { qaBg: '#f5f3ff', qaFg: '#7c3aed' }, go: 'offertes' },
         { icon: I.wo,     l: 'Werkbon',        d: 'nieuwe werkbon',        tone: { qaBg: '#fffbeb', qaFg: '#b45309' }, go: 'werkbonnen' },
         { icon: I.cust,   l: 'Klant',          d: 'klantbestand uitbreiden', tone: { qaBg: '#f0fdfa', qaFg: '#0d9488' }, go: 'customers' },
-        { icon: I.hours,  l: 'Uren boeken',    d: 'urenregistratie',       tone: { qaBg: '#f0fdf4', qaFg: '#15803d' }, go: 'activities' },
+        { icon: I.hours,  l: 'Uren boeken',    d: 'urenregistratie',       tone: { qaBg: '#f0fdf4', qaFg: '#15A34A' }, go: 'activities' },
       ];
       return (
         <div className="bb-widget">

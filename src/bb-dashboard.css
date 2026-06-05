@@ -242,21 +242,21 @@ ul{list-style:none}
 .b-draft{background:#f3f4f6;color:#6b7280}
 .b-sent{background:#fff4ec;color:#e8784a}
 .b-viewed{background:#eff6ff;color:#2563eb}
-.b-accepted{background:#ecfdf5;color:#059669}
+.b-accepted{background:#ecfdf5;color:#15A34A}
 .b-declined{background:#fef2f2;color:#dc2626}
 .b-expired{background:#fef2f2;color:#dc2626}
-.b-paid{background:#ecfdf5;color:#059669}
+.b-paid{background:#ecfdf5;color:#15A34A}
 .b-open{background:#fff4ec;color:#e8784a}
 .b-overdue{background:#fef2f2;color:#dc2626}
 .b-today{background:#eff6ff;color:#2563eb}
 .b-planned{background:#eff6ff;color:#2563eb}
 .b-progress{background:#fff4ec;color:#e8784a}
-.b-done{background:#ecfdf5;color:#059669}
+.b-done{background:#ecfdf5;color:#15A34A}
 .b-lost{background:#f3f4f6;color:#6b7280}
 .b-new{background:linear-gradient(135deg,#1DDB62,#15A34A);color:#ffffff}
 .b-orange{background:#fff4ec;color:#e8784a}
 .b-blue{background:#eff6ff;color:#2563eb}
-.b-green{background:#ecfdf5;color:#059669}
+.b-green{background:#ecfdf5;color:#15A34A}
 .b-red{background:#fef2f2;color:#dc2626}
 .b-gray{background:#f3f4f6;color:#6b7280}
 .b-purple{background:#f5f3ff;color:#7c3aed}
@@ -273,7 +273,7 @@ ul{list-style:none}
 .av-xl{width:56px;height:56px;font-size:1.1rem}
 .av-0{background:var(--pl);color:var(--pd)}
 .av-1{background:#dbeafe;color:#1d4ed8}
-.av-2{background:#dcfce7;color:#15803d}
+.av-2{background:#dcfce7;color:#15A34A}
 .av-3{background:#fce7f3;color:#db2777}
 .av-4{background:#ede9fe;color:#7c3aed}
 .av-5{background:#e0f2fe;color:#0369a1}
@@ -304,7 +304,7 @@ ul{list-style:none}
 .filter-select:hover{border-color:#d1d5db}.filter-select:focus{border-color:var(--p);box-shadow:0 0 0 3px rgba(29,219,98,.12)}
 .td-empty{text-align:center;color:var(--dl);padding:32px 16px!important;font-size:.84rem}
 .trend{font-size:.7rem;font-weight:600;padding:3px 7px;border-radius:var(--r999)}
-.trend-up{background:#ecfdf5;color:#059669}
+.trend-up{background:#ecfdf5;color:#15A34A}
 .trend-dn{background:#fef2f2;color:#dc2626}
 .trend-neu{background:#f3f4f6;color:#6b7280}
 
@@ -1305,7 +1305,7 @@ ul{list-style:none}
 .act2-s-overdue{color:#dc2626;background:linear-gradient(180deg,#fff,#fff8f7)}
 .act2-s-today{color:#2563eb}
 .act2-s-open{color:#6b7280}
-.act2-s-done{color:#059669}
+.act2-s-done{color:#15A34A}
 
 /* ── Filter bar ──────────────────────────────────────────────────────────── */
 .act2-filterbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;animation:fadeUp .42s cubic-bezier(.22,1,.36,1) .14s both}
@@ -1369,8 +1369,8 @@ ul{list-style:none}
 .act2-icobox{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;color:var(--dm);transition:transform .15s ease}
 .act2-icobox svg{width:17px;height:17px}
 .act2-ico-call{background:#eff6ff;color:#2563eb}
-.act2-ico-email{background:#ecfdf5;color:#059669}
-.act2-ico-visit{background:#f0fdf4;color:#15803d}
+.act2-ico-email{background:#ecfdf5;color:#15A34A}
+.act2-ico-visit{background:#f0fdf4;color:#15A34A}
 .act2-ico-task{background:#f5f3ff;color:#7c3aed}
 .act2-ico-follow{background:#fff4ec;color:#c2410c}
 
@@ -1389,7 +1389,7 @@ ul{list-style:none}
 .act2-badge-dot{width:5px;height:5px;border-radius:999px;background:currentColor;opacity:.9}
 .act2-b-overdue{background:#fef2f2;color:#dc2626}
 .act2-b-today{background:#eff6ff;color:#2563eb}
-.act2-b-done{background:#ecfdf5;color:#059669}
+.act2-b-done{background:#ecfdf5;color:#15A34A}
 .act2-b-gray{background:#f3f4f6;color:#6b7280}
 
 .act2-row-actions{display:flex;align-items:center;gap:6px}
@@ -1464,9 +1464,9 @@ ul{list-style:none}
 /* ── UrenPage V2 — herontwerp ─────────────────────────────────────────── */
 :root {
   --uren2-primary:       #1DDB62;
-  --uren2-primary-hover: #13B850;
+  --uren2-primary-hover: #15A34A;
   --uren2-primary-soft:  rgba(29,219,98,0.10);
-  --uren2-primary-ink:   #0a7a36;
+  --uren2-primary-ink:   #15A34A;
   --uren2-focus:         rgba(29,219,98,0.28);
   --uren2-page:          #f5f7fa;
   --uren2-soft:          #f5f7fa;
@@ -1732,7 +1732,7 @@ ul{list-style:none}
 .uren2-btn-primary{
   background:var(--uren2-primary); color:#04210e;
   border-color:var(--uren2-primary);
-  box-shadow:0 1px 0 rgba(16,82,42,.20), inset 0 -1px 0 rgba(0,0,0,.06);
+  box-shadow:0 4px 12px rgba(29,219,98,0.18);
 }
 .uren2-btn-primary:hover:not(:disabled){ background:var(--uren2-primary-hover); border-color:var(--uren2-primary-hover) }
 .uren2-btn-ghost{
@@ -1994,7 +1994,7 @@ ul{list-style:none}
    ============================================================ */
 
 .dw-grid{
-  --st-success:#059669;  --st-success-bg:#ecfdf5;
+  --st-success:#15A34A;  --st-success-bg:#ecfdf5;
   --st-info:#2563eb;     --st-info-bg:#eff6ff;
   --st-warn:#dc2626;     --st-warn-bg:#fef2f2;
   --st-neutral:#6b7280;  --st-neutral-bg:#f3f4f6;
@@ -2188,8 +2188,8 @@ ul{list-style:none}
 .dw-grid .feed-row.done{ opacity:.62; background:var(--bgs) }
 .dw-grid .feed-row.done .feed-title{ text-decoration:line-through; color:var(--dmu) }
 .dw-grid .ic-call    { --rowAccent:var(--st-info);    --iconBg:#eff6ff;  --iconFg:#2563eb }
-.dw-grid .ic-email   { --rowAccent:var(--st-success); --iconBg:#ecfdf5;  --iconFg:#059669 }
-.dw-grid .ic-visit   { --rowAccent:#15803d;           --iconBg:#f0fdf4;  --iconFg:#15803d }
+.dw-grid .ic-email   { --rowAccent:var(--st-success); --iconBg:#ecfdf5;  --iconFg:#15A34A }
+.dw-grid .ic-visit   { --rowAccent:#15A34A;           --iconBg:#f0fdf4;  --iconFg:#15A34A }
 .dw-grid .ic-task    { --rowAccent:var(--st-purple);  --iconBg:#f5f3ff;  --iconFg:#7c3aed }
 .dw-grid .ic-follow  { --rowAccent:var(--st-orange);  --iconBg:#fff4ec;  --iconFg:#c2410c }
 .dw-grid .ic-deal    { --rowAccent:var(--pd);         --iconBg:var(--pll); --iconFg:var(--pd) }
@@ -2668,7 +2668,7 @@ ul{list-style:none}
 .bb-notitie-editor li,.bb-notitie-content li{display:list-item!important;margin:.1rem 0}
 .bb-tb-btn{background:none;border:none;border-radius:4px;cursor:pointer;padding:3px 6px;display:flex;align-items:center;line-height:1;flex-shrink:0;color:var(--dl);transition:background .1s,color .1s}
 .bb-tb-btn:hover{background:rgba(0,0,0,.06)}
-.bb-tb-btn.active{background:rgba(29,219,98,.15);color:#059669}
+.bb-tb-btn.active{background:rgba(29,219,98,.15);color:#15A34A}
 .bb-tb-btn.active:hover{background:rgba(29,219,98,.25)}
 .notitie-input-wrap{display:grid;grid-template-rows:0fr;transition:grid-template-rows .22s ease}
 .notitie-input-wrap.open{grid-template-rows:1fr}

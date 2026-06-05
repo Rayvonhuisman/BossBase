@@ -64,6 +64,11 @@ export async function importKostenVanuitMoneybird() {
     body: {},
   })
   if (error) throw error
+  // BTW data syncen voor beide periode types (fouten hier falen stil)
+  await Promise.allSettled([
+    supabase.functions.invoke('moneybird-sync-btw', { body: { periode_type: 'kwartaal' } }),
+    supabase.functions.invoke('moneybird-sync-btw', { body: { periode_type: 'maand' } }),
+  ])
   return data
 }
 

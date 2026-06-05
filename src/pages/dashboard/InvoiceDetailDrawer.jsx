@@ -103,7 +103,7 @@ export function InvoiceDetailDrawer({ invoiceId, onClose, setPage, openCustomer 
           </div>
           <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.3, color: '#0a0a0a', marginTop: 6 }}>{inv.customerName || 'Geen klant'}</div>
           <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 16, fontWeight: 800, color: '#15803d', letterSpacing: -0.2 }}>{fmt(inv.totaalIncl || 0)}</span>
+            <span style={{ fontSize: 16, fontWeight: 800, color: '#15A34A', letterSpacing: -0.2 }}>{fmt(inv.totaalIncl || 0)}</span>
             <span style={{ fontSize: 11.5, color: '#9ca3af' }}>incl. btw</span>
           </div>
         </div>
@@ -111,7 +111,7 @@ export function InvoiceDetailDrawer({ invoiceId, onClose, setPage, openCustomer 
       </div>
 
       {/* Bron-disclosure */}
-      <div style={{ marginTop: 14, padding: '9px 12px', background: '#f0fdf4', border: '1px solid #dcfce7', borderRadius: 9, fontSize: 12, color: '#15803d' }}>
+      <div style={{ marginTop: 14, padding: '9px 12px', background: '#f0fdf4', border: '1px solid #dcfce7', borderRadius: 9, fontSize: 12, color: '#15A34A' }}>
         Bron: geaccepteerde offerte — er is nog geen aparte facturenmodule. Bedragen en regels komen uit de offerte.
       </div>
 

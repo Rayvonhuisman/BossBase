@@ -81,11 +81,11 @@ function deriveCharts({ deals = [], activities = [], offertes = [], customers = 
   const monthlyProfit = hasRev ? monthlyRevenue.map(m => ({ label: m.label, value: Math.round(m.value * 0.28) })) : [];
 
   const stageDefs = [
-    { keys: ['new_lead'], label: 'Nieuwe lead', color: '#22c55e' },
+    { keys: ['new_lead'], label: 'Nieuwe lead', color: '#1DDB62' },
     { keys: ['contact'], label: 'Contact', color: '#d97706' },
     { keys: ['quote_sent'], label: 'Offerte verz.', color: '#2563eb' },
     { keys: ['approved'], label: 'Akkoord', color: '#7c3aed' },
-    { keys: ['planned', 'in_progress'], label: 'In uitvoering', color: '#16a34a' },
+    { keys: ['planned', 'in_progress'], label: 'In uitvoering', color: '#15A34A' },
   ];
   const pipelineByStage = stageDefs
     .map(sd => ({ label: sd.label, color: sd.color, value: deals.filter(d => sd.keys.includes(d.stage)).reduce((s, d) => s + (d.value || 0), 0) }))
@@ -104,7 +104,7 @@ function deriveCharts({ deals = [], activities = [], offertes = [], customers = 
 
   const sc = st => offertes.filter(o => o.status === st).length;
   const invAll = [
-    { label: 'Geaccepteerd', value: sc('geaccepteerd'), color: '#22c55e' },
+    { label: 'Geaccepteerd', value: sc('geaccepteerd'), color: '#1DDB62' },
     { label: 'Verzonden', value: sc('verzonden'), color: '#d97706' },
     { label: 'Concept', value: sc('concept'), color: '#9ca3af' },
   ];
@@ -152,7 +152,7 @@ function deriveCharts({ deals = [], activities = [], offertes = [], customers = 
   }
   const weeklyHours = wkRows.some(x => x.value > 0) ? wkRows : [];
 
-  const srcColors = ['#22c55e', '#16a34a', '#2563eb', '#d97706', '#7c3aed', '#9ca3af'];
+  const srcColors = ['#1DDB62', '#15A34A', '#2563eb', '#d97706', '#7c3aed', '#9ca3af'];
   const srcMap = new Map();
   deals.forEach(d => { if (d.source) srcMap.set(d.source, (srcMap.get(d.source) || 0) + 1); });
   const leadSource = [...srcMap.entries()].sort((a, b) => b[1] - a[1])

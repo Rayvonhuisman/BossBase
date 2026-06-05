@@ -11,12 +11,15 @@ const toFactuur = row => ({
   nummer: row.nummer || '',
   factuurdatum: row.factuurdatum || null,
   vervaldatum: row.vervaldatum || null,
+  betaaltermijnDagen: Number(row.betaaltermijn_dagen ?? 14),
   betalingskenmerk: row.betalingskenmerk || '',
   status: row.status || 'concept',
   notities: row.notities || '',
   totaalExcl: Number(row.totaal_excl || 0),
   totaalIncl: Number(row.totaal_incl || 0),
   betaaldOp: row.betaald_op || null,
+  herinnering1VerstuurdAt: row.herinnering_1_verstuurd_at || null,
+  herinnering2VerstuurdAt: row.herinnering_2_verstuurd_at || null,
   createdAt: row.created_at,
   customerName: row.customers?.name || '',
   isCredit: row.is_credit || false,
@@ -106,12 +109,14 @@ export async function createFactuur(input) {
 
 export async function updateFactuur(id, input) {
   const updates = {}
-  if ('status' in input)           updates.status = input.status
-  if ('vervaldatum' in input)      updates.vervaldatum = input.vervaldatum
-  if ('betalingskenmerk' in input) updates.betalingskenmerk = input.betalingskenmerk
-  if ('notities' in input)         updates.notities = input.notities
-  if ('totaal_excl' in input)      updates.totaal_excl = input.totaal_excl
-  if ('totaal_incl' in input)      updates.totaal_incl = input.totaal_incl
+  if ('status' in input)                       updates.status = input.status
+  if ('vervaldatum' in input)                  updates.vervaldatum = input.vervaldatum
+  if ('betalingskenmerk' in input)             updates.betalingskenmerk = input.betalingskenmerk
+  if ('notities' in input)                     updates.notities = input.notities
+  if ('totaal_excl' in input)                  updates.totaal_excl = input.totaal_excl
+  if ('totaal_incl' in input)                  updates.totaal_incl = input.totaal_incl
+  if ('herinnering_1_verstuurd_at' in input)   updates.herinnering_1_verstuurd_at = input.herinnering_1_verstuurd_at
+  if ('herinnering_2_verstuurd_at' in input)   updates.herinnering_2_verstuurd_at = input.herinnering_2_verstuurd_at
   if (input.status === 'betaald' && !input.betaald_op) {
     updates.betaald_op = new Date().toISOString().slice(0, 10)
   }

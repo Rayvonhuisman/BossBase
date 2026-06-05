@@ -20,9 +20,14 @@ const toEmailTemplate = row => ({
   id: row.id,
   companyId: row.company_id,
   type: row.type,
+  name: row.name || "",
   onderwerp: row.onderwerp || "",
   body: row.body || "",
+  body_html: row.body_html || row.body || "",
+  is_default: Boolean(row.is_default),
   actief: Boolean(row.actief),
+  auto_versturen: Boolean(row.auto_versturen),
+  auto_dagen: Number(row.auto_dagen ?? 7),
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   raw: row,
@@ -121,7 +126,10 @@ export async function updateEmailTemplate(id, input) {
   const updates = {
     onderwerp: input.onderwerp,
     body: input.body,
+    body_html: input.body_html,
     actief: input.actief != null ? Boolean(input.actief) : undefined,
+    auto_versturen: input.auto_versturen != null ? Boolean(input.auto_versturen) : undefined,
+    auto_dagen: input.auto_dagen != null ? Number(input.auto_dagen) : undefined,
     updated_at: new Date().toISOString(),
   }
   Object.keys(updates).forEach(k => updates[k] === undefined && delete updates[k])
@@ -134,6 +142,36 @@ export async function updateEmailTemplate(id, input) {
     .single()
   if (error) throw error
   return toEmailTemplate(data)
+}
+
+export async function createEmailTemplate(input) {
+  const base = {
+    type: input.type,
+    name: input.name || input.type,
+    onderwerp: input.onderwerp || '',
+    body: input.body || '',
+    body_html: input.body || '',
+    is_default: false,
+    actief: true,
+    auto_versturen: false,
+    auto_dagen: 7,
+  }
+  const payload = await withCompanyId(base)
+  const { data, error } = await supabase
+    .from("email_templates")
+    .insert(payload)
+    .select()
+    .single()
+  if (error) throw error
+  return toEmailTemplate(data)
+}
+
+export async function deleteEmailTemplate(id) {
+  const { error } = await supabase
+    .from("email_templates")
+    .delete()
+    .eq("id", id)
+  if (error) throw error
 }
 
 // ── PIPELINE STAGES ──────────────────────────────────────────────────────────

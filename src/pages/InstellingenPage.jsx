@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { I, ModalX } from '../bb-shared.jsx';
 import { supabase } from '../lib/supabase.js';
 import { useToast } from '../lib/toast.jsx';
@@ -8,6 +8,8 @@ import {
   upsertBedrijfsinstellingen,
   getEmailTemplates,
   updateEmailTemplate,
+  createEmailTemplate,
+  deleteEmailTemplate,
   getPipelineStages,
   createPipelineStage,
   updatePipelineStage,
@@ -16,6 +18,7 @@ import {
 import { updateCompany } from '../services/profileService.js';
 import { uploadProfileAvatar, removeProfileAvatar } from '../services/avatarService.js';
 import { AvatarUpload } from '../components/AvatarUpload.jsx';
+import { MailBodyEditor, plainToEditorHtml } from '../components/MailBodyEditor.jsx';
 import {
   getConnection,
   saveConnection,
@@ -33,12 +36,31 @@ import {
   syncContactenMetAfas,
 } from '../services/accountingService.js';
 
-const TEMPLATE_LABELS = {
-  lead_ontvangen: 'Lead ontvangen',
-  offerte_verstuurd: 'Offerte verstuurd',
-  offerte_herinnering: 'Offerte herinnering',
-  klus_gepland: 'Klus ingepland',
-  betaalherinnering: 'Betaalherinnering',
+const ALL_TEMPLATE_CONFIGS = [
+  { type: 'offerte', label: 'Offerte', vars: ['klant_naam','bedrijfsnaam','offerte_nummer','totaal_bedrag','vervaldatum','link'], showAutoToggle: false, showAutoDagen: false },
+  { type: 'offerte_geaccepteerd', label: 'Offerte geaccepteerd', vars: ['klant_naam','bedrijfsnaam','offerte_nummer'], showAutoToggle: true, showAutoDagen: false },
+  { type: 'factuur', label: 'Factuur', vars: ['klant_naam','bedrijfsnaam','factuur_nummer','totaal_bedrag','vervaldatum'], showAutoToggle: false, showAutoDagen: false },
+  { type: 'herinnering_1', label: 'Herinnering 1', vars: ['klant_naam','bedrijfsnaam','factuur_nummer','totaal_bedrag','vervaldatum'], showAutoToggle: true, showAutoDagen: true, dagenLabel: 'dagen na vervaldatum' },
+  { type: 'herinnering_2', label: 'Herinnering 2', vars: ['klant_naam','bedrijfsnaam','factuur_nummer','totaal_bedrag','vervaldatum'], showAutoToggle: true, showAutoDagen: true, dagenLabel: 'dagen na vervaldatum' },
+  { type: 'aanvraag_ontvangen', label: 'Aanvraag ontvangen', vars: ['klant_naam','bedrijfsnaam'], showAutoToggle: true, showAutoDagen: false },
+  { type: 'welkom', label: 'Welkom', vars: ['klant_naam','bedrijfsnaam'], showAutoToggle: false, showAutoDagen: false },
+  { type: 'afspraak_bevestiging', label: 'Afspraak bevestiging', vars: ['klant_naam','bedrijfsnaam','afspraak_datum','afspraak_tijd'], showAutoToggle: true, showAutoDagen: false },
+  { type: 'afspraak_herinnering', label: 'Afspraak herinnering', vars: ['klant_naam','bedrijfsnaam','afspraak_datum','afspraak_tijd'], showAutoToggle: true, showAutoDagen: true, dagenLabel: 'dag(en) voor afspraak' },
+];
+
+const STANDARD_TYPES = new Set(ALL_TEMPLATE_CONFIGS.map(c => c.type));
+const NEW_TEMPLATE_VARS = ['klant_naam','bedrijfsnaam','factuur_nummer','offerte_nummer','totaal_bedrag','vervaldatum','afspraak_datum','afspraak_tijd','link'];
+
+const DEFAULT_BODY = {
+  offerte: 'Beste {{klant_naam}},\n\nHierbij sturen wij u offerte {{offerte_nummer}} toe.\n\nTotaalbedrag: {{totaal_bedrag}}\nGeldig tot: {{vervaldatum}}\n\nVia onderstaande link kunt u de offerte bekijken en digitaal ondertekenen:\n{{link}}\n\nHeeft u vragen? Neem gerust contact met ons op.\n\nMet vriendelijke groet,\n{{bedrijfsnaam}}',
+  offerte_geaccepteerd: 'Beste {{klant_naam}},\n\nHartelijk dank! Uw offerte {{offerte_nummer}} is succesvol ondertekend.\n\nWij gaan zo snel mogelijk voor u aan de slag. U ontvangt binnenkort meer informatie over de planning.\n\nMet vriendelijke groet,\n{{bedrijfsnaam}}',
+  factuur: 'Beste {{klant_naam}},\n\nHierbij ontvangt u factuur {{factuur_nummer}} van {{bedrijfsnaam}}.\n\nTotaalbedrag: {{totaal_bedrag}}\nBetaaltermijn: {{vervaldatum}}\n\nGelieve het totaalbedrag voor de betaaltermijn over te maken onder vermelding van {{factuur_nummer}}.\n\nMet vriendelijke groet,\n{{bedrijfsnaam}}',
+  herinnering_1: 'Beste {{klant_naam}},\n\nWij willen u vriendelijk herinneren dat factuur {{factuur_nummer}} nog openstaat.\n\nTotaalbedrag: {{totaal_bedrag}}\nVervaldatum was: {{vervaldatum}}\n\nMocht u dit bedrag reeds hebben overgemaakt, dan kunt u deze herinnering als niet verzonden beschouwen.\n\nMet vriendelijke groet,\n{{bedrijfsnaam}}',
+  herinnering_2: 'Beste {{klant_naam}},\n\nDit is een tweede herinnering voor factuur {{factuur_nummer}}, welke reeds is vervallen.\n\nTotaalbedrag: {{totaal_bedrag}}\nVervaldatum was: {{vervaldatum}}\n\nWij verzoeken u dringend dit bedrag zo spoedig mogelijk te voldoen.\n\nMet vriendelijke groet,\n{{bedrijfsnaam}}',
+  aanvraag_ontvangen: 'Beste {{klant_naam}},\n\nBedankt voor uw aanvraag! Wij hebben uw bericht ontvangen en nemen zo spoedig mogelijk contact met u op.\n\nMet vriendelijke groet,\n{{bedrijfsnaam}}',
+  welkom: 'Beste {{klant_naam}},\n\nWelkom bij {{bedrijfsnaam}}! Wij zijn blij u als nieuwe klant te mogen verwelkomen.\n\nHeeft u vragen? Neem gerust contact met ons op.\n\nMet vriendelijke groet,\n{{bedrijfsnaam}}',
+  afspraak_bevestiging: 'Beste {{klant_naam}},\n\nHierbij bevestigen wij uw afspraak.\n\nDatum: {{afspraak_datum}}\nTijdstip: {{afspraak_tijd}}\n\nMocht u de afspraak willen verzetten, neem dan tijdig contact met ons op.\n\nMet vriendelijke groet,\n{{bedrijfsnaam}}',
+  afspraak_herinnering: 'Beste {{klant_naam}},\n\nDit is een herinnering voor uw afspraak van morgen.\n\nDatum: {{afspraak_datum}}\nTijdstip: {{afspraak_tijd}}\n\nWij zien u graag tegemoet!\n\nMet vriendelijke groet,\n{{bedrijfsnaam}}',
 };
 
 const COLOR_OPTIONS = [
@@ -79,6 +101,12 @@ export function InstellingenPage() {
   const [templates, setTemplates] = useState([]);
   const [templateForms, setTemplateForms] = useState({});
   const [savingTemplate, setSavingTemplate] = useState({});
+  const [activeTemplateType, setActiveTemplateType] = useState('offerte');
+  const bodyRef = useRef(null);
+  const newBodyRef = useRef(null);
+  const [showNewTemplate, setShowNewTemplate] = useState(false);
+  const [newTemplateForm, setNewTemplateForm] = useState({ naam: '', type: '', onderwerp: '', body: '' });
+  const [creatingTemplate, setCreatingTemplate] = useState(false);
 
   // Pipeline stages
   const [stages, setStages] = useState([]);
@@ -138,7 +166,7 @@ export function InstellingenPage() {
         setTemplates(emailTemplates);
         const forms = {};
         emailTemplates.forEach(t => {
-          forms[t.id] = { onderwerp: t.onderwerp, body: t.body, actief: t.actief };
+          forms[t.id] = { onderwerp: t.onderwerp, body: plainToEditorHtml(t.body || ''), actief: t.actief, auto_versturen: Boolean(t.auto_versturen), auto_dagen: Number(t.auto_dagen ?? 7) };
         });
         setTemplateForms(forms);
         setStages(pipelineStages);
@@ -247,14 +275,73 @@ export function InstellingenPage() {
     setSavingTemplate(s => ({ ...s, [templateId]: true }));
     try {
       const form = templateForms[templateId];
-      const updated = await updateEmailTemplate(templateId, form);
+      const updated = await updateEmailTemplate(templateId, {
+        onderwerp: form.onderwerp,
+        body: form.body,
+        body_html: form.body,
+        actief: form.actief,
+        auto_versturen: form.auto_versturen,
+        auto_dagen: form.auto_dagen,
+      });
       setTemplates(ts => ts.map(t => t.id === templateId ? updated : t));
-      setTemplateForms(f => ({ ...f, [templateId]: { onderwerp: updated.onderwerp, body: updated.body, actief: updated.actief } }));
+      setTemplateForms(f => ({ ...f, [templateId]: { onderwerp: updated.onderwerp, body: plainToEditorHtml(updated.body || ''), actief: updated.actief, auto_versturen: Boolean(updated.auto_versturen), auto_dagen: Number(updated.auto_dagen ?? 7) } }));
       toast.success('Template opgeslagen');
     } catch (err) {
       toast.error(err.message || 'Opslaan mislukt');
     } finally {
       setSavingTemplate(s => ({ ...s, [templateId]: false }));
+    }
+  };
+
+  const insertVar = (varName, _templateId) => {
+    if (bodyRef.current?.insertAtCursor) {
+      bodyRef.current.insertAtCursor(`{{${varName}}}`);
+    }
+  };
+
+  const slugify = str => str.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+
+  const handleCreateTemplate = async () => {
+    if (!newTemplateForm.naam.trim()) { toast.error('Naam is verplicht'); return; }
+    const slug = newTemplateForm.type.trim() || slugify(newTemplateForm.naam);
+    if (!slug) { toast.error('Type/slug is verplicht'); return; }
+    if (STANDARD_TYPES.has(slug)) { toast.error('Dit type is al een standaard template'); return; }
+    if (templates.some(t => t.type === slug)) { toast.error('Een template met dit type bestaat al'); return; }
+    setCreatingTemplate(true);
+    try {
+      const created = await createEmailTemplate({
+        type: slug,
+        name: newTemplateForm.naam.trim(),
+        onderwerp: newTemplateForm.onderwerp,
+        body: newTemplateForm.body,
+      });
+      setTemplates(ts => [...ts, created]);
+      setTemplateForms(f => ({ ...f, [created.id]: { onderwerp: created.onderwerp, body: plainToEditorHtml(created.body || ''), actief: created.actief, auto_versturen: false, auto_dagen: 7 } }));
+      setActiveTemplateType(created.type);
+      setShowNewTemplate(false);
+      setNewTemplateForm({ naam: '', type: '', onderwerp: '', body: '' });
+      toast.success('Template aangemaakt');
+    } catch (err) {
+      toast.error(err.message || 'Aanmaken mislukt');
+    } finally {
+      setCreatingTemplate(false);
+    }
+  };
+
+  const handleDeleteTemplate = async (t) => {
+    if (!confirm(`Template "${t.name || t.type}" verwijderen? Dit kan niet ongedaan worden gemaakt.`)) return;
+    try {
+      await deleteEmailTemplate(t.id);
+      const remaining = templates.filter(x => x.id !== t.id);
+      setTemplates(remaining);
+      setTemplateForms(f => { const next = { ...f }; delete next[t.id]; return next; });
+      if (activeTemplateType === t.type) {
+        const fallback = ALL_TEMPLATE_CONFIGS.find(c => remaining.some(r => r.type === c.type));
+        setActiveTemplateType(fallback?.type || remaining[0]?.type || 'offerte');
+      }
+      toast.success('Template verwijderd');
+    } catch (err) {
+      toast.error(err.message || 'Verwijderen mislukt');
     }
   };
 
@@ -788,61 +875,278 @@ export function InstellingenPage() {
       )}
 
       {!loading && tab === 'templates' && (
-        <div className="afu3" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {templates.length === 0 && (
-            <div className="card card-p" style={{ textAlign: 'center', color: 'var(--dl)' }}>
-              <div style={{ marginBottom: 8 }}>{I.mail}</div>
-              Geen e-mailtemplates gevonden
-            </div>
-          )}
-          {templates.map(t => {
-            const form = templateForms[t.id] || { onderwerp: t.onderwerp, body: t.body, actief: t.actief };
+        <div className="afu3">
+          {/* Rij 1: standaard templates + "+" knop */}
+          {(() => {
+            const customTemplates = templates.filter(t => !STANDARD_TYPES.has(t.type));
+            return (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: customTemplates.length > 0 ? 8 : 0 }}>
+                  {ALL_TEMPLATE_CONFIGS.map(cfg => {
+                    const exists = templates.some(t => t.type === cfg.type);
+                    if (!exists) return null;
+                    const active = activeTemplateType === cfg.type;
+                    return (
+                      <button
+                        key={cfg.type}
+                        onClick={() => setActiveTemplateType(cfg.type)}
+                        style={{
+                          padding: '5px 13px', borderRadius: 20, fontSize: '.82rem', fontWeight: 500, cursor: 'pointer', border: 'none',
+                          background: active ? '#1DDB62' : 'var(--bgs)',
+                          color: active ? '#0D0D0D' : 'var(--tx)',
+                          outline: active ? 'none' : '1px solid var(--br)',
+                        }}
+                      >
+                        {cfg.label}
+                      </button>
+                    );
+                  })}
+                  <button
+                    onClick={() => setShowNewTemplate(true)}
+                    title="Nieuw template aanmaken"
+                    style={{ width: 28, height: 28, borderRadius: '50%', background: '#1DDB62', border: 'none', color: '#fff', fontSize: 18, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0, marginLeft: 'auto' }}
+                  >
+                    {I.plus}
+                  </button>
+                </div>
+                {/* Rij 2: eigen templates */}
+                {customTemplates.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                    {customTemplates.map(t => {
+                      const active = activeTemplateType === t.type;
+                      return (
+                        <div key={t.type} style={{ display: 'inline-flex', alignItems: 'center', gap: 0 }}>
+                          <button
+                            onClick={() => setActiveTemplateType(t.type)}
+                            style={{
+                              padding: '5px 10px 5px 13px', borderRadius: '20px 0 0 20px', fontSize: '.82rem', fontWeight: 500, cursor: 'pointer', border: 'none',
+                              background: active ? '#1DDB62' : 'var(--bgs)',
+                              color: active ? '#0D0D0D' : 'var(--tx)',
+                              outline: active ? 'none' : '1px solid var(--br)',
+                            }}
+                          >
+                            {t.name || t.type}
+                          </button>
+                          <button
+                            onClick={() => handleDeleteTemplate(t)}
+                            title="Template verwijderen"
+                            style={{
+                              padding: '5px 8px', borderRadius: '0 20px 20px 0', fontSize: '.78rem', cursor: 'pointer', border: 'none', lineHeight: 1,
+                              background: active ? '#1DDB62' : 'var(--bgs)',
+                              color: active ? '#0D0D0D' : 'var(--dl)',
+                              outline: active ? 'none' : '1px solid var(--br)',
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Actief template formulier */}
+          {(() => {
+            const stdCfg = ALL_TEMPLATE_CONFIGS.find(c => c.type === activeTemplateType);
+            const t = templates.find(x => x.type === activeTemplateType);
+            if (!t) return (
+              <div className="card card-p" style={{ textAlign: 'center', color: 'var(--dl)' }}>
+                Template niet gevonden — voer de database-migratie uit
+              </div>
+            );
+            // Custom templates get a generic config
+            const cfg = stdCfg || { label: t.name || t.type, vars: ['klant_naam', 'bedrijfsnaam'], showAutoToggle: false, showAutoDagen: false };
+            const form = templateForms[t.id] || { onderwerp: t.onderwerp, body: plainToEditorHtml(t.body || ''), actief: t.actief, auto_versturen: false, auto_dagen: 7 };
             const saving = savingTemplate[t.id] || false;
             return (
-              <div key={t.id} className="card card-p">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div className="card card-p">
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                   <div>
-                    <div className="card-title" style={{ fontSize: '.95rem' }}>
-                      {TEMPLATE_LABELS[t.type] || t.type}
-                    </div>
-                    <div className="card-sub" style={{ fontSize: '.78rem' }}>Type: {t.type}</div>
+                    <div className="card-title" style={{ fontSize: '.95rem' }}>{cfg.label}</div>
+                    {cfg.showAutoToggle && (
+                      <div style={{ fontSize: '.75rem', color: form.auto_versturen ? '#15A34A' : 'var(--dl)', marginTop: 2 }}>
+                        {form.auto_versturen ? 'Automatisch verzenden aan' : 'Automatisch verzenden uit'}
+                      </div>
+                    )}
                   </div>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '.83rem', color: 'var(--dm)', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={form.actief}
-                      onChange={e => setTemplateField(t.id, 'actief', e.target.checked)}
-                    />
+                    <input type="checkbox" checked={form.actief} onChange={e => setTemplateField(t.id, 'actief', e.target.checked)} />
                     Actief
                   </label>
                 </div>
+
+                {/* Variabele chips */}
+                {cfg.vars.length > 0 && (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: '.75rem', color: 'var(--dl)', marginBottom: 6, fontWeight: 600 }}>Klik om in te voegen:</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                      {cfg.vars.map(v => (
+                        <button
+                          key={v}
+                          onClick={() => insertVar(v, t.id)}
+                          style={{ padding: '2px 9px', borderRadius: 4, border: '1px solid var(--p)', background: 'var(--pll)', color: 'var(--p)', fontSize: '.78rem', fontFamily: 'monospace', cursor: 'pointer' }}
+                        >
+                          {`{{${v}}}`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="fg">
                   <div className="f s2">
                     <label>Onderwerp</label>
-                    <input
-                      value={form.onderwerp}
-                      onChange={e => setTemplateField(t.id, 'onderwerp', e.target.value)}
-                      placeholder="E-mailonderwerp..."
-                    />
+                    <input value={form.onderwerp} onChange={e => setTemplateField(t.id, 'onderwerp', e.target.value)} placeholder="E-mailonderwerp..." />
                   </div>
                   <div className="f s2">
                     <label>Berichttekst</label>
-                    <textarea
-                      rows={5}
+                    <MailBodyEditor
+                      ref={bodyRef}
                       value={form.body}
-                      onChange={e => setTemplateField(t.id, 'body', e.target.value)}
+                      onChange={html => setTemplateField(t.id, 'body', html)}
                       placeholder="Inhoud van het e-mailbericht..."
+                      minHeight={220}
                     />
                   </div>
+
+                  {/* Auto-versturen sectie */}
+                  {cfg.showAutoToggle && (
+                    <div className="f s2">
+                      <label>Automatisch verzenden</label>
+                      <div style={{ border: '1px solid var(--bstrong)', borderRadius: 'var(--r8)', overflow: 'hidden', maxWidth: 500 }}>
+                        <div
+                          onClick={() => setTemplateField(t.id, 'auto_versturen', !form.auto_versturen)}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', cursor: 'pointer', background: 'white', gap: 14, userSelect: 'none' }}
+                        >
+                          <span style={{ fontSize: '.875rem', color: 'var(--dk)' }}>Automatisch versturen inschakelen</span>
+                          <div style={{ position: 'relative', width: 40, height: 22, flexShrink: 0 }}>
+                            <div style={{ width: 40, height: 22, borderRadius: 11, background: form.auto_versturen ? 'var(--p)' : 'var(--bstrong)', transition: 'background .18s ease' }} />
+                            <div style={{ position: 'absolute', top: 3, left: form.auto_versturen ? 21 : 3, width: 16, height: 16, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,.2)', transition: 'left .18s ease' }} />
+                          </div>
+                        </div>
+                        {cfg.showAutoDagen && form.auto_versturen && (
+                          <div style={{ borderTop: '1px solid var(--bstrong)', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bgs)' }}>
+                            <span style={{ fontSize: '.85rem', color: 'var(--dm)', flex: 1 }}>Verzenden na</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={form.auto_dagen}
+                              onClick={e => e.stopPropagation()}
+                              onChange={e => setTemplateField(t.id, 'auto_dagen', Number(e.target.value))}
+                              style={{ width: 68, textAlign: 'center' }}
+                            />
+                            <span style={{ fontSize: '.85rem', color: 'var(--dm)' }}>{cfg.dagenLabel}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="fa">
-                  <button className="btn btn-p" onClick={() => saveTemplate(t.id)} disabled={saving}>
-                    {saving ? 'Opslaan...' : 'Opslaan'}
-                  </button>
+
+                <div className="fa" style={{ flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+                  {stdCfg && DEFAULT_BODY[activeTemplateType] && (
+                    <button className="btn btn-ghost btn-sm" onClick={() => {
+                      if (confirm('Template terugzetten naar standaard?')) {
+                        setTemplateField(t.id, 'body', plainToEditorHtml(DEFAULT_BODY[activeTemplateType] || ''));
+                      }
+                    }}>Reset</button>
+                  )}
+                  <button className="btn btn-p" onClick={() => saveTemplate(t.id)} disabled={saving}>{saving ? 'Opslaan...' : 'Opslaan'}</button>
                 </div>
               </div>
             );
-          })}
+          })()}
+
+          {templates.length === 0 && (
+            <div className="card card-p" style={{ textAlign: 'center', color: 'var(--dl)', marginTop: 12 }}>
+              <div style={{ marginBottom: 8 }}>{I.mail}</div>
+              Geen e-mailtemplates gevonden — voer de database-migratie uit
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Nieuw template modal */}
+      {showNewTemplate && (
+        <div className="overlay" onClick={e => e.target === e.currentTarget && !creatingTemplate && setShowNewTemplate(false)}>
+          <div className="modal modal-wide">
+            <div className="modal-hd">
+              <div>
+                <div className="modal-title">Nieuw e-mailtemplate</div>
+                <div className="modal-sub">Maak een eigen template aan</div>
+              </div>
+              <ModalX onClose={() => !creatingTemplate && setShowNewTemplate(false)} />
+            </div>
+            <div className="fg">
+              <div className="f">
+                <label>Naam *</label>
+                <input
+                  value={newTemplateForm.naam}
+                  onChange={e => {
+                    const naam = e.target.value;
+                    setNewTemplateForm(f => ({
+                      ...f,
+                      naam,
+                      type: f.type === slugify(f.naam) ? slugify(naam) : f.type,
+                    }));
+                  }}
+                  placeholder="Bijv. Welkomstmail nieuw project"
+                />
+              </div>
+              <div className="f">
+                <label>Type / slug</label>
+                <input
+                  value={newTemplateForm.type}
+                  onChange={e => setNewTemplateForm(f => ({ ...f, type: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_') }))}
+                  placeholder="bijv. welkomst_project (automatisch ingevuld)"
+                />
+              </div>
+              <div className="f s2">
+                <label>Onderwerp</label>
+                <input
+                  value={newTemplateForm.onderwerp}
+                  onChange={e => setNewTemplateForm(f => ({ ...f, onderwerp: e.target.value }))}
+                  placeholder="E-mailonderwerp..."
+                />
+              </div>
+              <div className="f s2">
+                <label>Variabelen</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {NEW_TEMPLATE_VARS.map(v => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => newBodyRef.current?.insertAtCursor(`{{${v}}}`)}
+                      style={{ padding: '2px 9px', borderRadius: 4, border: '1px solid var(--p)', background: 'var(--pll)', color: 'var(--p)', fontSize: '.78rem', fontFamily: 'monospace', cursor: 'pointer' }}
+                    >
+                      {`{{${v}}}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="f s2">
+                <label>Berichttekst</label>
+                <MailBodyEditor
+                  ref={newBodyRef}
+                  value={newTemplateForm.body}
+                  onChange={html => setNewTemplateForm(f => ({ ...f, body: html }))}
+                  placeholder="Inhoud van het e-mailbericht..."
+                  minHeight={180}
+                />
+              </div>
+            </div>
+            <div className="fa">
+              <button className="btn btn-s" onClick={() => setShowNewTemplate(false)} disabled={creatingTemplate}>Annuleren</button>
+              <button className="btn btn-p" onClick={handleCreateTemplate} disabled={creatingTemplate}>
+                {creatingTemplate ? 'Aanmaken...' : 'Template aanmaken'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -971,7 +1275,7 @@ export function InstellingenPage() {
               <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                 {googleConnected ? (
                   <>
-                    <span style={{ fontSize: '.75rem', color: '#059669', fontWeight: 600 }}>Verbonden (demo)</span>
+                    <span style={{ fontSize: '.75rem', color: '#15A34A', fontWeight: 600 }}>Verbonden (demo)</span>
                     <button
                       className="btn btn-danger btn-sm"
                       onClick={() => { setGoogleConnected(false); toast.info('Google Agenda losgekoppeld'); }}
@@ -1008,7 +1312,7 @@ export function InstellingenPage() {
               </div>
               <div style={{ flexShrink: 0 }}>
                 {mbConnection?.apiToken ? (
-                  <span style={{ fontSize: '.75rem', color: '#059669', fontWeight: 600 }}>Verbonden</span>
+                  <span style={{ fontSize: '.75rem', color: '#15A34A', fontWeight: 600 }}>Verbonden</span>
                 ) : (
                   <span style={{ fontSize: '.75rem', color: 'var(--dmu)' }}>Niet verbonden</span>
                 )}
@@ -1126,7 +1430,7 @@ export function InstellingenPage() {
               </div>
               <div style={{ flexShrink: 0 }}>
                 {ssConnection?.subscriptionKey ? (
-                  <span style={{ fontSize: '.75rem', color: '#059669', fontWeight: 600 }}>Verbonden</span>
+                  <span style={{ fontSize: '.75rem', color: '#15A34A', fontWeight: 600 }}>Verbonden</span>
                 ) : (
                   <span style={{ fontSize: '.75rem', color: 'var(--dmu)' }}>Niet verbonden</span>
                 )}
@@ -1240,7 +1544,7 @@ export function InstellingenPage() {
               </div>
               <div style={{ flexShrink: 0 }}>
                 {afasTested ? (
-                  <span style={{ fontSize: '.75rem', color: '#059669', fontWeight: 600 }}>Verbonden</span>
+                  <span style={{ fontSize: '.75rem', color: '#15A34A', fontWeight: 600 }}>Verbonden</span>
                 ) : afasConnection?.afasToken ? (
                   <span style={{ fontSize: '.75rem', color: 'var(--dl)', fontWeight: 600 }}>Niet getest</span>
                 ) : (

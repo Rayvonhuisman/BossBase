@@ -7,6 +7,7 @@ import { createCalendarEvent, listCalendarEvents, updateCalendarEvent } from '..
 import { createJobCost, deleteJobCost, listJobCosts, updateJobCost } from '../services/jobCostService.js';
 import { getFacturen, getAllFactuurRegels } from '../services/factuurService.js';
 import { getConnection } from '../services/accountingService.js';
+import { getBtwPeriodes, syncBtwData } from '../services/btwService.js';
 import { getOffertes } from '../services/offerteService.js';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { listCustomers } from '../services/customerService.js';
@@ -692,7 +693,7 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
           <div>
             <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 4 }}>
               Categorie
-              {savedField === 'category' && <span style={{ marginLeft: 8, color: '#059669', fontSize: '.7rem', fontWeight: 700 }}>{I.check} Opgeslagen</span>}
+              {savedField === 'category' && <span style={{ marginLeft: 8, color: '#15A34A', fontSize: '.7rem', fontWeight: 700 }}>{I.check} Opgeslagen</span>}
             </div>
             <select
               className="btn btn-s btn-sm"
@@ -707,7 +708,7 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
           <div>
             <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 4 }}>
               Klant / project
-              {savedField === 'customer_id' && <span style={{ marginLeft: 8, color: '#059669', fontSize: '.7rem', fontWeight: 700 }}>{I.check} Opgeslagen</span>}
+              {savedField === 'customer_id' && <span style={{ marginLeft: 8, color: '#15A34A', fontSize: '.7rem', fontWeight: 700 }}>{I.check} Opgeslagen</span>}
             </div>
             <select
               className="btn btn-s btn-sm"
@@ -881,6 +882,28 @@ export function CostsPage() {
   );
 }
 
+// ── BTW HELPERS ───────────────────────────────────────────────
+const BTW_NL_MONTHS = ['Januari','Februari','Maart','April','Mei','Juni','Juli','Augustus','September','Oktober','November','December'];
+
+function generatePeriodeOpties(type) {
+  const now = new Date();
+  const opties = [];
+  if (type === 'kwartaal') {
+    let q = Math.floor(now.getMonth() / 3);
+    let year = now.getFullYear();
+    for (let i = 0; i < 4; i++) {
+      opties.push(`Q${q + 1} ${year}`);
+      q--; if (q < 0) { q = 3; year--; }
+    }
+  } else {
+    for (let i = 0; i < 4; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      opties.push(`${BTW_NL_MONTHS[d.getMonth()]} ${d.getFullYear()}`);
+    }
+  }
+  return opties;
+}
+
 // ── FINANCIËN ─────────────────────────────────────────────────
 export function RevenuePage() {
   const toast = useToast();
@@ -894,13 +917,16 @@ export function RevenuePage() {
   const [chartPeriod, setChartPeriod] = useState('maand');
   const [loading, setLoading] = useState(true);
   const [mbConnection, setMbConnection] = useState(null);
-
+  const [btwPerioden, setBtwPerioden] = useState([]);
+  const [btwPeriodeType, setBtwPeriodeType] = useState('kwartaal');
+  const [btwLoading, setBtwLoading] = useState(false);
+  const [btwSyncing, setBtwSyncing] = useState(false);
+  const [btwSelectedLabel, setBtwSelectedLabel] = useState(() => generatePeriodeOpties('kwartaal')[0] || '');
+  const [kpiPeriode, setKpiPeriode] = useState('deze-maand');
+  const [kpiVan, setKpiVan] = useState('');
+  const [kpiTot, setKpiTot] = useState('');
 
   const TODAY = new Date().toISOString().slice(0, 10);
-  const THIS_MONTH = TODAY.slice(0, 7);
-  const qStart = (() => { const d = new Date(TODAY); const q = Math.floor(d.getMonth() / 3); return `${d.getFullYear()}-${String(q * 3 + 1).padStart(2, '0')}-01`; })();
-  const qEnd   = (() => { const d = new Date(TODAY); const q = Math.floor(d.getMonth() / 3); return new Date(d.getFullYear(), q * 3 + 3, 0).toISOString().slice(0, 10); })();
-  const qLabel = (() => { const d = new Date(TODAY); return `Q${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}`; })();
 
   React.useEffect(() => {
     setLoading(true);
@@ -915,15 +941,54 @@ export function RevenuePage() {
       }).catch(() => {}).finally(() => setLoading(false));
   }, [refreshKey]);
 
+  React.useEffect(() => {
+    setBtwSelectedLabel(generatePeriodeOpties(btwPeriodeType)[0] || '');
+  }, [btwPeriodeType]);
+
+  React.useEffect(() => {
+    if (!mbConnection?.apiToken) return;
+    setBtwLoading(true);
+    getBtwPeriodes(btwPeriodeType)
+      .then(setBtwPerioden)
+      .catch(() => {})
+      .finally(() => setBtwLoading(false));
+  }, [mbConnection, btwPeriodeType]);
+
   // ── KPI ──────────────────────────────────────────────────────
   const isRealFactuur = f => !f.isCredit && !f.gecrediteerd;
-  const omzetMaand     = facturen.filter(f => isRealFactuur(f) && f.status !== 'concept' && f.factuurdatum?.startsWith(THIS_MONTH)).reduce((s, f) => s + f.totaalIncl, 0);
-  const ontvangenMaand = facturen.filter(f => isRealFactuur(f) && f.status === 'betaald' && f.betaaldOp?.startsWith(THIS_MONTH)).reduce((s, f) => s + f.totaalIncl, 0);
-  const openstaand     = facturen.filter(f => isRealFactuur(f) && f.status === 'verzonden').reduce((s, f) => s + f.totaalIncl, 0);
-  const teVerwachten   = offertes.filter(o => o.status === 'geaccepteerd').reduce((s, o) => s + o.totaalIncl, 0);
-  const kostenMaand    = costsData.filter(c => c.date?.startsWith(THIS_MONTH)).reduce((s, c) => s + c.amt, 0);
-  const netto          = ontvangenMaand - kostenMaand;
-  const marge          = ontvangenMaand > 0 ? Math.round((netto / ontvangenMaand) * 100) : 0;
+
+  const kpiRange = React.useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    if (kpiPeriode === 'deze-maand')  return { start: `${y}-${m}`, end: `${y}-${m}`, mode: 'month' };
+    if (kpiPeriode === 'vorige-maand') {
+      const p = new Date(y, now.getMonth() - 1, 1);
+      const pm = String(p.getMonth() + 1).padStart(2, '0');
+      return { start: `${p.getFullYear()}-${pm}`, end: `${p.getFullYear()}-${pm}`, mode: 'month' };
+    }
+    if (kpiPeriode === 'dit-jaar')   return { start: `${y}-01-01`, end: `${y}-12-31`, mode: 'range' };
+    if (kpiPeriode === 'vorig-jaar') return { start: `${y - 1}-01-01`, end: `${y - 1}-12-31`, mode: 'range' };
+    if (kpiPeriode === 'aangepast')  return { start: kpiVan, end: kpiTot, mode: 'range' };
+    return { start: `${y}-${m}`, end: `${y}-${m}`, mode: 'month' };
+  }, [kpiPeriode, kpiVan, kpiTot]);
+
+  const inPeriode = d => {
+    if (!d) return false;
+    if (kpiRange.mode === 'month') return d.startsWith(kpiRange.start);
+    return kpiRange.start && kpiRange.end && d >= kpiRange.start && d <= kpiRange.end;
+  };
+
+  const PERIODE_LABEL = { 'deze-maand': 'deze maand', 'vorige-maand': 'vorige maand', 'dit-jaar': 'dit jaar', 'vorig-jaar': 'vorig jaar', 'aangepast': 'geselecteerde periode' };
+  const periodeLabel = PERIODE_LABEL[kpiPeriode] || 'deze periode';
+
+  const omzetPeriode     = facturen.filter(f => isRealFactuur(f) && f.status !== 'concept' && inPeriode(f.factuurdatum)).reduce((s, f) => s + f.totaalIncl, 0);
+  const ontvangenPeriode = facturen.filter(f => isRealFactuur(f) && f.status === 'betaald'  && inPeriode(f.betaaldOp)).reduce((s, f) => s + f.totaalIncl, 0);
+  const openstaand       = facturen.filter(f => isRealFactuur(f) && f.status === 'verzonden').reduce((s, f) => s + f.totaalIncl, 0);
+  const teVerwachten     = offertes.filter(o => o.status === 'geaccepteerd').reduce((s, o) => s + o.totaalIncl, 0);
+  const kostenPeriode    = costsData.filter(c => inPeriode(c.date)).reduce((s, c) => s + c.amt, 0);
+  const netto            = ontvangenPeriode - kostenPeriode;
+  const marge            = ontvangenPeriode > 0 ? Math.round((netto / ontvangenPeriode) * 100) : 0;
 
   // ── CHART DATA ────────────────────────────────────────────────
   const chartData = React.useMemo(() => {
@@ -985,12 +1050,6 @@ export function RevenuePage() {
     });
   }, [facturen, costsData, chartPeriod]);
 
-  // ── BTW ───────────────────────────────────────────────────────
-  const qFactuurIds = new Set(facturen.filter(f => isRealFactuur(f) && f.status !== 'concept' && f.factuurdatum >= qStart && f.factuurdatum <= qEnd).map(f => f.id));
-  const qRegels     = allRegels.filter(r => qFactuurIds.has(r.factuurId));
-  const btw21 = Math.round(qRegels.filter(r => r.btwPct === 21).reduce((s, r) => s + r.regelprijs * 0.21, 0) * 100) / 100;
-  const btw9  = Math.round(qRegels.filter(r => r.btwPct === 9).reduce((s, r) => s + r.regelprijs * 0.09, 0) * 100) / 100;
-
   // ── PER KLANT ─────────────────────────────────────────────────
   const rows = customers.map(c => {
     const costs  = costsData.filter(x => x.custId === c.id).reduce((s, x) => s + x.amt, 0);
@@ -998,6 +1057,17 @@ export function RevenuePage() {
     const margin = c.paid > 0 ? Math.round((profit / c.paid) * 100) : 0;
     return { ...c, costs, profit, margin };
   });
+
+  const handleSyncBtw = async () => {
+    setBtwSyncing(true);
+    try {
+      await syncBtwData(btwPeriodeType);
+      const data = await getBtwPeriodes(btwPeriodeType);
+      setBtwPerioden(data);
+      toast.success('BTW data gesynchroniseerd');
+    } catch (err) { toast.error(err.message || 'Synchronisatie mislukt'); }
+    finally { setBtwSyncing(false); }
+  };
 
   const handleExport = () => {
     if (rows.length === 0) { toast.info('Geen financiële data om te exporteren'); return; }
@@ -1030,19 +1100,30 @@ export function RevenuePage() {
   const CHART_PERIOD_LABELS = { week: 'afgelopen 7 dagen', maand: 'afgelopen 30 dagen', kwartaal: 'afgelopen kwartaal', jaar: 'afgelopen 12 maanden' };
 
   const KPI = [
-    { label: 'Omzet deze maand',  val: fmt(omzetMaand),     sub: 'Verzonden + betaald (incl. BTW)', icon: I.chart   },
-    { label: 'Ontvangen',         val: fmt(ontvangenMaand), sub: 'Betaalde facturen deze maand',    icon: I.check   },
-    { label: 'Openstaand',        val: fmt(openstaand),     sub: 'Verzonden, nog te ontvangen',     icon: I.clock,  color: '#e8784a' },
-    { label: 'Te verwachten',     val: fmt(teVerwachten),   sub: 'Geaccepteerde offertes',          icon: I.quotes  },
-    { label: 'Kosten deze maand', val: fmt(kostenMaand),    sub: 'Alle kostenregels deze maand',    icon: I.costs },
-    { label: 'Nettoresultaat',    val: fmt(netto),          sub: `${marge}% marge deze maand`,      icon: I.revenue, color: netto >= 0 ? '#059669' : '#dc2626' },
+    { label: `Omzet ${periodeLabel}`,  val: fmt(omzetPeriode),     sub: 'Verzonden + betaald (incl. BTW)',    icon: I.chart   },
+    { label: 'Ontvangen',              val: fmt(ontvangenPeriode), sub: `Betaalde facturen ${periodeLabel}`,  icon: I.check   },
+    { label: 'Openstaand',             val: fmt(openstaand),       sub: 'Verzonden, nog te ontvangen',        icon: I.clock,  color: '#e8784a' },
+    { label: 'Te verwachten',          val: fmt(teVerwachten),     sub: 'Geaccepteerde offertes',             icon: I.quotes  },
+    { label: `Kosten ${periodeLabel}`, val: fmt(kostenPeriode),    sub: `Alle kostenregels ${periodeLabel}`,  icon: I.costs   },
+    { label: 'Nettoresultaat',         val: fmt(netto),            sub: `${marge}% marge ${periodeLabel}`,    icon: I.revenue, color: netto >= 0 ? '#15A34A' : '#dc2626' },
   ];
 
   return (
     <div>
       <div className="page-hd afu">
         <div><h1>Financiën</h1><p>Financieel overzicht</p></div>
-        <div className="page-hd-actions">
+        <div className="page-hd-actions" style={{ flexWrap: 'wrap', gap: 8 }}>
+          <select value={kpiPeriode} onChange={e => setKpiPeriode(e.target.value)} style={{ fontSize: '.82rem' }}>
+            <option value="deze-maand">Deze maand</option>
+            <option value="vorige-maand">Vorige maand</option>
+            <option value="dit-jaar">Dit jaar</option>
+            <option value="vorig-jaar">Vorig jaar</option>
+            <option value="aangepast">Aangepast…</option>
+          </select>
+          {kpiPeriode === 'aangepast' && (<>
+            <input type="date" value={kpiVan} onChange={e => setKpiVan(e.target.value)} style={{ fontSize: '.82rem' }} />
+            <input type="date" value={kpiTot} onChange={e => setKpiTot(e.target.value)} style={{ fontSize: '.82rem' }} />
+          </>)}
           <button className="btn btn-s btn-sm" onClick={handleExport}>Exporteren</button>
         </div>
       </div>
@@ -1099,23 +1180,94 @@ export function RevenuePage() {
         </div>
       </div>
 
-      <div className="afu3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
-        <div className="sc" style={{ padding: '16px 18px' }}>
-          <div style={{ fontWeight: 700, fontSize: '.88rem', marginBottom: 12, color: 'var(--dk)' }}>BTW {qLabel}</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {[{ label: 'BTW 21%', val: btw21 }, { label: 'BTW 9%', val: btw9 }].map((row, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.85rem' }}>
-                <span style={{ color: 'var(--dmu)' }}>{row.label}</span>
-                <span style={{ fontWeight: 700 }}>{fmt(row.val)}</span>
+      {/* ── BTW-overzicht ── */}
+      <div className="tw afu3" style={{ marginBottom: 20 }}>
+        <div className="tw-hd" style={{ flexWrap: 'wrap', gap: 10, marginBottom: mbConnection?.apiToken ? 16 : 0 }}>
+          <div>
+            <div className="card-title">BTW-overzicht</div>
+            {btwPerioden.find(p => p.periode_label === btwSelectedLabel)?.last_synced_at && (
+              <div style={{ fontSize: '.75rem', color: 'var(--dmu)', marginTop: 2 }}>
+                Laatste sync: {new Date(btwPerioden.find(p => p.periode_label === btwSelectedLabel).last_synced_at).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
               </div>
-            ))}
-            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: '.85rem' }}>
-              <span style={{ color: 'var(--dmu)', fontWeight: 600 }}>Totaal BTW</span>
-              <span style={{ fontWeight: 800 }}>{fmt(btw21 + btw9)}</span>
-            </div>
+            )}
           </div>
-          <div style={{ fontSize: '.7rem', color: 'var(--dl)', marginTop: 10 }}>Informatief · geen aangifte</div>
+          {mbConnection?.apiToken && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div className="tabs">
+                <button className={`tab${btwPeriodeType === 'kwartaal' ? ' active' : ''}`} onClick={() => setBtwPeriodeType('kwartaal')}>Kwartaal</button>
+                <button className={`tab${btwPeriodeType === 'maand' ? ' active' : ''}`} onClick={() => setBtwPeriodeType('maand')}>Maand</button>
+              </div>
+              <select value={btwSelectedLabel} onChange={e => setBtwSelectedLabel(e.target.value)}>
+                {generatePeriodeOpties(btwPeriodeType).map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+              <button className="btn btn-s btn-sm" onClick={handleSyncBtw} disabled={btwSyncing}>
+                {btwSyncing ? 'Synchroniseren...' : 'Synchroniseer BTW'}
+              </button>
+            </div>
+          )}
         </div>
+
+        {!mbConnection?.apiToken ? (
+          <div style={{ fontSize: '.84rem', color: 'var(--dl)', paddingTop: 4 }}>
+            Verbind Moneybird om BTW-overzicht te zien.
+          </div>
+        ) : btwLoading ? (
+          <div style={{ fontSize: '.84rem', color: 'var(--dl)', padding: '8px 0' }}>Laden...</div>
+        ) : (() => {
+          const p = btwPerioden.find(x => x.periode_label === btwSelectedLabel);
+          if (!p) return (
+            <div style={{ fontSize: '.84rem', color: 'var(--dl)', padding: '8px 16px 16px' }}>
+              Geen data voor {btwSelectedLabel}. Klik "Synchroniseer BTW" om op te halen.
+            </div>
+          );
+          const totOntvangen = (p.btw_ontvangen_21 || 0) + (p.btw_ontvangen_9 || 0);
+          const totBetaald   = (p.btw_betaald_21  || 0) + (p.btw_betaald_9  || 0);
+          const saldo = totOntvangen - totBetaald;
+          const positief = saldo >= 0;
+
+          const BtwKaart = ({ titel, rijen, subtotaal }) => (
+            <div style={{ background: 'var(--bg)', border: '1px solid var(--br)', borderRadius: 'var(--r8)', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 0 }}>
+              <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 12 }}>{titel}</div>
+              {rijen.map((r, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '.85rem', padding: '4px 0' }}>
+                  <span style={{ color: 'var(--dmu)' }}>{r.label}</span>
+                  <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(r.val)}</span>
+                </div>
+              ))}
+              <div style={{ borderTop: '1px solid var(--br)', marginTop: 8, paddingTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '.85rem' }}>
+                <span style={{ fontWeight: 700, color: 'var(--tx)' }}>Subtotaal</span>
+                <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{fmt(subtotaal)}</span>
+              </div>
+            </div>
+          );
+
+          const rijenOntvangen = [
+            { label: '21% tarief', val: p.btw_ontvangen_21 || 0 },
+            { label: '9% tarief',  val: p.btw_ontvangen_9  || 0 },
+            ...(p.omzet_0_tarief > 0 ? [{ label: 'Omzet 0% tarief', val: p.omzet_0_tarief }] : []),
+          ];
+          const rijenBetaald = [
+            { label: '21% tarief', val: p.btw_betaald_21 || 0 },
+            { label: '9% tarief',  val: p.btw_betaald_9  || 0 },
+          ];
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '0 16px 16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+                <BtwKaart titel="BTW Ontvangen (Verkoop)" rijen={rijenOntvangen} subtotaal={totOntvangen} />
+                <BtwKaart titel="BTW Betaald (Inkoop)"    rijen={rijenBetaald}   subtotaal={totBetaald}   />
+              </div>
+              <div style={{ background: 'var(--bg)', border: '1px solid var(--br)', borderRadius: 'var(--r8)', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontWeight: 600, fontSize: '.9rem', color: positief ? 'var(--tx)' : '#15A34A' }}>
+                  {positief ? 'Te betalen aan Belastingdienst' : 'Terug te krijgen'}
+                </span>
+                <span style={{ fontWeight: 800, fontSize: '1.05rem', fontVariantNumeric: 'tabular-nums', color: positief ? 'var(--tx)' : '#15A34A' }}>
+                  {fmt(Math.abs(saldo))}
+                </span>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       <div className="tw afu3">
@@ -1141,13 +1293,13 @@ export function RevenuePage() {
                   </td>
                   <td style={{ fontWeight: 600 }}>{fmt(r.total)}</td>
                   <td style={{ color: '#dc2626', fontWeight: 600 }}>{fmt(r.costs)}</td>
-                  <td style={{ color: '#059669', fontWeight: 700 }}>{fmt(r.paid)}</td>
+                  <td style={{ color: '#15A34A', fontWeight: 700 }}>{fmt(r.paid)}</td>
                   <td style={{ fontWeight: 600, color: r.total - r.paid > 0 ? '#e8784a' : 'var(--dl)' }}>{fmt(r.total - r.paid)}</td>
-                  <td style={{ fontWeight: 800, color: r.profit >= 0 ? '#059669' : '#dc2626' }}>{fmt(r.profit)}</td>
+                  <td style={{ fontWeight: 800, color: r.profit >= 0 ? '#15A34A' : '#dc2626' }}>{fmt(r.profit)}</td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <div style={{ width: 40, height: 5, background: '#f3f4f6', borderRadius: 99, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${Math.max(0, r.margin)}%`, background: r.margin >= 30 ? '#059669' : r.margin >= 15 ? '#e8784a' : '#dc2626', borderRadius: 99 }} />
+                        <div style={{ height: '100%', width: `${Math.max(0, r.margin)}%`, background: r.margin >= 30 ? '#15A34A' : r.margin >= 15 ? '#e8784a' : '#dc2626', borderRadius: 99 }} />
                       </div>
                       <span style={{ fontSize: '.78rem', fontWeight: 700 }}>{r.margin}%</span>
                     </div>
@@ -1163,23 +1315,6 @@ export function RevenuePage() {
         </div>
       </div>
 
-      <div className="tw afu3">
-        <div className="tw-hd">
-          <div>
-            <div className="card-title">Boekhoudkoppeling</div>
-            <div style={{ fontSize: '.8rem', color: 'var(--dmu)', marginTop: 2 }}>
-              {mbConnection?.apiToken
-                ? `Moneybird verbonden${mbConnection.lastSyncedAt ? ' · Laatste sync: ' + new Date(mbConnection.lastSyncedAt).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}`
-                : 'Geen boekhoudpakket gekoppeld · Stel dit in via Instellingen → Integraties'}
-            </div>
-          </div>
-        </div>
-        {!mbConnection?.apiToken && (
-          <div style={{ padding: '16px 0 4px', fontSize: '.84rem', color: 'var(--dl)' }}>
-            Koppel Moneybird om facturen automatisch te exporteren en inkoopfacturen als kostenregels te importeren.
-          </div>
-        )}
-      </div>
     </div>
   );
 }

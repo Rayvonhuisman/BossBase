@@ -94,7 +94,7 @@ export function AvatarUpload({
               position: 'absolute', inset: 0, borderRadius: '50%',
               background: 'rgba(255,255,255,0.65)', display: 'flex',
               alignItems: 'center', justifyContent: 'center',
-              fontSize: '.72rem', fontWeight: 700, color: '#15803d',
+              fontSize: '.72rem', fontWeight: 700, color: '#15A34A',
             }}
           >…</div>
         )}

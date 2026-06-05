@@ -82,8 +82,8 @@ const STATUS_BADGE = {
   overdue:   { cls: 'act2-b-overdue', label: 'Te laat',  dot: '#dc2626' },
   today:     { cls: 'act2-b-today',   label: 'Vandaag',  dot: '#2563eb' },
   open:      { cls: 'act2-b-gray',    label: 'Open',     dot: '#9ca3af' },
-  completed: { cls: 'act2-b-done',    label: 'Gereed',   dot: '#059669' },
-  done:      { cls: 'act2-b-done',    label: 'Gereed',   dot: '#059669' },
+  completed: { cls: 'act2-b-done',    label: 'Gereed',   dot: '#15A34A' },
+  done:      { cls: 'act2-b-done',    label: 'Gereed',   dot: '#15A34A' },
 };
 
 const isDone = a => a.status === 'completed' || a.status === 'done';

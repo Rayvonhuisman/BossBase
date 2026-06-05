@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { I, Logo, initials } from './bb-shared.jsx';
 import { LoginPage, RegisterFlow } from './pages/BbAuth.jsx';
+import OfferteSigneren from './pages/OfferteSigneren.jsx';
 import { DashboardHome } from './pages/dashboard/DashboardHome.jsx';
 import { Pipeline } from './pages/BbDashboard.jsx';
 import { DealDetailDrawer } from './pages/dashboard/DealDetailDrawer.jsx';
@@ -637,7 +638,7 @@ function AppInner() {
     const path = window.location.pathname;
     if (path.startsWith('/dashboard/')) {
       const sub = path.slice('/dashboard/'.length).split('/')[0];
-      const VALID = ['pipeline','customers','activities','calendar','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','team','instellingen'];
+      const VALID = ['pipeline','customers','activities','calendar','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','database','team','instellingen'];
       if (VALID.includes(sub)) return sub;
     }
     return 'dashboard';
@@ -694,7 +695,7 @@ function AppInner() {
       setRoute(path || '/');
       if (path.startsWith('/dashboard/')) {
         const sub = path.slice('/dashboard/'.length).split('/')[0];
-        const VALID = ['pipeline','customers','activities','calendar','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','team','instellingen'];
+        const VALID = ['pipeline','customers','activities','calendar','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','database','team','instellingen'];
         setPage(VALID.includes(sub) ? sub : 'dashboard');
       } else if (path === '/dashboard') {
         setPage('dashboard');
@@ -939,6 +940,11 @@ function AppInner() {
       onBack={() => navigate('/login')}
     />
     );
+  }
+
+  if (route.startsWith('/offerte/')) {
+    const token = route.replace('/offerte/', '').split('?')[0];
+    return <OfferteSigneren token={token} />;
   }
 
   if (!route.startsWith('/dashboard')) {

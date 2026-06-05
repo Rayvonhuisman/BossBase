@@ -93,7 +93,7 @@ export function CalendarEventDetailDrawer({ eventId, onClose, setPage, openCusto
       </div>
 
       {isLoose && (
-        <div style={{ marginTop: 14, padding: '9px 12px', background: '#f0fdf4', border: '1px solid #dcfce7', borderRadius: 9, fontSize: 12, color: '#15803d' }}>
+        <div style={{ marginTop: 14, padding: '9px 12px', background: '#f0fdf4', border: '1px solid #dcfce7', borderRadius: 9, fontSize: 12, color: '#15A34A' }}>
           Bron: los agenda-item — niet gekoppeld aan een activiteit.
         </div>
       )}

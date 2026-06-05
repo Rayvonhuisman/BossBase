@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Download, MoreVertical } from 'lucide-react';
+import { Download, MoreVertical, Send } from 'lucide-react';
+import { MailBodyEditor, plainToEditorHtml } from '../components/MailBodyEditor.jsx';
 import { I, ModalX, fmt } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -11,6 +12,7 @@ import { listCustomers } from '../services/customerService.js';
 import { listDeals } from '../services/dealService.js';
 import { NewFactuurModal } from './FacturenPage.jsx';
 import { generateOffertePdf } from '../utils/generatePdf.js';
+import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
 
 const offerteBadge = status => {
   const map = { concept: 'b-concept', verzonden: 'b-sent', geaccepteerd: 'b-accepted', afgewezen: 'b-declined' };
@@ -55,7 +57,7 @@ function BtwSelect({ r, setRegel }) {
   );
 }
 
-export function NewOfferteModal({ customers, deals = [], prefillDealId = null, prefillCustomerId = null, onClose, onSaved }) {
+export function NewOfferteModal({ customers, deals = [], prefillDealId = null, prefillCustomerId = null, onClose, onSaved, onSaveAndSend }) {
   const toast = useToast();
   const [form, setForm] = useState({ customer_id: prefillCustomerId || '', deal_id: prefillDealId || '', omschrijving: '', marge_pct: 25, geldig_tot: '', notes: '' });
   const [regels, setRegels] = useState([emptyRegel()]);
@@ -115,25 +117,36 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
   const modalStyle = isMobile ? { width: '100vw', height: '100vh', maxWidth: '100vw', maxHeight: '100vh', borderRadius: 0, overflow: 'auto' } : { overflowX: 'hidden' };
   const overlayStyle = isMobile ? { padding: 0, alignItems: 'flex-start' } : {};
 
+  const doCreate = async () => {
+    if (!form.customer_id) { toast.error('Selecteer een klant'); return null; }
+    const created = await createOfferte({ ...form, totaal_excl: totaalExcl, totaal_incl: totaalIncl });
+    for (let i = 0; i < regels.length; i++) {
+      const r = regels[i];
+      if (!r.omschrijving.trim()) continue;
+      await createOfferteItem({ offerte_id: created.id, omschrijving: r.omschrijving, aantal: r.type === 'vast' ? 1 : Number(r.aantal || 1), prijs_per: Number(r.eenheidsprijs || 0), subtotaal: getRegelprijs(r), volgorde: i });
+    }
+    return created;
+  };
+
   const submit = async () => {
-    if (!form.customer_id) { toast.error('Selecteer een klant'); return; }
     setSaving(true);
     try {
-      const created = await createOfferte({ ...form, totaal_excl: totaalExcl, totaal_incl: totaalIncl });
-      for (let i = 0; i < regels.length; i++) {
-        const r = regels[i];
-        if (!r.omschrijving.trim()) continue;
-        await createOfferteItem({
-          offerte_id: created.id,
-          omschrijving: r.omschrijving,
-          aantal: r.type === 'vast' ? 1 : Number(r.aantal || 1),
-          prijs_per: Number(r.eenheidsprijs || 0),
-          subtotaal: getRegelprijs(r),
-          volgorde: i,
-        });
-      }
+      const created = await doCreate();
+      if (!created) return;
       toast.success('Offerte aangemaakt');
       onSaved?.(created);
+      onClose();
+    } catch (err) { toast.error(err.message || 'Mislukt'); } finally { setSaving(false); }
+  };
+
+  const submitAndSend = async () => {
+    setSaving(true);
+    try {
+      const created = await doCreate();
+      if (!created) return;
+      toast.success('Offerte aangemaakt');
+      onSaved?.(created);
+      onSaveAndSend?.(created);
       onClose();
     } catch (err) { toast.error(err.message || 'Mislukt'); } finally { setSaving(false); }
   };
@@ -288,6 +301,7 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
         </div>
         <div className="fa">
           <button className="btn btn-ghost" onClick={onClose}>Annuleren</button>
+          {onSaveAndSend && <button className="btn btn-s" onClick={submitAndSend} disabled={saving} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={14} />{saving ? 'Bezig...' : 'Opslaan en versturen'}</button>}
           <button className="btn btn-p" onClick={submit} disabled={saving}>{saving ? 'Opslaan...' : 'Opslaan'}</button>
         </div>
       </div>
@@ -297,7 +311,7 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
 
 // ── EDIT OFFERTE MODAL ───────────────────────────────────────────────────────
 
-function EditOfferteModal({ offerte, customers, onClose, onSaved }) {
+function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend }) {
   const toast = useToast();
   const [form, setForm] = useState({
     customer_id: offerte.customerId || '',
@@ -356,34 +370,37 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved }) {
   const overlayStyle = isMobile ? { padding: 0, alignItems: 'flex-start' } : {};
   const COLS = '78px minmax(0,1fr) 68px 84px 110px 84px 28px';
 
+  const doSave = async () => {
+    const updated = await updateOfferte(offerte.id, {
+      customer_id: form.customer_id, omschrijving: form.omschrijving,
+      marge_pct: Number(form.marge_pct), geldig_tot: form.geldig_tot || null,
+      notes: form.notes, status: form.status, totaal_excl: totaalExcl, totaal_incl: totaalIncl,
+    });
+    await deleteOfferteItemsByOfferteId(offerte.id);
+    for (let i = 0; i < regels.length; i++) {
+      const r = regels[i];
+      if (!r.omschrijving.trim()) continue;
+      await createOfferteItem({ offerte_id: offerte.id, omschrijving: r.omschrijving, aantal: r.type === 'vast' ? 1 : Number(r.aantal || 1), prijs_per: Number(r.eenheidsprijs || 0), subtotaal: getRegelprijs(r), volgorde: i });
+    }
+    onSaved?.(updated);
+    return updated;
+  };
+
   const submit = async () => {
     setSaving(true);
     try {
-      const updated = await updateOfferte(offerte.id, {
-        customer_id: form.customer_id,
-        omschrijving: form.omschrijving,
-        marge_pct: Number(form.marge_pct),
-        geldig_tot: form.geldig_tot || null,
-        notes: form.notes,
-        status: form.status,
-        totaal_excl: totaalExcl,
-        totaal_incl: totaalIncl,
-      });
-      await deleteOfferteItemsByOfferteId(offerte.id);
-      for (let i = 0; i < regels.length; i++) {
-        const r = regels[i];
-        if (!r.omschrijving.trim()) continue;
-        await createOfferteItem({
-          offerte_id: offerte.id,
-          omschrijving: r.omschrijving,
-          aantal: r.type === 'vast' ? 1 : Number(r.aantal || 1),
-          prijs_per: Number(r.eenheidsprijs || 0),
-          subtotaal: getRegelprijs(r),
-          volgorde: i,
-        });
-      }
+      await doSave();
       toast.success('Offerte opgeslagen');
-      onSaved?.(updated);
+      onClose();
+    } catch (err) { toast.error(err.message || 'Mislukt'); } finally { setSaving(false); }
+  };
+
+  const submitAndSend = async () => {
+    setSaving(true);
+    try {
+      const updated = await doSave();
+      toast.success('Offerte opgeslagen');
+      onSaveAndSend?.(updated);
       onClose();
     } catch (err) { toast.error(err.message || 'Mislukt'); } finally { setSaving(false); }
   };
@@ -528,6 +545,7 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved }) {
         )}
         <div className="fa">
           <button className="btn btn-ghost" onClick={onClose}>Annuleren</button>
+          {onSaveAndSend && <button className="btn btn-s" onClick={submitAndSend} disabled={saving || loadingRegels} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={14} />{saving ? 'Bezig...' : 'Opslaan en versturen'}</button>}
           <button className="btn btn-p" onClick={submit} disabled={saving || loadingRegels}>{saving ? 'Opslaan...' : 'Opslaan'}</button>
         </div>
       </div>
@@ -621,6 +639,7 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur }) {
           )}
         </div>
         <div className="fa">
+          {onSendMail && <button className="btn btn-s" onClick={() => { onClose(); onSendMail(offerte); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={14} /> Verstuur per mail</button>}
           <button className="btn btn-p" onClick={handleDownloadPdf} disabled={pdfLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <Download size={15} />{pdfLoading ? 'Genereren...' : 'Download PDF'}
           </button>
@@ -634,7 +653,92 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur }) {
   );
 }
 
-// ── ACTION MENU ───────────────────────────────────────────────────────────────
+// ── SEND EMAIL MODAL ─────────────────────────────────────────────────────────
+
+function SendOfferteMailModal({ offerte, customers, company, onClose, onSent }) {
+  const toast = useToast();
+  const [form, setForm] = useState({ to: '', subject: '', body: '' });
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+
+  const appUrl = window.location.origin;
+  const signLink = `${appUrl}/offerte/${offerte.sign_token || ''}`;
+  const customer = customers.find(c => c.id == offerte.customerId);
+  const fmt2 = n => new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0);
+  const fmtDate = d => d ? new Date(d).toLocaleDateString('nl-NL') : '—';
+
+  useEffect(() => {
+    const vars = {
+      klant_naam: customer?.name || offerte.customerName || 'klant',
+      bedrijfsnaam: company?.name || 'ons bedrijf',
+      offerte_nummer: offerte.nummer,
+      omschrijving: offerte.omschrijving || '',
+      totaal_bedrag: fmt2(offerte.totaalIncl),
+      vervaldatum: fmtDate(offerte.geldigTot),
+      link: signLink,
+    };
+    getMailTemplate('offerte')
+      .then(tpl => {
+        const sub = tpl ? substituteVars(tpl.onderwerp || '', vars) : `Offerte ${offerte.nummer} van ${company?.name || ''}`;
+        const rawBody = tpl ? substituteVars(tpl.body || '', vars) : `Beste ${vars.klant_naam},\n\nHierbij sturen wij u offerte ${offerte.nummer} toe.\n\nVia onderstaande link kunt u de offerte bekijken en digitaal ondertekenen:\n${signLink}\n\nMet vriendelijke groet,\n${company?.name || ''}`;
+        setForm({ to: customer?.email || '', subject: sub, body: plainToEditorHtml(rawBody) });
+      })
+      .catch(() => setForm({ to: customer?.email || '', subject: `Offerte ${offerte.nummer}`, body: '' }))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSend = async () => {
+    if (!form.to) { toast.error('E-mailadres is verplicht'); return; }
+    setSending(true);
+    try {
+      await sendEmail({ to: form.to, subject: form.subject, html: form.body });
+      await logSentEmail({ toEmail: form.to, subject: form.subject, relatedType: 'offerte', relatedId: offerte.id, customerId: offerte.customerId });
+      if (offerte.status === 'concept') await updateOfferte(offerte.id, { status: 'verzonden' });
+      toast.success('E-mail verstuurd');
+      onSent?.();
+      onClose();
+    } catch (err) {
+      toast.error(err.message || 'Versturen mislukt');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal modal-wide">
+        <div className="modal-hd">
+          <div>
+            <div className="modal-title">Offerte versturen per e-mail</div>
+            <div className="modal-sub">{offerte.nummer}</div>
+          </div>
+          <ModalX onClose={onClose} />
+        </div>
+        {loading ? (
+          <div style={{ padding: '32px', textAlign: 'center', color: 'var(--dl)' }}>Template laden…</div>
+        ) : (
+          <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ background: 'var(--pll)', borderRadius: 8, padding: '10px 14px', fontSize: '.82rem', color: 'var(--dm)' }}>
+              Ondertekeningslink: <span style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{signLink}</span>
+            </div>
+            <div className="f"><label>Aan</label><input value={form.to} onChange={e => setForm(f => ({ ...f, to: e.target.value }))} placeholder="emailadres@klant.nl" /></div>
+            <div className="f"><label>Onderwerp</label><input value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} /></div>
+            <div className="f">
+              <label>Bericht</label>
+              <MailBodyEditor value={form.body} onChange={html => setForm(f => ({ ...f, body: html }))} placeholder="Schrijf uw bericht hier..." minHeight={200} />
+            </div>
+          </div>
+        )}
+        <div className="fa">
+          <button className="btn btn-ghost" onClick={onClose}>Annuleren</button>
+          <button className="btn btn-p" onClick={handleSend} disabled={sending || loading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Send size={14} />{sending ? 'Versturen...' : 'Versturen'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── OFFERTES PAGE ────────────────────────────────────────────────────────────
 
@@ -654,6 +758,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
   const [editOfferte, setEditOfferte] = useState(null);
   const [viewOfferte, setViewOfferte] = useState(null);
   const [factuurPrefill, setFactuurPrefill] = useState(null);
+  const [sendMailOfferte, setSendMailOfferte] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -871,6 +976,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
                       <td className="td">
                         <div style={{ display: 'flex', gap: 4 }}>
                           <button className="btn btn-xs btn-ghost btn-icon" title="Bekijken" onClick={() => setViewOfferte(o)}><MoreVertical size={14} /></button>
+                          {canManageOffertes && <button className="btn btn-xs btn-ghost btn-icon" title="Verstuur per mail" onClick={() => setSendMailOfferte(o)}><Send size={13} /></button>}
                           {canManageOffertes && <button className="btn btn-xs btn-ghost btn-icon" title="Bewerken" onClick={() => setEditOfferte(o)}>{I.edit}</button>}
                           {canManageOffertes && <button className="btn btn-xs btn-danger btn-icon" title="Verwijderen" onClick={() => handleDelete(o)}>{I.trash}</button>}
                         </div>
@@ -891,6 +997,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
           prefillDealId={newDealId}
           onClose={() => { setShowNew(false); setNewDealId(null); }}
           onSaved={saved => { handleSaved(saved); setNewDealId(null); }}
+          onSaveAndSend={saved => { handleSaved(saved); setSendMailOfferte(saved); }}
         />
       )}
       {editOfferte && (
@@ -899,6 +1006,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
           customers={customers}
           onClose={() => setEditOfferte(null)}
           onSaved={saved => { handleSaved(saved); setEditOfferte(null); }}
+          onSaveAndSend={saved => { handleSaved(saved); setEditOfferte(null); setSendMailOfferte(saved); }}
         />
       )}
       {viewOfferte && (
@@ -907,6 +1015,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
           customers={customers}
           onClose={() => setViewOfferte(null)}
           onMaakFactuur={handleMaakFactuur}
+          onSendMail={o => setSendMailOfferte(o)}
         />
       )}
       {factuurPrefill && (
@@ -916,6 +1025,15 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
           onClose={() => setFactuurPrefill(null)}
           onSaved={() => setFactuurPrefill(null)}
           openCustomer={openCustomer}
+        />
+      )}
+      {sendMailOfferte && (
+        <SendOfferteMailModal
+          offerte={sendMailOfferte}
+          customers={customers}
+          company={company}
+          onClose={() => setSendMailOfferte(null)}
+          onSent={() => { load(); setSendMailOfferte(null); }}
         />
       )}
     </div>

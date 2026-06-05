@@ -20,7 +20,7 @@
   --color-primary-light: #d1fae5;
   --color-primary-dark:  #15A34A;
   --accent-gradient: linear-gradient(180deg, #1DDB62 0%, #d1fae5 100%);
-  --accent-gradient-h: linear-gradient(95deg, #1DDB62 0%, #22e86b 50%, #d1fae5 100%);
+  --accent-gradient-h: linear-gradient(95deg, #1DDB62 0%, #1DDB62 50%, #d1fae5 100%);
   --accent-start: #1DDB62;
   --accent-end:   #d1fae5;
   --accent: #1DDB62;
@@ -37,7 +37,7 @@
   /* Semantic */
   --danger:  #d92d20;
   --warning: #f59e0b;
-  --success: #17803d;
+  --success: #15A34A;
   --blue:    #2563eb;
 
   font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -355,14 +355,13 @@ select:focus-visible {
   border-color: #1DDB62;
   box-shadow:
     0 1px 0 rgba(255,255,255,0.3) inset,
-    0 -1px 0 rgba(0,0,0,0.08) inset,
     0 6px 18px rgba(29,219,98,0.28);
 }
 .btn-primary:hover {
   background: #15A34A;
   color: #ffffff;
   border-color: #15A34A;
-  box-shadow: 0 4px 16px rgba(29,219,98,0.38), 0 1px 3px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 16px rgba(29,219,98,0.38);
   transform: translateY(-1px) scale(1.01);
 }
 
@@ -663,7 +662,7 @@ select:focus-visible {
   width: fit-content;
   border: 1px solid rgba(29, 219, 98, 0.28);
   background: rgba(29, 219, 98, 0.1);
-  color: #86efac;
+  color: #1DDB62;
   border-radius: 999px;
   padding: 6px 12px;
   font-size: 0.8rem;
@@ -1994,9 +1993,7 @@ th {
   font-weight: 700;
   box-shadow:
     0 1px 0 rgba(255,255,255,0.3) inset,
-    0 -1px 0 rgba(0,0,0,0.08) inset,
-    0 6px 20px rgba(29,219,98,0.4),
-    0 1px 2px rgba(21,163,74,0.3);
+    0 6px 20px rgba(29,219,98,0.4);
 }
 
 .bb-btn-primary:hover {
@@ -2005,9 +2002,7 @@ th {
   transform: translateY(-1px) scale(1.02);
   box-shadow:
     0 1px 0 rgba(255,255,255,0.3) inset,
-    0 -1px 0 rgba(0,0,0,0.08) inset,
-    0 10px 28px rgba(29,219,98,0.5),
-    0 1px 2px rgba(21,163,74,0.3);
+    0 10px 28px rgba(29,219,98,0.5);
 }
 
 .bb-btn-primary:active { transform: translateY(0) scale(1); }
@@ -2218,7 +2213,7 @@ th {
 
 .bb-kpi-label  { font-size: 0.68rem; color: #6b7280; font-weight: 500; margin-bottom: 3px; }
 .bb-kpi-value  { font-size: 1rem; font-weight: 700; color: #0D0D0D; letter-spacing: -0.02em; }
-.bb-kpi-trend  { font-size: 0.65rem; font-weight: 600; color: #16a34a; margin-top: 1px; }
+.bb-kpi-trend  { font-size: 0.65rem; font-weight: 600; color: #15A34A; margin-top: 1px; }
 
 .bb-pipeline {
   display: grid;
@@ -2303,7 +2298,7 @@ th {
   letter-spacing: 0.03em;
 }
 
-.bb-lead-tag.green { background: #dcfce7; color: #15803d; }
+.bb-lead-tag.green { background: #dcfce7; color: #15A34A; }
 .bb-lead-tag.blue  { background: #dbeafe; color: #1d4ed8; }
 .bb-lead-tag.gray  { background: #f3f4f6; color: #4b5563; }
 
@@ -2533,7 +2528,7 @@ th {
   font-size: 0.62rem;
   font-weight: 700;
   background: #dcfce7;
-  color: #15803d;
+  color: #15A34A;
   padding: 1px 6px;
   border-radius: 999px;
   text-transform: uppercase;

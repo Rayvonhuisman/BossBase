@@ -178,10 +178,10 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
           <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.3, color: '#0a0a0a' }}>{deal.title || 'Deal'}</div>
           <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             {deal.custId
-              ? <button onClick={() => { openCustomer && openCustomer(deal.custId); }} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 13.5, fontWeight: 700, color: '#15803d' }}>{deal.customerName || 'Klant'}</button>
+              ? <button onClick={() => { openCustomer && openCustomer(deal.custId); }} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 13.5, fontWeight: 700, color: '#15A34A' }}>{deal.customerName || 'Klant'}</button>
               : <span style={{ fontSize: 13.5, color: '#6b7280' }}>{deal.customerName || 'Geen klant'}</span>}
             {curStage && <span className={`badge ${curStage.col || 'b-gray'}`}>{curStage.label}</span>}
-            <span style={{ fontSize: 15, fontWeight: 800, color: '#15803d', letterSpacing: -0.2 }}>{fmt(deal.value || 0)}</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: '#15A34A', letterSpacing: -0.2 }}>{fmt(deal.value || 0)}</span>
           </div>
         </div>
         {HeadClose}
@@ -264,7 +264,7 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
               <div style={{ fontSize: 13, fontWeight: 700, color: '#0a0a0a' }}>{o.nummer || 'Offerte'} <span style={{ fontWeight: 500, color: '#6b7280' }}>· {o.status}</span></div>
               <div style={{ fontSize: 11.5, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.omschrijving || o.customerName || '—'}</div>
             </div>
-            <span style={{ fontSize: 13, fontWeight: 800, color: '#15803d' }}>{fmt(o.totaalIncl || 0)}</span>
+            <span style={{ fontSize: 13, fontWeight: 800, color: '#15A34A' }}>{fmt(o.totaalIncl || 0)}</span>
           </button>
         ))}
       </Section>

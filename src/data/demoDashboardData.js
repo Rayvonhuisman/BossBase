@@ -135,7 +135,7 @@ const DEMO_CHARTS = {
     { label: 'Offerte',      value: 20418, color: '#f59e0b' },
     { label: 'Akkoord',      value: 8900,  color: '#10b981' },
     { label: 'Uitvoering',   value: 24500, color: '#1DDB62' },
-    { label: 'Gepland',      value: 5200,  color: '#22c55e' },
+    { label: 'Gepland',      value: 5200,  color: '#1DDB62' },
   ],
   conversionFunnel: [
     { label: 'Leads',      value: 24, pct: 100 },

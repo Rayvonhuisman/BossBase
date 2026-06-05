@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Download, MoreVertical } from 'lucide-react';
+import { Download, MoreVertical, Send } from 'lucide-react';
+import { MailBodyEditor, plainToEditorHtml } from '../components/MailBodyEditor.jsx';
 import { I, ModalX, fmt } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -12,6 +13,7 @@ import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
 import { getBedrijfsinstellingen } from '../services/instellingenService.js';
 import { generateFactuurPdf } from '../utils/generatePdf.js';
+import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -26,7 +28,7 @@ const displayStatus = f => (isVerlopen(f) ? 'verlopen' : f.status);
 const factuurBadge = f => {
   const s = displayStatus(f);
   const map = { aangemaakt: 'b-concept', concept: 'b-concept', verzonden: 'b-sent', betaald: 'b-accepted', verlopen: 'b-declined' };
-  const labels = { aangemaakt: 'Aangemaakt', concept: 'Aangemaakt', verzonden: 'Verzonden', betaald: 'Betaald', verlopen: 'Verlopen' };
+  const labels = { aangemaakt: 'Aangemaakt', concept: 'Aangemaakt', verzonden: 'Verzonden', betaald: 'Betaald', verlopen: 'Te laat' };
   return <span className={`badge ${map[s] || 'b-gray'}`}>{labels[s] || s}</span>;
 };
 
@@ -203,7 +205,7 @@ function TotalenBlok({ regels }) {
 
 // ── NEW FACTUUR MODAL ─────────────────────────────────────────────────────────
 
-export function NewFactuurModal({ customers, projects = [], prefill, onClose, onSaved, openCustomer }) {
+export function NewFactuurModal({ customers, projects = [], prefill, onClose, onSaved, onSaveAndSend, openCustomer }) {
   const toast = useToast();
   const [nummer, setNummer] = useState('');
   const [form, setForm] = useState({
@@ -255,28 +257,38 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
     : { overflowX: 'hidden' };
   const overlayStyle = isMobile ? { padding: 0, alignItems: 'flex-start' } : {};
 
+  const doCreate = async () => {
+    if (!form.customer_id) { toast.error('Selecteer een klant'); return null; }
+    if (hasIncompleteCustomer) { toast.error('Vul eerst de klantgegevens aan voordat je een factuur aanmaakt'); return null; }
+    const created = await createFactuur({ ...form, project_id: form.project_id || null, status: 'aangemaakt', nummer, betalingskenmerk: nummer, totaal_excl: totaalExcl, totaal_incl: totaalIncl });
+    for (let i = 0; i < regels.length; i++) {
+      const r = regels[i];
+      if (!r.omschrijving.trim()) continue;
+      const btwPct = r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw);
+      await createFactuurRegel({ factuur_id: created.id, type: r.type, omschrijving: r.omschrijving, aantal: r.type === 'vast' ? 1 : Number(r.aantal || 1), eenheidsprijs: Number(r.eenheidsprijs || 0), btw_pct: btwPct, volgorde: i });
+    }
+    return created;
+  };
+
   const submit = async () => {
-    if (!form.customer_id) { toast.error('Selecteer een klant'); return; }
-    if (hasIncompleteCustomer) { toast.error('Vul eerst de klantgegevens aan voordat je een factuur aanmaakt'); return; }
     setSaving(true);
     try {
-      const created = await createFactuur({ ...form, project_id: form.project_id || null, status: 'aangemaakt', nummer, betalingskenmerk: nummer, totaal_excl: totaalExcl, totaal_incl: totaalIncl });
-      for (let i = 0; i < regels.length; i++) {
-        const r = regels[i];
-        if (!r.omschrijving.trim()) continue;
-        const btwPct = r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw);
-        await createFactuurRegel({
-          factuur_id: created.id,
-          type: r.type,
-          omschrijving: r.omschrijving,
-          aantal: r.type === 'vast' ? 1 : Number(r.aantal || 1),
-          eenheidsprijs: Number(r.eenheidsprijs || 0),
-          btw_pct: btwPct,
-          volgorde: i,
-        });
-      }
+      const created = await doCreate();
+      if (!created) return;
       toast.success('Factuur aangemaakt');
       onSaved?.(created);
+      onClose();
+    } catch (err) { toast.error(err.message || 'Mislukt'); } finally { setSaving(false); }
+  };
+
+  const submitAndSend = async () => {
+    setSaving(true);
+    try {
+      const created = await doCreate();
+      if (!created) return;
+      toast.success('Factuur aangemaakt');
+      onSaved?.(created);
+      onSaveAndSend?.(created);
       onClose();
     } catch (err) { toast.error(err.message || 'Mislukt'); } finally { setSaving(false); }
   };
@@ -351,6 +363,7 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
         </div>
         <div className="fa">
           <button className="btn btn-ghost" onClick={onClose}>Annuleren</button>
+          {onSaveAndSend && <button className="btn btn-s" onClick={submitAndSend} disabled={saving || hasIncompleteCustomer} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={14} />{saving ? 'Bezig...' : 'Opslaan en versturen'}</button>}
           <button className="btn btn-p" onClick={submit} disabled={saving || hasIncompleteCustomer}>{saving ? 'Opslaan...' : 'Opslaan'}</button>
         </div>
       </div>
@@ -360,7 +373,7 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
 
 // ── EDIT FACTUUR MODAL ────────────────────────────────────────────────────────
 
-function EditFactuurModal({ factuur, customers, onClose, onSaved }) {
+function EditFactuurModal({ factuur, customers, onClose, onSaved, onSaveAndSend }) {
   const toast = useToast();
   const [form, setForm] = useState({
     status: factuur.status || 'aangemaakt',
@@ -371,12 +384,27 @@ function EditFactuurModal({ factuur, customers, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  const doSave = async () => {
+    const updated = await updateFactuur(factuur.id, form);
+    onSaved?.(updated);
+    return updated;
+  };
+
   const submit = async () => {
     setSaving(true);
     try {
-      const updated = await updateFactuur(factuur.id, form);
+      await doSave();
       toast.success('Factuur opgeslagen');
-      onSaved?.(updated);
+      onClose();
+    } catch (err) { toast.error(err.message || 'Mislukt'); } finally { setSaving(false); }
+  };
+
+  const submitAndSend = async () => {
+    setSaving(true);
+    try {
+      const updated = await doSave();
+      toast.success('Factuur opgeslagen');
+      onSaveAndSend?.(updated);
       onClose();
     } catch (err) { toast.error(err.message || 'Mislukt'); } finally { setSaving(false); }
   };
@@ -401,7 +429,7 @@ function EditFactuurModal({ factuur, customers, onClose, onSaved }) {
             </select>
           </div>
           <div className="f">
-            <label>Vervaldatum</label>
+            <label>Betaaltermijn</label>
             <input type="date" value={form.vervaldatum} onChange={e => set('vervaldatum', e.target.value)} />
           </div>
           <div className="f s2">
@@ -415,6 +443,7 @@ function EditFactuurModal({ factuur, customers, onClose, onSaved }) {
         </div>
         <div className="fa">
           <button className="btn btn-ghost" onClick={onClose}>Annuleren</button>
+          {onSaveAndSend && <button className="btn btn-s" onClick={submitAndSend} disabled={saving} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={14} />{saving ? 'Bezig...' : 'Opslaan en versturen'}</button>}
           <button className="btn btn-p" onClick={submit} disabled={saving}>{saving ? 'Opslaan...' : 'Opslaan'}</button>
         </div>
       </div>
@@ -467,7 +496,7 @@ function CrediteerModal({ factuur, regels, onClose, onSuccess }) {
             <ModalX onClose={() => { onSuccess?.(); onClose(); }} />
           </div>
           <div style={{ padding: '32px 24px', textAlign: 'center' }}>
-            <div style={{ fontSize: 36, marginBottom: 12, color: '#22c55e' }}>✓</div>
+            <div style={{ fontSize: 36, marginBottom: 12, color: '#1DDB62' }}>✓</div>
             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{success}</div>
             <div style={{ fontSize: 13, color: 'var(--dl)' }}>Creditfactuur succesvol aangemaakt</div>
           </div>
@@ -572,7 +601,7 @@ function CrediteerModal({ factuur, regels, onClose, onSuccess }) {
 
 // ── VIEW FACTUUR MODAL ────────────────────────────────────────────────────────
 
-function ViewFactuurModal({ factuur, customers, onClose, onRefresh }) {
+function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }) {
   const { company, profile } = useProfile();
   const canManage = profile?.role === 'admin' || profile?.role === 'planner';
   const canCrediteer = canManage && (factuur.status === 'verzonden' || factuur.status === 'betaald') && !factuur.gecrediteerd && !factuur.isCredit;
@@ -580,6 +609,7 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh }) {
   const [regels, setRegels] = useState([]);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [showCrediteer, setShowCrediteer] = useState(false);
+  const isOverdue = factuur.status !== 'betaald' && factuur.vervaldatum && factuur.vervaldatum < new Date().toISOString().slice(0, 10);
 
   useEffect(() => {
     getFactuurRegels(factuur.id).then(setRegels).catch(() => {});
@@ -613,12 +643,24 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh }) {
             <div><div style={DL_STYLE}>Klant</div><div style={{ fontWeight: 500 }}>{customerName}</div></div>
             <div><div style={DL_STYLE}>Status</div><div>{factuurBadge(factuur)}</div></div>
             <div><div style={DL_STYLE}>Factuurdatum</div><div>{fmtDate(factuur.factuurdatum)}</div></div>
-            <div><div style={DL_STYLE}>Vervaldatum</div><div>{fmtDate(factuur.vervaldatum)}</div></div>
+            <div>
+              <div style={DL_STYLE}>Betaaltermijn</div>
+              <div style={{ color: isOverdue ? '#dc2626' : 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>
+                {fmtDate(factuur.vervaldatum)}
+                {isOverdue && <span className="badge b-declined" style={{ fontSize: 10 }}>Te laat</span>}
+              </div>
+            </div>
             {factuur.betalingskenmerk && (
               <div><div style={DL_STYLE}>Betalingskenmerk</div><div>{factuur.betalingskenmerk}</div></div>
             )}
             {factuur.betaaldOp && (
               <div><div style={DL_STYLE}>Betaald op</div><div>{fmtDate(factuur.betaaldOp)}</div></div>
+            )}
+            {factuur.herinnering1VerstuurdAt && (
+              <div><div style={DL_STYLE}>Herinnering 1 verstuurd</div><div style={{ fontSize: 13 }}>{new Date(factuur.herinnering1VerstuurdAt).toLocaleDateString('nl-NL')}</div></div>
+            )}
+            {factuur.herinnering2VerstuurdAt && (
+              <div><div style={DL_STYLE}>Herinnering 2 verstuurd</div><div style={{ fontSize: 13 }}>{new Date(factuur.herinnering2VerstuurdAt).toLocaleDateString('nl-NL')}</div></div>
             )}
           </div>
 
@@ -659,7 +701,20 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh }) {
             </div>
           )}
         </div>
-        <div className="fa">
+        <div className="fa" style={{ flexWrap: 'wrap', gap: 8 }}>
+          {onSendMail && canManage && (
+            <button className="btn btn-s" onClick={() => { onClose(); onSendMail(factuur, 'factuur'); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={14} /> Verstuur per mail</button>
+          )}
+          {onSendMail && canManage && isOverdue && !factuur.herinnering1VerstuurdAt && (
+            <button className="btn btn-ghost btn-sm" onClick={() => { onClose(); onSendMail(factuur, 'herinnering_1'); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <Send size={13} /> Herinnering 1 sturen
+            </button>
+          )}
+          {onSendMail && canManage && isOverdue && factuur.herinnering1VerstuurdAt && !factuur.herinnering2VerstuurdAt && (
+            <button className="btn btn-ghost btn-sm" onClick={() => { onClose(); onSendMail(factuur, 'herinnering_2'); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <Send size={13} /> Herinnering 2 sturen
+            </button>
+          )}
           {canCrediteer && (
             <button className="btn btn-danger" onClick={() => setShowCrediteer(true)}>
               Crediteer factuur
@@ -683,7 +738,95 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh }) {
   );
 }
 
-// ── ACTION MENU ───────────────────────────────────────────────────────────────
+// ── SEND EMAIL MODAL ─────────────────────────────────────────────────────────
+
+function SendFactuurMailModal({ factuur, customers, company, templateType = 'factuur', onClose, onSent }) {
+  const toast = useToast();
+  const [form, setForm] = useState({ to: '', subject: '', body: '' });
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+
+  const customer = customers.find(c => c.id == factuur.customerId);
+  const fmt2 = n => new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0);
+  const fmtD = d => d ? new Date(d).toLocaleDateString('nl-NL') : '—';
+
+  const TITLE_MAP = { factuur: 'Factuur versturen per e-mail', herinnering_1: 'Betaalherinnering 1 versturen', herinnering_2: 'Betaalherinnering 2 versturen' };
+
+  useEffect(() => {
+    const vars = {
+      klant_naam: customer?.name || factuur.customerName || 'klant',
+      bedrijfsnaam: company?.name || 'ons bedrijf',
+      factuur_nummer: factuur.nummer,
+      totaal_bedrag: fmt2(factuur.totaalIncl),
+      vervaldatum: fmtD(factuur.vervaldatum),
+    };
+    getMailTemplate(templateType)
+      .then(tpl => {
+        const sub = tpl ? substituteVars(tpl.onderwerp || '', vars) : `Factuur ${factuur.nummer} van ${company?.name || ''}`;
+        const rawBody = tpl ? substituteVars(tpl.body || '', vars) : `Beste ${vars.klant_naam},\n\nHierbij uw factuur ${factuur.nummer}.\n\nMet vriendelijke groet,\n${company?.name || ''}`;
+        setForm({ to: customer?.email || '', subject: sub, body: plainToEditorHtml(rawBody) });
+      })
+      .catch(() => setForm({ to: customer?.email || '', subject: `Factuur ${factuur.nummer}`, body: '' }))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSend = async () => {
+    if (!form.to) { toast.error('E-mailadres is verplicht'); return; }
+    setSending(true);
+    try {
+      await sendEmail({ to: form.to, subject: form.subject, html: form.body });
+      await logSentEmail({ toEmail: form.to, subject: form.subject, relatedType: 'factuur', relatedId: factuur.id, customerId: factuur.customerId });
+      if ((templateType === 'factuur') && (factuur.status === 'aangemaakt' || factuur.status === 'concept')) {
+        await updateFactuur(factuur.id, { status: 'verzonden' });
+      }
+      if (templateType === 'herinnering_1') {
+        await updateFactuur(factuur.id, { herinnering_1_verstuurd_at: new Date().toISOString() });
+      }
+      if (templateType === 'herinnering_2') {
+        await updateFactuur(factuur.id, { herinnering_2_verstuurd_at: new Date().toISOString() });
+      }
+      toast.success('E-mail verstuurd');
+      onSent?.();
+      onClose();
+    } catch (err) {
+      toast.error(err.message || 'Versturen mislukt');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal modal-wide">
+        <div className="modal-hd">
+          <div>
+            <div className="modal-title">{TITLE_MAP[templateType] || 'E-mail versturen'}</div>
+            <div className="modal-sub">{factuur.nummer}</div>
+          </div>
+          <ModalX onClose={onClose} />
+        </div>
+        {loading ? (
+          <div style={{ padding: '32px', textAlign: 'center', color: 'var(--dl)' }}>Template laden…</div>
+        ) : (
+          <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className="f"><label>Aan</label><input value={form.to} onChange={e => setForm(f => ({ ...f, to: e.target.value }))} placeholder="emailadres@klant.nl" /></div>
+            <div className="f"><label>Onderwerp</label><input value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} /></div>
+            <div className="f">
+              <label>Bericht</label>
+              <MailBodyEditor value={form.body} onChange={html => setForm(f => ({ ...f, body: html }))} placeholder="Schrijf uw bericht hier..." minHeight={200} />
+            </div>
+          </div>
+        )}
+        <div className="fa">
+          <button className="btn btn-ghost" onClick={onClose}>Annuleren</button>
+          <button className="btn btn-p" onClick={handleSend} disabled={sending || loading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Send size={14} />{sending ? 'Versturen...' : 'Versturen'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── FACTUREN PAGE ─────────────────────────────────────────────────────────────
 
@@ -702,6 +845,7 @@ export function FacturenPage({ openCustomer }) {
   const [editFactuur, setEditFactuur] = useState(null);
   const [viewFactuur, setViewFactuur] = useState(null);
   const [crediteerData, setCrediteerData] = useState(null);
+  const [sendMailFactuur, setSendMailFactuur] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -840,7 +984,7 @@ export function FacturenPage({ openCustomer }) {
                   <th className="th">Excl. BTW</th>
                   <th className="th">Incl. BTW</th>
                   <th className="th">Status</th>
-                  <th className="th">Vervaldatum</th>
+                  <th className="th">Betaaltermijn</th>
                   <th className="th">Acties</th>
                 </tr>
               </thead>
@@ -878,6 +1022,7 @@ export function FacturenPage({ openCustomer }) {
                       <td className="td">
                         <div style={{ display: 'flex', gap: 4 }}>
                           <button className="btn btn-xs btn-ghost btn-icon" title="Bekijken" onClick={() => setViewFactuur(f)}><MoreVertical size={14} /></button>
+                          {canManage && <button className="btn btn-xs btn-ghost btn-icon" title="Verstuur per mail" onClick={() => setSendMailFactuur({ factuur: f, templateType: 'factuur' })}><Send size={13} /></button>}
                           {canManage && <button className="btn btn-xs btn-ghost btn-icon" title="Bewerken" onClick={() => setEditFactuur(f)}>{I.edit}</button>}
                           {canManage && <button className="btn btn-xs btn-danger btn-icon" title="Verwijderen" onClick={() => handleDelete(f)}>{I.trash}</button>}
                         </div>
@@ -897,6 +1042,7 @@ export function FacturenPage({ openCustomer }) {
           projects={projects}
           onClose={() => setShowNew(false)}
           onSaved={saved => { handleSaved(saved); setShowNew(false); }}
+          onSaveAndSend={saved => { handleSaved(saved); setSendMailFactuur({ factuur: saved, templateType: 'factuur' }); }}
           openCustomer={openCustomer}
         />
       )}
@@ -906,6 +1052,7 @@ export function FacturenPage({ openCustomer }) {
           customers={customers}
           onClose={() => setEditFactuur(null)}
           onSaved={saved => { handleSaved(saved); setEditFactuur(null); }}
+          onSaveAndSend={saved => { handleSaved(saved); setEditFactuur(null); setSendMailFactuur({ factuur: saved, templateType: 'factuur' }); }}
         />
       )}
       {viewFactuur && (
@@ -914,6 +1061,7 @@ export function FacturenPage({ openCustomer }) {
           customers={customers}
           onClose={() => setViewFactuur(null)}
           onRefresh={load}
+          onSendMail={(f, type) => { setSendMailFactuur({ factuur: f, templateType: type || 'factuur' }); setViewFactuur(null); }}
         />
       )}
       {crediteerData && (
@@ -922,6 +1070,16 @@ export function FacturenPage({ openCustomer }) {
           regels={crediteerData.regels}
           onClose={() => setCrediteerData(null)}
           onSuccess={() => { load(); setCrediteerData(null); }}
+        />
+      )}
+      {sendMailFactuur && (
+        <SendFactuurMailModal
+          factuur={sendMailFactuur.factuur}
+          customers={customers}
+          company={company}
+          templateType={sendMailFactuur.templateType || 'factuur'}
+          onClose={() => setSendMailFactuur(null)}
+          onSent={() => { load(); setSendMailFactuur(null); }}
         />
       )}
     </div>

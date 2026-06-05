@@ -7,6 +7,8 @@ import { createDeal } from '../services/dealService.js';
 import { createActivity, updateActivity, deleteActivity, buildDueAt } from '../services/activityService.js';
 import { syncActivity } from '../services/googleCalendarService.js';
 import { useProfile } from '../lib/profileContext.jsx';
+import { triggerAutoEmail } from '../services/emailService.js';
+import { getCompanyId } from '../lib/currentCompany.js';
 import { createCalendarEvent } from '../services/calendarService.js';
 import { createJobCost } from '../services/jobCostService.js';
 import { updateProfile } from '../services/profileService.js';
@@ -151,6 +153,7 @@ export function NewCustomerModal({ onClose, onSaved }) {
 // ── NEW LEAD / DEAL MODAL ────────────────────────────────────
 export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage = '', defaultCustomerId = '' }) {
   const toast = useToast();
+  const { company } = useProfile();
   // Always prefer real DB stages; only fall back to the hardcoded slug list if
   // the database has no stages at all (so the dropdown isn't empty).
   const stageOptions = (stages?.length ? stages : PIPELINE_STAGES);
@@ -215,6 +218,14 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
         dealInput.stage_id = form.stage;
       }
       const deal = await createDeal(dealInput);
+      const cust = customers?.find(c => c.id === customerId);
+      if (cust?.email) {
+        getCompanyId().then(companyId =>
+          triggerAutoEmail('aanvraag_ontvangen',
+            { klant_naam: cust.name, bedrijfsnaam: company?.name || 'BossBase' },
+            cust.email, companyId, 'deal', deal.id, customerId)
+        );
+      }
       toast.success('Nieuwe lead toegevoegd');
       onSaved?.(deal);
       onClose();
@@ -300,6 +311,7 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
 // ── NEW ACTIVITY MODAL ───────────────────────────────────────
 export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCustId = '', defaultDealId = '' }) {
   const toast = useToast();
+  const { company } = useProfile();
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
     title: '',
@@ -342,6 +354,17 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
         deal_id: form.dealId || null,
         due_at: buildDueAt(form.date, form.time),
       });
+      if (form.type === 'visit' && form.custId) {
+        const cust = customers?.find(c => c.id === form.custId);
+        if (cust?.email) {
+          const dateStr = form.date ? new Date(form.date + 'T00:00:00').toLocaleDateString('nl-NL') : '';
+          getCompanyId().then(companyId =>
+            triggerAutoEmail('afspraak_bevestiging',
+              { klant_naam: cust.name, bedrijfsnaam: company?.name || 'BossBase', afspraak_datum: dateStr, afspraak_tijd: form.time || '' },
+              cust.email, companyId, 'activity', created.id, form.custId)
+          );
+        }
+      }
       toast.success('Activiteit toegevoegd');
       onSaved?.(created);
       onClose();

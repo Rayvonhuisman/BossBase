@@ -20,6 +20,9 @@ import { NewProjectModal, ProjectBadge } from './ProjectsPage.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { ActivityEditModal, NewActivityModal, NewCustomerModal, NewJobCostModal } from '../components/SharedModals.jsx';
+import { Send } from 'lucide-react';
+import { getMailTemplate, sendEmail, substituteVars, logSentEmail, getSentEmailsByCustomer } from '../services/emailService.js';
+import { MailBodyEditor, plainToEditorHtml } from '../components/MailBodyEditor.jsx';
 
 const EMPTY_FORMATS = { bold: false, italic: false, underline: false, insertUnorderedList: false, insertOrderedList: false };
 
@@ -130,6 +133,78 @@ function NotitieEditor({ editorRef, minHeight = 200, maxHeight, placeholder, onH
 // `type` and `source` are local-only display state for now (no DB columns yet).
 const emptyCustomerForm = { name: '', company: '', email: '', phone: '', city: '', address: '', postcode: '', kvkNumber: '', btwNumber: '', iban: '', type: 'Zakelijk', source: 'Handmatig', notes: '' };
 
+// ── SEND KLANT EMAIL MODAL ───────────────────────────────────
+
+function SendKlantEmailModal({ customer, company, onClose }) {
+  const toast = useToast();
+  const [form, setForm] = useState({ to: customer?.email || '', subject: '', body: '' });
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    const vars = {
+      klant_naam: customer?.name || 'klant',
+      bedrijfsnaam: company?.name || 'ons bedrijf',
+    };
+    getMailTemplate('algemeen')
+      .then(tpl => {
+        if (tpl) {
+          setForm(f => ({
+            ...f,
+            subject: substituteVars(tpl.onderwerp || '', vars),
+            body: plainToEditorHtml(substituteVars(tpl.body || '', vars)),
+          }));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSend = async () => {
+    if (!form.to) { toast.error('E-mailadres is verplicht'); return; }
+    if (!form.subject) { toast.error('Onderwerp is verplicht'); return; }
+    setSending(true);
+    try {
+      await sendEmail({ to: form.to, subject: form.subject, html: form.body || `<p>${form.subject}</p>` });
+      await logSentEmail({ toEmail: form.to, subject: form.subject });
+      toast.success('E-mail verstuurd');
+      onClose();
+    } catch (err) {
+      toast.error(err.message || 'Versturen mislukt');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal modal-wide">
+        <div className="modal-hd">
+          <div>
+            <div className="modal-title">E-mail sturen</div>
+            <div className="modal-sub">{customer?.name}</div>
+          </div>
+          <ModalX onClose={onClose} />
+        </div>
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="f"><label>Aan</label><input value={form.to} onChange={e => setForm(f => ({ ...f, to: e.target.value }))} placeholder="emailadres@klant.nl" /></div>
+          <div className="f"><label>Onderwerp</label><input value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} placeholder="Onderwerp..." /></div>
+          <div className="f">
+            <label>Bericht</label>
+            <MailBodyEditor value={form.body} onChange={html => setForm(f => ({ ...f, body: html }))} placeholder="Schrijf uw bericht hier..." minHeight={180} />
+          </div>
+        </div>
+        <div className="fa">
+          <button className="btn btn-ghost" onClick={onClose}>Annuleren</button>
+          <button className="btn btn-p" onClick={handleSend} disabled={sending || loading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Send size={14} />{sending ? 'Versturen...' : 'Versturen'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── CUSTOMER DETAIL DRAWER ───────────────────────────────────
 export function CustomerPage({ custId, onClose, setPage }) {
   const toast = useToast();
@@ -169,6 +244,10 @@ export function CustomerPage({ custId, onClose, setPage }) {
   const [notitiesVisible, setNotitiesVisible] = useState(10);
   const [fullscreen, setFullscreen] = useState(() => localStorage.getItem('customer_fullscreen') === 'true');
   const [sbWidth, setSbWidth] = useState(232);
+  const [showSendMail, setShowSendMail] = useState(false);
+  const [sentEmails, setSentEmails] = useState([]);
+  const [sentEmailsLoading, setSentEmailsLoading] = useState(false);
+  const { company } = useProfile();
 
   useEffect(() => {
     const el = document.querySelector('.sb');
@@ -203,6 +282,12 @@ export function CustomerPage({ custId, onClose, setPage }) {
     setFullscreen(next);
     localStorage.setItem('customer_fullscreen', String(next));
   };
+
+  useEffect(() => {
+    if (tab !== 'emails' || !custId) return;
+    setSentEmailsLoading(true);
+    getSentEmailsByCustomer(custId).then(setSentEmails).catch(() => {}).finally(() => setSentEmailsLoading(false));
+  }, [tab, custId]);
 
   useEffect(() => {
     let alive = true;
@@ -308,8 +393,8 @@ export function CustomerPage({ custId, onClose, setPage }) {
     } catch { /* ignore */ }
   };
 
-  const TABS = ['overview', 'notities', 'quotes', 'costs', 'projecten', 'timeline', 'klantgegevens'];
-  const TAB_LABELS = { overview: 'Overzicht', notities: 'Notities', quotes: 'Offertes', costs: 'Kosten', projecten: 'Projecten', timeline: 'Tijdlijn', klantgegevens: 'Klantgegevens' };
+  const TABS = ['overview', 'notities', 'quotes', 'costs', 'projecten', 'timeline', 'emails', 'klantgegevens'];
+  const TAB_LABELS = { overview: 'Overzicht', notities: 'Notities', quotes: 'Offertes', costs: 'Kosten', projecten: 'Projecten', timeline: 'Tijdlijn', emails: 'E-mails', klantgegevens: 'Klantgegevens' };
 
   const fmtNotitieDate = iso => {
     if (!iso) return '';
@@ -412,13 +497,13 @@ export function CustomerPage({ custId, onClose, setPage }) {
           <div style={{ fontSize: '.82rem', color: 'var(--dmu)', marginBottom: 10 }}>{c.company} · {c.city}</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-start', marginLeft: 0, paddingLeft: 0 }}>
             {c.phone && <a href={`tel:${c.phone}`} className="btn btn-s btn-sm">{I.call} {c.phone}</a>}
-            {c.email && <a href={`mailto:${c.email}`} className="btn btn-s btn-sm">{I.mail} E-mail</a>}
+            {c.email && <button className="btn btn-s btn-sm" onClick={() => setShowSendMail(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Send size={13} /> E-mail sturen</button>}
             {(c.moneybirdId || c.afasId || c.snelstartId) && (
               <span
                 className="sync-indicator"
                 data-tooltip={c.moneybirdId ? 'Gesynchroniseerd met Moneybird' : c.afasId ? 'Gesynchroniseerd met AFAS' : 'Gesynchroniseerd met SnelStart'}
               >
-                <Check size={15} style={{ color: '#059669' }} />
+                <Check size={15} style={{ color: '#15A34A' }} />
               </span>
             )}
           </div>
@@ -435,7 +520,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
         ].map((s, i) => (
           <div key={i} style={{ background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 'var(--r10)', padding: '12px 14px' }}>
             <div style={{ fontSize: '.7rem', color: 'var(--dl)', marginBottom: 4, fontWeight: 600 }}>{s.label}</div>
-            <div style={{ fontSize: '1.05rem', fontWeight: 800, letterSpacing: '-.02em', color: s.green ? '#059669' : s.red ? '#dc2626' : 'var(--dk)' }}>{s.val}</div>
+            <div style={{ fontSize: '1.05rem', fontWeight: 800, letterSpacing: '-.02em', color: s.green ? '#15A34A' : s.red ? '#dc2626' : 'var(--dk)' }}>{s.val}</div>
           </div>
         ))}
       </div>
@@ -750,7 +835,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
             ].map((s, i) => (
               <div key={i} className="sc" style={{ padding: '14px 16px' }}>
                 <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginBottom: 6 }}>{s.label}</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: s.green ? '#059669' : 'var(--dk)' }}>{s.val}</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: s.green ? '#15A34A' : 'var(--dk)' }}>{s.val}</div>
               </div>
             ))}
           </div>
@@ -808,6 +893,33 @@ export function CustomerPage({ custId, onClose, setPage }) {
         </div>
       )}
 
+      {/* E-mails tab */}
+      {tab === 'emails' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Verzonden e-mails</div>
+            <button className="btn btn-s btn-sm" onClick={() => setShowSendMail(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <Send size={13} /> Nieuwe e-mail
+            </button>
+          </div>
+          {sentEmailsLoading && <div style={{ color: 'var(--dl)', fontSize: 13 }}>Laden…</div>}
+          {!sentEmailsLoading && sentEmails.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '28px 0', color: '#9ca3af', fontSize: 13 }}>Nog geen e-mails verstuurd aan deze klant</div>
+          )}
+          {sentEmails.map(m => (
+            <div key={m.id} style={{ padding: '10px 14px', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 'var(--r8)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                <div style={{ fontWeight: 600, fontSize: '.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.subject}</div>
+                <div style={{ fontSize: '.75rem', color: 'var(--dl)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  {m.sent_at ? new Date(m.sent_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}
+                </div>
+              </div>
+              <div style={{ fontSize: '.78rem', color: 'var(--dl)', marginTop: 3 }}>{m.to_email}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Klantgegevens tab */}
       {tab === 'klantgegevens' && (
         <div className="card card-p">
@@ -843,7 +955,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
                         style={{ flex: 1, fontSize: '.82rem', padding: '2px 6px' }}
                       />
                     )}
-                    <button onClick={() => saveField(field.key)} disabled={savingField} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#059669', display: 'flex', alignItems: 'center', padding: 2 }}>
+                    <button onClick={() => saveField(field.key)} disabled={savingField} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#15A34A', display: 'flex', alignItems: 'center', padding: 2 }}>
                       <Check size={14} />
                     </button>
                     <button onClick={cancelEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2 }}>
@@ -921,6 +1033,13 @@ export function CustomerPage({ custId, onClose, setPage }) {
           prefillCustomerId={c.id}
           onClose={() => setShowNewProject(false)}
           onSaved={saved => { setProjecten(ps => [saved, ...ps]); setShowNewProject(false); }}
+        />
+      )}
+      {showSendMail && c && (
+        <SendKlantEmailModal
+          customer={c}
+          company={company}
+          onClose={() => setShowSendMail(false)}
         />
       )}
     </div>
@@ -1008,7 +1127,7 @@ export function CustomersPage({ openCustomer }) {
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: '.68rem', color: 'var(--dl)' }}>Betaald</div>
-                    <div style={{ fontWeight: 700, fontSize: '.88rem', color: c.paid > 0 ? '#059669' : 'var(--dk)' }}>{fmt(c.paid)}</div>
+                    <div style={{ fontWeight: 700, fontSize: '.88rem', color: c.paid > 0 ? '#15A34A' : 'var(--dk)' }}>{fmt(c.paid)}</div>
                   </div>
                   <button className="btn-icon" title="Verwijderen" onClick={e => { e.stopPropagation(); remove(c.id); }}>{I.trash}</button>
                 </div>
@@ -1027,7 +1146,7 @@ export function CustomersPage({ openCustomer }) {
                   <td style={{ color: 'var(--dmu)' }}>{c.phone || '—'}</td>
                   <td>{c.city}</td>
                   <td style={{ fontWeight: 700 }}>{fmt(c.total)}</td>
-                  <td style={{ fontWeight: 700, color: '#059669' }}>{fmt(c.paid)}</td>
+                  <td style={{ fontWeight: 700, color: '#15A34A' }}>{fmt(c.paid)}</td>
                   <td><button className="btn-icon" onClick={e => { e.stopPropagation(); openCustomer(c.id); }}>{I.arrow_r}</button><button className="btn-icon" onClick={e => { e.stopPropagation(); remove(c.id); }}>{I.trash}</button></td>
                 </tr>
               ))}
