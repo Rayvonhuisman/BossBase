@@ -1,11 +1,19 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { encodeBase64 } from 'https://deno.land/std@0.168.0/encoding/base64.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { PDFDocument, rgb, StandardFonts } from 'https://esm.sh/pdf-lib@1.17.1'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  const CHUNK = 1024
+  const parts: string[] = []
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    parts.push(String.fromCharCode(...bytes.slice(i, i + CHUNK)))
+  }
+  return btoa(parts.join(''))
 }
 
 function dataUrlToBytes(dataUrl: string): Uint8Array {
@@ -428,8 +436,7 @@ serve(async (req) => {
         warnings.push(`PDF upload mislukt (signed-offertes): ${pdfUploadErr.message}`)
       }
 
-      // Base64 voor bijlage — gebruik Deno std encodeBase64
-      const pdfBase64 = encodeBase64(pdfBytes)
+      const pdfBase64 = uint8ArrayToBase64(pdfBytes)
       attachment = [{ filename: pdfFilename, content: pdfBase64 }]
     } catch (pdfErr) {
       warnings.push(`PDF genereren mislukt: ${pdfErr}`)
