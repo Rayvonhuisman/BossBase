@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
-import { signOfferte } from '../services/emailService.js'
+import { signOfferte, sendEmail } from '../services/emailService.js'
 import { getOffertePdfUrl } from '../utils/generatePdf.js'
 
 const fmt = n =>
@@ -114,12 +114,58 @@ export default function OfferteSigneren({ token }) {
     try {
       const canvas = canvasRef.current
       const dataUrl = canvas.toDataURL('image/png')
-      await signOfferte({ signToken: token, name: form.name, email: form.email, signatureDataUrl: dataUrl })
+      const result = await signOfferte({ signToken: token, name: form.name, email: form.email, signatureDataUrl: dataUrl })
       setDone(true)
+
+      // Bevestigingsmails versturen (best-effort — blokkeert success niet)
+      verstuurBevestigingsmails(result, form.name, form.email).catch(e =>
+        console.warn('Bevestigingsmail mislukt:', e.message)
+      )
     } catch (err) {
       alert('Er is iets misgegaan: ' + err.message)
     } finally {
       setSigning(false)
+    }
+  }
+
+  const verstuurBevestigingsmails = async (result, signerName, signerEmail) => {
+    const attachment = result.signed_pdf_base64
+      ? [{ filename: result.signed_pdf_filename, content: result.signed_pdf_base64 }]
+      : []
+
+    const fromName = result.company_name || 'BossBase'
+    const nummer = result.offerte_nummer || ''
+    const totaal = result.totaal || ''
+    const omschrijving = result.offerte_omschrijving || ''
+
+    // Mail 1 → klant
+    await sendEmail({
+      to: signerEmail,
+      subject: `Bevestiging: offerte ${nummer} ondertekend`,
+      html: `<p>Beste ${signerName},</p>
+             <p>Bedankt voor het ondertekenen van offerte <strong>${nummer}</strong>.</p>
+             ${omschrijving ? `<p>Omschrijving: ${omschrijving}</p>` : ''}
+             <p>Totaal: <strong>${totaal}</strong></p>
+             ${attachment.length ? '<p>In de bijlage vindt u de ondertekende offerte.</p>' : ''}
+             <p>We nemen zo snel mogelijk contact met u op.</p>
+             <p>Met vriendelijke groet,<br>${fromName}</p>`,
+      fromName,
+      attachments: attachment,
+    })
+
+    // Mail 2 → eigenaar
+    if (result.company_email) {
+      await sendEmail({
+        to: result.company_email,
+        subject: `Offerte ${nummer} ondertekend door ${signerName}`,
+        html: `<p>Goed nieuws! Offerte <strong>${nummer}</strong> is zojuist ondertekend.</p>
+               <p>Ondertekend door: <strong>${signerName}</strong> (${signerEmail})<br>
+                  Datum en tijd: ${new Date(result.signed_at).toLocaleString('nl-NL')}<br>
+                  Totaal: <strong>${totaal}</strong></p>
+               ${attachment.length ? '<p>De ondertekende offerte is als bijlage toegevoegd.</p>' : ''}`,
+        fromName,
+        attachments: attachment,
+      })
     }
   }
 

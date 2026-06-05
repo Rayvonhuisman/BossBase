@@ -39,12 +39,16 @@ async function getCompanyName() {
 
 // ── E-MAIL VERSTUREN VIA EDGE FUNCTION ──────────────────────────────────────
 
-export async function sendEmail({ to, subject, html, fromName }) {
-  const resolvedFromName = fromName || await getCompanyName()
-  const { data, error } = await supabase.functions.invoke('send-email', {
-    body: { to, subject, html, from_name: resolvedFromName },
-  })
-  if (error) throw error
+export async function sendEmail({ to, subject, html, fromName, attachments }) {
+  const resolvedFromName = fromName !== undefined ? fromName : await getCompanyName()
+  const body = { to, subject, html, from_name: resolvedFromName }
+  if (attachments?.length) body.attachments = attachments
+  const { data, error } = await supabase.functions.invoke('send-email', { body })
+  if (error) {
+    let message = error.message
+    try { const b = await error.context?.json(); if (b?.error) message = b.error } catch {}
+    throw new Error(message)
+  }
   if (!data?.success) throw new Error(data?.error || 'Versturen mislukt')
   return data
 }

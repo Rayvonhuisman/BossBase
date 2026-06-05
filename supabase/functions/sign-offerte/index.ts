@@ -270,35 +270,6 @@ async function generateSignedPdf(
   return pdfDoc.save()
 }
 
-async function sendEmail(
-  to: string,
-  subject: string,
-  html: string,
-  fromName?: string,
-  attachments?: Array<{ filename: string; content: string }>,
-): Promise<{ ok: boolean; error?: string }> {
-  const apiKey = Deno.env.get('RESEND_API_KEY')
-  const fromEmail = Deno.env.get('RESEND_FROM_EMAIL') || 'noreply@bossbase.nl'
-  if (!apiKey) return { ok: false, error: 'RESEND_API_KEY niet ingesteld' }
-  const from = fromName ? `${fromName} <${fromEmail}>` : fromEmail
-  const body: Record<string, unknown> = { from, to, subject, html }
-  if (attachments?.length) body.attachments = attachments
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    if (!res.ok) {
-      const resBody = await res.text()
-      return { ok: false, error: `Resend ${res.status}: ${resBody}` }
-    }
-    return { ok: true }
-  } catch (err) {
-    return { ok: false, error: String(err) }
-  }
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
@@ -442,95 +413,30 @@ serve(async (req) => {
       warnings.push(`PDF genereren mislukt: ${pdfErr}`)
     }
 
-    // ── STAP 6: E-mails versturen ─────────────────────────────────────────────
+    // ── STAP 6: Response samenstellen ────────────────────────────────────────
     const bedrijfNaam = (company?.name as string) || 'BossBase'
     const totaal = new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(offerte.totaal_incl || 0)
-    const appUrl = Deno.env.get('APP_URL') || 'https://app.bossbase.nl'
 
-    try {
-      const { data: tpls } = await admin
-        .from('email_templates')
-        .select('onderwerp, body, auto_versturen')
-        .eq('type', 'offerte_geaccepteerd')
-        .eq('company_id', offerte.company_id)
-        .eq('actief', true)
-        .limit(1)
-      const tpl = tpls?.[0]
-
-      const vars: Record<string, string> = {
-        klant_naam: name,
-        bedrijfsnaam: bedrijfNaam,
-        offerte_nummer: offerte.nummer,
-        totaal_bedrag: totaal,
-      }
-      const substituteVars = (tmpl: string) =>
-        tmpl.replace(/\{\{(\w+)\}\}/g, (_: string, k: string) => vars[k] ?? `{{${k}}}`)
-      const bodyToHtml = (b: string) =>
-        b.split('\n').map((l: string) =>
-          l.trim() === '' ? '<br>' : `<p style="margin:0 0 6px 0">${l.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`
-        ).join('')
-
-      const klantSubject = tpl?.auto_versturen
-        ? substituteVars(tpl.onderwerp)
-        : `Bevestiging ondertekening offerte ${offerte.nummer}`
-
-      const klantHtml = tpl?.auto_versturen
-        ? bodyToHtml(substituteVars(tpl.body))
-        : `<p>Beste ${name},</p>
-           <p>Bedankt voor het ondertekenen van offerte <strong>${offerte.nummer}</strong>.</p>
-           <p>Omschrijving: ${offerte.omschrijving || '—'}<br>Totaal: <strong>${totaal}</strong></p>
-           ${attachment ? '<p>In de bijlage vindt u de ondertekende offerte.</p>' : ''}
-           <p>We nemen zo snel mogelijk contact met u op.</p>
-           <p>Met vriendelijke groet,<br>${bedrijfNaam}</p>`
-
-      // Bevestiging naar klant
-      const mailKlant = await sendEmail(email, klantSubject, klantHtml, bedrijfNaam, attachment)
-      if (!mailKlant.ok) warnings.push(`Klantmail mislukt: ${mailKlant.error}`)
-
-      // Notificatie naar eigenaar
-      if (company?.email) {
-        const mailEigenaar = await sendEmail(
-          company.email as string,
-          `Offerte ${offerte.nummer} ondertekend door ${name}`,
-          `<p>Goed nieuws! Offerte <strong>${offerte.nummer}</strong> is zojuist ondertekend.</p>
-           <p>Ondertekend door: <strong>${name}</strong> (${email})<br>
-              Datum en tijd: ${new Date(now).toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' })}<br>
-              Totaal: <strong>${totaal}</strong></p>
-           ${attachment ? '<p>De ondertekende offerte is als bijlage toegevoegd.</p>' : ''}
-           <p>Ga naar <a href="${appUrl}/dashboard/offertes">BossBase</a> voor meer details.</p>`,
-          bedrijfNaam,
-          attachment,
-        )
-        if (!mailEigenaar.ok) warnings.push(`Eigenaarmail mislukt: ${mailEigenaar.error}`)
-      }
-
-      // Log naar sent_emails
-      const logRows = [
-        {
-          company_id: offerte.company_id,
-          to_email: email,
-          subject: klantSubject,
-          related_type: 'offerte',
-          related_id: offerte.id,
-          status: 'sent',
-        },
-        ...(company?.email ? [{
-          company_id: offerte.company_id,
-          to_email: company.email,
-          subject: `Offerte ${offerte.nummer} ondertekend door ${name}`,
-          related_type: 'offerte',
-          related_id: offerte.id,
-          status: 'sent',
-        }] : []),
-      ]
-      const { error: logErr } = await admin.from('sent_emails').insert(logRows)
-      if (logErr) warnings.push(`E-mail log mislukt: ${logErr.message}`)
-    } catch (emailErr) {
-      warnings.push(`E-mail stap mislukt: ${emailErr}`)
+    const responseBody: Record<string, unknown> = {
+      success: true,
+      offerte_nummer: offerte.nummer,
+      offerte_omschrijving: offerte.omschrijving || '',
+      company_name: bedrijfNaam,
+      company_email: (company?.email as string) || null,
+      totaal,
+      signed_at: now,
     }
 
+    // PDF meegeven als base64 als generatie geslaagd is
+    if (attachment) {
+      responseBody.signed_pdf_base64 = attachment[0].content
+      responseBody.signed_pdf_filename = attachment[0].filename
+    }
+
+    if (warnings.length) responseBody.warnings = warnings
+
     return new Response(
-      JSON.stringify({ success: true, ...(warnings.length ? { warnings } : {}) }),
+      JSON.stringify(responseBody),
       { headers: { ...CORS, 'Content-Type': 'application/json' } },
     )
   } catch (err) {
