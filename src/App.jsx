@@ -18,6 +18,7 @@ import { FacturenPage } from './pages/FacturenPage.jsx';
 import { UrenPageV2 as UrenPage } from './pages/UrenPageV2.jsx';
 import { WerkbonPageV2 as WerkbonPage } from './pages/WerkbonPageV2.jsx';
 import { ProjectsPage } from './pages/ProjectsPage.jsx';
+import { DatabasePage } from './pages/DatabasePage.jsx';
 import MarketingWebsite from './pages/MarketingWebsite.jsx';
 import DemoPage from './pages/DemoPage.jsx';
 import { createMissingProfile, getSession, logout, onAuthStateChange } from './services/authService.js';
@@ -46,6 +47,7 @@ const NAV = [
   { id: 'revenue',     label: 'Financiën',   icon: 'chart',    section: 'finance' },
   { id: 'facturen',    label: 'Facturen',    icon: 'brief',    section: 'finance' },
   { id: 'offertes',    label: 'Offertes',    icon: 'quotes',   section: 'finance' },
+  { id: 'database',    label: 'Database',    icon: 'db',       section: 'bedrijf' },
   { id: 'team',        label: 'Team',        icon: 'team',     section: 'bedrijf' },
   { id: 'instellingen',label: 'Instellingen',icon: 'settings', section: 'bedrijf' },
 ];
@@ -890,6 +892,7 @@ function AppInner() {
       case 'projecten':   return <ProjectsPage openCustomer={openCustomer} openInvoice={openInvoice} setPage={navigatePage} preOpenProjectId={navIntent?.page === 'projecten' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'werkbonnen':  return <WerkbonPage preOpenWerkbonId={navIntent?.page === 'werkbonnen' ? navIntent.id : null} onNavConsumed={clearNavIntent} setPage={navigatePage} />;
       case 'uren':        return <UrenPage />;
+      case 'database':    return <DatabasePage openCustomer={openCustomer} />;
       case 'team':        return <TeamPage />;
       case 'instellingen':return <InstellingenPage />;
       default:            return <DashboardHome {...props} />;
