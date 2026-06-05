@@ -1,6 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { PDFDocument, rgb, StandardFonts } from 'https://esm.sh/pdf-lib@1.17.1'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -51,6 +50,7 @@ async function generateSignedPdf(
   signedAt: string,
   signatureDataUrl: string,
 ): Promise<Uint8Array> {
+  const { PDFDocument, rgb, StandardFonts } = await import('https://esm.sh/pdf-lib@1.17.1')
   const pdfDoc = await PDFDocument.create()
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)

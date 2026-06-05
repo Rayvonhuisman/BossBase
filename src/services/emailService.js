@@ -143,7 +143,15 @@ export async function signOfferte({ signToken, name, email, signatureDataUrl }) 
       signature_data_url: signatureDataUrl,
     },
   })
-  if (error) throw error
+  if (error) {
+    // Haal de werkelijke foutmelding op uit de response body
+    let message = error.message
+    try {
+      const body = await error.context?.json()
+      if (body?.error) message = body.error
+    } catch {}
+    throw new Error(message)
+  }
   if (!data?.success) throw new Error(data?.error || 'Ondertekenen mislukt')
   return data
 }
