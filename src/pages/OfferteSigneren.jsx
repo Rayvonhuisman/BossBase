@@ -50,40 +50,68 @@ export default function OfferteSigneren({ token }) {
       .finally(() => setLoading(false))
   }, [token])
 
-  // Canvas setup
+  // Canvas setup — touch events direct op DOM met passive:false zodat
+  // preventDefault() scroll blokkeert. Geen resize listener: die wist de canvas.
   useEffect(() => {
     if (!canvasRef.current) return
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
-    const resize = () => {
-      const w = canvas.offsetWidth
-      canvas.width = w
-      canvas.height = 160
-      ctx.strokeStyle = '#1e293b'
-      ctx.lineWidth = 2.5
-      ctx.lineCap = 'round'
-      ctx.lineJoin = 'round'
+
+    canvas.width = canvas.offsetWidth
+    canvas.height = 160
+    ctx.strokeStyle = '#1e293b'
+    ctx.lineWidth = 2.5
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+
+    const canvasPos = (touch) => {
+      const r = canvas.getBoundingClientRect()
+      return { x: touch.clientX - r.left, y: touch.clientY - r.top }
     }
-    resize()
-    window.addEventListener('resize', resize)
-    return () => window.removeEventListener('resize', resize)
+
+    const onTouchStart = (e) => {
+      e.preventDefault()
+      drawing.current = true
+      lastPos.current = canvasPos(e.touches[0])
+    }
+
+    const onTouchMove = (e) => {
+      if (!drawing.current) return
+      e.preventDefault()
+      const pos = canvasPos(e.touches[0])
+      ctx.beginPath()
+      ctx.moveTo(lastPos.current.x, lastPos.current.y)
+      ctx.lineTo(pos.x, pos.y)
+      ctx.stroke()
+      lastPos.current = pos
+      setHasSignature(true)
+    }
+
+    const onTouchEnd = () => { drawing.current = false }
+
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false })
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false })
+    canvas.addEventListener('touchend', onTouchEnd)
+
+    return () => {
+      canvas.removeEventListener('touchstart', onTouchStart)
+      canvas.removeEventListener('touchmove', onTouchMove)
+      canvas.removeEventListener('touchend', onTouchEnd)
+    }
   }, [offerte])
 
   const getPos = (e, canvas) => {
     const r = canvas.getBoundingClientRect()
-    const src = e.touches?.[0] || e
-    return { x: src.clientX - r.left, y: src.clientY - r.top }
+    return { x: e.clientX - r.left, y: e.clientY - r.top }
   }
 
   const startDraw = e => {
-    e.preventDefault()
     drawing.current = true
     lastPos.current = getPos(e, canvasRef.current)
   }
 
   const draw = e => {
     if (!drawing.current) return
-    e.preventDefault()
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
     const pos = getPos(e, canvas)
@@ -395,9 +423,6 @@ export default function OfferteSigneren({ token }) {
               onMouseMove={draw}
               onMouseUp={stopDraw}
               onMouseLeave={stopDraw}
-              onTouchStart={startDraw}
-              onTouchMove={draw}
-              onTouchEnd={stopDraw}
             />
             {!hasSignature && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: '.88rem', pointerEvents: 'none' }}>
