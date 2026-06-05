@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { signOfferte } from '../services/emailService.js'
-import { generateOffertePdf } from '../utils/generatePdf.js'
+import { getOffertePdfUrl } from '../utils/generatePdf.js'
 
 const fmt = n =>
   new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0)
@@ -162,7 +162,16 @@ export default function OfferteSigneren({ token }) {
         city: klant?.city,
         email: klant?.email,
       }
-      await generateOffertePdf(mappedOfferte, mappedItems, mappedKlant, mappedCompany)
+      const pdfUrl = await getOffertePdfUrl(mappedOfferte, mappedItems, mappedKlant, mappedCompany)
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+      if (isMobile) {
+        const link = document.createElement('a')
+        link.href = pdfUrl
+        link.download = `Offerte-${offerte.nummer}.pdf`
+        link.click()
+      } else {
+        window.open(pdfUrl, '_blank')
+      }
     } catch (err) {
       alert('PDF genereren mislukt: ' + err.message)
     } finally {

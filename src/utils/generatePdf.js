@@ -312,3 +312,9 @@ export async function previewOffertePdf(offerte, items, customer, company) {
   const url = doc.output('bloburl');
   window.open(url, '_blank');
 }
+
+export async function getOffertePdfUrl(offerte, items, customer, company) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  await buildPdf(doc, 'offerte', offerte, items, customer, company);
+  return doc.output('bloburl');
+}
