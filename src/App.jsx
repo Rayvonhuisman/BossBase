@@ -20,6 +20,11 @@ import { WerkbonPageV2 as WerkbonPage } from './pages/WerkbonPageV2.jsx';
 import { ProjectsPage } from './pages/ProjectsPage.jsx';
 import { DatabasePage } from './pages/DatabasePage.jsx';
 import MarketingWebsite from './pages/MarketingWebsite.jsx';
+import FeaturesPage from './pages/marketing/FeaturesPage.jsx';
+import PricingPage from './pages/marketing/PricingPage.jsx';
+import IndustriesPage from './pages/marketing/IndustriesPage.jsx';
+import AboutPage from './pages/marketing/AboutPage.jsx';
+import ContactPage from './pages/marketing/ContactPage.jsx';
 import DemoPage from './pages/DemoPage.jsx';
 import { createMissingProfile, getSession, logout, onAuthStateChange } from './services/authService.js';
 import { getCurrentUserContext } from './services/profileService.js';
@@ -779,10 +784,17 @@ function AppInner() {
 
   const navigate = (path, replace = false) => {
     const nextPath = path === '/website' ? '/' : path === '/registreer' ? '/register' : path;
-    if (window.location.pathname !== nextPath) {
+    const changed = window.location.pathname !== nextPath;
+    if (changed) {
       window.history[replace ? 'replaceState' : 'pushState']({}, '', nextPath);
     }
     setRoute(nextPath);
+    // Reset scroll when entering a public marketing page so each route
+    // starts at the top, mirroring real multi-page navigation.
+    const PUBLIC = ['/', '/functies', '/prijzen', '/voor-wie', '/over-ons', '/contact', '/demo', '/login', '/register'];
+    if (changed && PUBLIC.includes(nextPath)) {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
+    }
   };
 
   // Customer / deal / invoice / calendar-event drawers are mutually exclusive
@@ -907,8 +919,28 @@ function AppInner() {
     return <MarketingWebsite navigate={navigate} isAuthenticated={Boolean(session)} />;
   }
 
+  if (route === '/functies') {
+    return <FeaturesPage navigate={navigate} isAuthenticated={Boolean(session)} />;
+  }
+
+  if (route === '/prijzen') {
+    return <PricingPage navigate={navigate} isAuthenticated={Boolean(session)} />;
+  }
+
+  if (route === '/voor-wie') {
+    return <IndustriesPage navigate={navigate} isAuthenticated={Boolean(session)} />;
+  }
+
+  if (route === '/over-ons') {
+    return <AboutPage navigate={navigate} isAuthenticated={Boolean(session)} />;
+  }
+
+  if (route === '/contact') {
+    return <ContactPage navigate={navigate} isAuthenticated={Boolean(session)} />;
+  }
+
   if (route === '/demo') {
-    return <DemoPage navigate={navigate} />;
+    return <DemoPage navigate={navigate} isAuthenticated={Boolean(session)} />;
   }
 
   if (route === '/login') {
