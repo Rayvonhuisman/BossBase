@@ -210,9 +210,9 @@ async function generateSignedPdf(
   totRow('Totaal incl. BTW', euro((offerte.totaal_incl as number) || 0), true)
 
   // ── NOTITIES ─────────────────────────────────────────────────────────────────
-  if (offerte.notities) {
+  if (offerte.notes) {
     y -= 8
-    const noteLines = String(offerte.notities).split('\n').slice(0, 4)
+    const noteLines = String(offerte.notes).split('\n').slice(0, 4)
     for (const line of noteLines) {
       if (y < 80) break
       drawText(line.slice(0, 120), ML, y, { size: 8, color: gray })
@@ -320,7 +320,7 @@ serve(async (req) => {
     // ── STAP 1: Offerte ophalen ───────────────────────────────────────────────
     const { data: offerte, error: offerteErr } = await admin
       .from('offertes')
-      .select('id, nummer, omschrijving, totaal_incl, totaal_excl, btw_pct, notities, created_at, company_id, customer_id, signed_at, geldig_tot')
+      .select('id, nummer, omschrijving, totaal_incl, totaal_excl, btw_pct, notes, created_at, company_id, customer_id, signed_at, geldig_tot')
       .eq('sign_token', sign_token)
       .maybeSingle()
 
