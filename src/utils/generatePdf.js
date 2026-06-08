@@ -3,11 +3,15 @@ import jsPDF from 'jspdf';
 const euro = n => `€ ${Number(n || 0).toFixed(2).replace('.', ',')}`;
 
 function hexToRgb(hex) {
-  const h = (hex || '#f97316').replace('#', '');
+  const h = (hex || '#1DDB62').replace('#', '');
   const r = parseInt(h.slice(0, 2), 16);
   const g = parseInt(h.slice(2, 4), 16);
   const b = parseInt(h.slice(4, 6), 16);
-  return [isNaN(r) ? 249 : r, isNaN(g) ? 115 : g, isNaN(b) ? 22 : b];
+  return [isNaN(r) ? 29 : r, isNaN(g) ? 219 : g, isNaN(b) ? 98 : b];
+}
+
+function luminance([r, g, b]) {
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 }
 
 const fmtDate = d => {
@@ -17,12 +21,27 @@ const fmtDate = d => {
   return `${parts[2]}-${parts[1]}-${parts[0]}`;
 };
 
+const fmtDateTime = d => {
+  if (!d) return '—';
+  try {
+    return new Date(d).toLocaleString('nl-NL', {
+      day: 'numeric', month: 'numeric', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    });
+  } catch { return String(d); }
+};
+
+// Ink palette matching the design prototype
 const C = {
-  dark:   [17, 24, 39],
-  gray:   [107, 114, 128],
-  light:  [249, 250, 251],
-  border: [229, 231, 235],
-  white:  [255, 255, 255],
+  dark:    [20, 22, 28],      // #14161c
+  soft:    [60, 66, 80],      // #3c4250
+  muted:   [128, 134, 154],   // #80869a
+  faint:   [170, 176, 192],   // #aab0c0
+  line:    [231, 233, 239],   // #e7e9ef
+  lineStr: [211, 215, 224],   // #d3d7e0
+  paper:   [255, 255, 255],
+  panel:   [246, 247, 250],   // #f6f7fa
+  green:   [15, 157, 88],     // #0f9d58
 };
 
 async function imgToBase64(url) {
@@ -41,20 +60,25 @@ async function imgToBase64(url) {
 }
 
 async function buildPdf(doc, type, document, regels, customer, company) {
-  const W = 210, M = 18, CW = W - 2 * M;
-
+  const W = 210, M = 16, CW = W - 2 * M;
   const accent = hexToRgb(company?.brandingColor);
-  const accentLight = accent.map(v => Math.round(v + (255 - v) * 0.88));
+  const accentInk = luminance(accent) > 0.62 ? C.dark : C.paper;
 
-  const tc = (c) => doc.setTextColor(c[0], c[1], c[2]);
-  const fc = (c) => doc.setFillColor(c[0], c[1], c[2]);
-  const dc = (c) => doc.setDrawColor(c[0], c[1], c[2]);
+  const tc = c => doc.setTextColor(c[0], c[1], c[2]);
+  const fc = c => doc.setFillColor(c[0], c[1], c[2]);
+  const dc = c => doc.setDrawColor(c[0], c[1], c[2]);
 
-  let y = M;
+  // ── ACCENT BAND (top of page) ────────────────────────────────
+  fc(accent);
+  doc.rect(0, 0, W, 5, 'F');
 
-  // ── HEADER ─────────────────────────────────────────────────────────────────
+  let y = 17;
 
-  // Logo links
+  // ── HEADER ───────────────────────────────────────────────────
+
+  let headerBottom = y;
+
+  // Logo links — als geen logo: toon bedrijfsnaam als tekst
   if (company?.logoUrl) {
     const logoData = await imgToBase64(company.logoUrl);
     if (logoData) {
@@ -70,192 +94,249 @@ async function buildPdf(doc, type, document, regels, customer, company) {
           img.src = logoData;
         });
         if (imgDims) {
-          const maxWidth = 60, maxHeight = 30;
-          const ratio = Math.min(maxWidth / imgDims.w, maxHeight / imgDims.h);
-          const logoW = imgDims.w * ratio;
-          const logoH = imgDims.h * ratio;
-          doc.addImage(logoData, imgFmt, M, y, logoW, logoH, '', 'FAST');
+          const maxW = 55, maxH = 20;
+          const ratio = Math.min(maxW / imgDims.w, maxH / imgDims.h);
+          const lw = imgDims.w * ratio, lh = imgDims.h * ratio;
+          doc.addImage(logoData, imgFmt, M, y, lw, lh, '', 'FAST');
+          headerBottom = Math.max(headerBottom, y + lh);
         }
       } catch {}
     }
+  } else if (company?.name) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    tc(C.dark);
+    doc.text(company.name, M, y + 9);
+    headerBottom = Math.max(headerBottom, y + 13);
   }
 
-  // Bedrijfsinfo rechts
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  tc(C.dark);
-  doc.text(company?.name || '', W - M, y + 5, { align: 'right' });
-
+  // Bedrijfsgegevens rechts
+  let ry = y + 1;
+  if (company?.name) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    tc(C.dark);
+    doc.text(company.name, W - M, ry, { align: 'right' });
+    ry += 5;
+  }
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
-  tc(C.gray);
-  let ry = y + 10;
-  if (company?.address) { doc.text(company.address, W - M, ry, { align: 'right' }); ry += 4.5; }
-  const companyCity = [company?.postalCode, company?.city].filter(Boolean).join('  ');
-  if (companyCity) { doc.text(companyCity, W - M, ry, { align: 'right' }); ry += 4.5; }
-  if (company?.email) { doc.text(company.email, W - M, ry, { align: 'right' }); ry += 4.5; }
-  if (company?.kvk) { doc.text(`KvK: ${company.kvk}`, W - M, ry, { align: 'right' }); ry += 4.5; }
-  if (company?.btwNumber) { doc.text(`BTW: ${company.btwNumber}`, W - M, ry, { align: 'right' }); }
+  tc(C.soft);
+  if (company?.address) { doc.text(company.address, W - M, ry, { align: 'right' }); ry += 4; }
+  const compCity = [company?.postalCode, company?.city].filter(Boolean).join('  ');
+  if (compCity) { doc.text(compCity, W - M, ry, { align: 'right' }); ry += 4; }
+  if (company?.email) { doc.text(company.email, W - M, ry, { align: 'right' }); ry += 4; }
+  const regParts = [
+    company?.kvk ? `KvK ${company.kvk}` : null,
+    company?.btwNumber ? `BTW ${company.btwNumber}` : null,
+  ].filter(Boolean);
+  if (regParts.length) {
+    tc(C.muted);
+    doc.text(regParts.join(' · '), W - M, ry, { align: 'right' });
+    ry += 4;
+  }
 
-  y = Math.max(y + 26, ry + 4);
+  y = Math.max(headerBottom, ry) + 9;
 
-  // Accentlijn
-  dc(accent);
-  doc.setLineWidth(0.7);
-  doc.line(M, y, W - M, y);
-  y += 10;
+  // ── TITLE ROW ────────────────────────────────────────────────
 
-  // ── DOCUMENT TITEL ─────────────────────────────────────────────────────────
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(22);
-  tc(C.dark);
   const docTitle = document.isCredit ? 'CREDITFACTUUR' : (type === 'factuur' ? 'FACTUUR' : 'OFFERTE');
-  doc.text(docTitle, M, y);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  tc(accent);
-  doc.text(document.nummer || '', M, y + 7);
-  if (document.isCredit && document.creditNote) {
-    tc(C.gray);
-    doc.setFontSize(8.5);
-    doc.text(document.creditNote, M, y + 14);
-    y += 6;
-  }
-  y += 18;
 
-  // ── KLANT + DOCUMENT INFO (twee kolommen) ──────────────────────────────────
-
-  const col2 = M + CW * 0.5 + 4;
-  const custStartY = y;
-
-  // Links: "AAN" + klantgegevens
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  tc(accent);
-  doc.text('AAN', M, y);
-  y += 5;
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
+  doc.setFontSize(38);
   tc(C.dark);
-  doc.text(customer?.name || '—', M, y); y += 5.5;
-  if (customer?.address) { doc.text(customer.address, M, y); y += 5.5; }
-  const custCity = [customer?.postalCode, customer?.city].filter(Boolean).join('  ');
-  if (custCity) { doc.text(custCity, M, y); y += 5.5; }
-  if (customer?.email) {
-    doc.setFontSize(8.5);
-    tc(C.gray);
-    doc.text(customer.email, M, y); y += 5.5;
+  doc.text(docTitle, M, y + 13);
+
+  doc.setFontSize(17);
+  tc(accent);
+  doc.text(document.nummer || '', M, y + 23);
+
+  if (document.isCredit && document.creditNote) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    tc(C.muted);
+    doc.text(document.creditNote, M, y + 30);
   }
 
-  // Rechts: document metagegevens
-  let infoY = custStartY;
-  const infoRow = (label, val) => {
+  // Meta rechts
+  const metaX = W - M - 70;
+  let metaY = y + 2;
+  const metaRow = (label, val) => {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
-    tc(C.gray);
-    doc.text(label, col2, infoY);
+    tc(C.muted);
+    doc.text(label, metaX, metaY);
+    doc.setFont('helvetica', 'bold');
     tc(C.dark);
-    doc.text(val || '—', col2 + 33, infoY);
-    infoY += 5.5;
+    doc.text(val || '—', W - M, metaY, { align: 'right' });
+    metaY += 5.5;
   };
 
-  infoRow(type === 'factuur' ? 'Factuurnummer' : 'Offertenummer', document.nummer);
-  infoRow('Datum', fmtDate(type === 'factuur' ? document.factuurdatum : document.createdAt?.slice(0, 10)));
+  metaRow(type === 'factuur' ? 'Factuurnummer' : 'Offertenummer', document.nummer);
+  metaRow('Datum', fmtDate(type === 'factuur' ? document.factuurdatum : document.createdAt?.slice(0, 10)));
   if (type === 'factuur') {
-    infoRow('Vervaldatum', fmtDate(document.vervaldatum));
-    if (document.betalingskenmerk) infoRow('Betalingskenmerk', document.betalingskenmerk);
+    metaRow('Vervaldatum', fmtDate(document.vervaldatum));
+    if (document.betalingskenmerk) metaRow('Kenmerk', document.betalingskenmerk);
   } else {
-    infoRow('Geldig tot', fmtDate(document.geldigTot));
+    metaRow('Geldig tot', fmtDate(document.geldigTot));
+    const signedAt = document.signedAt || document.signed_at;
+    if (signedAt) metaRow('Ondertekend', fmtDate(signedAt?.slice(0, 10)));
   }
 
-  y = Math.max(y, infoY) + 10;
+  y = Math.max(y + 29, metaY) + 5;
 
-  // ── REGELITEMS TABEL ───────────────────────────────────────────────────────
+  // ── PARTIES ──────────────────────────────────────────────────
 
-  const COL_PERC = [0.40, 0.10, 0.19, 0.11, 0.20];
+  // Accent top-border
+  dc(accent);
+  doc.setLineWidth(0.6);
+  doc.line(M, y, W - M, y);
+
+  const partyStartY = y + 4;
+  const colMid = M + CW / 2;
+
+  // VAN (links — bedrijf)
+  let vanY = partyStartY + 3;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  tc(C.muted);
+  doc.text('VAN', M, vanY);
+  vanY += 5.5;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11.5);
+  tc(C.dark);
+  if (company?.name) { doc.text(company.name, M, vanY); vanY += 5.5; }
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  tc(C.soft);
+  if (company?.address) { doc.text(company.address, M, vanY); vanY += 4.5; }
+  const compCity2 = [company?.postalCode, company?.city].filter(Boolean).join('  ');
+  if (compCity2) { doc.text(compCity2, M, vanY); vanY += 4.5; }
+  if (company?.email) { doc.text(company.email, M, vanY); vanY += 4.5; }
+
+  // AAN (rechts — klant)
+  const aanX = colMid + 6;
+  let aanY = partyStartY + 3;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  tc(C.muted);
+  doc.text('AAN', aanX, aanY);
+  aanY += 5.5;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11.5);
+  tc(C.dark);
+  if (customer?.name) { doc.text(customer.name, aanX, aanY); aanY += 5.5; }
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  tc(C.soft);
+  if (customer?.address) { doc.text(customer.address, aanX, aanY); aanY += 4.5; }
+  const custCity = [customer?.postalCode, customer?.city].filter(Boolean).join('  ');
+  if (custCity) { doc.text(custCity, aanX, aanY); aanY += 4.5; }
+  if (customer?.email) { doc.text(customer.email, aanX, aanY); aanY += 4.5; }
+
+  y = Math.max(vanY, aanY) + 4;
+
+  // Verticale scheiding
+  dc(C.line);
+  doc.setLineWidth(0.3);
+  doc.line(colMid, partyStartY, colMid, y - 2);
+
+  // Onderrand
+  dc(C.line);
+  doc.setLineWidth(0.3);
+  doc.line(M, y, W - M, y);
+  y += 9;
+
+  // ── ITEMS TABEL ───────────────────────────────────────────────
+
+  const COL_PERC = [0.44, 0.10, 0.17, 0.09, 0.20];
   const COL_W = COL_PERC.map(p => CW * p);
   const COL_X = [];
   let cx = M;
   COL_W.forEach(w => { COL_X.push(cx); cx += w; });
-  const ROW_H = 7;
-  const HEADERS = ['Omschrijving', 'Aantal', 'Eenheidsprijs', 'BTW', 'Bedrag'];
 
-  // Tabel header
-  fc(accent);
-  doc.rect(M, y, CW, ROW_H, 'F');
+  // Kolomkoppen
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  tc(C.white);
-  HEADERS.forEach((h, i) => {
-    const isRight = i === 4;
-    const x = isRight ? COL_X[i] + COL_W[i] - 2 : COL_X[i] + 2;
-    doc.text(h, x, y + ROW_H - 2, { align: isRight ? 'right' : 'left' });
+  doc.setFontSize(7.5);
+  tc(C.muted);
+  ['OMSCHRIJVING', 'AANTAL', 'EENHEIDSPRIJS', 'BTW', 'BEDRAG'].forEach((h, i) => {
+    const isR = i >= 1;
+    doc.text(h, isR ? COL_X[i] + COL_W[i] - 1 : COL_X[i], y, { align: isR ? 'right' : 'left' });
   });
-  y += ROW_H;
+  y += 4;
+
+  // Accent scheidingslijn onder headers
+  dc(accent);
+  doc.setLineWidth(0.6);
+  doc.line(M, y, W - M, y);
+  y += 7;
 
   // Rijen
   (regels || []).forEach((r, idx) => {
-    if (y > 245) return; // pagina-overflow bewaking (simpel)
+    if (y > 238) return;
 
-    if (idx % 2 === 0) {
-      fc(C.light);
-      doc.rect(M, y, CW, ROW_H, 'F');
+    if (idx > 0) {
+      dc(C.line);
+      doc.setLineWidth(0.3);
+      doc.line(M, y - 2.5, W - M, y - 2.5);
     }
 
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
+    // Omschrijving (vet)
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
     tc(C.dark);
+    const omschr = doc.splitTextToSize(r.omschrijving || '', COL_W[0] - 2);
+    doc.text(omschr[0] || '', COL_X[0], y);
 
-    // Type label + omschrijving
-    const typeLabel = r.type ? `[${r.type}] ` : '';
-    const omschr = typeLabel + (r.omschrijving || '');
-    const omschrLines = doc.splitTextToSize(omschr, COL_W[0] - 4);
-    doc.text(omschrLines[0] || '', COL_X[0] + 2, y + ROW_H - 2);
+    // Overige kolommen
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    tc(C.soft);
 
-    // Aantal
     const isVast = r.type === 'vast';
-    doc.text(isVast ? '—' : String(r.aantal ?? 1), COL_X[1] + 2, y + ROW_H - 2);
+    doc.text(isVast ? '—' : String(r.aantal ?? 1), COL_X[1] + COL_W[1] - 1, y, { align: 'right' });
 
-    // Eenheidsprijs
     const prijs = type === 'factuur' ? r.eenheidsprijs : r.prijsPer;
-    doc.text(euro(prijs), COL_X[2] + 2, y + ROW_H - 2);
+    doc.text(euro(prijs), COL_X[2] + COL_W[2] - 1, y, { align: 'right' });
 
-    // BTW
     const btwPct = r.btwPct !== undefined ? r.btwPct : (document.btwPct ?? 21);
-    doc.text(`${btwPct}%`, COL_X[3] + 2, y + ROW_H - 2);
+    doc.text(`${btwPct}%`, COL_X[3] + COL_W[3] - 1, y, { align: 'right' });
 
-    // Bedrag
     const bedrag = type === 'factuur' ? r.regelprijs : r.subtotaal;
-    doc.text(euro(bedrag), COL_X[4] + COL_W[4] - 2, y + ROW_H - 2, { align: 'right' });
+    doc.setFont('helvetica', 'bold');
+    tc(C.dark);
+    doc.text(euro(bedrag), COL_X[4] + COL_W[4] - 1, y, { align: 'right' });
 
-    y += ROW_H;
+    y += 9;
   });
 
-  y += 6;
+  // Lijn na laatste rij
+  dc(C.line);
+  doc.setLineWidth(0.3);
+  doc.line(M, y - 1.5, W - M, y - 1.5);
+  y += 7;
 
-  // ── TOTALEN ────────────────────────────────────────────────────────────────
+  // ── TOTALEN ──────────────────────────────────────────────────
 
-  const totLeft = M + CW * 0.6;
-  const totW = W - M - totLeft;
+  const totW = CW * 0.58;
+  const totX = W - M - totW;
 
-  const totRow = (label, val, isFinal = false) => {
-    if (isFinal) {
-      fc(accentLight);
-      doc.rect(totLeft - 4, y - 4.5, totW + 4, 8, 'F');
-    }
-    doc.setFont('helvetica', isFinal ? 'bold' : 'normal');
-    doc.setFontSize(isFinal ? 10 : 8.5);
-    tc(isFinal ? C.dark : C.gray);
-    doc.text(label, totLeft, y);
-    tc(isFinal ? accent : C.dark);
+  const subRow = (label, val) => {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    tc(C.muted);
+    doc.text(label, totX, y);
+    doc.setFont('helvetica', 'bold');
+    tc(C.dark);
     doc.text(val, W - M, y, { align: 'right' });
-    y += 7;
+    y += 9;
   };
 
   if (type === 'factuur') {
-    totRow('Subtotaal excl. BTW', euro(document.totaalExcl));
+    subRow('Subtotaal excl. BTW', euro(document.totaalExcl));
+    dc(C.line); doc.setLineWidth(0.3); doc.line(totX, y - 6, W - M, y - 6);
     const btwGroups = {};
     (regels || []).forEach(r => {
       const pct = r.btwPct ?? 21;
@@ -263,36 +344,189 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     });
     Object.entries(btwGroups)
       .sort(([a], [b]) => Number(a) - Number(b))
-      .forEach(([pct, amt]) => totRow(`BTW ${pct}%`, euro(amt)));
-    totRow('Totaal incl. BTW', euro(document.totaalIncl), true);
+      .forEach(([pct, amt]) => subRow(`BTW ${pct}%`, euro(amt)));
   } else {
     const btwBedrag = Math.round((document.totaalIncl - document.totaalExcl) * 100) / 100;
-    totRow('Subtotaal excl. BTW', euro(document.totaalExcl));
-    totRow(`BTW ${document.btwPct ?? 21}%`, euro(btwBedrag));
-    totRow('Totaal incl. BTW', euro(document.totaalIncl), true);
+    subRow('Subtotaal excl. BTW', euro(document.totaalExcl));
+    dc(C.line); doc.setLineWidth(0.3); doc.line(totX, y - 6, W - M, y - 6);
+    subRow(`BTW ${document.btwPct ?? 21}%`, euro(btwBedrag));
   }
 
-  // ── FOOTER ────────────────────────────────────────────────────────────────
+  y += 2;
 
-  const footY = 276;
-  dc(C.border);
-  doc.setLineWidth(0.3);
-  doc.line(M, footY - 5, W - M, footY - 5);
+  // Grand total box (accent achtergrond)
+  const grandH = 13;
+  fc(accent);
+  doc.roundedRect(totX - 2, y - 1, totW + 2, grandH, 3, 3, 'F');
 
-  const notes = document.notities || document.notes;
-  if (notes) {
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  tc(accentInk);
+  doc.text('Totaal incl. BTW', totX + 4, y + 8);
+
+  doc.setFontSize(17);
+  doc.text(euro(document.totaalIncl), W - M - 3, y + 8.5, { align: 'right' });
+
+  y += grandH + 10;
+
+  // ── NOTITIE / GELDIGHEID ──────────────────────────────────────
+
+  const rawNotes = document.notities || document.notes;
+  const defaultNote = !rawNotes && type === 'offerte' && document.geldigTot
+    ? `Deze offerte is geldig tot ${fmtDate(document.geldigTot)}. Na akkoord ontvangt u een bevestiging per e-mail.`
+    : null;
+  const noteText = rawNotes || defaultNote;
+
+  if (noteText) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    const noteLines = doc.splitTextToSize(noteText, CW - 22);
+    const noteH = Math.max(14, noteLines.length * 4.2 + 12);
+
+    fc(C.panel);
+    doc.roundedRect(M, y, CW, noteH, 3, 3, 'F');
+
+    // 'i' badge
+    fc(accent);
+    doc.ellipse(M + 8, y + noteH / 2, 4, 4, 'F');
+    tc(accentInk);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text('i', M + 8, y + noteH / 2 + 1.2, { align: 'center' });
+
+    tc(C.soft);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(noteLines.slice(0, 5), M + 16, y + 7);
+
+    y += noteH + 8;
+  }
+
+  // ── HANDTEKENING (alleen bij ondertekende offertes) ───────────
+
+  const signedAt = type === 'offerte' ? (document.signedAt || document.signed_at) : null;
+  if (signedAt) {
+    const signedByName = document.signedByName || document.signed_by_name || '';
+    const signedByEmail = document.signedByEmail || document.signed_by_email || '';
+
+    // Signature image ophalen via Supabase storage (als sign_token beschikbaar)
+    let sigImgData = null;
+    const signToken = document.sign_token || document.signToken;
+    if (signToken) {
+      try {
+        const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const sigUrl = `${baseUrl}/storage/v1/object/public/signatures/${signToken}.png`;
+        sigImgData = await imgToBase64(sigUrl);
+      } catch {}
+    }
+
+    const hasImg = Boolean(sigImgData);
+    const signBlockH = hasImg ? 52 : 42;
+
+    // Buitenrand
+    dc(C.lineStr);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(M, y, CW, signBlockH, 3, 3, 'S');
+
+    // Header achtergrond (paneel-kleur, afgerond boven)
+    fc(C.panel);
+    doc.roundedRect(M, y, CW, 13, 3, 3, 'F');
+    doc.rect(M, y + 7, CW, 6, 'F'); // rechte onderhoeken
+
+    // Scheidingslijn onder header
+    dc(C.line);
+    doc.setLineWidth(0.3);
+    doc.line(M, y + 13, W - M, y + 13);
+
+    // Groen vinkje badge
+    fc(C.green);
+    doc.ellipse(M + 9, y + 6.5, 4.5, 4.5, 'F');
+    tc(C.paper);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text('v', M + 9, y + 8.3, { align: 'center' });
+
+    // Titel
+    tc(C.dark);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('Digitaal ondertekend', M + 17, y + 8);
+
+    // Datum rechts
+    tc(C.muted);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
-    tc(C.gray);
-    const lines = doc.splitTextToSize(notes, CW * 0.65);
-    doc.text(lines.slice(0, 4), M, footY);
+    doc.text(`Akkoord · ${fmtDate(signedAt?.slice(0, 10))}`, W - M, y + 8, { align: 'right' });
+
+    // Velden
+    let fy = y + 20;
+    const fields = [
+      ['Ondertekend door', signedByName || '—'],
+      ['E-mailadres', signedByEmail || '—'],
+      ['Datum en tijd', fmtDateTime(signedAt)],
+    ];
+    fields.forEach(([label, val]) => {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      tc(C.muted);
+      doc.text(label, M + 5, fy);
+      doc.setFont('helvetica', 'bold');
+      tc(C.dark);
+      doc.text(val, M + 48, fy);
+      fy += 5.5;
+    });
+
+    // Handtekening afbeelding (rechts)
+    if (hasImg) {
+      try {
+        const sigW = 62, sigH = 24;
+        const sigX = W - M - sigW - 2;
+        const sigY = y + 16;
+        doc.addImage(sigImgData, 'PNG', sigX, sigY, sigW, sigH, '', 'FAST');
+        dc(C.lineStr);
+        doc.setLineWidth(0.3);
+        doc.line(sigX, sigY + sigH + 1, sigX + sigW, sigY + sigH + 1);
+        tc(C.muted);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.text(`Handtekening — ${signedByName}`, sigX + sigW, sigY + sigH + 5, { align: 'right' });
+      } catch {}
+    }
+
+    y += signBlockH + 8;
   }
 
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(7.5);
-  tc(C.gray);
-  doc.text('Gegenereerd door BossBase', W - M, footY + 7, { align: 'right' });
+  // ── FOOTER ────────────────────────────────────────────────────
+
+  const footY = 282;
+  dc(C.line);
+  doc.setLineWidth(0.3);
+  doc.line(M, footY - 3, W - M, footY - 3);
+
+  // Accent stip
+  fc(accent);
+  doc.ellipse(M + 2.5, footY + 2.5, 1.8, 1.8, 'F');
+
+  // "Gegenereerd door BossBase"
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  tc(C.muted);
+  const prefix = 'Gegenereerd door ';
+  doc.text(prefix, M + 7, footY + 4);
+  const prefixW = doc.getTextWidth(prefix);
+  doc.setFont('helvetica', 'bold');
+  doc.text('BossBase', M + 7 + prefixW, footY + 4);
+
+  // Documentreferentie rechts
+  doc.setFont('helvetica', 'normal');
+  tc(C.muted);
+  const docRef = type === 'factuur'
+    ? `Factuur ${document.nummer || ''}`
+    : `Offerte ${document.nummer || ''}`;
+  doc.text(`${docRef} · Pagina 1 van 1`, W - M, footY + 4, { align: 'right' });
 }
+
+// ── EXPORTS ──────────────────────────────────────────────────────────────────
 
 export async function generateFactuurPdf(factuur, regels, customer, company) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -313,8 +547,21 @@ export async function previewOffertePdf(offerte, items, customer, company) {
   window.open(url, '_blank');
 }
 
+export async function previewFactuurPdf(factuur, regels, customer, company) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  await buildPdf(doc, 'factuur', factuur, regels, customer, company);
+  const url = doc.output('bloburl');
+  window.open(url, '_blank');
+}
+
 export async function getOffertePdfUrl(offerte, items, customer, company) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   await buildPdf(doc, 'offerte', offerte, items, customer, company);
+  return doc.output('bloburl');
+}
+
+export async function getFactuurPdfUrl(factuur, regels, customer, company) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  await buildPdf(doc, 'factuur', factuur, regels, customer, company);
   return doc.output('bloburl');
 }

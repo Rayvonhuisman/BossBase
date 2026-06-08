@@ -29,6 +29,9 @@ const toOfferte = row => ({
   notes: row.notes || "",
   sign_token: row.sign_token || null,
   createdAt: row.created_at,
+  signedAt: row.signed_at || null,
+  signedByName: row.signed_by_name || '',
+  signedByEmail: row.signed_by_email || '',
   // Joined klant (optional — alleen aanwezig bij select met customers(*))
   customerName: row.customers?.name || "",
   raw: row,
