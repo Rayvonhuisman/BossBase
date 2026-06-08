@@ -20,9 +20,10 @@ import { NewProjectModal, ProjectBadge } from './ProjectsPage.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { ActivityEditModal, NewActivityModal, NewCustomerModal, NewJobCostModal } from '../components/SharedModals.jsx';
-import { Send } from 'lucide-react';
+import { ChevronDown, Mail, Send } from 'lucide-react';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail, getSentEmailsByCustomer } from '../services/emailService.js';
 import { MailBodyEditor, plainToEditorHtml } from '../components/MailBodyEditor.jsx';
+import { getEmailTemplates } from '../services/instellingenService.js';
 
 const EMPTY_FORMATS = { bold: false, italic: false, underline: false, insertUnorderedList: false, insertOrderedList: false };
 
@@ -133,77 +134,6 @@ function NotitieEditor({ editorRef, minHeight = 200, maxHeight, placeholder, onH
 // `type` and `source` are local-only display state for now (no DB columns yet).
 const emptyCustomerForm = { name: '', company: '', email: '', phone: '', city: '', address: '', postcode: '', kvkNumber: '', btwNumber: '', iban: '', type: 'Zakelijk', source: 'Handmatig', notes: '' };
 
-// ── SEND KLANT EMAIL MODAL ───────────────────────────────────
-
-function SendKlantEmailModal({ customer, company, onClose }) {
-  const toast = useToast();
-  const [form, setForm] = useState({ to: customer?.email || '', subject: '', body: '' });
-  const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
-
-  useEffect(() => {
-    const vars = {
-      klant_naam: customer?.name || 'klant',
-      bedrijfsnaam: company?.name || 'ons bedrijf',
-    };
-    getMailTemplate('algemeen')
-      .then(tpl => {
-        if (tpl) {
-          setForm(f => ({
-            ...f,
-            subject: substituteVars(tpl.onderwerp || '', vars),
-            body: plainToEditorHtml(substituteVars(tpl.body || '', vars)),
-          }));
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  const handleSend = async () => {
-    if (!form.to) { toast.error('E-mailadres is verplicht'); return; }
-    if (!form.subject) { toast.error('Onderwerp is verplicht'); return; }
-    setSending(true);
-    try {
-      await sendEmail({ to: form.to, subject: form.subject, html: form.body || `<p>${form.subject}</p>` });
-      await logSentEmail({ toEmail: form.to, subject: form.subject });
-      toast.success('E-mail verstuurd');
-      onClose();
-    } catch (err) {
-      toast.error(err.message || 'Versturen mislukt');
-    } finally {
-      setSending(false);
-    }
-  };
-
-  return (
-    <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal modal-wide">
-        <div className="modal-hd">
-          <div>
-            <div className="modal-title">E-mail sturen</div>
-            <div className="modal-sub">{customer?.name}</div>
-          </div>
-          <ModalX onClose={onClose} />
-        </div>
-        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div className="f"><label>Aan</label><input value={form.to} onChange={e => setForm(f => ({ ...f, to: e.target.value }))} placeholder="emailadres@klant.nl" /></div>
-          <div className="f"><label>Onderwerp</label><input value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} placeholder="Onderwerp..." /></div>
-          <div className="f">
-            <label>Bericht</label>
-            <MailBodyEditor value={form.body} onChange={html => setForm(f => ({ ...f, body: html }))} placeholder="Schrijf uw bericht hier..." minHeight={180} />
-          </div>
-        </div>
-        <div className="fa">
-          <button className="btn btn-ghost" onClick={onClose}>Annuleren</button>
-          <button className="btn btn-p" onClick={handleSend} disabled={sending || loading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Send size={14} />{sending ? 'Versturen...' : 'Versturen'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── CUSTOMER DETAIL DRAWER ───────────────────────────────────
 export function CustomerPage({ custId, onClose, setPage }) {
@@ -244,9 +174,12 @@ export function CustomerPage({ custId, onClose, setPage }) {
   const [notitiesVisible, setNotitiesVisible] = useState(10);
   const [fullscreen, setFullscreen] = useState(() => localStorage.getItem('customer_fullscreen') === 'true');
   const [sbWidth, setSbWidth] = useState(232);
-  const [showSendMail, setShowSendMail] = useState(false);
   const [sentEmails, setSentEmails] = useState([]);
   const [sentEmailsLoading, setSentEmailsLoading] = useState(false);
+  const [emailTemplates, setEmailTemplates] = useState([]);
+  const [emailForm, setEmailForm] = useState({ to: '', templateId: '', subject: '', body: '' });
+  const [emailSending, setEmailSending] = useState(false);
+  const [expandedEmailId, setExpandedEmailId] = useState(null);
   const { company } = useProfile();
 
   useEffect(() => {
@@ -287,7 +220,15 @@ export function CustomerPage({ custId, onClose, setPage }) {
     if (tab !== 'emails' || !custId) return;
     setSentEmailsLoading(true);
     getSentEmailsByCustomer(custId).then(setSentEmails).catch(() => {}).finally(() => setSentEmailsLoading(false));
+    getEmailTemplates().then(tpls => setEmailTemplates(tpls.filter(t => t.actief))).catch(() => {});
+    setExpandedEmailId(null);
   }, [tab, custId]);
+
+  useEffect(() => {
+    if (tab === 'emails' && c) {
+      setEmailForm(f => ({ ...f, to: c.email || '' }));
+    }
+  }, [tab, c]);
 
   useEffect(() => {
     let alive = true;
@@ -438,6 +379,47 @@ export function CustomerPage({ custId, onClose, setPage }) {
     return `${dag} ${d.getDate()} ${mnd} · ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
   };
 
+  const handleTemplateSelect = templateId => {
+    if (!templateId) {
+      setEmailForm(f => ({ ...f, templateId: '', subject: '', body: '' }));
+      return;
+    }
+    const tpl = emailTemplates.find(t => t.id === templateId);
+    if (!tpl) return;
+    const vars = { klant_naam: c?.name || 'klant', bedrijfsnaam: company?.name || 'BossBase' };
+    setEmailForm(f => ({
+      ...f,
+      templateId,
+      subject: substituteVars(tpl.onderwerp || '', vars),
+      body: plainToEditorHtml(substituteVars(tpl.body || '', vars)),
+    }));
+  };
+
+  const handleSendEmail = async () => {
+    if (!emailForm.to) { toast.error('E-mailadres is verplicht'); return; }
+    if (!emailForm.subject) { toast.error('Onderwerp is verplicht'); return; }
+    setEmailSending(true);
+    try {
+      const html = emailForm.body || `<p>${emailForm.subject}</p>`;
+      const tpl = emailTemplates.find(t => t.id === emailForm.templateId);
+      await sendEmail({ to: emailForm.to, subject: emailForm.subject, html });
+      await logSentEmail({
+        toEmail: emailForm.to,
+        subject: emailForm.subject,
+        bodyHtml: html,
+        relatedType: tpl?.type || null,
+        customerId: c?.id,
+      });
+      toast.success('E-mail verstuurd');
+      getSentEmailsByCustomer(custId).then(setSentEmails).catch(() => {});
+      setEmailForm(f => ({ ...f, templateId: '', subject: '', body: '' }));
+    } catch (err) {
+      toast.error(err.message || 'Versturen mislukt');
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
   const TIJDLIJN_ICON = {
     klant_aangemaakt:         <User size={14} />,
     offerte_aangemaakt:       <FileText size={14} />,
@@ -497,7 +479,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
           <div style={{ fontSize: '.82rem', color: 'var(--dmu)', marginBottom: 10 }}>{c.company} · {c.city}</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-start', marginLeft: 0, paddingLeft: 0 }}>
             {c.phone && <a href={`tel:${c.phone}`} className="btn btn-s btn-sm">{I.call} {c.phone}</a>}
-            {c.email && <button className="btn btn-s btn-sm" onClick={() => setShowSendMail(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Send size={13} /> E-mail sturen</button>}
+            {c.email && <button className="btn btn-s btn-sm" onClick={() => setTab('emails')} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Send size={13} /> E-mail sturen</button>}
             {(c.moneybirdId || c.afasId || c.snelstartId) && (
               <span
                 className="sync-indicator"
@@ -895,28 +877,141 @@ export function CustomerPage({ custId, onClose, setPage }) {
 
       {/* E-mails tab */}
       {tab === 'emails' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Verzonden e-mails</div>
-            <button className="btn btn-s btn-sm" onClick={() => setShowSendMail(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <Send size={13} /> Nieuwe e-mail
-            </button>
-          </div>
-          {sentEmailsLoading && <div style={{ color: 'var(--dl)', fontSize: 13 }}>Laden…</div>}
-          {!sentEmailsLoading && sentEmails.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '28px 0', color: '#9ca3af', fontSize: 13 }}>Nog geen e-mails verstuurd aan deze klant</div>
-          )}
-          {sentEmails.map(m => (
-            <div key={m.id} style={{ padding: '10px 14px', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 'var(--r8)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                <div style={{ fontWeight: 600, fontSize: '.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.subject}</div>
-                <div style={{ fontSize: '.75rem', color: 'var(--dl)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  {m.sent_at ? new Date(m.sent_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}
-                </div>
-              </div>
-              <div style={{ fontSize: '.78rem', color: 'var(--dl)', marginTop: 3 }}>{m.to_email}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          {/* ── Schrijfvak ── */}
+          <div className="card card-p">
+            <div style={{ fontWeight: 700, fontSize: '.9rem', marginBottom: 12 }}>Nieuw bericht</div>
+
+            {/* Template kiezer */}
+            <select
+              value={emailForm.templateId}
+              onChange={e => handleTemplateSelect(e.target.value)}
+              style={{
+                width: '100%', marginBottom: 10, height: 34,
+                background: 'var(--bgs)', border: '1px solid var(--border)',
+                borderRadius: 'var(--r8)', fontSize: '.84rem', padding: '0 10px', color: 'var(--dk)',
+              }}
+            >
+              <option value="">Schrijf zelf een bericht</option>
+              {emailTemplates.map(t => (
+                <option key={t.id} value={t.id}>{t.name || t.type}</option>
+              ))}
+            </select>
+
+            {/* Onderwerp */}
+            <input
+              value={emailForm.subject}
+              onChange={e => setEmailForm(f => ({ ...f, subject: e.target.value }))}
+              placeholder="Onderwerp..."
+              style={{
+                width: '100%', marginBottom: 10, height: 34,
+                background: 'var(--bgs)', border: '1px solid var(--border)',
+                borderRadius: 'var(--r8)', fontSize: '.84rem', padding: '0 10px',
+              }}
+            />
+
+            {/* Bericht body */}
+            <div style={{ marginBottom: 12 }}>
+              <MailBodyEditor
+                value={emailForm.body}
+                onChange={html => setEmailForm(f => ({ ...f, body: html }))}
+                placeholder="Schrijf uw bericht hier..."
+                minHeight={140}
+              />
             </div>
-          ))}
+
+            {/* Footer: Aan + Versturen */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              borderTop: '1px solid var(--border)', paddingTop: 10,
+            }}>
+              <span style={{ fontSize: '.78rem', color: 'var(--dl)', flexShrink: 0, fontWeight: 600 }}>Aan:</span>
+              <input
+                value={emailForm.to}
+                onChange={e => setEmailForm(f => ({ ...f, to: e.target.value }))}
+                placeholder="emailadres@klant.nl"
+                style={{
+                  flex: 1, height: 30, fontSize: '.82rem',
+                  background: 'var(--bgs)', border: '1px solid var(--border)',
+                  borderRadius: 'var(--r8)', padding: '0 8px',
+                }}
+              />
+              <button
+                className="btn btn-p btn-sm"
+                onClick={handleSendEmail}
+                disabled={emailSending || !emailForm.to || !emailForm.subject}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0 }}
+              >
+                <Send size={13} />{emailSending ? 'Versturen...' : 'Versturen'}
+              </button>
+            </div>
+          </div>
+
+          {/* ── Verstuurde mails ── */}
+          {sentEmailsLoading && <div style={{ color: 'var(--dl)', fontSize: '.84rem' }}>Laden…</div>}
+          {!sentEmailsLoading && sentEmails.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '28px 0', color: '#9ca3af', fontSize: '.84rem' }}>
+              Nog geen e-mails verstuurd aan deze klant
+            </div>
+          )}
+          {sentEmails.map(m => {
+            const isExpanded = expandedEmailId === m.id;
+            const isTemplate = Boolean(m.related_type);
+            const fmtDate = m.sent_at
+              ? new Date(m.sent_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+              : '';
+            return (
+              <div key={m.id}>
+                <div
+                  onClick={() => setExpandedEmailId(id => id === m.id ? null : m.id)}
+                  style={{
+                    padding: '10px 14px',
+                    background: isExpanded ? 'white' : 'var(--bgs)',
+                    border: '1px solid var(--border)',
+                    borderRadius: isExpanded ? 'var(--r8) var(--r8) 0 0' : 'var(--r8)',
+                    cursor: 'pointer',
+                    transition: 'background .1s',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                    <span style={{ color: isTemplate ? 'var(--pd)' : 'var(--dl)', display: 'flex', flexShrink: 0 }}>
+                      {isTemplate ? <FileText size={14} /> : <Mail size={14} />}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: '.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {m.subject}
+                      </div>
+                      <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginTop: 2 }}>
+                        {fmtDate}{isTemplate && m.related_type ? ` · ${m.related_type}` : ''}
+                      </div>
+                    </div>
+                    <span style={{
+                      color: 'var(--dl)', display: 'flex', flexShrink: 0,
+                      transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform .15s',
+                    }}>
+                      <ChevronDown size={14} />
+                    </span>
+                  </div>
+                </div>
+                {isExpanded && (
+                  <div style={{
+                    border: '1px solid var(--border)', borderTop: 'none',
+                    borderRadius: '0 0 var(--r8) var(--r8)',
+                    padding: '14px 16px', background: 'white',
+                  }}>
+                    {m.body_html
+                      ? <div dangerouslySetInnerHTML={{ __html: m.body_html }} className="bb-notitie-content" style={{ fontSize: '.85rem', lineHeight: 1.7, color: 'var(--dk)' }} />
+                      : <div style={{ color: 'var(--dl)', fontSize: '.82rem', fontStyle: 'italic' }}>Inhoud niet beschikbaar voor oudere e-mails</div>
+                    }
+                    <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                      Aan: {m.to_email}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -1033,13 +1128,6 @@ export function CustomerPage({ custId, onClose, setPage }) {
           prefillCustomerId={c.id}
           onClose={() => setShowNewProject(false)}
           onSaved={saved => { setProjecten(ps => [saved, ...ps]); setShowNewProject(false); }}
-        />
-      )}
-      {showSendMail && c && (
-        <SendKlantEmailModal
-          customer={c}
-          company={company}
-          onClose={() => setShowSendMail(false)}
         />
       )}
     </div>
