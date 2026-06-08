@@ -82,9 +82,10 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
 
   const setRegel = (id, k, v) => setRegels(rs => rs.map(r => {
     if (r.id !== id) return r;
-    if (k === 'type' && (v === 'uren' || v === 'km')) {
-      const price = v === 'uren' ? (instDefaults?.uurtarief ?? 0) : (instDefaults?.reiskostenPerKm ?? 0);
-      return { ...r, type: v, eenheidsprijs: price };
+    if (k === 'type') {
+      if (v === 'uren') return { ...r, type: v, eenheidsprijs: instDefaults?.uurtarief ?? 0 };
+      if (v === 'km')   return { ...r, type: v, eenheidsprijs: instDefaults?.reiskostenPerKm ?? 0 };
+      if (v === 'vast') return { ...r, type: v, eenheidsprijs: 0 };
     }
     return { ...r, [k]: v };
   }));
@@ -827,9 +828,9 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
       const regels = items.map(item => ({
         id: crypto.randomUUID(),
         omschrijving: item.omschrijving || '',
-        type: item.aantal > 1 ? 'stuks' : 'vast',
+        type: item.aantal > 1 ? 'uren' : 'vast',
         aantal: item.aantal || 1,
-        eenheidsprijs: item.prijsPer || 0,
+        eenheidsprijs: item.prijsPer ?? 0,
         btw: '21',
         btwAnders: '',
       }));
