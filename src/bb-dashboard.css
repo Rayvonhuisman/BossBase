@@ -516,7 +516,7 @@ ul{list-style:none}
 .bb-profile-note{margin-top:14px;padding:10px 12px;background:var(--bgs);border:1px dashed var(--bstrong);border-radius:var(--r8);font-size:.76rem;color:var(--dmu)}
 
 /* Toasts */
-.bb-toast-stack{position:fixed;top:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:300;pointer-events:none}
+.bb-toast-stack{position:fixed;top:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:10000;pointer-events:none}
 .bb-toast{pointer-events:auto;background:#0D0D0D;color:#fff;padding:11px 16px;border-radius:var(--r10);box-shadow:0 12px 40px rgba(0,0,0,.22);display:flex;align-items:center;gap:10px;font-size:.84rem;font-weight:600;min-width:240px;max-width:380px;animation:bbToastIn .25s cubic-bezier(.22,1,.36,1) both;border-left:3px solid var(--p);cursor:pointer}
 .bb-toast-error{border-left-color:#dc2626}
 .bb-toast-info{border-left-color:#2563eb}
