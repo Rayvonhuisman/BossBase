@@ -55,10 +55,11 @@ export async function sendEmail({ to, subject, html, fromName, attachments }) {
 
 // ── VERSTUURDE MAIL LOGGEN ───────────────────────────────────────────────────
 
-export async function logSentEmail({ toEmail, subject, relatedType, relatedId, customerId }) {
+export async function logSentEmail({ toEmail, subject, bodyHtml, relatedType, relatedId, customerId }) {
   const payload = await withCompanyId({
     to_email: toEmail,
     subject,
+    body_html: bodyHtml || null,
     related_type: relatedType || null,
     related_id: relatedId || null,
     customer_id: customerId || null,
@@ -99,7 +100,7 @@ export async function triggerAutoEmail(type, vars, toEmail, companyId, relatedTy
     const body = substituteVars(tpl.body, vars)
     const html = body.split('\n').map(l => l.trim() === '' ? '<br>' : `<p style="margin:0 0 6px 0">${l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>`).join('')
     await sendEmail({ to: toEmail, subject, html })
-    await logSentEmail({ toEmail, subject, relatedType, relatedId, customerId })
+    await logSentEmail({ toEmail, subject, bodyHtml: html, relatedType, relatedId, customerId })
   } catch (e) {
     console.warn('Auto-email mislukt:', e.message)
   }

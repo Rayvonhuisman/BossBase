@@ -692,7 +692,7 @@ function SendOfferteMailModal({ offerte, customers, company, onClose, onSent }) 
     setSending(true);
     try {
       await sendEmail({ to: form.to, subject: form.subject, html: form.body });
-      await logSentEmail({ toEmail: form.to, subject: form.subject, relatedType: 'offerte', relatedId: offerte.id, customerId: offerte.customerId });
+      await logSentEmail({ toEmail: form.to, subject: form.subject, bodyHtml: form.body, relatedType: 'offerte', relatedId: offerte.id, customerId: offerte.customerId });
       if (offerte.status === 'concept') await updateOfferte(offerte.id, { status: 'verzonden' });
       toast.success('E-mail verstuurd');
       onSent?.();

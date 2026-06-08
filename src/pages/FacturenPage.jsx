@@ -775,7 +775,7 @@ function SendFactuurMailModal({ factuur, customers, company, templateType = 'fac
     setSending(true);
     try {
       await sendEmail({ to: form.to, subject: form.subject, html: form.body });
-      await logSentEmail({ toEmail: form.to, subject: form.subject, relatedType: 'factuur', relatedId: factuur.id, customerId: factuur.customerId });
+      await logSentEmail({ toEmail: form.to, subject: form.subject, bodyHtml: form.body, relatedType: 'factuur', relatedId: factuur.id, customerId: factuur.customerId });
       if ((templateType === 'factuur') && (factuur.status === 'aangemaakt' || factuur.status === 'concept')) {
         await updateFactuur(factuur.id, { status: 'verzonden' });
       }

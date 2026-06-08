@@ -649,7 +649,7 @@ export function DatabasePage({ openCustomer }) {
         const html = body.split('\n').map(l => l.trim() === '' ? '<br>' : `<p style="margin:0 0 6px">${l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>`).join('');
         try {
           await sendEmail({ to: c.email, subject, html });
-          await logSentEmail({ toEmail: c.email, subject, relatedType: tpl.type || 'algemeen', customerId: c.id });
+          await logSentEmail({ toEmail: c.email, subject, bodyHtml: html, relatedType: tpl.type || 'algemeen', customerId: c.id });
           ok++;
         } catch { skipped++; }
       }
