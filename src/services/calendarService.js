@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase"
 import { withCompanyId } from "../lib/currentCompany"
 import { safeInsert } from "../lib/safeInsert"
+import { logTijdlijnSafe } from "./klantTijdlijnService"
 
 // Real DB columns: id, company_id, customer_id, deal_id, activity_id, title,
 // start_at, end_at, location, description, created_at, updated_at.
@@ -113,7 +114,12 @@ export async function createCalendarEvent(input) {
   const payload = await withCompanyId(mapCalendarEventFormToPayload(input))
   const { data, error } = await safeInsert(supabase, "calendar_events", payload)
   if (error) throw error
-  return toCalendarEvent(data)
+  const event = toCalendarEvent(data)
+  if (data.customer_id) {
+    const dateStr = event.date ? ` op ${new Date(event.startAt).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}` : ''
+    logTijdlijnSafe(data.customer_id, 'afspraak_ingepland', `Afspraak ingepland: ${event.title}${dateStr}`, { title: event.title, startAt: event.startAt })
+  }
+  return event
 }
 
 export async function updateCalendarEvent(id, input) {

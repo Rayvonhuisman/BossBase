@@ -5,7 +5,7 @@ import {
   fmt, custById, stageLabel, stageCol, Av, StatusBadge, ModalX,
 } from '../bb-shared.jsx';
 import { createCustomer, deleteCustomer, getCustomer, listCustomers, updateCustomer } from '../services/customerService.js';
-import { getKlantNotities, addKlantNotitie, getTijdlijnByCustomer } from '../services/klantTijdlijnService.js';
+import { getKlantNotities, addKlantNotitie, getTijdlijnByCustomer, logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { updateContactInMoneybird } from '../services/accountingService.js';
 import { buildDueAt, createActivity, listActivities, updateActivity } from '../services/activityService.js';
 import { createNote, listNotes } from '../services/noteService.js';
@@ -411,6 +411,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
         customerId: c?.id,
       });
       toast.success('E-mail verstuurd');
+      logTijdlijnSafe(c?.id, 'email_verstuurd', `E-mail verstuurd: ${emailForm.subject}`, { to: emailForm.to, subject: emailForm.subject });
       getSentEmailsByCustomer(custId).then(setSentEmails).catch(() => {});
       setEmailForm(f => ({ ...f, templateId: '', subject: '', body: '' }));
     } catch (err) {
@@ -433,15 +434,24 @@ export function CustomerPage({ custId, onClose, setPage }) {
     project_aangemaakt:       <Folder size={14} />,
     project_status_gewijzigd: <Folder size={14} />,
     notitie_toegevoegd:       <PenLine size={14} />,
+    email_verstuurd:          <Mail size={14} />,
+    herinnering_verstuurd:    <Mail size={14} />,
+    afspraak_ingepland:       <Calendar size={14} />,
+    deal_aangemaakt:          <ShoppingCart size={14} />,
+    deal_fase_gewijzigd:      <ShoppingCart size={14} />,
   };
 
   const TIJDLIJN_KLEUR = type => {
-    if (type.startsWith('klant'))   return '#3b82f6';
-    if (type.startsWith('offerte')) return '#f97316';
-    if (type.startsWith('factuur')) return '#10b981';
-    if (type.startsWith('credit'))  return '#ef4444';
-    if (type.startsWith('project')) return '#6366f1';
-    if (type.startsWith('notitie')) return '#10b981';
+    if (type.startsWith('klant'))       return '#3b82f6';
+    if (type.startsWith('offerte'))     return '#f97316';
+    if (type.startsWith('factuur'))     return '#10b981';
+    if (type.startsWith('credit'))      return '#ef4444';
+    if (type.startsWith('project'))     return '#6366f1';
+    if (type.startsWith('notitie'))     return '#10b981';
+    if (type.startsWith('email'))       return '#0ea5e9';
+    if (type.startsWith('herinnering')) return '#f59e0b';
+    if (type.startsWith('afspraak'))    return '#14b8a6';
+    if (type.startsWith('deal'))        return '#8b5cf6';
     return 'var(--dl)';
   };
 

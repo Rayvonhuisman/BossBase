@@ -14,6 +14,7 @@ import { getProjects } from '../services/projectsService.js';
 import { getBedrijfsinstellingen } from '../services/instellingenService.js';
 import { generateFactuurPdf } from '../utils/generatePdf.js';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
+import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -784,6 +785,12 @@ function SendFactuurMailModal({ factuur, customers, company, templateType = 'fac
       }
       if (templateType === 'herinnering_2') {
         await updateFactuur(factuur.id, { herinnering_2_verstuurd_at: new Date().toISOString() });
+      }
+      if (templateType === 'herinnering_1' || templateType === 'herinnering_2') {
+        const nr = templateType === 'herinnering_1' ? '1' : '2';
+        logTijdlijnSafe(factuur.customerId, 'herinnering_verstuurd', `Betaalherinnering ${nr} verstuurd voor factuur ${factuur.nummer}`, { nummer: factuur.nummer });
+      } else {
+        logTijdlijnSafe(factuur.customerId, 'email_verstuurd', `E-mail verstuurd: ${form.subject}`, { to: form.to, subject: form.subject });
       }
       toast.success('E-mail verstuurd');
       onSent?.();

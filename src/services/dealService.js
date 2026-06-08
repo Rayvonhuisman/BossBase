@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase"
 import { withCompanyId } from "../lib/currentCompany"
 import { safeInsert } from "../lib/safeInsert"
+import { logTijdlijnSafe } from "./klantTijdlijnService"
 
 // pipeline_stages table has no color_class column — derive from position/name
 const STAGE_COLORS = ["b-new","b-orange","b-blue","b-blue","b-orange","b-orange","b-green","b-planned","b-progress","b-done","b-accepted","b-lost"]
@@ -71,7 +72,11 @@ export async function updateDealStage(dealId, stageId) {
     console.error("[bb:pipeline] updateDealStage mislukt", { message: error.message, code: error.code, dealId, stage_id: stageId })
     throw error
   }
-  return toDeal(data)
+  const deal = toDeal(data)
+  if (deal.custId) {
+    logTijdlijnSafe(deal.custId, 'deal_fase_gewijzigd', `Deal fase gewijzigd: ${deal.title}`, { dealId: deal.id, stageId })
+  }
+  return deal
 }
 
 const isUuid = v => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
@@ -105,7 +110,11 @@ export async function createDeal(input) {
     })
     throw error
   }
-  return toDeal(data)
+  const deal = toDeal(data)
+  if (deal.custId) {
+    logTijdlijnSafe(deal.custId, 'deal_aangemaakt', `Deal aangemaakt: ${deal.title}`, { dealId: deal.id, title: deal.title })
+  }
+  return deal
 }
 
 export async function updateDeal(dealId, input) {

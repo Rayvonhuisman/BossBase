@@ -13,6 +13,7 @@ import { listDeals } from '../services/dealService.js';
 import { NewFactuurModal } from './FacturenPage.jsx';
 import { generateOffertePdf } from '../utils/generatePdf.js';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
+import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 
 const offerteBadge = status => {
   const map = { concept: 'b-concept', verzonden: 'b-sent', geaccepteerd: 'b-accepted', afgewezen: 'b-declined' };
@@ -35,11 +36,10 @@ const emptyRegel = () => ({
 });
 
 const TYPE_CFG = {
-  uren:  { label: 'Uren',  v1Ph: '0 uur',  v2Ph: '0,00', hasV1: true,  v1Step: '0.5',  regelLabel: r => `${r.aantal}u × €${r.eenheidsprijs}` },
-  m2:    { label: 'm²',    v1Ph: '0 m²',   v2Ph: '0,00', hasV1: true,  v1Step: '0.01', regelLabel: r => `${r.aantal}m² × €${r.eenheidsprijs}` },
-  stuks: { label: 'Stuks', v1Ph: '0 st.',  v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal}st. × €${r.eenheidsprijs}` },
-  vast:  { label: 'Vast',  v1Ph: null,     v2Ph: '0,00', hasV1: false, v1Step: '1',    regelLabel: null },
-  km:    { label: 'Km',    v1Ph: '0 km',   v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal}km × €${r.eenheidsprijs}` },
+  uren: { label: 'Uren', v1Ph: '0 uur',  v2Ph: '0,00', hasV1: true,  v1Step: '0.5',  regelLabel: r => `${r.aantal}u × €${r.eenheidsprijs}` },
+  m2:   { label: 'm²',   v1Ph: '0 m²',   v2Ph: '0,00', hasV1: true,  v1Step: '0.01', regelLabel: r => `${r.aantal}m² × €${r.eenheidsprijs}` },
+  km:   { label: 'Km',   v1Ph: '0 km',   v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal}km × €${r.eenheidsprijs}` },
+  vast: { label: 'Vast', v1Ph: null,     v2Ph: '0,00', hasV1: false, v1Step: '1',    regelLabel: null },
 };
 
 function BtwSelect({ r, setRegel }) {
@@ -332,9 +332,9 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
         setRegels(items.map(item => ({
           id: crypto.randomUUID(),
           omschrijving: item.omschrijving,
-          type: 'stuks',
+          type: item.aantal > 1 ? 'uren' : 'vast',
           aantal: item.aantal,
-          eenheidsprijs: item.prijsPer,
+          eenheidsprijs: item.prijsPer ?? 0,
           btw: '21',
           btwAnders: '',
         })));
@@ -694,6 +694,7 @@ function SendOfferteMailModal({ offerte, customers, company, onClose, onSent }) 
       await sendEmail({ to: form.to, subject: form.subject, html: form.body });
       await logSentEmail({ toEmail: form.to, subject: form.subject, bodyHtml: form.body, relatedType: 'offerte', relatedId: offerte.id, customerId: offerte.customerId });
       if (offerte.status === 'concept') await updateOfferte(offerte.id, { status: 'verzonden' });
+      logTijdlijnSafe(offerte.customerId, 'email_verstuurd', `E-mail verstuurd: ${form.subject}`, { to: form.to, subject: form.subject });
       toast.success('E-mail verstuurd');
       onSent?.();
       onClose();

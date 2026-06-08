@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { supabase } from '../lib/supabase.js';
 import { I, fmt, Av } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
@@ -12,6 +12,7 @@ import { listDeals, listPipelineStages } from '../services/dealService.js';
 import { listActivities } from '../services/activityService.js';
 import { getEmailTemplates } from '../services/instellingenService.js';
 import { sendEmail, logSentEmail, substituteVars } from '../services/emailService.js';
+import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { getCompanyId } from '../lib/currentCompany.js';
 
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -650,6 +651,7 @@ export function DatabasePage({ openCustomer }) {
         try {
           await sendEmail({ to: c.email, subject, html });
           await logSentEmail({ toEmail: c.email, subject, bodyHtml: html, relatedType: tpl.type || 'algemeen', customerId: c.id });
+          logTijdlijnSafe(c.id, 'email_verstuurd', `E-mail verstuurd: ${subject}`, { to: c.email, subject });
           ok++;
         } catch { skipped++; }
       }
@@ -676,21 +678,42 @@ export function DatabasePage({ openCustomer }) {
     };
   });
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
+    try {
     const rows = buildExportRows();
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Klanten');
-    XLSX.writeFile(wb, `BossBase-export-${TODAY}.xlsx`);
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Klanten');
+    ws.columns = [
+      { header: 'Naam',            key: 'Naam',            width: 28 },
+      { header: 'Email',           key: 'Email',           width: 32 },
+      { header: 'Telefoon',        key: 'Telefoon',        width: 18 },
+      { header: 'Stad',            key: 'Stad',            width: 18 },
+      { header: 'KvK',             key: 'KvK',             width: 14 },
+      { header: 'Laatste project', key: 'Laatste project', width: 24 },
+      { header: 'Totale omzet',    key: 'Totale omzet',    width: 16 },
+      { header: 'Aanmaakdatum',    key: 'Aanmaakdatum',    width: 14 },
+    ];
+    ws.getRow(1).font = { bold: true };
+    rows.forEach(r => ws.addRow(r));
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `BossBase-export-${TODAY}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
     setShowBulkMenu(false);
     toast.success(`${rows.length} klanten geëxporteerd als Excel`);
+    } catch (err) { toast.error('Excel export mislukt: ' + (err.message || '')); }
   };
 
   const exportCsv = () => {
     const rows = buildExportRows();
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const csv = XLSX.utils.sheet_to_csv(ws);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const headers = ['Naam', 'Email', 'Telefoon', 'Stad', 'KvK', 'Laatste project', 'Totale omzet', 'Aanmaakdatum'];
+    const escape = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const csv = [headers.map(escape), ...rows.map(r => headers.map(h => escape(r[h])))].map(r => r.join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
