@@ -12,6 +12,7 @@ import { listDeals, listPipelineStages } from '../services/dealService.js';
 import { listActivities } from '../services/activityService.js';
 import { getEmailTemplates } from '../services/instellingenService.js';
 import { sendEmail, logSentEmail, substituteVars } from '../services/emailService.js';
+import { MailBodyEditor, plainToEditorHtml } from '../components/MailBodyEditor.jsx';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { getCompanyId } from '../lib/currentCompany.js';
 
@@ -205,7 +206,7 @@ function QuickDropdown({ label, options, value, onChange }) {
 }
 
 // ── FILTER BAR ───────────────────────────────────────────────
-function FilterBar({ quickTab, setQuickTab, searchQuery, setSearchQuery, filters, setFilter, stadsUniek, active, onClearAll }) {
+function FilterBar({ quickTab, setQuickTab, searchQuery, setSearchQuery, filters, setFilter, stadsUniek, active, onClearAll, connectedIntegrations }) {
   const tabs = [
     { id: 'alle', label: 'Alle' },
     { id: 'actief', label: 'Actief' },
@@ -266,7 +267,9 @@ function FilterBar({ quickTab, setQuickTab, searchQuery, setSearchQuery, filters
       <QuickDropdown label="Stad" options={stadOptions} value={filters.stad} onChange={v => setFilter('stad', v)} />
       <QuickDropdown label="Project status" options={projectStatusOptions} value={filters.projectStatussen[0] || ''} onChange={v => setFilter('projectStatussen', v ? [v] : [])} />
       <QuickDropdown label="Laatste contact" options={contactOptions} value={filters.laatsteContactDagen} onChange={v => setFilter('laatsteContactDagen', v)} />
-      <QuickDropdown label="Moneybird" options={moneybirdOptions} value={filters.heeftMoneybird} onChange={v => setFilter('heeftMoneybird', v)} />
+      {connectedIntegrations?.has('moneybird') && <QuickDropdown label="Moneybird sync" options={moneybirdOptions} value={filters.heeftMoneybird} onChange={v => setFilter('heeftMoneybird', v)} />}
+      {connectedIntegrations?.has('snelstart') && <QuickDropdown label="SnelStart sync" options={moneybirdOptions} value={filters.heeftMoneybird} onChange={v => setFilter('heeftMoneybird', v)} />}
+      {connectedIntegrations?.has('afas') && <QuickDropdown label="AFAS sync" options={moneybirdOptions} value={filters.heeftMoneybird} onChange={v => setFilter('heeftMoneybird', v)} />}
 
       <div style={{ flex: 1 }} />
 
@@ -428,6 +431,7 @@ export function DatabasePage({ openCustomer }) {
   const [stages, setStages]           = useState([]);
   const [templates, setTemplates]     = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
+  const [connectedIntegrations, setConnectedIntegrations] = useState(new Set());
   const [loading, setLoading]         = useState(true);
 
   const [filters, setFilters]             = useState(EMPTY_FILTERS);
@@ -444,9 +448,10 @@ export function DatabasePage({ openCustomer }) {
   const [currentPage, setCurrentPage] = useState(1);
   const PER_PAGE = 50;
 
-  const [showMailModal, setShowMailModal]       = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState('');
-  const [sending, setSending]                   = useState(false);
+  const [showMailModal, setShowMailModal] = useState(false);
+  const [mailForm, setMailForm]           = useState({ templateId: '', subject: '', body: '' });
+  const [showRecipients, setShowRecipients] = useState(false);
+  const [sending, setSending]             = useState(false);
 
   const [showBulkMenu, setShowBulkMenu] = useState(false);
   const bulkMenuRef = useRef(null);
@@ -493,10 +498,23 @@ export function DatabasePage({ openCustomer }) {
         const { data } = await supabase.from('profiles').select('id,full_name').eq('company_id', companyId);
         return data || [];
       })(),
-    ]).then(([c, p, f, o, d, a, tpl, st, se, ur, tm]) => {
+      (async () => {
+        const companyId = await getCompanyId();
+        if (!companyId) return [];
+        const { data } = await supabase.from('accounting_connections').select('provider,api_token,subscription_key,is_connected').eq('company_id', companyId);
+        return data || [];
+      })(),
+    ]).then(([c, p, f, o, d, a, tpl, st, se, ur, tm, ac]) => {
       setCustomers(c); setProjects(p); setFacturen(f); setOffertes(o);
       setDeals(d); setActivities(a); setTemplates(tpl); setStages(st);
       setSentEmails(se); setUrenData(ur); setTeamMembers(tm);
+      const connected = new Set();
+      (ac || []).forEach(row => {
+        if (row.provider === 'moneybird' && row.api_token) connected.add('moneybird');
+        if (row.provider === 'snelstart' && row.subscription_key) connected.add('snelstart');
+        if (row.provider === 'afas' && row.is_connected) connected.add('afas');
+      });
+      setConnectedIntegrations(connected);
     }).catch(err => toast.error(err.message || 'Laden mislukt'))
     .finally(() => setLoading(false));
   }, []);
@@ -642,22 +660,42 @@ export function DatabasePage({ openCustomer }) {
   };
 
   // ── Bulk mail ────────────────────────────────────────────────
-  const handleSendMail = async () => {
-    if (!selectedTemplate) { toast.error('Kies een e-mailtemplate'); return; }
-    const tpl = templates.find(t => t.id === selectedTemplate);
+  const mailBodyRef = useRef(null);
+
+  const openMailModal = () => {
+    setMailForm({ templateId: '', subject: '', body: '' });
+    setShowRecipients(false);
+    setShowMailModal(true);
+  };
+
+  const handleMailTemplateChange = (tplId) => {
+    if (!tplId) {
+      setMailForm({ templateId: '', subject: '', body: '' });
+      return;
+    }
+    const tpl = templates.find(t => t.id === tplId);
     if (!tpl) return;
+    const newBody = tpl.body || '';
+    setMailForm({ templateId: tplId, subject: tpl.onderwerp || '', body: newBody });
+    if (mailBodyRef.current) mailBodyRef.current.setHtml(plainToEditorHtml(newBody));
+  };
+
+  const handleSendMail = async () => {
+    if (!mailForm.subject.trim()) { toast.error('Vul een onderwerp in'); return; }
+    if (!mailForm.body.trim())    { toast.error('Schrijf een bericht'); return; }
     setSending(true);
     let ok = 0, skipped = 0;
     try {
       for (const c of selectedCustomers) {
         if (!c.email) { skipped++; continue; }
         const vars = { klant_naam: c.name, bedrijfsnaam: c.name };
-        const subject = substituteVars(tpl.onderwerp || '', vars);
-        const body    = substituteVars(tpl.body || '', vars);
+        const subject = substituteVars(mailForm.subject, vars);
+        const body    = substituteVars(mailForm.body, vars);
         const html    = body.split('\n').map(l => l.trim() === '' ? '<br>' : `<p style="margin:0 0 6px">${l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>`).join('');
+        const tpl     = templates.find(t => t.id === mailForm.templateId);
         try {
           await sendEmail({ to: c.email, subject, html });
-          await logSentEmail({ toEmail: c.email, subject, bodyHtml: html, relatedType: tpl.type || 'algemeen', customerId: c.id });
+          await logSentEmail({ toEmail: c.email, subject, bodyHtml: html, relatedType: tpl?.type || 'algemeen', customerId: c.id });
           logTijdlijnSafe(c.id, 'email_verstuurd', `E-mail verstuurd: ${subject}`, { to: c.email, subject });
           ok++;
         } catch { skipped++; }
@@ -735,8 +773,6 @@ export function DatabasePage({ openCustomer }) {
   const ACTIVITEIT_TYPEN   = [{ id: 'call', label: 'Bellen' }, { id: 'email', label: 'E-mail' }, { id: 'visit', label: 'Bezoek' }, { id: 'task', label: 'Taak' }, { id: 'follow', label: 'Follow-up' }];
   const PROJECT_STATUSSEN  = Object.entries(PROJECT_STATUS).map(([id, v]) => ({ id, label: v.label }));
   const teamOpties         = teamMembers.map(m => ({ id: m.id, label: m.full_name }));
-  const noEmail            = selectedCustomers.filter(c => !c.email);
-
   const clearAll = () => { setFilters(EMPTY_FILTERS); setQuickTab('alle'); setSearchQuery(''); setCurrentPage(1); };
 
   if (loading) return (
@@ -813,6 +849,7 @@ export function DatabasePage({ openCustomer }) {
           setSearchQuery={q => { setSearchQuery(q); setCurrentPage(1); }}
           filters={filters} setFilter={setFilter}
           stadsUniek={stadsUniek} active={active} onClearAll={clearAll}
+          connectedIntegrations={connectedIntegrations}
         />
       </div>
 
@@ -847,13 +884,33 @@ export function DatabasePage({ openCustomer }) {
                 <option value="nee">Geen KvK</option>
               </select>
             </FilterRow>
-            <FilterRow label="Moneybird sync">
-              <select value={filters.heeftMoneybird} onChange={e => setFilter('heeftMoneybird', e.target.value)} style={FIN}>
-                <option value="alles">Alles</option>
-                <option value="ja">Gesynchroniseerd</option>
-                <option value="nee">Niet gesynchroniseerd</option>
-              </select>
-            </FilterRow>
+            {connectedIntegrations.has('moneybird') && (
+              <FilterRow label="Moneybird sync">
+                <select value={filters.heeftMoneybird} onChange={e => setFilter('heeftMoneybird', e.target.value)} style={FIN}>
+                  <option value="alles">Alles</option>
+                  <option value="ja">Gesynchroniseerd</option>
+                  <option value="nee">Niet gesynchroniseerd</option>
+                </select>
+              </FilterRow>
+            )}
+            {connectedIntegrations.has('snelstart') && (
+              <FilterRow label="SnelStart sync">
+                <select value={filters.heeftMoneybird} onChange={e => setFilter('heeftMoneybird', e.target.value)} style={FIN}>
+                  <option value="alles">Alles</option>
+                  <option value="ja">Gesynchroniseerd</option>
+                  <option value="nee">Niet gesynchroniseerd</option>
+                </select>
+              </FilterRow>
+            )}
+            {connectedIntegrations.has('afas') && (
+              <FilterRow label="AFAS sync">
+                <select value={filters.heeftMoneybird} onChange={e => setFilter('heeftMoneybird', e.target.value)} style={FIN}>
+                  <option value="alles">Alles</option>
+                  <option value="ja">Gesynchroniseerd</option>
+                  <option value="nee">Niet gesynchroniseerd</option>
+                </select>
+              </FilterRow>
+            )}
             <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--dm)', cursor: 'pointer' }}>
               <input type="checkbox" checked={filters.geenProject} onChange={e => setFilter('geenProject', e.target.checked)} style={{ accentColor: 'var(--p)' }} />
               Nog nooit een project
@@ -1129,7 +1186,7 @@ export function DatabasePage({ openCustomer }) {
                 minWidth: 220, overflow: 'hidden', zIndex: 60,
               }}>
                 {[
-                  { icon: <IconMail />, label: 'E-mail versturen', action: () => { setShowBulkMenu(false); setShowMailModal(true); } },
+                  { icon: <IconMail />, label: 'E-mail versturen', action: () => { setShowBulkMenu(false); openMailModal(); } },
                   { icon: <IconExcel />, label: 'Exporteren als Excel', action: exportExcel },
                   { icon: <IconCsv />, label: 'Exporteren als CSV', action: exportCsv },
                   { icon: <IconBookmark />, label: 'Segment opslaan', action: () => { setShowBulkMenu(false); setShowSaveSegment(true); } },
@@ -1152,61 +1209,111 @@ export function DatabasePage({ openCustomer }) {
       )}
 
       {/* ── Mail modal ── */}
-      {showMailModal && (
-        <div className="overlay" onClick={e => e.target === e.currentTarget && !sending && setShowMailModal(false)}>
-          <div className="modal">
-            <div className="modal-hd">
-              <div>
-                <div className="modal-title">Mail versturen</div>
-                <div className="modal-sub">Aan: {selectedCustomers.length} klant{selectedCustomers.length !== 1 ? 'en' : ''}</div>
-              </div>
-              <button className="modal-x" onClick={() => !sending && setShowMailModal(false)}>{I.x}</button>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Template</label>
-                <select
-                  value={selectedTemplate} onChange={e => setSelectedTemplate(e.target.value)}
-                  style={{ height: 36, borderRadius: 'var(--r8)', border: '1px solid var(--br)', padding: '0 10px', fontSize: 13 }}
-                >
-                  <option value="">— Kies template —</option>
-                  {templates.filter(t => t.actief).map(t => (
-                    <option key={t.id} value={t.id}>{t.name || t.type}</option>
-                  ))}
-                </select>
-              </div>
-              {selectedTemplate && (
-                <div style={{ background: 'var(--pll)', borderRadius: 'var(--r8)', padding: '12px 14px', fontSize: 13 }}>
-                  Je verstuurt <strong>{templates.find(t => t.id === selectedTemplate)?.name || 'deze mail'}</strong> naar{' '}
-                  <strong>{selectedCustomers.length} klant{selectedCustomers.length !== 1 ? 'en' : ''}</strong>.
+      {showMailModal && (() => {
+        const withEmail    = selectedCustomers.filter(c => c.email);
+        const withoutEmail = selectedCustomers.filter(c => !c.email);
+        const canSend      = !sending && mailForm.subject.trim() && mailForm.body.trim() && withEmail.length > 0;
+        return (
+          <div className="overlay" onClick={e => e.target === e.currentTarget && !sending && setShowMailModal(false)}>
+            <div className="modal" style={{ maxWidth: 560, width: '100%' }}>
+              <div className="modal-hd">
+                <div>
+                  <div className="modal-title">Mail versturen</div>
+                  <div className="modal-sub">{selectedCustomers.length} klant{selectedCustomers.length !== 1 ? 'en' : ''} geselecteerd</div>
                 </div>
-              )}
-              <div style={{ maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
-                {selectedCustomers.slice(0, 10).map(c => (
-                  <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '4px 0', borderBottom: '1px solid var(--br)' }}>
-                    <span style={{ fontWeight: 500 }}>{c.name}</span>
-                    {c.email ? <span style={{ color: 'var(--dmu)' }}>{c.email}</span> : <span style={{ color: '#dc2626', fontSize: 11 }}>geen emailadres</span>}
+                <button className="modal-x" onClick={() => !sending && setShowMailModal(false)}>{I.x}</button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
+
+                {/* Template dropdown */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Template</label>
+                  <select
+                    value={mailForm.templateId}
+                    onChange={e => handleMailTemplateChange(e.target.value)}
+                    style={{ height: 36, borderRadius: 'var(--r8)', border: '1px solid var(--br)', padding: '0 10px', fontSize: 13, background: '#fff' }}
+                  >
+                    <option value="">— Schrijf zelf een bericht —</option>
+                    {templates.filter(t => t.actief).map(t => (
+                      <option key={t.id} value={t.id}>{t.name || t.type}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Onderwerp */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Onderwerp</label>
+                  <input
+                    type="text"
+                    placeholder="Onderwerp van de e-mail"
+                    value={mailForm.subject}
+                    onChange={e => setMailForm(f => ({ ...f, subject: e.target.value }))}
+                    style={{ height: 36, borderRadius: 'var(--r8)', border: '1px solid var(--br)', padding: '0 10px', fontSize: 13 }}
+                  />
+                </div>
+
+                {/* Bericht */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Bericht</label>
+                  <MailBodyEditor
+                    ref={mailBodyRef}
+                    value={mailForm.body}
+                    onChange={v => setMailForm(f => ({ ...f, body: v }))}
+                    placeholder="Schrijf je bericht hier… Variabelen zoals {{klant_naam}} worden per klant ingevuld."
+                    minHeight={160}
+                  />
+                </div>
+
+                {/* Ontvangers */}
+                <div style={{ border: '1px solid var(--br)', borderRadius: 'var(--r8)', overflow: 'hidden' }}>
+                  <button
+                    onClick={() => setShowRecipients(v => !v)}
+                    style={{
+                      width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '10px 14px', background: 'var(--bg)', border: 'none', cursor: 'pointer',
+                      fontSize: 13, fontWeight: 500, color: 'var(--dk)',
+                    }}
+                  >
+                    <span>Versturen naar <strong>{withEmail.length}</strong> klant{withEmail.length !== 1 ? 'en' : ''}{withoutEmail.length > 0 && <span style={{ color: '#dc2626', marginLeft: 6 }}>({withoutEmail.length} zonder e-mail)</span>}</span>
+                    <span style={{ color: 'var(--dl)', fontSize: 11 }}>{showRecipients ? '▲' : '▼'}</span>
+                  </button>
+                  {showRecipients && (
+                    <div style={{ maxHeight: 180, overflowY: 'auto', borderTop: '1px solid var(--br)' }}>
+                      {selectedCustomers.map(c => (
+                        <div key={c.id} style={{
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          padding: '7px 14px', fontSize: 12, borderBottom: '1px solid var(--border)',
+                        }}>
+                          <span style={{ fontWeight: 500 }}>{c.name}</span>
+                          {c.email
+                            ? <span style={{ color: 'var(--dmu)' }}>{c.email}</span>
+                            : <span style={{ color: '#dc2626', fontStyle: 'italic' }}>geen e-mailadres — wordt overgeslagen</span>
+                          }
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Waarschuwing */}
+                {withoutEmail.length > 0 && (
+                  <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 'var(--r8)', padding: '10px 14px', fontSize: 12, color: '#92400e' }}>
+                    ⚠️ {withoutEmail.length} klant{withoutEmail.length !== 1 ? 'en hebben' : ' heeft'} geen e-mailadres en {withoutEmail.length !== 1 ? 'worden' : 'wordt'} overgeslagen.
                   </div>
-                ))}
-                {selectedCustomers.length > 10 && (
-                  <div style={{ fontSize: 12, color: 'var(--dl)', padding: '4px 0' }}>+ {selectedCustomers.length - 10} meer</div>
                 )}
               </div>
-              {noEmail.length > 0 && (
-                <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 'var(--r8)', padding: '10px 14px', fontSize: 12, color: '#92400e' }}>
-                  ⚠️ {noEmail.length} klant{noEmail.length !== 1 ? 'en hebben' : ' heeft'} geen emailadres en {noEmail.length !== 1 ? 'worden' : 'wordt'} overgeslagen.
-                </div>
-              )}
-            </div>
-            <div className="fa">
-              <button className="btn btn-ghost" onClick={() => setShowMailModal(false)} disabled={sending}>Annuleren</button>
-              <button className="btn btn-p" onClick={handleSendMail} disabled={sending || !selectedTemplate}>
-                {sending ? 'Versturen...' : 'Bevestigen en versturen'}
-              </button>
+
+              <div className="fa">
+                <button className="btn btn-ghost" onClick={() => setShowMailModal(false)} disabled={sending}>Annuleren</button>
+                <button className="btn btn-p" onClick={handleSendMail} disabled={!canSend}>
+                  {sending ? 'Versturen...' : `Versturen naar ${withEmail.length} klant${withEmail.length !== 1 ? 'en' : ''}`}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
