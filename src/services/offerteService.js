@@ -32,6 +32,7 @@ const toOfferte = row => ({
   signedAt: row.signed_at || null,
   signedByName: row.signed_by_name || '',
   signedByEmail: row.signed_by_email || '',
+  signedPdfUrl: row.signed_pdf_url || null,
   // Joined klant (optional — alleen aanwezig bij select met customers(*))
   customerName: row.customers?.name || "",
   raw: row,

@@ -405,6 +405,16 @@ serve(async (req) => {
 
       if (pdfUploadErr) {
         warnings.push(`PDF upload mislukt (signed-offertes): ${pdfUploadErr.message}`)
+      } else {
+        // Sla de publieke URL op in de offerte record
+        const { data: pdfPublicUrlData } = admin.storage.from('signed-offertes').getPublicUrl(pdfFilename)
+        const signedPdfUrl = pdfPublicUrlData?.publicUrl || null
+        if (signedPdfUrl) {
+          const { error: urlUpdateErr } = await admin.from('offertes')
+            .update({ signed_pdf_url: signedPdfUrl })
+            .eq('id', offerte.id)
+          if (urlUpdateErr) warnings.push(`PDF URL opslaan mislukt: ${urlUpdateErr.message}`)
+        }
       }
 
       const pdfBase64 = uint8ArrayToBase64(pdfBytes)

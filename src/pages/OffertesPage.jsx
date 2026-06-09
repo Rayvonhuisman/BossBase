@@ -638,12 +638,39 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
               <div style={{ fontSize: 13, color: 'var(--tx)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{offerte.notes}</div>
             </div>
           )}
+          {offerte.signedAt && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              background: '#f0fdf4', border: '1px solid #bbf7d0',
+              borderRadius: 8, padding: '10px 14px',
+            }}>
+              <span style={{ fontSize: 16 }}>✅</span>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#15803d' }}>Ondertekend</div>
+                <div style={{ fontSize: 11, color: '#166534' }}>
+                  {offerte.signedByName} · {new Date(offerte.signedAt).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
         <div className="fa">
           {onSendMail && <button className="btn btn-s" onClick={() => { onClose(); onSendMail(offerte); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={14} /> Verstuur per mail</button>}
-          <button className="btn btn-p" onClick={handleDownloadPdf} disabled={pdfLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Download size={15} />{pdfLoading ? 'Genereren...' : 'Download PDF'}
-          </button>
+          {offerte.signedPdfUrl ? (
+            <a
+              href={offerte.signedPdfUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-p"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}
+            >
+              <Download size={15} /> Download getekende offerte
+            </a>
+          ) : (
+            <button className="btn btn-p" onClick={handleDownloadPdf} disabled={pdfLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Download size={15} />{pdfLoading ? 'Genereren...' : 'Download PDF'}
+            </button>
+          )}
           <button className="btn btn-ghost" onClick={onClose}>Sluiten</button>
           {offerte.status === 'geaccepteerd' && onMaakFactuur && (
             <button className="btn btn-p" onClick={() => onMaakFactuur(offerte)}>{I.brief} Maak factuur</button>

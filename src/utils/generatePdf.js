@@ -70,9 +70,9 @@ async function buildPdf(doc, type, document, regels, customer, company) {
 
   // ── ACCENT BAND (top of page) ────────────────────────────────
   fc(accent);
-  doc.rect(0, 0, W, 5, 'F');
+  doc.rect(0, 0, W, 2.5, 'F');
 
-  let y = 17;
+  let y = 14;
 
   // ── HEADER ───────────────────────────────────────────────────
 
@@ -388,16 +388,16 @@ async function buildPdf(doc, type, document, regels, customer, company) {
 
     // 'i' badge
     fc(accent);
-    doc.ellipse(M + 8, y + noteH / 2, 4, 4, 'F');
+    doc.ellipse(M + 6, y + noteH / 2, 2.8, 2.8, 'F');
     tc(accentInk);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.text('i', M + 8, y + noteH / 2 + 1.2, { align: 'center' });
+    doc.setFontSize(7);
+    doc.text('i', M + 6, y + noteH / 2 + 1, { align: 'center' });
 
     tc(C.soft);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    doc.text(noteLines.slice(0, 5), M + 16, y + 7);
+    doc.text(noteLines.slice(0, 5), M + 13, y + 7);
 
     y += noteH + 8;
   }
@@ -503,19 +503,15 @@ async function buildPdf(doc, type, document, regels, customer, company) {
   doc.setLineWidth(0.3);
   doc.line(M, footY - 3, W - M, footY - 3);
 
-  // Accent stip
-  fc(accent);
-  doc.ellipse(M + 2.5, footY + 2.5, 1.8, 1.8, 'F');
-
   // "Gegenereerd door BossBase"
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   tc(C.muted);
   const prefix = 'Gegenereerd door ';
-  doc.text(prefix, M + 7, footY + 4);
+  doc.text(prefix, M, footY + 4);
   const prefixW = doc.getTextWidth(prefix);
   doc.setFont('helvetica', 'bold');
-  doc.text('BossBase', M + 7 + prefixW, footY + 4);
+  doc.text('BossBase', M + prefixW, footY + 4);
 
   // Documentreferentie rechts
   doc.setFont('helvetica', 'normal');
