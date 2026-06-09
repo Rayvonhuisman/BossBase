@@ -442,7 +442,6 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                 const od = a.status === 'overdue' || (a.dueAt && a.dueAt.slice(0, 10) < today);
                 return (
                   <button key={a.id} className={`feed-row ${actIcoClass(a.type)}`} onClick={() => open.activity(a)}>
-                    <span className="feed-bar" />
                     <span className="feed-icon">{actIcoSvg(a.type)}</span>
                     <div className="feed-main">
                       <div className="feed-title">{a.title}{c && <> · <strong>{c.name}</strong></>}</div>
@@ -485,7 +484,6 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                   <div key={a.id} className="feed-row ic-overdue" role="button" tabIndex={0}
                     onClick={openIt}
                     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openIt(); } }}>
-                    <span className="feed-bar" />
                     <span className="feed-icon" style={{ fontWeight: 800, fontSize: 12 }}>{od}d</span>
                     <div className="feed-main">
                       <div className="feed-title">{a.title}</div>
@@ -535,7 +533,6 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                 const ago = relAgo(d.createdAt);
                 return (
                   <button key={d.id} className="feed-row ic-lead" onClick={goDeal(d)}>
-                    <span className="feed-bar" />
                     <span className="feed-icon"><AvatarSq name={name} /></span>
                     <div className="feed-main">
                       <div className="feed-title">{name}</div>
@@ -592,7 +589,6 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                 const nx = nextAct(d.custId);
                 return (
                   <button key={d.id} className="feed-row ic-deal" onClick={goDeal(d)}>
-                    <span className="feed-bar" />
                     <span className="feed-icon"><AvatarSq name={name} /></span>
                     <div className="feed-main">
                       <div className="feed-title">{name}</div>
@@ -637,7 +633,6 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                 const age = ageDays(o);
                 return (
                   <button key={o.id} className="feed-row ic-deal" onClick={() => open.offerte(o)}>
-                    <span className="feed-bar" />
                     <span className="feed-icon">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
                     </span>
@@ -678,7 +673,6 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                 const ref = o.nummer || `F-${String(idx + 1).padStart(3, '0')}`;
                 return (
                   <button key={o.id} className="feed-row ic-invoice" onClick={goInvoice(o)}>
-                    <span className="feed-bar" />
                     <span className="feed-icon" style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontWeight: 800, fontSize: 10.5 }}>{String(ref).slice(0, 2)}</span>
                     <div className="feed-main">
                       <div className="feed-title">{o.customerName || 'Geen klant'}</div>
@@ -720,7 +714,6 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                 const ref = w.nummer || `WB-${String(idx + 1).padStart(3, '0')}`;
                 return (
                   <button key={w.id} className="feed-row ic-werkbon" onClick={() => open.werkbon(w)}>
-                    <span className="feed-bar" />
                     <span className="feed-icon">
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 17l9 4 9-4M3 12l9 4 9-4"/></svg>
                     </span>
@@ -856,7 +849,6 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                 const ago = relAgo(a.dueAt);
                 return (
                   <button key={a.id} className={`feed-row compact ${actIcoClass(a.type)}`} onClick={() => open.activity(a)}>
-                    <span className="feed-bar" />
                     <span className="feed-icon">{actIcoSvg(a.type)}</span>
                     <div className="feed-main">
                       <div className="feed-title"><strong>{c?.name || 'Onbekende klant'}</strong> — {a.title}</div>
@@ -903,7 +895,6 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                   <div key={d.id} className="feed-row ic-follow" role="button" tabIndex={0}
                     onClick={openIt}
                     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openIt(); } }}>
-                    <span className="feed-bar" />
                     <span className="feed-icon"><AvatarSq name={name} /></span>
                     <div className="feed-main">
                       <div className="feed-title">{name}</div>

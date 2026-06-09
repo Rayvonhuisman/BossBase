@@ -131,7 +131,9 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loadin
           )}
         </div>
 
-        <nav className="sb-nav" ref={navRef}>
+        <nav className="sb-nav" ref={navRef}
+          onMouseEnter={e => e.currentTarget.classList.add('hov')}
+          onMouseLeave={e => e.currentTarget.classList.remove('hov')}>
           {SECTIONS.map(sec => {
             const isMedewerker = profile?.role === 'medewerker';
             const items = NAV.filter(n => {
