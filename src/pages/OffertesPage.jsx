@@ -36,11 +36,11 @@ const emptyRegel = () => ({
 });
 
 const TYPE_CFG = {
-  uren:  { label: 'Uren',  v1Ph: '0 uur',  v2Ph: '0,00', hasV1: true,  v1Step: '0.5',  regelLabel: r => `${r.aantal}u × €${r.eenheidsprijs}` },
-  m2:    { label: 'm²',    v1Ph: '0 m²',   v2Ph: '0,00', hasV1: true,  v1Step: '0.01', regelLabel: r => `${r.aantal}m² × €${r.eenheidsprijs}` },
-  stuks: { label: 'Stuks', v1Ph: '0 st',   v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal} st × €${r.eenheidsprijs}` },
-  km:    { label: 'Km',    v1Ph: '0 km',   v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal}km × €${r.eenheidsprijs}` },
-  vast:  { label: 'Vast',  v1Ph: null,     v2Ph: '0,00', hasV1: false, v1Step: '1',    regelLabel: null },
+  uren:  { label: 'Uren',       omschrPh: 'Arbeidsuren',     v1Ph: '0 uur',  v2Ph: '0,00', hasV1: true,  v1Step: '0.5',  regelLabel: r => `${r.aantal}u × €${r.eenheidsprijs}` },
+  m2:    { label: 'm²',         omschrPh: 'Prijs per m²',   v1Ph: '0 m²',   v2Ph: '0,00', hasV1: true,  v1Step: '0.01', regelLabel: r => `${r.aantal}m² × €${r.eenheidsprijs}` },
+  stuks: { label: 'Stuks',      omschrPh: 'Materiaalkosten', v1Ph: '0 st',   v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal} st × €${r.eenheidsprijs}` },
+  km:    { label: 'Km',         omschrPh: 'Reisvergoeding',  v1Ph: '0 km',   v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal}km × €${r.eenheidsprijs}` },
+  vast:  { label: 'Vast bedrag', omschrPh: 'Overige kosten', v1Ph: null,     v2Ph: '0,00', hasV1: false, v1Step: '1',    regelLabel: null },
 };
 
 function BtwSelect({ r, setRegel }) {
@@ -121,8 +121,8 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
     const created = await createOfferte({ ...form, marge_pct: 0, totaal_excl: totaalExcl, totaal_incl: totaalIncl });
     for (let i = 0; i < regels.length; i++) {
       const r = regels[i];
-      if (!r.omschrijving.trim()) continue;
-      await createOfferteItem({ offerte_id: created.id, omschrijving: r.omschrijving, aantal: r.type === 'vast' ? 1 : Number(r.aantal || 1), prijs_per: Number(r.eenheidsprijs || 0), subtotaal: getRegelprijs(r), volgorde: i });
+      const omschrijving = r.omschrijving.trim() || TYPE_CFG[r.type]?.omschrPh || '';
+      await createOfferteItem({ offerte_id: created.id, omschrijving, aantal: r.type === 'vast' ? 1 : Number(r.aantal || 1), prijs_per: Number(r.eenheidsprijs || 0), subtotaal: getRegelprijs(r), volgorde: i });
     }
     return created;
   };
@@ -203,7 +203,7 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
                         </select>
                         <button className="btn btn-xs btn-danger btn-icon" onClick={() => removeRegel(r.id)} disabled={regels.length === 1} title="Verwijderen">{I.trash}</button>
                       </div>
-                      <input type="text" placeholder="Omschrijving" value={r.omschrijving} onChange={e => setRegel(r.id, 'omschrijving', e.target.value)} />
+                      <input type="text" placeholder={cfg.omschrPh} value={r.omschrijving} onChange={e => setRegel(r.id, 'omschrijving', e.target.value)} />
                       <div style={{ display: 'grid', gridTemplateColumns: cfg.hasV1 ? '1fr 1fr' : '1fr', gap: 6 }}>
                         {cfg.hasV1 && (
                           <input type="number" min="0" step={cfg.v1Step} placeholder={cfg.v1Ph} value={r.aantal} onChange={e => setRegel(r.id, 'aantal', e.target.value)} />
@@ -236,7 +236,7 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
                       <select value={r.type} onChange={e => setRegel(r.id, 'type', e.target.value)} style={{ minWidth: 0 }}>
                         {Object.entries(TYPE_CFG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                       </select>
-                      <input type="text" placeholder="Omschrijving" value={r.omschrijving} onChange={e => setRegel(r.id, 'omschrijving', e.target.value)} style={{ minWidth: 0 }} />
+                      <input type="text" placeholder={cfg.omschrPh} value={r.omschrijving} onChange={e => setRegel(r.id, 'omschrijving', e.target.value)} style={{ minWidth: 0 }} />
                       <input
                         type="number" min="0" step={cfg.v1Step} placeholder={cfg.v1Ph || ''}
                         value={r.aantal}
@@ -369,8 +369,8 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
     await deleteOfferteItemsByOfferteId(offerte.id);
     for (let i = 0; i < regels.length; i++) {
       const r = regels[i];
-      if (!r.omschrijving.trim()) continue;
-      await createOfferteItem({ offerte_id: offerte.id, omschrijving: r.omschrijving, aantal: r.type === 'vast' ? 1 : Number(r.aantal || 1), prijs_per: Number(r.eenheidsprijs || 0), subtotaal: getRegelprijs(r), volgorde: i });
+      const omschrijving = r.omschrijving.trim() || TYPE_CFG[r.type]?.omschrPh || '';
+      await createOfferteItem({ offerte_id: offerte.id, omschrijving, aantal: r.type === 'vast' ? 1 : Number(r.aantal || 1), prijs_per: Number(r.eenheidsprijs || 0), subtotaal: getRegelprijs(r), volgorde: i });
     }
     onSaved?.(updated);
     return updated;
@@ -435,7 +435,7 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
                           </select>
                           <button className="btn btn-xs btn-danger btn-icon" onClick={() => removeRegel(r.id)} disabled={regels.length === 1} title="Verwijderen">{I.trash}</button>
                         </div>
-                        <input type="text" placeholder="Omschrijving" value={r.omschrijving} onChange={e => setRegel(r.id, 'omschrijving', e.target.value)} />
+                        <input type="text" placeholder={cfg.omschrPh} value={r.omschrijving} onChange={e => setRegel(r.id, 'omschrijving', e.target.value)} />
                         <div style={{ display: 'grid', gridTemplateColumns: cfg.hasV1 ? '1fr 1fr' : '1fr', gap: 6 }}>
                           {cfg.hasV1 && (
                             <input type="number" min="0" step={cfg.v1Step} placeholder={cfg.v1Ph} value={r.aantal} onChange={e => setRegel(r.id, 'aantal', e.target.value)} />
@@ -467,7 +467,7 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
                         <select value={r.type} onChange={e => setRegel(r.id, 'type', e.target.value)} style={{ minWidth: 0 }}>
                           {Object.entries(TYPE_CFG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                         </select>
-                        <input type="text" placeholder="Omschrijving" value={r.omschrijving} onChange={e => setRegel(r.id, 'omschrijving', e.target.value)} style={{ minWidth: 0 }} />
+                        <input type="text" placeholder={cfg.omschrPh} value={r.omschrijving} onChange={e => setRegel(r.id, 'omschrijving', e.target.value)} style={{ minWidth: 0 }} />
                         <input type="number" min="0" step={cfg.v1Step} placeholder={cfg.v1Ph || ''}
                           value={r.aantal} onChange={e => setRegel(r.id, 'aantal', e.target.value)}
                           style={{ minWidth: 0, visibility: cfg.hasV1 ? 'visible' : 'hidden' }} />

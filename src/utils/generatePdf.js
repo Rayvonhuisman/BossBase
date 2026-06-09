@@ -31,6 +31,10 @@ const fmtDateTime = d => {
   } catch { return String(d); }
 };
 
+const TYPE_OMSCHR_DEFAULT = {
+  uren: 'Arbeidsuren', m2: 'Prijs per m²', stuks: 'Materiaalkosten', km: 'Reisvergoeding', vast: 'Overige kosten',
+};
+
 // Ink palette matching the design prototype
 const C = {
   dark:    [20, 22, 28],      // #14161c
@@ -290,7 +294,7 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     tc(C.dark);
-    const omschr = doc.splitTextToSize(r.omschrijving || '', COL_W[0] - 2);
+    const omschr = doc.splitTextToSize(r.omschrijving || TYPE_OMSCHR_DEFAULT[r.type] || '', COL_W[0] - 2);
     doc.text(omschr[0] || '', COL_X[0], y);
 
     // Overige kolommen
