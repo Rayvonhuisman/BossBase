@@ -27,7 +27,7 @@ const EMPTY_FILTERS = {
   geenProject: false, laatsteContactDagen: '',
   projectStatussen: [], projectStartVan: '', projectStartTot: '',
   projectDeadlineVan: '', projectDeadlineTot: '',
-  heeftOverrun: false, projectMedewerker: '',
+  heeftOverrun: false, heeftLopendProject: false, projectMedewerker: '',
   offerteStatussen: [], offerteVerlopen: false,
   offerteOndertekend: 'alles',
   offerteBedragMin: '', offerteBedragMax: '',
@@ -209,9 +209,7 @@ function QuickDropdown({ label, options, value, onChange }) {
 function FilterBar({ quickTab, setQuickTab, searchQuery, setSearchQuery, filters, setFilter, stadsUniek, active, onClearAll, connectedIntegrations }) {
   const tabs = [
     { id: 'alle', label: 'Alle' },
-    { id: 'actief', label: 'Actief' },
-    { id: 'inactief', label: 'Inactief' },
-    { id: 'geen_projecten', label: 'Geen projecten' },
+    { id: 'lopend_project', label: 'Lopend project' },
   ];
   const stadOptions = [{ value: '', label: 'Alle steden' }, ...stadsUniek.map(s => ({ value: s, label: s }))];
   const projectStatusOptions = [
@@ -539,9 +537,7 @@ export function DatabasePage({ openCustomer }) {
       const rel = byCustomer[c.id] || { projects: [], facturen: [], offertes: [], deals: [], activities: [], emails: [], uren: [] };
 
       if (searchQuery && !c.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-      if (quickTab === 'actief' && !rel.projects.some(p => p.status === 'in_uitvoering')) return false;
-      if (quickTab === 'inactief' && rel.projects.some(p => p.status === 'in_uitvoering')) return false;
-      if (quickTab === 'geen_projecten' && rel.projects.length > 0) return false;
+      if (quickTab === 'lopend_project' && !rel.projects.some(p => p.status === 'in_uitvoering' || p.status === 'gepland')) return false;
 
       if (filters.stad && !(c.city || '').toLowerCase().includes(filters.stad.toLowerCase())) return false;
       if (filters.aanmaakVan && c.createdAt?.slice(0,10) < filters.aanmaakVan) return false;
@@ -568,6 +564,7 @@ export function DatabasePage({ openCustomer }) {
       if (filters.projectDeadlineVan && !rel.projects.some(p => p.deadline >= filters.projectDeadlineVan)) return false;
       if (filters.projectDeadlineTot && !rel.projects.some(p => p.deadline <= filters.projectDeadlineTot)) return false;
       if (filters.heeftOverrun && !rel.projects.some(p => (p.usedHours || 0) > (p.quotedHours || 0))) return false;
+      if (filters.heeftLopendProject && !rel.projects.some(p => p.status === 'in_uitvoering' || p.status === 'gepland')) return false;
       if (filters.projectMedewerker && !rel.projects.some(p => p.ownerId === filters.projectMedewerker)) return false;
 
       if (filters.offerteStatussen.length > 0 && !rel.offertes.some(o => filters.offerteStatussen.includes(o.status))) return false;
@@ -928,6 +925,10 @@ export function DatabasePage({ openCustomer }) {
             <FilterRow label="Startdatum tot"><input type="date" value={filters.projectStartTot} onChange={e => setFilter('projectStartTot', e.target.value)} style={FIN} /></FilterRow>
             <FilterRow label="Deadline van"><input type="date" value={filters.projectDeadlineVan} onChange={e => setFilter('projectDeadlineVan', e.target.value)} style={FIN} /></FilterRow>
             <FilterRow label="Deadline tot"><input type="date" value={filters.projectDeadlineTot} onChange={e => setFilter('projectDeadlineTot', e.target.value)} style={FIN} /></FilterRow>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--dm)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={filters.heeftLopendProject} onChange={e => setFilter('heeftLopendProject', e.target.checked)} style={{ accentColor: 'var(--p)' }} />
+              Heeft lopend project
+            </label>
             <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--dm)', cursor: 'pointer' }}>
               <input type="checkbox" checked={filters.heeftOverrun} onChange={e => setFilter('heeftOverrun', e.target.checked)} style={{ accentColor: 'var(--p)' }} />
               Heeft overrun
