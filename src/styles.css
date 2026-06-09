@@ -173,6 +173,24 @@ select:focus-visible {
   border-right: 1px solid rgba(0, 0, 0, 0.06);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.sidebar:hover {
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+.sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+}
+.sidebar:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
 }
 
 .brand-row {
