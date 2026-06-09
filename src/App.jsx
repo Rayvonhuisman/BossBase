@@ -48,10 +48,10 @@ const NAV = [
   { id: 'projecten',   label: 'Projecten',   icon: 'projects', section: 'work' },
   { id: 'werkbonnen',  label: 'Werkbonnen',  icon: 'wo',       section: 'work' },
   { id: 'uren',        label: 'Uren',        icon: 'hours',    section: 'work' },
-  { id: 'costs',       label: 'Kosten',      icon: 'costs',    section: 'finance' },
-  { id: 'revenue',     label: 'Financiën',   icon: 'chart',    section: 'finance' },
-  { id: 'facturen',    label: 'Facturen',    icon: 'brief',    section: 'finance' },
   { id: 'offertes',    label: 'Offertes',    icon: 'quotes',   section: 'finance' },
+  { id: 'facturen',    label: 'Facturen',    icon: 'brief',    section: 'finance' },
+  { id: 'costs',       label: 'Kosten',      icon: 'euro',     section: 'finance' },
+  { id: 'revenue',     label: 'Financiën',   icon: 'chart',    section: 'finance' },
   { id: 'database',    label: 'Database',    icon: 'db',       section: 'bedrijf' },
   { id: 'team',        label: 'Team',        icon: 'team',     section: 'bedrijf' },
   { id: 'instellingen',label: 'Instellingen',icon: 'settings', section: 'bedrijf' },
@@ -89,6 +89,13 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loadin
   };
   const hideToggleTip = () => setToggleTip(null);
 
+  const [navTip, setNavTip] = useState(null);
+  const showNavTip = (e, label) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setNavTip({ x: r.right + 8, y: r.top + r.height / 2, label });
+  };
+  const hideNavTip = () => setNavTip(null);
+
   return (
     <>
       {open && (
@@ -116,6 +123,12 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loadin
             </span>,
             document.body
           )}
+          {navTip && createPortal(
+            <span className="sb-toggle-tip" style={{ left: navTip.x, top: navTip.y }}>
+              {navTip.label}
+            </span>,
+            document.body
+          )}
         </div>
 
         <nav className="sb-nav" ref={navRef}>
@@ -138,8 +151,9 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loadin
                       key={item.id}
                       className={`sbi${page === item.id ? ' active' : ''}`}
                       onClick={() => go(item.id)}
-                      title={collapsed ? item.label : undefined}
                       aria-label={item.label}
+                      onMouseEnter={collapsed ? e => showNavTip(e, item.label) : undefined}
+                      onMouseLeave={collapsed ? hideNavTip : undefined}
                     >
                       <span className="sbi-icon">{I[item.icon]}</span>
                       <span className="sbi-label">{item.label}</span>

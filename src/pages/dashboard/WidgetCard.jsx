@@ -162,13 +162,6 @@ function AvatarSq({ name }) {
   );
 }
 
-function MoreBtn({ onClick }) {
-  return (
-    <button className="bbw-icon-btn" onClick={onClick} aria-label="Meer">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>
-    </button>
-  );
-}
 
 function Seg({ options, active, onPick }) {
   return (
@@ -439,7 +432,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       return (
         <div className="bb-widget">
           <WHead title="Acties vandaag" sub={`${items.length} openstaand · ${overdue} te laat`}
-            right={<><Chip tone={overdue > 0 ? 'warn' : 'success'} noDot={overdue === 0}>{overdue > 0 ? `${overdue} te laat` : 'Op schema'}</Chip><MoreBtn /></>} />
+            right={<Chip tone={overdue > 0 ? 'warn' : 'success'} noDot={overdue === 0}>{overdue > 0 ? `${overdue} te laat` : 'Op schema'}</Chip>} />
           {items.length === 0 ? (
             <EmptyState title="Geen acties vandaag" text="Tijd om vooruit te plannen of even adem te halen." />
           ) : (
@@ -479,7 +472,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       }
       return (
         <div className="bb-widget">
-          <WHead title="Taken te laat" sub={<><strong style={{ color: C.warn }}>{items.length}</strong> activiteiten over datum</>} right={<><Chip tone="warn">Actie nodig</Chip><MoreBtn /></>} />
+          <WHead title="Taken te laat" sub={<><strong style={{ color: C.warn }}>{items.length}</strong> activiteiten over datum</>} right={<Chip tone="warn">Actie nodig</Chip>} />
           {items.length === 0 ? (
             <EmptyState title="Niets te laat" text="Mooi werk — geen openstaande achterstand." />
           ) : (
@@ -531,7 +524,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       return (
         <div className="bb-widget">
           <WHead title="Nieuwe leads" sub={`${thisWk} deze week · ${delta >= 0 ? '+' : ''}${delta} t.o.v. vorige`}
-            right={<><Chip tone="info" noDot>{count} totaal</Chip><MoreBtn /></>} />
+            right={<Chip tone="info" noDot>{count} totaal</Chip>} />
           {items.length === 0 ? (
             <EmptyState title="Geen nieuwe leads" text="Tijd om je netwerk aan te spreken." />
           ) : (
@@ -587,7 +580,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       return (
         <div className="bb-widget">
           <WHead title="Actieve deals" sub={`${count} deals · ${eur(totalVal)}`}
-            right={<><Seg options={['Alle', 'Mijn', 'Team']} active="Alle" /><MoreBtn /></>} />
+            right={<Seg options={['Alle', 'Mijn', 'Team']} active="Alle" />} />
           {items.length === 0 ? (
             <EmptyState title="Geen actieve deals" text="Push een lead verder of voeg een nieuwe deal toe." />
           ) : (
@@ -635,7 +628,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       };
       return (
         <div className="bb-widget">
-          <WHead title="Open offertes" sub={`${count} offertes · ${eur(totalValue)}`} right={<MoreBtn />} />
+          <WHead title="Open offertes" sub={`${count} offertes · ${eur(totalValue)}`} />
           {items.length === 0 ? (
             <EmptyState title="Geen open offertes" text="Alles is verstuurd of geaccepteerd." />
           ) : (
@@ -676,7 +669,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const totalOpen = items.reduce((s, o) => s + (o.totaalIncl || 0), 0);
       return (
         <div className="bb-widget">
-          <WHead title="Openstaande facturen" sub={`${items.length} facturen · ${eur(totalOpen)}`} right={<MoreBtn />} />
+          <WHead title="Openstaande facturen" sub={`${items.length} facturen · ${eur(totalOpen)}`} />
           {items.length === 0 ? (
             <EmptyState title="Niets openstaand" text="Alle geaccepteerde offertes zijn afgehandeld." />
           ) : (
@@ -718,7 +711,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       }
       return (
         <div className="bb-widget">
-          <WHead title="Werkbonnen vandaag" sub={`${items.length} bonnen gepland`} right={<MoreBtn />} />
+          <WHead title="Werkbonnen vandaag" sub={`${items.length} bonnen gepland`} />
           {items.length === 0 ? (
             <EmptyState title="Geen werkbonnen vandaag" text="Niets ingepland. Voeg er een toe vanaf de werkbonnenpagina." />
           ) : (
@@ -766,7 +759,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const showDays = daily.length ? daily : dayLabels.map(l => ({ label: l, value: 0 }));
       return (
         <div className="bb-widget">
-          <WHead title="Uren deze week" sub={`Doel ${target}u · ${daily.length ? (total / daily.length).toFixed(1) : 0}u/dag gem.`} right={<><Chip tone={pctDoel >= 100 ? 'success' : 'neutral'} noDot>{pctDoel}%</Chip><MoreBtn /></>} />
+          <WHead title="Uren deze week" sub={`Doel ${target}u · ${daily.length ? (total / daily.length).toFixed(1) : 0}u/dag gem.`} right={<Chip tone={pctDoel >= 100 ? 'success' : 'neutral'} noDot>{pctDoel}%</Chip>} />
           <div style={{ padding: '6px 16px 18px' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
               <div className="bb-kpi-value" style={{ marginTop: 0 }}>{total}u</div>
@@ -853,7 +846,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const sorted = [...activities].sort((a, b) => new Date(b.dueAt || 0) - new Date(a.dueAt || 0)).slice(0, 6);
       return (
         <div className="bb-widget">
-          <WHead title="Laatste klantactiviteit" sub="Realtime feed" right={<><Chip tone="green" noDot>● Live</Chip><MoreBtn /></>} />
+          <WHead title="Laatste klantactiviteit" sub="Realtime feed" right={<Chip tone="green" noDot>● Live</Chip>} />
           {sorted.length === 0 ? (
             <EmptyState title="Geen klantactiviteiten" text="Acties op klanten verschijnen hier." />
           ) : (
@@ -895,7 +888,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       };
       return (
         <div className="bb-widget">
-          <WHead title="Lead opvolging" sub={`${leadDeals.length} leads te bellen`} right={<MoreBtn />} />
+          <WHead title="Lead opvolging" sub={`${leadDeals.length} leads te bellen`} />
           {leadDeals.length === 0 ? (
             <EmptyState title="Geen leads te bellen" text="Alle opvolging is bij." />
           ) : (
@@ -952,7 +945,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const totalVal = deals.reduce((s, d) => s + (d.value || 0), 0);
       return (
         <div className="bb-widget">
-          <WHead eyebrow="Pipeline" title="Deals per fase" right={<><Chip tone="neutral" noDot>{eur(totalVal)} totaal</Chip><MoreBtn /></>} />
+          <WHead eyebrow="Pipeline" title="Deals per fase" right={<Chip tone="neutral" noDot>{eur(totalVal)} totaal</Chip>} />
           <div style={{ padding: '8px 0 14px' }}>
             {stages.map((s, i) => (
               <div key={s.key} className="pipe-row" onClick={() => setPage('pipeline')}>
@@ -988,7 +981,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       ];
       return (
         <div className="bb-widget">
-          <WHead title="Snelle acties" sub="Veelgebruikt" right={<MoreBtn />} />
+          <WHead title="Snelle acties" sub="Veelgebruikt" />
           <div className="qa-grid">
             {acts.map((a, i) => (
               <button key={i} className={`qa-btn${a.primary ? ' primary' : ''}`} onClick={() => setPage(a.go)}
@@ -1010,7 +1003,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const content = widget.settings?.content || '';
       return (
         <div className="bb-widget">
-          <WHead title="Notities" sub="Persoonlijk notitieblok" right={<MoreBtn />} />
+          <WHead title="Notities" sub="Persoonlijk notitieblok" />
           <div style={{ padding: '6px 16px 16px', flex: 1, display: 'flex', flexDirection: 'column' }}>
             <textarea
               className="notes-field"
@@ -1032,7 +1025,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const prof = charts.monthlyProfit || [];
       const n = Math.min(6, Math.max(rev.length, prof.length));
       const rv = rev.slice(-n), pf = prof.slice(-n);
-      if (!rv.length && !pf.length) return <div className="bb-widget"><WHead title="Winst per maand" right={<MoreBtn />} /><EmptyState title="Geen grafiekdata" text="Markeer deals als betaald om data te zien." /></div>;
+      if (!rv.length && !pf.length) return <div className="bb-widget"><WHead title="Winst per maand" /><EmptyState title="Geen grafiekdata" text="Markeer deals als betaald om data te zien." /></div>;
       const rows = (rv.length ? rv : pf).map((_, i) => ({
         label: (rv[i] || pf[i]).label,
         omzet: rv[i]?.value ?? (pf[i]?.value || 0),
@@ -1043,7 +1036,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       return (
         <div className="bb-widget">
           <WHead eyebrow="Winst" title="Winst per maand" sub={`Totaal ${kEur(totalP)} · stabiele groei`}
-            right={<><Seg options={['6M', '12M']} active="6M" /><MoreBtn /></>} />
+            right={<Seg options={['6M', '12M']} active="6M" />} />
           <div style={{ padding: '14px 16px 6px', display: 'flex', alignItems: 'flex-end', gap: 16, height: 220 }}>
             {rows.map((d, i) => {
               const totalH = (d.omzet / max) * 150;
@@ -1080,7 +1073,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const total = d.reduce((s, x) => s + x.value, 0);
       return (
         <div className="bb-widget">
-          <WHead eyebrow="Pipeline" title="Waarde per fase" sub={`Totaal ${eur(total)}`} right={<MoreBtn />} />
+          <WHead eyebrow="Pipeline" title="Waarde per fase" sub={`Totaal ${eur(total)}`} />
           <div style={{ padding: '8px 0 14px' }}>
             {d.length ? d.map((s, i) => (
               <div key={i} className="pipe-row" {...hov(<Tt title={s.label} rows={[{ k: 'Waarde', v: eur(s.value) }, { k: 'Aandeel', v: `${pct(s.value, total)}%` }]} />)} onClick={() => setPage('pipeline')}>
@@ -1103,7 +1096,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const d = charts.conversionFunnel || [];
       return (
         <div className="bb-widget">
-          <WHead eyebrow="Trechter" title="Conversie funnel" sub={d.length ? `${d[0].value} leads · ${d[d.length - 1].pct}% win rate` : null} right={<MoreBtn />} />
+          <WHead eyebrow="Trechter" title="Conversie funnel" sub={d.length ? `${d[0].value} leads · ${d[d.length - 1].pct}% win rate` : null} />
           {d.length ? (
             <div className="funnel">
               {d.map((s, i) => {
@@ -1140,7 +1133,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       let acc = 0;
       return (
         <div className="bb-widget">
-          <WHead eyebrow="Facturen" title="Status overzicht" sub={`${total} facturen`} right={<MoreBtn />} />
+          <WHead eyebrow="Facturen" title="Status overzicht" sub={`${total} facturen`} />
           {segs.length ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '8px 16px 18px' }}>
               <svg width="150" height="150" viewBox="0 0 150 150" style={{ flexShrink: 0 }}>
@@ -1181,7 +1174,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const tight = widget.size === 'medium';
       return (
         <div className="bb-widget">
-          <WHead eyebrow="Kosten" title="Per klant" sub={`${eur(total)} totaal`} right={<MoreBtn />} />
+          <WHead eyebrow="Kosten" title="Per klant" sub={`${eur(total)} totaal`} />
           <div style={{ padding: '14px 16px 18px', display: 'flex', alignItems: 'flex-end', gap: 14, height: 220 }}>
             {cats.length ? cats.map((c, i) => {
               const h = Math.max(8, (c.value / max) * 150);
@@ -1205,7 +1198,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const tight = widget.size === 'medium';
       return (
         <div className="bb-widget">
-          <WHead eyebrow="Uren" title="Per week" sub={`${wk.length} weken · gem. ${avg}u/week`} right={<><Chip tone={avg >= target ? 'success' : 'neutral'} noDot>{avg}u/wk</Chip><MoreBtn /></>} />
+          <WHead eyebrow="Uren" title="Per week" sub={`${wk.length} weken · gem. ${avg}u/week`} right={<Chip tone={avg >= target ? 'success' : 'neutral'} noDot>{avg}u/wk</Chip>} />
           {wk.length ? (
             <>
               <div style={{ padding: '14px 16px 6px', display: 'flex', alignItems: 'flex-end', gap: 16, height: 200, position: 'relative' }}>
@@ -1239,7 +1232,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const tight = widget.size === 'medium';
       return (
         <div className="bb-widget">
-          <WHead eyebrow="Activiteiten" title="Per dag" sub={`${total} deze week`} right={<MoreBtn />} />
+          <WHead eyebrow="Activiteiten" title="Per dag" sub={`${total} deze week`} />
           {d.length ? (
             <div style={{ padding: '14px 16px 18px', display: 'flex', alignItems: 'flex-end', gap: 14, height: 200 }}>
               {d.map((x, i) => {
@@ -1265,7 +1258,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const total = src.reduce((s, x) => s + x.value, 0) || 1;
       return (
         <div className="bb-widget">
-          <WHead eyebrow="Leads" title="Bronnen" sub={`${total} leads · 30 dagen`} right={<MoreBtn />} />
+          <WHead eyebrow="Leads" title="Bronnen" sub={`${total} leads · 30 dagen`} />
           {src.length ? (
             <div style={{ padding: '8px 16px 18px' }}>
               <div style={{ display: 'flex', height: 16, borderRadius: 999, overflow: 'hidden' }}>
@@ -1294,7 +1287,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const max = items.length ? items[0].value : 1;
       return (
         <div className="bb-widget">
-          <WHead eyebrow="Top 5" title="Beste klanten" sub="Jaar tot nu" right={<MoreBtn />} />
+          <WHead eyebrow="Top 5" title="Beste klanten" sub="Jaar tot nu" />
           {items.length ? (
             <div>
               {items.map((it, i) => {
@@ -1338,7 +1331,7 @@ function MonthlyRevenueChart({ charts, widget, ux, onNav }) {
   if (!hasData) {
     return (
       <div className="bb-widget">
-        <WHead eyebrow="Omzet" title="Per maand" sub="Maandelijkse omzetontwikkeling" right={<MoreBtn />} />
+        <WHead eyebrow="Omzet" title="Per maand" sub="Maandelijkse omzetontwikkeling" />
         <EmptyState title="Nog geen omzetdata" text="Markeer deals als betaald om je omzet hier te zien." />
       </div>
     );
@@ -1368,7 +1361,7 @@ function MonthlyRevenueChart({ charts, widget, ux, onNav }) {
   return (
     <div className="bb-widget">
       <WHead eyebrow="Omzet" title="Per maand" sub="Maandelijkse omzetontwikkeling"
-        right={<><Seg options={['6M', '12M']} active="6M" /><MoreBtn /></>} />
+        right={<Seg options={['6M', '12M']} active="6M" />} />
       <div style={{ padding: '6px 16px 4px', display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
         <div>
           <div className="bb-widget-eyebrow" style={{ fontSize: 10.5 }}>Deze maand</div>

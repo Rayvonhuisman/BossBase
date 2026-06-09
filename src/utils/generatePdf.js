@@ -70,9 +70,9 @@ async function buildPdf(doc, type, document, regels, customer, company) {
 
   // ── ACCENT BAND (top of page) ────────────────────────────────
   fc(accent);
-  doc.rect(0, 0, W, 2.5, 'F');
+  doc.rect(0, 0, W, 1.6, 'F');
 
-  let y = 14;
+  let y = 17;
 
   // ── HEADER ───────────────────────────────────────────────────
 
@@ -143,19 +143,19 @@ async function buildPdf(doc, type, document, regels, customer, company) {
   const docTitle = document.isCredit ? 'CREDITFACTUUR' : (type === 'factuur' ? 'FACTUUR' : 'OFFERTE');
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(38);
+  doc.setFontSize(34);
   tc(C.dark);
-  doc.text(docTitle, M, y + 13);
-
-  doc.setFontSize(17);
+  const titlePrefix = docTitle + ' ';
+  const titlePrefixW = doc.getTextWidth(titlePrefix);
+  doc.text(titlePrefix, M, y + 13);
   tc(accent);
-  doc.text(document.nummer || '', M, y + 23);
+  doc.text(document.nummer || '', M + titlePrefixW, y + 13);
 
   if (document.isCredit && document.creditNote) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     tc(C.muted);
-    doc.text(document.creditNote, M, y + 30);
+    doc.text(document.creditNote, M, y + 22);
   }
 
   // Meta rechts
@@ -183,7 +183,7 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     if (signedAt) metaRow('Ondertekend', fmtDate(signedAt?.slice(0, 10)));
   }
 
-  y = Math.max(y + 29, metaY) + 5;
+  y = Math.max(y + 18, metaY) + 5;
 
   // ── PARTIES ──────────────────────────────────────────────────
 
@@ -198,17 +198,17 @@ async function buildPdf(doc, type, document, regels, customer, company) {
   // VAN (links — bedrijf)
   let vanY = partyStartY + 3;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
+  doc.setFontSize(7);
   tc(C.muted);
   doc.text('VAN', M, vanY);
-  vanY += 5.5;
+  vanY += 5;
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11.5);
+  doc.setFontSize(10.5);
   tc(C.dark);
   if (company?.name) { doc.text(company.name, M, vanY); vanY += 5.5; }
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   tc(C.soft);
   if (company?.address) { doc.text(company.address, M, vanY); vanY += 4.5; }
   const compCity2 = [company?.postalCode, company?.city].filter(Boolean).join('  ');
@@ -216,20 +216,20 @@ async function buildPdf(doc, type, document, regels, customer, company) {
   if (company?.email) { doc.text(company.email, M, vanY); vanY += 4.5; }
 
   // AAN (rechts — klant)
-  const aanX = colMid + 6;
+  const aanX = colMid + 7;
   let aanY = partyStartY + 3;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
+  doc.setFontSize(7);
   tc(C.muted);
   doc.text('AAN', aanX, aanY);
-  aanY += 5.5;
+  aanY += 5;
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11.5);
+  doc.setFontSize(10.5);
   tc(C.dark);
   if (customer?.name) { doc.text(customer.name, aanX, aanY); aanY += 5.5; }
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   tc(C.soft);
   if (customer?.address) { doc.text(customer.address, aanX, aanY); aanY += 4.5; }
   const custCity = [customer?.postalCode, customer?.city].filter(Boolean).join('  ');
@@ -251,7 +251,7 @@ async function buildPdf(doc, type, document, regels, customer, company) {
 
   // ── ITEMS TABEL ───────────────────────────────────────────────
 
-  const COL_PERC = [0.44, 0.10, 0.17, 0.09, 0.20];
+  const COL_PERC = [0.48, 0.11, 0.16, 0.10, 0.15];
   const COL_W = COL_PERC.map(p => CW * p);
   const COL_X = [];
   let cx = M;
@@ -259,7 +259,7 @@ async function buildPdf(doc, type, document, regels, customer, company) {
 
   // Kolomkoppen
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
+  doc.setFontSize(7);
   tc(C.muted);
   ['OMSCHRIJVING', 'AANTAL', 'EENHEIDSPRIJS', 'BTW', 'BEDRAG'].forEach((h, i) => {
     const isR = i >= 1;
@@ -285,14 +285,14 @@ async function buildPdf(doc, type, document, regels, customer, company) {
 
     // Omschrijving (vet)
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     tc(C.dark);
     const omschr = doc.splitTextToSize(r.omschrijving || '', COL_W[0] - 2);
     doc.text(omschr[0] || '', COL_X[0], y);
 
     // Overige kolommen
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
+    doc.setFontSize(8.5);
     tc(C.soft);
 
     const isVast = r.type === 'vast';
@@ -306,6 +306,7 @@ async function buildPdf(doc, type, document, regels, customer, company) {
 
     const bedrag = type === 'factuur' ? r.regelprijs : r.subtotaal;
     doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
     tc(C.dark);
     doc.text(euro(bedrag), COL_X[4] + COL_W[4] - 1, y, { align: 'right' });
 
@@ -325,13 +326,13 @@ async function buildPdf(doc, type, document, regels, customer, company) {
 
   const subRow = (label, val) => {
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     tc(C.muted);
     doc.text(label, totX, y);
     doc.setFont('helvetica', 'bold');
     tc(C.dark);
     doc.text(val, W - M, y, { align: 'right' });
-    y += 9;
+    y += 8;
   };
 
   if (type === 'factuur') {
@@ -357,15 +358,15 @@ async function buildPdf(doc, type, document, regels, customer, company) {
   // Grand total box (accent achtergrond)
   const grandH = 13;
   fc(accent);
-  doc.roundedRect(totX - 2, y - 1, totW + 2, grandH, 3, 3, 'F');
+  doc.roundedRect(totX - 2, y - 1, totW + 2, grandH, 2.1, 2.1, 'F');
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
+  doc.setFontSize(9);
   tc(accentInk);
   doc.text('Totaal incl. BTW', totX + 4, y + 8);
 
-  doc.setFontSize(17);
-  doc.text(euro(document.totaalIncl), W - M - 3, y + 8.5, { align: 'right' });
+  doc.setFontSize(14);
+  doc.text(euro(document.totaalIncl), W - M - 3, y + 8, { align: 'right' });
 
   y += grandH + 10;
 
@@ -379,25 +380,25 @@ async function buildPdf(doc, type, document, regels, customer, company) {
 
   if (noteText) {
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     const noteLines = doc.splitTextToSize(noteText, CW - 22);
-    const noteH = Math.max(14, noteLines.length * 4.2 + 12);
+    const noteH = Math.max(13, noteLines.length * 4 + 10);
 
     fc(C.panel);
-    doc.roundedRect(M, y, CW, noteH, 3, 3, 'F');
+    doc.roundedRect(M, y, CW, noteH, 2.1, 2.1, 'F');
 
     // 'i' badge
     fc(accent);
-    doc.ellipse(M + 6, y + noteH / 2, 2.8, 2.8, 'F');
+    doc.ellipse(M + 6, y + noteH / 2, 2.1, 2.1, 'F');
     tc(accentInk);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7);
+    doc.setFontSize(7.5);
     doc.text('i', M + 6, y + noteH / 2 + 1, { align: 'center' });
 
     tc(C.soft);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.text(noteLines.slice(0, 5), M + 13, y + 7);
+    doc.setFontSize(8);
+    doc.text(noteLines.slice(0, 5), M + 13, y + 6.5);
 
     y += noteH + 8;
   }
@@ -426,11 +427,11 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     // Buitenrand
     dc(C.lineStr);
     doc.setLineWidth(0.4);
-    doc.roundedRect(M, y, CW, signBlockH, 3, 3, 'S');
+    doc.roundedRect(M, y, CW, signBlockH, 2.1, 2.1, 'S');
 
     // Header achtergrond (paneel-kleur, afgerond boven)
     fc(C.panel);
-    doc.roundedRect(M, y, CW, 13, 3, 3, 'F');
+    doc.roundedRect(M, y, CW, 13, 2.1, 2.1, 'F');
     doc.rect(M, y + 7, CW, 6, 'F'); // rechte onderhoeken
 
     // Scheidingslijn onder header
@@ -438,19 +439,19 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     doc.setLineWidth(0.3);
     doc.line(M, y + 13, W - M, y + 13);
 
-    // Groen vinkje badge
+    // Groen vinkje badge (18px = 4.76mm diameter, radius 2.38mm)
     fc(C.green);
-    doc.ellipse(M + 9, y + 6.5, 4.5, 4.5, 'F');
+    doc.ellipse(M + 7, y + 6.5, 2.4, 2.4, 'F');
     tc(C.paper);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.text('v', M + 9, y + 8.3, { align: 'center' });
+    doc.setFontSize(8);
+    doc.text('v', M + 7, y + 7.6, { align: 'center' });
 
     // Titel
     tc(C.dark);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text('Digitaal ondertekend', M + 17, y + 8);
+    doc.setFontSize(9);
+    doc.text('Digitaal ondertekend', M + 13, y + 8);
 
     // Datum rechts
     tc(C.muted);
@@ -479,7 +480,7 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     // Handtekening afbeelding (rechts)
     if (hasImg) {
       try {
-        const sigW = 62, sigH = 24;
+        const sigW = 58, sigH = 15;
         const sigX = W - M - sigW - 2;
         const sigY = y + 16;
         doc.addImage(sigImgData, 'PNG', sigX, sigY, sigW, sigH, '', 'FAST');
@@ -505,17 +506,22 @@ async function buildPdf(doc, type, document, regels, customer, company) {
 
   // "Gegenereerd door BossBase"
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  tc(C.muted);
+  doc.setFontSize(7.5);
+  tc(C.faint);
   const prefix = 'Gegenereerd door ';
   doc.text(prefix, M, footY + 4);
   const prefixW = doc.getTextWidth(prefix);
   doc.setFont('helvetica', 'bold');
+  tc(C.muted);
   doc.text('BossBase', M + prefixW, footY + 4);
+
+  // Accent dot (scheidingspunt midden)
+  fc(accent);
+  doc.ellipse(W / 2, footY + 3.5, 0.66, 0.66, 'F');
 
   // Documentreferentie rechts
   doc.setFont('helvetica', 'normal');
-  tc(C.muted);
+  tc(C.faint);
   const docRef = type === 'factuur'
     ? `Factuur ${document.nummer || ''}`
     : `Offerte ${document.nummer || ''}`;
