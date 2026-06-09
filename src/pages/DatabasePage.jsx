@@ -703,6 +703,10 @@ export function DatabasePage({ openCustomer }) {
     a.download = `BossBase-export-${TODAY}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
+    rows.forEach((_, i) => {
+      const c = selectedCustomers[i];
+      if (c?.id) logTijdlijnSafe(c.id, 'export_uitgevoerd', 'Klantgegevens geëxporteerd als Excel');
+    });
     setShowBulkMenu(false);
     toast.success(`${rows.length} klanten geëxporteerd als Excel`);
     } catch (err) { toast.error('Excel export mislukt: ' + (err.message || '')); }
@@ -720,6 +724,10 @@ export function DatabasePage({ openCustomer }) {
     a.download = `BossBase-export-${TODAY}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+    rows.forEach((_, i) => {
+      const c = selectedCustomers[i];
+      if (c?.id) logTijdlijnSafe(c.id, 'export_uitgevoerd', 'Klantgegevens geëxporteerd als CSV');
+    });
     setShowBulkMenu(false);
     toast.success(`${rows.length} klanten geëxporteerd als CSV`);
   };

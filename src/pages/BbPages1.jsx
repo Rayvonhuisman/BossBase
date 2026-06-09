@@ -20,7 +20,7 @@ import { NewProjectModal, ProjectBadge } from './ProjectsPage.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { ActivityEditModal, NewActivityModal, NewCustomerModal, NewJobCostModal } from '../components/SharedModals.jsx';
-import { ChevronDown, Mail, Send } from 'lucide-react';
+import { ChevronDown, Download, Mail, Send } from 'lucide-react';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail, getSentEmailsByCustomer } from '../services/emailService.js';
 import { MailBodyEditor, plainToEditorHtml } from '../components/MailBodyEditor.jsx';
 import { getEmailTemplates } from '../services/instellingenService.js';
@@ -439,6 +439,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
     afspraak_ingepland:       <Calendar size={14} />,
     deal_aangemaakt:          <ShoppingCart size={14} />,
     deal_fase_gewijzigd:      <ShoppingCart size={14} />,
+    export_uitgevoerd:        <Download size={14} />,
   };
 
   const TIJDLIJN_KLEUR = type => {
@@ -452,6 +453,7 @@ export function CustomerPage({ custId, onClose, setPage }) {
     if (type.startsWith('herinnering')) return '#f59e0b';
     if (type.startsWith('afspraak'))    return '#14b8a6';
     if (type.startsWith('deal'))        return '#8b5cf6';
+    if (type.startsWith('export'))      return '#64748b';
     return 'var(--dl)';
   };
 

@@ -145,6 +145,18 @@ export default function OfferteSigneren({ token }) {
       const result = await signOfferte({ signToken: token, name: form.name, email: form.email, signatureDataUrl: dataUrl })
       setDone(true)
 
+      // Tijdlijn: offerte_geaccepteerd (best-effort, omzeilt service-laag want pagina is publiek)
+      if (offerte?.customer_id && offerte?.company_id) {
+        supabase.from('klant_tijdlijn').insert({
+          customer_id: offerte.customer_id,
+          company_id: offerte.company_id,
+          type: 'offerte_geaccepteerd',
+          omschrijving: `Offerte ${offerte.nummer} ondertekend door ${form.name}`,
+          aangemaakt_op: new Date().toISOString(),
+          meta: { nummer: offerte.nummer, signed_by: form.name, signed_by_email: form.email },
+        }).then(() => {}).catch(() => {})
+      }
+
       // Bevestigingsmails versturen (best-effort — blokkeert success niet)
       verstuurBevestigingsmails(result).catch(e =>
         console.warn('Bevestigingsmail mislukt:', e.message)
