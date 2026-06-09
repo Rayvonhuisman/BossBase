@@ -178,7 +178,7 @@ function QuickDropdown({ label, options, value, onChange }) {
         <div style={{
           position: 'absolute', top: 'calc(100% + 4px)', left: 0,
           background: 'white', border: '1px solid var(--br)', borderRadius: 10,
-          boxShadow: '0 6px 20px rgba(0,0,0,.10)', minWidth: 164, zIndex: 40, overflow: 'hidden',
+          boxShadow: '0 6px 20px rgba(0,0,0,.10)', minWidth: 164, zIndex: 200, overflow: 'hidden',
         }}>
           {options.map(o => {
             const sel = Array.isArray(value) ? value.includes(o.value) : value === o.value;
@@ -805,7 +805,7 @@ export function DatabasePage({ openCustomer }) {
       )}
 
       {/* ── Filter bar ── */}
-      <div className="afu2" style={{ marginBottom: 14 }}>
+      <div className="afu2" style={{ marginBottom: 14, position: 'relative', zIndex: 20 }}>
         <FilterBar
           quickTab={quickTab}
           setQuickTab={t => { setQuickTab(t); setCurrentPage(1); }}
@@ -817,7 +817,7 @@ export function DatabasePage({ openCustomer }) {
       </div>
 
       {/* ── Body ── */}
-      <div className="afu2" style={{ display: 'grid', gridTemplateColumns: '216px 1fr', gap: 14, alignItems: 'start' }}>
+      <div className="afu2" style={{ display: 'grid', gridTemplateColumns: '216px 1fr', gap: 14, alignItems: 'start', position: 'relative', zIndex: 1 }}>
 
         {/* ── Sidebar ── */}
         <div style={{
