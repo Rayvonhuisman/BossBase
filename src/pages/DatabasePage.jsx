@@ -50,36 +50,38 @@ const hasActiveFilters = f => {
   });
 };
 
-const CB = { width: 15, height: 15, cursor: 'pointer', flexShrink: 0, accentColor: 'var(--p)' };
-const COLS = '32px 1fr 160px 150px 56px 110px';
+// ── DESIGN TOKENS ────────────────────────────────────────────
+const T = {
+  pageBg:  '#F9FAFB',
+  borderXL: '#F3F4F6',
+  rowSel:  'var(--pll)',
+  shadow:  '0 1px 3px rgba(0,0,0,.05)',
+};
+
+const COLS = '20px 1fr 180px 160px 48px 120px';
 
 // ── ICONS ────────────────────────────────────────────────────
 const IconMail = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
     <polyline points="22,6 12,13 2,6"/>
   </svg>
 );
 const IconExcel = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <rect x="3" y="3" width="18" height="18" rx="2"/>
     <path d="M3 9h18M3 15h18M9 3v18M15 3v18" strokeLinecap="round"/>
   </svg>
 );
 const IconCsv = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
     <path d="M14 2v6h6M8 13h8M8 17h5" strokeLinecap="round"/>
   </svg>
 );
 const IconBookmark = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round"/>
-  </svg>
-);
-const IconChevDown = () => (
-  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-    <path d="M2 4l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>
 );
 const IconSearch = () => (
@@ -88,42 +90,62 @@ const IconSearch = () => (
     <path d="M21 21l-4.35-4.35" strokeLinecap="round"/>
   </svg>
 );
+const IconChevDown = () => (
+  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+    <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
+// ── CUSTOM CHECKBOX ──────────────────────────────────────────
+function Checkbox({ checked, onChange, indeterminate = false }) {
+  const ref = useRef(null);
+  useEffect(() => { if (ref.current) ref.current.indeterminate = indeterminate; }, [indeterminate]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      style={{ width: 15, height: 15, cursor: 'pointer', flexShrink: 0, accentColor: 'var(--p)', borderRadius: 3 }}
+    />
+  );
+}
 
 // ── STATUS BADGE ─────────────────────────────────────────────
-const STATUS_BADGE = {
-  'in_uitvoering': { bg: '#FFEDD5', color: '#C2410C' },
-  'afgerond':      { bg: 'transparent', color: '#16A34A', border: '1px solid #16A34A' },
-  'concept':       { bg: '#F3F4F6', color: '#6B7280' },
-  'gepauzeerd':    { bg: '#FEF9C3', color: '#854D0E' },
-  'geannuleerd':   { bg: '#FEE2E2', color: '#991B1B' },
+const STATUS_COLORS = {
+  'in_uitvoering': { bg: '#FFF7ED', color: '#C2410C' },
+  'afgerond':      { bg: '#F0FDF4', color: '#16A34A' },
+  'concept':       { bg: '#F9FAFB', color: '#6B7280' },
+  'gepauzeerd':    { bg: '#FEFCE8', color: '#854D0E' },
+  'geannuleerd':   { bg: '#FFF1F2', color: '#BE123C' },
 };
 function StatusBadge({ status }) {
   const label = PROJECT_STATUS[status]?.label || status || '';
-  const s = STATUS_BADGE[status] || { bg: '#F3F4F6', color: '#6B7280' };
+  const s = STATUS_COLORS[status] || { bg: '#F3F4F6', color: '#6B7280' };
   return (
     <span style={{
-      display: 'inline-block', padding: '2px 7px',
+      display: 'inline-block', padding: '2px 8px',
       background: s.bg, color: s.color,
-      borderRadius: 999, fontSize: '.68rem', fontWeight: 600,
-      border: s.border || 'none',
+      borderRadius: 999, fontSize: 10, fontWeight: 600,
+      letterSpacing: '.02em',
     }}>
       {label}
     </span>
   );
 }
 
-// ── FILTER INPUT STYLE ───────────────────────────────────────
+// ── FILTER INPUT ─────────────────────────────────────────────
 const FIN = {
-  height: 30, background: '#F9FAFB', border: '1px solid var(--br)',
-  borderRadius: 7, fontSize: '.78rem', padding: '0 8px',
+  height: 32, background: T.pageBg, border: '1px solid var(--br)',
+  borderRadius: 7, fontSize: 12, padding: '0 9px',
   color: 'var(--dk)', width: '100%', boxSizing: 'border-box',
 };
 const FLBL = {
-  fontSize: '.68rem', fontWeight: 600, color: 'var(--dl)',
-  textTransform: 'uppercase', letterSpacing: '.08em',
+  fontSize: 10, fontWeight: 600, color: 'var(--dl)',
+  textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 3,
 };
 
-// ── QUICK DROPDOWN (FilterBar) ───────────────────────────────
+// ── QUICK DROPDOWN ───────────────────────────────────────────
 function QuickDropdown({ label, options, value, onChange }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -142,12 +164,12 @@ function QuickDropdown({ label, options, value, onChange }) {
       <button
         onClick={() => setOpen(o => !o)}
         style={{
-          display: 'flex', alignItems: 'center', gap: 5,
-          height: 32, padding: '0 11px', borderRadius: 7,
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          height: 30, padding: '0 10px', borderRadius: 7,
           border: `1px solid ${active ? 'var(--p)' : 'var(--br)'}`,
-          background: active ? 'var(--pll)' : 'white',
-          fontSize: '.78rem', fontWeight: active ? 600 : 400,
-          color: active ? 'var(--pd)' : 'var(--dm)', cursor: 'pointer', whiteSpace: 'nowrap',
+          background: active ? 'var(--pll)' : T.pageBg,
+          fontSize: 12, fontWeight: active ? 600 : 400,
+          color: active ? 'var(--pd)' : 'var(--dmu)', cursor: 'pointer', whiteSpace: 'nowrap',
         }}
       >
         {activeLabel} <IconChevDown />
@@ -156,23 +178,26 @@ function QuickDropdown({ label, options, value, onChange }) {
         <div style={{
           position: 'absolute', top: 'calc(100% + 4px)', left: 0,
           background: 'white', border: '1px solid var(--br)', borderRadius: 10,
-          boxShadow: '0 4px 16px rgba(0,0,0,.10)', minWidth: 160, zIndex: 40, overflow: 'hidden',
+          boxShadow: '0 6px 20px rgba(0,0,0,.10)', minWidth: 164, zIndex: 40, overflow: 'hidden',
         }}>
-          {options.map(o => (
-            <button
-              key={o.value}
-              onClick={() => { onChange(o.value); setOpen(false); }}
-              style={{
-                width: '100%', padding: '8px 13px', background: 'none', border: 'none',
-                textAlign: 'left', fontSize: '.82rem', cursor: 'pointer',
-                color: (Array.isArray(value) ? value.includes(o.value) : value === o.value) ? 'var(--pd)' : 'var(--dk)',
-                fontWeight: (Array.isArray(value) ? value.includes(o.value) : value === o.value) ? 700 : 400,
-                borderBottom: '1px solid #F3F4F6',
-              }}
-            >
-              {o.label}
-            </button>
-          ))}
+          {options.map(o => {
+            const sel = Array.isArray(value) ? value.includes(o.value) : value === o.value;
+            return (
+              <button
+                key={o.value}
+                onClick={() => { onChange(o.value); setOpen(false); }}
+                style={{
+                  width: '100%', padding: '8px 13px', background: sel ? 'var(--pll)' : 'none',
+                  border: 'none', borderBottom: `1px solid ${T.borderXL}`,
+                  textAlign: 'left', fontSize: 13, cursor: 'pointer',
+                  color: sel ? 'var(--pd)' : 'var(--dk)',
+                  fontWeight: sel ? 600 : 400,
+                }}
+              >
+                {o.label}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -180,16 +205,14 @@ function QuickDropdown({ label, options, value, onChange }) {
 }
 
 // ── FILTER BAR ───────────────────────────────────────────────
-function FilterBar({
-  quickTab, setQuickTab,
-  searchQuery, setSearchQuery,
-  filters, setFilter,
-  stadsUniek, active, onClearAll,
-}) {
-  const stadOptions = [
-    { value: '', label: 'Alle steden' },
-    ...stadsUniek.map(s => ({ value: s, label: s })),
+function FilterBar({ quickTab, setQuickTab, searchQuery, setSearchQuery, filters, setFilter, stadsUniek, active, onClearAll }) {
+  const tabs = [
+    { id: 'alle', label: 'Alle' },
+    { id: 'actief', label: 'Actief' },
+    { id: 'inactief', label: 'Inactief' },
+    { id: 'geen_projecten', label: 'Geen projecten' },
   ];
+  const stadOptions = [{ value: '', label: 'Alle steden' }, ...stadsUniek.map(s => ({ value: s, label: s }))];
   const projectStatusOptions = [
     { value: '', label: 'Alle statussen' },
     { value: 'in_uitvoering', label: 'In uitvoering' },
@@ -210,138 +233,101 @@ function FilterBar({
     { value: 'ja', label: 'Gesynchroniseerd' },
     { value: 'nee', label: 'Niet gesynchroniseerd' },
   ];
-  const tabs = [
-    { id: 'alle', label: 'Alle' },
-    { id: 'actief', label: 'Actief' },
-    { id: 'inactief', label: 'Inactief' },
-    { id: 'geen_projecten', label: 'Geen projecten' },
-  ];
+
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 0,
-      background: 'white', borderRadius: 'var(--r12)',
-      border: '1px solid var(--br)', boxShadow: 'var(--shadow-xs)',
-      padding: '10px 16px', flexWrap: 'wrap', rowGap: 8,
+      display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', rowGap: 8,
+      background: 'white', borderRadius: 'var(--r14)',
+      border: '1px solid var(--border)', boxShadow: T.shadow,
+      padding: '9px 14px',
     }}>
       {/* Status tabs */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      <div style={{ display: 'flex', alignItems: 'center', background: T.pageBg, borderRadius: 8, padding: 2, gap: 1 }}>
         {tabs.map(t => {
           const on = quickTab === t.id;
           return (
-            <button
-              key={t.id}
-              onClick={() => setQuickTab(t.id)}
-              style={{
-                padding: '5px 13px', borderRadius: 999, border: 'none',
-                background: on ? 'var(--dk)' : 'transparent',
-                color: on ? '#fff' : 'var(--dmu)',
-                fontSize: '.8rem', fontWeight: on ? 600 : 400, cursor: 'pointer',
-                transition: 'all .12s',
-              }}
-            >
+            <button key={t.id} onClick={() => setQuickTab(t.id)} style={{
+              padding: '4px 12px', borderRadius: 6, border: 'none',
+              background: on ? 'white' : 'transparent',
+              boxShadow: on ? '0 1px 3px rgba(0,0,0,.08)' : 'none',
+              color: on ? 'var(--dk)' : 'var(--dl)',
+              fontSize: 12, fontWeight: on ? 600 : 400, cursor: 'pointer',
+              transition: 'all .12s',
+            }}>
               {t.label}
             </button>
           );
         })}
       </div>
 
-      {/* Divider */}
-      <div style={{ width: 1, height: 22, background: 'var(--br)', margin: '0 10px', flexShrink: 0 }} />
+      <div style={{ width: 1, height: 20, background: 'var(--br)', flexShrink: 0, margin: '0 2px' }} />
 
       {/* Quick filters */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <QuickDropdown
-          label="Stad / regio"
-          options={stadOptions}
-          value={filters.stad}
-          onChange={v => setFilter('stad', v)}
-        />
-        <QuickDropdown
-          label="Project status"
-          options={projectStatusOptions}
-          value={filters.projectStatussen[0] || ''}
-          onChange={v => setFilter('projectStatussen', v ? [v] : [])}
-        />
-        <QuickDropdown
-          label="Laatste contact"
-          options={contactOptions}
-          value={filters.laatsteContactDagen}
-          onChange={v => setFilter('laatsteContactDagen', v)}
-        />
-        <QuickDropdown
-          label="Moneybird sync"
-          options={moneybirdOptions}
-          value={filters.heeftMoneybird}
-          onChange={v => setFilter('heeftMoneybird', v)}
-        />
-      </div>
+      <QuickDropdown label="Stad" options={stadOptions} value={filters.stad} onChange={v => setFilter('stad', v)} />
+      <QuickDropdown label="Project status" options={projectStatusOptions} value={filters.projectStatussen[0] || ''} onChange={v => setFilter('projectStatussen', v ? [v] : [])} />
+      <QuickDropdown label="Laatste contact" options={contactOptions} value={filters.laatsteContactDagen} onChange={v => setFilter('laatsteContactDagen', v)} />
+      <QuickDropdown label="Moneybird" options={moneybirdOptions} value={filters.heeftMoneybird} onChange={v => setFilter('heeftMoneybird', v)} />
 
-      {/* Spacer */}
-      <div style={{ flex: 1, minWidth: 12 }} />
+      <div style={{ flex: 1 }} />
 
-      {/* Search + clear */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          background: '#F9FAFB', border: '1px solid var(--br)', borderRadius: 7,
-          padding: '0 10px', width: 200, height: 32,
-        }}>
-          <span style={{ color: 'var(--dl)', flexShrink: 0, display: 'flex' }}><IconSearch /></span>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Zoek klant..."
-            style={{
-              border: 'none', background: 'transparent', outline: 'none',
-              fontSize: '.78rem', color: 'var(--dk)', width: '100%',
-            }}
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl)', display: 'flex', padding: 0 }}>
-              {I.x}
-            </button>
-          )}
-        </div>
-        {active && (
-          <button
-            onClick={onClearAll}
-            style={{
-              fontSize: '.78rem', fontWeight: 500, color: 'var(--pd)',
-              background: 'transparent', border: 'none', cursor: 'pointer',
-              whiteSpace: 'nowrap', padding: '0 4px',
-            }}
-          >
-            Filters wissen
+      {/* Search */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        background: T.pageBg, border: '1px solid var(--br)', borderRadius: 7,
+        padding: '0 10px', width: 200, height: 30,
+      }}>
+        <span style={{ color: 'var(--dl)', flexShrink: 0, display: 'flex' }}><IconSearch /></span>
+        <input
+          type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Zoek klant…"
+          style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: 12, color: 'var(--dk)', width: '100%' }}
+        />
+        {searchQuery && (
+          <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl)', display: 'flex', padding: 0 }}>
+            {I.x}
           </button>
         )}
       </div>
+
+      {active && (
+        <button onClick={onClearAll} style={{
+          fontSize: 12, fontWeight: 500, color: 'var(--pd)',
+          background: 'transparent', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', padding: '0 2px',
+        }}>
+          Wis filters
+        </button>
+      )}
     </div>
   );
 }
 
-// ── FILTER SECTION (sidebar) ─────────────────────────────────
+// ── FILTER SIDEBAR SECTION ───────────────────────────────────
 function FilterSection({ title, children, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div style={{ borderBottom: '1px solid var(--br)' }}>
+    <div>
       <button
         onClick={() => setOpen(o => !o)}
         style={{
           width: '100%', display: 'flex', justifyContent: 'space-between',
-          alignItems: 'center', padding: '9px 0',
+          alignItems: 'center', padding: '8px 0',
           background: 'none', border: 'none', cursor: 'pointer',
-          fontSize: '.72rem', fontWeight: 700, color: 'var(--dk)',
-          textTransform: 'uppercase', letterSpacing: '.05em',
+          fontSize: 11, fontWeight: 700, color: 'var(--dk)',
+          textTransform: 'uppercase', letterSpacing: '.06em',
+          borderBottom: open ? 'none' : '1px solid var(--border)',
         }}
       >
         {title}
-        <span style={{ color: 'var(--dl)', transition: 'transform .15s', transform: open ? 'rotate(180deg)' : 'none', display: 'flex', flexShrink: 0 }}>
-          {I.chev_d}
+        <span style={{
+          color: 'var(--dl)', transition: 'transform .15s',
+          transform: open ? 'rotate(180deg)' : 'none',
+          display: 'flex', flexShrink: 0,
+        }}>
+          <IconChevDown />
         </span>
       </button>
       {open && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7, paddingBottom: 10 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
           {children}
         </div>
       )}
@@ -352,7 +338,7 @@ function FilterSection({ title, children, defaultOpen = false }) {
 function FilterRow({ label, children }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      {label && <label style={FLBL}>{label}</label>}
+      {label && <div style={FLBL}>{label}</div>}
       {children}
     </div>
   );
@@ -362,24 +348,66 @@ function MultiSelect({ options, value, onChange }) {
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
       {options.map(o => {
-        const active = value.includes(o.id);
+        const on = value.includes(o.id);
         return (
           <button
             key={o.id}
-            onClick={() => onChange(active ? value.filter(v => v !== o.id) : [...value, o.id])}
+            onClick={() => onChange(on ? value.filter(v => v !== o.id) : [...value, o.id])}
             style={{
-              padding: '2px 8px', borderRadius: 999,
-              fontSize: '.68rem', fontWeight: 600,
-              border: active ? 'none' : '1px solid var(--br)',
-              background: active ? 'var(--p)' : '#F3F4F6',
-              color: active ? 'var(--dk)' : 'var(--dmu)',
-              cursor: 'pointer',
+              padding: '3px 9px', borderRadius: 999,
+              fontSize: 11, fontWeight: 600,
+              border: on ? 'none' : '1px solid var(--br)',
+              background: on ? 'var(--p)' : T.pageBg,
+              color: on ? 'white' : 'var(--dmu)',
+              cursor: 'pointer', transition: 'all .1s',
             }}
           >
             {o.label}
           </button>
         );
       })}
+    </div>
+  );
+}
+
+// ── PAGINATION ───────────────────────────────────────────────
+function Pagination({ currentPage, totalPages, onPage }) {
+  const range = [];
+  const WING = 2;
+  let lo = Math.max(1, currentPage - WING);
+  let hi = Math.min(totalPages, currentPage + WING);
+  if (hi - lo < WING * 2) {
+    if (lo === 1) hi = Math.min(totalPages, lo + WING * 2);
+    else lo = Math.max(1, hi - WING * 2);
+  }
+  for (let i = lo; i <= hi; i++) range.push(i);
+
+  const btn = (content, page, disabled, active) => (
+    <button
+      key={content}
+      onClick={() => !disabled && onPage(page)}
+      disabled={disabled}
+      style={{
+        minWidth: 30, height: 30, padding: '0 6px', borderRadius: 6,
+        border: '1px solid ' + (active ? 'var(--dk)' : 'var(--br)'),
+        background: active ? 'var(--dk)' : 'white',
+        color: disabled ? 'var(--dl)' : active ? 'white' : 'var(--dk)',
+        fontSize: 12, fontWeight: active ? 700 : 400,
+        cursor: disabled ? 'default' : 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      {content}
+    </button>
+  );
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+      {btn(I.chev_l, currentPage - 1, currentPage === 1, false)}
+      {lo > 1 && <>{btn(1, 1, false, false)}{lo > 2 && <span style={{ fontSize: 12, color: 'var(--dl)', padding: '0 2px' }}>…</span>}</>}
+      {range.map(p => btn(p, p, false, p === currentPage))}
+      {hi < totalPages && <>{hi < totalPages - 1 && <span style={{ fontSize: 12, color: 'var(--dl)', padding: '0 2px' }}>…</span>}{btn(totalPages, totalPages, false, false)}</>}
+      {btn(I.chev_r, currentPage + 1, currentPage === totalPages, false)}
     </div>
   );
 }
@@ -402,23 +430,23 @@ export function DatabasePage({ openCustomer }) {
   const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading]         = useState(true);
 
-  const [filters, setFilters]         = useState(EMPTY_FILTERS);
-  const [quickTab, setQuickTab]       = useState('alle');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [segments, setSegments]       = useState(() => {
+  const [filters, setFilters]             = useState(EMPTY_FILTERS);
+  const [quickTab, setQuickTab]           = useState('alle');
+  const [searchQuery, setSearchQuery]     = useState('');
+  const [segments, setSegments]           = useState(() => {
     try { return JSON.parse(localStorage.getItem('bb_db_segments') || '[]'); } catch { return []; }
   });
-  const [segmentName, setSegmentName]     = useState('');
+  const [segmentName, setSegmentName]         = useState('');
   const [showSaveSegment, setShowSaveSegment] = useState(false);
 
-  const [selected, setSelected]       = useState(new Set());
-  const [hoveredRow, setHoveredRow]   = useState(null);
+  const [selected, setSelected]     = useState(new Set());
+  const [hoveredRow, setHoveredRow] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const PER_PAGE = 50;
 
-  const [showMailModal, setShowMailModal]     = useState(false);
+  const [showMailModal, setShowMailModal]       = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState('');
-  const [sending, setSending]                 = useState(false);
+  const [sending, setSending]                   = useState(false);
 
   const [showBulkMenu, setShowBulkMenu] = useState(false);
   const bulkMenuRef = useRef(null);
@@ -430,13 +458,9 @@ export function DatabasePage({ openCustomer }) {
 
   useEffect(() => {
     if (!showBulkMenu) return;
-    const handler = e => {
-      if (bulkMenuRef.current && !bulkMenuRef.current.contains(e.target)) {
-        setShowBulkMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    const h = e => { if (bulkMenuRef.current && !bulkMenuRef.current.contains(e.target)) setShowBulkMenu(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
   }, [showBulkMenu]);
 
   // ── Load data ────────────────────────────────────────────────
@@ -477,12 +501,10 @@ export function DatabasePage({ openCustomer }) {
     .finally(() => setLoading(false));
   }, []);
 
-  // ── Index related data by customer ───────────────────────────
+  // ── Index by customer ────────────────────────────────────────
   const byCustomer = useMemo(() => {
     const m = {};
-    const init = id => {
-      if (!m[id]) m[id] = { projects: [], facturen: [], offertes: [], deals: [], activities: [], emails: [], uren: [] };
-    };
+    const init = id => { if (!m[id]) m[id] = { projects: [], facturen: [], offertes: [], deals: [], activities: [], emails: [], uren: [] }; };
     customers.forEach(c => init(c.id));
     projects.forEach(p => { if (p.customerId) { init(p.customerId); m[p.customerId].projects.push(p); } });
     facturen.forEach(f => { if (f.customerId) { init(f.customerId); m[f.customerId].facturen.push(f); } });
@@ -498,10 +520,7 @@ export function DatabasePage({ openCustomer }) {
     return customers.filter(c => {
       const rel = byCustomer[c.id] || { projects: [], facturen: [], offertes: [], deals: [], activities: [], emails: [], uren: [] };
 
-      // Search query
       if (searchQuery && !c.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-
-      // Quick tabs
       if (quickTab === 'actief' && !rel.projects.some(p => p.status === 'in_uitvoering')) return false;
       if (quickTab === 'inactief' && rel.projects.some(p => p.status === 'in_uitvoering')) return false;
       if (quickTab === 'geen_projecten' && rel.projects.length > 0) return false;
@@ -522,15 +541,10 @@ export function DatabasePage({ openCustomer }) {
       if (filters.geenProject && rel.projects.length > 0) return false;
       if (filters.laatsteContactDagen) {
         const cutoff = daysAgo(Number(filters.laatsteContactDagen));
-        const lastContact = [...rel.emails, ...rel.activities]
-          .map(x => x.sent_at || x.due_at || '')
-          .filter(Boolean).sort().reverse()[0];
+        const lastContact = [...rel.emails, ...rel.activities].map(x => x.sent_at || x.due_at || '').filter(Boolean).sort().reverse()[0];
         if (lastContact && lastContact.slice(0,10) >= cutoff) return false;
       }
-
-      if (filters.projectStatussen.length > 0) {
-        if (!rel.projects.some(p => filters.projectStatussen.includes(p.status))) return false;
-      }
+      if (filters.projectStatussen.length > 0 && !rel.projects.some(p => filters.projectStatussen.includes(p.status))) return false;
       if (filters.projectStartVan && !rel.projects.some(p => p.startDate >= filters.projectStartVan)) return false;
       if (filters.projectStartTot && !rel.projects.some(p => p.startDate <= filters.projectStartTot)) return false;
       if (filters.projectDeadlineVan && !rel.projects.some(p => p.deadline >= filters.projectDeadlineVan)) return false;
@@ -538,9 +552,7 @@ export function DatabasePage({ openCustomer }) {
       if (filters.heeftOverrun && !rel.projects.some(p => (p.usedHours || 0) > (p.quotedHours || 0))) return false;
       if (filters.projectMedewerker && !rel.projects.some(p => p.ownerId === filters.projectMedewerker)) return false;
 
-      if (filters.offerteStatussen.length > 0) {
-        if (!rel.offertes.some(o => filters.offerteStatussen.includes(o.status))) return false;
-      }
+      if (filters.offerteStatussen.length > 0 && !rel.offertes.some(o => filters.offerteStatussen.includes(o.status))) return false;
       if (filters.offerteVerlopen && !rel.offertes.some(o => o.status === 'verzonden' && o.geldigTot && o.geldigTot < TODAY)) return false;
       if (filters.offerteOndertekend !== 'alles') {
         const isSigned = rel.offertes.some(o => Boolean(o.signedAt));
@@ -552,9 +564,7 @@ export function DatabasePage({ openCustomer }) {
       if (filters.offerteMargeMin && !rel.offertes.some(o => (o.margePct || 0) >= Number(filters.offerteMargeMin))) return false;
       if (filters.offerteMargeMax && !rel.offertes.some(o => (o.margePct || 0) <= Number(filters.offerteMargeMax))) return false;
 
-      if (filters.factuurStatussen.length > 0) {
-        if (!rel.facturen.some(f => filters.factuurStatussen.includes(f.status))) return false;
-      }
+      if (filters.factuurStatussen.length > 0 && !rel.facturen.some(f => filters.factuurStatussen.includes(f.status))) return false;
       if (filters.factuurVervallen && !rel.facturen.some(f => f.status === 'verzonden' && f.vervaldatum && f.vervaldatum < TODAY)) return false;
       if (filters.herinnering1 !== 'alles') {
         const h1 = rel.facturen.some(f => Boolean(f.herinnering1VerstuurdAt));
@@ -570,15 +580,11 @@ export function DatabasePage({ openCustomer }) {
       if (filters.betaaldVan && !rel.facturen.some(f => f.betaaldOp >= filters.betaaldVan)) return false;
       if (filters.betaaldTot && !rel.facturen.some(f => f.betaaldOp <= filters.betaaldTot)) return false;
 
-      if (filters.dealFasen.length > 0) {
-        if (!rel.deals.some(d => filters.dealFasen.includes(d.stageId))) return false;
-      }
+      if (filters.dealFasen.length > 0 && !rel.deals.some(d => filters.dealFasen.includes(d.stageId))) return false;
       if (filters.dealWaardeMin && !rel.deals.some(d => (d.value || 0) >= Number(filters.dealWaardeMin))) return false;
       if (filters.dealWaardeMax && !rel.deals.some(d => (d.value || 0) <= Number(filters.dealWaardeMax))) return false;
       if (filters.heeftOpenActiviteiten && !rel.activities.some(a => !a.completed)) return false;
-      if (filters.activiteitTypen.length > 0) {
-        if (!rel.activities.some(a => filters.activiteitTypen.includes(a.type))) return false;
-      }
+      if (filters.activiteitTypen.length > 0 && !rel.activities.some(a => filters.activiteitTypen.includes(a.type))) return false;
 
       if (filters.heeftMail !== 'alles') {
         const heeft = rel.emails.length > 0;
@@ -604,10 +610,11 @@ export function DatabasePage({ openCustomer }) {
 
   // ── Pagination ───────────────────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / PER_PAGE));
-  const pageSlice = filteredCustomers.slice((currentPage - 1) * PER_PAGE, currentPage * PER_PAGE);
+  const pageSlice  = filteredCustomers.slice((currentPage - 1) * PER_PAGE, currentPage * PER_PAGE);
 
   // ── Selection ────────────────────────────────────────────────
-  const allPageSelected = pageSlice.length > 0 && pageSlice.every(c => selected.has(c.id));
+  const allPageSelected  = pageSlice.length > 0 && pageSlice.every(c => selected.has(c.id));
+  const somePageSelected = pageSlice.some(c => selected.has(c.id)) && !allPageSelected;
   const toggleAll = () => {
     if (allPageSelected) {
       setSelected(s => { const n = new Set(s); pageSlice.forEach(c => n.delete(c.id)); return n; });
@@ -646,8 +653,8 @@ export function DatabasePage({ openCustomer }) {
         if (!c.email) { skipped++; continue; }
         const vars = { klant_naam: c.name, bedrijfsnaam: c.name };
         const subject = substituteVars(tpl.onderwerp || '', vars);
-        const body = substituteVars(tpl.body || '', vars);
-        const html = body.split('\n').map(l => l.trim() === '' ? '<br>' : `<p style="margin:0 0 6px">${l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>`).join('');
+        const body    = substituteVars(tpl.body || '', vars);
+        const html    = body.split('\n').map(l => l.trim() === '' ? '<br>' : `<p style="margin:0 0 6px">${l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>`).join('');
         try {
           await sendEmail({ to: c.email, subject, html });
           await logSentEmail({ toEmail: c.email, subject, bodyHtml: html, relatedType: tpl.type || 'algemeen', customerId: c.id });
@@ -661,54 +668,35 @@ export function DatabasePage({ openCustomer }) {
     } finally { setSending(false); }
   };
 
-  // ── Export helpers ───────────────────────────────────────────
+  // ── Export ───────────────────────────────────────────────────
   const buildExportRows = () => selectedCustomers.map(c => {
     const rel = byCustomer[c.id] || { projects: [], facturen: [] };
     const lastProject = [...rel.projects].sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''))[0];
     const omzet = rel.facturen.filter(f => f.status === 'betaald' && !f.isCredit).reduce((s,f) => s + (f.totaalIncl||0), 0);
-    return {
-      Naam: c.name,
-      Email: c.email || '',
-      Telefoon: c.phone || '',
-      Stad: c.city || '',
-      KvK: c.kvkNumber || '',
-      'Laatste project': lastProject?.name || '',
-      'Totale omzet': omzet,
-      Aanmaakdatum: c.createdAt ? c.createdAt.slice(0, 10) : '',
-    };
+    return { Naam: c.name, Email: c.email || '', Telefoon: c.phone || '', Stad: c.city || '', KvK: c.kvkNumber || '', 'Laatste project': lastProject?.name || '', 'Totale omzet': omzet, Aanmaakdatum: c.createdAt ? c.createdAt.slice(0,10) : '' };
   });
 
   const exportExcel = async () => {
     try {
-    const rows = buildExportRows();
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('Klanten');
-    ws.columns = [
-      { header: 'Naam',            key: 'Naam',            width: 28 },
-      { header: 'Email',           key: 'Email',           width: 32 },
-      { header: 'Telefoon',        key: 'Telefoon',        width: 18 },
-      { header: 'Stad',            key: 'Stad',            width: 18 },
-      { header: 'KvK',             key: 'KvK',             width: 14 },
-      { header: 'Laatste project', key: 'Laatste project', width: 24 },
-      { header: 'Totale omzet',    key: 'Totale omzet',    width: 16 },
-      { header: 'Aanmaakdatum',    key: 'Aanmaakdatum',    width: 14 },
-    ];
-    ws.getRow(1).font = { bold: true };
-    rows.forEach(r => ws.addRow(r));
-    const buffer = await wb.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `BossBase-export-${TODAY}.xlsx`;
-    a.click();
-    URL.revokeObjectURL(url);
-    rows.forEach((_, i) => {
-      const c = selectedCustomers[i];
-      if (c?.id) logTijdlijnSafe(c.id, 'export_uitgevoerd', 'Klantgegevens geëxporteerd als Excel');
-    });
-    setShowBulkMenu(false);
-    toast.success(`${rows.length} klanten geëxporteerd als Excel`);
+      const rows = buildExportRows();
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Klanten');
+      ws.columns = [
+        { header: 'Naam', key: 'Naam', width: 28 }, { header: 'Email', key: 'Email', width: 32 },
+        { header: 'Telefoon', key: 'Telefoon', width: 18 }, { header: 'Stad', key: 'Stad', width: 18 },
+        { header: 'KvK', key: 'KvK', width: 14 }, { header: 'Laatste project', key: 'Laatste project', width: 24 },
+        { header: 'Totale omzet', key: 'Totale omzet', width: 16 }, { header: 'Aanmaakdatum', key: 'Aanmaakdatum', width: 14 },
+      ];
+      ws.getRow(1).font = { bold: true };
+      rows.forEach(r => ws.addRow(r));
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `BossBase-export-${TODAY}.xlsx`; a.click();
+      URL.revokeObjectURL(url);
+      rows.forEach((_, i) => { const c = selectedCustomers[i]; if (c?.id) logTijdlijnSafe(c.id, 'export_uitgevoerd', 'Klantgegevens geëxporteerd als Excel'); });
+      setShowBulkMenu(false);
+      toast.success(`${rows.length} klanten geëxporteerd als Excel`);
     } catch (err) { toast.error('Excel export mislukt: ' + (err.message || '')); }
   };
 
@@ -719,71 +707,53 @@ export function DatabasePage({ openCustomer }) {
     const csv = [headers.map(escape), ...rows.map(r => headers.map(h => escape(r[h])))].map(r => r.join(',')).join('\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `BossBase-export-${TODAY}.csv`;
-    a.click();
+    const a = document.createElement('a'); a.href = url; a.download = `BossBase-export-${TODAY}.csv`; a.click();
     URL.revokeObjectURL(url);
-    rows.forEach((_, i) => {
-      const c = selectedCustomers[i];
-      if (c?.id) logTijdlijnSafe(c.id, 'export_uitgevoerd', 'Klantgegevens geëxporteerd als CSV');
-    });
+    rows.forEach((_, i) => { const c = selectedCustomers[i]; if (c?.id) logTijdlijnSafe(c.id, 'export_uitgevoerd', 'Klantgegevens geëxporteerd als CSV'); });
     setShowBulkMenu(false);
     toast.success(`${rows.length} klanten geëxporteerd als CSV`);
   };
 
-  // ── Display meta per customer ────────────────────────────────
+  // ── Display meta ─────────────────────────────────────────────
   const custMeta = useMemo(() => {
     const m = {};
     customers.forEach(c => {
       const rel = byCustomer[c.id] || { projects: [], facturen: [], emails: [] };
       const lastProject = [...rel.projects].sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''))[0];
-      const lastEmail = [...rel.emails].sort((a,b) => (b.sent_at||'').localeCompare(a.sent_at||''))[0];
+      const lastEmail   = [...rel.emails].sort((a,b) => (b.sent_at||'').localeCompare(a.sent_at||''))[0];
       const omzet = rel.facturen.filter(f => f.status === 'betaald' && !f.isCredit).reduce((s,f) => s + (f.totaalIncl||0), 0);
       m[c.id] = { lastProject, lastEmail, omzet, projectCount: rel.projects.length };
     });
     return m;
   }, [customers, byCustomer]);
 
-  const active = hasActiveFilters(filters) || quickTab !== 'alle' || Boolean(searchQuery);
-  const stadsUniek = useMemo(() => [...new Set(customers.map(c => c.city).filter(Boolean))].sort(), [customers]);
+  const active       = hasActiveFilters(filters) || quickTab !== 'alle' || Boolean(searchQuery);
+  const stadsUniek   = useMemo(() => [...new Set(customers.map(c => c.city).filter(Boolean))].sort(), [customers]);
   const templateTypes = [...new Set(templates.map(t => t.type))];
-  const OFFERTE_STATUSSEN = [
-    { id: 'concept', label: 'Concept' }, { id: 'verzonden', label: 'Verzonden' },
-    { id: 'geaccepteerd', label: 'Geaccepteerd' }, { id: 'afgewezen', label: 'Afgewezen' },
-  ];
-  const FACTUUR_STATUSSEN = [
-    { id: 'aangemaakt', label: 'Aangemaakt' }, { id: 'verzonden', label: 'Verzonden' }, { id: 'betaald', label: 'Betaald' },
-  ];
-  const ACTIVITEIT_TYPEN = [
-    { id: 'call', label: 'Bellen' }, { id: 'email', label: 'E-mail' },
-    { id: 'visit', label: 'Bezoek' }, { id: 'task', label: 'Taak' }, { id: 'follow', label: 'Follow-up' },
-  ];
-  const PROJECT_STATUSSEN = Object.entries(PROJECT_STATUS).map(([id, v]) => ({ id, label: v.label }));
-  const teamOpties = teamMembers.map(m => ({ id: m.id, label: m.full_name }));
-  const noEmail = selectedCustomers.filter(c => !c.email);
+  const OFFERTE_STATUSSEN  = [{ id: 'concept', label: 'Concept' }, { id: 'verzonden', label: 'Verzonden' }, { id: 'geaccepteerd', label: 'Geaccepteerd' }, { id: 'afgewezen', label: 'Afgewezen' }];
+  const FACTUUR_STATUSSEN  = [{ id: 'aangemaakt', label: 'Aangemaakt' }, { id: 'verzonden', label: 'Verzonden' }, { id: 'betaald', label: 'Betaald' }];
+  const ACTIVITEIT_TYPEN   = [{ id: 'call', label: 'Bellen' }, { id: 'email', label: 'E-mail' }, { id: 'visit', label: 'Bezoek' }, { id: 'task', label: 'Taak' }, { id: 'follow', label: 'Follow-up' }];
+  const PROJECT_STATUSSEN  = Object.entries(PROJECT_STATUS).map(([id, v]) => ({ id, label: v.label }));
+  const teamOpties         = teamMembers.map(m => ({ id: m.id, label: m.full_name }));
+  const noEmail            = selectedCustomers.filter(c => !c.email);
 
-  const clearAll = () => {
-    setFilters(EMPTY_FILTERS);
-    setQuickTab('alle');
-    setSearchQuery('');
-    setCurrentPage(1);
-  };
+  const clearAll = () => { setFilters(EMPTY_FILTERS); setQuickTab('alle'); setSearchQuery(''); setCurrentPage(1); };
 
   if (loading) return (
-    <div className="card card-p afu2" style={{ textAlign: 'center', color: 'var(--dl)', padding: 48 }}>
-      Database laden…
-    </div>
+    <div style={{ padding: 48, textAlign: 'center', color: 'var(--dl)', fontSize: 14 }}>Database laden…</div>
   );
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+  // ── TH style ─────────────────────────────────────────────────
+  const TH = { fontSize: 10, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.07em' };
 
-      {/* ── Header ── */}
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, height: '100%' }}>
+
+      {/* ── Page header ── */}
       <div className="page-hd afu">
         <div>
           <h1>Database</h1>
-          <p style={{ color: 'var(--dl)', fontSize: '.82rem', marginTop: 2 }}>
+          <p style={{ color: 'var(--dl)', fontSize: 12, marginTop: 2 }}>
             {active ? `${filteredCustomers.length} van ${customers.length} klanten` : `${customers.length} klanten`}
           </p>
         </div>
@@ -796,32 +766,22 @@ export function DatabasePage({ openCustomer }) {
 
       {/* ── Saved segments ── */}
       {segments.length > 0 && (
-        <div className="afu2" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+        <div className="afu2" style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 10 }}>
           {segments.map(seg => (
-            <div
-              key={seg.name}
-              style={{
-                display: 'inline-flex', alignItems: 'center',
-                background: 'white', border: '1px solid var(--br)',
-                borderRadius: 999, overflow: 'hidden', boxShadow: 'var(--shadow-xs)',
-              }}
-            >
+            <div key={seg.name} style={{
+              display: 'inline-flex', alignItems: 'center',
+              background: 'white', border: '1px solid var(--border)',
+              borderRadius: 999, overflow: 'hidden', boxShadow: T.shadow,
+            }}>
               <button
                 onClick={() => { setFilters(seg.filters); setCurrentPage(1); }}
-                style={{
-                  padding: '4px 11px 4px 13px', fontSize: '.75rem', fontWeight: 600,
-                  color: 'var(--dk)', background: 'none', border: 'none', cursor: 'pointer',
-                }}
+                style={{ padding: '4px 11px 4px 13px', fontSize: 12, fontWeight: 600, color: 'var(--dk)', background: 'none', border: 'none', cursor: 'pointer' }}
               >
                 {seg.name}
               </button>
               <button
                 onClick={() => deleteSegment(seg.name)}
-                style={{
-                  padding: '4px 8px', color: 'var(--dl)', background: 'none', border: 'none',
-                  borderLeft: '1px solid var(--br)', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center',
-                }}
+                style={{ padding: '4px 8px', color: 'var(--dl)', background: 'none', border: 'none', borderLeft: '1px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
               >
                 {I.x}
               </button>
@@ -837,58 +797,49 @@ export function DatabasePage({ openCustomer }) {
             type="text" placeholder="Naam voor dit segment…" value={segmentName}
             onChange={e => setSegmentName(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && saveSegment()}
-            style={{ flex: 1, maxWidth: 280 }}
-            autoFocus
+            style={{ flex: 1, maxWidth: 280 }} autoFocus
           />
           <button className="btn btn-p btn-sm" onClick={saveSegment}>Opslaan</button>
           <button className="btn btn-ghost btn-sm" onClick={() => setShowSaveSegment(false)}>Annuleren</button>
         </div>
       )}
 
-      {/* ── FilterBar ── */}
-      <div className="afu2" style={{ marginBottom: 12 }}>
+      {/* ── Filter bar ── */}
+      <div className="afu2" style={{ marginBottom: 14 }}>
         <FilterBar
           quickTab={quickTab}
           setQuickTab={t => { setQuickTab(t); setCurrentPage(1); }}
           searchQuery={searchQuery}
           setSearchQuery={q => { setSearchQuery(q); setCurrentPage(1); }}
-          filters={filters}
-          setFilter={setFilter}
-          stadsUniek={stadsUniek}
-          active={active}
-          onClearAll={clearAll}
+          filters={filters} setFilter={setFilter}
+          stadsUniek={stadsUniek} active={active} onClearAll={clearAll}
         />
       </div>
 
-      {/* ── Body: filter sidebar + results ── */}
-      <div className="afu2" style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 16, alignItems: 'start' }}>
+      {/* ── Body ── */}
+      <div className="afu2" style={{ display: 'grid', gridTemplateColumns: '216px 1fr', gap: 14, alignItems: 'start' }}>
 
-        {/* ── Filter sidebar ── */}
+        {/* ── Sidebar ── */}
         <div style={{
-          background: 'white', borderRadius: 'var(--r12)', border: '1px solid var(--br)',
-          padding: '0 14px 10px', boxShadow: 'var(--shadow-xs)',
+          background: 'white', borderRadius: 'var(--r14)',
+          border: '1px solid var(--border)', boxShadow: T.shadow,
+          padding: '4px 14px 14px',
         }}>
           <div style={{
-            fontSize: '.68rem', fontWeight: 700, color: 'var(--dl)',
-            textTransform: 'uppercase', letterSpacing: '.06em',
-            padding: '12px 0 9px', borderBottom: '1px solid var(--br)', marginBottom: 2,
+            fontSize: 10, fontWeight: 700, color: 'var(--dl)',
+            textTransform: 'uppercase', letterSpacing: '.07em',
+            padding: '12px 0 10px', borderBottom: '1px solid var(--border)', marginBottom: 2,
           }}>
             Geavanceerde filters
           </div>
 
           <FilterSection title="Klant" defaultOpen>
             <FilterRow label="Stad / regio">
-              <input list="steden" type="text" value={filters.stad}
-                onChange={e => setFilter('stad', e.target.value)}
-                placeholder="Alle steden" style={FIN} />
+              <input list="steden" type="text" value={filters.stad} onChange={e => setFilter('stad', e.target.value)} placeholder="Alle steden" style={FIN} />
               <datalist id="steden">{stadsUniek.map(s => <option key={s} value={s} />)}</datalist>
             </FilterRow>
-            <FilterRow label="Aangemaakt van">
-              <input type="date" value={filters.aanmaakVan} onChange={e => setFilter('aanmaakVan', e.target.value)} style={FIN} />
-            </FilterRow>
-            <FilterRow label="Aangemaakt tot">
-              <input type="date" value={filters.aanmaakTot} onChange={e => setFilter('aanmaakTot', e.target.value)} style={FIN} />
-            </FilterRow>
+            <FilterRow label="Aangemaakt van"><input type="date" value={filters.aanmaakVan} onChange={e => setFilter('aanmaakVan', e.target.value)} style={FIN} /></FilterRow>
+            <FilterRow label="Aangemaakt tot"><input type="date" value={filters.aanmaakTot} onChange={e => setFilter('aanmaakTot', e.target.value)} style={FIN} /></FilterRow>
             <FilterRow label="KvK-nummer">
               <select value={filters.heeftKvk} onChange={e => setFilter('heeftKvk', e.target.value)} style={FIN}>
                 <option value="alles">Alles</option>
@@ -903,14 +854,12 @@ export function DatabasePage({ openCustomer }) {
                 <option value="nee">Niet gesynchroniseerd</option>
               </select>
             </FilterRow>
-            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '.78rem', color: 'var(--dm)', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--dm)', cursor: 'pointer' }}>
               <input type="checkbox" checked={filters.geenProject} onChange={e => setFilter('geenProject', e.target.checked)} style={{ accentColor: 'var(--p)' }} />
-              Nog nooit een project gehad
+              Nog nooit een project
             </label>
             <FilterRow label="Laatste contact ouder dan (dagen)">
-              <input type="number" min="0" value={filters.laatsteContactDagen}
-                onChange={e => setFilter('laatsteContactDagen', e.target.value)}
-                placeholder="Bijv. 90" style={FIN} />
+              <input type="number" min="0" value={filters.laatsteContactDagen} onChange={e => setFilter('laatsteContactDagen', e.target.value)} placeholder="Bijv. 90" style={FIN} />
             </FilterRow>
           </FilterSection>
 
@@ -922,7 +871,7 @@ export function DatabasePage({ openCustomer }) {
             <FilterRow label="Startdatum tot"><input type="date" value={filters.projectStartTot} onChange={e => setFilter('projectStartTot', e.target.value)} style={FIN} /></FilterRow>
             <FilterRow label="Deadline van"><input type="date" value={filters.projectDeadlineVan} onChange={e => setFilter('projectDeadlineVan', e.target.value)} style={FIN} /></FilterRow>
             <FilterRow label="Deadline tot"><input type="date" value={filters.projectDeadlineTot} onChange={e => setFilter('projectDeadlineTot', e.target.value)} style={FIN} /></FilterRow>
-            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '.78rem', color: 'var(--dm)', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--dm)', cursor: 'pointer' }}>
               <input type="checkbox" checked={filters.heeftOverrun} onChange={e => setFilter('heeftOverrun', e.target.checked)} style={{ accentColor: 'var(--p)' }} />
               Heeft overrun
             </label>
@@ -940,7 +889,7 @@ export function DatabasePage({ openCustomer }) {
             <FilterRow label="Status">
               <MultiSelect options={OFFERTE_STATUSSEN} value={filters.offerteStatussen} onChange={v => setFilter('offerteStatussen', v)} />
             </FilterRow>
-            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '.78rem', color: 'var(--dm)', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--dm)', cursor: 'pointer' }}>
               <input type="checkbox" checked={filters.offerteVerlopen} onChange={e => setFilter('offerteVerlopen', e.target.checked)} style={{ accentColor: 'var(--p)' }} />
               Heeft verlopen offerte
             </label>
@@ -961,7 +910,7 @@ export function DatabasePage({ openCustomer }) {
             <FilterRow label="Status">
               <MultiSelect options={FACTUUR_STATUSSEN} value={filters.factuurStatussen} onChange={v => setFilter('factuurStatussen', v)} />
             </FilterRow>
-            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '.78rem', color: 'var(--dm)', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--dm)', cursor: 'pointer' }}>
               <input type="checkbox" checked={filters.factuurVervallen} onChange={e => setFilter('factuurVervallen', e.target.checked)} style={{ accentColor: 'var(--p)' }} />
               Heeft vervallen factuur
             </label>
@@ -975,7 +924,7 @@ export function DatabasePage({ openCustomer }) {
                 <option value="alles">Alles</option><option value="ja">Verstuurd</option><option value="nee">Niet verstuurd</option>
               </select>
             </FilterRow>
-            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '.78rem', color: 'var(--dm)', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--dm)', cursor: 'pointer' }}>
               <input type="checkbox" checked={filters.isCreditnota} onChange={e => setFilter('isCreditnota', e.target.checked)} style={{ accentColor: 'var(--p)' }} />
               Heeft creditnota
             </label>
@@ -991,7 +940,7 @@ export function DatabasePage({ openCustomer }) {
             )}
             <FilterRow label="Dealwaarde min (€)"><input type="number" min="0" value={filters.dealWaardeMin} onChange={e => setFilter('dealWaardeMin', e.target.value)} placeholder="0" style={FIN} /></FilterRow>
             <FilterRow label="Dealwaarde max (€)"><input type="number" min="0" value={filters.dealWaardeMax} onChange={e => setFilter('dealWaardeMax', e.target.value)} placeholder="∞" style={FIN} /></FilterRow>
-            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '.78rem', color: 'var(--dm)', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--dm)', cursor: 'pointer' }}>
               <input type="checkbox" checked={filters.heeftOpenActiviteiten} onChange={e => setFilter('heeftOpenActiviteiten', e.target.checked)} style={{ accentColor: 'var(--p)' }} />
               Heeft open activiteiten
             </label>
@@ -1020,38 +969,42 @@ export function DatabasePage({ openCustomer }) {
           </FilterSection>
 
           <FilterSection title="Uren">
-            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: '.78rem', color: 'var(--dm)', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--dm)', cursor: 'pointer' }}>
               <input type="checkbox" checked={filters.heeftFactureerbareUren} onChange={e => setFilter('heeftFactureerbareUren', e.target.checked)} style={{ accentColor: 'var(--p)' }} />
               Heeft factureerbare uren
             </label>
           </FilterSection>
         </div>
 
-        {/* ── Results table ── */}
-        <div style={{ background: 'white', borderRadius: 'var(--r12)', border: '1px solid var(--br)', overflow: 'hidden', boxShadow: 'var(--shadow-xs)' }}>
+        {/* ── Table card ── */}
+        <div style={{
+          background: 'white', borderRadius: 'var(--r14)',
+          border: '1px solid var(--border)', boxShadow: T.shadow,
+          overflow: 'hidden', display: 'flex', flexDirection: 'column',
+        }}>
 
           {/* Column headers */}
           <div style={{
             display: 'grid', gridTemplateColumns: COLS, gap: 12, alignItems: 'center',
-            padding: '10px 16px', background: '#F9FAFB', borderBottom: '1px solid var(--br)',
+            padding: '8px 16px', borderBottom: `1px solid ${T.borderXL}`,
           }}>
-            <input type="checkbox" style={CB} checked={allPageSelected} onChange={toggleAll} />
-            <div style={{ fontSize: '.68rem', fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Klant</div>
-            <div style={{ fontSize: '.68rem', fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Laatste project</div>
-            <div style={{ fontSize: '.68rem', fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Laatste mail</div>
-            <div style={{ fontSize: '.68rem', fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.06em', textAlign: 'center' }}>Proj.</div>
-            <div style={{ fontSize: '.68rem', fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.06em', textAlign: 'right' }}>Omzet</div>
+            <Checkbox checked={allPageSelected} indeterminate={somePageSelected} onChange={toggleAll} />
+            <div style={TH}>Klant</div>
+            <div style={TH}>Laatste project</div>
+            <div style={TH}>Laatste mail</div>
+            <div style={{ ...TH, textAlign: 'center' }}>Proj.</div>
+            <div style={{ ...TH, textAlign: 'right' }}>Omzet</div>
           </div>
 
           {/* Rows */}
           {pageSlice.length === 0 ? (
-            <div style={{ padding: 48, textAlign: 'center', color: 'var(--dl)', fontSize: '.84rem' }}>
+            <div style={{ padding: 48, textAlign: 'center', color: 'var(--dl)', fontSize: 13 }}>
               {active ? 'Geen klanten gevonden met deze filters.' : 'Geen klanten.'}
             </div>
           ) : pageSlice.map((c, i) => {
-            const meta = custMeta[c.id] || {};
+            const meta       = custMeta[c.id] || {};
             const isSelected = selected.has(c.id);
-            const isHovered = hoveredRow === c.id;
+            const isHovered  = hoveredRow === c.id;
             return (
               <div
                 key={c.id}
@@ -1059,32 +1012,32 @@ export function DatabasePage({ openCustomer }) {
                 onMouseLeave={() => setHoveredRow(null)}
                 style={{
                   display: 'grid', gridTemplateColumns: COLS, gap: 12, alignItems: 'center',
-                  padding: '11px 13px 11px 16px',
-                  borderLeft: isSelected ? '3px solid var(--p)' : '3px solid transparent',
-                  borderBottom: i < pageSlice.length - 1 ? '1px solid #F3F4F6' : 'none',
-                  background: isSelected ? 'var(--pll)' : isHovered ? '#F9FAFB' : 'white',
-                  transition: 'background .1s ease',
+                  padding: '10px 16px',
+                  borderLeft: `3px solid ${isSelected ? 'var(--p)' : 'transparent'}`,
+                  borderBottom: i < pageSlice.length - 1 ? `1px solid ${T.borderXL}` : 'none',
+                  background: isSelected ? T.rowSel : isHovered ? T.pageBg : 'white',
+                  transition: 'background .1s',
                 }}
               >
-                <input type="checkbox" style={CB} checked={isSelected} onChange={() => toggleOne(c.id)} />
+                <Checkbox checked={isSelected} onChange={() => toggleOne(c.id)} />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
                   <Av name={c.name} size="sm" idx={c.av} />
                   <div style={{ minWidth: 0 }}>
                     <button
                       onClick={() => openCustomer?.(c.id)}
                       style={{
-                        fontWeight: 600, fontSize: '.84rem', background: 'none', border: 'none',
+                        fontWeight: 600, fontSize: 13, background: 'none', border: 'none',
                         padding: 0, cursor: 'pointer', textAlign: 'left', color: 'var(--dk)',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%',
-                        display: 'block',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        maxWidth: '100%', display: 'block',
                       }}
                     >
                       {c.name}
                     </button>
-                    {c.city && <div style={{ fontSize: '.7rem', color: 'var(--dl)', marginTop: 1 }}>{c.city}</div>}
+                    {c.city && <div style={{ fontSize: 11, color: 'var(--dl)', marginTop: 1 }}>{c.city}</div>}
                   </div>
                 </div>
-                <div style={{ fontSize: '.78rem', minWidth: 0 }}>
+                <div style={{ fontSize: 12, minWidth: 0 }}>
                   {meta.lastProject ? (
                     <>
                       <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--dk)', marginBottom: 3 }}>
@@ -1094,20 +1047,24 @@ export function DatabasePage({ openCustomer }) {
                     </>
                   ) : <span style={{ color: 'var(--dl)' }}>—</span>}
                 </div>
-                <div style={{ fontSize: '.78rem', color: meta.lastEmail ? 'var(--dk)' : 'var(--dl)' }}>
+                <div style={{ fontSize: 12, color: meta.lastEmail ? 'var(--dk)' : 'var(--dl)' }}>
                   {meta.lastEmail ? (
                     <>
-                      <div>{new Date(meta.lastEmail.sent_at).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: '2-digit' })}</div>
-                      <div style={{ fontSize: '.7rem', color: 'var(--dl)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontWeight: 500 }}>
+                        {new Date(meta.lastEmail.sent_at).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--dl)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {meta.lastEmail.subject}
                       </div>
                     </>
                   ) : '—'}
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <span style={{ fontWeight: 700, fontSize: '.84rem', color: 'var(--dk)' }}>{meta.projectCount}</span>
+                  <span style={{ fontWeight: 700, fontSize: 13, color: meta.projectCount > 0 ? 'var(--dk)' : 'var(--dl)' }}>
+                    {meta.projectCount}
+                  </span>
                 </div>
-                <div style={{ fontSize: '.82rem', fontWeight: 700, color: meta.omzet > 0 ? 'var(--pd)' : 'var(--dl)', textAlign: 'right' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: meta.omzet > 0 ? 'var(--pd)' : 'var(--dl)', textAlign: 'right' }}>
                   {meta.omzet > 0 ? fmt(meta.omzet) : '—'}
                 </div>
               </div>
@@ -1118,40 +1075,12 @@ export function DatabasePage({ openCustomer }) {
           {totalPages > 1 && (
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '10px 16px', borderTop: '1px solid var(--br)', background: '#FAFAFA',
+              padding: '10px 16px', borderTop: `1px solid ${T.borderXL}`, background: T.pageBg,
             }}>
-              <span style={{ fontSize: '.78rem', color: 'var(--dl)' }}>{filteredCustomers.length} klanten</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <button
-                  onClick={() => setCurrentPage(p => p - 1)}
-                  disabled={currentPage === 1}
-                  style={{
-                    width: 30, height: 30, borderRadius: 'var(--r8)',
-                    border: '1px solid var(--br)', background: 'white',
-                    cursor: currentPage === 1 ? 'default' : 'pointer',
-                    color: currentPage === 1 ? 'var(--dl)' : 'var(--dk)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  }}
-                >
-                  {I.chev_l}
-                </button>
-                <span style={{ fontSize: '.8rem', color: 'var(--dmu)', minWidth: 80, textAlign: 'center' }}>
-                  {currentPage} / {totalPages}
-                </span>
-                <button
-                  onClick={() => setCurrentPage(p => p + 1)}
-                  disabled={currentPage === totalPages}
-                  style={{
-                    width: 30, height: 30, borderRadius: 'var(--r8)',
-                    border: '1px solid var(--br)', background: 'white',
-                    cursor: currentPage === totalPages ? 'default' : 'pointer',
-                    color: currentPage === totalPages ? 'var(--dl)' : 'var(--dk)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  }}
-                >
-                  {I.chev_r}
-                </button>
-              </div>
+              <span style={{ fontSize: 12, color: 'var(--dl)' }}>
+                {filteredCustomers.length} klanten · pagina {currentPage} van {totalPages}
+              </span>
+              <Pagination currentPage={currentPage} totalPages={totalPages} onPage={p => { setCurrentPage(p); }} />
             </div>
           )}
         </div>
@@ -1162,19 +1091,20 @@ export function DatabasePage({ openCustomer }) {
         <div style={{
           position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
           zIndex: 50, background: 'var(--dk)', color: '#fff',
-          borderRadius: 'var(--r14)', padding: '11px 16px',
-          display: 'flex', alignItems: 'center', gap: 12,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.28)', minWidth: 300,
+          borderRadius: 'var(--r14)', padding: '10px 16px',
+          display: 'flex', alignItems: 'center', gap: 10,
+          boxShadow: '0 8px 32px rgba(0,0,0,.28)', minWidth: 320,
         }}>
-          <span style={{ fontWeight: 600, fontSize: '.84rem', color: 'rgba(255,255,255,.7)', whiteSpace: 'nowrap', flex: 1 }}>
+          <span style={{ fontWeight: 600, fontSize: 13, flex: 1, color: 'rgba(255,255,255,.85)', whiteSpace: 'nowrap' }}>
             {selected.size} klant{selected.size !== 1 ? 'en' : ''} geselecteerd
           </span>
+          <div style={{ width: 1, height: 16, background: 'rgba(255,255,255,.15)', flexShrink: 0 }} />
           <button
             onClick={() => { setSelected(new Set()); setShowBulkMenu(false); }}
             style={{
-              background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.18)',
-              color: 'rgba(255,255,255,.7)', borderRadius: 'var(--r8)',
-              padding: '5px 11px', fontSize: '.78rem', cursor: 'pointer',
+              background: 'rgba(255,255,255,.10)', border: '1px solid rgba(255,255,255,.18)',
+              color: 'rgba(255,255,255,.75)', borderRadius: 7,
+              padding: '5px 11px', fontSize: 12, cursor: 'pointer',
             }}
           >
             Wis
@@ -1183,10 +1113,10 @@ export function DatabasePage({ openCustomer }) {
             <button
               onClick={() => setShowBulkMenu(o => !o)}
               style={{
-                background: 'var(--p)', border: 'none', color: 'var(--dk)',
-                borderRadius: 'var(--r8)', padding: '7px 14px',
-                fontSize: '.84rem', fontWeight: 700, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: 6,
+                background: 'var(--p)', border: 'none', color: 'white',
+                borderRadius: 7, padding: '6px 14px',
+                fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 5,
               }}
             >
               Acties {I.meer}
@@ -1194,8 +1124,8 @@ export function DatabasePage({ openCustomer }) {
             {showBulkMenu && (
               <div style={{
                 position: 'absolute', bottom: 'calc(100% + 8px)', right: 0,
-                background: 'white', borderRadius: 'var(--r12)',
-                border: '1px solid var(--br)', boxShadow: '0 8px 24px rgba(0,0,0,.14)',
+                background: 'white', borderRadius: 'var(--r14)',
+                border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(0,0,0,.14)',
                 minWidth: 220, overflow: 'hidden', zIndex: 60,
               }}>
                 {[
@@ -1204,17 +1134,13 @@ export function DatabasePage({ openCustomer }) {
                   { icon: <IconCsv />, label: 'Exporteren als CSV', action: exportCsv },
                   { icon: <IconBookmark />, label: 'Segment opslaan', action: () => { setShowBulkMenu(false); setShowSaveSegment(true); } },
                 ].map((item, idx) => (
-                  <button
-                    key={idx}
-                    onClick={item.action}
-                    style={{
-                      width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '10px 14px', background: 'none', border: 'none',
-                      textAlign: 'left', cursor: 'pointer',
-                      fontSize: '.84rem', color: 'var(--dk)',
-                      borderBottom: idx < 3 ? '1px solid #F3F4F6' : 'none',
-                    }}
-                  >
+                  <button key={idx} onClick={item.action} style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '10px 14px', background: 'none', border: 'none',
+                    textAlign: 'left', cursor: 'pointer',
+                    fontSize: 13, color: 'var(--dk)',
+                    borderBottom: idx < 3 ? `1px solid ${T.borderXL}` : 'none',
+                  }}>
                     <span style={{ color: 'var(--dl)', display: 'flex', flexShrink: 0 }}>{item.icon}</span>
                     {item.label}
                   </button>
@@ -1238,11 +1164,10 @@ export function DatabasePage({ openCustomer }) {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <label style={{ fontSize: '.78rem', fontWeight: 600, color: 'var(--dl)' }}>Template</label>
+                <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Template</label>
                 <select
-                  value={selectedTemplate}
-                  onChange={e => setSelectedTemplate(e.target.value)}
-                  style={{ height: 36, borderRadius: 'var(--r8)', border: '1px solid var(--br)', padding: '0 10px', fontSize: '.84rem' }}
+                  value={selectedTemplate} onChange={e => setSelectedTemplate(e.target.value)}
+                  style={{ height: 36, borderRadius: 'var(--r8)', border: '1px solid var(--br)', padding: '0 10px', fontSize: 13 }}
                 >
                   <option value="">— Kies template —</option>
                   {templates.filter(t => t.actief).map(t => (
@@ -1251,28 +1176,24 @@ export function DatabasePage({ openCustomer }) {
                 </select>
               </div>
               {selectedTemplate && (
-                <div style={{ background: 'var(--pll)', borderRadius: 'var(--r8)', padding: '12px 14px', fontSize: '.84rem' }}>
+                <div style={{ background: 'var(--pll)', borderRadius: 'var(--r8)', padding: '12px 14px', fontSize: 13 }}>
                   Je verstuurt <strong>{templates.find(t => t.id === selectedTemplate)?.name || 'deze mail'}</strong> naar{' '}
                   <strong>{selectedCustomers.length} klant{selectedCustomers.length !== 1 ? 'en' : ''}</strong>.
                 </div>
               )}
               <div style={{ maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
                 {selectedCustomers.slice(0, 10).map(c => (
-                  <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '.82rem', padding: '4px 0', borderBottom: '1px solid var(--br)' }}>
+                  <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '4px 0', borderBottom: '1px solid var(--br)' }}>
                     <span style={{ fontWeight: 500 }}>{c.name}</span>
-                    {c.email
-                      ? <span style={{ color: 'var(--dmu)' }}>{c.email}</span>
-                      : <span style={{ color: '#dc2626', fontSize: '.75rem' }}>geen emailadres</span>}
+                    {c.email ? <span style={{ color: 'var(--dmu)' }}>{c.email}</span> : <span style={{ color: '#dc2626', fontSize: 11 }}>geen emailadres</span>}
                   </div>
                 ))}
                 {selectedCustomers.length > 10 && (
-                  <div style={{ fontSize: '.78rem', color: 'var(--dl)', padding: '4px 0' }}>
-                    + {selectedCustomers.length - 10} meer
-                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--dl)', padding: '4px 0' }}>+ {selectedCustomers.length - 10} meer</div>
                 )}
               </div>
               {noEmail.length > 0 && (
-                <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 'var(--r8)', padding: '10px 14px', fontSize: '.82rem', color: '#92400e' }}>
+                <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 'var(--r8)', padding: '10px 14px', fontSize: 12, color: '#92400e' }}>
                   ⚠️ {noEmail.length} klant{noEmail.length !== 1 ? 'en hebben' : ' heeft'} geen emailadres en {noEmail.length !== 1 ? 'worden' : 'wordt'} overgeslagen.
                 </div>
               )}
