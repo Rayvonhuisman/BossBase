@@ -44,7 +44,10 @@ export default function OfferteSigneren({ token }) {
       setItems(it.data || [])
       setCompany(co.data?.[0] || null)
       setKlant(cu.data?.[0] || null)
-      if (cu.data?.[0]?.email) setForm(f => ({ ...f, email: cu.data[0].email }))
+      // Prefill met het adres waar de offerte naar verstuurd was (sent_to_email),
+      // of val terug op het emailadres van de klantkaart
+      const prefillEmail = off.sent_to_email || cu.data?.[0]?.email || ''
+      if (prefillEmail) setForm(f => ({ ...f, email: prefillEmail }))
       if (cu.data?.[0]?.name) setForm(f => ({ ...f, name: cu.data[0].name }))
     }).catch(err => setError(err.message || 'Laden mislukt'))
       .finally(() => setLoading(false))

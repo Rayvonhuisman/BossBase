@@ -240,13 +240,13 @@ async function buildPdf(doc, type, document, regels, customer, company) {
   doc.setFontSize(8.5);
   tc(C.soft);
   if (customer?.address) { doc.text(customer.address, aanX, aanY); aanY += 4.5; }
-  const custPostal = customer?.postalCode || customer?.postal_code;
+  const custPostal = customer?.postcode || customer?.postalCode || customer?.postal_code;
   const custCity = [custPostal, customer?.city].filter(Boolean).join('  ');
   if (custCity) { doc.text(custCity, aanX, aanY); aanY += 4.5; }
   if (customer?.email) { doc.text(customer.email, aanX, aanY); aanY += 4.5; }
   const custPhone = customer?.phone || customer?.phone_number;
   if (custPhone) { doc.text(custPhone, aanX, aanY); aanY += 4.5; }
-  const custKvk = customer?.kvk;
+  const custKvk = customer?.kvkNumber || customer?.kvk;
   const custBtw = customer?.btwNumber || customer?.btw_number;
   const custReg = [custKvk ? `KvK ${custKvk}` : null, custBtw ? `BTW ${custBtw}` : null].filter(Boolean);
   if (custReg.length) { tc(C.muted); doc.text(custReg.join(' · '), aanX, aanY); tc(C.soft); aanY += 4.5; }
@@ -425,10 +425,12 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     const signedByName = document.signedByName || document.signed_by_name || '';
     const signedByEmail = document.signedByEmail || document.signed_by_email || '';
 
-    // Signature image ophalen — direct dataUrl (verse ondertekening) of via storage
+    // Signature image ophalen — direct dataUrl (verse ondertekening), opgeslagen URL, of via storage
     let sigImgData = null;
     if (document.signatureDataUrl) {
       sigImgData = document.signatureDataUrl;
+    } else if (document.signatureUrl) {
+      sigImgData = await imgToBase64(document.signatureUrl);
     } else {
       const signToken = document.sign_token || document.signToken;
       if (signToken) {
@@ -467,10 +469,11 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     // Groen vinkje badge (18px = 4.76mm diameter, radius 2.38mm)
     fc(C.green);
     doc.ellipse(M + 7, y + 6.5, 2.4, 2.4, 'F');
-    tc(C.paper);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.text('✓', M + 7, y + 7.6, { align: 'center' });
+    // Vinkje als lijnen (Helvetica ondersteunt ✓ niet in standaard encoding)
+    dc(C.paper);
+    doc.setLineWidth(0.5);
+    doc.line(M + 5.8, y + 6.6, M + 6.7, y + 7.6);
+    doc.line(M + 6.7, y + 7.6, M + 8.4, y + 5.4);
 
     // Titel
     tc(C.dark);

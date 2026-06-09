@@ -652,16 +652,10 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
         </div>
         <div className="fa">
           {onSendMail && <button className="btn btn-s" onClick={() => { onClose(); onSendMail(offerte); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={14} /> Verstuur per mail</button>}
-          {offerte.signedPdfUrl ? (
-            <a
-              href={offerte.signedPdfUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-p"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}
-            >
-              <Download size={15} /> Download getekende offerte
-            </a>
+          {offerte.signedAt ? (
+            <button className="btn btn-p" onClick={handleDownloadPdf} disabled={pdfLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Download size={15} />{pdfLoading ? 'Genereren...' : 'Download getekende offerte'}
+            </button>
           ) : (
             <>
               <button className="btn btn-ghost" onClick={handlePreviewPdf} disabled={previewLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -730,7 +724,7 @@ function SendOfferteMailModal({ offerte, customers, company, onClose, onSent }) 
       }
       await sendEmail({ to: form.to, subject: form.subject, html: form.body, attachments });
       await logSentEmail({ toEmail: form.to, subject: form.subject, bodyHtml: form.body, relatedType: 'offerte', relatedId: offerte.id, customerId: offerte.customerId });
-      if (offerte.status === 'concept') await updateOfferte(offerte.id, { status: 'verzonden' });
+      await updateOfferte(offerte.id, { sent_to_email: form.to, ...(offerte.status === 'concept' ? { status: 'verzonden' } : {}) });
       logTijdlijnSafe(offerte.customerId, 'email_verstuurd', `E-mail verstuurd: ${form.subject}`, { to: form.to, subject: form.subject });
       toast.success('E-mail verstuurd');
       onSent?.();
