@@ -136,9 +136,9 @@ const emptyCustomerForm = { name: '', company: '', email: '', phone: '', city: '
 
 
 // ── CUSTOMER DETAIL DRAWER ───────────────────────────────────
-export function CustomerPage({ custId, onClose, setPage }) {
+export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   const toast = useToast();
-  const [tab, setTab] = useState('overview');
+  const [tab, setTab] = useState(initialTab || 'overview');
   const [c, setCustomer] = useState(null);
   const [cActs, setActs] = useState([]);
   const [cNotes, setNotes] = useState([]);

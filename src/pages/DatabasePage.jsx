@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase.js';
 import { I, fmt, Av } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
-import { listCustomers } from '../services/customerService.js';
+import { listCustomers, deleteCustomer } from '../services/customerService.js';
 import { getFacturen } from '../services/factuurService.js';
 import { getOffertes } from '../services/offerteService.js';
 import { getProjects, PROJECT_STATUS } from '../services/projectsService.js';
@@ -59,7 +59,7 @@ const T = {
   shadow:  '0 1px 3px rgba(0,0,0,.05)',
 };
 
-const COLS = '20px 1fr 180px 160px 48px 120px';
+const COLS = '20px 1fr 180px 160px 48px 120px 88px';
 
 // ── ICONS ────────────────────────────────────────────────────
 const IconMail = () => (
@@ -94,6 +94,23 @@ const IconSearch = () => (
 const IconChevDown = () => (
   <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
     <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const IconPencil = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const IconMailSm = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+    <polyline points="22,6 12,13 2,6"/>
+  </svg>
+);
+const IconDots = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="19" cy="12" r="1" fill="currentColor"/>
   </svg>
 );
 
@@ -454,6 +471,11 @@ export function DatabasePage({ openCustomer }) {
   const [showBulkMenu, setShowBulkMenu] = useState(false);
   const bulkMenuRef = useRef(null);
 
+  const [rowMenuOpen, setRowMenuOpen]     = useState(null); // customer id
+  const rowMenuRef                        = useRef(null);
+  const [deleteTarget, setDeleteTarget]   = useState(null); // { id, name }
+  const [deleting, setDeleting]           = useState(false);
+
   const setFilter = useCallback((k, v) => {
     setFilters(f => ({ ...f, [k]: v }));
     setCurrentPage(1);
@@ -465,6 +487,13 @@ export function DatabasePage({ openCustomer }) {
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, [showBulkMenu]);
+
+  useEffect(() => {
+    if (!rowMenuOpen) return;
+    const h = () => setRowMenuOpen(null);
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [rowMenuOpen]);
 
   // ── Load data ────────────────────────────────────────────────
   useEffect(() => {
@@ -654,6 +683,27 @@ export function DatabasePage({ openCustomer }) {
     const newSegs = segments.filter(s => s.name !== name);
     setSegments(newSegs);
     localStorage.setItem('bb_db_segments', JSON.stringify(newSegs));
+  };
+
+  // ── Row-level acties ─────────────────────────────────────────
+  const openSingleMail = (cust) => {
+    setSelected(new Set([cust.id]));
+    setMailForm({ templateId: '', subject: '', body: '' });
+    setShowRecipients(false);
+    setShowMailModal(true);
+  };
+
+  const doDeleteCustomer = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteCustomer(deleteTarget.id);
+      setCustomers(cs => cs.filter(c => c.id !== deleteTarget.id));
+      setSelected(s => { const n = new Set(s); n.delete(deleteTarget.id); return n; });
+      toast.success(`${deleteTarget.name} verwijderd`);
+      setDeleteTarget(null);
+    } catch { toast.error('Verwijderen mislukt'); }
+    finally { setDeleting(false); }
   };
 
   // ── Bulk mail ────────────────────────────────────────────────
@@ -1050,8 +1100,9 @@ export function DatabasePage({ openCustomer }) {
             <div style={TH}>Klant</div>
             <div style={TH}>Laatste project</div>
             <div style={TH}>Laatste mail</div>
-            <div style={{ ...TH, textAlign: 'center' }}>Proj.</div>
+            <div style={{ ...TH, textAlign: 'center' }}>Projecten</div>
             <div style={{ ...TH, textAlign: 'right' }}>Omzet</div>
+            <div style={{ ...TH, textAlign: 'right' }}>Acties</div>
           </div>
 
           {/* Rows */}
@@ -1125,6 +1176,67 @@ export function DatabasePage({ openCustomer }) {
                 <div style={{ fontSize: 13, fontWeight: 700, color: meta.omzet > 0 ? 'var(--pd)' : 'var(--dl)', textAlign: 'right' }}>
                   {meta.omzet > 0 ? fmt(meta.omzet) : '—'}
                 </div>
+
+                {/* ── Acties kolom ── */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}>
+                  {/* Potlood */}
+                  <button
+                    title="Klantgegevens bewerken"
+                    onClick={e => { e.stopPropagation(); openCustomer?.(c.id, 'klantgegevens'); }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 5px', borderRadius: 6, color: 'var(--dl)', display: 'flex', alignItems: 'center' }}
+                    onMouseEnter={e => e.currentTarget.style.background = T.borderXL}
+                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                  >
+                    <IconPencil />
+                  </button>
+                  {/* Mail */}
+                  <button
+                    title="E-mail versturen"
+                    onClick={e => { e.stopPropagation(); openSingleMail(c); }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 5px', borderRadius: 6, color: 'var(--dl)', display: 'flex', alignItems: 'center' }}
+                    onMouseEnter={e => e.currentTarget.style.background = T.borderXL}
+                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                  >
+                    <IconMailSm />
+                  </button>
+                  {/* 3-puntjes */}
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      title="Meer opties"
+                      onClick={e => { e.stopPropagation(); setRowMenuOpen(rowMenuOpen === c.id ? null : c.id); }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 5px', borderRadius: 6, color: 'var(--dl)', display: 'flex', alignItems: 'center' }}
+                      onMouseEnter={e => e.currentTarget.style.background = T.borderXL}
+                      onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                    >
+                      <IconDots />
+                    </button>
+                    {rowMenuOpen === c.id && (
+                      <div
+                        style={{
+                          position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 200,
+                          background: 'white', border: '1px solid var(--border)', borderRadius: 10,
+                          boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 160,
+                        }}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <button
+                          onClick={() => { setRowMenuOpen(null); setDeleteTarget({ id: c.id, name: c.name }); }}
+                          style={{
+                            width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                            padding: '10px 14px', background: 'none', border: 'none',
+                            textAlign: 'left', cursor: 'pointer', fontSize: 13,
+                            color: '#dc2626', borderRadius: 10,
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#fff1f2'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                        >
+                          Klant verwijderen
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
               </div>
             );
           })}
@@ -1165,7 +1277,7 @@ export function DatabasePage({ openCustomer }) {
               padding: '5px 11px', fontSize: 12, cursor: 'pointer',
             }}
           >
-            Wis
+            Deselecteren
           </button>
           <div ref={bulkMenuRef} style={{ position: 'relative' }}>
             <button
@@ -1315,6 +1427,32 @@ export function DatabasePage({ openCustomer }) {
           </div>
         );
       })()}
+
+      {/* ── Delete bevestiging ── */}
+      {deleteTarget && (
+        <div className="overlay" onClick={e => e.target === e.currentTarget && !deleting && setDeleteTarget(null)}>
+          <div className="modal" style={{ maxWidth: 420 }}>
+            <div className="modal-hd">
+              <div className="modal-title">Klant verwijderen</div>
+              <button className="modal-x" onClick={() => !deleting && setDeleteTarget(null)}>{I.x}</button>
+            </div>
+            <p style={{ fontSize: 14, color: 'var(--dk)', margin: '16px 0 24px', lineHeight: 1.5 }}>
+              Weet je zeker dat je <strong>{deleteTarget.name}</strong> wilt verwijderen? Dit kan niet ongedaan worden gemaakt.
+            </p>
+            <div className="fa">
+              <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)} disabled={deleting}>Annuleren</button>
+              <button
+                className="btn"
+                onClick={doDeleteCustomer}
+                disabled={deleting}
+                style={{ background: '#dc2626', color: 'white', border: 'none' }}
+              >
+                {deleting ? 'Verwijderen...' : 'Verwijderen'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

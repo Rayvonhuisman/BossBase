@@ -477,13 +477,13 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
 }
 
 // ── CUSTOMER DRAWER ──────────────────────────────────────────
-function CustomerDrawer({ custId, onClose, setPage }) {
+function CustomerDrawer({ custId, initialTab, onClose, setPage }) {
   return (
     <>
       <div className="drawer-overlay" onClick={onClose} />
       <div className="drawer">
         <div className="drawer-body">
-          <CustomerPage custId={custId} onClose={onClose} setPage={setPage} />
+          <CustomerPage custId={custId} initialTab={initialTab} onClose={onClose} setPage={setPage} />
         </div>
       </div>
     </>
@@ -669,7 +669,8 @@ function AppInner() {
     try { return localStorage.getItem('bb.sidebarCollapsed') === '1'; }
     catch { return false; }
   });
-  const [drawerCust, setDrawerCust] = useState(null);
+  const [drawerCust, setDrawerCust] = useState(null); // { id, tab? }
+
   const [drawerDeal, setDrawerDeal] = useState(null);
   const [drawerInvoice, setDrawerInvoice] = useState(null);
   const [drawerCalEvent, setDrawerCalEvent] = useState(null);
@@ -812,7 +813,7 @@ function AppInner() {
   };
 
   // Customer / deal / invoice / calendar-event drawers are mutually exclusive
-  const openCustomer     = id => { setDrawerDeal(null); setDrawerInvoice(null); setDrawerCalEvent(null); setDrawerCust(id); };
+  const openCustomer     = (id, tab) => { setDrawerDeal(null); setDrawerInvoice(null); setDrawerCalEvent(null); setDrawerCust(tab ? { id, tab } : id); };
   const closeCustomer    = () => setDrawerCust(null);
   const openDeal         = id => { setDrawerCust(null); setDrawerInvoice(null); setDrawerCalEvent(null); setDrawerDeal(id); };
   const closeDeal        = () => setDrawerDeal(null);
@@ -905,7 +906,7 @@ function AppInner() {
               <CustomersPage openCustomer={openCustomer} />
             </div>
             <div className="cust-split-panel">
-              <CustomerPage custId={drawerCust} onClose={closeCustomer} setPage={navigatePage} />
+              <CustomerPage custId={drawerCust?.id ?? drawerCust} initialTab={drawerCust?.tab} onClose={closeCustomer} setPage={navigatePage} />
             </div>
           </div>
         ) : <CustomersPage openCustomer={openCustomer} />;
@@ -1109,7 +1110,8 @@ function AppInner() {
 
         {drawerCust !== null && page !== 'customers' && (
           <CustomerDrawer
-            custId={drawerCust}
+            custId={drawerCust?.id ?? drawerCust}
+            initialTab={drawerCust?.tab}
             onClose={closeCustomer}
             setPage={navigatePage}
           />
