@@ -732,7 +732,7 @@ ul{list-style:none}
 .dw-widget-picker{display:flex;flex-direction:column;gap:6px;max-height:380px;overflow-y:auto;padding-right:2px}
 .dw-picker-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r10);background:#fff;transition:all .15s ease;text-align:left}
 .dw-picker-item:hover{border-color:var(--p);background:#f0fdf4}
-.dw-picker-icon{width:36px;height:36px;border-radius:var(--r8);background:linear-gradient(135deg,#1DDB62,#15A34A);display:flex;align-items:center;justify-content:center;color:#0D0D0D;flex-shrink:0}
+.dw-picker-icon{width:36px;height:36px;border-radius:var(--r8);background:var(--pll);display:flex;align-items:center;justify-content:center;color:var(--p);flex-shrink:0}
 .dw-picker-label{font-weight:700;font-size:.88rem;color:var(--dk)}
 .dw-picker-desc{font-size:.75rem;color:var(--dmu);margin-top:2px}
 .dw-picker-size{font-size:.68rem;color:var(--dl);padding:2px 7px;background:var(--bgs);border:1px solid var(--border);border-radius:99px;flex-shrink:0}
@@ -880,12 +880,6 @@ ul{list-style:none}
 
 /* KPI cards — add a 3px left accent strip per design */
 .dw-kpi-click{position:relative;cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}
-.dw-kpi-click::before{
-  content:'';position:absolute;left:0;top:18px;bottom:18px;width:3px;
-  border-radius:0 3px 3px 0;
-  background:var(--kpiAccent, var(--p));
-  opacity:.85;
-}
 .dw-kpi-click:hover{transform:translateY(-1px);box-shadow:var(--shadow-sm)}
 .dw-kpi-click:focus-visible{outline:2px solid var(--p);outline-offset:2px}
 
@@ -1009,13 +1003,9 @@ ul{list-style:none}
 .wb2-detail{display:flex;flex-direction:column;gap:14px;position:sticky;top:0;min-width:0}
 
 /* List card row ------------------------------------------------- */
-.wb2-row{position:relative;cursor:pointer;background:#fff;border:1px solid var(--br);border-radius:12px;padding:12px 14px 12px 18px;display:flex;gap:12px;box-shadow:0 1px 2px rgba(14,20,17,.04);transition:border-color .15s ease,background .15s ease,box-shadow .15s ease;text-align:left;width:100%;font-family:inherit;color:inherit}
+.wb2-row{cursor:pointer;background:#fff;border:1px solid var(--br);border-radius:12px;padding:12px 14px;display:flex;gap:12px;box-shadow:0 1px 2px rgba(14,20,17,.04);transition:border-color .15s ease,background .15s ease,box-shadow .15s ease;text-align:left;width:100%;font-family:inherit;color:inherit}
 .wb2-row:hover{border-color:#cfd3cf}
 .wb2-row.selected{background:#E8FBEF;border-color:#1DDB62;box-shadow:0 0 0 3px rgba(29,219,98,.18)}
-.wb2-row-stripe{position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:#E7EAE7}
-.wb2-row-stripe.overdue{background:#DC2626}
-.wb2-row-stripe.today{background:#1DDB62}
-.wb2-row-stripe.thisWeek{background:#C7CEC9}
 .wb2-row-main{flex:1;min-width:0;padding-left:6px}
 .wb2-row-meta{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
 .wb2-row-id{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--dl);font-weight:500}
@@ -2147,7 +2137,7 @@ ul{list-style:none}
 .dw-grid .feed{ display:flex; flex-direction:column }
 .dw-grid .feed-row{
   display:grid;
-  grid-template-columns:4px 36px 1fr auto;
+  grid-template-columns:36px 1fr auto;
   gap:12px; align-items:center;
   padding:13px 16px 13px 14px;
   border-bottom:1px solid var(--border);
@@ -2165,14 +2155,9 @@ ul{list-style:none}
 .dw-grid .feed-row:hover{ background:var(--pll) }
 .dw-grid .feed-row.compact{
   padding:10px 14px 10px 12px;
-  grid-template-columns:3px 30px 1fr auto;
+  grid-template-columns:30px 1fr auto;
   gap:10px;
 }
-.dw-grid .feed-bar{
-  width:3px; height:28px; border-radius:3px;
-  background:var(--rowAccent, var(--st-neutral));
-}
-.dw-grid .feed-row.compact .feed-bar{ height:22px }
 .dw-grid .feed-icon{
   width:36px; height:36px; border-radius:var(--r10);
   background:var(--iconBg, var(--st-neutral-bg));
