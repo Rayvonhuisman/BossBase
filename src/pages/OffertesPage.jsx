@@ -40,7 +40,7 @@ const TYPE_CFG = {
   m2:    { label: 'm²',         omschrPh: 'Prijs per m²',   v1Ph: '0 m²',   v2Ph: '0,00', hasV1: true,  v1Step: '0.01', regelLabel: r => `${r.aantal}m² × €${r.eenheidsprijs}` },
   stuks: { label: 'Stuks',      omschrPh: 'Materiaalkosten', v1Ph: '0 st',   v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal} st × €${r.eenheidsprijs}` },
   km:    { label: 'Km',         omschrPh: 'Reisvergoeding',  v1Ph: '0 km',   v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal}km × €${r.eenheidsprijs}` },
-  vast:  { label: 'Vast bedrag', omschrPh: 'Overige kosten', v1Ph: null,     v2Ph: '0,00', hasV1: false, v1Step: '1',    regelLabel: null },
+  vast:  { label: 'Vast bedrag', omschrPh: 'Overige kosten', v1Ph: '0',      v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal} × €${r.eenheidsprijs}` },
 };
 
 function BtwSelect({ r, setRegel }) {
@@ -96,10 +96,7 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
   }]);
   const removeRegel = (id) => setRegels(rs => rs.filter(r => r.id !== id));
 
-  const getRegelprijs = r => {
-    if (r.type === 'vast') return Math.round(Number(r.eenheidsprijs || 0) * 100) / 100;
-    return Math.round(Number(r.aantal || 0) * Number(r.eenheidsprijs || 0) * 100) / 100;
-  };
+  const getRegelprijs = r => Math.round(Number(r.aantal || 0) * Number(r.eenheidsprijs || 0) * 100) / 100;
   const getEffBtw = r => r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw);
 
   const totaalExcl = Math.round(regels.reduce((s, r) => s + getRegelprijs(r), 0) * 100) / 100;
@@ -122,7 +119,7 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
     for (let i = 0; i < regels.length; i++) {
       const r = regels[i];
       const omschrijving = r.omschrijving.trim() || TYPE_CFG[r.type]?.omschrPh || '';
-      await createOfferteItem({ offerte_id: created.id, omschrijving, aantal: r.type === 'vast' ? 1 : Number(r.aantal || 1), prijs_per: Number(r.eenheidsprijs || 0), subtotaal: getRegelprijs(r), volgorde: i });
+      await createOfferteItem({ offerte_id: created.id, omschrijving, aantal: Number(r.aantal || 1), prijs_per: Number(r.eenheidsprijs || 0), subtotaal: getRegelprijs(r), volgorde: i });
     }
     return created;
   };
@@ -340,10 +337,7 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
   const addRegel = () => setRegels(rs => [...rs, emptyRegel()]);
   const removeRegel = (id) => setRegels(rs => rs.filter(r => r.id !== id));
 
-  const getRegelprijs = r => {
-    if (r.type === 'vast') return Math.round(Number(r.eenheidsprijs || 0) * 100) / 100;
-    return Math.round(Number(r.aantal || 0) * Number(r.eenheidsprijs || 0) * 100) / 100;
-  };
+  const getRegelprijs = r => Math.round(Number(r.aantal || 0) * Number(r.eenheidsprijs || 0) * 100) / 100;
   const getEffBtw = r => r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw);
 
   const totaalExcl = Math.round(regels.reduce((s, r) => s + getRegelprijs(r), 0) * 100) / 100;
@@ -370,7 +364,7 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
     for (let i = 0; i < regels.length; i++) {
       const r = regels[i];
       const omschrijving = r.omschrijving.trim() || TYPE_CFG[r.type]?.omschrPh || '';
-      await createOfferteItem({ offerte_id: offerte.id, omschrijving, aantal: r.type === 'vast' ? 1 : Number(r.aantal || 1), prijs_per: Number(r.eenheidsprijs || 0), subtotaal: getRegelprijs(r), volgorde: i });
+      await createOfferteItem({ offerte_id: offerte.id, omschrijving, aantal: Number(r.aantal || 1), prijs_per: Number(r.eenheidsprijs || 0), subtotaal: getRegelprijs(r), volgorde: i });
     }
     onSaved?.(updated);
     return updated;

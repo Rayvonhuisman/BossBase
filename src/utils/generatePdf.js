@@ -302,8 +302,7 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     doc.setFontSize(8.5);
     tc(C.soft);
 
-    const isVast = r.type === 'vast';
-    doc.text(isVast ? '—' : String(r.aantal ?? 1), COL_X[1] + COL_W[1] - 1, y, { align: 'right' });
+    doc.text(String(r.aantal ?? 1), COL_X[1] + COL_W[1] - 1, y, { align: 'right' });
 
     const prijs = type === 'factuur' ? r.eenheidsprijs : r.prijsPer;
     doc.text(euro(prijs), COL_X[2] + COL_W[2] - 1, y, { align: 'right' });

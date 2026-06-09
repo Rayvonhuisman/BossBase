@@ -50,7 +50,7 @@ const TYPE_CFG = {
   m2:    { label: 'm²',         omschrPh: 'Prijs per m²',   v1Ph: '0 m²',   v2Ph: '0,00', hasV1: true,  v1Step: '0.01', regelLabel: r => `${r.aantal}m² × €${r.eenheidsprijs}` },
   stuks: { label: 'Stuks',      omschrPh: 'Materiaalkosten', v1Ph: '0 st',   v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal} st × €${r.eenheidsprijs}` },
   km:    { label: 'Km',         omschrPh: 'Reisvergoeding',  v1Ph: '0 km',   v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal}km × €${r.eenheidsprijs}` },
-  vast:  { label: 'Vast bedrag', omschrPh: 'Overige kosten', v1Ph: null,     v2Ph: '0,00', hasV1: false, v1Step: '1',    regelLabel: null },
+  vast:  { label: 'Vast bedrag', omschrPh: 'Overige kosten', v1Ph: '0',      v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal} × €${r.eenheidsprijs}` },
 };
 
 const emptyRegel = (defaults) => ({
@@ -76,9 +76,7 @@ function BtwSelect({ r, setRegel }) {
 }
 
 function useRegelTotals(regels) {
-  const getRegelprijs = r => r.type === 'vast'
-    ? Math.round(Number(r.eenheidsprijs || 0) * 100) / 100
-    : Math.round(Number(r.aantal || 0) * Number(r.eenheidsprijs || 0) * 100) / 100;
+  const getRegelprijs = r => Math.round(Number(r.aantal || 0) * Number(r.eenheidsprijs || 0) * 100) / 100;
   const getEffBtw = r => r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw);
   const totaalExcl = Math.round(regels.reduce((s, r) => s + getRegelprijs(r), 0) * 100) / 100;
   const btwPerTarief = {};
@@ -267,7 +265,7 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
       const r = regels[i];
       const omschrijving = r.omschrijving.trim() || TYPE_CFG[r.type]?.omschrPh || '';
       const btwPct = r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw);
-      await createFactuurRegel({ factuur_id: created.id, type: r.type, omschrijving, aantal: r.type === 'vast' ? 1 : Number(r.aantal || 1), eenheidsprijs: Number(r.eenheidsprijs || 0), btw_pct: btwPct, volgorde: i });
+      await createFactuurRegel({ factuur_id: created.id, type: r.type, omschrijving, aantal: Number(r.aantal || 1), eenheidsprijs: Number(r.eenheidsprijs || 0), btw_pct: btwPct, volgorde: i });
     }
     return created;
   };
@@ -690,7 +688,7 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }
                     <div>
                       <span style={{ color: 'var(--dl)', fontSize: 11, marginRight: 6 }}>{TYPE_CFG[r.type]?.label || r.type}</span>
                       {r.omschrijving}
-                      {r.type !== 'vast' && <span style={{ color: 'var(--dl)', fontSize: 11, marginLeft: 6 }}>{r.aantal} × {fmt(r.eenheidsprijs)}</span>}
+                      <span style={{ color: 'var(--dl)', fontSize: 11, marginLeft: 6 }}>{r.aantal} × {fmt(r.eenheidsprijs)}</span>
                     </div>
                     <div style={{ fontWeight: 500, whiteSpace: 'nowrap', marginLeft: 12 }}>{fmt(r.regelprijs)}</div>
                   </div>
