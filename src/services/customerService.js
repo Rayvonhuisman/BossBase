@@ -31,6 +31,7 @@ const toCustomer = (row, index = 0) => ({
   notities: row.notities || "",
   logoUrl: row.logo_url || "",
   companyId: row.company_id || null,
+  createdAt: row.created_at || null,
   moneybirdId: row.moneybird_id || null,
   // UI helpers — synthesized, not stored:
   av: index,

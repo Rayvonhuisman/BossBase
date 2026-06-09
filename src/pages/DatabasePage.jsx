@@ -543,19 +543,19 @@ export function DatabasePage({ openCustomer }) {
       if (filters.aanmaakVan && c.createdAt?.slice(0,10) < filters.aanmaakVan) return false;
       if (filters.aanmaakTot && c.createdAt?.slice(0,10) > filters.aanmaakTot) return false;
       if (filters.heeftKvk !== 'alles') {
-        const heeft = Boolean(c.kvk_number);
+        const heeft = Boolean(c.kvkNumber);
         if (filters.heeftKvk === 'ja' && !heeft) return false;
         if (filters.heeftKvk === 'nee' && heeft) return false;
       }
       if (filters.heeftMoneybird !== 'alles') {
-        const heeft = Boolean(c.moneybird_id);
+        const heeft = Boolean(c.moneybirdId);
         if (filters.heeftMoneybird === 'ja' && !heeft) return false;
         if (filters.heeftMoneybird === 'nee' && heeft) return false;
       }
       if (filters.geenProject && rel.projects.length > 0) return false;
       if (filters.laatsteContactDagen) {
         const cutoff = daysAgo(Number(filters.laatsteContactDagen));
-        const lastContact = [...rel.emails, ...rel.activities].map(x => x.sent_at || x.due_at || '').filter(Boolean).sort().reverse()[0];
+        const lastContact = [...rel.emails, ...rel.activities].map(x => x.sent_at || x.dueAt || '').filter(Boolean).sort().reverse()[0];
         if (lastContact && lastContact.slice(0,10) >= cutoff) return false;
       }
       if (filters.projectStatussen.length > 0 && !rel.projects.some(p => filters.projectStatussen.includes(p.status))) return false;
@@ -595,7 +595,7 @@ export function DatabasePage({ openCustomer }) {
       if (filters.betaaldVan && !rel.facturen.some(f => f.betaaldOp >= filters.betaaldVan)) return false;
       if (filters.betaaldTot && !rel.facturen.some(f => f.betaaldOp <= filters.betaaldTot)) return false;
 
-      if (filters.dealFasen.length > 0 && !rel.deals.some(d => filters.dealFasen.includes(d.stageId))) return false;
+      if (filters.dealFasen.length > 0 && !rel.deals.some(d => filters.dealFasen.includes(d.stage))) return false;
       if (filters.dealWaardeMin && !rel.deals.some(d => (d.value || 0) >= Number(filters.dealWaardeMin))) return false;
       if (filters.dealWaardeMax && !rel.deals.some(d => (d.value || 0) <= Number(filters.dealWaardeMax))) return false;
       if (filters.heeftOpenActiviteiten && !rel.activities.some(a => !a.completed)) return false;
