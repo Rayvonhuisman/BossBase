@@ -180,7 +180,8 @@ async function buildPdf(doc, type, document, regels, customer, company) {
   };
 
   metaRow(type === 'factuur' ? 'Factuurnummer' : 'Offertenummer', document.nummer);
-  metaRow('Datum', fmtDate(type === 'factuur' ? document.factuurdatum : document.createdAt?.slice(0, 10)));
+  const docDate = type === 'factuur' ? document.factuurdatum : (document.createdAt || document.created_at)?.slice(0, 10);
+  metaRow('Datum', fmtDate(docDate));
   if (type === 'factuur') {
     metaRow('Vervaldatum', fmtDate(document.vervaldatum));
     if (document.betalingskenmerk) metaRow('Kenmerk', document.betalingskenmerk);
@@ -239,9 +240,16 @@ async function buildPdf(doc, type, document, regels, customer, company) {
   doc.setFontSize(8.5);
   tc(C.soft);
   if (customer?.address) { doc.text(customer.address, aanX, aanY); aanY += 4.5; }
-  const custCity = [customer?.postalCode, customer?.city].filter(Boolean).join('  ');
+  const custPostal = customer?.postalCode || customer?.postal_code;
+  const custCity = [custPostal, customer?.city].filter(Boolean).join('  ');
   if (custCity) { doc.text(custCity, aanX, aanY); aanY += 4.5; }
   if (customer?.email) { doc.text(customer.email, aanX, aanY); aanY += 4.5; }
+  const custPhone = customer?.phone || customer?.phone_number;
+  if (custPhone) { doc.text(custPhone, aanX, aanY); aanY += 4.5; }
+  const custKvk = customer?.kvk;
+  const custBtw = customer?.btwNumber || customer?.btw_number;
+  const custReg = [custKvk ? `KvK ${custKvk}` : null, custBtw ? `BTW ${custBtw}` : null].filter(Boolean);
+  if (custReg.length) { tc(C.muted); doc.text(custReg.join(' · '), aanX, aanY); tc(C.soft); aanY += 4.5; }
 
   y = Math.max(vanY, aanY) + 4;
 
@@ -287,7 +295,7 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     if (idx > 0) {
       dc(C.line);
       doc.setLineWidth(0.3);
-      doc.line(M, y - 2.5, W - M, y - 2.5);
+      doc.line(M, y - 3, W - M, y - 3);
     }
 
     // Omschrijving (vet)
@@ -316,13 +324,13 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     tc(C.dark);
     doc.text(euro(bedrag), COL_X[4] + COL_W[4] - 1, y, { align: 'right' });
 
-    y += 9;
+    y += 11;
   });
 
   // Lijn na laatste rij
   dc(C.line);
   doc.setLineWidth(0.3);
-  doc.line(M, y - 1.5, W - M, y - 1.5);
+  doc.line(M, y - 2.5, W - M, y - 2.5);
   y += 7;
 
   // ── TOTALEN ──────────────────────────────────────────────────
@@ -393,19 +401,19 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     fc(C.panel);
     doc.roundedRect(M, y, CW, noteH, 2.1, 2.1, 'F');
 
-    // 'i' badge
+    // 'i' badge — aligned with first text line
+    const noteTextY = y + 6.5;
     fc(accent);
-    doc.ellipse(M + 6, y + noteH / 2, 2.1, 2.1, 'F');
+    doc.ellipse(M + 6, noteTextY - 0.8, 2.1, 2.1, 'F');
     tc(accentInk);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.5);
-    doc.text('i', M + 6, y + noteH / 2 + 1, { align: 'center' });
+    doc.text('i', M + 6, noteTextY, { align: 'center' });
 
     tc(C.soft);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    // text start = padding-left 16px + ic 16px + gap 11px = 43px = 11.4mm
-    doc.text(noteLines.slice(0, 5), M + 11.5, y + 6.5);
+    doc.text(noteLines.slice(0, 5), M + 11.5, noteTextY);
 
     y += noteH + 8;
   }
@@ -434,6 +442,12 @@ async function buildPdf(doc, type, document, regels, customer, company) {
 
     const hasImg = Boolean(sigImgData);
     const signBlockH = hasImg ? 52 : 42;
+
+    // Nieuwe pagina als handtekening vak niet past
+    if (y + signBlockH + 20 > 270) {
+      doc.addPage();
+      y = 17;
+    }
 
     // Buitenrand
     dc(C.lineStr);
@@ -515,14 +529,9 @@ async function buildPdf(doc, type, document, regels, customer, company) {
   doc.setLineWidth(0.3);
   doc.line(M, footY - 3, W - M, footY - 3);
 
-  // LEFT: .gen = [accent dot 5px] [gap 6px=1.6mm] "Gegenereerd door **BossBase**"
-  // dot: 5px = 1.32mm diameter, center at M + 0.66
+  // LEFT: "Gegenereerd door **BossBase**"
   doc.setFontSize(7.5);
-  fc(accent);
-  doc.ellipse(M + 0.66, footY + 3.3, 0.66, 0.66, 'F');
-
-  // gap 6px = 1.6mm after dot → text at M + 1.32 + 1.6 = M + 2.9
-  const genX = M + 2.9;
+  const genX = M;
   doc.setFont('helvetica', 'normal');
   tc(C.faint);
   const prefixGen = 'Gegenereerd door ';

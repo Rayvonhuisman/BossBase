@@ -10,7 +10,7 @@ import {
 import { getBedrijfsinstellingen } from '../services/instellingenService.js';
 import { listCustomers } from '../services/customerService.js';
 import { listDeals } from '../services/dealService.js';
-import { NewFactuurModal } from './FacturenPage.jsx';
+import { NewFactuurModal, SendFactuurMailModal } from './FacturenPage.jsx';
 import { generateOffertePdf, previewOffertePdf, getOffertePdfBase64 } from '../utils/generatePdf.js';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
@@ -537,6 +537,7 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
 
 function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMail }) {
   const { company } = useProfile();
+  const toast = useToast();
   const customerName = offerte.customerName || customers.find(c => c.id == offerte.customerId)?.name || '—';
   const [pdfLoading, setPdfLoading] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -549,6 +550,7 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
       await generateOffertePdf(offerte, items, customer, company);
     } catch (err) {
       console.error('PDF genereren mislukt:', err);
+      toast.error('PDF genereren mislukt: ' + (err.message || 'Onbekende fout'));
     } finally {
       setPdfLoading(false);
     }
@@ -562,6 +564,7 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
       await previewOffertePdf(offerte, items, customer, company);
     } catch (err) {
       console.error('PDF preview mislukt:', err);
+      toast.error('PDF preview mislukt: ' + (err.message || 'Onbekende fout'));
     } finally {
       setPreviewLoading(false);
     }
@@ -794,6 +797,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
   const [viewOfferte, setViewOfferte] = useState(null);
   const [factuurPrefill, setFactuurPrefill] = useState(null);
   const [sendMailOfferte, setSendMailOfferte] = useState(null);
+  const [sendMailFactuur, setSendMailFactuur] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -1059,7 +1063,17 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
           prefill={factuurPrefill}
           onClose={() => setFactuurPrefill(null)}
           onSaved={() => setFactuurPrefill(null)}
+          onSaveAndSend={saved => { setFactuurPrefill(null); setSendMailFactuur(saved); }}
           openCustomer={openCustomer}
+        />
+      )}
+      {sendMailFactuur && (
+        <SendFactuurMailModal
+          factuur={sendMailFactuur}
+          customers={customers}
+          company={company}
+          onClose={() => setSendMailFactuur(null)}
+          onSent={() => setSendMailFactuur(null)}
         />
       )}
       {sendMailOfferte && (

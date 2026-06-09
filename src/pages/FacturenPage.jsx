@@ -757,7 +757,7 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }
 
 // ── SEND EMAIL MODAL ─────────────────────────────────────────────────────────
 
-function SendFactuurMailModal({ factuur, customers, company, templateType = 'factuur', onClose, onSent }) {
+export function SendFactuurMailModal({ factuur, customers, company, templateType = 'factuur', onClose, onSent }) {
   const toast = useToast();
   const [form, setForm] = useState({ to: '', subject: '', body: '' });
   const [loading, setLoading] = useState(true);
