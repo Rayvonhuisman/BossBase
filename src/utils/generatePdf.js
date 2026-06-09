@@ -401,10 +401,14 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     fc(C.panel);
     doc.roundedRect(M, y, CW, noteH, 2.1, 2.1, 'F');
 
-    // 'i' badge — aligned with first text line
-    const noteTextY = y + 6.5;
+    // Bereken eerste-regel baseline zodat het tekstblok verticaal gecentreerd staat
+    const noteLineH = 4; // komt overeen met noteH-formule (4mm per regel)
+    const noteBlockH = Math.max(0, noteLines.length - 1) * noteLineH;
+    const noteTextY = y + (noteH - noteBlockH) / 2 + 1;
+
+    // 'i' badge — gecentreerd met de visuele middenlijn van de tekst
     fc(accent);
-    doc.ellipse(M + 6, noteTextY - 0.8, 2.1, 2.1, 'F');
+    doc.ellipse(M + 6, noteTextY - 1, 2.1, 2.1, 'F');
     tc(accentInk);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.5);
