@@ -59,7 +59,7 @@ function BtwSelect({ r, setRegel }) {
 
 export function NewOfferteModal({ customers, deals = [], prefillDealId = null, prefillCustomerId = null, onClose, onSaved, onSaveAndSend }) {
   const toast = useToast();
-  const [form, setForm] = useState({ customer_id: prefillCustomerId || '', deal_id: prefillDealId || '', omschrijving: '', marge_pct: 25, geldig_tot: '', notes: '' });
+  const [form, setForm] = useState({ customer_id: prefillCustomerId || '', deal_id: prefillDealId || '', omschrijving: '', geldig_tot: '', notes: '' });
   const [regels, setRegels] = useState([emptyRegel()]);
   const [saving, setSaving] = useState(false);
   const [instDefaults, setInstDefaults] = useState(null);
@@ -72,7 +72,7 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
       const d = new Date();
       d.setDate(d.getDate() + (s.offerteGeldigDagen || 14));
       const geldig = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      setForm(f => ({ ...f, marge_pct: s.standaardMarge, geldig_tot: geldig }));
+      setForm(f => ({ ...f, geldig_tot: geldig }));
       setRegels(rs => rs.map((r, i) => i === 0 ? {
         ...r, btw: String(s.btwPct),
         eenheidsprijs: r.type === 'uren' ? s.uurtarief : r.type === 'km' ? s.reiskostenPerKm : r.eenheidsprijs,
@@ -101,16 +101,13 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
   };
   const getEffBtw = r => r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw);
 
-  const margeFactor = 1 + Number(form.marge_pct || 0) / 100;
-  const subtotaalExcl = regels.reduce((s, r) => s + getRegelprijs(r), 0);
-  const totaalExcl = Math.round(subtotaalExcl * margeFactor * 100) / 100;
+  const totaalExcl = Math.round(regels.reduce((s, r) => s + getRegelprijs(r), 0) * 100) / 100;
 
   const btwPerTarief = {};
   for (const r of regels) {
     const pct = getEffBtw(r);
-    const base = getRegelprijs(r) * margeFactor;
     const key = String(pct);
-    btwPerTarief[key] = Math.round(((btwPerTarief[key] || 0) + base * pct / 100) * 100) / 100;
+    btwPerTarief[key] = Math.round(((btwPerTarief[key] || 0) + getRegelprijs(r) * pct / 100) * 100) / 100;
   }
   const totaalIncl = Math.round((totaalExcl + Object.values(btwPerTarief).reduce((s, v) => s + v, 0)) * 100) / 100;
 
@@ -120,7 +117,7 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
 
   const doCreate = async () => {
     if (!form.customer_id) { toast.error('Selecteer een klant'); return null; }
-    const created = await createOfferte({ ...form, totaal_excl: totaalExcl, totaal_incl: totaalIncl });
+    const created = await createOfferte({ ...form, marge_pct: 0, totaal_excl: totaalExcl, totaal_incl: totaalIncl });
     for (let i = 0; i < regels.length; i++) {
       const r = regels[i];
       if (!r.omschrijving.trim()) continue;
@@ -265,11 +262,6 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
             </div>
           </div>
 
-          {/* ── Marge & Geldig tot ── */}
-          <div className="f">
-            <label>Marge %</label>
-            <input type="number" min="0" max="100" step="1" value={form.marge_pct} onChange={e => set('marge_pct', e.target.value)} />
-          </div>
           <div className="f">
             <label>Geldig tot</label>
             <input type="date" value={form.geldig_tot} onChange={e => set('geldig_tot', e.target.value)} />
@@ -317,7 +309,6 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
   const [form, setForm] = useState({
     customer_id: offerte.customerId || '',
     omschrijving: offerte.omschrijving || '',
-    marge_pct: offerte.margePct ?? 25,
     geldig_tot: offerte.geldigTot || '',
     notes: offerte.notes || '',
     status: offerte.status || 'concept',
@@ -354,15 +345,12 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
   };
   const getEffBtw = r => r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw);
 
-  const margeFactor = 1 + Number(form.marge_pct || 0) / 100;
-  const subtotaalExcl = regels.reduce((s, r) => s + getRegelprijs(r), 0);
-  const totaalExcl = Math.round(subtotaalExcl * margeFactor * 100) / 100;
+  const totaalExcl = Math.round(regels.reduce((s, r) => s + getRegelprijs(r), 0) * 100) / 100;
   const btwPerTarief = {};
   for (const r of regels) {
     const pct = getEffBtw(r);
-    const base = getRegelprijs(r) * margeFactor;
     const key = String(pct);
-    btwPerTarief[key] = Math.round(((btwPerTarief[key] || 0) + base * pct / 100) * 100) / 100;
+    btwPerTarief[key] = Math.round(((btwPerTarief[key] || 0) + getRegelprijs(r) * pct / 100) * 100) / 100;
   }
   const totaalIncl = Math.round((totaalExcl + Object.values(btwPerTarief).reduce((s, v) => s + v, 0)) * 100) / 100;
 
@@ -374,7 +362,7 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
   const doSave = async () => {
     const updated = await updateOfferte(offerte.id, {
       customer_id: form.customer_id, omschrijving: form.omschrijving,
-      marge_pct: Number(form.marge_pct), geldig_tot: form.geldig_tot || null,
+      geldig_tot: form.geldig_tot || null,
       notes: form.notes, status: form.status, totaal_excl: totaalExcl, totaal_incl: totaalIncl,
     });
     await deleteOfferteItemsByOfferteId(offerte.id);
@@ -501,10 +489,6 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
               </div>
             </div>
 
-            <div className="f">
-              <label>Marge %</label>
-              <input type="number" min="0" max="100" step="1" value={form.marge_pct} onChange={e => set('marge_pct', e.target.value)} />
-            </div>
             <div className="f">
               <label>Status</label>
               <select value={form.status} onChange={e => set('status', e.target.value)}>
