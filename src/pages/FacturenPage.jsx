@@ -12,7 +12,7 @@ import {
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
 import { getBedrijfsinstellingen } from '../services/instellingenService.js';
-import { generateFactuurPdf } from '../utils/generatePdf.js';
+import { generateFactuurPdf, previewFactuurPdf, getFactuurPdfBase64 } from '../utils/generatePdf.js';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 
@@ -610,6 +610,7 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }
   const customerName = factuur.customerName || customers.find(c => c.id == factuur.customerId)?.name || '—';
   const [regels, setRegels] = useState([]);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [showCrediteer, setShowCrediteer] = useState(false);
   const isOverdue = factuur.status !== 'betaald' && factuur.vervaldatum && factuur.vervaldatum < new Date().toISOString().slice(0, 10);
 
@@ -627,6 +628,19 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }
       console.error('PDF genereren mislukt:', err);
     } finally {
       setPdfLoading(false);
+    }
+  };
+
+  const handlePreviewPdf = async () => {
+    setPreviewLoading(true);
+    try {
+      const customer = customers.find(c => String(c.id) === String(factuur.customerId));
+      const factuurForPdf = factuur.isCredit ? { ...factuur, creditNote: factuur.notities } : factuur;
+      await previewFactuurPdf(factuurForPdf, regels, customer, company);
+    } catch (err) {
+      console.error('PDF preview mislukt:', err);
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -722,6 +736,9 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }
               Crediteer factuur
             </button>
           )}
+          <button className="btn btn-ghost" onClick={handlePreviewPdf} disabled={previewLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            {previewLoading ? 'Laden...' : 'Preview PDF'}
+          </button>
           <button className="btn btn-p" onClick={handleDownloadPdf} disabled={pdfLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <Download size={15} />{pdfLoading ? 'Genereren...' : 'Download PDF'}
           </button>
@@ -776,7 +793,16 @@ function SendFactuurMailModal({ factuur, customers, company, templateType = 'fac
     if (!form.to) { toast.error('E-mailadres is verplicht'); return; }
     setSending(true);
     try {
-      await sendEmail({ to: form.to, subject: form.subject, html: form.body });
+      let attachments = [];
+      try {
+        const regels = await getFactuurRegels(factuur.id);
+        const factuurForPdf = factuur.isCredit ? { ...factuur, creditNote: factuur.notities } : factuur;
+        const pdfBase64 = await getFactuurPdfBase64(factuurForPdf, regels, customer, company);
+        attachments = [{ filename: `Factuur-${factuur.nummer}.pdf`, content: pdfBase64 }];
+      } catch (pdfErr) {
+        console.warn('PDF bijlage genereren mislukt:', pdfErr.message);
+      }
+      await sendEmail({ to: form.to, subject: form.subject, html: form.body, attachments });
       await logSentEmail({ toEmail: form.to, subject: form.subject, bodyHtml: form.body, relatedType: 'factuur', relatedId: factuur.id, customerId: factuur.customerId });
       if ((templateType === 'factuur') && (factuur.status === 'aangemaakt' || factuur.status === 'concept')) {
         await updateFactuur(factuur.id, { status: 'verzonden' });

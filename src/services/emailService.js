@@ -139,15 +139,10 @@ export async function ensureMailTemplates(companyId) {
 
 // ── SIGN-OFFERTE VIA EDGE FUNCTION ──────────────────────────────────────────
 
-export async function signOfferte({ signToken, name, email, signatureDataUrl }) {
-  const { data, error } = await supabase.functions.invoke('sign-offerte', {
-    body: {
-      sign_token: signToken,
-      name,
-      email,
-      signature_data_url: signatureDataUrl,
-    },
-  })
+export async function signOfferte({ signToken, name, email, signatureDataUrl, signedPdfBase64 }) {
+  const body = { sign_token: signToken, name, email, signature_data_url: signatureDataUrl }
+  if (signedPdfBase64) body.signed_pdf_base64 = signedPdfBase64
+  const { data, error } = await supabase.functions.invoke('sign-offerte', { body })
   if (error) {
     // Haal de werkelijke foutmelding op uit de response body
     let message = error.message

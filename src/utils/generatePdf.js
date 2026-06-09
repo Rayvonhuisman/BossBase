@@ -414,15 +414,19 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     const signedByName = document.signedByName || document.signed_by_name || '';
     const signedByEmail = document.signedByEmail || document.signed_by_email || '';
 
-    // Signature image ophalen via Supabase storage (als sign_token beschikbaar)
+    // Signature image ophalen — direct dataUrl (verse ondertekening) of via storage
     let sigImgData = null;
-    const signToken = document.sign_token || document.signToken;
-    if (signToken) {
-      try {
-        const baseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const sigUrl = `${baseUrl}/storage/v1/object/public/signatures/${signToken}.png`;
-        sigImgData = await imgToBase64(sigUrl);
-      } catch {}
+    if (document.signatureDataUrl) {
+      sigImgData = document.signatureDataUrl;
+    } else {
+      const signToken = document.sign_token || document.signToken;
+      if (signToken) {
+        try {
+          const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+          const sigUrl = `${baseUrl}/storage/v1/object/public/signatures/${signToken}.png`;
+          sigImgData = await imgToBase64(sigUrl);
+        } catch {}
+      }
     }
 
     const hasImg = Boolean(sigImgData);
@@ -572,4 +576,16 @@ export async function getFactuurPdfUrl(factuur, regels, customer, company) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   await buildPdf(doc, 'factuur', factuur, regels, customer, company);
   return doc.output('bloburl');
+}
+
+export async function getOffertePdfBase64(offerte, items, customer, company) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  await buildPdf(doc, 'offerte', offerte, items, customer, company);
+  return doc.output('datauristring').split(',')[1];
+}
+
+export async function getFactuurPdfBase64(factuur, regels, customer, company) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  await buildPdf(doc, 'factuur', factuur, regels, customer, company);
+  return doc.output('datauristring').split(',')[1];
 }

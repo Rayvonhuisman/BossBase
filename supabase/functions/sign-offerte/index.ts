@@ -6,15 +6,6 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-function uint8ArrayToBase64(bytes: Uint8Array): string {
-  const CHUNK = 1024
-  const parts: string[] = []
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    parts.push(String.fromCharCode(...bytes.slice(i, i + CHUNK)))
-  }
-  return btoa(parts.join(''))
-}
-
 function dataUrlToBytes(dataUrl: string): Uint8Array {
   const base64 = dataUrl.split(',')[1]
   const binary = atob(base64)
@@ -23,251 +14,11 @@ function dataUrlToBytes(dataUrl: string): Uint8Array {
   return bytes
 }
 
-function hexToRgb(hex: string): [number, number, number] {
-  const h = (hex || '#f97316').replace('#', '')
-  const r = parseInt(h.slice(0, 2), 16)
-  const g = parseInt(h.slice(2, 4), 16)
-  const b = parseInt(h.slice(4, 6), 16)
-  return [isNaN(r) ? 249 : r, isNaN(g) ? 115 : g, isNaN(b) ? 22 : b]
-}
-
-const euro = (n: number) => `€ ${Number(n || 0).toFixed(2).replace('.', ',')}`
-
-const fmtDate = (d: string) => {
-  if (!d) return '—'
-  const parts = String(d).slice(0, 10).split('-')
-  if (parts.length !== 3) return d
-  return `${parts[2]}-${parts[1]}-${parts[0]}`
-}
-
-async function generateSignedPdf(
-  offerte: Record<string, unknown>,
-  items: Record<string, unknown>[],
-  company: Record<string, unknown>,
-  customer: Record<string, unknown>,
-  signerName: string,
-  signerEmail: string,
-  signedAt: string,
-  signatureDataUrl: string,
-): Promise<Uint8Array> {
-  const { PDFDocument, rgb, StandardFonts } = await import('https://esm.sh/pdf-lib@1.17.1')
-  const pdfDoc = await PDFDocument.create()
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
-  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
-
-  const [ar, ag, ab] = hexToRgb((company?.branding_color as string) || '#f97316')
-  const accent = rgb(ar / 255, ag / 255, ab / 255)
-  const accentLight = rgb(
-    (ar + (255 - ar) * 0.88) / 255,
-    (ag + (255 - ag) * 0.88) / 255,
-    (ab + (255 - ab) * 0.88) / 255,
-  )
-  const dark = rgb(0.07, 0.09, 0.15)
-  const gray = rgb(0.42, 0.45, 0.50)
-  const light = rgb(0.98, 0.98, 0.99)
-  const white = rgb(1, 1, 1)
-  const border = rgb(0.90, 0.91, 0.92)
-
-  const PAGE_H = 842
-  const ML = 50
-  const MR = 545
-  const CW = MR - ML
-
-  let page = pdfDoc.addPage([595, PAGE_H])
-  let y = PAGE_H - 40
-
-  const drawText = (
-    text: string,
-    x: number,
-    py: number,
-    options: { font?: typeof font; size?: number; color?: ReturnType<typeof rgb> } = {},
-  ) => {
-    const f = options.font ?? font
-    const s = options.size ?? 8.5
-    const c = options.color ?? dark
-    page.drawText(String(text ?? ''), { x, y: py, font: f, size: s, color: c })
-  }
-
-  // ── HEADER ──────────────────────────────────────────────────────────────────
-  const companyName = (company?.name as string) || ''
-  drawText(companyName, MR - fontBold.widthOfTextAtSize(companyName, 13), y, { font: fontBold, size: 13 })
-
-  const companyLines: string[] = [
-    company?.address as string,
-    [(company?.postal_code as string), (company?.city as string)].filter(Boolean).join('  '),
-    company?.email as string,
-    company?.kvk ? `KvK: ${company.kvk}` : '',
-    company?.btw_number ? `BTW: ${company.btw_number}` : '',
-  ].filter(Boolean)
-
-  let ry = y - 14
-  for (const line of companyLines) {
-    drawText(line, MR - font.widthOfTextAtSize(line, 8), ry, { size: 8, color: gray })
-    ry -= 11
-  }
-  y = Math.min(y - 14, ry) - 8
-
-  page.drawLine({ start: { x: ML, y }, end: { x: MR, y }, thickness: 1.5, color: accent })
-  y -= 18
-
-  // ── TITLE ────────────────────────────────────────────────────────────────────
-  drawText('OFFERTE', ML, y, { font: fontBold, size: 22 })
-  y -= 14
-  drawText((offerte.nummer as string) || '', ML, y, { size: 10, color: accent })
-  y -= 22
-
-  // ── KLANT + META (2 kolommen) ─────────────────────────────────────────────────
-  const col2 = ML + CW * 0.5 + 4
-  const custStartY = y
-
-  drawText('AAN', ML, y, { font: fontBold, size: 7.5, color: accent })
-  y -= 14
-
-  const custLines: string[] = [
-    customer?.name as string,
-    customer?.address as string,
-    [(customer?.postal_code as string), (customer?.city as string)].filter(Boolean).join('  '),
-    customer?.email as string,
-  ].filter(Boolean)
-
-  for (const line of custLines) {
-    drawText(line, ML, y, { size: 9.5 })
-    y -= 13
-  }
-
-  let infoY = custStartY
-  const infoRow = (label: string, val: string) => {
-    drawText(label, col2, infoY, { size: 8, color: gray })
-    drawText(val || '—', col2 + 95, infoY, { size: 8 })
-    infoY -= 13
-  }
-  infoRow('Offertenummer', (offerte.nummer as string) || '—')
-  infoRow('Datum', fmtDate((offerte.created_at as string)?.slice(0, 10)))
-  infoRow('Geldig tot', fmtDate(offerte.geldig_tot as string))
-
-  y = Math.min(y, infoY) - 14
-
-  // ── ITEMS TABEL ──────────────────────────────────────────────────────────────
-  const ROW_H = 16
-  const COL_PERC = [0.40, 0.10, 0.19, 0.11, 0.20]
-  const COL_W = COL_PERC.map(p => CW * p)
-  const COL_X: number[] = []
-  let cx = ML
-  COL_W.forEach(w => { COL_X.push(cx); cx += w })
-
-  page.drawRectangle({ x: ML, y: y - ROW_H + 4, width: CW, height: ROW_H, color: accent })
-  const HEADERS = ['Omschrijving', 'Aantal', 'Eenheidsprijs', 'BTW', 'Bedrag']
-  HEADERS.forEach((h, i) => {
-    const isRight = i === 4
-    const tw = fontBold.widthOfTextAtSize(h, 7.5)
-    const tx = isRight ? COL_X[i] + COL_W[i] - 4 - tw : COL_X[i] + 4
-    drawText(h, tx, y - ROW_H + 9, { font: fontBold, size: 7.5, color: white })
-  })
-  y -= ROW_H
-
-  items.forEach((item, idx) => {
-    if (y < 140) return
-    if (idx % 2 === 0) {
-      page.drawRectangle({ x: ML, y: y - ROW_H + 4, width: CW, height: ROW_H, color: light })
-    }
-    const typeLabel = item.type ? `[${item.type}] ` : ''
-    let omschr = typeLabel + ((item.omschrijving as string) || '')
-    while (omschr.length > 3 && font.widthOfTextAtSize(omschr, 8) > COL_W[0] - 8) {
-      omschr = omschr.slice(0, -4) + '...'
-    }
-    const btwPct = item.btw_pct !== undefined ? item.btw_pct : (offerte.btw_pct ?? 21)
-    const bedragText = euro((item.subtotaal as number) ?? 0)
-
-    drawText(omschr, COL_X[0] + 4, y - ROW_H + 9, { size: 8 })
-    drawText(item.type === 'vast' ? '—' : String(item.aantal ?? 1), COL_X[1] + 4, y - ROW_H + 9, { size: 8 })
-    drawText(euro((item.prijs_per as number) ?? 0), COL_X[2] + 4, y - ROW_H + 9, { size: 8 })
-    drawText(`${btwPct}%`, COL_X[3] + 4, y - ROW_H + 9, { size: 8 })
-    drawText(bedragText, COL_X[4] + COL_W[4] - 4 - font.widthOfTextAtSize(bedragText, 8), y - ROW_H + 9, { size: 8 })
-
-    y -= ROW_H
-  })
-  y -= 8
-
-  // ── TOTALEN ──────────────────────────────────────────────────────────────────
-  const totLeft = ML + CW * 0.6
-  const btwBedrag = ((offerte.totaal_incl as number) || 0) - ((offerte.totaal_excl as number) || 0)
-
-  const totRow = (label: string, val: string, isFinal = false) => {
-    if (y < 80) return
-    if (isFinal) {
-      page.drawRectangle({ x: totLeft - 6, y: y - 8, width: MR - totLeft + 6, height: 18, color: accentLight })
-    }
-    const f = isFinal ? fontBold : font
-    const sz = isFinal ? 10 : 8.5
-    drawText(label, totLeft, y, { font: f, size: sz, color: isFinal ? dark : gray })
-    const vw = f.widthOfTextAtSize(val, sz)
-    drawText(val, MR - vw, y, { font: f, size: sz, color: isFinal ? accent : dark })
-    y -= 14
-  }
-
-  totRow('Subtotaal excl. BTW', euro((offerte.totaal_excl as number) || 0))
-  totRow(`BTW ${(offerte.btw_pct as number) ?? 21}%`, euro(btwBedrag))
-  totRow('Totaal incl. BTW', euro((offerte.totaal_incl as number) || 0), true)
-
-  // ── NOTITIES ─────────────────────────────────────────────────────────────────
-  if (offerte.notes) {
-    y -= 8
-    const noteLines = String(offerte.notes).split('\n').slice(0, 4)
-    for (const line of noteLines) {
-      if (y < 80) break
-      drawText(line.slice(0, 120), ML, y, { size: 8, color: gray })
-      y -= 11
-    }
-  }
-
-  // ── HANDTEKENING SECTIE ───────────────────────────────────────────────────────
-  if (y < 200) {
-    page = pdfDoc.addPage([595, PAGE_H])
-    y = PAGE_H - 60
-  }
-
-  y -= 10
-  page.drawLine({ start: { x: ML, y }, end: { x: MR, y }, thickness: 0.5, color: border })
-  y -= 16
-
-  drawText('Digitaal ondertekend', ML, y, { font: fontBold, size: 10 })
-  y -= 16
-
-  const sigDetails: [string, string][] = [
-    ['Ondertekend door', signerName],
-    ['E-mailadres', signerEmail],
-    ['Datum en tijd', new Date(signedAt).toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' })],
-  ]
-  for (const [label, val] of sigDetails) {
-    drawText(`${label}:`, ML, y, { font: fontBold, size: 8.5, color: gray })
-    drawText(val, ML + 105, y, { size: 8.5 })
-    y -= 13
-  }
-
-  if (signatureDataUrl?.startsWith('data:image/png')) {
-    try {
-      const sigBytes = dataUrlToBytes(signatureDataUrl)
-      const sigImage = await pdfDoc.embedPng(sigBytes)
-      const sigDims = sigImage.scaleToFit(160, 70)
-      y -= 8
-      drawText('Handtekening:', ML, y, { font: fontBold, size: 8.5, color: gray })
-      y -= sigDims.height + 4
-      page.drawImage(sigImage, { x: ML, y, width: sigDims.width, height: sigDims.height })
-    } catch (imgErr) {
-      console.error('Handtekening insluitfout:', imgErr)
-    }
-  }
-
-  const footerText = 'Gegenereerd door BossBase'
-  page.drawText(footerText, {
-    x: MR - font.widthOfTextAtSize(footerText, 7),
-    y: 20,
-    font,
-    size: 7,
-    color: gray,
-  })
-
-  return pdfDoc.save()
+function base64ToBytes(b64: string): Uint8Array {
+  const binary = atob(b64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes
 }
 
 serve(async (req) => {
@@ -276,7 +27,7 @@ serve(async (req) => {
   const warnings: string[] = []
 
   try {
-    const { sign_token, name, email, signature_data_url } = await req.json()
+    const { sign_token, name, email, signature_data_url, signed_pdf_base64 } = await req.json()
 
     if (!sign_token || !name || !email || !signature_data_url) {
       return new Response(JSON.stringify({ success: false, error: 'Verplichte velden ontbreken' }), {
@@ -291,7 +42,7 @@ serve(async (req) => {
     // ── STAP 1: Offerte ophalen ───────────────────────────────────────────────
     const { data: offerte, error: offerteErr } = await admin
       .from('offertes')
-      .select('id, nummer, omschrijving, totaal_incl, totaal_excl, btw_pct, notes, created_at, company_id, customer_id, signed_at, geldig_tot')
+      .select('id, nummer, omschrijving, totaal_incl, company_id, customer_id, signed_at')
       .eq('sign_token', sign_token)
       .maybeSingle()
 
@@ -351,76 +102,45 @@ serve(async (req) => {
       })
     }
 
-    // ── STAP 4: Company/customer/items ophalen ────────────────────────────────
-    // Vanaf hier is signing geslaagd. Fouten zijn waarschuwingen, geen fatale fouten.
+    // ── STAP 4: Company ophalen (voor response metadata) ─────────────────────
     let company: Record<string, unknown> = {}
-    let customer: Record<string, unknown> = {}
-    let items: Record<string, unknown>[] = []
-
     try {
-      const [companyRes, customerRes, itemsRes] = await Promise.all([
-        admin.from('companies')
-          .select('name, email, address, postal_code, city, kvk, btw_number, branding_color, logo_url')
-          .eq('id', offerte.company_id)
-          .maybeSingle(),
-        admin.from('customers')
-          .select('name, email, address, postal_code, city')
-          .eq('id', offerte.customer_id)
-          .maybeSingle(),
-        admin.from('offerte_items')
-          .select('omschrijving, aantal, prijs_per, subtotaal, btw_pct, type')
-          .eq('offerte_id', offerte.id)
-          .order('id'),
-      ])
-      if (companyRes.error) warnings.push(`Company ophalen: ${companyRes.error.message}`)
-      else company = companyRes.data || {}
-      if (customerRes.error) warnings.push(`Customer ophalen: ${customerRes.error.message}`)
-      else customer = customerRes.data || {}
-      if (itemsRes.error) warnings.push(`Items ophalen: ${itemsRes.error.message}`)
-      else items = itemsRes.data || []
+      const { data, error } = await admin
+        .from('companies')
+        .select('name, email')
+        .eq('id', offerte.company_id)
+        .maybeSingle()
+      if (error) warnings.push(`Company ophalen: ${error.message}`)
+      else company = data || {}
     } catch (err) {
-      warnings.push(`Data ophalen mislukt: ${err}`)
+      warnings.push(`Company ophalen mislukt: ${err}`)
     }
 
-    // ── STAP 5: PDF genereren ─────────────────────────────────────────────────
-    let attachment: Array<{ filename: string; content: string }> | undefined
+    // ── STAP 5: PDF verwerken (frontend-gegenereerde PDF uploaden) ────────────
     const pdfFilename = `offerte-${offerte.nummer}-ondertekend.pdf`
 
-    try {
-      const pdfBytes = await generateSignedPdf(
-        offerte,
-        items,
-        company,
-        customer,
-        name,
-        email,
-        now,
-        signature_data_url,
-      )
+    if (signed_pdf_base64) {
+      try {
+        const pdfBytes = base64ToBytes(signed_pdf_base64)
+        const { error: pdfUploadErr } = await admin.storage
+          .from('signed-offertes')
+          .upload(pdfFilename, pdfBytes, { contentType: 'application/pdf', upsert: true })
 
-      // Upload PDF naar storage
-      const { error: pdfUploadErr } = await admin.storage
-        .from('signed-offertes')
-        .upload(pdfFilename, pdfBytes, { contentType: 'application/pdf', upsert: true })
-
-      if (pdfUploadErr) {
-        warnings.push(`PDF upload mislukt (signed-offertes): ${pdfUploadErr.message}`)
-      } else {
-        // Sla de publieke URL op in de offerte record
-        const { data: pdfPublicUrlData } = admin.storage.from('signed-offertes').getPublicUrl(pdfFilename)
-        const signedPdfUrl = pdfPublicUrlData?.publicUrl || null
-        if (signedPdfUrl) {
-          const { error: urlUpdateErr } = await admin.from('offertes')
-            .update({ signed_pdf_url: signedPdfUrl })
-            .eq('id', offerte.id)
-          if (urlUpdateErr) warnings.push(`PDF URL opslaan mislukt: ${urlUpdateErr.message}`)
+        if (pdfUploadErr) {
+          warnings.push(`PDF upload mislukt (signed-offertes): ${pdfUploadErr.message}`)
+        } else {
+          const { data: pdfPublicUrlData } = admin.storage.from('signed-offertes').getPublicUrl(pdfFilename)
+          const signedPdfUrl = pdfPublicUrlData?.publicUrl || null
+          if (signedPdfUrl) {
+            const { error: urlUpdateErr } = await admin.from('offertes')
+              .update({ signed_pdf_url: signedPdfUrl })
+              .eq('id', offerte.id)
+            if (urlUpdateErr) warnings.push(`PDF URL opslaan mislukt: ${urlUpdateErr.message}`)
+          }
         }
+      } catch (pdfErr) {
+        warnings.push(`PDF verwerken mislukt: ${pdfErr}`)
       }
-
-      const pdfBase64 = uint8ArrayToBase64(pdfBytes)
-      attachment = [{ filename: pdfFilename, content: pdfBase64 }]
-    } catch (pdfErr) {
-      warnings.push(`PDF genereren mislukt: ${pdfErr}`)
     }
 
     // ── STAP 6: Response samenstellen ────────────────────────────────────────
@@ -437,12 +157,6 @@ serve(async (req) => {
       signed_at: now,
       signed_by_name: name,
       signed_by_email: email,
-    }
-
-    // PDF meegeven als base64 als generatie geslaagd is
-    if (attachment) {
-      responseBody.signed_pdf_base64 = attachment[0].content
-      responseBody.signed_pdf_filename = attachment[0].filename
     }
 
     if (warnings.length) responseBody.warnings = warnings

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { signOfferte, sendEmail } from '../services/emailService.js'
-import { getOffertePdfUrl } from '../utils/generatePdf.js'
+import { getOffertePdfUrl, getOffertePdfBase64 } from '../utils/generatePdf.js'
 
 const fmt = n =>
   new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0)
@@ -142,7 +142,63 @@ export default function OfferteSigneren({ token }) {
     try {
       const canvas = canvasRef.current
       const dataUrl = canvas.toDataURL('image/png')
-      const result = await signOfferte({ signToken: token, name: form.name, email: form.email, signatureDataUrl: dataUrl })
+
+      // Genereer ondertekende PDF (nieuwe opmaak) vóór de edge function call
+      let signedPdfBase64 = null
+      try {
+        const signedAtPreview = new Date().toISOString()
+        const mappedOfferte = {
+          nummer: offerte.nummer,
+          createdAt: offerte.created_at,
+          geldigTot: offerte.geldig_tot,
+          totaalExcl: offerte.totaal_excl,
+          totaalIncl: offerte.totaal_incl,
+          btwPct: offerte.btw_pct,
+          omschrijving: offerte.omschrijving,
+          notes: offerte.notes,
+          signedAt: signedAtPreview,
+          signedByName: form.name,
+          signedByEmail: form.email,
+          signatureDataUrl: dataUrl,
+        }
+        const mappedItems = (items || []).map(item => ({
+          omschrijving: item.omschrijving,
+          aantal: item.aantal,
+          prijsPer: item.prijs_per,
+          btwPct: item.btw_pct,
+          subtotaal: item.subtotaal,
+          type: item.type,
+        }))
+        const mappedCompany = {
+          name: company?.name,
+          address: company?.address,
+          postalCode: company?.postal_code,
+          city: company?.city,
+          email: company?.email,
+          kvk: company?.kvk,
+          btwNumber: company?.btw_number,
+          brandingColor: company?.branding_color,
+          logoUrl: company?.logo_url,
+        }
+        const mappedKlant = {
+          name: klant?.name,
+          address: klant?.address,
+          postalCode: klant?.postal_code,
+          city: klant?.city,
+          email: klant?.email,
+        }
+        signedPdfBase64 = await getOffertePdfBase64(mappedOfferte, mappedItems, mappedKlant, mappedCompany)
+      } catch (pdfErr) {
+        console.warn('Ondertekend PDF genereren mislukt:', pdfErr.message)
+      }
+
+      const result = await signOfferte({
+        signToken: token,
+        name: form.name,
+        email: form.email,
+        signatureDataUrl: dataUrl,
+        signedPdfBase64,
+      })
       setDone(true)
 
       // Tijdlijn: offerte_geaccepteerd (best-effort, omzeilt service-laag want pagina is publiek)
@@ -158,7 +214,7 @@ export default function OfferteSigneren({ token }) {
       }
 
       // Bevestigingsmails versturen (best-effort — blokkeert success niet)
-      verstuurBevestigingsmails(result).catch(e =>
+      verstuurBevestigingsmails(result, signedPdfBase64).catch(e =>
         console.warn('Bevestigingsmail mislukt:', e.message)
       )
     } catch (err) {
@@ -168,12 +224,15 @@ export default function OfferteSigneren({ token }) {
     }
   }
 
-  const verstuurBevestigingsmails = async (result) => {
+  const verstuurBevestigingsmails = async (result, pdfBase64) => {
     const signerName = result.signed_by_name || ''
     const signerEmail = result.signed_by_email || ''
-    const attachment = result.signed_pdf_base64
-      ? [{ filename: result.signed_pdf_filename, content: result.signed_pdf_base64 }]
-      : []
+    const pdfFilename = `Offerte-${result.offerte_nummer || ''}-ondertekend.pdf`
+    const attachment = pdfBase64
+      ? [{ filename: pdfFilename, content: pdfBase64 }]
+      : result.signed_pdf_base64
+        ? [{ filename: result.signed_pdf_filename || pdfFilename, content: result.signed_pdf_base64 }]
+        : []
 
     const fromName = result.company_name || 'BossBase'
     const nummer = result.offerte_nummer || ''

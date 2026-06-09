@@ -11,7 +11,7 @@ import { getBedrijfsinstellingen } from '../services/instellingenService.js';
 import { listCustomers } from '../services/customerService.js';
 import { listDeals } from '../services/dealService.js';
 import { NewFactuurModal } from './FacturenPage.jsx';
-import { generateOffertePdf } from '../utils/generatePdf.js';
+import { generateOffertePdf, previewOffertePdf, getOffertePdfBase64 } from '../utils/generatePdf.js';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 
@@ -545,6 +545,7 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
   const { company } = useProfile();
   const customerName = offerte.customerName || customers.find(c => c.id == offerte.customerId)?.name || '—';
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const handleDownloadPdf = async () => {
     setPdfLoading(true);
@@ -556,6 +557,19 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
       console.error('PDF genereren mislukt:', err);
     } finally {
       setPdfLoading(false);
+    }
+  };
+
+  const handlePreviewPdf = async () => {
+    setPreviewLoading(true);
+    try {
+      const customer = customers.find(c => String(c.id) === String(offerte.customerId));
+      const items = await getOfferteItems(offerte.id);
+      await previewOffertePdf(offerte, items, customer, company);
+    } catch (err) {
+      console.error('PDF preview mislukt:', err);
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -652,9 +666,14 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
               <Download size={15} /> Download getekende offerte
             </a>
           ) : (
-            <button className="btn btn-p" onClick={handleDownloadPdf} disabled={pdfLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Download size={15} />{pdfLoading ? 'Genereren...' : 'Download PDF'}
-            </button>
+            <>
+              <button className="btn btn-ghost" onClick={handlePreviewPdf} disabled={previewLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                {previewLoading ? 'Laden...' : 'Preview PDF'}
+              </button>
+              <button className="btn btn-p" onClick={handleDownloadPdf} disabled={pdfLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Download size={15} />{pdfLoading ? 'Genereren...' : 'Download PDF'}
+              </button>
+            </>
           )}
           <button className="btn btn-ghost" onClick={onClose}>Sluiten</button>
           {offerte.status === 'geaccepteerd' && onMaakFactuur && (
@@ -704,7 +723,15 @@ function SendOfferteMailModal({ offerte, customers, company, onClose, onSent }) 
     if (!form.to) { toast.error('E-mailadres is verplicht'); return; }
     setSending(true);
     try {
-      await sendEmail({ to: form.to, subject: form.subject, html: form.body });
+      let attachments = [];
+      try {
+        const items = await getOfferteItems(offerte.id);
+        const pdfBase64 = await getOffertePdfBase64(offerte, items, customer, company);
+        attachments = [{ filename: `Offerte-${offerte.nummer}.pdf`, content: pdfBase64 }];
+      } catch (pdfErr) {
+        console.warn('PDF bijlage genereren mislukt:', pdfErr.message);
+      }
+      await sendEmail({ to: form.to, subject: form.subject, html: form.body, attachments });
       await logSentEmail({ toEmail: form.to, subject: form.subject, bodyHtml: form.body, relatedType: 'offerte', relatedId: offerte.id, customerId: offerte.customerId });
       if (offerte.status === 'concept') await updateOfferte(offerte.id, { status: 'verzonden' });
       logTijdlijnSafe(offerte.customerId, 'email_verstuurd', `E-mail verstuurd: ${form.subject}`, { to: form.to, subject: form.subject });
