@@ -140,36 +140,39 @@ async function buildPdf(doc, type, document, regels, customer, company) {
 
   // ── TITLE ROW ────────────────────────────────────────────────
 
-  const docTitle = document.isCredit ? 'CREDITFACTUUR' : (type === 'factuur' ? 'FACTUUR' : 'OFFERTE');
+  // doctitle: hoofdletter op eerste letter, rest lowercase — exact zoals design HTML
+  const docTitle = document.isCredit ? 'Creditfactuur' : (type === 'factuur' ? 'Factuur' : 'Offerte');
 
+  // Lijn 1: document type (bijv. "Offerte")
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(34);
+  doc.setFontSize(30);
   tc(C.dark);
-  const titlePrefix = docTitle + ' ';
-  const titlePrefixW = doc.getTextWidth(titlePrefix);
-  doc.text(titlePrefix, M, y + 13);
+  doc.text(docTitle, M, y + 11);
+
+  // Lijn 2: nummer in accentkleur (line-height .9 op 40px = ~9.5mm)
+  doc.setFontSize(30);
   tc(accent);
-  doc.text(document.nummer || '', M + titlePrefixW, y + 13);
+  doc.text(document.nummer || '', M, y + 21);
 
   if (document.isCredit && document.creditNote) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     tc(C.muted);
-    doc.text(document.creditNote, M, y + 22);
+    doc.text(document.creditNote, M, y + 29);
   }
 
-  // Meta rechts
-  const metaX = W - M - 70;
-  let metaY = y + 2;
+  // Meta rechts — bottom-aligned met de onderkant van de titel (y+21)
+  const metaX = W - M - 72;
+  let metaY = y + 8;
   const metaRow = (label, val) => {
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
+    doc.setFontSize(8);
     tc(C.muted);
     doc.text(label, metaX, metaY);
     doc.setFont('helvetica', 'bold');
     tc(C.dark);
     doc.text(val || '—', W - M, metaY, { align: 'right' });
-    metaY += 5.5;
+    metaY += 5;
   };
 
   metaRow(type === 'factuur' ? 'Factuurnummer' : 'Offertenummer', document.nummer);
@@ -183,7 +186,7 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     if (signedAt) metaRow('Ondertekend', fmtDate(signedAt?.slice(0, 10)));
   }
 
-  y = Math.max(y + 18, metaY) + 5;
+  y = Math.max(y + 26, metaY) + 5;
 
   // ── PARTIES ──────────────────────────────────────────────────
 
@@ -398,7 +401,8 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     tc(C.soft);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.text(noteLines.slice(0, 5), M + 13, y + 6.5);
+    // text start = padding-left 16px + ic 16px + gap 11px = 43px = 11.4mm
+    doc.text(noteLines.slice(0, 5), M + 11.5, y + 6.5);
 
     y += noteH + 8;
   }
@@ -445,7 +449,7 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     tc(C.paper);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
-    doc.text('v', M + 7, y + 7.6, { align: 'center' });
+    doc.text('✓', M + 7, y + 7.6, { align: 'center' });
 
     // Titel
     tc(C.dark);
@@ -453,10 +457,10 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     doc.setFontSize(9);
     doc.text('Digitaal ondertekend', M + 13, y + 8);
 
-    // Datum rechts
+    // Datum rechts (.meta-min: 10px = 7.5pt, color muted)
     tc(C.muted);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
+    doc.setFontSize(7.5);
     doc.text(`Akkoord · ${fmtDate(signedAt?.slice(0, 10))}`, W - M, y + 8, { align: 'right' });
 
     // Velden
@@ -504,22 +508,24 @@ async function buildPdf(doc, type, document, regels, customer, company) {
   doc.setLineWidth(0.3);
   doc.line(M, footY - 3, W - M, footY - 3);
 
-  // "Gegenereerd door BossBase"
-  doc.setFont('helvetica', 'normal');
+  // LEFT: .gen = [accent dot 5px] [gap 6px=1.6mm] "Gegenereerd door **BossBase**"
+  // dot: 5px = 1.32mm diameter, center at M + 0.66
   doc.setFontSize(7.5);
+  fc(accent);
+  doc.ellipse(M + 0.66, footY + 3.3, 0.66, 0.66, 'F');
+
+  // gap 6px = 1.6mm after dot → text at M + 1.32 + 1.6 = M + 2.9
+  const genX = M + 2.9;
+  doc.setFont('helvetica', 'normal');
   tc(C.faint);
-  const prefix = 'Gegenereerd door ';
-  doc.text(prefix, M, footY + 4);
-  const prefixW = doc.getTextWidth(prefix);
+  const prefixGen = 'Gegenereerd door ';
+  doc.text(prefixGen, genX, footY + 4);
+  const prefixGenW = doc.getTextWidth(prefixGen);
   doc.setFont('helvetica', 'bold');
   tc(C.muted);
-  doc.text('BossBase', M + prefixW, footY + 4);
+  doc.text('BossBase', genX + prefixGenW, footY + 4);
 
-  // Accent dot (scheidingspunt midden)
-  fc(accent);
-  doc.ellipse(W / 2, footY + 3.5, 0.66, 0.66, 'F');
-
-  // Documentreferentie rechts
+  // RIGHT: doc reference
   doc.setFont('helvetica', 'normal');
   tc(C.faint);
   const docRef = type === 'factuur'
