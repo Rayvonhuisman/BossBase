@@ -20,7 +20,7 @@ const NAV = [
   { id: 'contact',    label: 'Contact',     href: '/contact'  },
 ];
 
-export default function MarketingShell({ navigate, active, children, isAuthenticated = false }) {
+export default function MarketingShell({ navigate, active, children, isAuthenticated = false, scrollLine = null }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Scroll reveal — observes anything with .mkt-rev within the shell.
@@ -65,6 +65,7 @@ export default function MarketingShell({ navigate, active, children, isAuthentic
   return (
     <div className="mkt">
       <div className="mkt-shell">
+        {scrollLine}
         {/* ── NAV ────────────────────────────────────────────── */}
         <nav className="mkt-nav">
           <div className="mkt-nav-in">

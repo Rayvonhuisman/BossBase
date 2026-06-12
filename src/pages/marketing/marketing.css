@@ -55,6 +55,16 @@
 
 .mkt-shell { position: relative; z-index: 2; }
 
+/* ══ SCROLL-DRIVEN GREEN LINE ══════════════════════════════ */
+.mkt-scroll-line {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+.mkt-scroll-line svg { display: block; width: 100%; height: 100%; }
+
 /* ══ CONTAINER ══════════════════════════════════════════ */
 .mkt-c {
   max-width: 1260px;

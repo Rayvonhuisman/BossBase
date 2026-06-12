@@ -1,77 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import MarketingShell from './MarketingShell.jsx';
-
-/* ── Scroll-driven groene lijn — tekent zich progressief uit terwijl
-   je scrolt. Gebruikt stroke-dasharray/-offset met pathLength="1" zodat
-   het animatiebereik altijd 0→1 is, ongeacht schaalgrootte of viewport. */
-function useReducedMotion() {
-  const [reduced, setReduced] = useState(
-    () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const handler = e => setReduced(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-  return reduced;
-}
-
-function ScrollLine() {
-  const reduced = useReducedMotion();
-  const pathRef = useRef(null);
-
-  useEffect(() => {
-    if (reduced) return;
-    const path = pathRef.current;
-    if (!path) return;
-    let raf = 0;
-    const update = () => {
-      raf = 0;
-      const doc = document.documentElement;
-      const max = doc.scrollHeight - window.innerHeight;
-      const p = max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 1;
-      path.style.strokeDashoffset = String(1 - p);
-    };
-    const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };
-    update();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, [reduced]);
-
-  return (
-    <div className="mkt-scroll-line" aria-hidden="true">
-      <svg
-        width="100%" height="100%"
-        viewBox="0 0 1000 10000"
-        preserveAspectRatio="none"
-        focusable="false"
-      >
-        <path
-          ref={pathRef}
-          d="M 620 0 C 620 620, 180 900, 180 1620 C 180 2340, 820 2560, 820 3320 C 820 4120, 160 4320, 160 5120 C 160 5920, 840 6120, 840 6920 C 840 7720, 200 7920, 200 8720 C 200 9340, 600 9520, 600 10000"
-          pathLength="1"
-          fill="none"
-          stroke="#1DDB62"
-          strokeWidth="2"
-          vectorEffect="non-scaling-stroke"
-          strokeLinecap="round"
-          style={{
-            opacity: reduced ? 0.15 : 0.35,
-            strokeDasharray: reduced ? 'none' : '1',
-            strokeDashoffset: reduced ? '0' : '1',
-            filter: 'drop-shadow(0 0 6px rgba(29,219,98,0.4))',
-          }}
-        />
-      </svg>
-    </div>
-  );
-}
 
 /* ── Inline duotone icons (kept here to avoid pulling lucide-react and
    keep the marketing CSS truly scoped). All use currentColor where it
@@ -338,7 +266,7 @@ export default function HomePage({ navigate, isAuthenticated }) {
   const [openFaq, setOpenFaq] = useState(0);
 
   return (
-    <MarketingShell navigate={navigate} active="home" isAuthenticated={isAuthenticated} scrollLine={<ScrollLine />}>
+    <MarketingShell navigate={navigate} active="home" isAuthenticated={isAuthenticated}>
       {/* ── HERO ─────────────────────────────────────────────── */}
       <section className="mkt-hero">
         <div className="mkt-c">
