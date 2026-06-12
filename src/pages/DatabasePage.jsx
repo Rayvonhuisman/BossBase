@@ -896,7 +896,7 @@ export function DatabasePage({ openCustomer }) {
     setShowBulkMenu(false);
     const pairs = selectedCustomers.flatMap(c =>
       (byCustomer[c.id]?.offertes || [])
-        .filter(o => Boolean(o.signedPdfUrl))
+        .filter(o => Boolean(o.signedAt))
         .map(o => ({ offerte: o, customer: c }))
     );
     if (pairs.length === 0) { toast.error('Geen getekende offertes gevonden voor de selectie'); return; }
@@ -906,11 +906,24 @@ export function DatabasePage({ openCustomer }) {
       for (let i = 0; i < pairs.length; i++) {
         const { offerte, customer } = pairs[i];
         setBulkDownloadProgress({ current: i + 1, total: pairs.length, label: 'getekende offertes' });
-        const resp = await fetch(offerte.signedPdfUrl);
-        if (!resp.ok) throw new Error(`Kan PDF niet ophalen voor ${offerte.nummer}`);
-        const buf = await resp.arrayBuffer();
         const filename = `GetekendOfferte-${slugify(offerte.nummer)}-${slugify(customer.name)}.pdf`;
-        zip.file(filename, buf);
+        // Probeer eerst de opgeslagen getekende PDF op te halen; val terug op gegenereerde PDF
+        let added = false;
+        if (offerte.signedPdfUrl) {
+          try {
+            const resp = await fetch(offerte.signedPdfUrl);
+            if (resp.ok) {
+              const buf = await resp.arrayBuffer();
+              zip.file(filename, buf);
+              added = true;
+            }
+          } catch { /* val terug op gegenereerde PDF */ }
+        }
+        if (!added) {
+          const items = await getOfferteItems(offerte.id);
+          const b64 = await getOffertePdfBase64(offerte, items, customer, company);
+          zip.file(filename, b64, { base64: true });
+        }
       }
       await triggerZipDownload(zip, `BossBase-getekende-offertes-${TODAY}.zip`);
       toast.success(`${pairs.length} getekende offerte${pairs.length !== 1 ? 's' : ''} gedownload`);
