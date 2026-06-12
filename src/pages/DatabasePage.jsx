@@ -918,6 +918,31 @@ export function DatabasePage({ openCustomer }) {
     finally { setBulkDownloadProgress(null); }
   };
 
+  const bulkDownloadCreditfacturen = async () => {
+    setShowBulkMenu(false);
+    const pairs = selectedCustomers.flatMap(c =>
+      (byCustomer[c.id]?.facturen || [])
+        .filter(f => f.isCredit)
+        .map(f => ({ factuur: f, customer: c }))
+    );
+    if (pairs.length === 0) { toast.error('Geen creditfacturen gevonden voor de selectie'); return; }
+    const zip = new JSZip();
+    setBulkDownloadProgress({ current: 0, total: pairs.length, label: 'creditfacturen' });
+    try {
+      for (let i = 0; i < pairs.length; i++) {
+        const { factuur, customer } = pairs[i];
+        setBulkDownloadProgress({ current: i + 1, total: pairs.length, label: 'creditfacturen' });
+        const regels = await getFactuurRegels(factuur.id);
+        const b64 = await getFactuurPdfBase64(factuur, regels, customer, company);
+        const filename = `Creditfactuur-${slugify(factuur.nummer)}-${slugify(customer.name)}.pdf`;
+        zip.file(filename, b64, { base64: true });
+      }
+      await triggerZipDownload(zip, `BossBase-creditfacturen-${TODAY}.zip`);
+      toast.success(`${pairs.length} creditfactuur${pairs.length !== 1 ? 'en' : ''} gedownload`);
+    } catch (err) { toast.error('Download mislukt: ' + (err.message || '')); }
+    finally { setBulkDownloadProgress(null); }
+  };
+
   const bulkDownloadAlles = async () => {
     setShowBulkMenu(false);
     const offertePairs = selectedCustomers.flatMap(c =>
@@ -1488,6 +1513,7 @@ export function DatabasePage({ openCustomer }) {
                   null,
                   { icon: <IconPdf />, label: 'Download offertes (PDF)', action: bulkDownloadOffertes },
                   { icon: <IconPdf />, label: 'Download facturen (PDF)', action: bulkDownloadFacturen },
+                  { icon: <IconPdf />, label: 'Download creditfacturen (PDF)', action: bulkDownloadCreditfacturen },
                   { icon: <IconPdf />, label: 'Download getekende offertes', action: bulkDownloadGetekend },
                   { icon: <IconZip />, label: 'Download alles (ZIP)', action: bulkDownloadAlles },
                 ].map((item, idx) => item === null ? (
