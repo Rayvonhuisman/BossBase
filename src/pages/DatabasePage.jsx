@@ -791,11 +791,70 @@ export function DatabasePage({ openCustomer }) {
   };
 
   // ── Export ───────────────────────────────────────────────────
+  const EXPORT_COLS = [
+    { key: 'Naam',                      width: 28 },
+    { key: 'Email',                     width: 32 },
+    { key: 'Telefoon',                  width: 18 },
+    { key: 'Adres',                     width: 28 },
+    { key: 'Postcode',                  width: 12 },
+    { key: 'Stad',                      width: 18 },
+    { key: 'KvK-nummer',               width: 16 },
+    { key: 'BTW-nummer',               width: 16 },
+    { key: 'IBAN',                      width: 22 },
+    { key: 'Type',                      width: 14 },
+    { key: 'Bron',                      width: 16 },
+    { key: 'Aantal projecten',          width: 16 },
+    { key: 'Aantal offertes',           width: 16 },
+    { key: 'Aantal facturen',           width: 16 },
+    { key: 'Totaal geoffreerd',         width: 18 },
+    { key: 'Totaal betaald',            width: 16 },
+    { key: 'Openstaand bedrag',         width: 18 },
+    { key: 'Laatste project naam',      width: 26 },
+    { key: 'Laatste project datum',     width: 20 },
+    { key: 'Laatste project status',    width: 20 },
+    { key: 'Laatste mail datum',        width: 18 },
+    { key: 'Laatste mail onderwerp',    width: 36 },
+    { key: 'Aanmaakdatum',             width: 14 },
+    { key: 'Moneybird gesynchroniseerd', width: 22 },
+  ];
+
   const buildExportRows = () => selectedCustomers.map(c => {
-    const rel = byCustomer[c.id] || { projects: [], facturen: [] };
+    const rel = byCustomer[c.id] || { projects: [], facturen: [], offertes: [], emails: [] };
     const lastProject = [...rel.projects].sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''))[0];
-    const omzet = rel.facturen.filter(f => f.status === 'betaald' && !f.isCredit).reduce((s,f) => s + (f.totaalIncl||0), 0);
-    return { Naam: c.name, Email: c.email || '', Telefoon: c.phone || '', Stad: c.city || '', KvK: c.kvkNumber || '', 'Laatste project': lastProject?.name || '', 'Totale omzet': omzet, Aanmaakdatum: c.createdAt ? c.createdAt.slice(0,10) : '' };
+    const lastEmail   = [...rel.emails].sort((a,b) => (b.sent_at||'').localeCompare(a.sent_at||''))[0];
+
+    const totaalGeoffreerd = rel.offertes.reduce((s,o) => s + (o.totaalIncl||0), 0);
+    const totaalBetaald    = rel.facturen.filter(f => f.status === 'betaald' && !f.isCredit).reduce((s,f) => s + (f.totaalIncl||0), 0);
+    const openstaand       = rel.facturen.filter(f => f.status !== 'betaald' && !f.isCredit).reduce((s,f) => s + (f.totaalIncl||0), 0);
+
+    const fmtEuro = n => n > 0 ? Number(n).toFixed(2).replace('.', ',') : '0,00';
+
+    return {
+      'Naam':                       c.name || '',
+      'Email':                      c.email || '',
+      'Telefoon':                   c.phone || '',
+      'Adres':                      c.address || '',
+      'Postcode':                   c.postcode || '',
+      'Stad':                       c.city || '',
+      'KvK-nummer':                c.kvkNumber || '',
+      'BTW-nummer':                c.btwNumber || '',
+      'IBAN':                       c.iban || '',
+      'Type':                       c.type || '',
+      'Bron':                       c.source || '',
+      'Aantal projecten':           rel.projects.length,
+      'Aantal offertes':            rel.offertes.length,
+      'Aantal facturen':            rel.facturen.filter(f => !f.isCredit).length,
+      'Totaal geoffreerd':          fmtEuro(totaalGeoffreerd),
+      'Totaal betaald':             fmtEuro(totaalBetaald),
+      'Openstaand bedrag':          fmtEuro(openstaand),
+      'Laatste project naam':       lastProject?.name || '',
+      'Laatste project datum':      lastProject?.createdAt ? lastProject.createdAt.slice(0,10) : '',
+      'Laatste project status':     lastProject?.status || '',
+      'Laatste mail datum':         lastEmail?.sent_at ? lastEmail.sent_at.slice(0,10) : '',
+      'Laatste mail onderwerp':     lastEmail?.subject || '',
+      'Aanmaakdatum':              c.createdAt ? c.createdAt.slice(0,10) : '',
+      'Moneybird gesynchroniseerd': c.moneybirdId ? 'Ja' : 'Nee',
+    };
   });
 
   const exportExcel = async () => {
@@ -803,12 +862,7 @@ export function DatabasePage({ openCustomer }) {
       const rows = buildExportRows();
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet('Klanten');
-      ws.columns = [
-        { header: 'Naam', key: 'Naam', width: 28 }, { header: 'Email', key: 'Email', width: 32 },
-        { header: 'Telefoon', key: 'Telefoon', width: 18 }, { header: 'Stad', key: 'Stad', width: 18 },
-        { header: 'KvK', key: 'KvK', width: 14 }, { header: 'Laatste project', key: 'Laatste project', width: 24 },
-        { header: 'Totale omzet', key: 'Totale omzet', width: 16 }, { header: 'Aanmaakdatum', key: 'Aanmaakdatum', width: 14 },
-      ];
+      ws.columns = EXPORT_COLS.map(c => ({ header: c.key, key: c.key, width: c.width }));
       ws.getRow(1).font = { bold: true };
       rows.forEach(r => ws.addRow(r));
       const buffer = await wb.xlsx.writeBuffer();
@@ -824,7 +878,7 @@ export function DatabasePage({ openCustomer }) {
 
   const exportCsv = () => {
     const rows = buildExportRows();
-    const headers = ['Naam', 'Email', 'Telefoon', 'Stad', 'KvK', 'Laatste project', 'Totale omzet', 'Aanmaakdatum'];
+    const headers = EXPORT_COLS.map(c => c.key);
     const escape = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const csv = [headers.map(escape), ...rows.map(r => headers.map(h => escape(r[h])))].map(r => r.join(',')).join('\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
