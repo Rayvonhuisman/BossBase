@@ -1,12 +1,14 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
 import { supabase } from '../lib/supabase.js';
 import { I, fmt, Av } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { listCustomers, deleteCustomer } from '../services/customerService.js';
-import { getFacturen } from '../services/factuurService.js';
-import { getOffertes } from '../services/offerteService.js';
+import { getFacturen, getFactuurRegels } from '../services/factuurService.js';
+import { getOffertes, getOfferteItems } from '../services/offerteService.js';
+import { getOffertePdfBase64, getFactuurPdfBase64 } from '../utils/generatePdf.js';
 import { getProjects, PROJECT_STATUS } from '../services/projectsService.js';
 import { listDeals, listPipelineStages } from '../services/dealService.js';
 import { listActivities } from '../services/activityService.js';
@@ -39,6 +41,9 @@ const EMPTY_FILTERS = {
   heeftOpenActiviteiten: false, activiteitTypen: [],
   heeftMail: 'alles', mailOuderDanDagen: '', mailTemplateType: '',
   heeftFactureerbareUren: false, urenVan: '', urenTot: '',
+  heeftOffertes: false, heeftFacturen: false,
+  heeftGetekendOfferte: false, heeftOnbetaaldeFacturen: false, heeftVerlopenOffertes: false,
+  documentenPeriodeVan: '', documentenPeriodeTot: '',
 };
 
 const hasActiveFilters = f => {
@@ -111,6 +116,20 @@ const IconMailSm = () => (
 const IconDots = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="19" cy="12" r="1" fill="currentColor"/>
+  </svg>
+);
+const IconPdf = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+    <path d="M14 2v6h6" strokeLinecap="round"/>
+    <path d="M9 15h1.5a1.5 1.5 0 000-3H9v6M15 12v6M15 15h2" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const IconZip = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+    <polyline points="17 8 12 3 7 8"/>
+    <line x1="12" y1="3" x2="12" y2="15" strokeLinecap="round"/>
   </svg>
 );
 
@@ -433,7 +452,7 @@ function Pagination({ currentPage, totalPages, onPage }) {
 // ── MAIN PAGE ────────────────────────────────────────────────
 export function DatabasePage({ openCustomer }) {
   const toast = useToast();
-  const { profile } = useProfile();
+  const { profile, company } = useProfile();
 
   const [customers, setCustomers]     = useState([]);
   const [projects, setProjects]       = useState([]);
@@ -475,6 +494,8 @@ export function DatabasePage({ openCustomer }) {
   const rowMenuRef                        = useRef(null);
   const [deleteTarget, setDeleteTarget]   = useState(null); // { id, name }
   const [deleting, setDeleting]           = useState(false);
+
+  const [bulkDownloadProgress, setBulkDownloadProgress] = useState(null); // { current, total, label }
 
   const setFilter = useCallback((k, v) => {
     setFilters(f => ({ ...f, [k]: v }));
@@ -648,6 +669,22 @@ export function DatabasePage({ openCustomer }) {
         if (billableUren.length === 0) return false;
       }
 
+      if (filters.heeftOffertes && rel.offertes.length === 0) return false;
+      if (filters.heeftFacturen && rel.facturen.length === 0) return false;
+      if (filters.heeftGetekendOfferte && !rel.offertes.some(o => Boolean(o.signedAt))) return false;
+      if (filters.heeftOnbetaaldeFacturen && !rel.facturen.some(f => f.status !== 'betaald' && !f.isCredit)) return false;
+      if (filters.heeftVerlopenOffertes && !rel.offertes.some(o => o.status === 'verzonden' && o.geldigTot && o.geldigTot < TODAY)) return false;
+      if (filters.documentenPeriodeVan) {
+        const hasDoc = rel.offertes.some(o => (o.createdAt||'').slice(0,10) >= filters.documentenPeriodeVan) ||
+                       rel.facturen.some(f => (f.factuurdatum||'') >= filters.documentenPeriodeVan);
+        if (!hasDoc) return false;
+      }
+      if (filters.documentenPeriodeTot) {
+        const hasDoc = rel.offertes.some(o => (o.createdAt||'').slice(0,10) <= filters.documentenPeriodeTot) ||
+                       rel.facturen.some(f => (f.factuurdatum||'') <= filters.documentenPeriodeTot);
+        if (!hasDoc) return false;
+      }
+
       return true;
     });
   }, [customers, byCustomer, filters, urenData, quickTab, searchQuery]);
@@ -797,6 +834,122 @@ export function DatabasePage({ openCustomer }) {
     rows.forEach((_, i) => { const c = selectedCustomers[i]; if (c?.id) logTijdlijnSafe(c.id, 'export_uitgevoerd', 'Klantgegevens geëxporteerd als CSV'); });
     setShowBulkMenu(false);
     toast.success(`${rows.length} klanten geëxporteerd als CSV`);
+  };
+
+  // ── Bulk PDF downloads ───────────────────────────────────────
+  const slugify = s => (s || '').replace(/[^a-zA-Z0-9À-ɏ]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+
+  const triggerZipDownload = async (zip, filename) => {
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const bulkDownloadOffertes = async () => {
+    setShowBulkMenu(false);
+    const pairs = selectedCustomers.flatMap(c =>
+      (byCustomer[c.id]?.offertes || []).map(o => ({ offerte: o, customer: c }))
+    );
+    if (pairs.length === 0) { toast.error('Geen offertes gevonden voor de selectie'); return; }
+    const zip = new JSZip();
+    setBulkDownloadProgress({ current: 0, total: pairs.length, label: 'offertes' });
+    try {
+      for (let i = 0; i < pairs.length; i++) {
+        const { offerte, customer } = pairs[i];
+        setBulkDownloadProgress({ current: i + 1, total: pairs.length, label: 'offertes' });
+        const items = await getOfferteItems(offerte.id);
+        const b64 = await getOffertePdfBase64(offerte, items, customer, company);
+        const filename = `Offerte-${slugify(offerte.nummer)}-${slugify(customer.name)}.pdf`;
+        zip.file(filename, b64, { base64: true });
+      }
+      await triggerZipDownload(zip, `BossBase-offertes-${TODAY}.zip`);
+      toast.success(`${pairs.length} offerte${pairs.length !== 1 ? 's' : ''} gedownload`);
+    } catch (err) { toast.error('Download mislukt: ' + (err.message || '')); }
+    finally { setBulkDownloadProgress(null); }
+  };
+
+  const bulkDownloadFacturen = async () => {
+    setShowBulkMenu(false);
+    const pairs = selectedCustomers.flatMap(c =>
+      (byCustomer[c.id]?.facturen || []).map(f => ({ factuur: f, customer: c }))
+    );
+    if (pairs.length === 0) { toast.error('Geen facturen gevonden voor de selectie'); return; }
+    const zip = new JSZip();
+    setBulkDownloadProgress({ current: 0, total: pairs.length, label: 'facturen' });
+    try {
+      for (let i = 0; i < pairs.length; i++) {
+        const { factuur, customer } = pairs[i];
+        setBulkDownloadProgress({ current: i + 1, total: pairs.length, label: 'facturen' });
+        const regels = await getFactuurRegels(factuur.id);
+        const b64 = await getFactuurPdfBase64(factuur, regels, customer, company);
+        const filename = `Factuur-${slugify(factuur.nummer)}-${slugify(customer.name)}.pdf`;
+        zip.file(filename, b64, { base64: true });
+      }
+      await triggerZipDownload(zip, `BossBase-facturen-${TODAY}.zip`);
+      toast.success(`${pairs.length} factuur${pairs.length !== 1 ? 'en' : ''} gedownload`);
+    } catch (err) { toast.error('Download mislukt: ' + (err.message || '')); }
+    finally { setBulkDownloadProgress(null); }
+  };
+
+  const bulkDownloadGetekend = async () => {
+    setShowBulkMenu(false);
+    const pairs = selectedCustomers.flatMap(c =>
+      (byCustomer[c.id]?.offertes || [])
+        .filter(o => Boolean(o.signedPdfUrl))
+        .map(o => ({ offerte: o, customer: c }))
+    );
+    if (pairs.length === 0) { toast.error('Geen getekende offertes gevonden voor de selectie'); return; }
+    const zip = new JSZip();
+    setBulkDownloadProgress({ current: 0, total: pairs.length, label: 'getekende offertes' });
+    try {
+      for (let i = 0; i < pairs.length; i++) {
+        const { offerte, customer } = pairs[i];
+        setBulkDownloadProgress({ current: i + 1, total: pairs.length, label: 'getekende offertes' });
+        const resp = await fetch(offerte.signedPdfUrl);
+        if (!resp.ok) throw new Error(`Kan PDF niet ophalen voor ${offerte.nummer}`);
+        const buf = await resp.arrayBuffer();
+        const filename = `GetekendOfferte-${slugify(offerte.nummer)}-${slugify(customer.name)}.pdf`;
+        zip.file(filename, buf);
+      }
+      await triggerZipDownload(zip, `BossBase-getekende-offertes-${TODAY}.zip`);
+      toast.success(`${pairs.length} getekende offerte${pairs.length !== 1 ? 's' : ''} gedownload`);
+    } catch (err) { toast.error('Download mislukt: ' + (err.message || '')); }
+    finally { setBulkDownloadProgress(null); }
+  };
+
+  const bulkDownloadAlles = async () => {
+    setShowBulkMenu(false);
+    const offertePairs = selectedCustomers.flatMap(c =>
+      (byCustomer[c.id]?.offertes || []).map(o => ({ offerte: o, customer: c }))
+    );
+    const factuurPairs = selectedCustomers.flatMap(c =>
+      (byCustomer[c.id]?.facturen || []).map(f => ({ factuur: f, customer: c }))
+    );
+    const total = offertePairs.length + factuurPairs.length;
+    if (total === 0) { toast.error('Geen documenten gevonden voor de selectie'); return; }
+    const zip = new JSZip();
+    const offerteFolder = zip.folder('Offertes');
+    const factuurFolder = zip.folder('Facturen');
+    setBulkDownloadProgress({ current: 0, total, label: 'documenten' });
+    try {
+      let done = 0;
+      for (const { offerte, customer } of offertePairs) {
+        setBulkDownloadProgress({ current: ++done, total, label: 'documenten' });
+        const items = await getOfferteItems(offerte.id);
+        const b64 = await getOffertePdfBase64(offerte, items, customer, company);
+        offerteFolder.file(`Offerte-${slugify(offerte.nummer)}-${slugify(customer.name)}.pdf`, b64, { base64: true });
+      }
+      for (const { factuur, customer } of factuurPairs) {
+        setBulkDownloadProgress({ current: ++done, total, label: 'documenten' });
+        const regels = await getFactuurRegels(factuur.id);
+        const b64 = await getFactuurPdfBase64(factuur, regels, customer, company);
+        factuurFolder.file(`Factuur-${slugify(factuur.nummer)}-${slugify(customer.name)}.pdf`, b64, { base64: true });
+      }
+      await triggerZipDownload(zip, `BossBase-export-${TODAY}.zip`);
+      toast.success(`${total} document${total !== 1 ? 'en' : ''} gedownload`);
+    } catch (err) { toast.error('Download mislukt: ' + (err.message || '')); }
+    finally { setBulkDownloadProgress(null); }
   };
 
   // ── Display meta ─────────────────────────────────────────────
@@ -1082,6 +1235,35 @@ export function DatabasePage({ openCustomer }) {
               Heeft factureerbare uren
             </label>
           </FilterSection>
+
+          <FilterSection title="Documenten">
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--dm)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={filters.heeftOffertes} onChange={e => setFilter('heeftOffertes', e.target.checked)} style={{ accentColor: 'var(--p)' }} />
+              Heeft offertes
+            </label>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--dm)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={filters.heeftFacturen} onChange={e => setFilter('heeftFacturen', e.target.checked)} style={{ accentColor: 'var(--p)' }} />
+              Heeft facturen
+            </label>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--dm)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={filters.heeftGetekendOfferte} onChange={e => setFilter('heeftGetekendOfferte', e.target.checked)} style={{ accentColor: 'var(--p)' }} />
+              Heeft getekende offerte
+            </label>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--dm)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={filters.heeftOnbetaaldeFacturen} onChange={e => setFilter('heeftOnbetaaldeFacturen', e.target.checked)} style={{ accentColor: 'var(--p)' }} />
+              Heeft onbetaalde facturen
+            </label>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--dm)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={filters.heeftVerlopenOffertes} onChange={e => setFilter('heeftVerlopenOffertes', e.target.checked)} style={{ accentColor: 'var(--p)' }} />
+              Heeft verlopen offertes
+            </label>
+            <FilterRow label="Periode van">
+              <input type="date" value={filters.documentenPeriodeVan} onChange={e => setFilter('documentenPeriodeVan', e.target.value)} style={FIN} />
+            </FilterRow>
+            <FilterRow label="Periode tot">
+              <input type="date" value={filters.documentenPeriodeTot} onChange={e => setFilter('documentenPeriodeTot', e.target.value)} style={FIN} />
+            </FilterRow>
+          </FilterSection>
         </div>
 
         {/* ── Table card ── */}
@@ -1303,14 +1485,23 @@ export function DatabasePage({ openCustomer }) {
                   { icon: <IconExcel />, label: 'Exporteren als Excel', action: exportExcel },
                   { icon: <IconCsv />, label: 'Exporteren als CSV', action: exportCsv },
                   { icon: <IconBookmark />, label: 'Segment opslaan', action: () => { setShowBulkMenu(false); setShowSaveSegment(true); } },
-                ].map((item, idx) => (
+                  null,
+                  { icon: <IconPdf />, label: 'Download offertes (PDF)', action: bulkDownloadOffertes },
+                  { icon: <IconPdf />, label: 'Download facturen (PDF)', action: bulkDownloadFacturen },
+                  { icon: <IconPdf />, label: 'Download getekende offertes', action: bulkDownloadGetekend },
+                  { icon: <IconZip />, label: 'Download alles (ZIP)', action: bulkDownloadAlles },
+                ].map((item, idx) => item === null ? (
+                  <div key={`sep-${idx}`} style={{ height: 1, background: T.borderXL, margin: '4px 0' }} />
+                ) : (
                   <button key={idx} onClick={item.action} style={{
                     width: '100%', display: 'flex', alignItems: 'center', gap: 10,
                     padding: '10px 14px', background: 'none', border: 'none',
                     textAlign: 'left', cursor: 'pointer',
                     fontSize: 13, color: 'var(--dk)',
-                    borderBottom: idx < 3 ? `1px solid ${T.borderXL}` : 'none',
-                  }}>
+                  }}
+                    onMouseEnter={e => e.currentTarget.style.background = T.pageBg}
+                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                  >
                     <span style={{ color: 'var(--dl)', display: 'flex', flexShrink: 0 }}>{item.icon}</span>
                     {item.label}
                   </button>
@@ -1427,6 +1618,33 @@ export function DatabasePage({ openCustomer }) {
           </div>
         );
       })()}
+
+      {/* ── Bulk download voortgang ── */}
+      {bulkDownloadProgress && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 100,
+          background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div style={{
+            background: 'white', borderRadius: 'var(--r14)', padding: '28px 32px',
+            boxShadow: '0 12px 40px rgba(0,0,0,.2)', minWidth: 320, textAlign: 'center',
+          }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--dk)', marginBottom: 14 }}>
+              PDF's genereren…
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--dl)', marginBottom: 16 }}>
+              {bulkDownloadProgress.current} van {bulkDownloadProgress.total} {bulkDownloadProgress.label}
+            </div>
+            <div style={{ height: 6, background: 'var(--border)', borderRadius: 999, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', background: 'var(--p)', borderRadius: 999,
+                width: `${Math.round((bulkDownloadProgress.current / bulkDownloadProgress.total) * 100)}%`,
+                transition: 'width .2s',
+              }} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Delete bevestiging ── */}
       {deleteTarget && (
