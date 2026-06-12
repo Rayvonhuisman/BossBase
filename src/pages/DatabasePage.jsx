@@ -1656,7 +1656,7 @@ export function DatabasePage({ openCustomer }) {
             boxShadow: '0 12px 40px rgba(0,0,0,.2)', minWidth: 320, textAlign: 'center',
           }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--dk)', marginBottom: 14 }}>
-              PDF's genereren…
+              PDF's downloaden…
             </div>
             <div style={{ fontSize: 12, color: 'var(--dl)', marginBottom: 16 }}>
               {bulkDownloadProgress.current} van {bulkDownloadProgress.total} {bulkDownloadProgress.label}
