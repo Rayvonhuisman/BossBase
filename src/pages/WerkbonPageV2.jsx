@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { I, ModalX } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { MentionEditor } from '../components/MentionEditor.jsx';
+import { getTeamMembers, createAssignmentNotification } from '../services/notificatieService.js';
 import {
   getWerkbonnen, getWerkbonById, createWerkbon, updateWerkbon,
   getWerkbonTaken, createWerkbonTaak, toggleWerkbonTaak, deleteWerkbonTaak,
@@ -71,7 +73,10 @@ const StatusBadge = ({ status, size }) => (
 
 function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSaved }) {
   const toast = useToast();
+  const { profile } = useProfile();
   const isEdit = mode === 'edit';
+  const [teamMembers, setTeamMembers] = useState([]);
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
   const [form, setForm] = useState(() => ({
     titel: werkbon?.titel || '',
     customer_id: werkbon?.customerId || '',
@@ -83,6 +88,7 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
     locatie: werkbon?.locatie || '',
     notes: werkbon?.notes || '',
     status: werkbon?.status || 'gepland',
+    assignedTo: werkbon?.assignedTo || '',
   }));
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -101,14 +107,24 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
         eindtijd: form.eindtijd || null,
         locatie: form.locatie || null,
         notes: form.notes || null,
+        assigned_to: form.assignedTo || null,
       };
       let saved;
       if (isEdit) {
         saved = await updateWerkbon(werkbon.id, { ...payload, status: form.status });
         toast.success('Werkbon bijgewerkt');
+        const prevAssigned = werkbon?.assignedTo || '';
+        if (form.assignedTo && form.assignedTo !== prevAssigned && profile?.id) {
+          const m = teamMembers.find(x => x.id === form.assignedTo);
+          createAssignmentNotification({ assignedToUserId: form.assignedTo, assignedToName: m?.fullName, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile.id, creatorName: profile.fullName }).catch(() => {});
+        }
       } else {
         saved = await createWerkbon(payload);
         toast.success('Werkbon aangemaakt');
+        if (form.assignedTo && profile?.id) {
+          const m = teamMembers.find(x => x.id === form.assignedTo);
+          createAssignmentNotification({ assignedToUserId: form.assignedTo, assignedToName: m?.fullName, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile.id, creatorName: profile.fullName }).catch(() => {});
+        }
       }
       onSaved?.(saved);
       onClose();
@@ -188,8 +204,17 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
           </div>
           <div className="f full">
             <label>Interne notities</label>
-            <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Bv. klant heeft hond, deur dicht houden…" />
+            <MentionEditor value={form.notes} onChange={v => set('notes', v)} placeholder="Bv. klant heeft hond, deur dicht houden… Typ @ om iemand te taggen" rows={2} disabled={saving} teamMembers={teamMembers} />
           </div>
+          {teamMembers.length > 0 && (
+            <div className="f full">
+              <label>Toegewezen aan</label>
+              <select value={form.assignedTo || ''} onChange={e => set('assignedTo', e.target.value)} disabled={saving}>
+                <option value="">Niemand</option>
+                {teamMembers.map(m => <option key={m.id} value={m.id}>{m.fullName}</option>)}
+              </select>
+            </div>
+          )}
         </div>
         <div className="fa">
           <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Annuleren</button>

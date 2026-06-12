@@ -8,6 +8,8 @@ import { getOffertes } from '../../services/offerteService.js';
 import { listNotes, createNote } from '../../services/noteService.js';
 import { listJobCosts } from '../../services/jobCostService.js';
 import { getWerkbonnen } from '../../services/werkbonService.js';
+import { MentionEditor } from '../../components/MentionEditor.jsx';
+import { getTeamMembers, createMentionNotifications, createAssignmentNotification } from '../../services/notificatieService.js';
 
 const GREEN = '#1DDB62';
 
@@ -45,7 +47,7 @@ function Hint({ children }) {
 
 export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
   const toast = useToast();
-  const { bumpRefresh, requestNewActivity } = useProfile();
+  const { profile, bumpRefresh, requestNewActivity } = useProfile();
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
@@ -56,8 +58,9 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
   const [notes, setNotes] = useState([]);
   const [costs, setCosts] = useState([]);
   const [wbs, setWbs] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
 
-  const [form, setForm] = useState({ title: '', value: '', stageId: '', nextAct: '' });
+  const [form, setForm] = useState({ title: '', value: '', stageId: '', nextAct: '', assignedTo: '' });
   const [saving, setSaving] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [addingNote, setAddingNote] = useState(false);
@@ -84,11 +87,13 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
       setNotes(n.filter(x => x.dealId === dealId));
       setCosts(jc.filter(x => x.dealId === dealId));
       setWbs(w.filter(x => x.dealId === dealId));
-      if (d) setForm({ title: d.title || '', value: d.value || 0, stageId: d.stage || '', nextAct: d.nextAct || '' });
+      if (d) setForm({ title: d.title || '', value: d.value || 0, stageId: d.stage || '', nextAct: d.nextAct || '', assignedTo: d.assignedTo || '' });
     }).catch(e => { if (alive) setErr(e.message || 'Laden mislukt'); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [dealId]);
+
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
 
   const stageOf = id => stages.find(s => s.id === id) || null;
   const curStage = deal ? stageOf(deal.stage) : null;
@@ -111,12 +116,18 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
     if (valueCol) payload[valueCol] = Number(form.value) || 0;
     if (stageCol && form.stageId && form.stageId !== deal.stage) payload[stageCol] = form.stageId;
     if (nextCol) payload[nextCol] = form.nextAct;
+    payload.assigned_to = form.assignedTo || null;
     if (Object.keys(payload).length === 0) { onClose(); return; }
     setSaving(true);
     try {
       const updated = await updateDeal(deal.id, payload);
+      const prevAssigned = deal.assignedTo || '';
+      if (form.assignedTo && form.assignedTo !== prevAssigned && profile?.id) {
+        const assignedMember = teamMembers.find(m => m.id === form.assignedTo);
+        createAssignmentNotification({ assignedToUserId: form.assignedTo, assignedToName: assignedMember?.fullName, type: 'toewijzing_deal', title: `Je bent toegewezen aan ${form.title}`, link: 'pipeline', relatedType: 'deal', relatedId: deal.id, creatorId: profile.id, creatorName: profile.fullName }).catch(() => {});
+      }
       setDeal(updated);
-      setForm(f => ({ ...f, title: updated.title || '', value: updated.value || 0, stageId: updated.stage || '', nextAct: updated.nextAct || '' }));
+      setForm(f => ({ ...f, title: updated.title || '', value: updated.value || 0, stageId: updated.stage || '', nextAct: updated.nextAct || '', assignedTo: updated.assignedTo || '' }));
       bumpRefresh && bumpRefresh();
       toast.success('Deal opgeslagen');
     } catch (e) {
@@ -133,6 +144,9 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
     try {
       const created = await createNote({ customer_id: deal.custId || null, deal_id: deal.id, body });
       setNotes(ns => [created, ...ns]);
+      if (profile?.id) {
+        createMentionNotifications({ text: body, relatedType: 'deal', relatedId: deal.id, link: 'pipeline', creatorId: profile.id, creatorName: profile.fullName, contextName: deal.title }).catch(() => {});
+      }
       setNoteText('');
     } catch (e) {
       toast.error(e.message || 'Notitie opslaan mislukt');
@@ -213,6 +227,16 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
               {!nextCol && <Hint>Volgende actie kan voor deze deal nog niet worden aangepast.</Hint>}
             </Field>
           </div>
+          {teamMembers.length > 0 && (
+            <div style={{ gridColumn: '1 / -1' }}>
+              <Field label="Toegewezen aan">
+                <select style={inputStyle} value={form.assignedTo || ''} onChange={e => setForm(f => ({ ...f, assignedTo: e.target.value }))}>
+                  <option value="">Niemand</option>
+                  {teamMembers.map(m => <option key={m.id} value={m.id}>{m.fullName}</option>)}
+                </select>
+              </Field>
+            </div>
+          )}
         </div>
         {(deal.city || deal.raw?.source) && (
           <div style={{ marginTop: 10, fontSize: 12, color: '#9ca3af' }}>
@@ -271,11 +295,9 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
 
       {/* Notities */}
       <Section title={`Notities (${notes.length})`}>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-          <input style={{ ...inputStyle, flex: 1 }} value={noteText} placeholder="Nieuwe notitie…"
-            onChange={e => setNoteText(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') addNote(); }} />
-          <button className="btn btn-s btn-sm" disabled={addingNote || !noteText.trim()} onClick={addNote}>Toevoegen</button>
+        <div style={{ marginBottom: 10 }}>
+          <MentionEditor value={noteText} onChange={setNoteText} placeholder="Nieuwe notitie… Typ @ om iemand te taggen" rows={3} disabled={addingNote} teamMembers={teamMembers} />
+          <button className="btn btn-s btn-sm" disabled={addingNote || !noteText.trim()} onClick={addNote} style={{ marginTop: 8 }}>Toevoegen</button>
         </div>
         {notes.length === 0 && <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Nog geen notities</div>}
         {notes.map(n => (

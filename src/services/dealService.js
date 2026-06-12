@@ -29,6 +29,7 @@ const toDeal = row => ({
   notes: row.notes_count || 0,
   files: row.files_count || 0,
   acts: row.activities_count || 0,
+  assignedTo: row.assigned_to || null,
   raw: row,
 })
 

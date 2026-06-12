@@ -12,6 +12,8 @@ import { getCompanyId } from '../lib/currentCompany.js';
 import { createCalendarEvent } from '../services/calendarService.js';
 import { createJobCost } from '../services/jobCostService.js';
 import { updateProfile } from '../services/profileService.js';
+import { MentionEditor } from './MentionEditor.jsx';
+import { getTeamMembers, createMentionNotifications, createAssignmentNotification } from '../services/notificatieService.js';
 
 const isEmail = v => !v || /^\S+@\S+\.\S+$/.test(v);
 
@@ -311,7 +313,7 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
 // ── NEW ACTIVITY MODAL ───────────────────────────────────────
 export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCustId = '', defaultDealId = '' }) {
   const toast = useToast();
-  const { company } = useProfile();
+  const { company, profile } = useProfile();
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
     title: '',
@@ -322,10 +324,14 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
     dealId: defaultDealId,
     status: 'open',
     notes: '',
+    assignedTo: '',
   });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [teamMembers, setTeamMembers] = useState([]);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
 
   const dealsForCust = useMemo(() => {
     if (!deals) return [];
@@ -353,7 +359,18 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
         customer_id: form.custId || null,
         deal_id: form.dealId || null,
         due_at: buildDueAt(form.date, form.time),
+        assigned_to: form.assignedTo || null,
       });
+      // Mention notifications in notes
+      if (form.notes && profile?.id) {
+        const custName = customers?.find(c => c.id === form.custId)?.name || '';
+        createMentionNotifications({ text: form.notes, relatedType: 'activiteit', relatedId: created.id, link: 'activities', creatorId: profile.id, creatorName: profile.fullName, contextName: custName }).catch(() => {});
+      }
+      // Assignment notification
+      if (form.assignedTo) {
+        const assignedMember = teamMembers.find(m => m.id === form.assignedTo);
+        createAssignmentNotification({ assignedToUserId: form.assignedTo, assignedToName: assignedMember?.fullName, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${form.date}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: created.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
+      }
       if (form.type === 'visit' && form.custId) {
         const cust = customers?.find(c => c.id === form.custId);
         if (cust?.email) {
@@ -435,9 +452,18 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
               </select>
             </div>
           )}
+          {teamMembers.length > 0 && (
+            <div className="f">
+              <label>Toegewezen aan</label>
+              <select value={form.assignedTo || ''} onChange={e => set('assignedTo', e.target.value)}>
+                <option value="">— Niet toegewezen —</option>
+                {teamMembers.map(m => <option key={m.id} value={m.id}>{m.fullName}</option>)}
+              </select>
+            </div>
+          )}
           <div className="f s2">
             <label>Notities</label>
-            <textarea value={form.notes} onChange={e => set('notes', e.target.value)} />
+            <MentionEditor value={form.notes} onChange={v => set('notes', v)} teamMembers={teamMembers} disabled={saving} />
           </div>
         </div>
         <div className="fa">
@@ -906,6 +932,8 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
   const { profile } = useProfile();
   const role = profile?.role || 'medewerker';
   const canEdit = role === 'admin' || role === 'planner';
+  const [teamMembers, setTeamMembers] = useState([]);
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
 
   // Google Calendar per-activity sync state (read-only display + manual retry).
   const [gStatus, setGStatus] = useState(activity?.googleSyncStatus || 'not_synced');
@@ -932,6 +960,7 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
     status: activity?.completed ? 'completed' : (activity?.status === 'completed' || activity?.status === 'done' ? 'completed' : 'open'),
     priority: 'med',
     notes: activity?.notes || '',
+    assignedTo: activity?.assignee || '',
   });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -960,7 +989,17 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
         due_at: buildDueAt(form.date, form.time),
         status: form.status,
         notes: form.notes,
+        assigned_to: form.assignedTo || null,
       });
+      if (form.notes && profile?.id) {
+        const custName = customers?.find(c => c.id === form.custId)?.name || '';
+        createMentionNotifications({ text: form.notes, relatedType: 'activiteit', relatedId: activity.id, link: 'activities', creatorId: profile.id, creatorName: profile.fullName, contextName: custName }).catch(() => {});
+      }
+      const prevAssigned = activity?.assignee || '';
+      if (form.assignedTo && form.assignedTo !== prevAssigned) {
+        const assignedMember = teamMembers.find(m => m.id === form.assignedTo);
+        createAssignmentNotification({ assignedToUserId: form.assignedTo, assignedToName: assignedMember?.fullName, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${form.date}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: activity.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
+      }
       toast.success('Activiteit bijgewerkt');
       onSaved?.(updated);
       onClose();
@@ -1073,6 +1112,15 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
               </select>
             </div>
           )}
+          {teamMembers.length > 0 && (
+            <div className="f">
+              <label>Toegewezen aan</label>
+              <select value={form.assignedTo || ''} onChange={e => set('assignedTo', e.target.value)} disabled={!canEdit || busy}>
+                <option value="">Niemand</option>
+                {teamMembers.map(m => <option key={m.id} value={m.id}>{m.fullName}</option>)}
+              </select>
+            </div>
+          )}
           <div className="f">
             <label>Prioriteit <span style={{ fontSize: '.7rem', color: 'var(--dl)', fontWeight: 400 }}>(alleen weergave)</span></label>
             <select value={form.priority} onChange={e => set('priority', e.target.value)} disabled={busy}>
@@ -1083,7 +1131,7 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
           </div>
           <div className="f s2">
             <label>Notities</label>
-            <textarea value={form.notes} onChange={e => set('notes', e.target.value)} disabled={!canEdit || busy} />
+            <MentionEditor value={form.notes} onChange={v => set('notes', v)} teamMembers={teamMembers} disabled={!canEdit || busy} />
           </div>
           {activity?.dueAt && (
             <div className="f s2" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

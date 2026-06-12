@@ -37,6 +37,8 @@ import { listActivities } from './services/activityService.js';
 import { getOffertes } from './services/offerteService.js';
 import { getWerkbonnen } from './services/werkbonService.js';
 import { ActivityEditModal, NewActivityModal, NewLeadModal, ProfileModal } from './components/SharedModals.jsx';
+import { supabase } from './lib/supabase.js';
+import { listNotifications, markNotificationRead, markAllNotificationsRead } from './services/notificatieService.js';
 
 // ── NAV CONFIG ───────────────────────────────────────────────
 const NAV = [
@@ -201,6 +203,8 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
   const [notifData, setNotifData] = useState({ overdue: [], today: [], leads: [], offertes: [], werkbonnen: [] });
   const [notifActivity, setNotifActivity] = useState(null);
   const [notifCustomers, setNotifCustomers] = useState([]);
+  const [dbNotifs, setDbNotifs] = useState([]);
+  const [markingAll, setMarkingAll] = useState(false);
   const wrapRef = useRef(null);
 
   const close = () => setOpenMenu(null);
@@ -246,9 +250,45 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
     }
   }, []);
 
+  // Load DB notifications
+  const loadDbNotifs = useCallback(async () => {
+    try { setDbNotifs(await listNotifications()); } catch { /* ignore */ }
+  }, []);
+
   useEffect(() => {
-    if (openMenu === 'notif') loadNotifications();
-  }, [openMenu, loadNotifications]);
+    if (openMenu === 'notif') { loadNotifications(); loadDbNotifs(); }
+  }, [openMenu, loadNotifications, loadDbNotifs]);
+
+  // Initial DB notifs load (for unread dot)
+  useEffect(() => { loadDbNotifs(); }, [loadDbNotifs, refreshKey]);
+
+  // Realtime subscription on notifications table
+  useEffect(() => {
+    if (!profile?.id) return;
+    const channel = supabase
+      .channel(`notif-${profile.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'notifications',
+        filter: `user_id=eq.${profile.id}`,
+      }, payload => {
+        setDbNotifs(prev => [{
+          id: payload.new.id,
+          userId: payload.new.user_id,
+          type: payload.new.type,
+          title: payload.new.title,
+          body: payload.new.body || '',
+          link: payload.new.link || '',
+          relatedType: payload.new.related_type || '',
+          relatedId: payload.new.related_id || null,
+          createdBy: payload.new.created_by || null,
+          createdByName: '',
+          readAt: null,
+          createdAt: payload.new.created_at,
+        }, ...prev]);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [profile?.id]);
 
   // Keep search data fresh after global mutations
   useEffect(() => {
@@ -277,7 +317,8 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
   }, [search, searchData]);
 
   const totalNotifs = notifData.overdue.length + notifData.today.length + notifData.leads.length + notifData.offertes.length + notifData.werkbonnen.length;
-  const hasUnread = totalNotifs > 0;
+  const dbUnread = dbNotifs.filter(n => !n.readAt).length;
+  const hasUnread = totalNotifs > 0 || dbUnread > 0;
 
   return (
     <>
@@ -369,12 +410,73 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
           {openMenu === 'notif' && (
             <div className="tb-pop">
               <div className="tb-pop-hd">
-                <span>Meldingen</span>
-                <small>{totalNotifs} nieuw</small>
+                <span>Notificaties{dbUnread > 0 ? ` · ${dbUnread} ongelezen` : ''}</span>
+                {dbUnread > 0 && (
+                  <button
+                    className="btn btn-ghost btn-xs"
+                    disabled={markingAll}
+                    onClick={async () => {
+                      setMarkingAll(true);
+                      await markAllNotificationsRead().catch(() => {});
+                      await loadDbNotifs();
+                      setMarkingAll(false);
+                    }}
+                    style={{ fontSize: 11 }}
+                  >
+                    Alles gelezen
+                  </button>
+                )}
               </div>
               <div className="tb-pop-list">
-                {totalNotifs === 0 && (
+                {/* ── DB-backed notifications ── */}
+                {dbNotifs.length === 0 && totalNotifs === 0 && (
                   <div className="tb-pop-empty">Geen nieuwe notificaties</div>
+                )}
+                {dbNotifs.map(n => {
+                  const isUnread = !n.readAt;
+                  const icon = n.type === 'mention' ? '@'
+                    : n.type.startsWith('toewijzing') ? '→' : '●';
+                  const handleClick = async () => {
+                    if (isUnread) {
+                      await markNotificationRead(n.id).catch(() => {});
+                      setDbNotifs(prev => prev.map(x => x.id === n.id ? { ...x, readAt: new Date().toISOString() } : x));
+                    }
+                    close();
+                    if (n.link) {
+                      const parts = n.link.split('/');
+                      if (parts[0]) navigatePage(parts[0]);
+                    }
+                  };
+                  const ago = (() => {
+                    const diff = Date.now() - new Date(n.createdAt).getTime();
+                    const m = Math.floor(diff / 60000);
+                    if (m < 1) return 'zojuist';
+                    if (m < 60) return `${m} min geleden`;
+                    const h = Math.floor(m / 60);
+                    if (h < 24) return `${h} uur geleden`;
+                    return `${Math.floor(h / 24)} dagen geleden`;
+                  })();
+                  return (
+                    <button key={n.id} className="tb-pop-item" onClick={handleClick}
+                      style={{ background: isUnread ? 'var(--pll)' : undefined }}>
+                      <div className="tb-pop-icon" style={{ background: n.type === 'mention' ? 'var(--p)' : undefined, color: n.type === 'mention' ? '#fff' : undefined, fontWeight: 800 }}>
+                        {icon}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="tb-pop-title">{n.title}</div>
+                        {n.body && <div className="tb-pop-sub" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.body}</div>}
+                        <div style={{ fontSize: 10, color: 'var(--dl)', marginTop: 2 }}>{ago}</div>
+                      </div>
+                      {isUnread && <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--p)', flexShrink: 0 }} />}
+                    </button>
+                  );
+                })}
+
+                {/* ── Ephemere notificaties (activiteiten, leads, etc.) ── */}
+                {(totalNotifs > 0 && dbNotifs.length > 0) && (
+                  <div style={{ padding: '4px 14px', fontSize: 10, fontWeight: 700, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.06em', borderTop: '1px solid var(--border)', marginTop: 4 }}>
+                    Automatisch
+                  </div>
                 )}
                 {notifData.overdue.map(a => (
                   <button key={`o-${a.id}`} className="tb-pop-item" onClick={() => { close(); setNotifActivity(a); }}>
