@@ -71,9 +71,9 @@ export async function inviteTeamMember(input) {
     .single()
   if (error) throw error
 
-  // Stuur uitnodigingsmail
-  const inviteUrl = `${window.location.origin}/uitnodiging/${inviteToken}`
-  const inviteeName = input.full_name || input.fullName || input.email
+  // Stuur uitnodigingsmail — altijd productie URL, ook bij lokale ontwikkeling
+  const INVITE_BASE = 'https://www.bossbase.nl'
+  const inviteUrl = `${INVITE_BASE}/uitnodiging/${inviteToken}`
   const html = `
 <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
   <div style="margin-bottom:24px">
@@ -97,18 +97,26 @@ export async function inviteTeamMember(input) {
   </p>
 </div>`
 
-  try {
-    await sendEmail({
-      to: input.email.trim().toLowerCase(),
-      subject: `Je bent uitgenodigd voor ${companyName} op BossBase`,
-      html,
-      fromName: companyName,
-    })
-  } catch (e) {
-    console.warn('[team] uitnodigingsmail mislukt:', e.message)
-  }
+  const member = toTeamMember(data)
 
-  return toTeamMember(data)
+  console.log('[team] Uitnodigingsmail versturen →', { to: input.email.trim().toLowerCase(), inviteUrl })
+  const emailErr = await sendEmail({
+    to: input.email.trim().toLowerCase(),
+    subject: `Je bent uitgenodigd voor ${companyName} op BossBase`,
+    html,
+    fromName: companyName,
+  }).then(() => {
+    console.log('[team] Uitnodigingsmail verstuurd ✓')
+    return null
+  }).catch(e => {
+    console.error('[team] Uitnodigingsmail MISLUKT:', e)
+    return e
+  })
+
+  if (emailErr) {
+    return { ...member, emailSent: false, emailError: emailErr.message }
+  }
+  return { ...member, emailSent: true }
 }
 
 // ── BEWERKEN ─────────────────────────────────────────────────────────────────

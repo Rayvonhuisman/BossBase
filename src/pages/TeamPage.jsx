@@ -48,7 +48,11 @@ function InviteModal({ onClose, onSaved }) {
     setSaving(true);
     try {
       const result = await inviteTeamMember(form);
-      toast.success('Uitnodiging verstuurd');
+      if (result.emailSent === false) {
+        toast.error(`Teamlid toegevoegd maar e-mail niet verstuurd: ${result.emailError || 'onbekende fout'}`);
+      } else {
+        toast.success('Uitnodiging verstuurd');
+      }
       onSaved?.(result);
       onClose();
     } catch (err) {
