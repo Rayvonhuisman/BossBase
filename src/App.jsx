@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { I, Logo, initials } from './bb-shared.jsx';
 import { LoginPage, RegisterFlow } from './pages/BbAuth.jsx';
+import { ResetPasswordPage } from './pages/ResetPasswordPage.jsx';
+import { UitnodigingPage } from './pages/UitnodigingPage.jsx';
 import OfferteSigneren from './pages/OfferteSigneren.jsx';
 import { DashboardHome } from './pages/dashboard/DashboardHome.jsx';
 import { Pipeline } from './pages/BbDashboard.jsx';
@@ -1094,6 +1096,15 @@ function AppInner() {
       onBack={() => navigate('/login')}
     />
     );
+  }
+
+  if (route === '/reset-password') {
+    return <ResetPasswordPage navigate={navigate} />;
+  }
+
+  if (route.startsWith('/uitnodiging/')) {
+    const token = route.replace('/uitnodiging/', '').split('?')[0];
+    return <UitnodigingPage token={token} navigate={navigate} />;
   }
 
   if (route.startsWith('/offerte/')) {

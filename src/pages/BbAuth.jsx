@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { I, Logo } from '../bb-shared.jsx';
-import { loginWithEmail, registerWithEmail } from '../services/authService.js';
+import { loginWithEmail, registerWithEmail, resetPasswordForEmail, resendVerificationEmail } from '../services/authService.js';
 
 const TRADES = [
   { icon: '🖌️', label: 'Schilder' }, { icon: '🌿', label: 'Hovenier' },
@@ -14,9 +14,19 @@ export function LoginPage({ onLogin, onRegister }) {
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [unconfirmed, setUnconfirmed] = useState(false); // email not confirmed yet
+  // forgot password state: null | 'form' | 'sent'
+  const [forgot, setForgot] = useState(null);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState('');
+  const [resendLoading, setResendLoading] = useState(false);
+
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
   const submit = async () => {
     setError('');
+    setUnconfirmed(false);
     if (!/^\S+@\S+\.\S+$/.test(form.email)) return setError('Vul een geldig e-mailadres in.');
     if (!form.password) return setError('Vul je wachtwoord in.');
     setLoading(true);
@@ -24,11 +34,109 @@ export function LoginPage({ onLogin, onRegister }) {
       await loginWithEmail(form.email, form.password);
       onLogin();
     } catch (err) {
-      setError(err.message || 'Inloggen is mislukt.');
+      const msg = err.message || '';
+      if (/not confirmed|email.*confirm/i.test(msg)) {
+        setUnconfirmed(true);
+      } else {
+        setError(msg || 'Inloggen is mislukt.');
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  const sendReset = async () => {
+    setForgotError('');
+    if (!/^\S+@\S+\.\S+$/.test(forgotEmail)) return setForgotError('Vul een geldig e-mailadres in.');
+    setForgotLoading(true);
+    try {
+      await resetPasswordForEmail(forgotEmail);
+      setForgot('sent');
+    } catch (err) {
+      setForgotError(err.message || 'Versturen mislukt.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const resendConfirmation = async () => {
+    setResendLoading(true);
+    try {
+      await resendVerificationEmail(form.email);
+      setError('');
+      setUnconfirmed(false);
+      setError('Verificatiemail opnieuw verstuurd. Check je inbox.');
+    } catch {
+      // ignore
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
+  // ── Forgot: bevestiging verstuurd ────────────────────────────────────────
+  if (forgot === 'sent') {
+    return (
+      <div className="auth-shell">
+        <div className="auth-card afu">
+          <div className="auth-logo"><Logo /></div>
+          <div style={{ textAlign: 'center', marginBottom: 16 }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>📬</div>
+            <div className="auth-title" style={{ marginBottom: 6 }}>Check je e-mail</div>
+            <div className="auth-sub">
+              We hebben een resetlink gestuurd naar <strong>{forgotEmail}</strong>.
+              Klik op de link in de mail om je wachtwoord opnieuw in te stellen.
+            </div>
+          </div>
+          <div className="auth-link" style={{ textAlign: 'center' }}>
+            <a href="#" onClick={e => { e.preventDefault(); setForgot(null); }}>
+              Terug naar inloggen
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Forgot: e-mailinvoer ─────────────────────────────────────────────────
+  if (forgot === 'form') {
+    return (
+      <div className="auth-shell">
+        <div className="auth-card afu">
+          <div className="auth-logo"><Logo /></div>
+          <div className="auth-title">Wachtwoord vergeten</div>
+          <div className="auth-sub">
+            Vul je e-mailadres in en we sturen je een resetlink.
+          </div>
+          <div className="auth-field">
+            <label>E-mailadres</label>
+            <input
+              type="email"
+              value={forgotEmail}
+              onChange={e => setForgotEmail(e.target.value)}
+              placeholder="je@bedrijf.nl"
+              autoFocus
+              onKeyDown={e => { if (e.key === 'Enter') sendReset(); }}
+            />
+          </div>
+          {forgotError && (
+            <div style={{ color: '#dc2626', fontSize: '.78rem', fontWeight: 600, marginBottom: 10 }}>
+              {forgotError}
+            </div>
+          )}
+          <button className="auth-submit" onClick={sendReset} disabled={forgotLoading}>
+            {forgotLoading ? 'Versturen…' : 'Stuur resetlink →'}
+          </button>
+          <div className="auth-link">
+            <a href="#" onClick={e => { e.preventDefault(); setForgot(null); }}>
+              Terug naar inloggen
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Normaal inlogscherm ──────────────────────────────────────────────────
   return (
     <div className="auth-shell">
       <div className="auth-card afu">
@@ -44,11 +152,26 @@ export function LoginPage({ onLogin, onRegister }) {
         </div>
         <div className="auth-field">
           <label>Wachtwoord</label>
-          <input type="password" value={form.password} onChange={e => set('password', e.target.value)} placeholder="••••••••" />
+          <input type="password" value={form.password} onChange={e => set('password', e.target.value)} placeholder="••••••••"
+            onKeyDown={e => { if (e.key === 'Enter') submit(); }} />
         </div>
-        {error && <div style={{ color: '#dc2626', fontSize: '.78rem', fontWeight: 600, marginBottom: 10 }}>{error}</div>}
+        {unconfirmed ? (
+          <div style={{ background: '#fef9c3', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: '.8rem', color: '#92400e' }}>
+            <strong>E-mail nog niet bevestigd.</strong> Check je inbox voor de verificatiemail.
+            <br />
+            <button onClick={resendLoading ? undefined : resendConfirmation} disabled={resendLoading}
+              style={{ marginTop: 6, background: 'none', border: 'none', padding: 0, color: '#92400e', textDecoration: 'underline', cursor: 'pointer', fontSize: '.8rem', fontWeight: 600 }}>
+              {resendLoading ? 'Versturen…' : 'Verificatiemail opnieuw sturen'}
+            </button>
+          </div>
+        ) : error ? (
+          <div style={{ color: '#dc2626', fontSize: '.78rem', fontWeight: 600, marginBottom: 10 }}>{error}</div>
+        ) : null}
         <div style={{ textAlign: 'right', marginBottom: 4 }}>
-          <a href="#" style={{ fontSize: '.78rem', color: 'var(--pd)', fontWeight: 600 }}>Wachtwoord vergeten?</a>
+          <a href="#" onClick={e => { e.preventDefault(); setForgotEmail(form.email); setForgot('form'); }}
+            style={{ fontSize: '.78rem', color: 'var(--pd)', fontWeight: 600 }}>
+            Wachtwoord vergeten?
+          </a>
         </div>
         <button className="auth-submit" onClick={submit} disabled={loading}>{loading ? 'Bezig...' : 'Inloggen →'}</button>
         <div className="auth-divider"><span>of</span></div>
@@ -67,6 +190,8 @@ export function RegisterFlow({ onDone, onBack }) {
   const [form, setForm] = useState({ fullName: '', email: '', password: '', companyName: '', phone: '', kvk: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [needsConfirmation, setNeedsConfirmation] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const steps = ['Account', 'Bedrijf', 'Setup', 'Team'];
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -102,13 +227,23 @@ export function RegisterFlow({ onDone, onBack }) {
     setLoading(true);
     setError('');
     try {
-      await registerWithEmail({ ...form, trade });
-      onDone();
+      const result = await registerWithEmail({ ...form, trade });
+      if (result?.requiresConfirmation) {
+        setNeedsConfirmation(true);
+      } else {
+        onDone();
+      }
     } catch (err) {
       setError(err.message || 'Registreren is mislukt.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const resendConfirmation = async () => {
+    setResendLoading(true);
+    try { await resendVerificationEmail(form.email); } catch { /* ignore */ }
+    finally { setResendLoading(false); }
   };
 
   const stepTitles = ['Maak je account aan', 'Vertel over je bedrijf', 'Hoe werk je?', 'Nodig je team uit'];
@@ -131,6 +266,34 @@ export function RegisterFlow({ onDone, onBack }) {
       ))}
     </div>
   );
+
+  if (needsConfirmation) {
+    return (
+      <div className="auth-shell">
+        <div className="auth-card afu">
+          <div className="auth-logo"><Logo /></div>
+          <div style={{ textAlign: 'center', marginBottom: 16 }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>📬</div>
+            <div className="auth-title" style={{ marginBottom: 6 }}>Bevestig je e-mailadres</div>
+            <div className="auth-sub">
+              We hebben een verificatiemail gestuurd naar <strong>{form.email}</strong>.
+              Klik op de link in de mail om je account te activeren.
+            </div>
+          </div>
+          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 9, padding: '12px 16px', fontSize: '.82rem', color: '#166534', marginBottom: 16, lineHeight: 1.6 }}>
+            Geen mail ontvangen? Check ook je spammap. De mail kan soms even duren.
+          </div>
+          <button className="btn btn-s" style={{ width: '100%', justifyContent: 'center', marginBottom: 10 }}
+            onClick={resendConfirmation} disabled={resendLoading}>
+            {resendLoading ? 'Versturen…' : 'Verificatiemail opnieuw sturen'}
+          </button>
+          <div className="auth-link" style={{ textAlign: 'center' }}>
+            <a href="#" onClick={e => { e.preventDefault(); onBack(); }}>Terug naar inloggen</a>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="auth-shell">

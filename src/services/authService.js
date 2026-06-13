@@ -127,6 +127,22 @@ export async function logout() {
   if (error) throw error
 }
 
+export async function resetPasswordForEmail(email) {
+  const redirectTo = `${window.location.origin}/reset-password`
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
+  if (error) throw error
+}
+
+export async function updatePassword(newPassword) {
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
+  if (error) throw error
+}
+
+export async function resendVerificationEmail(email) {
+  const { error } = await supabase.auth.resend({ type: 'signup', email })
+  if (error) throw error
+}
+
 // Repair flow: recreate company + profile from auth metadata if signup didn't
 // complete cleanly. Used by the "Geen profiel gevonden" error state.
 export async function createMissingProfile() {
