@@ -76,16 +76,37 @@ export async function requestPasswordReset(email) {
   if (!data?.success) throw new Error(data?.error || 'Versturen mislukt')
 }
 
+// Valideert het reset token zonder wachtwoord in te stellen.
+// Geeft { valid: true } of { valid: false, code: 'EXPIRED'|'USED'|'INVALID', error: string }
+export async function validateResetToken(token) {
+  const { data, error } = await supabase.functions.invoke('apply-password-reset', {
+    body: { token, checkOnly: true },
+  })
+  if (error) {
+    let parsed = null
+    try { parsed = await error.context?.json() } catch {}
+    return { valid: false, code: parsed?.code || 'INVALID', error: parsed?.error || error.message }
+  }
+  if (!data?.success) return { valid: false, code: data?.code || 'INVALID', error: data?.error || 'Ongeldige link' }
+  return { valid: true, code: 'VALID' }
+}
+
 export async function applyPasswordReset(token, newPassword) {
   const { data, error } = await supabase.functions.invoke('apply-password-reset', {
     body: { token, newPassword },
   })
   if (error) {
-    let message = error.message
-    try { const b = await error.context?.json(); if (b?.error) message = b.error } catch {}
-    throw new Error(message)
+    let parsed = null
+    try { parsed = await error.context?.json() } catch {}
+    const err = new Error(parsed?.error || error.message || 'Wachtwoord instellen mislukt')
+    err.code = parsed?.code || 'ERROR'
+    throw err
   }
-  if (!data?.success) throw new Error(data?.error || 'Wachtwoord instellen mislukt')
+  if (!data?.success) {
+    const err = new Error(data?.error || 'Wachtwoord instellen mislukt')
+    err.code = data?.code || 'ERROR'
+    throw err
+  }
 }
 
 export async function resendVerificationEmail(email) {
