@@ -130,17 +130,30 @@ export async function inviteTeamMember(input) {
 
   const member = toTeamMember(data)
 
-  console.log('[team] Uitnodigingsmail versturen →', { to: input.email.trim().toLowerCase(), inviteUrl, inviterName, roleLabel })
-  const emailErr = await sendEmail({
+  const mailPayload = {
     to: input.email.trim().toLowerCase(),
     subject: `Je bent uitgenodigd voor ${companyName} op BossBase`,
+    from_name: companyName,
+    inviteUrl,
+    inviterName,
+    roleLabel,
+  }
+  console.log('[invite-mail] Payload die verstuurd wordt →', mailPayload)
+
+  const emailErr = await sendEmail({
+    to: mailPayload.to,
+    subject: mailPayload.subject,
     html,
     fromName: companyName,
-  }).then(() => {
-    console.log('[team] Uitnodigingsmail verstuurd ✓')
+  }).then(response => {
+    console.log('[invite-mail] send-email response ✓', response)
     return null
   }).catch(e => {
-    console.error('[team] Uitnodigingsmail MISLUKT:', e)
+    console.error('[invite-mail] send-email MISLUKT', {
+      message: e.message,
+      stack: e.stack,
+      error: e,
+    })
     return e
   })
 

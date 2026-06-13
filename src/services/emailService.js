@@ -43,10 +43,14 @@ export async function sendEmail({ to, subject, html, fromName, attachments }) {
   const resolvedFromName = fromName !== undefined ? fromName : await getCompanyName()
   const body = { to, subject, html, from_name: resolvedFromName }
   if (attachments?.length) body.attachments = attachments
+
+  console.log('[sendEmail] invoke send-email →', { to, subject, from_name: resolvedFromName })
   const { data, error } = await supabase.functions.invoke('send-email', { body })
+  console.log('[sendEmail] raw response →', { data, error: error ? { message: error.message, status: error.status, context: error.context } : null })
+
   if (error) {
     let message = error.message
-    try { const b = await error.context?.json(); if (b?.error) message = b.error } catch {}
+    try { const b = await error.context?.json(); console.log('[sendEmail] error body →', b); if (b?.error) message = b.error } catch {}
     throw new Error(message)
   }
   if (!data?.success) throw new Error(data?.error || 'Versturen mislukt')
