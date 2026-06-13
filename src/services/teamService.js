@@ -41,7 +41,7 @@ export async function inviteTeamMember(input) {
   const inviteToken = crypto.randomUUID()
   const inviteExpiresAt = new Date(Date.now() + 48 * 3600 * 1000).toISOString()
 
-  // Haal bedrijfsnaam op voor de uitnodigingsmail
+  // Haal bedrijfsnaam en naam uitnodiger op voor de uitnodigingsmail
   const companyId = await getCompanyId()
   let companyName = 'BossBase'
   if (companyId) {
@@ -49,11 +49,22 @@ export async function inviteTeamMember(input) {
     if (co?.name) companyName = co.name
   }
 
+  let inviterName = 'BossBase'
+  const { data: { user: currentUser } } = await supabase.auth.getUser()
+  if (currentUser) {
+    const { data: prof } = await supabase.from('profiles').select('full_name').eq('id', currentUser.id).maybeSingle()
+    if (prof?.full_name) inviterName = prof.full_name
+  }
+
+  const role = input.role || "medewerker"
+  const roleLabels = { admin: 'Beheerder', medewerker: 'Medewerker', manager: 'Manager' }
+  const roleLabel = roleLabels[role] || role
+
   const base = {
     email: input.email.trim().toLowerCase(),
     full_name: input.full_name || input.fullName || null,
     phone: input.phone || null,
-    role: input.role || "medewerker",
+    role,
     status: "uitgenodigd",
     hours_per_week: Number(input.hours_per_week || input.hoursPerWeek || 0),
     profile_id: null,
@@ -71,35 +82,55 @@ export async function inviteTeamMember(input) {
     .single()
   if (error) throw error
 
-  // Stuur uitnodigingsmail — altijd productie URL, ook bij lokale ontwikkeling
-  const INVITE_BASE = 'https://www.bossbase.nl'
-  const inviteUrl = `${INVITE_BASE}/uitnodiging/${inviteToken}`
+  // Uitnodigingsmail — altijd productie URL
+  const inviteUrl = `https://www.bossbase.nl/uitnodiging/${inviteToken}`
+  const inviteeName = input.full_name || input.fullName || input.email
   const html = `
-<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
-  <div style="margin-bottom:24px">
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#ffffff">
+  <div style="margin-bottom:32px">
     <span style="font-size:22px;font-weight:900;color:#1DDB62;letter-spacing:-0.5px">Boss<span style="color:#0a0a0a">Base</span></span>
   </div>
-  <h2 style="font-size:20px;font-weight:800;color:#0a0a0a;margin:0 0 8px">Je bent uitgenodigd!</h2>
-  <p style="color:#4b5563;margin:0 0 20px">
-    Je bent uitgenodigd om deel te nemen aan <strong>${companyName}</strong> op BossBase.
+
+  <h2 style="font-size:22px;font-weight:800;color:#0a0a0a;margin:0 0 20px 0">Je bent uitgenodigd!</h2>
+
+  <p style="color:#374151;font-size:15px;line-height:1.6;margin:0 0 12px 0">
+    Hallo ${inviteeName},
   </p>
-  <p style="color:#4b5563;margin:0 0 28px">
-    Klik op de knop hieronder om je account aan te maken en direct aan de slag te gaan.
-    Deze uitnodiging is 48 uur geldig.
+
+  <p style="color:#374151;font-size:15px;line-height:1.6;margin:0 0 12px 0">
+    <strong>${inviterName}</strong> heeft je uitgenodigd om deel uit te maken van
+    <strong>${companyName}</strong> op BossBase.
   </p>
+
+  <p style="color:#374151;font-size:15px;line-height:1.6;margin:0 0 28px 0">
+    Je krijgt de rol: <strong>${roleLabel}</strong>
+  </p>
+
   <a href="${inviteUrl}"
      style="display:inline-block;background:#1DDB62;color:#0a0a0a;font-weight:800;
-            font-size:15px;padding:14px 28px;border-radius:10px;text-decoration:none">
+            font-size:15px;padding:14px 28px;border-radius:10px;text-decoration:none;
+            letter-spacing:-0.2px">
     Accepteer uitnodiging →
   </a>
-  <p style="color:#9ca3af;font-size:12px;margin-top:28px">
-    Als je deze uitnodiging niet verwachtte, kun je deze e-mail negeren.
+
+  <p style="color:#6b7280;font-size:13px;margin:28px 0 8px 0">
+    Deze uitnodiging is 48 uur geldig.
+  </p>
+
+  <p style="color:#9ca3af;font-size:12px;margin:0 0 28px 0">
+    Als je deze uitnodiging niet verwacht hebt, kun je deze mail negeren.
+  </p>
+
+  <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 20px 0" />
+
+  <p style="color:#6b7280;font-size:13px;margin:0">
+    Met vriendelijke groet,<br>het BossBase team
   </p>
 </div>`
 
   const member = toTeamMember(data)
 
-  console.log('[team] Uitnodigingsmail versturen →', { to: input.email.trim().toLowerCase(), inviteUrl })
+  console.log('[team] Uitnodigingsmail versturen →', { to: input.email.trim().toLowerCase(), inviteUrl, inviterName, roleLabel })
   const emailErr = await sendEmail({
     to: input.email.trim().toLowerCase(),
     subject: `Je bent uitgenodigd voor ${companyName} op BossBase`,
