@@ -863,8 +863,10 @@ function AppInner() {
       if (ctx.profileError) {
         if (import.meta?.env?.DEV) console.warn('[bb:profile] error:', ctx.profileError);
         setProfileError(ctx.profileError);
-      } else if (ctx.user && !ctx.profile) {
-        // Profiel ontbreekt — probeer automatisch aan te maken zonder foutscherm.
+      } else if (ctx.user && (!ctx.profile || !ctx.profile.companyId)) {
+        // Profiel ontbreekt OF profiel heeft nog geen company_id (trigger maakte
+        // een minimaal profiel aan tijdens email-confirmatie-flow).
+        // Probeer automatisch te herstellen zonder foutscherm.
         try {
           await createMissingProfile();
           const ctx2 = await getCurrentUserContext();
@@ -872,7 +874,7 @@ function AppInner() {
           setProfile(ctx2.profile);
           setCompany(ctx2.company);
           if (ctx2.profile?.companyId) setCompanyId(ctx2.profile.companyId);
-          if (!ctx2.profile) {
+          if (!ctx2.profile || !ctx2.profile.companyId) {
             setProfileError({ code: 'missing', message: 'Geen profiel gevonden voor dit account.' });
           }
         } catch (repairErr) {
