@@ -66,8 +66,8 @@ async function ensureDefaultPipelineStages(companyId) {
 }
 
 export async function registerWithEmail({ email, password, fullName, companyName, phone, kvk }) {
-  // 1. Create the auth user. Stash full_name and company_name in metadata so a
-  //    later "repair profile" flow can recover the values if step 2 or 3 fails.
+  // 1. Maak auth gebruiker aan. Metadata wordt gebruikt door de DB-trigger
+  //    om automatisch een profiel aan te maken.
   const signup = await supabase.auth.signUp({
     email,
     password,
@@ -75,14 +75,30 @@ export async function registerWithEmail({ email, password, fullName, companyName
   })
   if (signup.error) throw signup.error
 
-  const user = signup.data.user
-  if (!user) {
-    // Email-confirmation flow — UI will need to wait for the user to confirm.
+  // Geen sessie = email-bevestiging vereist. Trigger maakt profiel al aan.
+  // Company wordt aangemaakt bij eerste login via createMissingProfile.
+  if (!signup.data.session) {
     return { ...signup.data, requiresConfirmation: true }
   }
 
-  // 2. Create the company. New schema: name is required; the rest are optional
-  //    string columns. We drop unknown columns (e.g. legacy `trade`) on retry.
+  const user = signup.data.user
+
+  // 2. Wacht tot de trigger het profiel heeft aangemaakt (max 5 seconden).
+  let profileExists = false
+  for (let i = 0; i < 10; i++) {
+    await new Promise(r => setTimeout(r, 500))
+    const { data } = await supabase.from("profiles").select("id").eq("id", user.id).maybeSingle()
+    if (data) { profileExists = true; break }
+  }
+  // Fallback: trigger vuurde niet — maak profiel handmatig aan.
+  if (!profileExists) {
+    const { error: fallbackErr } = await supabase
+      .from("profiles")
+      .upsert({ id: user.id, full_name: fullName, role: "admin" }, { onConflict: "id", ignoreDuplicates: true })
+    if (fallbackErr) throw new Error(`Profiel aanmaken mislukt: ${fallbackErr.message}`)
+  }
+
+  // 3. Maak het bedrijf aan.
   const companyPayload = {
     name: companyName,
     email: email || null,
@@ -95,28 +111,16 @@ export async function registerWithEmail({ email, password, fullName, companyName
   }
   const company = companyResult.data
 
-  // 3. Create the profile row keyed on auth.user.id. Schema: id, company_id,
-  //    full_name, role. We use insert (not upsert) so duplicate-key errors are
-  //    visible — if a trigger already created the row we update instead.
-  const profilePayload = {
-    id: user.id,
-    company_id: company.id,
-    full_name: fullName,
-    role: "admin",
-  }
-  let { error: profileError } = await supabase.from("profiles").insert(profilePayload)
-  if (profileError && /duplicate|already exists|conflict/i.test(profileError.message)) {
-    const upd = await supabase
-      .from("profiles")
-      .update({ company_id: company.id, full_name: fullName, role: "admin" })
-      .eq("id", user.id)
-    profileError = upd.error
-  }
-  if (profileError) {
-    throw new Error(`Profiel aanmaken mislukt: ${profileError.message}`)
+  // 4. Koppel profiel aan het bedrijf (UPDATE — trigger had company_id nog niet).
+  const { error: updateErr } = await supabase
+    .from("profiles")
+    .update({ company_id: company.id, full_name: fullName, role: "admin" })
+    .eq("id", user.id)
+  if (updateErr) {
+    throw new Error(`Profiel bijwerken mislukt: ${updateErr.message}`)
   }
 
-  // 4. Best-effort seed of default pipeline stages.
+  // 5. Seed pipeline stages.
   try { await ensureDefaultPipelineStages(company.id) } catch { /* non-fatal */ }
 
   return { ...signup.data, company }
