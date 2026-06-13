@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { I, Logo } from '../bb-shared.jsx';
-import { loginWithEmail, registerWithEmail, resetPasswordForEmail, resendVerificationEmail } from '../services/authService.js';
+import { loginWithEmail, registerWithEmail, requestPasswordReset, resendVerificationEmail } from '../services/authService.js';
 import { PasswordRequirements, PasswordMatch, passwordValid } from '../components/PasswordStrength.jsx';
 
 const TRADES = [
@@ -51,7 +51,7 @@ export function LoginPage({ onLogin, onRegister }) {
     if (!/^\S+@\S+\.\S+$/.test(forgotEmail)) return setForgotError('Vul een geldig e-mailadres in.');
     setForgotLoading(true);
     try {
-      await resetPasswordForEmail(forgotEmail);
+      await requestPasswordReset(forgotEmail);
       setForgot('sent');
     } catch (err) {
       setForgotError(err.message || 'Versturen mislukt.');

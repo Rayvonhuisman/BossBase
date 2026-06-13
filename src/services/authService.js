@@ -63,15 +63,29 @@ export async function logout() {
   if (error) throw error
 }
 
-export async function resetPasswordForEmail(email) {
-  const redirectTo = `${window.location.origin}/reset-password`
-  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
-  if (error) throw error
+// Eigen reset flow via edge function + Resend — Supabase auth reset mail wordt NIET gebruikt
+export async function requestPasswordReset(email) {
+  const { data, error } = await supabase.functions.invoke('request-password-reset', {
+    body: { email },
+  })
+  if (error) {
+    let message = error.message
+    try { const b = await error.context?.json(); if (b?.error) message = b.error } catch {}
+    throw new Error(message)
+  }
+  if (!data?.success) throw new Error(data?.error || 'Versturen mislukt')
 }
 
-export async function updatePassword(newPassword) {
-  const { error } = await supabase.auth.updateUser({ password: newPassword })
-  if (error) throw error
+export async function applyPasswordReset(token, newPassword) {
+  const { data, error } = await supabase.functions.invoke('apply-password-reset', {
+    body: { token, newPassword },
+  })
+  if (error) {
+    let message = error.message
+    try { const b = await error.context?.json(); if (b?.error) message = b.error } catch {}
+    throw new Error(message)
+  }
+  if (!data?.success) throw new Error(data?.error || 'Wachtwoord instellen mislukt')
 }
 
 export async function resendVerificationEmail(email) {

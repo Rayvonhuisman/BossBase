@@ -1112,7 +1112,8 @@ function AppInner() {
   }
 
   if (route === '/reset-password') {
-    return <ResetPasswordPage navigate={navigate} />;
+    const resetToken = new URLSearchParams(window.location.search).get('token') || '';
+    return <ResetPasswordPage token={resetToken} navigate={navigate} />;
   }
 
   if (route.startsWith('/uitnodiging/')) {

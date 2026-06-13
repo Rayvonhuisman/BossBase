@@ -1,43 +1,37 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Logo } from '../bb-shared.jsx';
-import { updatePassword } from '../services/authService.js';
-import { supabase } from '../lib/supabase.js';
+import { applyPasswordReset } from '../services/authService.js';
 import { PasswordRequirements, PasswordMatch, passwordValid } from '../components/PasswordStrength.jsx';
 
-export function ResetPasswordPage({ navigate }) {
+export function ResetPasswordPage({ token, navigate }) {
   const [password, setPassword]   = useState('');
   const [password2, setPassword2] = useState('');
-  const [ready, setReady]         = useState(false);
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState('');
   const [done, setDone]           = useState(false);
 
   const canSubmit = passwordValid(password) && password === password2 && password2.length > 0;
 
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') setReady(true);
-    });
-    supabase.auth.getSession().then(({ data }) => {
-      if (data?.session) setReady(true);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const submit = async () => {
-    if (!canSubmit) return;
-    setError('');
-    setLoading(true);
-    try {
-      await updatePassword(password);
-      await supabase.auth.signOut();
-      setDone(true);
-    } catch (err) {
-      setError(err.message || 'Opslaan mislukt.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Geen token in URL → ongeldige link
+  if (!token) {
+    return (
+      <div className="auth-shell">
+        <div className="auth-card afu">
+          <div className="auth-logo"><Logo /></div>
+          <div style={{ textAlign: 'center', marginBottom: 16 }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🔗</div>
+            <div className="auth-title" style={{ marginBottom: 6 }}>Ongeldige resetlink</div>
+            <div className="auth-sub">
+              Deze link is ongeldig of al gebruikt. Vraag een nieuwe wachtwoordreset aan.
+            </div>
+          </div>
+          <button className="auth-submit" onClick={() => navigate('/login')}>
+            Terug naar inloggen →
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (done) {
     return (
@@ -57,25 +51,19 @@ export function ResetPasswordPage({ navigate }) {
     );
   }
 
-  if (!ready) {
-    return (
-      <div className="auth-shell">
-        <div className="auth-card afu">
-          <div className="auth-logo"><Logo /></div>
-          <div className="auth-title">Wachtwoord instellen</div>
-          <div className="auth-sub" style={{ textAlign: 'center' }}>
-            Bezig met verifiëren van je resetlink…
-          </div>
-          <div style={{ textAlign: 'center', padding: '12px 0', color: 'var(--dl)' }}>⏳</div>
-          <div className="auth-link" style={{ textAlign: 'center' }}>
-            <a href="#" onClick={e => { e.preventDefault(); navigate('/login'); }}>
-              Terug naar inloggen
-            </a>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const submit = async () => {
+    if (!canSubmit) return;
+    setError('');
+    setLoading(true);
+    try {
+      await applyPasswordReset(token, password);
+      setDone(true);
+    } catch (err) {
+      setError(err.message || 'Opslaan mislukt.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="auth-shell">
