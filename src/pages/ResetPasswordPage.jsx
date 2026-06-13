@@ -2,22 +2,22 @@ import { useEffect, useState } from 'react';
 import { Logo } from '../bb-shared.jsx';
 import { updatePassword } from '../services/authService.js';
 import { supabase } from '../lib/supabase.js';
+import { PasswordRequirements, PasswordMatch, passwordValid } from '../components/PasswordStrength.jsx';
 
 export function ResetPasswordPage({ navigate }) {
   const [password, setPassword]   = useState('');
   const [password2, setPassword2] = useState('');
-  const [ready, setReady]         = useState(false); // session established from recovery link
+  const [ready, setReady]         = useState(false);
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState('');
   const [done, setDone]           = useState(false);
 
-  // Supabase processes the recovery token in the URL hash automatically on load.
-  // We wait for the session to be set (type === 'RECOVERY').
+  const canSubmit = passwordValid(password) && password === password2 && password2.length > 0;
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') setReady(true);
     });
-    // Also check if a session already exists (e.g. page reload)
     supabase.auth.getSession().then(({ data }) => {
       if (data?.session) setReady(true);
     });
@@ -25,10 +25,8 @@ export function ResetPasswordPage({ navigate }) {
   }, []);
 
   const submit = async () => {
+    if (!canSubmit) return;
     setError('');
-    if (!password) return setError('Vul een nieuw wachtwoord in.');
-    if (password.length < 8) return setError('Gebruik minimaal 8 tekens.');
-    if (password !== password2) return setError('Wachtwoorden komen niet overeen.');
     setLoading(true);
     try {
       await updatePassword(password);
@@ -94,6 +92,7 @@ export function ResetPasswordPage({ navigate }) {
             placeholder="Min. 8 tekens"
             autoFocus
           />
+          <PasswordRequirements password={password} />
         </div>
         <div className="auth-field">
           <label>Herhaal wachtwoord</label>
@@ -104,13 +103,14 @@ export function ResetPasswordPage({ navigate }) {
             placeholder="Nogmaals je wachtwoord"
             onKeyDown={e => { if (e.key === 'Enter') submit(); }}
           />
+          <PasswordMatch password={password} password2={password2} />
         </div>
         {error && (
           <div style={{ color: '#dc2626', fontSize: '.78rem', fontWeight: 600, marginBottom: 10 }}>
             {error}
           </div>
         )}
-        <button className="auth-submit" onClick={submit} disabled={loading}>
+        <button className="auth-submit" onClick={submit} disabled={loading || !canSubmit}>
           {loading ? 'Opslaan…' : 'Wachtwoord opslaan →'}
         </button>
         <div className="auth-link">

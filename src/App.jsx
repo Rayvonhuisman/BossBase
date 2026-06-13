@@ -857,18 +857,29 @@ function AppInner() {
       setUser(ctx.user);
       setProfile(ctx.profile);
       setCompany(ctx.company);
-      // Prime the company-id cache so service-layer inserts can satisfy RLS.
       if (ctx.profile?.companyId) setCompanyId(ctx.profile.companyId);
       else clearCompanyId();
-      // Two failure modes are possible and we keep them distinct:
-      //   1. SELECT succeeded with 0 rows → real missing profile → repair UI
-      //   2. SELECT errored (RLS, network) → keep dashboard usable, show toast
+
       if (ctx.profileError) {
         if (import.meta?.env?.DEV) console.warn('[bb:profile] error:', ctx.profileError);
         setProfileError(ctx.profileError);
       } else if (ctx.user && !ctx.profile) {
-        setProfileError({ code: 'missing', message: 'Geen profiel gevonden voor dit account.' });
+        // Profiel ontbreekt — probeer automatisch aan te maken zonder foutscherm.
+        try {
+          await createMissingProfile();
+          const ctx2 = await getCurrentUserContext();
+          setUser(ctx2.user);
+          setProfile(ctx2.profile);
+          setCompany(ctx2.company);
+          if (ctx2.profile?.companyId) setCompanyId(ctx2.profile.companyId);
+          if (!ctx2.profile) {
+            setProfileError({ code: 'missing', message: 'Geen profiel gevonden voor dit account.' });
+          }
+        } catch (repairErr) {
+          setProfileError({ code: 'missing', message: 'Geen profiel gevonden voor dit account.' });
+        }
       }
+
       if (ctx.companyError && import.meta?.env?.DEV) {
         console.warn('[bb:profile] company error:', ctx.companyError);
       }

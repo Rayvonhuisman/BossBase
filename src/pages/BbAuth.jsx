@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { I, Logo } from '../bb-shared.jsx';
 import { loginWithEmail, registerWithEmail, resetPasswordForEmail, resendVerificationEmail } from '../services/authService.js';
+import { PasswordRequirements, PasswordMatch, passwordValid } from '../components/PasswordStrength.jsx';
 
 const TRADES = [
   { icon: '🖌️', label: 'Schilder' }, { icon: '🌿', label: 'Hovenier' },
@@ -187,7 +188,7 @@ export function RegisterFlow({ onDone, onBack }) {
   const [step, setStep] = useState(0);
   const [trade, setTrade] = useState('');
   const [setup, setSetup] = useState('');
-  const [form, setForm] = useState({ fullName: '', email: '', password: '', companyName: '', phone: '', kvk: '' });
+  const [form, setForm] = useState({ fullName: '', email: '', password: '', password2: '', companyName: '', phone: '', kvk: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
@@ -199,9 +200,17 @@ export function RegisterFlow({ onDone, onBack }) {
     if (!form.fullName.trim()) return 'Vul je volledige naam in.';
     if (!/^\S+@\S+\.\S+$/.test(form.email)) return 'Vul een geldig e-mailadres in.';
     if (!form.password) return 'Vul een wachtwoord in.';
-    if (form.password.length < 8) return 'Gebruik minimaal 8 tekens voor je wachtwoord.';
+    if (!passwordValid(form.password)) return 'Vul een wachtwoord in dat aan alle vereisten voldoet.';
+    if (!form.password2) return 'Herhaal je wachtwoord.';
+    if (form.password !== form.password2) return 'Wachtwoorden komen niet overeen.';
     return '';
   };
+
+  const step0Valid = form.fullName.trim() &&
+    /^\S+@\S+\.\S+$/.test(form.email) &&
+    passwordValid(form.password) &&
+    form.password === form.password2 &&
+    form.password2.length > 0;
 
   const validateCompany = () => {
     if (!form.companyName.trim()) return 'Vul je bedrijfsnaam in.';
@@ -307,7 +316,16 @@ export function RegisterFlow({ onDone, onBack }) {
           <>
             <div className="auth-field"><label>Volledige naam</label><input value={form.fullName} onChange={e => set('fullName', e.target.value)} placeholder="Marco Veldhuis" /></div>
             <div className="auth-field"><label>E-mailadres</label><input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="marco@veldhuis.nl" /></div>
-            <div className="auth-field"><label>Wachtwoord</label><input type="password" value={form.password} onChange={e => set('password', e.target.value)} placeholder="Min. 8 tekens" /></div>
+            <div className="auth-field">
+              <label>Wachtwoord</label>
+              <input type="password" value={form.password} onChange={e => set('password', e.target.value)} placeholder="Min. 8 tekens" />
+              <PasswordRequirements password={form.password} />
+            </div>
+            <div className="auth-field">
+              <label>Herhaal wachtwoord</label>
+              <input type="password" value={form.password2} onChange={e => set('password2', e.target.value)} placeholder="Nogmaals je wachtwoord" />
+              <PasswordMatch password={form.password} password2={form.password2} />
+            </div>
           </>
         )}
         {step === 1 && (
@@ -365,7 +383,7 @@ export function RegisterFlow({ onDone, onBack }) {
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
           {step > 0 && <button className="btn btn-s" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setStep(s => s - 1)}>Terug</button>}
           {step < 3
-            ? <button className="auth-submit" style={{ flex: 1 }} onClick={next}>Volgende →</button>
+            ? <button className="auth-submit" style={{ flex: 1 }} onClick={next} disabled={step === 0 && !step0Valid}>Volgende →</button>
             : <button className="auth-submit" style={{ flex: 1 }} onClick={submit} disabled={loading}>{loading ? 'Bezig...' : 'BossBase starten 🚀'}</button>
           }
         </div>

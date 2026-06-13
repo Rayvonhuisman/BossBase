@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Logo } from '../bb-shared.jsx';
 import { supabase } from '../lib/supabase.js';
+import { PasswordRequirements, PasswordMatch, passwordValid } from '../components/PasswordStrength.jsx';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -39,11 +40,12 @@ export function UitnodigingPage({ token, navigate }) {
       .finally(() => setLoading(false));
   }, [token]);
 
+  const canSubmit = fullName.trim().length > 0 && passwordValid(password) && password === password2 && password2.length > 0;
+
   const submit = async () => {
     setError('');
     if (!fullName.trim()) return setError('Vul je naam in.');
-    if (!password) return setError('Kies een wachtwoord.');
-    if (password.length < 8) return setError('Gebruik minimaal 8 tekens.');
+    if (!passwordValid(password)) return setError('Vul een wachtwoord in dat aan alle vereisten voldoet.');
     if (password !== password2) return setError('Wachtwoorden komen niet overeen.');
     setSaving(true);
     try {
@@ -171,6 +173,7 @@ export function UitnodigingPage({ token, navigate }) {
             onChange={e => setPassword(e.target.value)}
             placeholder="Min. 8 tekens"
           />
+          <PasswordRequirements password={password} />
         </div>
         <div className="auth-field">
           <label>Herhaal wachtwoord</label>
@@ -181,13 +184,14 @@ export function UitnodigingPage({ token, navigate }) {
             placeholder="Nogmaals je wachtwoord"
             onKeyDown={e => { if (e.key === 'Enter') submit(); }}
           />
+          <PasswordMatch password={password} password2={password2} />
         </div>
         {error && (
           <div style={{ color: '#dc2626', fontSize: '.78rem', fontWeight: 600, marginBottom: 10 }}>
             {error}
           </div>
         )}
-        <button className="auth-submit" onClick={submit} disabled={saving}>
+        <button className="auth-submit" onClick={submit} disabled={saving || !canSubmit}>
           {saving ? 'Account aanmaken…' : 'Account aanmaken →'}
         </button>
         <div className="auth-link">
