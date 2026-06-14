@@ -1,236 +1,337 @@
-import MarketingShell from './MarketingShell.jsx';
+import { useEffect } from "react"
+import { Nav, Footer, Reveal, I, initChoreo } from "./MktShared"
 
-const FBIGS = [
-  {
-    n: 'Leadbeheer',
-    h: 'Elke aanvraag landt op <em>één plek.</em>',
-    p: 'Of een lead nu via je website komt, via een mail-formulier, een WhatsApp of een telefoontje — BossBase zet ’m in de inbox, koppelt ’m aan een klantkaart en geeft je een opvolgdatum.',
-    pts: ['Inbound vanuit webformulier en e-mail', 'Automatische klantverrijking', 'Opvolgregels en herinneringen', 'Bron tracken voor latere rapportage'],
-    art: 'inbox',
-  },
-  {
-    n: 'Sales pipeline',
-    h: 'Sleep deals door <em>jouw fases.</em>',
-    p: 'Een pipeline die past op hoe vakbedrijven werken — niet hoe softwarebedrijven werken. Van nieuwe lead tot afgerond, met fases die jij zelf bepaalt.',
-    pts: ['Eigen fases per branche', 'Drag-and-drop op desktop én mobiel', 'Pipelinewaarde, conversie en velociteit per fase', 'Filters op stad, klustype en ploeg'],
-    art: 'pipe',
-  },
-  {
-    n: 'Offertes & online akkoord',
-    h: 'Een offerte die klanten <em>willen tekenen.</em>',
-    p: 'Regels in uren, m² en materialen. Marge per regel. Btw automatisch. De klant tekent online — datum, IP en signatuur netjes vastgelegd.',
-    pts: ['Templates per klustype', 'Materiaalbibliotheek met prijzen', 'Online akkoord met audit trail', 'Eén klik naar werkbon en factuur'],
-    art: 'quote',
-  },
-  {
-    n: 'Planning & agenda',
-    h: 'Het juiste werk bij <em>de juiste ploeg.</em>',
-    p: 'Plan klussen per ploeg of medewerker, sleep door de week en synchroniseer met Google Calendar. Zien wat er nog aankomt — en wie wat doet.',
-    pts: ['Drag-and-drop weekplanning', 'Google Calendar sync (twee kanten)', 'Ploegen, rollen en beschikbaarheid', 'Mobiele agenda voor onderweg'],
-    art: 'cal',
-  },
-  {
-    n: 'Mobiele werkbonnen',
-    h: 'De werkbon werkt waar <em>het werk gebeurt.</em>',
-    p: 'Het team opent de werkbon op de telefoon: klantgegevens, adres, taken, foto’s en handtekening — allemaal direct gekoppeld aan de juiste klus.',
-    pts: ['Adres, route en klantgegevens', 'Taken, foto’s en notities', 'Digitale handtekening op locatie', 'Direct beschikbaar voor facturatie'],
-    art: 'wo',
-  },
-  {
-    n: 'Uren & materiaal',
-    h: 'Uren registreren voelt <em>als ademen.</em>',
-    p: 'Per project, per klant of per medewerker. Materialen scannen of zelf invoeren. BossBase rekent direct door naar marge en factuur.',
-    pts: ['Per project, klant of medewerker', 'Realtime kostenoverzicht', 'Job costing & winstanalyse', 'Export voor je boekhouder'],
-    art: 'hours',
-  },
-  {
-    n: 'Facturatie',
-    h: 'Van akkoord naar factuur in <em>één klik.</em>',
-    p: 'Geaccepteerde offerte? Klus afgerond? BossBase maakt de factuur, koppelt uren en materialen, en stuurt ’m op met betaallink en herinneringen.',
-    pts: ['Conceptfactuur uit offerte', 'Automatische btw en kortingen', 'Betaallinks en herinneringen', 'Boekhouder-export (Snelstart, Exact, e-Boekhouden)'],
-    art: 'invoice',
-  },
-  {
-    n: 'Rapportages',
-    h: 'Zie wat <em>écht werkt</em> in je bedrijf.',
-    p: 'Omzet, marge per branche, conversie, doorlooptijd, top-klanten — in heldere weekgrafieken die je in 10 seconden begrijpt.',
-    pts: ['Maandomzet en marge', 'Conversie per pipeline-fase', 'Klant- en branche-analyse', 'Vergelijk vorige periodes en jaren'],
-    art: 'chart',
-  },
-];
-
-/* ─── Small ASCII-grade art panels per feature, no images ─────── */
-function Art({ kind }) {
-  if (kind === 'inbox') {
-    return (
-      <div className="mkt-mini">
-        <div className="mkt-mini-hd"><span>Inbox · vandaag</span><span>3 nieuw</span></div>
-        <div className="mkt-mini-row"><span className="mkt-mini-av">JV</span><span><b>J. de Vries</b><small>Schilderwerk gevel · via website</small></span><span className="mkt-mini-amt">±€2.450</span></div>
-        <div className="mkt-mini-row"><span className="mkt-mini-av">AB</span><span><b>A. Bakker</b><small>Tuinaanleg · WhatsApp</small></span><span className="mkt-mini-amt">±€4.200</span></div>
-        <div className="mkt-mini-row"><span className="mkt-mini-av">PS</span><span><b>P. Smits</b><small>Verbouwing keuken · e-mail</small></span><span className="mkt-mini-amt">±€8.900</span></div>
-      </div>
-    );
-  }
-  if (kind === 'pipe') {
-    return (
-      <div className="mkt-mini" style={{ background: 'var(--paper-soft)' }}>
-        <div className="mkt-mini-hd"><span>Pipeline · 14 actief</span><span>€48.250</span></div>
-        {[
-          ['Nieuw', 3, '#9CA3AF'],
-          ['Contact', 2, '#2563eb'],
-          ['Offerte', 4, '#f59e0b'],
-          ['Akkoord', 3, '#1DDB62'],
-          ['Gepland', 2, '#0F3D2B'],
-        ].map(([label, n, color]) => (
-          <div key={label} className="mkt-mini-row" style={{ gridTemplateColumns: '90px 1fr 50px' }}>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: '.78rem', color: 'var(--ink)' }}>{label}</span>
-            <div style={{ height: 8, borderRadius: 999, background: 'var(--line)', overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${(n / 4) * 100}%`, background: color, borderRadius: 999 }} />
-            </div>
-            <span className="mkt-mini-amt" style={{ textAlign: 'right' }}>{n}</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-  if (kind === 'quote') {
-    return (
-      <div className="mkt-mini">
-        <div className="mkt-mini-hd"><span>Offerte BB-024</span><span>Concept</span></div>
-        <div className="mkt-mini-row"><span className="mkt-mini-av">m²</span><span><b>Voorbereiding gevel</b><small>32 m² · €18/m²</small></span><span className="mkt-mini-amt">€576</span></div>
-        <div className="mkt-mini-row"><span className="mkt-mini-av">u</span><span><b>Schilderen 2 lagen</b><small>14 u · €52/u</small></span><span className="mkt-mini-amt">€728</span></div>
-        <div className="mkt-mini-row"><span className="mkt-mini-av">€</span><span><b>Materialen</b><small>verf, plamuur, doek</small></span><span className="mkt-mini-amt">€340</span></div>
-        <div className="mkt-mini-row" style={{ borderTop: '1px solid var(--line-strong)' }}>
-          <span className="mkt-mini-av" style={{ background: 'var(--brand)', color: 'var(--atelier)' }}>✓</span>
-          <span><b>Totaal incl. btw</b><small>21% btw</small></span><span className="mkt-mini-amt">€2.450</span>
-        </div>
-      </div>
-    );
-  }
-  if (kind === 'cal') {
-    const days = ['M', 'D', 'W', 'D', 'V'];
-    return (
-      <div className="mkt-mini">
-        <div className="mkt-mini-hd"><span>Week 22 · planning</span><span>Marco, Tim</span></div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, marginTop: 8 }}>
-          {days.map((d, i) => (
-            <div key={d + i} style={{ background: 'var(--paper-soft)', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 6px', minHeight: 88, position: 'relative' }}>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: '.65rem', color: 'var(--ink-mute)', textAlign: 'center' }}>{d}</div>
-              {i === 0 && <div style={{ background: 'var(--atelier)', color: 'var(--paper)', fontSize: '.62rem', borderRadius: 4, padding: '2px 4px', marginTop: 6 }}>Gevel</div>}
-              {i === 1 && <div style={{ background: 'var(--brand)', color: 'var(--atelier)', fontSize: '.62rem', borderRadius: 4, padding: '2px 4px', marginTop: 6, fontWeight: 600 }}>Tuin AB</div>}
-              {i === 2 && <div style={{ background: 'var(--atelier-hi)', color: 'var(--paper)', fontSize: '.62rem', borderRadius: 4, padding: '2px 4px', marginTop: 6 }}>Keuken</div>}
-              {i === 3 && <div style={{ background: 'var(--atelier)', color: 'var(--paper)', fontSize: '.62rem', borderRadius: 4, padding: '2px 4px', marginTop: 6 }}>Dakkapel</div>}
-              {i === 4 && <div style={{ background: 'var(--paper)', border: '1px dashed var(--line-strong)', color: 'var(--ink-mute)', fontSize: '.62rem', borderRadius: 4, padding: '2px 4px', marginTop: 6 }}>Vrij</div>}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-  if (kind === 'wo') {
-    return (
-      <div className="mkt-mini">
-        <div className="mkt-mini-hd"><span>Werkbon W-184</span><span>In uitvoering</span></div>
-        <div className="mkt-mini-row"><span className="mkt-mini-av">📍</span><span><b>Jansen Schilderwerken</b><small>Zwolle · Veerweg 12</small></span><span className="mkt-mini-amt">—</span></div>
-        <div className="mkt-mini-row"><span className="mkt-mini-av" style={{ background: 'var(--brand)', color: 'var(--atelier)' }}>✓</span><span><b>Voorbereiding</b><small>klaar · 14:30</small></span><span className="mkt-mini-amt">2u</span></div>
-        <div className="mkt-mini-row"><span className="mkt-mini-av">…</span><span><b>Schilderen 1e laag</b><small>bezig · Marco</small></span><span className="mkt-mini-amt">—</span></div>
-        <div className="mkt-mini-row"><span className="mkt-mini-av">○</span><span><b>Schilderen 2e laag</b><small>open</small></span><span className="mkt-mini-amt">—</span></div>
-      </div>
-    );
-  }
-  if (kind === 'hours') {
-    return (
-      <div className="mkt-mini">
-        <div className="mkt-mini-hd"><span>Uren week 22</span><span>32u / ploeg</span></div>
-        {[['Ma', 8], ['Di', 9], ['Wo', 6], ['Do', 8], ['Vr', 5]].map(([d, h]) => (
-          <div key={d} className="mkt-mini-row" style={{ gridTemplateColumns: '60px 1fr 50px' }}>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: '.78rem' }}>{d}</span>
-            <div style={{ height: 10, borderRadius: 4, background: 'var(--line)', overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${(h / 9) * 100}%`, background: 'var(--atelier)' }} />
-            </div>
-            <span className="mkt-mini-amt" style={{ textAlign: 'right' }}>{h}u</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-  if (kind === 'invoice') {
-    return (
-      <div className="mkt-mini">
-        <div className="mkt-mini-hd"><span>Factuur F-2026-082</span><span style={{ color: 'var(--brand-deep)' }}>Betaald</span></div>
-        <div className="mkt-mini-row"><span className="mkt-mini-av">JV</span><span><b>Jansen Schilderwerken</b><small>Veerweg 12 · Zwolle</small></span><span className="mkt-mini-amt">—</span></div>
-        <div className="mkt-mini-row"><span className="mkt-mini-av">€</span><span><b>Subtotaal</b><small>5 regels uit offerte BB-024</small></span><span className="mkt-mini-amt">€2.024</span></div>
-        <div className="mkt-mini-row"><span className="mkt-mini-av">%</span><span><b>Btw 21%</b><small>automatisch</small></span><span className="mkt-mini-amt">€426</span></div>
-        <div className="mkt-mini-row" style={{ borderTop: '1px solid var(--line-strong)' }}>
-          <span className="mkt-mini-av" style={{ background: 'var(--brand)', color: 'var(--atelier)' }}>=</span>
-          <span><b>Totaal</b><small>Vervaldatum 28 mei</small></span><span className="mkt-mini-amt">€2.450</span>
-        </div>
-      </div>
-    );
-  }
-  // chart
-  const months = [40, 62, 58, 78, 71, 92, 88];
+/* ── Feature visuals ── */
+function CRMVisual() {
   return (
-    <div className="mkt-mini">
-      <div className="mkt-mini-hd"><span>Omzet · laatste 7 mnd</span><span style={{ color: 'var(--brand-deep)' }}>↑ 18%</span></div>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 130, marginTop: 8 }}>
-        {months.map((v, i) => (
-          <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 6, height: '100%' }}>
-            <div style={{ width: '100%', height: `${v}%`, background: i === months.length - 1 ? 'var(--brand)' : 'var(--atelier)', borderRadius: '4px 4px 0 0', minHeight: 6 }} />
-            <span style={{ fontFamily: 'var(--mono)', fontSize: '.62rem', color: 'var(--ink-mute)' }}>{['nov','dec','jan','feb','mrt','apr','mei'][i]}</span>
+    <div className="feature-frame">
+      <div className="feature-frame-bar"><span className="dot-r"/><span className="dot-y"/><span className="dot-g"/>
+        <div className="feature-frame-urlbar">{I.shield} bossbase.nl/klanten</div>
+      </div>
+      <div className="feature-frame-body" style={{ display: "grid", gap: 9 }}>
+        {[
+          { name: "Bakker Loodgieters",     status: "Actief",  val: "€ 12.400", cls: "badge-accepted" },
+          { name: "Jansen Schilderwerk",    status: "Offerte", val: "€ 3.800",  cls: "badge-sent" },
+          { name: "Peters Installatiewerk", status: "Nieuw",   val: "—",        cls: "badge-concept" },
+        ].map(r => (
+          <div key={r.name} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 13px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13.5 }}>{r.name}</div>
+              <span className={`badge ${r.cls}`} style={{ marginTop: 4 }}>{r.status}</span>
+            </div>
+            <div style={{ fontWeight: 800, fontSize: 15, color: "var(--dk)" }}>{r.val}</div>
           </div>
         ))}
       </div>
     </div>
-  );
+  )
 }
 
-export default function FeaturesPage({ navigate, isAuthenticated }) {
+function OffertesVisual() {
   return (
-    <MarketingShell navigate={navigate} active="functies" isAuthenticated={isAuthenticated}>
-      <div className="mkt-c">
-        <header className="mkt-page-hd mkt-rev">
-          <div>
-            <div className="mkt-sec-num">Functies</div>
-            <h1>Acht modules, <em>één werkstroom.</em></h1>
-          </div>
-          <p>
-            Bekijk wat BossBase doet voor élke fase van je werk —
-            van eerste aanvraag tot betaalde factuur. Alle modules
-            spreken met elkaar, zodat geen klus tussen wal en schip valt.
-          </p>
-        </header>
-
-        <section className="mkt-sec mkt-sec--first" style={{ paddingTop: 40, borderTop: 0 }}>
-          {FBIGS.map((f, i) => (
-            <article key={f.n} className={`mkt-fbig${i % 2 ? ' is-rev' : ''} mkt-rev`}>
-              {i % 2 ? <div className="mkt-fbig-art"><Art kind={f.art} /></div> : null}
-              <div>
-                <div className="mkt-fbig-num">{f.n}</div>
-                <h3 dangerouslySetInnerHTML={{ __html: f.h }} />
-                <p>{f.p}</p>
-                <ul>
-                  {f.pts.map(pt => <li key={pt}>{pt}</li>)}
-                </ul>
-              </div>
-              {i % 2 ? null : <div className="mkt-fbig-art"><Art kind={f.art} /></div>}
-            </article>
-          ))}
-        </section>
+    <div className="feature-frame flip">
+      <div className="feature-frame-bar"><span className="dot-r"/><span className="dot-y"/><span className="dot-g"/>
+        <div className="feature-frame-urlbar">{I.shield} bossbase.nl/offertes</div>
       </div>
+      <div className="feature-frame-body">
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>Offerte #2024-048</div>
+        {[
+          { desc: "Schilderwerk gevel",  price: "€ 2.400" },
+          { desc: "Materialen",          price: "€ 650" },
+          { desc: "Reiskosten",          price: "€ 90" },
+        ].map(r => (
+          <div key={r.desc} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 11px", display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <span style={{ fontSize: 13 }}>{r.desc}</span><span style={{ fontWeight: 700, fontSize: 13 }}>{r.price}</span>
+          </div>
+        ))}
+        <div style={{ borderTop: "1px solid var(--border)", marginTop: 10, paddingTop: 10, display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 13.5 }}>
+          <span>Totaal incl. BTW</span><span style={{ color: "var(--pd)" }}>€ 3.803</span>
+        </div>
+        <div className="btn btn-p" style={{ width: "100%", justifyContent: "center", marginTop: 10, fontSize: 13 }}>
+          Digitale handtekening aanvragen
+        </div>
+      </div>
+    </div>
+  )
+}
 
-      {/* Final CTA */}
-      <section className="mkt-final">
-        <div className="mkt-final-in mkt-rev">
-          <div className="mkt-sec-num mkt-sec-num--light" style={{ justifyContent: 'center' }}>Probeer het zelf</div>
-          <h2>14 dagen gratis,<br /><em>geen creditcard.</em></h2>
-          <p>Maak vandaag een account en stuur je eerste offerte vóór de koffie koud is.</p>
-          <div className="mkt-final-ctas">
-            <button className="mkt-btn mkt-btn--brand mkt-btn--lg" onClick={() => navigate('/register')}>Start gratis</button>
-            <button className="mkt-btn mkt-btn--inverse mkt-btn--lg" onClick={() => navigate('/prijzen')}>Bekijk prijzen →</button>
+function AgendaVisual() {
+  return (
+    <div className="feature-frame">
+      <div className="feature-frame-bar"><span className="dot-r"/><span className="dot-y"/><span className="dot-g"/>
+        <div className="feature-frame-urlbar">{I.shield} bossbase.nl/agenda</div>
+      </div>
+      <div className="feature-frame-body" style={{ display: "grid", gap: 7 }}>
+        {[
+          { time: "09:00", title: "Offerte opstellen — Jansen",       color: "#ecfdf5", col: "#0c7a38" },
+          { time: "11:30", title: "Afspraak: Peters Installatiewerk", color: "#dbeafe", col: "#1d4ed8" },
+          { time: "14:00", title: "Factuur versturen: Bakker",        color: "#fef3c7", col: "#b45309" },
+        ].map(e => (
+          <div key={e.time} style={{ background: e.color, color: e.col, borderRadius: 9, padding: "8px 11px" }}>
+            <div style={{ fontSize: 10.5, fontWeight: 500, opacity: 0.7 }}>{e.time}</div>
+            <div style={{ fontWeight: 700, fontSize: 13, marginTop: 2 }}>{e.title}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function OmzetVisual() {
+  const bars = [55, 68, 42, 78, 85, 61, 90, 72, 95, 64, 88, 100]
+  const months = ["J","F","M","A","M","J","J","A","S","O","N","D"]
+  return (
+    <div className="feature-frame flip">
+      <div className="feature-frame-bar"><span className="dot-r"/><span className="dot-y"/><span className="dot-g"/>
+        <div className="feature-frame-urlbar">{I.shield} bossbase.nl/omzet</div>
+      </div>
+      <div className="feature-frame-body">
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+          <span style={{ fontWeight: 700, fontSize: 13.5 }}>Omzet 2024</span>
+          <span style={{ color: "var(--pd)", fontWeight: 800, fontSize: 13.5 }}>€ 148.320</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 84 }}>
+          {bars.map((h, i) => (
+            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, height: "100%" }}>
+              <div style={{ width: "100%", borderRadius: "3px 3px 2px 2px", background: i === 11 ? "var(--p)" : "var(--pl)", height: `${h}%` }} />
+              <span style={{ fontSize: 9, color: "var(--dl)" }}>{months[i]}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TeamVisual() {
+  return (
+    <div className="feature-frame">
+      <div className="feature-frame-bar"><span className="dot-r"/><span className="dot-y"/><span className="dot-g"/>
+        <div className="feature-frame-urlbar">{I.shield} bossbase.nl/team</div>
+      </div>
+      <div className="feature-frame-body" style={{ display: "grid", gap: 9 }}>
+        {[
+          { name: "Mark (Eigenaar)", role: "Admin",      bg: "var(--pl)" },
+          { name: "Lisa (Planner)", role: "Medewerker",  bg: "#dbeafe" },
+          { name: "Thomas (Monteur)",role: "Medewerker", bg: "#fef3c7" },
+        ].map(u => (
+          <div key={u.name} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 13px", display: "flex", alignItems: "center", gap: 11 }}>
+            <div style={{ width: 36, height: 36, borderRadius: "50%", background: u.bg, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, color: "var(--dk)", flex: "none" }}>{u.name[0]}</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13.5 }}>{u.name}</div>
+              <div style={{ fontSize: 12.5, color: "var(--dmu)" }}>{u.role}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function MailVisual() {
+  return (
+    <div className="feature-frame flip">
+      <div className="feature-frame-bar"><span className="dot-r"/><span className="dot-y"/><span className="dot-g"/>
+        <div className="feature-frame-urlbar">{I.shield} bossbase.nl/automatisering</div>
+      </div>
+      <div className="feature-frame-body" style={{ display: "grid", gap: 8 }}>
+        {[
+          { subj: "Uw offerte is klaar",          badge: "Verstuurd",   cls: "badge-accepted" },
+          { subj: "Herinnering: offerte vervalt",  badge: "Automatisch", cls: "badge-sent" },
+          { subj: "Factuur betaald — dank u!",     badge: "Ontvangen",   cls: "badge-paid" },
+        ].map(m => (
+          <div key={m.subj} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 9, padding: "9px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+            <div style={{ fontWeight: 700, fontSize: 13 }}>{m.subj}</div>
+            <span className={`badge ${m.cls}`}>{m.badge}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const BLOCKS = [
+  {
+    kicker: "CRM", title: "Klanten bijhouden die jou bijhouden",
+    desc: "Nooit meer zoeken in je hoofd. BossBase onthoudt alles: contactgegevens, opdrachten, notities en volledige communicatiegeschiedenis.",
+    points: ["Klantenkaarten met volledige historie", "Notities en bijlagen per klant", "Segmenteer op sector, regio of omzet", "Automatische opvolgherinneringen"],
+    Visual: CRMVisual, flip: false,
+  },
+  {
+    kicker: "Offertes & facturen", title: "Van offerte naar betaald in één klik",
+    desc: "Maak professionele offertes in 2 minuten. Klant tekent digitaal, jij converteert naar factuur met één klik. BTW wordt automatisch berekend.",
+    points: ["Huisstijl aanpassing", "Digitale handtekening", "Automatisch omzetten naar factuur", "BTW-aangifte export"],
+    Visual: OffertesVisual, flip: true,
+  },
+  {
+    kicker: "Agenda", title: "Plan slim, werk slimmer",
+    desc: "Koppel afspraken direct aan klanten en opdrachten. Stuur automatisch herinneringen en voorkom no-shows.",
+    points: ["Klantgekoppelde afspraken", "Automatische SMS/e-mail herinneringen", "Google Calendar synchronisatie", "Terugkerende afspraken"],
+    Visual: AgendaVisual, flip: false,
+  },
+  {
+    kicker: "Omzet & rapporten", title: "Weet precies hoe je er voor staat",
+    desc: "Realtime inzicht in omzet, openstaande facturen en beste klanten. Exporteer naar je accountant met één klik.",
+    points: ["Realtime omzetdashboard", "Openstaande en vervallen facturen", "Beste klanten en sectoren", "Export naar accountant (CSV/PDF)"],
+    Visual: OmzetVisual, flip: true,
+  },
+  {
+    kicker: "Team", title: "Werk samen zonder gedoe",
+    desc: "Voeg medewerkers toe met de juiste rechten. Iedereen werkt in hetzelfde systeem, altijd up-to-date.",
+    points: ["Gebruikersrollen (admin/medewerker)", "Activiteitenlog", "Taakverdeling per klant", "Mobiel voor onderweg"],
+    Visual: TeamVisual, flip: false,
+  },
+  {
+    kicker: "E-mail automatisering", title: "Nooit meer handmatig herinneringen sturen",
+    desc: "BossBase stuurt automatisch offertebevestigingen, herinneringen en bedankjes. Jij hoeft er niets aan te doen.",
+    points: ["Automatische offertebevestiging", "Betalingsherinnering na X dagen", "Bedankmail na betaling", "Eigen e-mailsjablonen"],
+    Visual: MailVisual, flip: true,
+  },
+]
+
+const INTEGRATIONS = [
+  { name: "Google Calendar", icon: "📅", soon: false },
+  { name: "Outlook",         icon: "📧", soon: false },
+  { name: "Exact Online",    icon: "💼", soon: false },
+  { name: "Mollie",          icon: "💳", soon: false },
+  { name: "Slack",           icon: "💬", soon: true },
+  { name: "Zapier",          icon: "⚡",  soon: true },
+  { name: "Moneybird",       icon: "🐦",  soon: true },
+  { name: "WhatsApp",        icon: "📱",  soon: true },
+]
+
+const VROEGER = [
+  "Offertes in losse Word-bestanden",
+  "Klanten bijhouden in Excel",
+  "Agenda op papier of los in Google",
+  "Omzet uitrekenen aan het einde van het kwartaal",
+  "Herinneren via Post-it briefjes",
+  "Facturen handmatig nummeren en versturen",
+]
+const NU = [
+  "Offerte klaar in 2 minuten, digitaal ondertekend",
+  "CRM met volledige klanthistorie op één plek",
+  "Agenda gekoppeld aan klanten en opdrachten",
+  "Realtime omzetdashboard, altijd inzicht",
+  "Automatische herinneringen per e-mail en SMS",
+  "Factuur met één klik vanuit geaccepteerde offerte",
+]
+
+export default function FeaturesPage({ navigate }) {
+  useEffect(() => {
+    const cleanup = initChoreo()
+    return cleanup
+  }, [])
+
+  const go = (e, href) => {
+    e.preventDefault()
+    if (navigate) navigate(href)
+    else window.location.href = href
+  }
+
+  return (
+    <div className="bm">
+      <Nav navigate={navigate} />
+      <main>
+        <section className="functies-hero">
+          <div className="container">
+            <Reveal>
+              <span className="section-kicker">Functies</span>
+              <h1>Alles wat je nodig hebt.<br/>Niets wat je niet nodig hebt.</h1>
+              <p>BossBase combineert CRM, offertes, agenda en financieel in één eenvoudige tool — speciaal voor ZZP'ers en kleine bedrijven.</p>
+              <div className="hero-ctas" style={{ marginTop: 28 }}>
+                <a href="/registreer" className="btn btn-p glow btn-lg" onClick={e => go(e, "/registreer")}>Gratis proberen {I.arrowRight}</a>
+                <a href="/prijzen" className="btn btn-s btn-lg" onClick={e => go(e, "/prijzen")}>Bekijk prijzen</a>
+              </div>
+            </Reveal>
+          </div>
+        </section>
+
+        {BLOCKS.map((b, i) => (
+          <div key={i} className="section" style={{ borderTop: i > 0 ? "1px solid var(--border)" : "none" }}>
+            <div className="container">
+              <Reveal>
+                <div className={`feature-row${b.flip ? " flip" : ""}`}>
+                  <div className="feature-copy">
+                    <span className="section-kicker">{b.kicker}</span>
+                    <h2 style={{ fontSize: "clamp(24px,3vw,34px)", marginTop: 10 }}>{b.title}</h2>
+                    <p style={{ marginTop: 12, fontSize: 16.5, color: "var(--dmu)", maxWidth: "30em" }}>{b.desc}</p>
+                    <ul className="feature-points" style={{ marginTop: 18 }}>
+                      {b.points.map(p => <li key={p}>{I.check} {p}</li>)}
+                    </ul>
+                  </div>
+                  <div><b.Visual /></div>
+                </div>
+              </Reveal>
+            </div>
+          </div>
+        ))}
+
+        <div className="section" style={{ background: "var(--bgs)", borderTop: "1px solid var(--border)" }}>
+          <div className="container">
+            <Reveal><div className="section-head">
+              <span className="section-kicker">Vergelijk</span>
+              <h2>Vroeger vs. nu</h2>
+              <p>Zie hoe BossBase de dagelijkse rompslomp oplost.</p>
+            </div></Reveal>
+            <Reveal>
+              <div className="compare-cols">
+                <div className="compare-col bad">
+                  <h3>{I.warning} Zonder BossBase</h3>
+                  <ul className="compare-list">
+                    {VROEGER.map(t => <li key={t}><span className="ic" style={{ color: "var(--danger)" }}>{I.x}</span> {t}</li>)}
+                  </ul>
+                </div>
+                <div className="compare-col good">
+                  <h3>{I.checkCircle} Met BossBase</h3>
+                  <ul className="compare-list">
+                    {NU.map(t => <li key={t}><span className="ic" style={{ color: "var(--pd)" }}>{I.check}</span> {t}</li>)}
+                  </ul>
+                </div>
+              </div>
+            </Reveal>
           </div>
         </div>
-      </section>
-    </MarketingShell>
-  );
+
+        <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
+          <div className="container">
+            <Reveal><div className="section-head">
+              <span className="section-kicker">Integraties</span>
+              <h2>Werkt samen met wat je al gebruikt</h2>
+              <p>BossBase integreert met jouw bestaande tools. Geen dubbel werk meer.</p>
+            </div></Reveal>
+            <Reveal stagger>
+              <div className="integ-grid">
+                {INTEGRATIONS.map(integ => (
+                  <div key={integ.name} className={`integ-card${integ.soon ? " soon" : ""}`}>
+                    <div className="integ-dot">{integ.icon}</div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>{integ.name}</div>
+                      {integ.soon && <div style={{ fontSize: 12.5, color: "var(--dl)", marginTop: 2 }}>Binnenkort beschikbaar</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Reveal>
+          </div>
+        </div>
+
+        <div className="section">
+          <div className="container">
+            <Reveal>
+              <div className="final-cta">
+                <h2>Klaar om chaos achter je te laten? <span className="green">Probeer BossBase.</span></h2>
+                <p>14 dagen gratis. Geen creditcard. Geen gedoe.</p>
+                <div className="hero-ctas" style={{ justifyContent: "center" }}>
+                  <a href="/registreer" className="btn btn-p glow btn-lg" onClick={e => go(e, "/registreer")}>Gratis starten {I.arrowRight}</a>
+                  <a href="/prijzen" className="btn btn-s btn-lg" onClick={e => go(e, "/prijzen")}>Bekijk prijzen</a>
+                </div>
+              </div>
+            </Reveal>
+          </div>
+        </div>
+      </main>
+      <Footer navigate={navigate} />
+    </div>
+  )
 }

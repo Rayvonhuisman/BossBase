@@ -27,6 +27,7 @@ import PricingPage from './pages/marketing/PricingPage.jsx';
 import IndustriesPage from './pages/marketing/IndustriesPage.jsx';
 import AboutPage from './pages/marketing/AboutPage.jsx';
 import ContactPage from './pages/marketing/ContactPage.jsx';
+import FaqPage from './pages/marketing/FaqPage.jsx';
 import DemoPage from './pages/DemoPage.jsx';
 import { createMissingProfile, getSession, logout, onAuthStateChange } from './services/authService.js';
 import { getCurrentUserContext } from './services/profileService.js';
@@ -925,7 +926,7 @@ function AppInner() {
     setRoute(nextPath);
     // Reset scroll when entering a public marketing page so each route
     // starts at the top, mirroring real multi-page navigation.
-    const PUBLIC = ['/', '/functies', '/prijzen', '/voor-wie', '/over-ons', '/contact', '/demo', '/login', '/register'];
+    const PUBLIC = ['/', '/functies', '/prijzen', '/voor-wie', '/over-ons', '/over', '/contact', '/faq', '/demo', '/login', '/register'];
     if (changed && PUBLIC.includes(nextPath)) {
       window.scrollTo({ top: 0, left: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
     }
@@ -1065,12 +1066,16 @@ function AppInner() {
     return <IndustriesPage navigate={navigate} isAuthenticated={Boolean(session)} />;
   }
 
-  if (route === '/over-ons') {
+  if (route === '/over-ons' || route === '/over') {
     return <AboutPage navigate={navigate} isAuthenticated={Boolean(session)} />;
   }
 
   if (route === '/contact') {
     return <ContactPage navigate={navigate} isAuthenticated={Boolean(session)} />;
+  }
+
+  if (route === '/faq') {
+    return <FaqPage navigate={navigate} isAuthenticated={Boolean(session)} />;
   }
 
   if (route === '/demo') {

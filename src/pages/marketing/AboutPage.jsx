@@ -1,136 +1,197 @@
-import MarketingShell from './MarketingShell.jsx';
+import { Nav, Footer, Reveal, I } from "./MktShared"
 
-const VALUES = [
-  { n: '01', h: 'Werk dat klopt', p: 'Geen tool om de tool. Elk scherm in BossBase verdient z’n plek door tijd te besparen — of het hoort er niet thuis.' },
-  { n: '02', h: 'Helder en kort', p: 'Eén oogopslag, één begrip. Als je drie keer moet lezen, is het ontwerp niet af. We schrappen liever dan we toevoegen.' },
-  { n: '03', h: 'Voor vakmensen', p: 'Schilders, hoveniers, klusbedrijven. We bouwen voor de mensen die met laarzen aan binnenkomen — niet voor afdelingshoofden achter een glaswand.' },
-];
+const STATS = [
+  { num: "2.400+", lbl: "Actieve gebruikers" },
+  { num: "€ 2,1M+", lbl: "Aan offertes verstuurd" },
+  { num: "98%", lbl: "Klanttevredenheid" },
+  { num: "2022", lbl: "Opgericht in" },
+]
 
-const STORY = [
-  ['2024', 'Geboren in een loods', 'Twee oprichters — een schilder en een softwarebouwer — beginnen met een schoenendoos vol offertes. BossBase wordt een MVP.'],
-  ['2025', 'Eerste 50 ondernemers', 'BossBase gaat live met zelfde-dag onboarding. Pipeline, offertes en planning komen samen in één pakket.'],
-  ['2026', '200+ vakbedrijven', 'Mobiele werkbonnen, Google Calendar sync, online akkoord en automatische facturatie. Vandaag.'],
-  ['Vooruit', 'Slimmer, niet zwaarder', 'AI-hulp bij offertes, koppelingen met boekhoudpakketten en bredere mobiele app. Maar altijd: minder klikken, niet meer.'],
-];
+const WAARDEN = [
+  { icon: I.heart,   title: "Eerlijkheid boven alles",         desc: "Geen verborgen kosten, geen misleidende beloften. We zeggen wat we doen en doen wat we zeggen." },
+  { icon: I.bolt,    title: "Eenvoud als ontwerpregel",         desc: "Elke functie die we bouwen moet simpeler zijn dan de status quo. Als het ingewikkeld aanvoelt, is het niet klaar." },
+  { icon: I.shield,  title: "Jouw data is van jou",             desc: "We verkopen nooit data aan derden. Servers staan in Nederland. AVG-compliant by design." },
+  { icon: I.rocket,  title: "Bouwen voor de lange termijn",     desc: "We nemen geen risicokapitaal aan dat ons dwingt tot groeimanie. Winstgevendheid en klantgeluk gaan hand in hand." },
+]
 
-export default function AboutPage({ navigate, isAuthenticated }) {
+const OPRICHTERS = [
+  {
+    naam: "Niels Grevink", rol: "CEO & Mede-oprichter",
+    bio: "Niels groeide op als zoon van een schilder en zag als kind hoe zijn vader worstelde met administratie. Na een carrière in software bouwde hij BossBase om dat probleem op te lossen.",
+    initials: "NG",
+  },
+  {
+    naam: "Tim van der Berg", rol: "CTO & Mede-oprichter",
+    bio: "Tim bouwde eerder software voor de logistieke sector en snapt als geen ander hoe je complexe processen eenvoudig maakt. Hij schrijft de code die BossBase snel en betrouwbaar houdt.",
+    initials: "TB",
+  },
+]
+
+export default function AboutPage({ navigate }) {
+  const go = (e, href) => {
+    e.preventDefault()
+    if (navigate) navigate(href)
+    else window.location.href = href
+  }
+
   return (
-    <MarketingShell navigate={navigate} active="over-ons" isAuthenticated={isAuthenticated}>
-      <div className="mkt-c">
-        <header className="mkt-page-hd mkt-rev">
-          <div>
-            <div className="mkt-sec-num">Over BossBase</div>
-            <h1>De rustige plek<br />tussen <em>jouw werk en je avond.</em></h1>
-          </div>
-          <p>
-            BossBase werd geboren in een schildersloods. Geen pitch deck, geen
-            kantoortuin — een schoenendoos vol offertes en de vraag: kan dit niet rustiger?
-          </p>
-        </header>
-
-        <section className="mkt-sec mkt-sec--first" style={{ paddingTop: 8, borderTop: 0 }}>
-          <div className="mkt-rev">
-            <p className="mkt-about-lede">
-              We bouwen BossBase voor de Nederlandse vakman. Voor de eigenaar
-              die op vrijdagmiddag wéér met losse papieren aan de keukentafel
-              zit. Voor de hovenier die niet weet welke klus écht winst maakte.
-              Voor de schilder die zijn beste klant kwijtraakt omdat de offerte
-              een dag te laat de deur uitging.
-              <br /><br />
-              <em>BossBase brengt het terug naar één plek.</em> Eén dashboard.
-              Eén werkstroom. Een paar minuten per dag, in plaats van een avond per week.
-            </p>
+    <div className="bm">
+      <Nav navigate={navigate} />
+      <main>
+        {/* Hero */}
+        <section className="over-hero">
+          <div className="container">
+            <Reveal>
+              <span className="section-kicker">Over ons</span>
+              <h1>Gebouwd door ondernemers,<br/>voor ondernemers</h1>
+              <p>BossBase ontstond uit frustratie. De frustratie van een vakman die na een lange werkdag nog uren kwijt is aan administratie. Dat kan anders.</p>
+            </Reveal>
           </div>
         </section>
 
-        {/* Values */}
-        <section className="mkt-sec">
-          <div className="mkt-sec-head mkt-rev">
-            <div>
-              <div className="mkt-sec-num">Wat ons drijft</div>
-              <h2>Drie principes,<br /><em>nul franje.</em></h2>
-            </div>
-            <p>Elke beslissing in BossBase loopt langs deze drie principes. Als iets botst, sneuvelt het.</p>
-          </div>
-
-          <div className="mkt-values mkt-rev">
-            {VALUES.map(v => (
-              <div key={v.n} className="mkt-value">
-                <div className="mkt-value-num">— {v.n}</div>
-                <h4>{v.h}</h4>
-                <p>{v.p}</p>
+        {/* Verhaal */}
+        <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
+          <div className="container">
+            <Reveal><div className="section-head">
+              <span className="section-kicker">Ons verhaal</span>
+              <h2>Waarom BossBase bestaat</h2>
+            </div></Reveal>
+            <Reveal>
+              <div className="verhaal-body">
+                <p>Het begon met een belletje. Niels' vader — schilder van beroep — belde op een avond met de vraag: "Kun jij een spreadsheet voor me maken? Ik raak al mijn offertes kwijt." Drie weken later waren er acht. Allemaal vaklieden, allemaal met hetzelfde probleem: te veel losse tools, te weinig overzicht.</p>
+                <p>In 2022 richtten Niels en Tim BossBase op met één doel: de administratie van ZZP'ers en kleine bedrijven zo eenvoudig maken dat je er nooit meer wakker van ligt.</p>
+                <p>Vandaag gebruiken meer dan 2.400 vakmensen BossBase dagelijks. Van loodgieters in Rotterdam tot aannemers in Groningen. We groeien op basis van mond-tot-mondreclame, omdat onze klanten ons product écht aanbevelen.</p>
               </div>
-            ))}
-          </div>
-        </section>
-      </div>
-
-      {/* Timeline — atelier dark */}
-      <section className="mkt-sec mkt-sec--atelier mkt-sec--airy">
-        <div className="mkt-c">
-          <div className="mkt-sec-head mkt-rev">
-            <div>
-              <div className="mkt-sec-num mkt-sec-num--light">Tijdlijn</div>
-              <h2>Van loods naar<br /><em>200+ vakbedrijven.</em></h2>
-            </div>
-            <p>
-              We gaan rustig. Liever één scherm dat écht klopt dan tien die half werken.
-            </p>
-          </div>
-
-          <div className="mkt-timeline mkt-rev">
-            {STORY.map(([year, title, desc]) => (
-              <div key={year} className="mkt-timeline-cell">
-                <div className="mkt-timeline-year">{year}</div>
-                <div className="mkt-timeline-title">{title}</div>
-                <p>{desc}</p>
-              </div>
-            ))}
+            </Reveal>
           </div>
         </div>
-      </section>
 
-      {/* Team / Made in NL */}
-      <section className="mkt-sec mkt-sec--cream">
-        <div className="mkt-c">
-          <div className="mkt-quote-wrap mkt-rev">
-            <div className="mkt-quote-stamp">
-              <div>
-                <strong>Gemaakt in</strong>
-                <b>NL</b>
-                Sinds 2024
+        {/* Oprichters */}
+        <div className="section" style={{ background: "var(--bgs)", borderTop: "1px solid var(--border)" }}>
+          <div className="container">
+            <Reveal><div className="section-head">
+              <span className="section-kicker">Het team</span>
+              <h2>Wie wij zijn</h2>
+            </div></Reveal>
+            <Reveal>
+              <div className="founder-grid">
+                {OPRICHTERS.map(o => (
+                  <div key={o.naam} className="founder-card">
+                    <div className="founder-avatar">{o.initials}</div>
+                    <div className="founder-name">{o.naam}</div>
+                    <div className="founder-role">{o.rol}</div>
+                    <p className="founder-bio">{o.bio}</p>
+                    <a href="https://linkedin.com" className="founder-li" target="_blank" rel="noopener noreferrer">
+                      {I.linkedIn} LinkedIn
+                    </a>
+                  </div>
+                ))}
               </div>
-            </div>
-            <div>
-              <p className="mkt-quote-text">
-                Een team in Utrecht en Zwolle — drie bouwers, een ontwerper en een
-                klantkampioen — maakt BossBase. <em>We pakken zelf de telefoon op.</em>
-                We kennen onze klanten bij naam.
+              <p className="founder-tagline">
+                En verder een klein team van <span>developers, designers en support-helden</span> verspreid over Nederland.
               </p>
-              <div className="mkt-hero-ctas" style={{ marginBottom: 0 }}>
-                <button className="mkt-btn mkt-btn--primary" onClick={() => navigate('/contact')}>
-                  <span className="mkt-btn-dot" /> Neem contact op
-                </button>
-                <button className="mkt-btn mkt-btn--ghost" onClick={() => navigate('/voor-wie')}>
-                  Voor wie we bouwen →
-                </button>
-              </div>
-            </div>
+            </Reveal>
           </div>
         </div>
-      </section>
 
-      <section className="mkt-final">
-        <div className="mkt-final-in mkt-rev">
-          <div className="mkt-sec-num mkt-sec-num--light" style={{ justifyContent: 'center' }}>Klaar om te beginnen?</div>
-          <h2>Jij de baas,<br /><em>wij de basis.</em></h2>
-          <p>Word een van de 200+ vakbedrijven die hun werk vanuit BossBase besturen.</p>
-          <div className="mkt-final-ctas">
-            <button className="mkt-btn mkt-btn--brand mkt-btn--lg" onClick={() => navigate('/register')}>Start gratis</button>
-            <button className="mkt-btn mkt-btn--inverse mkt-btn--lg" onClick={() => navigate('/demo')}>Bekijk demo →</button>
+        {/* Missie */}
+        <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
+          <div className="container">
+            <Reveal><div className="section-head">
+              <span className="section-kicker">Missie</span>
+              <h2>Waarom we doen wat we doen</h2>
+            </div></Reveal>
+            <Reveal>
+              <div className="verhaal-body">
+                <p style={{ fontWeight: 700, fontSize: 20, color: "var(--dk)" }}>
+                  "Elke vakman verdient tools die even hard werken als hijzelf."
+                </p>
+                <p>Nederland draait op mensen die iets met hun handen maken. Loodgieters die lekkage verhelpen. Elektriciens die huizen aansluiten. Schilders die gevels opknappen. Zij verdienen software die hen helpt, niet software die hen ophoudt.</p>
+                <p>BossBase is gebouwd om vakmannen meer tijd te geven voor het werk dat ze leuk vinden, en minder tijd te laten verdoen aan administratie.</p>
+              </div>
+            </Reveal>
           </div>
         </div>
-      </section>
-    </MarketingShell>
-  );
+
+        {/* Statistieken */}
+        <div className="section" style={{ background: "var(--bgs)", borderTop: "1px solid var(--border)" }}>
+          <div className="container">
+            <Reveal><div className="section-head">
+              <span className="section-kicker">In cijfers</span>
+              <h2>BossBase in 2024</h2>
+            </div></Reveal>
+            <Reveal stagger>
+              <div className="stats-row">
+                {STATS.map(s => (
+                  <div key={s.num} className="stat-block">
+                    <div className="num">{s.num}</div>
+                    <div className="lbl">{s.lbl}</div>
+                  </div>
+                ))}
+              </div>
+            </Reveal>
+          </div>
+        </div>
+
+        {/* Waarden */}
+        <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
+          <div className="container">
+            <Reveal><div className="section-head">
+              <span className="section-kicker">Waarden</span>
+              <h2>Waar we voor staan</h2>
+            </div></Reveal>
+            <Reveal stagger>
+              <div className="waarden-grid">
+                {WAARDEN.map(w => (
+                  <div key={w.title} className="waarde-card">
+                    <div className="waarde-icon">{w.icon}</div>
+                    <h3>{w.title}</h3>
+                    <p>{w.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </Reveal>
+          </div>
+        </div>
+
+        {/* Waarom niet VC */}
+        <div className="section" style={{ background: "var(--bgs)", borderTop: "1px solid var(--border)" }}>
+          <div className="container">
+            <Reveal><div className="section-head">
+              <span className="section-kicker">Onze aanpak</span>
+              <h2>Waarom we geen durfkapitaal aannemen</h2>
+            </div></Reveal>
+            <Reveal>
+              <div className="waarom-body">
+                <p>Veel SaaS-bedrijven nemen tientallen miljoenen aan en groeien daarna ten koste van hun klanten: prijsverhogingen, verslechterende service, feature bloat. Dat willen we niet.</p>
+                <p>BossBase is winstgevend vanaf dag één. We groeien op eigen tempo, op basis van wat onze klanten willen betalen. Dat houdt ons scherp: elke euro die je betaalt, moet zijn waarde meerdere keren terugverdienen.</p>
+                <p>Dit betekent ook dat we je data nooit hoeven te verkopen. We hebben geen investeerder die dat eist.</p>
+              </div>
+            </Reveal>
+          </div>
+        </div>
+
+        {/* Slot CTA */}
+        <div className="section">
+          <div className="container">
+            <Reveal>
+              <div className="final-cta">
+                <h2>Klaar om kennis te maken? <span className="green">Begin vandaag.</span></h2>
+                <p>14 dagen gratis. Geen creditcard. Annuleer wanneer je wilt.</p>
+                <div className="hero-ctas" style={{ justifyContent: "center" }}>
+                  <a href="/registreer" className="btn btn-p glow btn-lg" onClick={e => go(e, "/registreer")}>
+                    Gratis proberen {I.arrowRight}
+                  </a>
+                  <a href="/contact" className="btn btn-s btn-lg" onClick={e => go(e, "/contact")}>
+                    Neem contact op
+                  </a>
+                </div>
+              </div>
+            </Reveal>
+          </div>
+        </div>
+      </main>
+      <Footer navigate={navigate} />
+    </div>
+  )
 }

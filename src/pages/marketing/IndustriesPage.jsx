@@ -1,152 +1,263 @@
-import MarketingShell from './MarketingShell.jsx';
+import { useState } from "react"
+import { Nav, Footer, Reveal, I } from "./MktShared"
 
-/* ─── Per-industry mini glyphs (no images, no icon libs) ───── */
-const Glyph = {
-  paint: <svg viewBox="0 0 64 64" fill="none" width="40" height="40"><rect x="14" y="10" width="32" height="14" rx="2" stroke="currentColor" strokeWidth="2.5"/><path d="M14 24h32" stroke="currentColor" strokeWidth="2.5"/><path d="M30 24v12h4v12c0 2 1.5 4 4 4s4-2 4-4V36" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/><rect x="40" y="6" width="6" height="8" rx="1" stroke="currentColor" strokeWidth="2.5"/></svg>,
-  garden: <svg viewBox="0 0 64 64" fill="none" width="40" height="40"><path d="M32 56V30" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/><path d="M32 30c-8 0-14-6-14-14 8 0 14 6 14 14z" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round"/><path d="M32 36c8 0 14-6 14-14-8 0-14 6-14 14z" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round"/><path d="M10 56h44" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg>,
-  klus: <svg viewBox="0 0 64 64" fill="none" width="40" height="40"><path d="M20 44l-8 8m0 0l-4-4 8-8m12-12l16 16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/><circle cx="44" cy="20" r="10" stroke="currentColor" strokeWidth="2.5"/><path d="M40 16l8 8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg>,
-  stuc: <svg viewBox="0 0 64 64" fill="none" width="40" height="40"><rect x="10" y="34" width="44" height="8" rx="2" stroke="currentColor" strokeWidth="2.5"/><path d="M16 34V22h32v12" stroke="currentColor" strokeWidth="2.5"/><path d="M22 30l8-4 6 4 6-4" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>,
-  loodgieter: <svg viewBox="0 0 64 64" fill="none" width="40" height="40"><path d="M14 18h14v8h14v8h-14v18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/><circle cx="46" cy="22" r="6" stroke="currentColor" strokeWidth="2.5"/></svg>,
-  install: <svg viewBox="0 0 64 64" fill="none" width="40" height="40"><path d="M14 20l18-8 18 8v24l-18 8-18-8V20z" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round"/><path d="M14 20l18 8 18-8M32 28v24" stroke="currentColor" strokeWidth="2.5"/></svg>,
-};
+const BRANCHES = [
+  {
+    id: "loodgieter", naam: "Loodgieter", icon: I.wrench,
+    tag: "Sanitair & installaties",
+    intro: "Als loodgieter werk je op afroep, vaak urgent. Offertes moeten snel de deur uit en klanten wil je goed bijhouden.",
+    pains: ["Offertes maken duurt te lang", "Klanten vergeten wie je bent", "Agenda-chaos bij spoedklussen", "Facturen blijven liggen"],
+    solves: ["Offerte in 2 minuten via sjabloon", "CRM met volledige klanthistorie", "Agenda met SMS-herinneringen", "Automatische factuurherinneringen"],
+    stats: [{ n: "42 min", lbl: "bespaard per dag" }, { n: "3×", lbl: "snellere offertes" }],
+  },
+  {
+    id: "schilder", naam: "Schilder", icon: I.tool,
+    tag: "Schilderwerk & afwerking",
+    intro: "Schilders werken aan meerdere projecten tegelijk. Wie is wanneer waar? Welke offerte wacht nog op akkoord?",
+    pains: ["Meerdere projecten tegelijk overzien", "Materiaalkosten bijhouden", "Klanten bellen op onhandige momenten", "Verloren offertes"],
+    solves: ["Pipeline per project", "Kostprijs in offerte verwerken", "Klant belt jou dankzij herinneringen", "Digitaal archief van alle offertes"],
+    stats: [{ n: "€ 1.200", lbl: "extra omzet/maand" }, { n: "18 min", lbl: "per offerte bespaard" }],
+  },
+  {
+    id: "elektricien", naam: "Elektricien", icon: I.bolt,
+    tag: "Elektra & beveiliging",
+    intro: "Van kleine storingen tot complete installaties — als elektricien wil je je concentreren op het werk, niet op de administratie.",
+    pains: ["Werkbonnen kwijtraken", "Onduidelijke afspraken met klanten", "Te laat factureren", "Geen inzicht in winstmarges"],
+    solves: ["Digitale werkbonnen", "Afspraken met klantbevestiging", "Automatisch factureren na opdracht", "Omzet per klant inzichtelijk"],
+    stats: [{ n: "15 uur", lbl: "minder admin per maand" }, { n: "92%", lbl: "betaalt op tijd" }],
+  },
+  {
+    id: "aannemer", naam: "Aannemer", icon: I.package,
+    tag: "Bouw & renovatie",
+    intro: "Als aannemer manage je subcontractors, klanten en deadlines tegelijk. Overzicht is geen luxe, maar een must.",
+    pains: ["Veel partijen, weinig overzicht", "Grote offertes met veel regels", "Betalingsrisico bij grote projecten", "Teamcommunicatie loopt vast"],
+    solves: ["Projectpipeline met deadlines", "Gedetailleerde offertes met subregelitems", "Betalingsschema's in facturen", "Teamrollen en taakverdeling"],
+    stats: [{ n: "€ 8.400", lbl: "gem. offertebedrag" }, { n: "4", lbl: "projecten tegelijk" }],
+  },
+  {
+    id: "installateur", naam: "Installateur", icon: I.tool,
+    tag: "Installatie & service",
+    intro: "Service-abonnementen, onderhoudsbeurten en storingen: als installateur heb je terugkerende klanten die goed bijgehouden moeten worden.",
+    pains: ["Onderhoudsmomenten vergeten", "Servicecontracten niet bijhouden", "Klanten zijn vergeten wie je bent", "Geen inzicht in uurtarief-omzet"],
+    solves: ["Terugkerende afspraken instellen", "Contracten per klant opslaan", "Automatische herinneringen", "Omzet per uurtarief inzichtelijk"],
+    stats: [{ n: "12×", lbl: "terugkerende klanten" }, { n: "0", lbl: "gemiste onderhoudsbeurten" }],
+  },
+  {
+    id: "transporteur", naam: "Transporteur", icon: I.truck,
+    tag: "Transport & logistiek",
+    intro: "Als transporteur werk je met vaste klanten en route-planning. Factureren per rit of per maand? BossBase past zich aan.",
+    pains: ["Rittenadministratie is tijdrovend", "Klanten betalen te laat", "Geen overzicht per chauffeur", "Offertes per traject opmaken"],
+    solves: ["Klanten per rit of maand factureren", "Automatische betalingsherinneringen", "Teamrollen per chauffeur", "Offerte-sjablonen per traject"],
+    stats: [{ n: "98%", lbl: "betaalt binnen 14 dagen" }, { n: "6 uur", lbl: "bespaard per week" }],
+  },
+  {
+    id: "tuinman", naam: "Tuinman / Groenvoorziening", icon: I.sparkle,
+    tag: "Tuin & groenonderhoud",
+    intro: "Tuinaanleg, onderhoud en seizoenswerk: als tuinman heb je een gevarieerde klantenkring die je goed wil bijhouden.",
+    pains: ["Seizoensdrukte vs. rustige periodes", "Klanten vergeten servicebeurt", "Materiaalkosten in offerte vergeten", "Geen terugkerende facturen"],
+    solves: ["Pipeline voor drukte en rustige periodes", "Herinneringen voor terugkerende diensten", "Kostprijs-calculatie in offerte", "Abonnementsfacturatie"],
+    stats: [{ n: "+34%", lbl: "meer terugkerende klanten" }, { n: "2×", lbl: "snellere offertes" }],
+  },
+  {
+    id: "schoonmaker", naam: "Schoonmaakbedrijf", icon: I.sparkle,
+    tag: "Schoonmaak & facilitair",
+    intro: "Vaste klanten, terugkerende diensten en meerdere medewerkers: schoonmaakbedrijven hebben eenvoudige maar robuuste tools nodig.",
+    pains: ["Roosters voor meerdere klanten bijhouden", "Facturen per klant afstemmen", "Medewerkers overzicht geven", "Klachten tracken"],
+    solves: ["Agenda per locatie en medewerker", "Automatische maandfacturering", "Teamrollen en taakverdeling", "Notities per klant voor feedback"],
+    stats: [{ n: "22", lbl: "gem. vaste klanten" }, { n: "100%", lbl: "facturen op tijd" }],
+  },
+]
 
-const INDUSTRIES = [
-  { n: '01', g: Glyph.paint,      h: 'Schilders',          p: 'Voor binnen- en buitenwerk. Foto’s per kamer, m²-staat, materialen en uren — alles op één werkbon.', tags: ['Gevelopnames', 'm²-prijzen', 'Foto-werkbonnen', 'Klusplanning'], deep: true },
-  { n: '02', g: Glyph.garden,     h: 'Hoveniers',          p: 'Houd onderhoudsabonnementen en eenmalige aanlegklussen netjes uit elkaar — én op één planning.',     tags: ['Vaste rondes', 'Aanlegprojecten', 'Klantabonnementen', 'Materiaalbestelling'] },
-  { n: '03', g: Glyph.klus,       h: 'Klusbedrijven',      p: 'Van dakkapel tot keukenrenovatie. Per klus zie je uren, kosten, marge en planning in één oogopslag.', tags: ['Job costing', 'Materiaalstaat', 'Werkbonnen', 'Foto-archief'], deep: true },
-  { n: '04', g: Glyph.stuc,       h: 'Stukadoors',         p: 'Strakke calculaties op m². Snelle offertes, slimme planning per ploeg en directe oplevering.',         tags: ['m²-calculatie', 'Ploegplanning', 'Oplevering', 'Foto-akkoord'] },
-  { n: '05', g: Glyph.loodgieter, h: 'Loodgieters',        p: 'Snel storingen aannemen, plannen en uitvoeren. Inclusief urenregistratie ter plekke en factuur per mail.', tags: ['Storingen', 'Mobiel werken', 'Snelle facturatie', 'Service-abonnement'], deep: true },
-  { n: '06', g: Glyph.install,    h: 'Installateurs',      p: 'Voor cv, elektra, ventilatie en zonnepanelen. Per project uren, materialen en garantie netjes vastgelegd.', tags: ['Materiaalbestelling', 'Garantie & serienr.', 'Onderhoudsplanning', 'API-integraties'] },
-];
+const PERSONAS = [
+  {
+    id: "zzp", label: "ZZP'er",
+    desc: "Jij bent je eigen baas. Geen personeel, maar wel alle verantwoordelijkheid. BossBase helpt je gefocust te blijven op je werk.",
+    features: [
+      { icon: I.signature, title: "Offertes in 2 minuten", desc: "Professioneel en snel, ook op je telefoon." },
+      { icon: I.calendar,  title: "Agenda met herinneringen", desc: "Nooit meer een afspraak vergeten of no-shows." },
+      { icon: I.chart,     title: "Inzicht in je omzet", desc: "Weet direct hoeveel je deze maand verdient." },
+      { icon: I.users,     title: "CRM zonder gedoe", desc: "Alle klantinfo op één plek, snel terug te vinden." },
+    ],
+    cta: "Ga als ZZP'er aan de slag",
+  },
+  {
+    id: "bedrijf", label: "Klein bedrijf",
+    desc: "Je hebt een team en meerdere projecten tegelijk. BossBase houdt iedereen op de hoogte en het overzicht compleet.",
+    features: [
+      { icon: I.users,     title: "Teamrollen & rechten", desc: "Iedereen heeft toegang tot wat hij nodig heeft." },
+      { icon: I.kanban,    title: "Pipeline voor elk project", desc: "Van aanvraag tot betaling, alles in beeld." },
+      { icon: I.chart,     title: "Rapportages per medewerker", desc: "Zie wie de meeste omzet genereert." },
+      { icon: I.building,  title: "Meerdere vestigingen", desc: "Beheer meerdere locaties in één account (Team plan)." },
+    ],
+    cta: "Ga als bedrijf aan de slag",
+  },
+]
 
-const PROOF = [
-  ['200+', 'Vakbedrijven actief op BossBase'],
-  ['18%', 'Gemiddelde stijging in conversie'],
-  ['4.9', 'Gemiddelde beoordeling (★)'],
-  ['<5 min', 'Tot je eerste offerte na aanmelding'],
-];
-
-export default function IndustriesPage({ navigate, isAuthenticated }) {
+function BrancheVisual({ branch }) {
   return (
-    <MarketingShell navigate={navigate} active="voor-wie" isAuthenticated={isAuthenticated}>
-      <div className="mkt-c">
-        <header className="mkt-page-hd mkt-rev">
-          <div>
-            <div className="mkt-sec-num">Voor wie</div>
-            <h1>Voor mensen die<br /><em>met hun handen werken.</em></h1>
-          </div>
-          <p>
-            BossBase is gebouwd voor de Nederlandse vakman. We praten geen
-            corporate, we ondersteunen geen 50.000 features die jij toch niet
-            gebruikt — alleen het werk dat klopt.
-          </p>
-        </header>
+    <div className="branche-visual-box">
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
+        <div style={{ width: 44, height: 44, borderRadius: 12, background: "var(--pll)", color: "var(--pd)", display: "flex", alignItems: "center", justifyContent: "center" }}>{branch.icon}</div>
+        <div>
+          <div style={{ fontWeight: 800, fontSize: 17, color: "var(--dk)" }}>{branch.naam}</div>
+          <div style={{ fontSize: 13, color: "var(--pd)", fontWeight: 600 }}>{branch.tag}</div>
+        </div>
       </div>
+      {branch.stats && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
+          {branch.stats.map(s => (
+            <div key={s.lbl} style={{ background: "var(--pll)", borderRadius: 10, padding: "12px 14px", textAlign: "center" }}>
+              <div style={{ fontSize: 20, fontWeight: 900, color: "var(--pd)", letterSpacing: "-0.02em" }}>{s.n}</div>
+              <div style={{ fontSize: 12.5, color: "var(--dmu)", marginTop: 3 }}>{s.lbl}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ display: "grid", gap: 8 }}>
+        {branch.solves.map(s => (
+          <div key={s} style={{ display: "flex", alignItems: "flex-start", gap: 9, fontSize: 14, color: "var(--dm)" }}>
+            <span style={{ color: "var(--pd)", flex: "none", marginTop: 2 }}>{I.check}</span> {s}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
-      <section className="mkt-sec mkt-sec--first" style={{ paddingTop: 32, borderTop: 0 }}>
-        <div className="mkt-c">
-          <div className="mkt-ind mkt-rev">
-            {INDUSTRIES.map(ind => (
-              <article key={ind.h} className={`mkt-ind-card${ind.deep ? ' is-deep' : ''}`}>
-                <div className="mkt-ind-art">
-                  <span className="mkt-ind-num">{ind.n}</span>
-                  {ind.g}
+export default function IndustriesPage({ navigate }) {
+  const [type, setType] = useState("zzp")
+  const persona = PERSONAS.find(p => p.id === type)
+
+  const go = (e, href) => {
+    e.preventDefault()
+    if (navigate) navigate(href)
+    else window.location.href = href
+  }
+
+  return (
+    <div className="bm">
+      <Nav navigate={navigate} />
+      <main>
+        {/* Hero */}
+        <section className="voorwie-page-hero">
+          <div className="container">
+            <Reveal>
+              <span className="section-kicker">Voor wie</span>
+              <h1>Gebouwd voor de handen<br/>die Nederland laten draaien</h1>
+              <p>Of je nu ZZP'er of klein bedrijf bent — BossBase past zich aan jouw branche en werkwijze aan.</p>
+              <div style={{ display: "inline-flex", gap: 4, background: "#fff", border: "1px solid var(--bstrong)", borderRadius: 999, padding: 4, marginTop: 28 }}>
+                {PERSONAS.map(p => (
+                  <button key={p.id}
+                    onClick={() => setType(p.id)}
+                    style={{
+                      border: "none", background: type === p.id ? "var(--dk)" : "none",
+                      color: type === p.id ? "#fff" : "var(--dmu)",
+                      fontWeight: 600, fontSize: 15, padding: "10px 22px", borderRadius: 999, cursor: "pointer",
+                      transition: "all 0.18s ease",
+                    }}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </Reveal>
+          </div>
+        </section>
+
+        {/* ZZP / Bedrijf persona */}
+        <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
+          <div className="container">
+            <Reveal>
+              <div className="section-head">
+                <h2>{type === "zzp" ? "BossBase voor ZZP'ers" : "BossBase voor kleine bedrijven"}</h2>
+                <p>{persona.desc}</p>
+              </div>
+              <div className="opdracht-grid">
+                {persona.features.map(f => (
+                  <div key={f.title} className="opdracht-card">
+                    <div className="ic">{f.icon}</div>
+                    <h3>{f.title}</h3>
+                    <p>{f.desc}</p>
+                  </div>
+                ))}
+              </div>
+              <div style={{ textAlign: "center", marginTop: 32 }}>
+                <a href="/registreer" className="btn btn-p glow btn-lg" onClick={e => go(e, "/registreer")}>
+                  {persona.cta} {I.arrowRight}
+                </a>
+              </div>
+            </Reveal>
+          </div>
+        </div>
+
+        {/* Per branche */}
+        <div style={{ borderTop: "1px solid var(--border)" }}>
+          <div className="section" style={{ paddingBottom: 0 }}>
+            <div className="container">
+              <Reveal><div className="section-head">
+                <span className="section-kicker">Per branche</span>
+                <h2>Speciaal voor jouw vakgebied</h2>
+                <p>BossBase kent de uitdagingen van jouw branche. Kijk hoe we die oplossen.</p>
+              </div></Reveal>
+            </div>
+          </div>
+
+          {BRANCHES.map((branch, i) => (
+            <div key={branch.id} className="section" style={{ borderTop: "1px solid var(--border)", paddingTop: 56, paddingBottom: 56 }}>
+              <div className="container">
+                <Reveal>
+                  <div className={`branche-layout${i % 2 === 1 ? " flip" : ""}`}>
+                    <div className="branche-copy">
+                      <span className="branche-tag">{branch.icon} {branch.tag}</span>
+                      <h2>{branch.naam}</h2>
+                      <p className="intro">{branch.intro}</p>
+                      <div className="two-cols-label">Jouw pijnpunten</div>
+                      <ul className="pain-list">
+                        {branch.pains.map(p => (
+                          <li key={p}>
+                            <span style={{ color: "var(--danger)", flex: "none" }}>{I.x}</span> {p}
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="two-cols-label" style={{ marginTop: 16 }}>Hoe BossBase helpt</div>
+                      <ul className="solve-list">
+                        {branch.solves.map(s => (
+                          <li key={s}>
+                            <span style={{ color: "var(--pd)", flex: "none" }}>{I.check}</span> {s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="branche-visual">
+                      <BrancheVisual branch={branch} />
+                    </div>
+                  </div>
+                </Reveal>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* CTA */}
+        <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
+          <div className="container">
+            <Reveal>
+              <div className="final-cta">
+                <h2>Klaar om te beginnen? <span className="green">Probeer het gratis.</span></h2>
+                <p>14 dagen gratis. Geen creditcard. Annuleer wanneer je wilt.</p>
+                <div className="hero-ctas" style={{ justifyContent: "center" }}>
+                  <a href="/registreer" className="btn btn-p glow btn-lg" onClick={e => go(e, "/registreer")}>
+                    Gratis proberen {I.arrowRight}
+                  </a>
+                  <a href="/prijzen" className="btn btn-s btn-lg" onClick={e => go(e, "/prijzen")}>
+                    Bekijk prijzen
+                  </a>
                 </div>
-                <div>
-                  <h4>{ind.h}</h4>
-                  <p>{ind.p}</p>
-                  <ul>
-                    {ind.tags.map(t => <li key={t}>{t}</li>)}
-                  </ul>
-                </div>
-              </article>
-            ))}
+              </div>
+            </Reveal>
           </div>
         </div>
-      </section>
-
-      {/* Atelier proof block */}
-      <section className="mkt-sec mkt-sec--atelier mkt-sec--airy">
-        <div className="mkt-c">
-          <div className="mkt-sec-head mkt-rev">
-            <div>
-              <div className="mkt-sec-num mkt-sec-num--light">In cijfers</div>
-              <h2>Vakmensen vinden<br /><em>de basis bij BossBase.</em></h2>
-            </div>
-            <p>
-              Vier cijfers die laten zien wat BossBase oplevert — en waarom we
-              elke dag wakker worden om het iets beter te maken.
-            </p>
-          </div>
-
-          <div className="mkt-stats mkt-rev">
-            {PROOF.map(([n, label]) => (
-              <div key={label} className="mkt-stat">
-                <b>{n}</b>
-                <span>{label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonial trio */}
-      <section className="mkt-sec mkt-sec--cream">
-        <div className="mkt-c">
-          <div className="mkt-sec-head mkt-rev">
-            <div>
-              <div className="mkt-sec-num">Wat ze zeggen</div>
-              <h2>Drie verhalen,<br /><em>één rode draad.</em></h2>
-            </div>
-            <p>
-              Verschillende branches, dezelfde winst: minder zoekwerk, snellere
-              offertes en eerder geld op de rekening.
-            </p>
-          </div>
-
-          <div className="mkt-aud mkt-rev">
-            <div className="mkt-aud-card">
-              <span className="mkt-eye">Schilder · Zwolle</span>
-              <h4 style={{ fontSize: '1.2rem' }}>“Drie uur per week erbij — en meer omzet.”</h4>
-              <p>“Mijn offertes gaan binnen de dag de deur uit. Klanten tekenen online. Voor BossBase had ik altijd een avond papierwerk per week — nu een paar minuten op de bouw.”</p>
-              <div className="mkt-aud-foot">
-                <strong>Pieter Jansen</strong>
-                <span className="mkt-aud-arrow">→</span>
-              </div>
-            </div>
-            <div className="mkt-aud-card">
-              <span className="mkt-eye">Hovenier · Groningen</span>
-              <h4 style={{ fontSize: '1.2rem' }}>“Abonnementen op de automaat.”</h4>
-              <p>“Tuinonderhoud-abonnementen factureren we automatisch per maand. Voor BossBase zat ik elke maand een dag te knippen en plakken — nu nul.”</p>
-              <div className="mkt-aud-foot">
-                <strong>Henk de Boer</strong>
-                <span className="mkt-aud-arrow">→</span>
-              </div>
-            </div>
-            <div className="mkt-aud-card">
-              <span className="mkt-eye">Klusbedrijf · Hardenberg</span>
-              <h4 style={{ fontSize: '1.2rem' }}>“Eindelijk zie ik de marge per klus.”</h4>
-              <p>“We hebben er drie ploegen tegelijk op draaien. Met BossBase zie ik dezelfde avond wat een klus heeft opgeleverd. Geen Excel-gepuzzel meer.”</p>
-              <div className="mkt-aud-foot">
-                <strong>Frank van Dijk</strong>
-                <span className="mkt-aud-arrow">→</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="mkt-final">
-        <div className="mkt-final-in mkt-rev">
-          <div className="mkt-sec-num mkt-sec-num--light" style={{ justifyContent: 'center' }}>Past BossBase bij jouw werk?</div>
-          <h2>Eén werkdag<br /><em>en je weet het.</em></h2>
-          <p>14 dagen gratis Pro-account. Geen creditcard. Stop wanneer je wilt.</p>
-          <div className="mkt-final-ctas">
-            <button className="mkt-btn mkt-btn--brand mkt-btn--lg" onClick={() => navigate('/register')}>Start gratis</button>
-            <button className="mkt-btn mkt-btn--inverse mkt-btn--lg" onClick={() => navigate('/contact')}>Stel een vraag →</button>
-          </div>
-        </div>
-      </section>
-    </MarketingShell>
-  );
+      </main>
+      <Footer navigate={navigate} />
+    </div>
+  )
 }
