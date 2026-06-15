@@ -14,6 +14,7 @@ import { listCustomers } from '../services/customerService.js';
 import { listDeals } from '../services/dealService.js';
 import { listActivities } from '../services/activityService.js';
 import { getConnectionStatus, startGoogleCalendarConnect, disconnectGoogleCalendar } from '../services/googleCalendarService.js';
+import { getWerkbonnen } from '../services/werkbonService.js';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { ActivityEditModal, NewCalendarEventModal, NewJobCostModal } from '../components/SharedModals.jsx';
@@ -85,8 +86,29 @@ export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityI
 
   React.useEffect(() => {
     setLoading(true);
-    Promise.all([listCalendarEvents(), listCustomers(), listActivities()])
-      .then(([data, custData, actData]) => { setEvents(data); setCustomers(custData); setActivities(actData); setError(''); })
+    Promise.all([listCalendarEvents(), listCustomers(), listActivities(), getWerkbonnen().catch(() => [])])
+      .then(([data, custData, actData, wbs]) => {
+        // Merge ingeplande werkbonnen als synthetische agenda-events (alleen voor huidige gebruiker)
+        const wbEvents = wbs
+          .filter(w => w.geplandOp && w.status !== 'afgerond')
+          .map(w => ({
+            id: `wb-${w.id}`,
+            title: w.titel,
+            date: w.geplandOp,
+            time: w.starttijd || '08:00',
+            end: w.eindtijd || '',
+            color: '#fff7ed',
+            textColor: '#d97706',
+            type: 'werkbon',
+            werkbonId: w.id,
+            customerName: w.customerName,
+            locatie: w.locatie,
+          }));
+        setEvents([...data, ...wbEvents]);
+        setCustomers(custData);
+        setActivities(actData);
+        setError('');
+      })
       .catch(err => setError(err.message || 'Agenda laden is mislukt.'))
       .finally(() => setLoading(false));
   }, [refreshKey]);

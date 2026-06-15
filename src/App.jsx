@@ -19,6 +19,7 @@ import { OffertesPage } from './pages/OffertesPage.jsx';
 import { FacturenPage } from './pages/FacturenPage.jsx';
 import { UrenPageV2 as UrenPage } from './pages/UrenPageV2.jsx';
 import { WerkbonPageV2 as WerkbonPage } from './pages/WerkbonPageV2.jsx';
+import { PlanningPage } from './pages/PlanningPage.jsx';
 import { ProjectsPage } from './pages/ProjectsPage.jsx';
 import { DatabasePage } from './pages/DatabasePage.jsx';
 import MarketingWebsite from './pages/MarketingWebsite.jsx';
@@ -50,6 +51,7 @@ const NAV = [
   { id: 'customers',  label: 'Klanten',     icon: 'cust',    section: 'main' },
   { id: 'activities', label: 'Activiteiten',icon: 'act',     section: 'main' },
   { id: 'calendar',    label: 'Agenda',       icon: 'cal',      section: 'work' },
+  { id: 'planning',    label: 'Planning',    icon: 'cal',      section: 'work', adminOnly: true },
   { id: 'projecten',   label: 'Projecten',   icon: 'projects', section: 'work' },
   { id: 'werkbonnen',  label: 'Werkbonnen',  icon: 'wo',       section: 'work' },
   { id: 'uren',        label: 'Uren',        icon: 'hours',    section: 'work' },
@@ -141,10 +143,13 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loadin
           onMouseLeave={e => e.currentTarget.classList.remove('hov')}>
           {SECTIONS.map(sec => {
             const isMedewerker = profile?.role === 'medewerker';
+            const isAdmin = profile?.role === 'admin';
             const items = NAV.filter(n => {
               if (n.section !== sec.id) return false;
               // medewerkers don't see Team/Instellingen management pages
               if (isMedewerker && (n.id === 'team' || n.id === 'instellingen')) return false;
+              // admin-only items
+              if (n.adminOnly && !isAdmin) return false;
               return true;
             });
             if (items.length === 0) return null;
@@ -766,7 +771,7 @@ function AppInner() {
     const path = window.location.pathname;
     if (path.startsWith('/dashboard/')) {
       const sub = path.slice('/dashboard/'.length).split('/')[0];
-      const VALID = ['pipeline','customers','activities','calendar','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','database','team','instellingen'];
+      const VALID = ['pipeline','customers','activities','calendar','planning','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','database','team','instellingen'];
       if (VALID.includes(sub)) return sub;
     }
     return 'dashboard';
@@ -806,6 +811,7 @@ function AppInner() {
       customers:  { title: 'Klanten',      sub: 'CRM — alle klantprofielen' },
       activities: { title: 'Activiteiten', sub: 'Openstaande acties en taken' },
       calendar:    { title: 'Agenda',        sub: 'Planning en afspraken' },
+      planning:    { title: 'Planning',     sub: 'Weekplanning per medewerker en voertuig' },
       projecten:   { title: 'Projecten',    sub: 'Beheer projecten, uren, offertes en facturatie' },
       werkbonnen:  { title: 'Werkbonnen',   sub: 'Uitvoeropdrachten op locatie' },
       uren:        { title: 'Uren',         sub: 'Urenregistratie per medewerker' },
@@ -824,7 +830,7 @@ function AppInner() {
       setRoute(path || '/');
       if (path.startsWith('/dashboard/')) {
         const sub = path.slice('/dashboard/'.length).split('/')[0];
-        const VALID = ['pipeline','customers','activities','calendar','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','database','team','instellingen'];
+        const VALID = ['pipeline','customers','activities','calendar','planning','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','database','team','instellingen'];
         setPage(VALID.includes(sub) ? sub : 'dashboard');
       } else if (path === '/dashboard') {
         setPage('dashboard');
@@ -1032,6 +1038,7 @@ function AppInner() {
         ) : <CustomersPage openCustomer={openCustomer} />;
       case 'activities': return <ActivitiesPageV2 openCustomer={openCustomer} preOpenActivityId={navIntent?.page === 'activities' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'calendar':   return <CalendarPage openCustomer={openCustomer} openCalendarEvent={openCalendarEvent} preOpenActivityId={navIntent?.page === 'calendar' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
+      case 'planning':   return <PlanningPage />;
       case 'costs':       return <CostsPage />;
       case 'revenue':     return <RevenuePage />;
       case 'facturen':    return <FacturenPage openCustomer={openCustomer} />;

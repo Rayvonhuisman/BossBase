@@ -14,6 +14,7 @@ const toWerkbon = row => ({
   offerteId: row.offerte_id,
   projectId: row.project_id || null,
   assignedTo: row.assigned_to,
+  voertuigId: row.voertuig_id || null,
   titel: row.titel || "",
   omschrijving: row.omschrijving || "",
   status: row.status || "gepland",
@@ -29,6 +30,8 @@ const toWerkbon = row => ({
   customerName: row.customers?.name || "",
   assignedName: row.profiles?.full_name || "",
   projectName: row.projects?.name || "",
+  voertuigNaam: row.voertuigen?.naam || "",
+  voertuigKleur: row.voertuigen?.kleur || "",
   raw: row,
 })
 
@@ -56,11 +59,24 @@ const toWerkbonMateriaal = row => ({
 
 // ── WERKBONNEN ───────────────────────────────────────────────────────────────
 
+const WERKBON_SELECT = "*, customers(name), profiles(full_name), projects(name), voertuigen(naam, kleur)"
+
 export async function getWerkbonnen() {
   const { data, error } = await supabase
     .from("werkbonnen")
-    .select("*, customers(name), profiles(full_name), projects(name)")
+    .select(WERKBON_SELECT)
     .order("gepland_op", { ascending: true })
+  if (error) throw error
+  return (data || []).map(toWerkbon)
+}
+
+export async function getWerkbonnenForWeek(startDate, endDate) {
+  const { data, error } = await supabase
+    .from("werkbonnen")
+    .select(WERKBON_SELECT)
+    .or(`gepland_op.gte.${startDate},gepland_op.is.null`)
+    .lte("gepland_op", endDate)
+    .order("starttijd", { ascending: true, nullsFirst: true })
   if (error) throw error
   return (data || []).map(toWerkbon)
 }
@@ -68,7 +84,7 @@ export async function getWerkbonnen() {
 export async function getWerkbonById(id) {
   const { data, error } = await supabase
     .from("werkbonnen")
-    .select("*, customers(name), profiles(full_name), projects(name)")
+    .select(WERKBON_SELECT)
     .eq("id", id)
     .single()
   if (error) throw error
@@ -82,6 +98,7 @@ export async function createWerkbon(input) {
     offerte_id: input.offerte_id || input.offerteId || null,
     project_id: input.project_id || input.projectId || null,
     assigned_to: input.assigned_to || input.assignedTo || null,
+    voertuig_id: input.voertuig_id || input.voertuigId || null,
     titel: input.titel,
     omschrijving: input.omschrijving || null,
     status: input.status || "gepland",
@@ -98,7 +115,7 @@ export async function createWerkbon(input) {
   const { data, error } = await supabase
     .from("werkbonnen")
     .insert(payload)
-    .select("*, customers(name), profiles(full_name), projects(name)")
+    .select(WERKBON_SELECT)
     .single()
   if (error) throw error
   return toWerkbon(data)
@@ -112,16 +129,20 @@ export async function updateWerkbon(id, input) {
   delete updates.offerteId
   delete updates.projectId
   delete updates.assignedTo
+  delete updates.voertuigId
   delete updates.geplandOp
   delete updates.customerName
   delete updates.assignedName
   delete updates.projectName
+  delete updates.voertuigNaam
+  delete updates.voertuigKleur
+  delete updates.raw
 
   const { data, error } = await supabase
     .from("werkbonnen")
     .update(updates)
     .eq("id", id)
-    .select("*, customers(name), profiles(full_name), projects(name)")
+    .select(WERKBON_SELECT)
     .single()
   if (error) throw error
   return toWerkbon(data)
@@ -356,7 +377,7 @@ export async function deleteWerkbonMeerwerk(id) {
 export async function getWerkbonnenByProject(projectId) {
   const { data, error } = await supabase
     .from("werkbonnen")
-    .select("*, customers(name), profiles(full_name), projects(name), werkbon_taken(afgerond)")
+    .select("*, customers(name), profiles(full_name), projects(name), voertuigen(naam, kleur), werkbon_taken(afgerond)")
     .eq("project_id", projectId)
     .order("gepland_op", { ascending: true })
   if (error) throw error

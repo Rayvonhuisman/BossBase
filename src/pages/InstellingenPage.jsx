@@ -15,6 +15,7 @@ import {
   updatePipelineStage,
   deletePipelineStage,
 } from '../services/instellingenService.js';
+import { getVoertuigen, createVoertuig, updateVoertuig, deleteVoertuig } from '../services/voertuigService.js';
 import { updateCompany } from '../services/profileService.js';
 import { uploadProfileAvatar, removeProfileAvatar } from '../services/avatarService.js';
 import { AvatarUpload } from '../components/AvatarUpload.jsx';
@@ -139,6 +140,14 @@ export function InstellingenPage() {
   const [ssImporting, setSsImporting] = useState(false);
   const [ssSyncingContacten, setSsSyncingContacten] = useState(false);
 
+  // Voertuigen
+  const [voertuigen, setVoertuigen] = useState([]);
+  const [showVoertuigForm, setShowVoertuigForm] = useState(false);
+  const [newVoertuigForm, setNewVoertuigForm] = useState({ naam: '', kenteken: '', kleur: '#1DDB62' });
+  const [savingVoertuig, setSavingVoertuig] = useState(false);
+  const [editingVoertuigId, setEditingVoertuigId] = useState(null);
+  const [editingVoertuigForm, setEditingVoertuigForm] = useState({});
+
   // AFAS
   const [afasConnection, setAfasConnection] = useState(null);
   const [afasForm, setAfasForm] = useState({ environmentId: '', token: '' });
@@ -149,6 +158,10 @@ export function InstellingenPage() {
   const [afasSyncingContacten, setAfasSyncingContacten] = useState(false);
   const [afasTested, setAfasTested] = useState(false);
   const [afasShowToken, setAfasShowToken] = useState(false);
+
+  useEffect(() => {
+    getVoertuigen({ inclusiefInactief: true }).then(setVoertuigen).catch(() => {});
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -628,6 +641,7 @@ export function InstellingenPage() {
     { id: 'standaard', label: 'Standaardwaarden' },
     { id: 'templates', label: 'E-mailtemplates' },
     { id: 'pipeline', label: 'Pipeline' },
+    ...(isAdmin ? [{ id: 'voertuigen', label: 'Voertuigen' }] : []),
     { id: 'integraties', label: 'Integraties' },
   ];
 
@@ -1253,6 +1267,109 @@ export function InstellingenPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {!loading && tab === 'voertuigen' && isAdmin && (
+        <div className="afu3" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="card card-p">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <div className="card-title">Voertuigen</div>
+                <div style={{ fontSize: '.82rem', color: 'var(--dmu)', marginTop: 2 }}>Beheer de voertuigen die je kunt inplannen via de Planning pagina.</div>
+              </div>
+              {!showVoertuigForm && (
+                <button className="btn btn-p btn-sm" onClick={() => setShowVoertuigForm(true)}>{I.plus} Voertuig toevoegen</button>
+              )}
+            </div>
+
+            {showVoertuigForm && (
+              <div style={{ background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 'var(--r10)', padding: 14, marginBottom: 14, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div className="f" style={{ flex: '1 1 160px' }}>
+                  <label>Naam *</label>
+                  <input autoFocus placeholder="Bijv. Busje 1" value={newVoertuigForm.naam} onChange={e => setNewVoertuigForm(f => ({ ...f, naam: e.target.value }))} />
+                </div>
+                <div className="f" style={{ flex: '1 1 120px' }}>
+                  <label>Kenteken</label>
+                  <input placeholder="AB-123-C" value={newVoertuigForm.kenteken} onChange={e => setNewVoertuigForm(f => ({ ...f, kenteken: e.target.value }))} />
+                </div>
+                <div className="f" style={{ flex: '0 0 80px' }}>
+                  <label>Kleur</label>
+                  <input type="color" value={newVoertuigForm.kleur} onChange={e => setNewVoertuigForm(f => ({ ...f, kleur: e.target.value }))} style={{ height: 38, padding: 4, cursor: 'pointer' }} />
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="btn btn-s btn-sm" onClick={() => { setShowVoertuigForm(false); setNewVoertuigForm({ naam: '', kenteken: '', kleur: '#1DDB62' }); }}>Annuleren</button>
+                  <button className="btn btn-p btn-sm" disabled={savingVoertuig || !newVoertuigForm.naam.trim()} onClick={async () => {
+                    setSavingVoertuig(true);
+                    try {
+                      const v = await createVoertuig(newVoertuigForm);
+                      setVoertuigen(prev => [...prev, v]);
+                      setNewVoertuigForm({ naam: '', kenteken: '', kleur: '#1DDB62' });
+                      setShowVoertuigForm(false);
+                      toast.success('Voertuig toegevoegd');
+                    } catch (e) { toast.error(e.message || 'Opslaan mislukt'); }
+                    finally { setSavingVoertuig(false); }
+                  }}>{savingVoertuig ? 'Toevoegen…' : 'Toevoegen'}</button>
+                </div>
+              </div>
+            )}
+
+            {voertuigen.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--dl)', fontSize: 13 }}>Nog geen voertuigen toegevoegd.</div>
+            ) : (
+              <table className="dt" style={{ width: '100%' }}>
+                <thead><tr><th>Naam</th><th>Kenteken</th><th>Kleur</th><th>Status</th><th style={{ width: 80 }}></th></tr></thead>
+                <tbody>
+                  {voertuigen.map(v => (
+                    <tr key={v.id}>
+                      <td>
+                        {editingVoertuigId === v.id ? (
+                          <input value={editingVoertuigForm.naam} onChange={e => setEditingVoertuigForm(f => ({ ...f, naam: e.target.value }))} style={{ width: '100%' }} />
+                        ) : <span style={{ fontWeight: 600 }}>{v.naam}</span>}
+                      </td>
+                      <td>
+                        {editingVoertuigId === v.id ? (
+                          <input value={editingVoertuigForm.kenteken} onChange={e => setEditingVoertuigForm(f => ({ ...f, kenteken: e.target.value }))} style={{ width: '100%' }} />
+                        ) : v.kenteken || '—'}
+                      </td>
+                      <td>
+                        {editingVoertuigId === v.id ? (
+                          <input type="color" value={editingVoertuigForm.kleur} onChange={e => setEditingVoertuigForm(f => ({ ...f, kleur: e.target.value }))} style={{ width: 40, height: 30, padding: 2, cursor: 'pointer' }} />
+                        ) : <span style={{ display: 'inline-block', width: 18, height: 18, borderRadius: 4, background: v.kleur, border: '1px solid var(--border)', verticalAlign: 'middle' }} />}
+                      </td>
+                      <td>
+                        <span className={`badge ${v.actief ? 'b-green' : 'b-gray'}`}>{v.actief ? 'Actief' : 'Inactief'}</span>
+                      </td>
+                      <td>
+                        {editingVoertuigId === v.id ? (
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button className="btn btn-ghost btn-xs" onClick={() => setEditingVoertuigId(null)}>Annuleer</button>
+                            <button className="btn btn-p btn-xs" onClick={async () => {
+                              try {
+                                const updated = await updateVoertuig(v.id, { ...editingVoertuigForm });
+                                setVoertuigen(prev => prev.map(x => x.id === v.id ? updated : x));
+                                setEditingVoertuigId(null);
+                                toast.success('Voertuig bijgewerkt');
+                              } catch (e) { toast.error(e.message || 'Opslaan mislukt'); }
+                            }}>Opslaan</button>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button className="btn-icon" title="Bewerken" onClick={() => { setEditingVoertuigId(v.id); setEditingVoertuigForm({ naam: v.naam, kenteken: v.kenteken, kleur: v.kleur, actief: v.actief }); }}>{I.edit}</button>
+                            <button className="btn-icon" title="Verwijderen" onClick={async () => {
+                              if (!confirm(`Voertuig "${v.naam}" verwijderen?`)) return;
+                              try { await deleteVoertuig(v.id); setVoertuigen(prev => prev.filter(x => x.id !== v.id)); toast.success('Verwijderd'); }
+                              catch (e) { toast.error(e.message || 'Verwijderen mislukt'); }
+                            }}>{I.trash}</button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       )}
