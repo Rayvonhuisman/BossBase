@@ -587,7 +587,7 @@ html.choreo-js .bm .choreo-body { animation: none !important; }
 .bm .final-cta .btn-s:hover { color: #fff; border-color: var(--dmu); background: rgba(255,255,255,0.05); }
 
 /* ── Footer ── */
-.bm .footer { background: var(--dk); color: var(--dl); margin-top: 72px; padding: 56px 0 32px; }
+.bm .footer { background: var(--dk); color: var(--dl); margin-top: 72px; padding: 56px 0 32px; position: relative; z-index: 10; }
 .bm .footer-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 40px; }
 .bm .footer h4 { color: #fff; font-size: 13.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 16px; }
 .bm .footer ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }

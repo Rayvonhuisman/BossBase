@@ -164,11 +164,13 @@ ${link ? `<p><a href="${link}" style="color:#1DDB62;font-weight:600;">Bekijk det
 
 export async function getTeamMembers() {
   const companyId = await getCompanyId();
+  console.log('[getTeamMembers] companyId:', companyId);
   if (!companyId) return [];
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
     .select('id, full_name')
     .eq('company_id', companyId)
     .order('full_name', { ascending: true });
+  console.log('[getTeamMembers] rows:', data?.length ?? 0, 'error:', error?.message ?? null);
   return (data || []).map(r => ({ id: r.id, fullName: r.full_name || '' })).filter(m => m.fullName);
 }

@@ -29,17 +29,23 @@ export function MentionEditor({ value = '', onChange, placeholder, rows = 4, dis
   const [atStart, setAtStart] = useState(-1);    // index of the @ character
   const [ddIndex, setDdIndex] = useState(0);
   const textareaRef = useRef(null);
+  const wrapperRef  = useRef(null);
 
+  // Case-insensitive filter on full name (first + last); empty query shows all
   const filtered = query !== null
-    ? teamMembers.filter(m => m.fullName.toLowerCase().includes(query.toLowerCase())).slice(0, 6)
+    ? teamMembers.filter(m => m.fullName.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
     : [];
 
   const showDd = query !== null && filtered.length > 0;
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside the entire component (wrapper + dropdown)
   useEffect(() => {
     if (!showDd) return;
-    const h = e => { if (!textareaRef.current?.contains(e.target)) { setQuery(null); } };
+    const h = e => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setQuery(null);
+      }
+    };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, [showDd]);
@@ -55,7 +61,10 @@ export function MentionEditor({ value = '', onChange, placeholder, rows = 4, dis
     const atIdx = before.lastIndexOf('@');
     if (atIdx === -1) { setQuery(null); return; }
     const afterAt = before.slice(atIdx + 1);
-    if (afterAt.includes(' ') || afterAt.includes('\n')) { setQuery(null); return; }
+    // Skip if this @ is already part of a completed @[Name](id) markup
+    if (afterAt.startsWith('[')) { setQuery(null); return; }
+    // Skip on newlines (but allow spaces so multi-word names like "Jan de Wit" work)
+    if (afterAt.includes('\n')) { setQuery(null); return; }
     setAtStart(atIdx);
     setQuery(afterAt);
     setDdIndex(0);
@@ -87,10 +96,9 @@ export function MentionEditor({ value = '', onChange, placeholder, rows = 4, dis
   };
 
   const AV_COLORS = ['#1DDB62','#3b82f6','#f59e0b','#ef4444','#8b5cf6','#06b6d4'];
-  const avColor = (name, idx) => AV_COLORS[idx % AV_COLORS.length];
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div ref={wrapperRef} style={{ position: 'relative' }}>
       <textarea
         ref={textareaRef}
         value={value}
@@ -104,13 +112,13 @@ export function MentionEditor({ value = '', onChange, placeholder, rows = 4, dis
       />
       {showDd && (
         <div style={{
-          position: 'absolute', bottom: 'calc(100% + 4px)', left: 0, zIndex: 400,
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 400,
           background: 'white', border: '1px solid var(--border)',
           borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,.14)',
-          minWidth: 220, overflow: 'hidden',
+          minWidth: 220, maxHeight: 240, overflowY: 'auto',
         }}>
           <div style={{ padding: '6px 12px 4px', fontSize: 10, fontWeight: 700, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.06em', borderBottom: '1px solid var(--border)' }}>
-            Teamlid taggen
+            {query ? `Teamlid taggen — "${query}"` : 'Teamlid taggen'}
           </div>
           {filtered.map((m, i) => (
             <button
@@ -127,7 +135,7 @@ export function MentionEditor({ value = '', onChange, placeholder, rows = 4, dis
             >
               <div style={{
                 width: 26, height: 26, borderRadius: '50%',
-                background: avColor(m.fullName, i), color: 'white',
+                background: AV_COLORS[i % AV_COLORS.length], color: 'white',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 10, fontWeight: 700, flexShrink: 0,
               }}>

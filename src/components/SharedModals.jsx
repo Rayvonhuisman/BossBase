@@ -47,7 +47,10 @@ export function NewCustomerModal({ onClose, onSaved }) {
   });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [teamMembersNC, setTeamMembersNC] = useState([]);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  useEffect(() => { getTeamMembers().then(setTeamMembersNC).catch(() => {}); }, []);
 
   const validate = () => {
     const next = {};
@@ -138,7 +141,7 @@ export function NewCustomerModal({ onClose, onSaved }) {
           </div>
           <div className="f s2">
             <label>Notities</label>
-            <textarea value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Extra informatie..." />
+            <MentionEditor value={form.notes} onChange={v => set('notes', v)} placeholder="Extra informatie… Typ @ om iemand te taggen" teamMembers={teamMembersNC} disabled={saving} />
           </div>
         </div>
         <div className="fa">
@@ -176,7 +179,10 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
   const [createNewCust, setCreateNewCust] = useState(!defaultCustomerId && (customers?.length || 0) === 0);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [teamMembersNL, setTeamMembersNL] = useState([]);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  useEffect(() => { getTeamMembers().then(setTeamMembersNL).catch(() => {}); }, []);
 
   // A real DB stage has a UUID id. The hardcoded fallbacks (PIPELINE_STAGES)
   // use slug ids — those would fail the deals.stage_id UUID check, so we
@@ -296,7 +302,7 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
           </div>
           <div className="f s2">
             <label>Omschrijving</label>
-            <textarea value={form.description} onChange={e => set('description', e.target.value)} placeholder="Wat moet er gebeuren? Welke afspraken zijn al gemaakt?" />
+            <MentionEditor value={form.description} onChange={v => set('description', v)} placeholder="Wat moet er gebeuren? Welke afspraken zijn al gemaakt? Typ @ om iemand te taggen" teamMembers={teamMembersNL} disabled={saving} />
           </div>
         </div>
         <div className="fa">
@@ -493,6 +499,9 @@ export function NewCalendarEventModal({ onClose, onSaved, customers, defaultDate
   });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [teamMembersCE, setTeamMembersCE] = useState([]);
+
+  useEffect(() => { getTeamMembers().then(setTeamMembersCE).catch(() => {}); }, []);
   const set = (k, v) => {
     setForm(f => {
       const next = { ...f, [k]: v };
@@ -590,7 +599,7 @@ export function NewCalendarEventModal({ onClose, onSaved, customers, defaultDate
           </div>
           <div className="f s2">
             <label>Notities</label>
-            <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+            <MentionEditor value={form.notes} onChange={v => setForm(f => ({ ...f, notes: v }))} placeholder="Notities… Typ @ om iemand te taggen" teamMembers={teamMembersCE} disabled={saving} />
           </div>
         </div>
         <div className="fa">

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { I, ModalX } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
-import { MentionEditor } from '../components/MentionEditor.jsx';
+import { MentionEditor, renderMentions } from '../components/MentionEditor.jsx';
 import { getTeamMembers, createAssignmentNotification } from '../services/notificatieService.js';
 import {
   getWerkbonnen, getWerkbonById, createWerkbon, updateWerkbon,
@@ -200,7 +200,7 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
           </div>
           <div className="f full">
             <label>Omschrijving</label>
-            <textarea rows={3} value={form.omschrijving} onChange={e => set('omschrijving', e.target.value)} placeholder="Wat moet er gebeuren op locatie?" />
+            <MentionEditor value={form.omschrijving} onChange={v => set('omschrijving', v)} placeholder="Wat moet er gebeuren op locatie? Typ @ om iemand te taggen" rows={3} disabled={saving} teamMembers={teamMembers} />
           </div>
           <div className="f full">
             <label>Interne notities</label>
@@ -665,7 +665,7 @@ function MeerwerkSection({ meerwerk, onAdd, onDelete }) {
 
 // ─── NOTITIES SECTION ────────────────────────────────────────────────────────
 
-function NotitiesSection({ notities, onSave }) {
+function NotitiesSection({ notities, onSave, teamMembers = [] }) {
   const [value, setValue] = useState(notities || '');
   const [saving, setSaving] = useState(false);
 
@@ -681,12 +681,13 @@ function NotitiesSection({ notities, onSave }) {
     <div className="wb2-card">
       <div className="wb2-card-hd"><div className="wb2-card-hd-title">Notities uitvoerder</div></div>
       <div className="wb2-card-body">
-        <textarea
+        <MentionEditor
           value={value}
-          onChange={e => setValue(e.target.value)}
-          placeholder="Bijzonderheden, bevindingen, aandachtspunten voor de baas…"
+          onChange={setValue}
+          placeholder="Bijzonderheden, bevindingen, aandachtspunten voor de baas… Typ @ om iemand te taggen"
           rows={4}
-          style={{ width: '100%', resize: 'vertical', borderRadius: 10, border: '1px solid var(--br)', padding: '10px 12px', fontSize: 13.5, fontFamily: 'inherit', lineHeight: 1.6, outline: 'none' }}
+          disabled={saving}
+          teamMembers={teamMembers}
         />
         <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
           <button className="btn btn-s btn-sm" onClick={save} disabled={saving}>
@@ -1101,13 +1102,13 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage } = {})
                 <div className="wb2-card-body">
                   {detail.omschrijving && (
                     <div style={{ fontSize: 13.5, color: 'var(--dmu)', lineHeight: 1.6, whiteSpace: 'pre-wrap', marginBottom: detail.notes ? 10 : 0 }}>
-                      {detail.omschrijving}
+                      {renderMentions(detail.omschrijving)}
                     </div>
                   )}
                   {detail.notes && (
                     <div className="wb2-note">
                       <span className="wb2-note-ic">{I.bell}</span>
-                      <div className="wb2-note-txt"><b>Interne notitie:</b> {detail.notes}</div>
+                      <div className="wb2-note-txt"><b>Interne notitie:</b> {renderMentions(detail.notes)}</div>
                     </div>
                   )}
                 </div>
@@ -1164,7 +1165,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage } = {})
             <MeerwerkSection meerwerk={meerwerk} onAdd={handleAddMeerwerk} onDelete={handleDeleteMeerwerk} />
 
             {/* Notities */}
-            <NotitiesSection notities={detail.werkbonNotities} onSave={handleSaveNotities} />
+            <NotitiesSection notities={detail.werkbonNotities} onSave={handleSaveNotities} teamMembers={teamMembers} />
 
             {/* Afronden */}
             {detail.status !== 'afgerond' && canManage && (
