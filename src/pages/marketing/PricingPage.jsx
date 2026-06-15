@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { Nav, Footer, Reveal, I } from "./MktShared"
+import { useState, useEffect } from "react"
+import { Nav, Footer, Reveal, I, ScrollLine, initChoreo } from "./MktShared"
 
 const TIERS = [
   {
@@ -122,6 +122,11 @@ export default function PricingPage({ navigate }) {
   const [yearly, setYearly] = useState(false)
   const [faqOpen, setFaqOpen] = useState(null)
 
+  useEffect(() => {
+    const cleanup = initChoreo()
+    return cleanup
+  }, [])
+
   const go = (e, href) => {
     e.preventDefault()
     if (navigate) navigate(href)
@@ -130,6 +135,7 @@ export default function PricingPage({ navigate }) {
 
   return (
     <div className="bm">
+      <ScrollLine />
       <Nav navigate={navigate} />
       <main>
         {/* Hero */}
@@ -154,7 +160,7 @@ export default function PricingPage({ navigate }) {
               {yearly && <div className="bill-hook pop">{I.bolt} Bespaar 25% bij jaarabonnement</div>}
             </div>
             <Reveal stagger>
-              <div className="price-grid-full">
+              <div className="price-grid-full choreo-body">
                 {TIERS.map(t => (
                   <div key={t.tier} className={`price-card${t.hot ? " hot" : ""}`}>
                     {t.hot && <div className="hot-badge">⚡ Meest gekozen</div>}
@@ -184,7 +190,7 @@ export default function PricingPage({ navigate }) {
         {/* Vergelijkingstabel */}
         <div className="compare-section">
           <div className="container">
-            <Reveal><div className="section-head">
+            <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">Vergelijk</span>
               <h2>Alles naast elkaar</h2>
             </div></Reveal>
@@ -223,7 +229,7 @@ export default function PricingPage({ navigate }) {
         {/* FAQ */}
         <div className="price-faq">
           <div className="container">
-            <Reveal><div className="section-head">
+            <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">FAQ</span>
               <h2>Veelgestelde vragen over prijzen</h2>
             </div></Reveal>

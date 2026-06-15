@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { Nav, Footer, Reveal, I, initChoreo } from "./MktShared"
+import { Nav, Footer, Reveal, I, initChoreo, ScrollLine } from "./MktShared"
 
 /* ── Feature visuals ── */
 function CRMVisual() {
@@ -231,6 +231,7 @@ export default function FeaturesPage({ navigate }) {
 
   return (
     <div className="bm">
+      <ScrollLine />
       <Nav navigate={navigate} />
       <main>
         <section className="functies-hero">
@@ -251,7 +252,7 @@ export default function FeaturesPage({ navigate }) {
           <div key={i} className="section" style={{ borderTop: i > 0 ? "1px solid var(--border)" : "none" }}>
             <div className="container">
               <Reveal>
-                <div className={`feature-row${b.flip ? " flip" : ""}`}>
+                <div className={`feature-row choreo-body${b.flip ? " flip" : ""}`}>
                   <div className="feature-copy">
                     <span className="section-kicker">{b.kicker}</span>
                     <h2 style={{ fontSize: "clamp(24px,3vw,34px)", marginTop: 10 }}>{b.title}</h2>
@@ -269,12 +270,12 @@ export default function FeaturesPage({ navigate }) {
 
         <div className="section" style={{ background: "var(--bgs)", borderTop: "1px solid var(--border)" }}>
           <div className="container">
-            <Reveal><div className="section-head">
+            <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">Vergelijk</span>
               <h2>Vroeger vs. nu</h2>
               <p>Zie hoe BossBase de dagelijkse rompslomp oplost.</p>
             </div></Reveal>
-            <Reveal>
+            <Reveal className="choreo-body">
               <div className="compare-cols">
                 <div className="compare-col bad">
                   <h3>{I.warning} Zonder BossBase</h3>
@@ -295,12 +296,12 @@ export default function FeaturesPage({ navigate }) {
 
         <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
           <div className="container">
-            <Reveal><div className="section-head">
+            <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">Integraties</span>
               <h2>Werkt samen met wat je al gebruikt</h2>
               <p>BossBase integreert met jouw bestaande tools. Geen dubbel werk meer.</p>
             </div></Reveal>
-            <Reveal stagger>
+            <Reveal stagger className="choreo-body">
               <div className="integ-grid">
                 {INTEGRATIONS.map(integ => (
                   <div key={integ.name} className={`integ-card${integ.soon ? " soon" : ""}`}>

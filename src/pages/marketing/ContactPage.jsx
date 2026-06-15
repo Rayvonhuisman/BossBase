@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { Nav, Footer, Reveal, I } from "./MktShared"
+import { useState, useEffect } from "react"
+import { Nav, Footer, Reveal, I, ScrollLine, initChoreo } from "./MktShared"
 
 const BRANCHES = [
   "Loodgieter", "Schilder", "Elektricien", "Aannemer", "Installateur",
@@ -40,6 +40,11 @@ export default function ContactPage({ navigate }) {
   const [sent, setSent] = useState(false)
   const [faqOpen, setFaqOpen] = useState(null)
 
+  useEffect(() => {
+    const cleanup = initChoreo()
+    return cleanup
+  }, [])
+
   const set = (field, val) => setForm(f => ({ ...f, [field]: val }))
 
   const submit = e => {
@@ -58,6 +63,7 @@ export default function ContactPage({ navigate }) {
 
   return (
     <div className="bm">
+      <ScrollLine />
       <Nav navigate={navigate} />
       <main>
         {/* Hero */}
@@ -74,7 +80,7 @@ export default function ContactPage({ navigate }) {
         {/* Grid: form + info */}
         <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
           <div className="container">
-            <div className="contact-grid">
+            <div className="contact-grid choreo-body">
               {/* Form */}
               <Reveal>
                 <div className="contact-form-wrap">
@@ -179,12 +185,12 @@ export default function ContactPage({ navigate }) {
         {/* Snelle antwoorden */}
         <div className="section" style={{ background: "var(--bgs)", borderTop: "1px solid var(--border)" }}>
           <div className="container">
-            <Reveal><div className="section-head">
+            <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">Snelle antwoorden</span>
               <h2>Veelgestelde vragen</h2>
               <p>Misschien staat jouw vraag er al bij.</p>
             </div></Reveal>
-            <div className="faq-list contact-faq-wrap">
+            <div className="faq-list choreo-body contact-faq-wrap">
               {FAQ_PREVIEW.map((item, i) => (
                 <div key={i} className="faq-item" data-open={faqOpen === i ? "true" : "false"}>
                   <button className="faq-q" onClick={() => setFaqOpen(faqOpen === i ? null : i)}>
@@ -206,12 +212,12 @@ export default function ContactPage({ navigate }) {
         {/* Contact kaarten */}
         <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
           <div className="container">
-            <Reveal><div className="section-head">
+            <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">Direct contact</span>
               <h2>Kies de snelste weg</h2>
             </div></Reveal>
             <Reveal stagger>
-              <div className="contact-cards">
+              <div className="contact-cards choreo-body">
                 {[
                   { icon: I.mail,     title: "E-mail",   desc: "hallo@bossbase.nl",  sub: "Reactie binnen 1 werkdag", href: "mailto:hallo@bossbase.nl" },
                   { icon: I.phone,    title: "Telefoon", desc: "085 - 060 70 80",    sub: "Ma–Vr 09:00–17:00",        href: "tel:+31850607080" },

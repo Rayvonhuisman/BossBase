@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react"
-import { Nav, Footer, Reveal, I } from "./MktShared"
+import { useState, useMemo, useEffect } from "react"
+import { Nav, Footer, Reveal, I, ScrollLine, initChoreo } from "./MktShared"
 
 const FAQ_DATA = [
   {
@@ -106,10 +106,16 @@ export default function FaqPage({ navigate }) {
     })
   }, [search, activeTab])
 
+  useEffect(() => {
+    const cleanup = initChoreo()
+    return cleanup
+  }, [])
+
   const totalResults = filtered.reduce((acc, c) => acc + c.items.length, 0)
 
   return (
     <div className="bm">
+      <ScrollLine />
       <Nav navigate={navigate} />
       <main>
         {/* Hero */}
@@ -190,7 +196,7 @@ export default function FaqPage({ navigate }) {
                   <div className="faq-cat-icon">{cat.icon}</div>
                   <h2>{cat.cat}</h2>
                 </div>
-                <div className="faq-list">
+                <div className="faq-list choreo-body">
                   {cat.items.map((item, i) => (
                     <FaqItem key={i} item={item} highlight={search.trim()} />
                   ))}
@@ -204,7 +210,7 @@ export default function FaqPage({ navigate }) {
         {filtered.length > 0 && (
           <div className="section" style={{ borderTop: "1px solid var(--border)", background: "var(--bgs)" }}>
             <div className="container">
-              <Reveal><div className="section-head">
+              <Reveal><div className="section-head choreo-head">
                 <span className="section-kicker">Nog vragen?</span>
                 <h2>We helpen je graag persoonlijk</h2>
                 <p>Staat jouw vraag er niet bij? Neem contact op en we reageren binnen één werkdag.</p>

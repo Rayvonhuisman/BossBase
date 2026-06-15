@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { Nav, Footer, Reveal, I } from "./MktShared"
+import { useState, useEffect } from "react"
+import { Nav, Footer, Reveal, I, ScrollLine, initChoreo } from "./MktShared"
 
 const BRANCHES = [
   {
@@ -128,6 +128,11 @@ export default function IndustriesPage({ navigate }) {
   const [type, setType] = useState("zzp")
   const persona = PERSONAS.find(p => p.id === type)
 
+  useEffect(() => {
+    const cleanup = initChoreo()
+    return cleanup
+  }, [])
+
   const go = (e, href) => {
     e.preventDefault()
     if (navigate) navigate(href)
@@ -136,6 +141,7 @@ export default function IndustriesPage({ navigate }) {
 
   return (
     <div className="bm">
+      <ScrollLine />
       <Nav navigate={navigate} />
       <main>
         {/* Hero */}
@@ -167,11 +173,11 @@ export default function IndustriesPage({ navigate }) {
         <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
           <div className="container">
             <Reveal>
-              <div className="section-head">
+              <div className="section-head choreo-head">
                 <h2>{type === "zzp" ? "BossBase voor ZZP'ers" : "BossBase voor kleine bedrijven"}</h2>
                 <p>{persona.desc}</p>
               </div>
-              <div className="opdracht-grid">
+              <div className="opdracht-grid choreo-body">
                 {persona.features.map(f => (
                   <div key={f.title} className="opdracht-card">
                     <div className="ic">{f.icon}</div>
@@ -193,7 +199,7 @@ export default function IndustriesPage({ navigate }) {
         <div style={{ borderTop: "1px solid var(--border)" }}>
           <div className="section" style={{ paddingBottom: 0 }}>
             <div className="container">
-              <Reveal><div className="section-head">
+              <Reveal><div className="section-head choreo-head">
                 <span className="section-kicker">Per branche</span>
                 <h2>Speciaal voor jouw vakgebied</h2>
                 <p>BossBase kent de uitdagingen van jouw branche. Kijk hoe we die oplossen.</p>
@@ -205,7 +211,7 @@ export default function IndustriesPage({ navigate }) {
             <div key={branch.id} className="section" style={{ borderTop: "1px solid var(--border)", paddingTop: 56, paddingBottom: 56 }}>
               <div className="container">
                 <Reveal>
-                  <div className={`branche-layout${i % 2 === 1 ? " flip" : ""}`}>
+                  <div className={`branche-layout choreo-body${i % 2 === 1 ? " flip" : ""}`}>
                     <div className="branche-copy">
                       <span className="branche-tag">{branch.icon} {branch.tag}</span>
                       <h2>{branch.naam}</h2>

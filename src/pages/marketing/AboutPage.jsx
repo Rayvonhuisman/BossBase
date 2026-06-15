@@ -1,4 +1,5 @@
-import { Nav, Footer, Reveal, I } from "./MktShared"
+import { useEffect } from "react"
+import { Nav, Footer, Reveal, I, ScrollLine, initChoreo } from "./MktShared"
 
 const STATS = [
   { num: "2.400+", lbl: "Actieve gebruikers" },
@@ -34,8 +35,14 @@ export default function AboutPage({ navigate }) {
     else window.location.href = href
   }
 
+  useEffect(() => {
+    const cleanup = initChoreo()
+    return cleanup
+  }, [])
+
   return (
     <div className="bm">
+      <ScrollLine />
       <Nav navigate={navigate} />
       <main>
         {/* Hero */}
@@ -52,7 +59,7 @@ export default function AboutPage({ navigate }) {
         {/* Verhaal */}
         <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
           <div className="container">
-            <Reveal><div className="section-head">
+            <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">Ons verhaal</span>
               <h2>Waarom BossBase bestaat</h2>
             </div></Reveal>
@@ -69,12 +76,12 @@ export default function AboutPage({ navigate }) {
         {/* Oprichters */}
         <div className="section" style={{ background: "var(--bgs)", borderTop: "1px solid var(--border)" }}>
           <div className="container">
-            <Reveal><div className="section-head">
+            <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">Het team</span>
               <h2>Wie wij zijn</h2>
             </div></Reveal>
             <Reveal>
-              <div className="founder-grid">
+              <div className="founder-grid choreo-body">
                 {OPRICHTERS.map(o => (
                   <div key={o.naam} className="founder-card">
                     <div className="founder-avatar">{o.initials}</div>
@@ -97,7 +104,7 @@ export default function AboutPage({ navigate }) {
         {/* Missie */}
         <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
           <div className="container">
-            <Reveal><div className="section-head">
+            <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">Missie</span>
               <h2>Waarom we doen wat we doen</h2>
             </div></Reveal>
@@ -116,12 +123,12 @@ export default function AboutPage({ navigate }) {
         {/* Statistieken */}
         <div className="section" style={{ background: "var(--bgs)", borderTop: "1px solid var(--border)" }}>
           <div className="container">
-            <Reveal><div className="section-head">
+            <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">In cijfers</span>
               <h2>BossBase in 2024</h2>
             </div></Reveal>
             <Reveal stagger>
-              <div className="stats-row">
+              <div className="stats-row choreo-body">
                 {STATS.map(s => (
                   <div key={s.num} className="stat-block">
                     <div className="num">{s.num}</div>
@@ -136,12 +143,12 @@ export default function AboutPage({ navigate }) {
         {/* Waarden */}
         <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
           <div className="container">
-            <Reveal><div className="section-head">
+            <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">Waarden</span>
               <h2>Waar we voor staan</h2>
             </div></Reveal>
             <Reveal stagger>
-              <div className="waarden-grid">
+              <div className="waarden-grid choreo-body">
                 {WAARDEN.map(w => (
                   <div key={w.title} className="waarde-card">
                     <div className="waarde-icon">{w.icon}</div>
@@ -157,7 +164,7 @@ export default function AboutPage({ navigate }) {
         {/* Waarom niet VC */}
         <div className="section" style={{ background: "var(--bgs)", borderTop: "1px solid var(--border)" }}>
           <div className="container">
-            <Reveal><div className="section-head">
+            <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">Onze aanpak</span>
               <h2>Waarom we geen durfkapitaal aannemen</h2>
             </div></Reveal>
