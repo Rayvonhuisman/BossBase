@@ -5,6 +5,7 @@ import { listDeals } from '../services/dealService.js';
 import { ActivityEditModal, NewActivityModal } from '../components/SharedModals.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { getTeamMembers } from '../services/notificatieService.js';
 
 // ─── Inline SVG icons (stroke-based, currentColor) ──────────────────────────
 const ICO_PLUS = (
@@ -128,6 +129,7 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
   const [acts, setActs] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [deals, setDeals] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
@@ -138,13 +140,20 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
   const [selected, setSelected] = useState(null);
   const [showNew, setShowNew] = useState(false);
 
+  const getMemberName = (userId) => {
+    if (!userId) return '';
+    const m = teamMembers.find(t => t.id === userId);
+    return m?.fullName || userId;
+  };
+
   useEffect(() => {
     setLoading(true);
-    Promise.all([listActivities(), listCustomers(), listDeals()])
-      .then(([activityData, customerData, dealData]) => {
+    Promise.all([listActivities(), listCustomers(), listDeals(), getTeamMembers()])
+      .then(([activityData, customerData, dealData, memberData]) => {
         setActs(activityData);
         setCustomers(customerData);
         setDeals(dealData);
+        setTeamMembers(memberData);
         setError('');
       })
       .catch(err => setError(err.message || 'Activiteiten laden is mislukt.'))
@@ -160,11 +169,17 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
     }
   }, [preOpenActivityId, loading, acts, onNavConsumed]);
 
+  // Unieke toegewezen medewerkers als { id, name } objecten voor de filterdropdown
   const assignees = useMemo(() => {
-    const set = new Set();
-    acts.forEach(a => { if (a.assignee) set.add(a.assignee); });
-    return Array.from(set);
-  }, [acts]);
+    const map = new Map();
+    acts.forEach(a => {
+      if (a.assignee && !map.has(a.assignee)) {
+        map.set(a.assignee, getMemberName(a.assignee));
+      }
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acts, teamMembers]);
 
   const counts = useMemo(() => {
     const c = { all: acts.length, open: 0, today: 0, overdue: 0, done: 0 };
@@ -307,7 +322,7 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
             {ICO_USER}
             <select value={memberFilter} onChange={e => setMemberFilter(e.target.value)}>
               <option value="all">Alle medewerkers</option>
-              {assignees.map(name => <option key={name} value={name}>{name}</option>)}
+              {assignees.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}
             </select>
           </label>
         )}
@@ -413,7 +428,8 @@ function Row({ a, openCustomer, onSelect, onMark }) {
   const badge = STATUS_BADGE[a.status] || STATUS_BADGE.open;
   const stateCls = done ? 'is-done' : `is-${a.status || 'open'}`;
   const t = safeType(a.type);
-  const initial = (a.assignee || '').trim().charAt(0).toUpperCase() || '·';
+  const assigneeName = getMemberName(a.assignee);
+  const initial = (assigneeName || '').trim().charAt(0).toUpperCase() || '·';
   return (
     <article className={`act2-row ${stateCls}`} onClick={() => onSelect(a)}>
       <span className="act2-accent-bar" aria-hidden="true" />
@@ -440,7 +456,7 @@ function Row({ a, openCustomer, onSelect, onMark }) {
           </>}
           {a.assignee && <>
             <span className="act2-meta-sep">·</span>
-            <span className="act2-meta-who"><span className="act2-av">{initial}</span>{a.assignee}</span>
+            <span className="act2-meta-who"><span className="act2-av">{initial}</span>{assigneeName}</span>
           </>}
         </div>
       </div>
