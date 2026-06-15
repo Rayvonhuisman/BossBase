@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { I, ModalX, fmt } from '../../bb-shared.jsx';
 import { useToast } from '../../lib/toast.jsx';
+import { useProfile } from '../../lib/profileContext.jsx';
 import {
   getProjectById,
   updateProject,
@@ -18,6 +19,8 @@ import {
 } from '../../services/projectsService.js';
 import { getWerkbonnenByProject, createWerkbon } from '../../services/werkbonService.js';
 import { NewFactuurModal } from '../FacturenPage.jsx';
+import { MentionEditor, renderMentions } from '../../components/MentionEditor.jsx';
+import { getTeamMembers, createAssignmentNotification } from '../../services/notificatieService.js';
 
 const TABS = [
   { id: 'overview',   label: 'Overzicht' },
@@ -86,6 +89,8 @@ function Tabs({ tab, setTab }) {
 
 function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
   const toast = useToast();
+  const { profile } = useProfile();
+  const [teamMembers, setTeamMembers] = useState([]);
   const [form, setForm] = useState({
     name: project.name || '',
     status: project.status || 'concept',
@@ -95,9 +100,12 @@ function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
     deadline: project.deadline || '',
     description: project.description || '',
     customer_id: project.customerId || '',
+    assigned_to: project.assignedTo || '',
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
 
   useEffect(() => {
     setForm({
@@ -109,6 +117,7 @@ function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
       deadline: project.deadline || '',
       description: project.description || '',
       customer_id: project.customerId || '',
+      assigned_to: project.assignedTo || '',
     });
   }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -116,6 +125,7 @@ function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
     if (!canManage) return;
     setSaving(true);
     try {
+      const prevAssigned = project.assignedTo || '';
       await onSave({
         name: form.name.trim() || project.name,
         status: form.status,
@@ -125,7 +135,12 @@ function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
         deadline: form.deadline || null,
         description: form.description,
         customer_id: form.customer_id || null,
+        assigned_to: form.assigned_to || null,
       });
+      if (form.assigned_to && form.assigned_to !== prevAssigned && profile?.id) {
+        const m = teamMembers.find(x => x.id === form.assigned_to);
+        createAssignmentNotification({ assignedToUserId: form.assigned_to, assignedToName: m?.fullName, type: 'toewijzing_project', title: `Je bent toegewezen aan ${form.name.trim() || project.name}`, link: 'projecten', relatedType: 'project', relatedId: project.id, creatorId: profile.id, creatorName: profile.fullName }).catch(() => {});
+      }
       toast.success('Project opgeslagen');
     } catch (e) {
       toast.error(e.message || 'Opslaan mislukt');
@@ -215,6 +230,13 @@ function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
         <div className="f">
           <label>Deadline</label>
           <input type="date" value={form.deadline || ''} onChange={e => set('deadline', e.target.value)} disabled={!canManage} />
+        </div>
+        <div className="f">
+          <label>Toegewezen aan</label>
+          <select value={form.assigned_to} onChange={e => set('assigned_to', e.target.value)} disabled={!canManage}>
+            <option value="">— Geen medewerker —</option>
+            {teamMembers.map(m => <option key={m.id} value={m.id}>{m.fullName}</option>)}
+          </select>
         </div>
         <div className="f" style={{ gridColumn: '1 / -1' }}>
           <label>Omschrijving</label>
@@ -564,6 +586,9 @@ function NotesTab({ notes, onAdd, onDelete }) {
   const toast = useToast();
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
+  const [teamMembers, setTeamMembers] = useState([]);
+
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
 
   const submit = async () => {
     const trimmed = text.trim();
@@ -582,12 +607,12 @@ function NotesTab({ notes, onAdd, onDelete }) {
   return (
     <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div className="card card-p" style={{ padding: 10 }}>
-        <textarea
-          rows={3}
-          placeholder="Schrijf een notitie over dit project…"
+        <MentionEditor
           value={text}
-          onChange={e => setText(e.target.value)}
-          style={{ resize: 'vertical', width: '100%' }}
+          onChange={setText}
+          rows={3}
+          placeholder="Schrijf een notitie over dit project… Typ @ om iemand te taggen"
+          teamMembers={teamMembers}
         />
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
           <button className="btn btn-p btn-sm" onClick={submit} disabled={saving || !text.trim()}>
@@ -604,7 +629,7 @@ function NotesTab({ notes, onAdd, onDelete }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {notes.map(n => (
             <div key={n.id} style={{ padding: 10, border: '1px solid var(--br)', borderRadius: 8, background: '#fff' }}>
-              <div style={{ whiteSpace: 'pre-wrap', fontSize: 13, color: 'var(--dk)' }}>{n.note}</div>
+              <div style={{ fontSize: 13, color: 'var(--dk)', lineHeight: 1.5 }}>{renderMentions(n.note)}</div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
                 <div style={{ fontSize: 11, color: 'var(--dl)' }}>
                   {n.authorName || 'Onbekend'} · {fmtDate(String(n.createdAt || '').slice(0, 10))}

@@ -1,0 +1,9 @@
+# Supabase project configuration
+# Cron job scheduling is handled via pg_cron migrations (zie 20260615100000_cron_jobs.sql)
+# Zodra de CLI `schedule` ondersteunt (>=v2.106.0), kan dit hier worden geconfigureerd:
+#
+# [functions.check-herinneringen]
+# schedule = "0 8 * * *"
+#
+# [functions.moneybird-sync-btw]
+# schedule = "0 6 * * *"

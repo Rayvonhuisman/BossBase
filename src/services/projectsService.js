@@ -22,6 +22,7 @@ const toProject = row => ({
   startDate: row.start_date || null,
   deadline: row.deadline || null,
   ownerId: row.owner_id || null,
+  assignedTo: row.assigned_to || null,
   createdBy: row.created_by || null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
@@ -130,6 +131,7 @@ export async function createProject(input) {
     start_date: input.start_date || input.startDate || null,
     deadline: input.deadline || null,
     owner_id: input.owner_id || input.ownerId || null,
+    assigned_to: input.assigned_to || input.assignedTo || null,
   })
 
   // created_by op huidige gebruiker zetten zodat audit-trail intact blijft
@@ -178,6 +180,8 @@ export async function updateProject(projectId, patch) {
     deadline: 'deadline',
     ownerId: 'owner_id',
     owner_id: 'owner_id',
+    assignedTo: 'assigned_to',
+    assigned_to: 'assigned_to',
   }
   Object.keys(patch || {}).forEach(k => {
     if (k in map) updates[map[k]] = patch[k]

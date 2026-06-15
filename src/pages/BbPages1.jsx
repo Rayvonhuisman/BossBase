@@ -6,6 +6,8 @@ import {
 } from '../bb-shared.jsx';
 import { createCustomer, deleteCustomer, getCustomer, listCustomers, updateCustomer } from '../services/customerService.js';
 import { getKlantNotities, addKlantNotitie, getTijdlijnByCustomer, logTijdlijnSafe } from '../services/klantTijdlijnService.js';
+import { MentionEditor, renderMentions } from '../components/MentionEditor.jsx';
+import { getTeamMembers } from '../services/notificatieService.js';
 import { updateContactInMoneybird } from '../services/accountingService.js';
 import { buildDueAt, createActivity, listActivities, updateActivity } from '../services/activityService.js';
 import { createNote, listNotes } from '../services/noteService.js';
@@ -163,10 +165,9 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   const [showNewProject, setShowNewProject] = useState(false);
   const [klantNotities, setKlantNotities] = useState([]);
   const [tijdlijn, setTijdlijn] = useState([]);
-  const notitiesEditorRef = useRef(null);
-  const overzichtEditorRef = useRef(null);
-  const [notitiesHasContent, setNotitiesHasContent] = useState(false);
-  const [overzichtHasContent, setOverzichtHasContent] = useState(false);
+  const [newNotitiesText, setNewNotitiesText] = useState('');
+  const [newOverzichtText, setNewOverzichtText] = useState('');
+  const [teamMembers, setTeamMembers] = useState([]);
   const [savingNotitie, setSavingNotitie] = useState(false);
   const [savingOverzicht, setSavingOverzicht] = useState(false);
   const [showNotitiesInput, setShowNotitiesInput] = useState(false);
@@ -262,6 +263,8 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
     return () => { alive = false; };
   }, [custId]);
 
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
+
   if (loading) return <div className="card card-p">Klant laden...</div>;
   if (error) return <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>;
   if (!c) return null;
@@ -344,18 +347,14 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
       + ' · ' + d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
   };
 
-  const clearEditor = ref => { if (ref.current) ref.current.innerHTML = ''; };
-
-  const addNotitie = async (editorRef, setHasContent, setSaving, onDone) => {
-    const html = editorRef.current?.innerHTML || '';
-    if (!editorRef.current?.textContent?.trim()) return;
+  const addNotitie = async (text, clearText, setSaving, onDone) => {
+    if (!text.trim()) return;
     setSaving(true);
     try {
-      const created = await addKlantNotitie(c.id, html);
+      const created = await addKlantNotitie(c.id, text);
       setKlantNotities(list => [created, ...list]);
       setTijdlijn(list => [created, ...list]);
-      clearEditor(editorRef);
-      setHasContent(false);
+      clearText('');
       onDone?.();
       toast.success('Notitie opgeslagen');
     } catch (err) {
@@ -365,9 +364,8 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
     }
   };
 
-  const cancelNotitie = (editorRef, setHasContent, closeFn) => {
-    clearEditor(editorRef);
-    setHasContent(false);
+  const cancelNotitie = (clearText, closeFn) => {
+    clearText('');
     closeFn();
   };
 
@@ -544,24 +542,24 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
             </div>
             <div className={`notitie-input-wrap${showOverzichtInput ? ' open' : ''}`}>
               <div>
-                <NotitieEditor
-                  editorRef={overzichtEditorRef}
-                  minHeight={80}
-                  maxHeight={120}
-                  placeholder="Schrijf een notitie..."
-                  onHasContent={setOverzichtHasContent}
+                <MentionEditor
+                  value={newOverzichtText}
+                  onChange={setNewOverzichtText}
+                  rows={3}
+                  placeholder="Schrijf een notitie… Typ @ om iemand te taggen"
+                  teamMembers={teamMembers}
                 />
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6, paddingBottom: 2 }}>
                   <button
                     className="btn btn-s btn-xs"
-                    onClick={() => cancelNotitie(overzichtEditorRef, setOverzichtHasContent, () => setShowOverzichtInput(false))}
+                    onClick={() => cancelNotitie(setNewOverzichtText, () => setShowOverzichtInput(false))}
                   >
                     Annuleren
                   </button>
                   <button
                     className="btn btn-p btn-xs"
-                    disabled={savingOverzicht || !overzichtHasContent}
-                    onClick={() => addNotitie(overzichtEditorRef, setOverzichtHasContent, setSavingOverzicht, () => setShowOverzichtInput(false))}
+                    disabled={savingOverzicht || !newOverzichtText.trim()}
+                    onClick={() => addNotitie(newOverzichtText, setNewOverzichtText, setSavingOverzicht, () => setShowOverzichtInput(false))}
                   >
                     {savingOverzicht ? 'Toevoegen...' : 'Toevoegen'}
                   </button>
@@ -572,7 +570,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {klantNotities.slice(0, 2).map(n => (
                   <div key={n.id} style={{ padding: '8px 10px', background: 'var(--bgs)', borderRadius: 'var(--r8)', border: '1px solid var(--border)' }}>
-                    <div dangerouslySetInnerHTML={{ __html: n.omschrijving }} className="bb-notitie-content" style={{ fontSize: '.83rem', color: 'var(--dk)', lineHeight: 1.5 }} />
+                    <div className="bb-notitie-content" style={{ fontSize: '.83rem', color: 'var(--dk)', lineHeight: 1.5 }}>{renderMentions(n.omschrijving)}</div>
                     <div style={{ fontSize: '.7rem', color: 'var(--dl)', marginTop: 4 }}>{fmtNotitieDate(n.aangemaaktop)}</div>
                   </div>
                 ))}
@@ -686,23 +684,24 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
             )}
             <div className={`notitie-input-wrap${showNotitiesInput ? ' open' : ''}`}>
               <div>
-                <NotitieEditor
-                  editorRef={notitiesEditorRef}
-                  minHeight={150}
-                  placeholder="Schrijf hier je notitie over deze klant..."
-                  onHasContent={setNotitiesHasContent}
+                <MentionEditor
+                  value={newNotitiesText}
+                  onChange={setNewNotitiesText}
+                  rows={4}
+                  placeholder="Schrijf hier je notitie over deze klant… Typ @ om iemand te taggen"
+                  teamMembers={teamMembers}
                 />
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 10, paddingBottom: 2 }}>
                   <button
                     className="btn btn-s btn-sm"
-                    onClick={() => cancelNotitie(notitiesEditorRef, setNotitiesHasContent, () => setShowNotitiesInput(false))}
+                    onClick={() => cancelNotitie(setNewNotitiesText, () => setShowNotitiesInput(false))}
                   >
                     Annuleren
                   </button>
                   <button
                     className="btn btn-p btn-sm"
-                    disabled={savingNotitie || !notitiesHasContent}
-                    onClick={() => addNotitie(notitiesEditorRef, setNotitiesHasContent, setSavingNotitie, () => setShowNotitiesInput(false))}
+                    disabled={savingNotitie || !newNotitiesText.trim()}
+                    onClick={() => addNotitie(newNotitiesText, setNewNotitiesText, setSavingNotitie, () => setShowNotitiesInput(false))}
                   >
                     {savingNotitie ? 'Opslaan...' : 'Opslaan'}
                   </button>
@@ -715,7 +714,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {klantNotities.slice(0, notitiesVisible).map(n => (
                 <div key={n.id} className="card card-p" style={{ padding: '12px 16px' }}>
-                  <div dangerouslySetInnerHTML={{ __html: n.omschrijving }} className="bb-notitie-content" style={{ fontSize: '.85rem', color: 'var(--dk)', lineHeight: 1.6 }} />
+                  <div className="bb-notitie-content" style={{ fontSize: '.85rem', color: 'var(--dk)', lineHeight: 1.6 }}>{renderMentions(n.omschrijving)}</div>
                   <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginTop: 6, fontWeight: 600 }}>
                     {fmtNotitieDate(n.aangemaaktop)}
                   </div>

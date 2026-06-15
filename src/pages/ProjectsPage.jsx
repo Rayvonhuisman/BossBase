@@ -12,6 +12,8 @@ import { listCustomers } from '../services/customerService.js';
 import { listDeals } from '../services/dealService.js';
 import { getOffertes } from '../services/offerteService.js';
 import { ProjectDetailDrawer } from './projects/ProjectDetailDrawer.jsx';
+import { MentionEditor } from '../components/MentionEditor.jsx';
+import { getTeamMembers, createAssignmentNotification } from '../services/notificatieService.js';
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -59,7 +61,9 @@ function ProgressBar({ pct, tone }) {
 
 export function NewProjectModal({ onClose, onSaved, customers, deals, offertes, prefillCustomerId = null }) {
   const toast = useToast();
+  const { profile } = useProfile();
   const [saving, setSaving] = useState(false);
+  const [teamMembers, setTeamMembers] = useState([]);
   const [form, setForm] = useState({
     name: '',
     customer_id: prefillCustomerId || '',
@@ -71,8 +75,11 @@ export function NewProjectModal({ onClose, onSaved, customers, deals, offertes, 
     start_date: '',
     deadline: '',
     description: '',
+    assigned_to: '',
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
 
   // Bij selectie van offerte: voorinvullen waarde + uren + klant + deal
   useEffect(() => {
@@ -109,7 +116,12 @@ export function NewProjectModal({ onClose, onSaved, customers, deals, offertes, 
         quoted_hours: Number(form.quoted_hours || 0),
         start_date: form.start_date || null,
         deadline: form.deadline || null,
+        assigned_to: form.assigned_to || null,
       });
+      if (form.assigned_to && profile?.id) {
+        const m = teamMembers.find(x => x.id === form.assigned_to);
+        createAssignmentNotification({ assignedToUserId: form.assigned_to, assignedToName: m?.fullName, type: 'toewijzing_project', title: `Je bent toegewezen aan ${name}`, link: 'projecten', relatedType: 'project', relatedId: saved?.id, creatorId: profile.id, creatorName: profile.fullName }).catch(() => {});
+      }
       toast.success('Project aangemaakt');
       onSaved?.(saved);
       onClose();
@@ -206,9 +218,16 @@ export function NewProjectModal({ onClose, onSaved, customers, deals, offertes, 
             <label>Deadline</label>
             <input type="date" value={form.deadline} onChange={e => set('deadline', e.target.value)} />
           </div>
+          <div className="f">
+            <label>Toegewezen aan</label>
+            <select value={form.assigned_to} onChange={e => set('assigned_to', e.target.value)}>
+              <option value="">— Geen medewerker —</option>
+              {teamMembers.map(m => <option key={m.id} value={m.id}>{m.fullName}</option>)}
+            </select>
+          </div>
           <div className="f s2" style={{ gridColumn: '1 / -1' }}>
             <label>Omschrijving</label>
-            <textarea rows={3} value={form.description} onChange={e => set('description', e.target.value)} placeholder="Werkomschrijving, bijzonderheden, aandachtspunten…" />
+            <MentionEditor value={form.description} onChange={v => set('description', v)} rows={3} placeholder="Werkomschrijving, bijzonderheden, aandachtspunten… Typ @ om iemand te taggen" teamMembers={teamMembers} />
           </div>
         </div>
         <div className="fa">
