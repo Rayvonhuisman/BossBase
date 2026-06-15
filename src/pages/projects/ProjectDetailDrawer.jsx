@@ -57,7 +57,7 @@ function DrawerHeader({ project, onClose }) {
   return (
     <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--br)', display: 'flex', alignItems: 'flex-start', gap: 12, position: 'sticky', top: 0, background: '#fff', zIndex: 2 }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--dk)', letterSpacing: '-.01em' }}>{project.name}</div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--dk)', letterSpacing: '-.01em', wordBreak: 'break-word', overflowWrap: 'break-word' }}>{project.name}</div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
           <StatusBadge status={project.status} />
           <HealthChip health={project.health} />
@@ -152,7 +152,7 @@ function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
   const isOverdue = project.deadline && project.deadline < new Date().toISOString().slice(0, 10) && project.status !== 'afgerond';
 
   return (
-    <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 18, overflow: 'hidden' }}>
       {/* Projectcontrole card */}
       <div className="card card-p" style={{ padding: 14, background: '#fafafa' }}>
         <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--dl)', marginBottom: 10 }}>
@@ -316,8 +316,8 @@ function OfferteTab({ project, offertes, setPage, onLink, canManage }) {
       <div className="card card-p" style={{ padding: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 13, color: 'var(--dl)', fontFamily: 'monospace' }}>{linkedOfferte.nummer}</div>
-            <div style={{ fontWeight: 600 }}>{linkedOfferte.omschrijving || project.name}</div>
+            <div style={{ fontSize: 13, color: 'var(--dl)', fontFamily: 'monospace', wordBreak: 'break-all' }}>{linkedOfferte.nummer}</div>
+            <div style={{ fontWeight: 600, wordBreak: 'break-word', overflowWrap: 'break-word' }}>{linkedOfferte.omschrijving || project.name}</div>
           </div>
           <span className={`badge b-${linkedOfferte.status || 'gray'}`}>{linkedOfferte.status}</span>
         </div>
@@ -605,7 +605,7 @@ function NotesTab({ notes, onAdd, onDelete }) {
   };
 
   return (
-    <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
       <div className="card card-p" style={{ padding: 10 }}>
         <MentionEditor
           value={text}
@@ -628,8 +628,8 @@ function NotesTab({ notes, onAdd, onDelete }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {notes.map(n => (
-            <div key={n.id} style={{ padding: 10, border: '1px solid var(--br)', borderRadius: 8, background: '#fff' }}>
-              <div style={{ fontSize: 13, color: 'var(--dk)', lineHeight: 1.5 }}>{renderMentions(n.note)}</div>
+            <div key={n.id} style={{ padding: 10, border: '1px solid var(--br)', borderRadius: 8, background: '#fff', overflow: 'hidden' }}>
+              <div style={{ fontSize: 13, color: 'var(--dk)', lineHeight: 1.5, wordBreak: 'break-word', overflowWrap: 'break-word' }}>{renderMentions(n.note)}</div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
                 <div style={{ fontSize: 11, color: 'var(--dl)' }}>
                   {n.authorName || 'Onbekend'} · {fmtDate(String(n.createdAt || '').slice(0, 10))}
