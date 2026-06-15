@@ -17,6 +17,13 @@ import { getTeamMembers, createMentionNotifications, createAssignmentNotificatio
 
 const isEmail = v => !v || /^\S+@\S+\.\S+$/.test(v);
 
+function addMins(time, mins) {
+  if (!time) return '';
+  const [h, m] = time.split(':').map(Number);
+  const total = h * 60 + m + mins;
+  return `${String(Math.floor(total / 60) % 24).padStart(2,'0')}:${String(total % 60).padStart(2,'0')}`;
+}
+
 // ── KOSTEN BTW HELPERS ───────────────────────────────────────
 const calcBtwHelper = (bedrag, pct, mode) => {
   const b = Number(bedrag) || 0;
@@ -326,6 +333,7 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
     type: 'task',
     date: today,
     time: '09:00',
+    endTime: addMins('09:00', 15),
     custId: defaultCustId,
     dealId: defaultDealId,
     status: 'open',
@@ -335,6 +343,7 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [teamMembers, setTeamMembers] = useState([]);
+  const [endTimeManual, setEndTimeManual] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
@@ -365,6 +374,7 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
         customer_id: form.custId || null,
         deal_id: form.dealId || null,
         due_at: buildDueAt(form.date, form.time),
+        end_time: form.endTime || null,
         assigned_to: form.assignedTo || null,
       });
       // Mention notifications in notes
@@ -439,8 +449,18 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
             {errors.date && <span className="bb-err">{errors.date}</span>}
           </div>
           <div className="f">
-            <label>Tijd</label>
-            <input type="time" value={form.time} onChange={e => set('time', e.target.value)} />
+            <label>Starttijd</label>
+            <input type="time" value={form.time} onChange={e => {
+              set('time', e.target.value);
+              if (!endTimeManual) set('endTime', addMins(e.target.value, 15));
+            }} />
+          </div>
+          <div className="f">
+            <label>Eindtijd</label>
+            <input type="time" value={form.endTime} onChange={e => {
+              setEndTimeManual(true);
+              set('endTime', e.target.value);
+            }} />
           </div>
           <div className="f">
             <label>Klant</label>
@@ -964,6 +984,7 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
     type: activity?.type || 'task',
     date: activity?.date || '',
     time: activity?.time || '',
+    endTime: activity?.endTime || '',
     custId: activity?.custId || '',
     dealId: activity?.dealId || '',
     status: activity?.completed ? 'completed' : (activity?.status === 'completed' || activity?.status === 'done' ? 'completed' : 'open'),
@@ -973,6 +994,7 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
   });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [endTimeManual, setEndTimeManual] = useState(!!activity?.endTime);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const isDone = form.status === 'completed' || form.status === 'done';
@@ -996,6 +1018,7 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
         customer_id: form.custId || null,
         deal_id: form.dealId || null,
         due_at: buildDueAt(form.date, form.time),
+        end_time: form.endTime || null,
         status: form.status,
         notes: form.notes,
         assigned_to: form.assignedTo || null,
@@ -1102,8 +1125,18 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
             <input type="date" value={form.date} onChange={e => set('date', e.target.value)} disabled={!canEdit || busy} />
           </div>
           <div className="f">
-            <label>Tijd</label>
-            <input type="time" value={form.time} onChange={e => set('time', e.target.value)} disabled={!canEdit || busy} />
+            <label>Starttijd</label>
+            <input type="time" value={form.time} onChange={e => {
+              set('time', e.target.value);
+              if (!endTimeManual) set('endTime', addMins(e.target.value, 15));
+            }} disabled={!canEdit || busy} />
+          </div>
+          <div className="f">
+            <label>Eindtijd</label>
+            <input type="time" value={form.endTime} onChange={e => {
+              setEndTimeManual(true);
+              set('endTime', e.target.value);
+            }} disabled={!canEdit || busy} />
           </div>
           <div className="f">
             <label>Klant</label>

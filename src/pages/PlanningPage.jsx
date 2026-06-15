@@ -13,6 +13,9 @@ import { getTeamMembers, createAssignmentNotification } from '../services/notifi
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
 import { createCalendarEvent } from '../services/calendarService.js';
+import { listActivities, createActivity, buildDueAt } from '../services/activityService.js';
+import { ActivityEditModal } from '../components/SharedModals.jsx';
+import { supabase } from '../lib/supabase.js';
 import { MentionEditor } from '../components/MentionEditor.jsx';
 
 // ── TIJDLIJN CONSTANTEN ───────────────────────────────────────────────────────
@@ -168,6 +171,50 @@ function WerkbonBlock({ werkbon, color, onClick }) {
   );
 }
 
+// ── ACTIVITEIT BLOK (in tijdlijn) ────────────────────────────────────────────
+
+function ActivityBlock({ activity, onClick }) {
+  const top    = timeToTopPx(activity.starttijd);
+  const height = durationToPx(activity.starttijd, activity.eindtijd);
+  const lane   = activity._lane || 0;
+  const total  = activity._totalLanes || 1;
+
+  return (
+    <div
+      onClick={e => { e.stopPropagation(); onClick && onClick(activity._orig); }}
+      title={`${activity.titel}\n${fmtTime(activity.starttijd)}–${fmtTime(activity.eindtijd)}\n${activity.customerName || ''}`}
+      style={{
+        position: 'absolute',
+        top, left: `${(lane / total) * 100}%`,
+        width: `${100 / total}%`, height,
+        background: 'rgba(29,219,98,.14)',
+        borderLeft: '3px solid #1DDB62',
+        border: '1px solid rgba(29,219,98,.35)',
+        borderRadius: 4, padding: '3px 5px 2px',
+        overflow: 'hidden', cursor: 'pointer',
+        boxSizing: 'border-box', zIndex: 3,
+        transition: 'filter .1s',
+      }}
+      onMouseEnter={e => (e.currentTarget.style.filter = 'brightness(.95)')}
+      onMouseLeave={e => (e.currentTarget.style.filter = '')}
+    >
+      <div style={{ fontWeight: 700, fontSize: 10, color: '#15803d', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>
+        {activity.titel}
+      </div>
+      {height > 30 && (
+        <div style={{ fontSize: 9, color: '#15803d', opacity: .75, lineHeight: 1.2 }}>
+          {fmtTime(activity.starttijd)}–{fmtTime(activity.eindtijd)}
+        </div>
+      )}
+      {height > 50 && activity.customerName && (
+        <div style={{ fontSize: 9, color: '#15803d', opacity: .6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
+          {activity.customerName}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── DRAGGABLE (niet-ingepland) ────────────────────────────────────────────────
 
 function DraggableUnplanned({ werkbon, onClick }) {
@@ -221,8 +268,22 @@ function TimeSlotDrop({ date, hour }) {
 
 // ── TIJDLIJN KOLOM ────────────────────────────────────────────────────────────
 
-function DayColumn({ date, werkbonnen, colorMap, isToday, allowDrop, onBlockClick }) {
-  const withLanes = useMemo(() => assignLanes(werkbonnen), [werkbonnen]);
+function DayColumn({ date, werkbonnen, activities = [], colorMap, isToday, allowDrop, onBlockClick, onActivityClick }) {
+  const allBlocks = useMemo(() => {
+    const wbs = werkbonnen.map(w => ({ ...w, _blockType: 'werkbon' }));
+    const acts = activities.map(a => ({
+      _blockType: 'activity',
+      id: `act:${a.id}`,
+      starttijd: a.time || '09:00',
+      eindtijd: a.endTime || minsToTime(timeToMins(a.time || '09:00') + 15),
+      titel: a.title,
+      customerName: a.customerName,
+      _orig: a,
+    }));
+    return [...wbs, ...acts];
+  }, [werkbonnen, activities]);
+
+  const withLanes = useMemo(() => assignLanes(allBlocks), [allBlocks]);
   const hours = Array.from({ length: TOTAL_HOURS }, (_, i) => HOUR_START + i);
 
   return (
@@ -245,12 +306,14 @@ function DayColumn({ date, werkbonnen, colorMap, isToday, allowDrop, onBlockClic
       ))}
       {/* Droppable zones */}
       {allowDrop && hours.map(h => <TimeSlotDrop key={h} date={date} hour={h} />)}
-      {/* Werkbon blokken */}
-      {withLanes.map(w => (
+      {/* Werkbon + Activiteit blokken */}
+      {withLanes.map(b => b._blockType === 'activity' ? (
+        <ActivityBlock key={b.id} activity={b} onClick={onActivityClick} />
+      ) : (
         <WerkbonBlock
-          key={w.id}
-          werkbon={w}
-          color={colorMap[w._colorKey] || entityColor(0)}
+          key={b.id}
+          werkbon={b}
+          color={colorMap[b._colorKey] || entityColor(0)}
           onClick={onBlockClick}
         />
       ))}
@@ -326,6 +389,210 @@ function QuickPlanModal({ werkbon, date, hour, teamMembers, onClose, onSaved }) 
               <option value="">— Niet toegewezen —</option>
               {teamMembers.map(m => <option key={m.id} value={m.id}>{m.fullName}</option>)}
             </select>
+          </div>
+        </div>
+        <div className="fa" style={{ justifyContent: 'flex-end', gap: 8, paddingTop: 12 }}>
+          <button className="btn btn-s" onClick={onClose} disabled={saving}>Annuleren</button>
+          <button className="btn btn-p" onClick={submit} disabled={saving}>{saving ? 'Inplannen…' : 'Inplannen'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ACTIVITEIT INPLANNEN MODAL ────────────────────────────────────────────────
+
+const ACT_TYPES = [
+  { value: 'call',  label: 'Bellen'      },
+  { value: 'visit', label: 'Bezoek'      },
+  { value: 'task',  label: 'Vergadering' },
+  { value: 'task',  label: 'Klus'        },
+  { value: 'follow',label: 'Overig'      },
+];
+
+function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, profile, onClose, onSaved }) {
+  const toast = useToast();
+  const [form, setForm] = useState({
+    titel: '', type: 'task', customer_id: '',
+    datum: toISO(new Date()), starttijd: '09:00', eindtijd: '09:15',
+    assigned_to: '', voertuig_id: '', locatie: '', omschrijving: '',
+    werkbon_id: '',
+  });
+  const [eindtijdManual, setEindtijdManual] = useState(false);
+  const [maakWerkbon, setMaakWerkbon] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const werkbonnenVoorKlant = form.customer_id
+    ? (werkbonnen || []).filter(w => w.customerId === form.customer_id && !w.activity_id)
+    : [];
+
+  const submit = async () => {
+    if (!form.titel.trim()) { toast.error('Titel is verplicht'); return; }
+    if (!form.datum)        { toast.error('Datum is verplicht'); return; }
+    if (!form.starttijd)    { toast.error('Starttijd is verplicht'); return; }
+    setSaving(true);
+    try {
+      const created = await createActivity({
+        title: form.titel.trim(),
+        type: form.type,
+        customer_id: form.customer_id || null,
+        due_at: buildDueAt(form.datum, form.starttijd),
+        end_time: form.eindtijd || null,
+        assigned_to: form.assigned_to || null,
+        location: form.locatie || null,
+        voertuig_id: form.voertuig_id || null,
+        notes: form.omschrijving || null,
+      });
+
+      // Calendar event aanmaken zodat activiteit in agenda verschijnt
+      if (form.datum && form.starttijd) {
+        createCalendarEvent({
+          title: form.titel.trim(),
+          date: form.datum,
+          time: form.starttijd,
+          end: form.eindtijd || minsToTime(timeToMins(form.starttijd) + 15),
+          customer_id: form.customer_id || null,
+          activity_id: created.id,
+          description: form.omschrijving || '',
+        }).catch(() => {});
+      }
+
+      // Notificatie naar toegewezen medewerker
+      if (form.assigned_to) {
+        const member = teamMembers.find(m => m.id === form.assigned_to);
+        createAssignmentNotification({
+          assignedToUserId: form.assigned_to,
+          assignedToName: member?.fullName,
+          type: 'toewijzing_activiteit',
+          title: `Je bent toegewezen aan ${form.titel.trim()}`,
+          body: `Datum: ${form.datum}${form.starttijd ? ` om ${form.starttijd}` : ''}`,
+          link: 'planning',
+          relatedType: 'activiteit',
+          relatedId: created.id,
+          creatorId: profile?.id,
+          creatorName: profile?.fullName,
+        }).catch(() => {});
+      }
+
+      // Bestaande werkbon koppelen
+      if (form.werkbon_id) {
+        supabase.from('werkbonnen').update({ activity_id: created.id }).eq('id', form.werkbon_id).then(() => {}).catch(() => {});
+      }
+      // Nieuwe werkbon aanmaken en koppelen
+      if (maakWerkbon && !form.werkbon_id) {
+        createWerkbon({
+          titel: form.titel.trim(),
+          customer_id: form.customer_id || null,
+          gepland_op: form.datum,
+          starttijd: form.starttijd || null,
+          eindtijd: form.eindtijd || null,
+          assigned_to: form.assigned_to || null,
+          voertuig_id: form.voertuig_id || null,
+          locatie: form.locatie || null,
+          omschrijving: form.omschrijving || null,
+          status: 'gepland',
+        }).then(wb => {
+          if (wb?.id) supabase.from('werkbonnen').update({ activity_id: created.id }).eq('id', wb.id).catch(() => {});
+        }).catch(() => {});
+      }
+
+      toast.success('Activiteit ingepland');
+      onSaved(created);
+      onClose();
+    } catch (e) {
+      toast.error(e.message || 'Opslaan mislukt');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 560, width: '90vw' }}>
+        <div className="modal-hd">
+          <div className="modal-title">Activiteit inplannen</div>
+          <ModalX onClose={onClose} />
+        </div>
+        <div className="fg" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div className="f" style={{ gridColumn: '1 / -1' }}>
+            <label>Titel *</label>
+            <input autoFocus value={form.titel} onChange={e => set('titel', e.target.value)} placeholder="Bijv. Klantbezoek of vergadering" />
+          </div>
+          <div className="f">
+            <label>Type</label>
+            <select value={form.type} onChange={e => set('type', e.target.value)}>
+              <option value="call">Bellen</option>
+              <option value="visit">Bezoek</option>
+              <option value="task">Vergadering / Klus</option>
+              <option value="follow">Overig</option>
+            </select>
+          </div>
+          <div className="f">
+            <label>Klant</label>
+            <select value={form.customer_id} onChange={e => { set('customer_id', e.target.value); set('werkbon_id', ''); }}>
+              <option value="">— Geen klant —</option>
+              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="f" style={{ gridColumn: '1 / -1' }}>
+            <label>Datum *</label>
+            <input type="date" value={form.datum} onChange={e => set('datum', e.target.value)} />
+          </div>
+          <div className="f">
+            <label>Starttijd *</label>
+            <input type="time" value={form.starttijd} onChange={e => {
+              set('starttijd', e.target.value);
+              if (!eindtijdManual) set('eindtijd', minsToTime(timeToMins(e.target.value) + 15));
+            }} />
+          </div>
+          <div className="f">
+            <label>Eindtijd <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(optioneel)</span></label>
+            <input type="time" value={form.eindtijd} onChange={e => { setEindtijdManual(true); set('eindtijd', e.target.value); }} />
+          </div>
+          <div className="f">
+            <label>Medewerker</label>
+            <select value={form.assigned_to} onChange={e => set('assigned_to', e.target.value)}>
+              <option value="">— Niet toegewezen —</option>
+              {teamMembers.map(m => <option key={m.id} value={m.id}>{m.fullName}</option>)}
+            </select>
+          </div>
+          <div className="f">
+            <label>Voertuig <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(optioneel)</span></label>
+            <select value={form.voertuig_id} onChange={e => set('voertuig_id', e.target.value)}>
+              <option value="">— Geen voertuig —</option>
+              {voertuigen.map(v => <option key={v.id} value={v.id}>{v.naam}{v.kenteken ? ` (${v.kenteken})` : ''}</option>)}
+            </select>
+          </div>
+          <div className="f" style={{ gridColumn: '1 / -1' }}>
+            <label>Locatie <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(optioneel)</span></label>
+            <input value={form.locatie} onChange={e => set('locatie', e.target.value)} placeholder="Adres of omschrijving" />
+          </div>
+          <div className="f" style={{ gridColumn: '1 / -1' }}>
+            <label>Notities</label>
+            <MentionEditor value={form.omschrijving} onChange={v => set('omschrijving', v)} rows={3}
+              placeholder="Instructies, agenda punten…" teamMembers={teamMembers} />
+          </div>
+
+          {/* Werkbon koppelen */}
+          <div className="f" style={{ gridColumn: '1 / -1', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+            <label style={{ marginBottom: 6 }}>Werkbon koppelen <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(optioneel)</span></label>
+            {werkbonnenVoorKlant.length > 0 ? (
+              <select value={form.werkbon_id} onChange={e => { set('werkbon_id', e.target.value); if (e.target.value) setMaakWerkbon(false); }}>
+                <option value="">— Geen werkbon —</option>
+                {werkbonnenVoorKlant.map(w => <option key={w.id} value={w.id}>{w.titel}</option>)}
+              </select>
+            ) : form.customer_id ? (
+              <div style={{ fontSize: 12, color: 'var(--dl)', marginBottom: 6 }}>Geen openstaande werkbonnen voor deze klant.</div>
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--dl)', marginBottom: 6 }}>Selecteer eerst een klant om werkbonnen te tonen.</div>
+            )}
+            {!form.werkbon_id && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 13, cursor: 'pointer' }}>
+                <input type="checkbox" checked={maakWerkbon} onChange={e => setMaakWerkbon(e.target.checked)} />
+                Nieuwe werkbon aanmaken en koppelen
+              </label>
+            )}
           </div>
         </div>
         <div className="fa" style={{ justifyContent: 'flex-end', gap: 8, paddingTop: 12 }}>
@@ -603,11 +870,14 @@ export function PlanningPage() {
   const [voertuigen,     setVoertuigen]     = useState([]);
   const [customers,      setCustomers]      = useState([]);
   const [projects,       setProjects]       = useState([]);
-  const [showPlanModal,  setShowPlanModal]  = useState(false);
-  const [detailWb,       setDetailWb]       = useState(null);
-  const [quickDrop,      setQuickDrop]      = useState(null); // { werkbon, date, hour }
-  const [showUnplanned,  setShowUnplanned]  = useState(true);
-  const [activeId,       setActiveId]       = useState(null);
+  const [activities,          setActivities]          = useState([]);
+  const [selectedActivity,    setSelectedActivity]    = useState(null);
+  const [showPlanModal,       setShowPlanModal]       = useState(false);
+  const [showPlanActivityModal, setShowPlanActivityModal] = useState(false);
+  const [detailWb,            setDetailWb]            = useState(null);
+  const [quickDrop,           setQuickDrop]           = useState(null); // { werkbon, date, hour }
+  const [showUnplanned,       setShowUnplanned]       = useState(true);
+  const [activeId,            setActiveId]            = useState(null);
 
   const weekDays = Array.from({ length: 7 }, (_, i) => toISO(addDays(weekStart, i)));
   const today = toISO(new Date());
@@ -617,18 +887,20 @@ export function PlanningPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [wbs, members, voerts, custs, projs] = await Promise.all([
+      const [wbs, members, voerts, custs, projs, acts] = await Promise.all([
         getWerkbonnen(),
         getTeamMembers().catch(() => []),
         getVoertuigen().catch(() => []),
         listCustomers().catch(() => []),
         getProjects().catch(() => []),
+        listActivities().catch(() => []),
       ]);
       setWerkbonnen(wbs);
       setTeamMembers(members);
       setVoertuigen(voerts);
       setCustomers(custs);
       setProjects(projs);
+      setActivities(acts);
     } catch (e) {
       toast.error(e.message || 'Laden mislukt');
     } finally {
@@ -686,6 +958,14 @@ export function PlanningPage() {
     ...w,
     _colorKey: viewMode === 'totaal' ? (w.assignedTo || '__none__') : (w.projectId || '__none__'),
   })), [filteredWb, viewMode]);
+
+  // Activiteiten gefilterd per viewMode
+  const filteredActivities = useMemo(() => {
+    if (viewMode === 'medewerker') return activities.filter(a => a.assignee === selectedMember);
+    if (viewMode === 'voertuig')   return []; // activiteiten niet per voertuig tonen
+    // totaal: toon alle activiteiten met assigned_to, of eigen activiteiten bij solo ZZP
+    return activities.filter(a => a.assignee || !teamMembers.length);
+  }, [activities, viewMode, selectedMember, teamMembers]);
 
   // Niet-ingepland: geen geplandOp OF (totaal: geen assignedTo) OF geen starttijd
   const unplanned = useMemo(() => werkbonnen.filter(w =>
@@ -757,8 +1037,11 @@ export function PlanningPage() {
               {voertuigen.map(v => <option key={v.id} value={v.id}>{v.naam}</option>)}
             </select>
           )}
-          <button className="btn btn-p btn-sm" onClick={() => setShowPlanModal(true)}>
+          <button className="btn btn-s btn-sm" onClick={() => setShowPlanModal(true)}>
             {I.plus} Werkbon inplannen
+          </button>
+          <button className="btn btn-p btn-sm" onClick={() => setShowPlanActivityModal(true)}>
+            {I.plus} Activiteit inplannen
           </button>
         </div>
       </div>
@@ -843,15 +1126,18 @@ export function PlanningPage() {
                   {/* Dag-kolommen */}
                   {weekDays.map(date => {
                     const dayWbs = colorKeyedWb.filter(w => w.geplandOp === date && w.starttijd);
+                    const dayActs = filteredActivities.filter(a => a.date === date);
                     return (
                       <DayColumn
                         key={date}
                         date={date}
                         werkbonnen={dayWbs}
+                        activities={dayActs}
                         colorMap={colorMap}
                         isToday={date === today}
                         allowDrop
                         onBlockClick={setDetailWb}
+                        onActivityClick={setSelectedActivity}
                       />
                     );
                   })}
@@ -883,6 +1169,34 @@ export function PlanningPage() {
           customers={customers} projects={projects}
           onClose={() => setShowPlanModal(false)}
           onSaved={wb => setWerkbonnen(prev => [wb, ...prev])}
+        />
+      )}
+
+      {showPlanActivityModal && (
+        <PlanActivityModal
+          teamMembers={teamMembers}
+          voertuigen={voertuigen}
+          customers={customers}
+          werkbonnen={werkbonnen}
+          profile={profile}
+          onClose={() => setShowPlanActivityModal(false)}
+          onSaved={act => setActivities(prev => [act, ...prev])}
+        />
+      )}
+
+      {selectedActivity && (
+        <ActivityEditModal
+          activity={selectedActivity}
+          teamMembers={teamMembers}
+          onClose={() => setSelectedActivity(null)}
+          onSaved={updated => {
+            setActivities(prev => prev.map(a => a.id === updated.id ? updated : a));
+            setSelectedActivity(null);
+          }}
+          onDeleted={id => {
+            setActivities(prev => prev.filter(a => a.id !== id));
+            setSelectedActivity(null);
+          }}
         />
       )}
 

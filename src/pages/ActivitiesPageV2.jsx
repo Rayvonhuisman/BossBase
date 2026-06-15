@@ -122,6 +122,13 @@ function formatRowDate(a) {
   return `${DAY_SHORT[d.getDay()]} ${d.getDate()} ${MONTH_SHORT[d.getMonth()]}`;
 }
 
+// Top-level helper zodat zowel de page als Row het kunnen gebruiken
+function getMemberName(userId, teamMembers) {
+  if (!userId) return '';
+  const m = (teamMembers || []).find(t => t.id === userId);
+  return m?.fullName || userId;
+}
+
 // ─── Page ───────────────────────────────────────────────────────────────────
 export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsumed }) {
   const toast = useToast();
@@ -139,12 +146,6 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
   const [view, setView] = useState('grouped');
   const [selected, setSelected] = useState(null);
   const [showNew, setShowNew] = useState(false);
-
-  const getMemberName = (userId) => {
-    if (!userId) return '';
-    const m = teamMembers.find(t => t.id === userId);
-    return m?.fullName || userId;
-  };
 
   useEffect(() => {
     setLoading(true);
@@ -174,11 +175,10 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
     const map = new Map();
     acts.forEach(a => {
       if (a.assignee && !map.has(a.assignee)) {
-        map.set(a.assignee, getMemberName(a.assignee));
+        map.set(a.assignee, getMemberName(a.assignee, teamMembers));
       }
     });
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [acts, teamMembers]);
 
   const counts = useMemo(() => {
@@ -364,7 +364,7 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
         <section className="act2-listwrap">
           <div className="act2-list">
             {filtered.map(a => (
-              <Row key={a.id} a={a} openCustomer={openCustomer} onSelect={setSelected} onMark={markDone} getMemberName={getMemberName} />
+              <Row key={a.id} a={a} openCustomer={openCustomer} onSelect={setSelected} onMark={markDone} teamMembers={teamMembers} />
             ))}
           </div>
         </section>
@@ -382,7 +382,7 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
                 </div>
                 <div className="act2-list">
                   {items.map(a => (
-                    <Row key={a.id} a={a} openCustomer={openCustomer} onSelect={setSelected} onMark={markDone} getMemberName={getMemberName} />
+                    <Row key={a.id} a={a} openCustomer={openCustomer} onSelect={setSelected} onMark={markDone} teamMembers={teamMembers} />
                   ))}
                 </div>
               </div>
@@ -423,12 +423,12 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
   );
 }
 
-function Row({ a, openCustomer, onSelect, onMark, getMemberName }) {
+function Row({ a, openCustomer, onSelect, onMark, teamMembers }) {
   const done = isDone(a);
   const badge = STATUS_BADGE[a.status] || STATUS_BADGE.open;
   const stateCls = done ? 'is-done' : `is-${a.status || 'open'}`;
   const t = safeType(a.type);
-  const assigneeName = getMemberName ? getMemberName(a.assignee) : (a.assignee || '');
+  const assigneeName = getMemberName(a.assignee, teamMembers);
   const initial = (assigneeName || '').trim().charAt(0).toUpperCase() || '·';
   return (
     <article className={`act2-row ${stateCls}`} onClick={() => onSelect(a)}>

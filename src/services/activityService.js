@@ -53,6 +53,15 @@ export function mapActivityFormToPayload(input = {}) {
   if (input.assigned_to !== undefined) {
     payload.assigned_to = input.assigned_to || null
   }
+  if (input.endTime !== undefined || input.end_time !== undefined) {
+    payload.end_time = input.endTime ?? input.end_time ?? null
+  }
+  if (input.location !== undefined) {
+    payload.location = input.location || null
+  }
+  if (input.voertuig_id !== undefined || input.voertuigId !== undefined) {
+    payload.voertuig_id = input.voertuig_id ?? input.voertuigId ?? null
+  }
 
   if (dueAt) payload.due_at = dueAt
 
@@ -81,6 +90,9 @@ export const toActivity = row => {
     time: splitDueAt(row.due_at).time,
     notes: row.notes || "",
     assignee: row.assigned_to || "",
+    endTime: row.end_time || null,
+    location: row.location || '',
+    voertuigId: row.voertuig_id || null,
     completed,
     // Synthesize a display status the existing UI expects.
     status: completed ? "completed" : computeOpenStatus(row.due_at),
