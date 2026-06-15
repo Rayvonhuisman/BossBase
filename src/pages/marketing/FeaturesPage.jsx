@@ -249,7 +249,7 @@ export default function FeaturesPage({ navigate }) {
         </section>
 
         {BLOCKS.map((b, i) => (
-          <div key={i} className="section" style={{ borderTop: i > 0 ? "1px solid var(--border)" : "none" }}>
+          <div key={i} className="section">
             <div className="container">
               <Reveal>
                 <div className={`feature-row choreo-body${b.flip ? " flip" : ""}`}>
@@ -268,7 +268,7 @@ export default function FeaturesPage({ navigate }) {
           </div>
         ))}
 
-        <div className="section" style={{ background: "var(--bgs)", borderTop: "1px solid var(--border)" }}>
+        <div className="section" style={{ background: "var(--bgs)" }}>
           <div className="container">
             <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">Vergelijk</span>
@@ -294,7 +294,7 @@ export default function FeaturesPage({ navigate }) {
           </div>
         </div>
 
-        <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
+        <div className="section">
           <div className="container">
             <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">Integraties</span>

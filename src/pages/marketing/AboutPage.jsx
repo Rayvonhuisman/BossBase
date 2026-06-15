@@ -57,7 +57,7 @@ export default function AboutPage({ navigate }) {
         </section>
 
         {/* Verhaal */}
-        <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
+        <div className="section">
           <div className="container">
             <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">Ons verhaal</span>
@@ -74,7 +74,7 @@ export default function AboutPage({ navigate }) {
         </div>
 
         {/* Oprichters */}
-        <div className="section" style={{ background: "var(--bgs)", borderTop: "1px solid var(--border)" }}>
+        <div className="section" style={{ background: "var(--bgs)" }}>
           <div className="container">
             <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">Het team</span>
@@ -102,7 +102,7 @@ export default function AboutPage({ navigate }) {
         </div>
 
         {/* Missie */}
-        <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
+        <div className="section">
           <div className="container">
             <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">Missie</span>
@@ -121,7 +121,7 @@ export default function AboutPage({ navigate }) {
         </div>
 
         {/* Statistieken */}
-        <div className="section" style={{ background: "var(--bgs)", borderTop: "1px solid var(--border)" }}>
+        <div className="section" style={{ background: "var(--bgs)" }}>
           <div className="container">
             <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">In cijfers</span>
@@ -141,7 +141,7 @@ export default function AboutPage({ navigate }) {
         </div>
 
         {/* Waarden */}
-        <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
+        <div className="section">
           <div className="container">
             <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">Waarden</span>
@@ -162,7 +162,7 @@ export default function AboutPage({ navigate }) {
         </div>
 
         {/* Waarom niet VC */}
-        <div className="section" style={{ background: "var(--bgs)", borderTop: "1px solid var(--border)" }}>
+        <div className="section" style={{ background: "var(--bgs)" }}>
           <div className="container">
             <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">Onze aanpak</span>

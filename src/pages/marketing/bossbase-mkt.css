@@ -239,7 +239,7 @@ html.choreo-js .bm .choreo-body { animation: none !important; }
 .bm .section-head p { margin-top: 16px; font-size: 17.5px; color: var(--dmu); }
 
 /* ── Logobalk / marquee ── */
-.bm .logobar { padding: 36px 0 40px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--bgs); }
+.bm .logobar { padding: 36px 0 40px; background: var(--bgs); }
 .bm .logobar-label { text-align: center; font-size: 11.5px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--dl); margin-bottom: 20px; }
 .bm .marquee { overflow: hidden; position: relative; -webkit-mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent); mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent); }
 .bm .marquee-track { display: flex; gap: 0; width: max-content; animation: bm-marquee 48s linear infinite; align-items: center; }
@@ -483,7 +483,8 @@ html.choreo-js .bm .choreo-body { animation: none !important; }
 
 /* ── Prijzen-pagina specifiek ── */
 .bm .price-hero {
-  padding: 140px 0 64px; text-align: center;
+  min-height: 88vh; padding: 140px 0 64px; text-align: center;
+  display: flex; flex-direction: column; justify-content: center;
   background:
     radial-gradient(600px 500px at 50% 30%, rgba(29,219,98,0.12), transparent 65%),
     var(--bg);
@@ -494,7 +495,7 @@ html.choreo-js .bm .choreo-body { animation: none !important; }
 .bm .price-grid-full { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; align-items: stretch; margin-top: 8px; }
 
 /* Vergelijkingstabel */
-.bm .compare-section { background: var(--bgs); border-top: 1px solid var(--border); padding: 72px 0; }
+.bm .compare-section { background: var(--bgs); padding: 72px 0; }
 .bm .compare-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .bm .compare-table { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 560px; }
 .bm .compare-table thead th { padding: 16px 20px; text-align: center; font-size: 15px; font-weight: 700; color: var(--dk); border-bottom: 2px solid var(--border); background: var(--bgs); }
@@ -535,7 +536,8 @@ html.choreo-js .bm .choreo-body { animation: none !important; }
 
 /* ── FAQ pagina ── */
 .bm .faq-hero {
-  padding: 140px 0 64px; text-align: center;
+  min-height: 88vh; padding: 140px 0 64px; text-align: center;
+  display: flex; flex-direction: column; justify-content: center;
   background:
     radial-gradient(600px 400px at 50% 30%, rgba(29,219,98,0.1), transparent 65%),
     var(--bg);
@@ -555,7 +557,7 @@ html.choreo-js .bm .choreo-body { animation: none !important; }
 .bm .faq-search-clear { position: absolute; right: 12px; background: none; border: none; color: var(--dl); padding: 6px; border-radius: var(--r8); display: none; align-items: center; justify-content: center; }
 .bm .faq-search-clear.visible { display: flex; }
 .bm .faq-search-clear:hover { color: var(--dk); background: var(--bgx); }
-.bm .faq-page-section { padding: 64px 0; border-top: 1px solid var(--border); }
+.bm .faq-page-section { padding: 64px 0; }
 .bm .faq-cat-head { display: flex; align-items: center; gap: 14px; max-width: 720px; margin: 0 auto 28px; }
 .bm .faq-cat-icon { width: 40px; height: 40px; border-radius: var(--r12); background: var(--pl); color: var(--pd); display: flex; align-items: center; justify-content: center; flex: none; }
 .bm .faq-cat-head h2 { font-size: 22px; font-weight: 700; }
@@ -618,12 +620,13 @@ html.choreo-js .bm .choreo-body { animation: none !important; }
 }
 
 /* ── Basis-moment (D+B combi hero) ── */
-.bm .basis-moment { text-align: center; padding: 64px 0; background: var(--bgs); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.bm .basis-moment { text-align: center; padding: 64px 0; background: var(--bgs); }
 .bm .basis-stage { position: relative; height: 220px; max-width: 520px; margin: 36px auto 0; }
 
 /* ── Functies pagina ── */
 .bm .functies-hero {
-  padding: 140px 0 64px;
+  min-height: 88vh; padding: 140px 0 64px;
+  display: flex; flex-direction: column; justify-content: center;
   background:
     radial-gradient(600px 500px at 60% 30%, rgba(29,219,98,0.12), transparent 65%),
     var(--bg);
@@ -648,7 +651,8 @@ html.choreo-js .bm .choreo-body { animation: none !important; }
 
 /* ── Voor Wie pagina ── */
 .bm .voorwie-page-hero {
-  padding: 140px 0 64px; text-align: center;
+  min-height: 88vh; padding: 140px 0 64px; text-align: center;
+  display: flex; flex-direction: column; justify-content: center;
   background:
     radial-gradient(600px 500px at 50% 30%, rgba(29,219,98,0.1), transparent 65%),
     var(--bg);
@@ -674,7 +678,8 @@ html.choreo-js .bm .choreo-body { animation: none !important; }
 
 /* ── Over pagina ── */
 .bm .over-hero {
-  padding: 140px 0 72px; text-align: center;
+  min-height: 88vh; padding: 140px 0 72px; text-align: center;
+  display: flex; flex-direction: column; justify-content: center;
   background:
     radial-gradient(600px 500px at 50% 30%, rgba(29,219,98,0.1), transparent 65%),
     var(--bg);
@@ -705,7 +710,8 @@ html.choreo-js .bm .choreo-body { animation: none !important; }
 
 /* ── Contact pagina ── */
 .bm .contact-hero {
-  padding: 140px 0 64px; text-align: center;
+  min-height: 88vh; padding: 140px 0 64px; text-align: center;
+  display: flex; flex-direction: column; justify-content: center;
   background:
     radial-gradient(600px 400px at 50% 30%, rgba(29,219,98,0.1), transparent 65%),
     var(--bg);

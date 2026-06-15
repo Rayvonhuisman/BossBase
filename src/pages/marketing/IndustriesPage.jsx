@@ -170,7 +170,7 @@ export default function IndustriesPage({ navigate }) {
         </section>
 
         {/* ZZP / Bedrijf persona */}
-        <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
+        <div className="section">
           <div className="container">
             <Reveal>
               <div className="section-head choreo-head">
@@ -196,7 +196,7 @@ export default function IndustriesPage({ navigate }) {
         </div>
 
         {/* Per branche */}
-        <div style={{ borderTop: "1px solid var(--border)" }}>
+        <div>
           <div className="section" style={{ paddingBottom: 0 }}>
             <div className="container">
               <Reveal><div className="section-head choreo-head">
@@ -208,7 +208,7 @@ export default function IndustriesPage({ navigate }) {
           </div>
 
           {BRANCHES.map((branch, i) => (
-            <div key={branch.id} className="section" style={{ borderTop: "1px solid var(--border)", paddingTop: 56, paddingBottom: 56 }}>
+            <div key={branch.id} className="section" style={{ paddingTop: 56, paddingBottom: 56 }}>
               <div className="container">
                 <Reveal>
                   <div className={`branche-layout choreo-body${i % 2 === 1 ? " flip" : ""}`}>
@@ -244,7 +244,7 @@ export default function IndustriesPage({ navigate }) {
         </div>
 
         {/* CTA */}
-        <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
+        <div className="section">
           <div className="container">
             <Reveal>
               <div className="final-cta">

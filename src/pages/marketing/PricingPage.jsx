@@ -150,7 +150,7 @@ export default function PricingPage({ navigate }) {
         </section>
 
         {/* Prijskaarten */}
-        <div className="section" style={{ background: "var(--bgs)", borderTop: "1px solid var(--border)", paddingTop: 0 }}>
+        <div className="section" style={{ background: "var(--bgs)", paddingTop: 0 }}>
           <div className="container">
             <div className="price-toggle-wrap" style={{ marginBottom: 32 }}>
               <div className="bill-toggle">

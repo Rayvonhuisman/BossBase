@@ -78,7 +78,7 @@ export default function ContactPage({ navigate }) {
         </section>
 
         {/* Grid: form + info */}
-        <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
+        <div className="section">
           <div className="container">
             <div className="contact-grid choreo-body">
               {/* Form */}
@@ -183,7 +183,7 @@ export default function ContactPage({ navigate }) {
         </div>
 
         {/* Snelle antwoorden */}
-        <div className="section" style={{ background: "var(--bgs)", borderTop: "1px solid var(--border)" }}>
+        <div className="section" style={{ background: "var(--bgs)" }}>
           <div className="container">
             <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">Snelle antwoorden</span>
@@ -210,7 +210,7 @@ export default function ContactPage({ navigate }) {
         </div>
 
         {/* Contact kaarten */}
-        <div className="section" style={{ borderTop: "1px solid var(--border)" }}>
+        <div className="section">
           <div className="container">
             <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">Direct contact</span>

@@ -146,7 +146,7 @@ export default function FaqPage({ navigate }) {
 
         {/* Tab filters */}
         {!search && (
-          <div style={{ borderBottom: "1px solid var(--border)", background: "var(--bgs)", position: "sticky", top: 68, zIndex: 10 }}>
+          <div style={{ background: "var(--bgs)", position: "sticky", top: 68, zIndex: 10 }}>
             <div className="container">
               <div style={{ display: "flex", gap: 4, overflowX: "auto", padding: "10px 0", scrollbarWidth: "none" }}>
                 <button
@@ -208,7 +208,7 @@ export default function FaqPage({ navigate }) {
 
         {/* Meer hulp nodig */}
         {filtered.length > 0 && (
-          <div className="section" style={{ borderTop: "1px solid var(--border)", background: "var(--bgs)" }}>
+          <div className="section" style={{ background: "var(--bgs)" }}>
             <div className="container">
               <Reveal><div className="section-head choreo-head">
                 <span className="section-kicker">Nog vragen?</span>

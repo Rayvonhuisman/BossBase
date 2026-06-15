@@ -893,7 +893,7 @@ function FaqHome({ navigate }) {
     else window.location.href = href
   }, [navigate])
   return (
-    <div className="section" id="faq" style={{ background: "var(--bgs)", borderTop: "1px solid var(--border)" }}>
+    <div className="section" id="faq" style={{ background: "var(--bgs)" }}>
       <div className="container">
         <Reveal><div className="section-head choreo-head">
           <span className="section-kicker">FAQ</span>
