@@ -364,7 +364,7 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
         <section className="act2-listwrap">
           <div className="act2-list">
             {filtered.map(a => (
-              <Row key={a.id} a={a} openCustomer={openCustomer} onSelect={setSelected} onMark={markDone} />
+              <Row key={a.id} a={a} openCustomer={openCustomer} onSelect={setSelected} onMark={markDone} getMemberName={getMemberName} />
             ))}
           </div>
         </section>
@@ -382,7 +382,7 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
                 </div>
                 <div className="act2-list">
                   {items.map(a => (
-                    <Row key={a.id} a={a} openCustomer={openCustomer} onSelect={setSelected} onMark={markDone} />
+                    <Row key={a.id} a={a} openCustomer={openCustomer} onSelect={setSelected} onMark={markDone} getMemberName={getMemberName} />
                   ))}
                 </div>
               </div>
@@ -423,12 +423,12 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
   );
 }
 
-function Row({ a, openCustomer, onSelect, onMark }) {
+function Row({ a, openCustomer, onSelect, onMark, getMemberName }) {
   const done = isDone(a);
   const badge = STATUS_BADGE[a.status] || STATUS_BADGE.open;
   const stateCls = done ? 'is-done' : `is-${a.status || 'open'}`;
   const t = safeType(a.type);
-  const assigneeName = getMemberName(a.assignee);
+  const assigneeName = getMemberName ? getMemberName(a.assignee) : (a.assignee || '');
   const initial = (assigneeName || '').trim().charAt(0).toUpperCase() || '·';
   return (
     <article className={`act2-row ${stateCls}`} onClick={() => onSelect(a)}>
