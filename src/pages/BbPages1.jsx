@@ -171,7 +171,6 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   const [savingNotitie, setSavingNotitie] = useState(false);
   const [savingOverzicht, setSavingOverzicht] = useState(false);
   const [showNotitiesInput, setShowNotitiesInput] = useState(false);
-  const [showOverzichtInput, setShowOverzichtInput] = useState(false);
   const [notitiesVisible, setNotitiesVisible] = useState(10);
   const [fullscreen, setFullscreen] = useState(() => localStorage.getItem('customer_fullscreen') === 'true');
   const [sbWidth, setSbWidth] = useState(232);
@@ -529,42 +528,24 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Notities blok */}
           <div className="card card-p">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: klantNotities.length > 0 || showOverzichtInput ? 10 : 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Notities</div>
-              {!showOverzichtInput && (
-                <button
-                  onClick={() => setShowOverzichtInput(true)}
-                  style={{ width: 28, height: 28, borderRadius: '50%', background: '#1DDB62', border: 'none', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0 }}
-                >
-                  {I.plus}
-                </button>
-              )}
             </div>
-            <div className={`notitie-input-wrap${showOverzichtInput ? ' open' : ''}`}>
-              <div>
-                <MentionEditor
-                  value={newOverzichtText}
-                  onChange={setNewOverzichtText}
-                  rows={3}
-                  placeholder="Schrijf een notitie… Typ @ om iemand te taggen"
-                  teamMembers={teamMembers}
-                />
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6, paddingBottom: 2 }}>
-                  <button
-                    className="btn btn-s btn-xs"
-                    onClick={() => cancelNotitie(setNewOverzichtText, () => setShowOverzichtInput(false))}
-                  >
-                    Annuleren
-                  </button>
-                  <button
-                    className="btn btn-p btn-xs"
-                    disabled={savingOverzicht || !newOverzichtText.trim()}
-                    onClick={() => addNotitie(newOverzichtText, setNewOverzichtText, setSavingOverzicht, () => setShowOverzichtInput(false))}
-                  >
-                    {savingOverzicht ? 'Toevoegen...' : 'Toevoegen'}
-                  </button>
-                </div>
-              </div>
+            <MentionEditor
+              value={newOverzichtText}
+              onChange={setNewOverzichtText}
+              rows={3}
+              placeholder="Schrijf een notitie… Typ @ om iemand te taggen"
+              teamMembers={teamMembers}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6, paddingBottom: 2 }}>
+              <button
+                className="btn btn-p btn-xs"
+                disabled={savingOverzicht || !newOverzichtText.trim()}
+                onClick={() => addNotitie(newOverzichtText, setNewOverzichtText, setSavingOverzicht, () => {})}
+              >
+                {savingOverzicht ? 'Toevoegen...' : 'Toevoegen'}
+              </button>
             </div>
             {klantNotities.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
