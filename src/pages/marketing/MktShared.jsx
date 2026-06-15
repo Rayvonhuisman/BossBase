@@ -205,6 +205,97 @@ export const I = {
       <path d="M9 8v4M9 14v.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
     </svg>
   ),
+  paintRoller: (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <rect x="2" y="3" width="11" height="5" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
+      <path d="M9 5.5h4a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H9" stroke="currentColor" strokeWidth="1.5"/>
+      <path d="M10 8.5v3.5a1 1 0 0 0 1 1h0a1 1 0 0 1 1 1V16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  ),
+  leaf: (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <path d="M14 3C14 3 14 10 8 12c-2 .7-4.5.5-6 .5 0 0 1-8 8-9.5A9 9 0 0 1 14 3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+      <path d="M4 15c1-1.5 2.5-2.5 4-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  ),
+  hammer: (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <path d="M10 3l5 5-1.5 1.5-1-1L7 14l-3-3 5.5-5.5-1-1L10 3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+      <path d="M4 14l1 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  ),
+  roof: (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <path d="M1 9L9 2l8 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M3 8v7h4v-4h4v4h4V8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  ),
+  sparkles: (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <path d="M9 2v2M9 14v2M2 9h2M14 9h2M4.2 4.2l1.4 1.4M12.4 12.4l1.4 1.4M4.2 13.8l1.4-1.4M12.4 5.6l1.4-1.4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      <circle cx="9" cy="9" r="2.5" stroke="currentColor" strokeWidth="1.5"/>
+    </svg>
+  ),
+  trowel: (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <path d="M3 15l4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      <path d="M7 11L14 4a2 2 0 0 0-3-3L4 8l3 3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+      <path d="M12 6l2 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  ),
+  droplet: (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <path d="M9 2C9 2 3.5 8 3.5 11.5a5.5 5.5 0 0 0 11 0C14.5 8 9 2 9 2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+    </svg>
+  ),
+  bell: (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <path d="M9 2a5 5 0 0 0-5 5v4l-1.5 2h13L14 11V7a5 5 0 0 0-5-5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+      <path d="M7 13a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  ),
+  smartphone: (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <rect x="4" y="1" width="10" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+      <path d="M7.5 14.5h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  ),
+  message: (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <path d="M2 3h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5l-3 3V4a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+    </svg>
+  ),
+  notebook: (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <rect x="3" y="2" width="12" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
+      <path d="M3 6h12M6 2v14M7 9h6M7 12h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  ),
+  table: (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <rect x="2" y="2" width="14" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
+      <path d="M2 7h14M7 7v9" stroke="currentColor" strokeWidth="1.5"/>
+    </svg>
+  ),
+  euro: (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <path d="M13 5a5.5 5.5 0 1 0 0 8M3 9h7M3 12h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  ),
+  fileText: (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <path d="M10 2H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6l-5-4z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+      <path d="M10 2v4h4M6 9h6M6 12h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  ),
+  dashboard: (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <rect x="2" y="2" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
+      <rect x="10" y="2" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
+      <rect x="2" y="10" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
+      <rect x="10" y="10" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
+    </svg>
+  ),
 }
 
 /* ── Wordmark ── */
@@ -345,7 +436,8 @@ export function Footer({ navigate }) {
         <div className="footer-grid">
           <div>
             <Wordmark onDark navigate={navigate} />
-            <p className="footer-tag">Alles-in-één administratie voor ZZP'ers en kleine bedrijven in Nederland.</p>
+            <p className="footer-tag">Jij de baas, wij de basis. Het complete systeem voor startende vakmensen in Nederland.</p>
+            <a href="mailto:hallo@bossbase.nl" className="footer-email">hallo@bossbase.nl</a>
           </div>
           {Object.entries(FOOTER_LINKS).map(([title, links]) => (
             <div key={title}>
@@ -361,8 +453,8 @@ export function Footer({ navigate }) {
           ))}
         </div>
         <div className="footer-bottom">
-          <span>© {new Date().getFullYear()} BossBase. Alle rechten voorbehouden.</span>
-          <span>Gemaakt met ❤️ in Nederland</span>
+          <span>© 2026 BossBase</span>
+          <span>Gemaakt in Nederland 🇳🇱</span>
         </div>
       </div>
     </footer>
@@ -372,6 +464,7 @@ export function Footer({ navigate }) {
 /* ── ScrollLine ── */
 export function ScrollLine() {
   const pathRef = useRef(null)
+  const reduced = useReducedMotion()
   useEffect(() => {
     const path = pathRef.current
     if (!path) return
@@ -384,18 +477,33 @@ export function ScrollLine() {
       path.style.strokeDashoffset = len * (1 - pct)
     }
     window.addEventListener("scroll", onScroll, { passive: true })
+    window.addEventListener("resize", onScroll, { passive: true })
     onScroll()
-    return () => window.removeEventListener("scroll", onScroll)
+    return () => {
+      window.removeEventListener("scroll", onScroll)
+      window.removeEventListener("resize", onScroll)
+    }
   }, [])
   return (
     <div className="scroll-line" aria-hidden="true">
-      <svg viewBox="0 0 1440 5000" preserveAspectRatio="none" fill="none">
+      <svg width="100%" height="100%" viewBox="0 0 1000 10000" preserveAspectRatio="none" fill="none">
         <path
           ref={pathRef}
-          d="M720 0 C 360 400, 1080 800, 720 1200 C 360 1600, 1080 2000, 720 2400 C 360 2800, 1080 3200, 720 3600 C 360 4000, 1080 4400, 720 5000"
-          stroke="rgba(29,219,98,0.18)"
-          strokeWidth="2.5"
+          d="M 620 0
+             C 620 620, 180 900, 180 1620
+             C 180 2340, 820 2560, 820 3320
+             C 820 4120, 160 4320, 160 5120
+             C 160 5920, 840 6120, 840 6920
+             C 840 7720, 200 7920, 200 8720
+             C 200 9340, 600 9520, 600 10000"
+          stroke="#1DDB62"
+          strokeWidth="2"
+          strokeLinecap="round"
           fill="none"
+          style={{
+            opacity: reduced ? 0.15 : 0.35,
+            filter: "drop-shadow(0 0 6px rgba(29,219,98,0.4))",
+          }}
         />
       </svg>
     </div>

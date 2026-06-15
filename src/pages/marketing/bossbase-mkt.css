@@ -592,6 +592,8 @@ html.choreo-js .bm .choreo-body { animation: none !important; }
 .bm .footer a { color: var(--dl); font-size: 14.5px; transition: color 0.15s ease; }
 .bm .footer a:hover { color: var(--p); }
 .bm .footer-tag { margin-top: 14px; font-size: 14.5px; max-width: 24em; }
+.bm .footer-email { display: inline-block; margin-top: 12px; font-size: 14px; color: var(--dl); text-decoration: none; }
+.bm .footer-email:hover { color: var(--p); }
 .bm .footer-bottom { margin-top: 40px; padding-top: 24px; border-top: 1px solid #1f2937; display: flex; justify-content: space-between; align-items: center; gap: 16px; font-size: 13.5px; }
 
 /* ── Reveal on scroll ── */
