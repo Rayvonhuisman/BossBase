@@ -166,11 +166,19 @@ export async function getTeamMembers() {
   const companyId = await getCompanyId();
   console.log('[getTeamMembers] companyId:', companyId);
   if (!companyId) return [];
-  const { data, error } = await supabase
+
+  const { data: { user } } = await supabase.auth.getUser();
+  const currentUserId = user?.id;
+
+  let query = supabase
     .from('profiles')
     .select('id, full_name')
     .eq('company_id', companyId)
     .order('full_name', { ascending: true });
+
+  if (currentUserId) query = query.neq('id', currentUserId);
+
+  const { data, error } = await query;
   console.log('[getTeamMembers] rows:', data?.length ?? 0, 'error:', error?.message ?? null);
   return (data || []).map(r => ({ id: r.id, fullName: r.full_name || '' })).filter(m => m.fullName);
 }
