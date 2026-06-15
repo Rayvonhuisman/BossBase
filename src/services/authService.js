@@ -133,7 +133,20 @@ export async function createMissingProfile() {
     .maybeSingle()
   if (existing?.company_id) return existing
 
-  // Provision via SECURITY DEFINER RPC — bypast de RLS kip-en-ei loop.
+  // Controleer of er een uitnodiging bestaat voor dit emailadres.
+  // company_members is niet leesbaar via RLS als company_id NULL is,
+  // dus gebruiken we een SECURITY DEFINER RPC die auth.users kan lezen.
+  const { data: inviteCompanyId } = await supabase.rpc("get_invite_company_for_current_user")
+  if (inviteCompanyId) {
+    // Koppel aan het bedrijf van de uitnodiging — geen nieuw bedrijf aanmaken
+    await supabase
+      .from("profiles")
+      .update({ company_id: inviteCompanyId, role: "medewerker" })
+      .eq("id", user.id)
+    return { id: user.id, company_id: inviteCompanyId }
+  }
+
+  // Geen uitnodiging → nieuw bedrijf aanmaken via SECURITY DEFINER RPC.
   const { data: rpcData, error: rpcError } = await supabase.rpc("provision_account", {
     p_company_name: companyName,
     p_full_name:    fullName,

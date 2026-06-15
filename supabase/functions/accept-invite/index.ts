@@ -52,7 +52,11 @@ serve(async (req) => {
 
     const userId = authData.user.id
 
-    // 3. Maak profiel aan (of update als trigger het al aangemaakt heeft)
+    // 3. Maak profiel aan of update als trigger het al aangemaakt heeft.
+    // De DB-trigger handle_new_user slaat altijd een profiel op zodra een
+    // auth-user wordt aangemaakt. Insert faalt dan met "duplicate key".
+    // In beide gevallen (nieuwe insert of bestaand profiel) moet company_id
+    // en rol correct worden ingesteld.
     const { error: profileErr } = await supabase.from('profiles').insert({
       id: userId,
       company_id: invite.company_id,
@@ -60,8 +64,8 @@ serve(async (req) => {
       role: invite.role || 'medewerker',
     })
 
-    if (profileErr && !/duplicate|already exists|conflict/i.test(profileErr.message)) {
-      // Probeer update als insert mislukt door dubbel profiel
+    if (profileErr) {
+      // Insert mislukt (profiel al aangemaakt door trigger): altijd updaten
       await supabase.from('profiles').update({
         company_id: invite.company_id,
         full_name: fullName || '',
