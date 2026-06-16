@@ -62,6 +62,14 @@ export async function markAllNotificationsRead() {
     .is('read_at', null);
 }
 
+// ── HELPERS ──────────────────────────────────────────────────────────────────
+
+function toAbsoluteUrl(link) {
+  if (!link) return undefined
+  if (link.startsWith('http')) return link
+  return `https://www.bossbase.nl/${link.replace(/^\//, '')}`
+}
+
 // ── MENTION HELPERS ──────────────────────────────────────────────────────────
 
 // Parse @[Name](userId) from text → [{ name, userId }]
@@ -127,7 +135,7 @@ export async function createMentionNotifications({ text, relatedType, relatedId,
                    ${plain}
                  </blockquote>`,
           buttonText: link ? 'Bekijk notitie' : undefined,
-          buttonUrl: link || undefined,
+          buttonUrl: toAbsoluteUrl(link),
         });
         await sendEmail({ to: toEmail, subject: `${creatorName || 'Collega'} heeft je getagd in een notitie`, html }).catch(() => {});
       }
@@ -174,7 +182,7 @@ export async function createAssignmentNotification({ assignedToUserId, assignedT
                <p><strong>${creatorName || 'Een collega'}</strong> heeft je toegewezen aan: <strong>${itemName}</strong></p>
                ${body ? `<p style="color:#555;">${body}</p>` : ''}`,
         buttonText: link ? 'Bekijk details' : undefined,
-        buttonUrl: link || undefined,
+        buttonUrl: toAbsoluteUrl(link),
       });
       await sendEmail({ to: toEmail, subject: `Nieuwe toewijzing: ${itemName}`, html }).catch(() => {});
     }
