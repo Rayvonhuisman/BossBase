@@ -4,6 +4,7 @@ export const ProfileContext = createContext({
   user: null,
   profile: null,
   company: null,
+  userPermissions: [],
   loading: false,
   error: null,
   refresh: () => {},

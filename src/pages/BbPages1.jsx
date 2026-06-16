@@ -21,6 +21,7 @@ import { NewFactuurModal, FactuurBadge } from './FacturenPage.jsx';
 import { NewProjectModal, ProjectBadge } from './ProjectsPage.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { usePermissions } from '../hooks/usePermissions.js';
 import { ActivityEditModal, NewActivityModal, NewCustomerModal, NewJobCostModal } from '../components/SharedModals.jsx';
 import { ChevronDown, Download, Mail, Send } from 'lucide-react';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail, getSentEmailsByCustomer } from '../services/emailService.js';
@@ -181,6 +182,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   const [emailSending, setEmailSending] = useState(false);
   const [expandedEmailId, setExpandedEmailId] = useState(null);
   const { company } = useProfile();
+  const { can } = usePermissions();
 
   useEffect(() => {
     const el = document.querySelector('.sb');
@@ -336,8 +338,17 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
     } catch { /* ignore */ }
   };
 
-  const TABS = ['overview', 'notities', 'quotes', 'costs', 'projecten', 'timeline', 'emails', 'klantgegevens'];
   const TAB_LABELS = { overview: 'Overzicht', notities: 'Notities', quotes: 'Offertes', costs: 'Kosten', projecten: 'Projecten', timeline: 'Tijdlijn', emails: 'E-mails', klantgegevens: 'Klantgegevens' };
+  const TABS = [
+    'overview',
+    'notities',
+    can('offertes') && 'quotes',
+    can('kosten')   && 'costs',
+    'projecten',
+    'timeline',
+    'emails',
+    'klantgegevens',
+  ].filter(Boolean);
 
   const fmtNotitieDate = iso => {
     if (!iso) return '';
@@ -501,20 +512,22 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
         </div>
       </div>
 
-      {/* Quick stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
-        {[
-          { label: 'Totaal geoffreerd', val: fmt(totalGeoffreerd) },
-          { label: 'Betaald',           val: fmt(totalBetaald),    green: totalBetaald > 0 },
-          { label: 'Totale kosten',     val: fmt(totalCosts) },
-          { label: 'Winst',             val: fmt(profit),    green: profit > 0, red: profit < 0 },
-        ].map((s, i) => (
-          <div key={i} style={{ background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 'var(--r10)', padding: '12px 14px' }}>
-            <div style={{ fontSize: '.7rem', color: 'var(--dl)', marginBottom: 4, fontWeight: 600 }}>{s.label}</div>
-            <div style={{ fontSize: '1.05rem', fontWeight: 800, letterSpacing: '-.02em', color: s.green ? '#15A34A' : s.red ? '#dc2626' : 'var(--dk)' }}>{s.val}</div>
-          </div>
-        ))}
-      </div>
+      {/* Quick stats — alleen zichtbaar met financieel recht */}
+      {can('financieel') && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
+          {[
+            { label: 'Totaal geoffreerd', val: fmt(totalGeoffreerd) },
+            { label: 'Betaald',           val: fmt(totalBetaald),    green: totalBetaald > 0 },
+            { label: 'Totale kosten',     val: fmt(totalCosts) },
+            { label: 'Winst',             val: fmt(profit),    green: profit > 0, red: profit < 0 },
+          ].map((s, i) => (
+            <div key={i} style={{ background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 'var(--r10)', padding: '12px 14px' }}>
+              <div style={{ fontSize: '.7rem', color: 'var(--dl)', marginBottom: 4, fontWeight: 600 }}>{s.label}</div>
+              <div style={{ fontSize: '1.05rem', fontWeight: 800, letterSpacing: '-.02em', color: s.green ? '#15A34A' : s.red ? '#dc2626' : 'var(--dk)' }}>{s.val}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="tabs kk-tabs" style={{ marginBottom: 16 }}>
@@ -1060,9 +1073,11 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
                     <span className="cust-info-val" style={{ flex: 1, color: c[field.key] ? undefined : 'var(--dl)' }}>
                       {c[field.key] || '—'}
                     </span>
-                    <button onClick={() => startEdit(field.key)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}>
-                      <Edit2 size={14} />
-                    </button>
+                    {can('klanten_bewerken') && (
+                      <button onClick={() => startEdit(field.key)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}>
+                        <Edit2 size={14} />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1136,6 +1151,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
 export function CustomersPage({ openCustomer }) {
   const toast = useToast();
   const { refreshKey, bumpRefresh } = useProfile();
+  const { can } = usePermissions();
   const [search, setSearch] = useState('');
   const [view, setView] = useState(() => localStorage.getItem('customers_view') || 'grid');
   const [customers, setCustomers] = useState([]);
@@ -1215,7 +1231,9 @@ export function CustomersPage({ openCustomer }) {
                     <div style={{ fontSize: '.68rem', color: 'var(--dl)' }}>Betaald</div>
                     <div style={{ fontWeight: 700, fontSize: '.88rem', color: c.paid > 0 ? '#15A34A' : 'var(--dk)' }}>{fmt(c.paid)}</div>
                   </div>
-                  <button className="btn-icon" title="Verwijderen" onClick={e => { e.stopPropagation(); remove(c.id); }}>{I.trash}</button>
+                  {can('klanten_verwijderen') && (
+                    <button className="btn-icon" title="Verwijderen" onClick={e => { e.stopPropagation(); remove(c.id); }}>{I.trash}</button>
+                  )}
                 </div>
               </div>
             );
@@ -1233,7 +1251,7 @@ export function CustomersPage({ openCustomer }) {
                   <td>{c.city}</td>
                   <td style={{ fontWeight: 700 }}>{fmt(c.total)}</td>
                   <td style={{ fontWeight: 700, color: '#15A34A' }}>{fmt(c.paid)}</td>
-                  <td><button className="btn-icon" onClick={e => { e.stopPropagation(); openCustomer(c.id); }}>{I.arrow_r}</button><button className="btn-icon" onClick={e => { e.stopPropagation(); remove(c.id); }}>{I.trash}</button></td>
+                  <td><button className="btn-icon" onClick={e => { e.stopPropagation(); openCustomer(c.id); }}>{I.arrow_r}</button>{can('klanten_verwijderen') && <button className="btn-icon" onClick={e => { e.stopPropagation(); remove(c.id); }}>{I.trash}</button>}</td>
                 </tr>
               ))}
             </tbody>

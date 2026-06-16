@@ -32,6 +32,8 @@ import FaqPage from './pages/marketing/FaqPage.jsx';
 import DemoPage from './pages/DemoPage.jsx';
 import { createMissingProfile, getSession, logout, onAuthStateChange } from './services/authService.js';
 import { getCurrentUserContext } from './services/profileService.js';
+import { getUserPermissions } from './services/permissionsService.js';
+import { usePermissions } from './hooks/usePermissions.js';
 import { clearCompanyId, setCompanyId } from './lib/currentCompany.js';
 import { ToastProvider, useToast } from './lib/toast.jsx';
 import { ProfileContext, displayName, profileInitials } from './lib/profileContext.jsx';
@@ -45,24 +47,37 @@ import { supabase } from './lib/supabase.js';
 import { listNotifications, markNotificationRead, markAllNotificationsRead } from './services/notificatieService.js';
 
 // ── NAV CONFIG ───────────────────────────────────────────────
+// permission: als gezet, verberg item als gebruiker dat recht niet heeft
 const NAV = [
-  { id: 'dashboard',  label: 'Dashboard',   icon: 'dash',    section: 'main' },
-  { id: 'pipeline',   label: 'Pipeline',    icon: 'pipe',    section: 'main' },
-  { id: 'customers',  label: 'Klanten',     icon: 'cust',    section: 'main' },
-  { id: 'activities', label: 'Activiteiten',icon: 'act',     section: 'main' },
-  { id: 'calendar',    label: 'Agenda',       icon: 'cal',      section: 'work' },
-  { id: 'planning',    label: 'Planning',    icon: 'cal',      section: 'work', adminOnly: true },
-  { id: 'projecten',   label: 'Projecten',   icon: 'projects', section: 'work' },
-  { id: 'werkbonnen',  label: 'Werkbonnen',  icon: 'wo',       section: 'work' },
-  { id: 'uren',        label: 'Uren',        icon: 'hours',    section: 'work' },
-  { id: 'offertes',    label: 'Offertes',    icon: 'quotes',   section: 'finance' },
-  { id: 'facturen',    label: 'Facturen',    icon: 'brief',    section: 'finance' },
-  { id: 'costs',       label: 'Kosten',      icon: 'euro',     section: 'finance' },
-  { id: 'revenue',     label: 'Financiën',   icon: 'chart',    section: 'finance' },
-  { id: 'database',    label: 'Database',    icon: 'db',       section: 'bedrijf' },
-  { id: 'team',        label: 'Team',        icon: 'team',     section: 'bedrijf' },
-  { id: 'instellingen',label: 'Instellingen',icon: 'settings', section: 'bedrijf' },
+  { id: 'dashboard',   label: 'Dashboard',    icon: 'dash',    section: 'main' },
+  { id: 'pipeline',    label: 'Pipeline',     icon: 'pipe',    section: 'main' },
+  { id: 'customers',   label: 'Klanten',      icon: 'cust',    section: 'main' },
+  { id: 'activities',  label: 'Activiteiten', icon: 'act',     section: 'main' },
+  { id: 'calendar',    label: 'Agenda',        icon: 'cal',     section: 'work' },
+  { id: 'planning',    label: 'Planning',      icon: 'cal',     section: 'work', permission: 'planning' },
+  { id: 'projecten',   label: 'Projecten',     icon: 'projects',section: 'work' },
+  { id: 'werkbonnen',  label: 'Werkbonnen',    icon: 'wo',      section: 'work' },
+  { id: 'uren',        label: 'Uren',          icon: 'hours',   section: 'work' },
+  { id: 'offertes',    label: 'Offertes',      icon: 'quotes',  section: 'finance', permission: 'offertes' },
+  { id: 'facturen',    label: 'Facturen',      icon: 'brief',   section: 'finance', permission: 'facturen' },
+  { id: 'costs',       label: 'Kosten',        icon: 'euro',    section: 'finance', permission: 'kosten' },
+  { id: 'revenue',     label: 'Financiën',     icon: 'chart',   section: 'finance', permission: 'financieel' },
+  { id: 'database',    label: 'Database',      icon: 'db',      section: 'bedrijf', permission: 'database' },
+  { id: 'team',        label: 'Team',          icon: 'team',    section: 'bedrijf', permission: 'team' },
+  { id: 'instellingen',label: 'Instellingen',  icon: 'settings',section: 'bedrijf', permission: 'instellingen' },
 ];
+
+// Pagina's die een bepaald recht vereisen voor toegang
+const PROTECTED_PAGES = {
+  offertes:    'offertes',
+  facturen:    'facturen',
+  costs:       'kosten',
+  revenue:     'financieel',
+  planning:    'planning',
+  database:    'database',
+  team:        'team',
+  instellingen:'instellingen',
+};
 
 const SECTIONS = [
   { id: 'main',    label: 'Hoofdmenu' },
@@ -73,6 +88,7 @@ const SECTIONS = [
 
 // ── SIDEBAR ──────────────────────────────────────────────────
 function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loading, onOpenProfile, badges = {}, collapsed, onToggleCollapsed }) {
+  const { can } = usePermissions();
   const go = id => { setPage(id); onClose(); };
   const initials = profileInitials(profile, user);
   const name = displayName(profile, user);
@@ -142,14 +158,9 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loadin
           onMouseEnter={e => e.currentTarget.classList.add('hov')}
           onMouseLeave={e => e.currentTarget.classList.remove('hov')}>
           {SECTIONS.map(sec => {
-            const isMedewerker = profile?.role === 'medewerker';
-            const isAdmin = profile?.role === 'admin';
             const items = NAV.filter(n => {
               if (n.section !== sec.id) return false;
-              // medewerkers don't see Team/Instellingen management pages
-              if (isMedewerker && (n.id === 'team' || n.id === 'instellingen')) return false;
-              // admin-only items
-              if (n.adminOnly && !isAdmin) return false;
+              if (n.permission && !can(n.permission)) return false;
               return true;
             });
             if (items.length === 0) return null;
@@ -646,7 +657,20 @@ function CalEventDrawer({ eventId, onClose, setPage, openCustomer, openDeal }) {
 
 // ── MOBILE MEER MENU ─────────────────────────────────────────
 function MeerMenu({ page, onNavigate, onClose, profile }) {
-  const isMedewerker = profile?.role === 'medewerker';
+  const { can } = usePermissions();
+
+  const financeItems = [
+    can('kosten')     && { id: 'costs',    label: 'Kosten',    icon: I.costs },
+    can('financieel') && { id: 'revenue',  label: 'Financiën', icon: I.chart },
+    can('facturen')   && { id: 'facturen', label: 'Facturen',  icon: I.brief },
+    can('offertes')   && { id: 'offertes', label: 'Offertes',  icon: I.quotes },
+  ].filter(Boolean);
+
+  const bedrijfItems = [
+    can('team')          && { id: 'team',         label: 'Team',         icon: I.team },
+    can('instellingen')  && { id: 'instellingen', label: 'Instellingen', icon: I.settings },
+  ].filter(Boolean);
+
   const groups = [
     {
       label: 'Uitvoering',
@@ -657,22 +681,8 @@ function MeerMenu({ page, onNavigate, onClose, profile }) {
         { id: 'uren',       label: 'Uren',       icon: I.hours },
       ],
     },
-    {
-      label: 'Financieel',
-      items: [
-        { id: 'costs',    label: 'Kosten',    icon: I.costs },
-        { id: 'revenue',  label: 'Financiën', icon: I.chart },
-        { id: 'facturen', label: 'Facturen',  icon: I.brief },
-        { id: 'offertes', label: 'Offertes',  icon: I.quotes },
-      ],
-    },
-    ...(isMedewerker ? [] : [{
-      label: 'Bedrijf',
-      items: [
-        { id: 'team',          label: 'Team',          icon: I.team },
-        { id: 'instellingen',  label: 'Instellingen',  icon: I.settings },
-      ],
-    }]),
+    ...(financeItems.length > 0 ? [{ label: 'Financieel', items: financeItems }] : []),
+    ...(bedrijfItems.length > 0 ? [{ label: 'Bedrijf',   items: bedrijfItems }] : []),
   ];
 
   return (
@@ -792,6 +802,7 @@ function AppInner() {
   const [company,    setCompany]    = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError,   setProfileError]   = useState(null);
+  const [userPermissions, setUserPermissions] = useState([]);
   const [repairing,  setRepairing]  = useState(false);
   const [openProfile, setOpenProfile] = useState(false);
   const [globalLeadModal, setGlobalLeadModal] = useState(false);
@@ -867,6 +878,18 @@ function AppInner() {
       if (ctx.profile?.companyId) setCompanyId(ctx.profile.companyId);
       else clearCompanyId();
 
+      // Laad permissies voor niet-admin gebruikers
+      if (ctx.profile && ctx.profile.role !== 'admin') {
+        try {
+          const perms = await getUserPermissions(ctx.profile.id);
+          setUserPermissions(perms);
+        } catch {
+          setUserPermissions([]);
+        }
+      } else {
+        setUserPermissions([]); // admins: can() geeft altijd true via hook
+      }
+
       if (ctx.profileError) {
         if (import.meta?.env?.DEV) console.warn('[bb:profile] error:', ctx.profileError);
         setProfileError(ctx.profileError);
@@ -906,6 +929,7 @@ function AppInner() {
     if (session) refreshProfile();
     else {
       setUser(null); setProfile(null); setCompany(null); setProfileError(null);
+      setUserPermissions([]);
       clearCompanyId();
     }
   }, [session, refreshProfile]);
@@ -1010,7 +1034,7 @@ function AppInner() {
   }, [showProfileFetchError, profileError, toast]);
 
   const profileApi = useMemo(() => ({
-    user, profile, company,
+    user, profile, company, userPermissions,
     loading: profileLoading,
     error: profileError,
     refresh: refreshProfile,
@@ -1018,7 +1042,18 @@ function AppInner() {
     repairProfile,
     requestNewLead, requestNewActivity, bumpRefresh,
     refreshKey,
-  }), [user, profile, company, profileLoading, profileError, refreshProfile, repairProfile, requestNewLead, requestNewActivity, bumpRefresh, refreshKey]);
+  }), [user, profile, company, userPermissions, profileLoading, profileError, refreshProfile, repairProfile, requestNewLead, requestNewActivity, bumpRefresh, refreshKey]);
+
+  // Route-beveiliging: redirect naar dashboard als gebruiker geen toegang heeft
+  useEffect(() => {
+    if (!profile) return;
+    const isAdmin = profile.role === 'admin';
+    const requiredPerm = PROTECTED_PAGES[page];
+    if (requiredPerm && !isAdmin && !userPermissions.includes(requiredPerm)) {
+      toast.error('Je hebt geen toegang tot deze pagina');
+      navigatePage('dashboard');
+    }
+  }, [page, profile, userPermissions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const renderPage = () => {
     const props = { setPage: navigatePage, openCustomer, openDeal, openInvoice, openCalendarEvent };

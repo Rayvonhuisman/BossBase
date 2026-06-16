@@ -12,6 +12,8 @@ import {
 } from '../services/teamService.js';
 import { uploadTeamMemberAvatar, removeTeamMemberAvatar } from '../services/avatarService.js';
 import { AvatarUpload } from '../components/AvatarUpload.jsx';
+import { getUserPermissions, setUserPermissions } from '../services/permissionsService.js';
+import { AVAILABLE_PERMISSIONS } from '../config/permissions.js';
 
 function TeamAvatar({ member, idx, size = 'sm' }) {
   if (member.avatarUrl) {
@@ -240,6 +242,122 @@ function EditModal({ member, onClose, onSaved }) {
   );
 }
 
+function PermissionsModal({ member, onClose, onSaved }) {
+  const toast = useToast();
+  const [perms, setPerms] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!member.profileId) {
+      // Profiel nog niet actief (uitnodiging niet geaccepteerd)
+      const empty = {};
+      AVAILABLE_PERMISSIONS.forEach(p => { empty[p.key] = false; });
+      setPerms(empty);
+      setLoading(false);
+      return;
+    }
+    getUserPermissions(member.profileId)
+      .then(granted => {
+        const map = {};
+        AVAILABLE_PERMISSIONS.forEach(p => { map[p.key] = granted.includes(p.key); });
+        setPerms(map);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [member.profileId]);
+
+  const toggle = key => setPerms(p => ({ ...p, [key]: !p[key] }));
+  const allOn  = () => { const m = {}; AVAILABLE_PERMISSIONS.forEach(p => { m[p.key] = true;  }); setPerms(m); };
+  const allOff = () => { const m = {}; AVAILABLE_PERMISSIONS.forEach(p => { m[p.key] = false; }); setPerms(m); };
+
+  const save = async () => {
+    if (!member.profileId) {
+      toast.error('Teamlid heeft de uitnodiging nog niet geaccepteerd');
+      return;
+    }
+    setSaving(true);
+    try {
+      const granted = Object.entries(perms).filter(([, v]) => v).map(([k]) => k);
+      await setUserPermissions(member.profileId, member.companyId, granted);
+      toast.success('Rechten opgeslagen');
+      onSaved?.();
+      onClose();
+    } catch (err) {
+      toast.error(err.message || 'Opslaan mislukt');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const categories = [...new Set(AVAILABLE_PERMISSIONS.map(p => p.categorie))];
+
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && !saving && onClose()}>
+      <div className="modal" style={{ maxWidth: 480 }}>
+        <div className="modal-hd">
+          <div>
+            <div className="modal-title">Rechten beheren</div>
+            <div className="modal-sub">{member.fullName || member.email}</div>
+          </div>
+          <ModalX onClose={onClose} />
+        </div>
+
+        {!member.profileId && (
+          <div style={{ padding: '10px 0 14px', fontSize: '.85rem', color: 'var(--dl)' }}>
+            Dit teamlid heeft de uitnodiging nog niet geaccepteerd. Rechten kunnen worden ingesteld zodra ze zijn ingelogd.
+          </div>
+        )}
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--dl)' }}>Laden…</div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={allOn}>Alles aan</button>
+              <button className="btn btn-ghost btn-sm" onClick={allOff}>Alles uit</button>
+            </div>
+
+            {categories.map(cat => (
+              <div key={cat} style={{ marginBottom: 14 }}>
+                <div style={{ fontWeight: 700, fontSize: '.72rem', color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>{cat}</div>
+                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                  {AVAILABLE_PERMISSIONS.filter(p => p.categorie === cat).map((p, i, arr) => (
+                    <label
+                      key={p.key}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '11px 14px', cursor: 'pointer',
+                        borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
+                        userSelect: 'none',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={perms[p.key] ?? false}
+                        onChange={() => toggle(p.key)}
+                        style={{ width: 16, height: 16, accentColor: 'var(--p)', flexShrink: 0 }}
+                      />
+                      <span style={{ fontSize: '.88rem', fontWeight: 500 }}>{p.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+
+        <div className="fa">
+          <button className="btn btn-ghost" onClick={onClose}>Annuleren</button>
+          <button className="btn btn-p" onClick={save} disabled={saving || loading || !member.profileId}>
+            {saving ? 'Opslaan…' : 'Opslaan'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function TeamPage() {
   const toast = useToast();
   const { profile } = useProfile();
@@ -248,6 +366,7 @@ export function TeamPage() {
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
+  const [permsMember, setPermsMember] = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -388,7 +507,7 @@ export function TeamPage() {
                   <td style={{ color: 'var(--dm)' }}>{member.hoursPerWeek > 0 ? `${member.hoursPerWeek}u` : '—'}</td>
                   <td>
                     {isAdmin && (
-                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
                         <button
                           className="btn-icon"
                           title="Bewerken"
@@ -396,6 +515,16 @@ export function TeamPage() {
                         >
                           {I.edit}
                         </button>
+                        {member.role !== 'admin' && (
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            title="Rechten instellen"
+                            onClick={() => setPermsMember(member)}
+                            style={{ fontSize: '.78rem' }}
+                          >
+                            Rechten
+                          </button>
+                        )}
                         {member.status === 'actief' ? (
                           <button
                             className="btn btn-ghost btn-sm"
@@ -439,6 +568,14 @@ export function TeamPage() {
           member={editingMember}
           onClose={() => setEditingMember(null)}
           onSaved={updated => setMembers(ms => ms.map(m => m.id === updated.id ? updated : m))}
+        />
+      )}
+
+      {permsMember && (
+        <PermissionsModal
+          member={permsMember}
+          onClose={() => setPermsMember(null)}
+          onSaved={() => setPermsMember(null)}
         />
       )}
     </div>

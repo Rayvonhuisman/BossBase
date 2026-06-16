@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getDemoDashboardData } from '../../data/demoDashboardData.js';
 import { I } from '../../bb-shared.jsx';
 import { useProfile, displayName } from '../../lib/profileContext.jsx';
+import { usePermissions } from '../../hooks/usePermissions.js';
 import { useToast } from '../../lib/toast.jsx';
 import { listDeals } from '../../services/dealService.js';
 import { listActivities } from '../../services/activityService.js';
@@ -187,8 +188,123 @@ function deriveCharts({ deals = [], activities = [], offertes = [], customers = 
   };
 }
 
+function EmployeeDashboard({ greeting, subline, activities, werkbonnen, calendarEvents, profile, dataLoading, setPage }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const todayWerkbonnen = werkbonnen.filter(w => w.geplandOp === today);
+  const todayActivities = activities.filter(a => a.dueAt?.slice(0, 10) === today && a.status !== 'completed' && a.status !== 'done');
+
+  const weekStart = new Date();
+  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  const weekStartIso = weekStart.toISOString().slice(0, 10);
+  const weekEndIso = weekEnd.toISOString().slice(0, 10);
+  const weekEvents = (calendarEvents || []).filter(e => {
+    const d = (e.startAt || e.start || e.date || '').slice(0, 10);
+    return d >= weekStartIso && d <= weekEndIso;
+  });
+
+  const fmtDate = iso => {
+    if (!iso) return '';
+    return new Date(iso).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
+  };
+
+  return (
+    <div>
+      <div className="page-hd afu">
+        <div>
+          <h1>{greeting}</h1>
+          <p>{subline}</p>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }} className="afu2">
+
+        {/* Mijn werkbonnen vandaag */}
+        <div className="card card-p">
+          <div style={{ fontWeight: 700, fontSize: '.95rem', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            {I.wo} Werkbonnen vandaag
+          </div>
+          {dataLoading && <div style={{ color: 'var(--dl)', fontSize: '.88rem' }}>Laden…</div>}
+          {!dataLoading && todayWerkbonnen.length === 0 && (
+            <div style={{ color: 'var(--dl)', fontSize: '.88rem', padding: '8px 0' }}>Geen werkbonnen voor vandaag</div>
+          )}
+          {!dataLoading && todayWerkbonnen.map(w => (
+            <div key={w.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div style={{ fontWeight: 600, fontSize: '.88rem' }}>{w.titel || w.title || 'Werkbon'}</div>
+              {(w.customerName || w.locatie) && (
+                <div style={{ fontSize: '.78rem', color: 'var(--dmu)' }}>{[w.customerName, w.locatie].filter(Boolean).join(' · ')}</div>
+              )}
+              {w.status && <div style={{ fontSize: '.73rem', color: 'var(--dl)' }}>{w.status}</div>}
+            </div>
+          ))}
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ marginTop: 10 }}
+            onClick={() => setPage('werkbonnen')}
+          >
+            Alle werkbonnen →
+          </button>
+        </div>
+
+        {/* Mijn activiteiten vandaag */}
+        <div className="card card-p">
+          <div style={{ fontWeight: 700, fontSize: '.95rem', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            {I.act} Activiteiten vandaag
+          </div>
+          {dataLoading && <div style={{ color: 'var(--dl)', fontSize: '.88rem' }}>Laden…</div>}
+          {!dataLoading && todayActivities.length === 0 && (
+            <div style={{ color: 'var(--dl)', fontSize: '.88rem', padding: '8px 0' }}>Geen activiteiten voor vandaag</div>
+          )}
+          {!dataLoading && todayActivities.map(a => (
+            <div key={a.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div style={{ fontWeight: 600, fontSize: '.88rem' }}>{a.title}</div>
+              {a.customerName && <div style={{ fontSize: '.78rem', color: 'var(--dmu)' }}>{a.customerName}</div>}
+              {a.time && <div style={{ fontSize: '.73rem', color: 'var(--dl)' }}>{a.time}</div>}
+            </div>
+          ))}
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ marginTop: 10 }}
+            onClick={() => setPage('activities')}
+          >
+            Alle activiteiten →
+          </button>
+        </div>
+
+        {/* Mijn agenda deze week */}
+        <div className="card card-p">
+          <div style={{ fontWeight: 700, fontSize: '.95rem', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            {I.cal} Agenda deze week
+          </div>
+          {dataLoading && <div style={{ color: 'var(--dl)', fontSize: '.88rem' }}>Laden…</div>}
+          {!dataLoading && weekEvents.length === 0 && (
+            <div style={{ color: 'var(--dl)', fontSize: '.88rem', padding: '8px 0' }}>Geen afspraken deze week</div>
+          )}
+          {!dataLoading && weekEvents.slice(0, 5).map(e => (
+            <div key={e.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div style={{ fontWeight: 600, fontSize: '.88rem' }}>{e.title || e.titel || 'Afspraak'}</div>
+              <div style={{ fontSize: '.78rem', color: 'var(--dmu)' }}>{fmtDate(e.startAt || e.start || e.date)}</div>
+            </div>
+          ))}
+          <button
+            className="btn btn-ghost btn-sm"
+            style={{ marginTop: 10 }}
+            onClick={() => setPage('calendar')}
+          >
+            Naar agenda →
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, openCalendarEvent }) {
   const { profile, user, company, loading: profileLoading, requestNewLead, requestNewActivity, refreshKey } = useProfile();
+  const { can, isAdmin } = usePermissions();
   const toast = useToast();
 
   // Demo mode: IS_DEV-only toggle that substitutes real data with static demo data
@@ -401,6 +517,22 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
     : profileLoading ? 'Profiel laden…' : 'Welkom bij BossBase';
   const todayStr = new Date().toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const subline = company?.name ? `${todayStr} · ${company.name}` : todayStr;
+
+  // Medewerker zonder financieel recht → vereenvoudigd dashboard
+  if (!isAdmin && !can('financieel') && !profileLoading) {
+    return (
+      <EmployeeDashboard
+        greeting={greeting}
+        subline={subline}
+        activities={activities}
+        werkbonnen={werkbonnen}
+        calendarEvents={calendarEvents}
+        profile={profile}
+        dataLoading={dataLoading}
+        setPage={setPage}
+      />
+    );
+  }
 
   return (
     <>
