@@ -338,17 +338,23 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
     } catch { /* ignore */ }
   };
 
-  const TAB_LABELS = { overview: 'Overzicht', notities: 'Notities', quotes: 'Offertes', costs: 'Kosten', projecten: 'Projecten', timeline: 'Tijdlijn', emails: 'E-mails', klantgegevens: 'Klantgegevens' };
+  const TAB_LABELS = { overview: 'Overzicht', notities: 'Notities', quotes: 'Offertes', facturen: 'Facturen', costs: 'Kosten', projecten: 'Projecten', timeline: 'Tijdlijn', emails: 'E-mails', klantgegevens: 'Klantgegevens' };
   const TABS = [
     'overview',
     'notities',
-    can('offertes') && 'quotes',
-    can('kosten')   && 'costs',
+    can('offertes')  && 'quotes',
+    can('facturen')  && 'facturen',
+    can('kosten')    && 'costs',
     'projecten',
     'timeline',
     'emails',
     'klantgegevens',
   ].filter(Boolean);
+
+  // Reset tab naar 'overview' als huidige tab onzichtbaar is geworden
+  if (tab !== 'overview' && !TABS.includes(tab)) {
+    setTab('overview');
+  }
 
   const fmtNotitieDate = iso => {
     if (!iso) return '';
@@ -808,6 +814,36 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
             )}
             {cOffertes.length === 0 && (
               <div style={{ textAlign: 'center', padding: '24px 0', color: '#9ca3af' }}>Geen offertes</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Facturen */}
+      {tab === 'facturen' && (
+        <div className="tw">
+          <div className="tw-hd">
+            <div className="card-title">Facturen</div>
+            <button className="btn btn-p btn-xs" onClick={() => setShowNewFactuur(true)}>{I.plus} Nieuwe factuur</button>
+          </div>
+          <div className="kk-scroll">
+            {cFacturen.length > 0 && (
+              <table className="dt">
+                <thead><tr><th>#</th><th>Omschrijving</th><th>Bedrag</th><th>Status</th></tr></thead>
+                <tbody>
+                  {cFacturen.map(f => (
+                    <tr key={f.id}>
+                      <td style={{ color: 'var(--dl)', fontWeight: 600, whiteSpace: 'nowrap' }}>{f.nummer || '—'}</td>
+                      <td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.omschrijving || '—'}</td>
+                      <td style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{fmt(f.totaalIncl)}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}><FactuurBadge status={f.status} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {cFacturen.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '24px 0', color: '#9ca3af' }}>Geen facturen</div>
             )}
           </div>
         </div>

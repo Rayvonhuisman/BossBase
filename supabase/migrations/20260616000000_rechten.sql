@@ -24,7 +24,12 @@ CREATE POLICY "permissions_admin_insert" ON user_permissions
   );
 
 CREATE POLICY "permissions_admin_update" ON user_permissions
-  FOR UPDATE USING (
+  FOR UPDATE
+  USING (
+    company_id = (SELECT company_id FROM profiles WHERE id = auth.uid())
+    AND (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin'
+  )
+  WITH CHECK (
     company_id = (SELECT company_id FROM profiles WHERE id = auth.uid())
     AND (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin'
   );
