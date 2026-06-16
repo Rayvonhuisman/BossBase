@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase.js';
 import { getCompanyId } from '../lib/currentCompany.js';
 import { sendEmail } from './emailService.js';
+import { mailTemplate } from '../utils/mailTemplate.js';
 
 const toNotification = row => ({
   id: row.id,
@@ -109,17 +110,26 @@ export async function createMentionNotifications({ text, relatedType, relatedId,
 
     // Email notification (best-effort, non-blocking)
     try {
-      const { data: prof } = await supabase.from('profiles').select('id').eq('id', userId).maybeSingle();
-      if (prof) {
-        const { data: authUser } = await supabase.auth.admin?.getUserById?.(userId).catch?.(() => ({ data: null })) || { data: null };
-        const toEmail = authUser?.user?.email;
-        if (toEmail) {
-          const html = `<p>Hoi ${name},</p>
-<p><strong>${creatorName || 'Een collega'}</strong> heeft je getagd${contextName ? ` bij <em>${contextName}</em>` : ''} in een notitie:</p>
-<blockquote style="border-left:3px solid #1DDB62;margin:12px 0;padding:8px 14px;color:#444;">${plain}</blockquote>
-${link ? `<p><a href="${link}" style="color:#1DDB62;font-weight:600;">Bekijk notitie</a></p>` : ''}`;
-          await sendEmail({ to: toEmail, subject: `${creatorName || 'Collega'} heeft je getagd in een notitie`, html }).catch(() => {});
-        }
+      const { data: member } = await supabase
+        .from('company_members')
+        .select('email')
+        .eq('profile_id', userId)
+        .eq('company_id', companyId)
+        .maybeSingle();
+      const toEmail = member?.email;
+      if (toEmail) {
+        const html = mailTemplate({
+          title: `${creatorName || 'Collega'} heeft je getagd`,
+          preheader: contextName ? `Getagd bij ${contextName}` : 'Je bent getagd in een notitie',
+          body: `<p>Hoi ${name},</p>
+                 <p><strong>${creatorName || 'Een collega'}</strong> heeft je getagd${contextName ? ` bij <strong>${contextName}</strong>` : ''} in een notitie:</p>
+                 <blockquote style="margin:12px 0;padding:12px 16px;background:#f9fafb;border-left:3px solid #1DDB62;border-radius:4px;color:#374151;">
+                   ${plain}
+                 </blockquote>`,
+          buttonText: link ? 'Bekijk notitie' : undefined,
+          buttonUrl: link || undefined,
+        });
+        await sendEmail({ to: toEmail, subject: `${creatorName || 'Collega'} heeft je getagd in een notitie`, html }).catch(() => {});
       }
     } catch { /* email is non-blocking */ }
   }
@@ -148,14 +158,25 @@ export async function createAssignmentNotification({ assignedToUserId, assignedT
 
   // Email notification (best-effort)
   try {
-    const { data: authUser } = await supabase.auth.admin?.getUserById?.(assignedToUserId).catch?.(() => ({ data: null })) || { data: null };
-    const toEmail = authUser?.user?.email;
+    const { data: member } = await supabase
+      .from('company_members')
+      .select('email')
+      .eq('profile_id', assignedToUserId)
+      .eq('company_id', companyId)
+      .maybeSingle();
+    const toEmail = member?.email;
     if (toEmail) {
-      const html = `<p>Hoi ${assignedToName || 'collega'},</p>
-<p><strong>${creatorName || 'Een collega'}</strong> heeft je toegewezen aan: <strong>${title.replace('Je bent toegewezen aan ', '')}</strong></p>
-${body ? `<p style="color:#555;">${body}</p>` : ''}
-${link ? `<p><a href="${link}" style="color:#1DDB62;font-weight:600;">Bekijk details</a></p>` : ''}`;
-      await sendEmail({ to: toEmail, subject: `Nieuwe toewijzing: ${title.replace('Je bent toegewezen aan ', '')}`, html }).catch(() => {});
+      const itemName = title.replace('Je bent toegewezen aan ', '')
+      const html = mailTemplate({
+        title: 'Nieuwe toewijzing',
+        preheader: `Je bent toegewezen aan ${itemName}`,
+        body: `<p>Hoi ${assignedToName || 'collega'},</p>
+               <p><strong>${creatorName || 'Een collega'}</strong> heeft je toegewezen aan: <strong>${itemName}</strong></p>
+               ${body ? `<p style="color:#555;">${body}</p>` : ''}`,
+        buttonText: link ? 'Bekijk details' : undefined,
+        buttonUrl: link || undefined,
+      });
+      await sendEmail({ to: toEmail, subject: `Nieuwe toewijzing: ${itemName}`, html }).catch(() => {});
     }
   } catch { /* email is non-blocking */ }
 }

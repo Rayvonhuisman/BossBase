@@ -2,6 +2,7 @@
 // BossBase gebruikt eigen Resend mails voor alle auth emails.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { mailTemplate } from '../_shared/mailTemplate.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -46,45 +47,15 @@ serve(async (req) => {
 
     // Mail via Resend
     const resetUrl = `${siteUrl}/reset-password?token=${token}`
-    const html = `
-<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#ffffff">
-  <div style="margin-bottom:32px">
-    <span style="font-size:22px;font-weight:900;color:#1DDB62;letter-spacing:-0.5px">Boss<span style="color:#0a0a0a">Base</span></span>
-  </div>
-
-  <h2 style="font-size:22px;font-weight:800;color:#0a0a0a;margin:0 0 20px 0">Wachtwoord opnieuw instellen</h2>
-
-  <p style="color:#374151;font-size:15px;line-height:1.6;margin:0 0 12px 0">Hallo,</p>
-
-  <p style="color:#374151;font-size:15px;line-height:1.6;margin:0 0 12px 0">
-    Je hebt een verzoek ingediend om je wachtwoord opnieuw in te stellen voor je BossBase account.
-  </p>
-
-  <p style="color:#374151;font-size:15px;line-height:1.6;margin:0 0 28px 0">
-    Klik op onderstaande knop om een nieuw wachtwoord in te stellen:
-  </p>
-
-  <a href="${resetUrl}"
-     style="display:inline-block;background:#1DDB62;color:#0a0a0a;font-weight:800;
-            font-size:15px;padding:14px 28px;border-radius:10px;text-decoration:none;
-            letter-spacing:-0.2px">
-    Stel nieuw wachtwoord in →
-  </a>
-
-  <p style="color:#6b7280;font-size:13px;margin:28px 0 8px 0">
-    Deze link is <strong>1 uur geldig</strong>.
-  </p>
-
-  <p style="color:#9ca3af;font-size:12px;margin:0 0 28px 0">
-    Als je dit verzoek niet hebt ingediend, kun je deze mail negeren.
-  </p>
-
-  <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 20px 0" />
-
-  <p style="color:#6b7280;font-size:13px;margin:0">
-    Met vriendelijke groet,<br>Het BossBase team
-  </p>
-</div>`
+    const html = mailTemplate({
+      title: 'Wachtwoord opnieuw instellen',
+      preheader: 'Stel je BossBase wachtwoord opnieuw in',
+      body: `<p>Je hebt een verzoek ingediend om je wachtwoord opnieuw in te stellen voor je BossBase account.</p>
+             <p>Klik op onderstaande knop om een nieuw wachtwoord in te stellen:</p>`,
+      buttonText: 'Stel nieuw wachtwoord in',
+      buttonUrl: resetUrl,
+      footerText: 'Deze link is <strong>1 uur geldig</strong>. Als je dit verzoek niet hebt ingediend, kun je deze mail negeren.',
+    })
 
     const resendRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',

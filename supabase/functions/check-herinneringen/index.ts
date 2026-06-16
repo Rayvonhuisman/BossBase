@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { mailTemplate } from '../_shared/mailTemplate.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -91,7 +92,10 @@ serve(async (req) => {
       // Herinnering 1
       if (tpl1 && !f.herinnering_1_verstuurd_at && daysPast >= (tpl1.auto_dagen || 7)) {
         const subject = substituteVars(tpl1.onderwerp, vars)
-        const html = plainTextToHtml(substituteVars(tpl1.body, vars))
+        const innerBody = tpl1.body_html
+          ? substituteVars(tpl1.body_html, vars)
+          : plainTextToHtml(substituteVars(tpl1.body, vars))
+        const html = mailTemplate({ title: subject, body: innerBody, companyName: company.name })
         const msgId = await sendMail(f.customers.email, subject, html, company.name)
         if (msgId !== null) {
           await db.from('facturen').update({ herinnering_1_verstuurd_at: new Date().toISOString() }).eq('id', f.id)
@@ -103,7 +107,10 @@ serve(async (req) => {
       // Herinnering 2
       if (tpl2 && !f.herinnering_2_verstuurd_at && daysPast >= (tpl2.auto_dagen || 14)) {
         const subject = substituteVars(tpl2.onderwerp, vars)
-        const html = plainTextToHtml(substituteVars(tpl2.body, vars))
+        const innerBody = tpl2.body_html
+          ? substituteVars(tpl2.body_html, vars)
+          : plainTextToHtml(substituteVars(tpl2.body, vars))
+        const html = mailTemplate({ title: subject, body: innerBody, companyName: company.name })
         const msgId = await sendMail(f.customers.email, subject, html, company.name)
         if (msgId !== null) {
           await db.from('facturen').update({ herinnering_2_verstuurd_at: new Date().toISOString() }).eq('id', f.id)
@@ -160,7 +167,10 @@ serve(async (req) => {
       }
 
       const subject = substituteVars(tpl.onderwerp, vars)
-      const html = plainTextToHtml(substituteVars(tpl.body, vars))
+      const innerBody = tpl.body_html
+        ? substituteVars(tpl.body_html, vars)
+        : plainTextToHtml(substituteVars(tpl.body, vars))
+      const html = mailTemplate({ title: subject, body: innerBody, companyName: company.name })
       const msgId = await sendMail(act.customers.email, subject, html, company.name)
       if (msgId !== null) {
         await db.from('sent_emails').insert({ company_id: act.company_id, to_email: act.customers.email, subject, related_type: 'activity', related_id: act.id, customer_id: act.customer_id, appointment_id: act.id, status: 'sent' })

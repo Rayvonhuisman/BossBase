@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase.js'
 import { getCompanyId, withCompanyId } from '../lib/currentCompany.js'
+import { mailTemplate } from '../utils/mailTemplate.js'
 
 // ── VARIABELEN VERVANGEN ─────────────────────────────────────────────────────
 
@@ -101,8 +102,10 @@ export async function triggerAutoEmail(type, vars, toEmail, companyId, relatedTy
     const tpl = tpls?.[0]
     if (!tpl || !toEmail) return
     const subject = substituteVars(tpl.onderwerp, vars)
-    const body = substituteVars(tpl.body, vars)
-    const html = body.split('\n').map(l => l.trim() === '' ? '<br>' : `<p style="margin:0 0 6px 0">${l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>`).join('')
+    const innerBody = tpl.body_html
+      ? substituteVars(tpl.body_html, vars)
+      : substituteVars(tpl.body, vars).split('\n').map(l => l.trim() === '' ? '' : `<p style="margin:0 0 8px 0">${l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>`).join('')
+    const html = mailTemplate({ title: subject, body: innerBody, companyName: vars.bedrijfsnaam || 'BossBase' })
     await sendEmail({ to: toEmail, subject, html })
     await logSentEmail({ toEmail, subject, bodyHtml: html, relatedType, relatedId, customerId })
   } catch (e) {
@@ -120,7 +123,7 @@ export async function ensureMailTemplates(companyId) {
       name: 'Offerte verstuurd',
       onderwerp: 'Offerte {{offerte_nummer}} van {{bedrijfsnaam}}',
       body: 'Beste {{klant_naam}},\n\nHierbij ontvangt u offerte {{offerte_nummer}}.\n\nMet vriendelijke groet,\n{{bedrijfsnaam}}',
-      body_html: '<p>Beste {{klant_naam}},</p><p>Hierbij ontvangt u offerte <strong>{{offerte_nummer}}</strong>.</p><p>Met vriendelijke groet,<br>{{bedrijfsnaam}}</p>',
+      body_html: '<p>Beste {{klant_naam}},</p><p>Hierbij ontvangt u offerte <strong>{{offerte_nummer}}</strong>.</p><p><a href="{{link}}" style="display:inline-block;background:#1DDB62;color:#ffffff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Offerte bekijken &amp; ondertekenen</a></p><p>Met vriendelijke groet,<br>{{bedrijfsnaam}}</p>',
       is_default: true,
       actief: true,
     },
