@@ -500,15 +500,16 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
           {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
         </button>
         <Av name={c.name} size="xl" idx={c.av} />
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
-            <h2 style={{ fontWeight: 800, fontSize: '1.25rem', letterSpacing: '-.025em' }}>{c.name}</h2>
-            <span className={`badge ${c.type === 'Zakelijk' ? 'b-blue' : 'b-gray'}`}>{c.type}</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+              <h2 style={{ fontWeight: 800, fontSize: '1.25rem', letterSpacing: '-.025em', wordBreak: 'break-word' }}>{c.name}</h2>
+              <span className={`badge ${c.type === 'Zakelijk' ? 'b-blue' : 'b-gray'}`}>{c.type}</span>
+            </div>
+            {c.phone && <a href={`tel:${c.phone}`} className="btn btn-s btn-sm" style={{ flexShrink: 0, marginLeft: 12 }}>{I.call} {c.phone}</a>}
           </div>
           <div style={{ fontSize: '.82rem', color: 'var(--dmu)', marginBottom: 10 }}>{c.company} · {c.city}</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-start', marginLeft: 0, paddingLeft: 0 }}>
-            {c.phone && <a href={`tel:${c.phone}`} className="btn btn-s btn-sm">{I.call} {c.phone}</a>}
-            {c.email && <button className="btn btn-s btn-sm" onClick={() => setTab('emails')} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Send size={13} /> E-mail sturen</button>}
             {(c.moneybirdId || c.afasId || c.snelstartId) && (
               <span
                 className="sync-indicator"
