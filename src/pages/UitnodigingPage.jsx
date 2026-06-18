@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
+import { Clock, PartyPopper, SearchX } from 'lucide-react';
 import { Logo } from '../bb-shared.jsx';
 import { supabase } from '../lib/supabase.js';
 import { PasswordRequirements, PasswordMatch, passwordValid } from '../components/PasswordStrength.jsx';
+
+function AuthIcon({ icon: Icon, color, bg }) {
+  return (
+    <div style={{ width: 56, height: 56, borderRadius: '50%', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+      <Icon size={26} color={color} strokeWidth={1.8} />
+    </div>
+  );
+}
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -88,7 +97,7 @@ export function UitnodigingPage({ token, navigate }) {
         <div className="auth-card afu">
           <div className="auth-logo"><Logo /></div>
           <div style={{ textAlign: 'center', marginBottom: 16 }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>⏰</div>
+            <AuthIcon icon={Clock} color="#d97706" bg="#fffbeb" />
             <div className="auth-title" style={{ marginBottom: 6 }}>Uitnodiging verlopen</div>
             <div className="auth-sub">
               Deze uitnodigingslink is niet meer geldig (48 uur verstreken).
@@ -111,7 +120,7 @@ export function UitnodigingPage({ token, navigate }) {
         <div className="auth-card afu">
           <div className="auth-logo"><Logo /></div>
           <div style={{ textAlign: 'center', marginBottom: 16 }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
+            <AuthIcon icon={SearchX} color="#6b7280" bg="#f3f4f6" />
             <div className="auth-title" style={{ marginBottom: 6 }}>Uitnodiging niet gevonden</div>
             <div className="auth-sub">
               Deze uitnodigingslink is ongeldig of al gebruikt.
@@ -133,7 +142,7 @@ export function UitnodigingPage({ token, navigate }) {
         <div className="auth-card afu">
           <div className="auth-logo"><Logo /></div>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>🎉</div>
+            <AuthIcon icon={PartyPopper} color="#1DDB62" bg="#f0fdf4" />
             <div className="auth-title" style={{ marginBottom: 6 }}>Welkom bij {invite?.companyName}!</div>
             <div className="auth-sub">Je account is aangemaakt. Je wordt doorgestuurd…</div>
           </div>
