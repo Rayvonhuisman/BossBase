@@ -38,12 +38,13 @@ export function mapCalendarEventFormToPayload(input = {}) {
   const payload = {}
   if (input.title !== undefined) payload.title = input.title
   if (input.location !== undefined) payload.location = input.location || null
+  if (input.type !== undefined) payload.type = input.type || null
 
-  // Description ↔ UI "notes". Accept either name from callers.
-  if (input.description !== undefined) {
-    payload.description = input.description || null
-  } else if (input.notes !== undefined) {
-    payload.description = input.notes || null
+  // UI "notes"/"description" → echte kolom `notes`.
+  if (input.notes !== undefined) {
+    payload.notes = input.notes || null
+  } else if (input.description !== undefined) {
+    payload.notes = input.description || null
   }
 
   if (input.customer_id !== undefined || input.custId !== undefined) {
@@ -52,8 +53,8 @@ export function mapCalendarEventFormToPayload(input = {}) {
   if (input.deal_id !== undefined || input.dealId !== undefined) {
     payload.deal_id = input.deal_id ?? input.dealId ?? null
   }
-  if (input.activity_id !== undefined || input.activityId !== undefined) {
-    payload.activity_id = input.activity_id ?? input.activityId ?? null
+  if (input.werkbon_id !== undefined || input.werkbonId !== undefined) {
+    payload.werkbon_id = input.werkbon_id ?? input.werkbonId ?? null
   }
 
   payload.start_at = input.start_at || input.startAt || times.start_at
@@ -81,7 +82,7 @@ function inferType(row) {
 }
 
 export const toCalendarEvent = row => {
-  const type = inferType(row)
+  const type = row.type || inferType(row)
   const palette = TYPE_COLORS[type] || TYPE_COLORS.event
   return {
     id: row.id,
@@ -90,9 +91,11 @@ export const toCalendarEvent = row => {
     custId: row.customer_id,
     dealId: row.deal_id,
     activityId: row.activity_id,
+    werkbonId: row.werkbon_id || null,
+    comments: Array.isArray(row.comments) ? row.comments : [],
     location: row.location || "",
-    description: row.description || "",
-    notes: row.description || "",
+    description: row.notes || "",
+    notes: row.notes || "",
     startAt: row.start_at || "",
     endAt: row.end_at || "",
     date: splitEventTime(row.start_at).date,
@@ -125,6 +128,30 @@ export async function createCalendarEvent(input) {
 export async function updateCalendarEvent(id, input) {
   const payload = mapCalendarEventFormToPayload(input)
   const { data, error } = await supabase.from("calendar_events").update(payload).eq("id", id).select().single()
+  if (error) throw error
+  return toCalendarEvent(data)
+}
+
+// Werk alleen het notities/communicatie-veld bij (raakt tijden/velden niet aan).
+export async function updateCalendarEventComments(id, comments) {
+  const { data, error } = await supabase
+    .from("calendar_events")
+    .update({ comments })
+    .eq("id", id)
+    .select()
+    .single()
+  if (error) throw error
+  return toCalendarEvent(data)
+}
+
+// Koppel (of ontkoppel met null) een werkbon aan een agenda-item.
+export async function setCalendarEventWerkbon(id, werkbonId) {
+  const { data, error } = await supabase
+    .from("calendar_events")
+    .update({ werkbon_id: werkbonId })
+    .eq("id", id)
+    .select()
+    .single()
   if (error) throw error
   return toCalendarEvent(data)
 }
