@@ -803,6 +803,7 @@ function AppInner() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError,   setProfileError]   = useState(null);
   const [userPermissions, setUserPermissions] = useState([]);
+  const [permissionsLoaded, setPermissionsLoaded] = useState(false);
   const [repairing,  setRepairing]  = useState(false);
   const [openProfile, setOpenProfile] = useState(false);
   const [globalLeadModal, setGlobalLeadModal] = useState(false);
@@ -889,6 +890,7 @@ function AppInner() {
       } else {
         setUserPermissions([]); // admins: can() geeft altijd true via hook
       }
+      setPermissionsLoaded(true);
 
       if (ctx.profileError) {
         if (import.meta?.env?.DEV) console.warn('[bb:profile] error:', ctx.profileError);
@@ -930,6 +932,7 @@ function AppInner() {
     else {
       setUser(null); setProfile(null); setCompany(null); setProfileError(null);
       setUserPermissions([]);
+      setPermissionsLoaded(false);
       clearCompanyId();
     }
   }, [session, refreshProfile]);
@@ -1190,6 +1193,10 @@ function AppInner() {
     pipeline: globalDeals.filter(d => d.stage === 'new_lead').length,
     activities: globalActivities.filter(a => a.status !== 'completed' && a.status !== 'done' && a.dueAt?.slice(0, 10) <= today).length,
   };
+
+  if (!permissionsLoaded) {
+    return <div style={{ background: 'var(--bg)', minHeight: '100dvh' }} />;
+  }
 
   return (
     <ProfileContext.Provider value={profileApi}>

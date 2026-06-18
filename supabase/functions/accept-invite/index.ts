@@ -42,15 +42,25 @@ serve(async (req) => {
       user_metadata: { full_name: fullName || '' },
     })
 
-    if (authErr) {
-      // Als gebruiker al bestaat, geef duidelijke foutmelding
-      if (authErr.message?.toLowerCase().includes('already')) {
-        return json({ error: 'Dit e-mailadres is al geregistreerd. Probeer in te loggen.' }, 409)
-      }
-      return json({ error: authErr.message }, 400)
-    }
+    let userId: string
 
-    const userId = authData.user.id
+    if (authErr) {
+      if (authErr.message?.toLowerCase().includes('already')) {
+        // Gebruiker bestaat al — zoek bestaande userId op en koppel die aan het bedrijf.
+        // Gebruik dezelfde SECURITY DEFINER RPC als de wachtwoord-reset flow.
+        const { data: existingId } = await supabase.rpc('get_auth_user_id_by_email', {
+          p_email: invite.email.toLowerCase(),
+        })
+        if (!existingId) {
+          return json({ error: 'Dit e-mailadres is al geregistreerd. Probeer in te loggen.' }, 409)
+        }
+        userId = existingId
+      } else {
+        return json({ error: authErr.message }, 400)
+      }
+    } else {
+      userId = authData.user.id
+    }
 
     // 3. Maak profiel aan of update als trigger het al aangemaakt heeft.
     // De DB-trigger handle_new_user slaat altijd een profiel op zodra een
