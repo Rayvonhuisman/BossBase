@@ -183,6 +183,8 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   const [expandedEmailId, setExpandedEmailId] = useState(null);
   const { company } = useProfile();
   const { can } = usePermissions();
+  const tabsRef  = useRef(null);
+  const scrollRef = useRef(null);
 
   useEffect(() => {
     const el = document.querySelector('.sb');
@@ -272,11 +274,11 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
     if (tab !== 'overview' && !validTabs.includes(tab)) setTab('overview');
   }, []);
 
-  // Scrollbar zichtbaar bij hover — macOS verbergt scrollbars standaard
+  // Scrollbar zichtbaar bij hover — refs + loading in deps zodat DOM klaar is
   useEffect(() => {
-    const containers = document.querySelectorAll('.kk-scroll, .kk-tabs');
+    const elements = [tabsRef.current, scrollRef.current].filter(Boolean);
     const handlers = [];
-    containers.forEach(el => {
+    elements.forEach(el => {
       const show = () => el.classList.add('show-scrollbar');
       const hide = () => el.classList.remove('show-scrollbar');
       el.addEventListener('mouseenter', show);
@@ -287,7 +289,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
       el.removeEventListener('mouseenter', show);
       el.removeEventListener('mouseleave', hide);
     });
-  }, [tab]);
+  }, [tab, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <div className="card card-p">Klant laden...</div>;
   if (error) return <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>;
@@ -555,7 +557,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
       )}
 
       {/* Tabs */}
-      <div className="tabs kk-tabs" style={{ marginBottom: 16 }}>
+      <div className="tabs kk-tabs" ref={tabsRef} style={{ marginBottom: 16 }}>
         {TABS.map(t => (
           <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>{TAB_LABELS[t]}</button>
         ))}
@@ -815,7 +817,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
             <div className="card-title">Offertes</div>
             <button className="btn btn-p btn-xs" onClick={() => setShowNewOfferte(true)}>{I.plus} Nieuwe offerte</button>
           </div>
-          <div className="kk-scroll">
+          <div className="kk-scroll" ref={el => { scrollRef.current = el; }}>
             {cOffertes.length > 0 && (
               <table className="dt">
                 <thead><tr><th>#</th><th>Omschrijving</th><th>Bedrag</th><th>Status</th></tr></thead>
@@ -845,7 +847,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
             <div className="card-title">Facturen</div>
             <button className="btn btn-p btn-xs" onClick={() => setShowNewFactuur(true)}>{I.plus} Nieuwe factuur</button>
           </div>
-          <div className="kk-scroll">
+          <div className="kk-scroll" ref={el => { scrollRef.current = el; }}>
             {cFacturen.length > 0 && (
               <table className="dt">
                 <thead><tr><th>#</th><th>Omschrijving</th><th>Bedrag</th><th>Status</th></tr></thead>
@@ -888,7 +890,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
               <div className="card-title">Kostenregels</div>
               <button className="btn btn-p btn-xs" onClick={() => setShowCostModal(true)}>{I.plus} Kosten toevoegen</button>
             </div>
-            <div className="kk-scroll">
+            <div className="kk-scroll" ref={el => { scrollRef.current = el; }}>
               {cCosts.length > 0 && (
                 <table className="dt">
                   <thead><tr><th>Categorie</th><th>Omschrijving</th><th>Bedrag</th><th>Datum</th></tr></thead>
@@ -919,7 +921,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
             <div className="card-title">Projecten</div>
             <button className="btn btn-p btn-xs" onClick={() => setShowNewProject(true)}>{I.plus} Nieuw project</button>
           </div>
-          <div className="kk-scroll">
+          <div className="kk-scroll" ref={el => { scrollRef.current = el; }}>
             {cProjecten.length > 0 && (
               <table className="dt">
                 <thead><tr><th>Naam</th><th>Waarde</th><th>Status</th></tr></thead>
