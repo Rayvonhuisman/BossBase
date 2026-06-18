@@ -191,7 +191,7 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loadin
         </nav>
 
         <div className="sb-user">
-          <button onClick={onOpenProfile} aria-label="Open profiel" style={{ flex: 1, minWidth: 0 }}>
+          <button onClick={() => { setPage('instellingen'); onClose(); }} aria-label="Naar instellingen" style={{ flex: 1, minWidth: 0 }}>
             {loading && !initials
               ? <div className="av av-md av-0 bb-skel-av" />
               : profile?.avatarUrl
@@ -1362,6 +1362,7 @@ function AppInner() {
             user={user}
             onSaved={() => refreshProfile()}
             onLogout={handleLogout}
+            onOpenInstellingen={() => { setOpenProfile(false); navigatePage('instellingen'); }}
           />
         )}
 

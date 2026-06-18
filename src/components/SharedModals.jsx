@@ -1213,7 +1213,7 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
 }
 
 // ── PROFILE MODAL ────────────────────────────────────────────
-export function ProfileModal({ onClose, profile, company, user, onSaved, onLogout }) {
+export function ProfileModal({ onClose, profile, company, user, onSaved, onLogout, onOpenInstellingen }) {
   const toast = useToast();
   const [name, setName] = useState(profile?.fullName || '');
   const [saving, setSaving] = useState(false);
@@ -1270,7 +1270,11 @@ export function ProfileModal({ onClose, profile, company, user, onSaved, onLogou
             <input value={profile?.role || 'user'} disabled />
           </div>
         </div>
-        <div className="bb-profile-note">Bedrijfsinstellingen volgen in een latere release.</div>
+        {onOpenInstellingen && (
+          <button type="button" className="bb-profile-link" onClick={onOpenInstellingen}>
+            {I.settings} Naar bedrijfsinstellingen
+          </button>
+        )}
         <div className="fa">
           {onLogout && <button className="btn btn-ghost" onClick={onLogout} disabled={saving}>{I.logout} Uitloggen</button>}
           <button className="btn btn-s" onClick={onClose} disabled={saving}>Sluiten</button>
