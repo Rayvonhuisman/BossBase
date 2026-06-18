@@ -324,9 +324,9 @@ ul{list-style:none}
 .kk-tabs .tab{padding:6px 10px;font-size:12px;font-weight:500;flex-shrink:0;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center}
 .kk-tabs .tab.active{background:var(--p) !important;color:white !important;box-shadow:none}
 
-/* Klantkaart — scrollbare tabellen (overflow-x toggle bij hover) */
-.kk-scroll{overflow-x:auto}
-.kk-scroll::-webkit-scrollbar{height:6px}
+/* Klantkaart — scrollbare tabellen (permanent zichtbare scrollbar) */
+.kk-scroll{overflow-x:scroll;scrollbar-width:thin;scrollbar-color:#d0d0d0 #f5f5f5}
+.kk-scroll::-webkit-scrollbar{height:6px;display:block}
 .kk-scroll::-webkit-scrollbar-track{background:#f5f5f5;border-radius:4px}
 .kk-scroll::-webkit-scrollbar-thumb{background:#d0d0d0;border-radius:4px}
 

@@ -184,7 +184,6 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   const { company } = useProfile();
   const { can } = usePermissions();
   const tabsRef   = useRef(null);
-  const scrollRefs = useRef([]);
 
   useEffect(() => {
     const el = document.querySelector('.sb');
@@ -273,23 +272,6 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
     const validTabs = ['overview','notities', can('offertes') && 'quotes', can('facturen') && 'facturen', can('kosten') && 'costs', 'projecten','timeline','emails','klantgegevens'].filter(Boolean);
     if (tab !== 'overview' && !validTabs.includes(tab)) setTab('overview');
   }, []);
-
-  // Scrollbar zichtbaar bij hover — toggle overflow-x forceert WebKit repaint
-  useEffect(() => {
-    const elements = [...scrollRefs.current].filter(Boolean);
-    const handlers = [];
-    elements.forEach(el => {
-      const show = () => { el.style.overflowX = 'scroll'; };
-      const hide = () => { el.style.overflowX = 'auto'; };
-      el.addEventListener('mouseenter', show);
-      el.addEventListener('mouseleave', hide);
-      handlers.push({ el, show, hide });
-    });
-    return () => handlers.forEach(({ el, show, hide }) => {
-      el.removeEventListener('mouseenter', show);
-      el.removeEventListener('mouseleave', hide);
-    });
-  }, [tab, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return <div className="card card-p">Klant laden...</div>;
   if (error) return <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>;
@@ -817,7 +799,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
             <div className="card-title">Offertes</div>
             <button className="btn btn-p btn-xs" onClick={() => setShowNewOfferte(true)}>{I.plus} Nieuwe offerte</button>
           </div>
-          <div className="kk-scroll" ref={el => { scrollRefs.current[0] = el; }}>
+          <div className="kk-scroll">
             {cOffertes.length > 0 && (
               <table className="dt">
                 <thead><tr><th>#</th><th>Omschrijving</th><th>Bedrag</th><th>Status</th></tr></thead>
@@ -847,7 +829,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
             <div className="card-title">Facturen</div>
             <button className="btn btn-p btn-xs" onClick={() => setShowNewFactuur(true)}>{I.plus} Nieuwe factuur</button>
           </div>
-          <div className="kk-scroll" ref={el => { scrollRefs.current[1] = el; }}>
+          <div className="kk-scroll">
             {cFacturen.length > 0 && (
               <table className="dt">
                 <thead><tr><th>#</th><th>Omschrijving</th><th>Bedrag</th><th>Status</th></tr></thead>
@@ -890,7 +872,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
               <div className="card-title">Kostenregels</div>
               <button className="btn btn-p btn-xs" onClick={() => setShowCostModal(true)}>{I.plus} Kosten toevoegen</button>
             </div>
-            <div className="kk-scroll" ref={el => { scrollRefs.current[2] = el; }}>
+            <div className="kk-scroll">
               {cCosts.length > 0 && (
                 <table className="dt">
                   <thead><tr><th>Categorie</th><th>Omschrijving</th><th>Bedrag</th><th>Datum</th></tr></thead>
@@ -921,7 +903,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
             <div className="card-title">Projecten</div>
             <button className="btn btn-p btn-xs" onClick={() => setShowNewProject(true)}>{I.plus} Nieuw project</button>
           </div>
-          <div className="kk-scroll" ref={el => { scrollRefs.current[3] = el; }}>
+          <div className="kk-scroll">
             {cProjecten.length > 0 && (
               <table className="dt">
                 <thead><tr><th>Naam</th><th>Waarde</th><th>Status</th></tr></thead>
