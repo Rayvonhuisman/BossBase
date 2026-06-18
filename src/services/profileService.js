@@ -14,6 +14,7 @@ const toProfile = (row, user) => ({
   role: row.role || "user",
   avatarUrl: row.avatar_url || "",
   createdAt: row.created_at || null,
+  isSuperAdmin: row.is_super_admin || false,
   raw: row,
 })
 
@@ -30,6 +31,7 @@ const toCompany = row => ({
   website: row.website || "",
   logoUrl: row.logo_url || "",
   brandingColor: row.branding_color || '#f97316',
+  status: row.status || 'actief',
   raw: row,
 })
 

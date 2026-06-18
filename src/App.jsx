@@ -30,6 +30,7 @@ import AboutPage from './pages/marketing/AboutPage.jsx';
 import ContactPage from './pages/marketing/ContactPage.jsx';
 import FaqPage from './pages/marketing/FaqPage.jsx';
 import DemoPage from './pages/DemoPage.jsx';
+import { SuperAdminPage } from './pages/SuperAdminPage.jsx';
 import { createMissingProfile, getSession, logout, onAuthStateChange } from './services/authService.js';
 import { getCurrentUserContext } from './services/profileService.js';
 import { getUserPermissions } from './services/permissionsService.js';
@@ -950,6 +951,15 @@ function AppInner() {
     }
   }, [refreshProfile, toast]);
 
+  // Blokkeer ingelogde gebruikers van geblokkeerde companies
+  useEffect(() => {
+    if (!company || !session) return;
+    if (company.status === 'geblokkeerd') {
+      supabase.auth.signOut();
+      // auth state change handler handelt de redirect naar /login af
+    }
+  }, [company, session]); // eslint-disable-line
+
   const navigate = (path, replace = false) => {
     const nextPath = path === '/website' ? '/' : path === '/registreer' ? '/register' : path;
     const changed = window.location.pathname !== nextPath;
@@ -1174,6 +1184,17 @@ function AppInner() {
   if (route.startsWith('/offerte/')) {
     const token = route.replace('/offerte/', '').split('?')[0];
     return <OfferteSigneren token={token} />;
+  }
+
+  if (route === '/superadmin') {
+    if (!session) { navigate('/login', true); return null; }
+    if (!permissionsLoaded) return <div style={{ background: '#0D0D0D', minHeight: '100dvh' }} />;
+    const ALLOWED = ['info@bossbase.nl', 'nielsgrevink@gmail.com'];
+    if (!profile?.isSuperAdmin || !ALLOWED.includes(profile?.email || '')) {
+      navigate('/dashboard', true);
+      return null;
+    }
+    return <SuperAdminPage navigate={navigate} />;
   }
 
   if (!route.startsWith('/dashboard')) {
