@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Download, MoreVertical, Send } from 'lucide-react';
 import { MailBodyEditor, plainToEditorHtml } from '../components/MailBodyEditor.jsx';
-import { I, ModalX, fmt } from '../bb-shared.jsx';
+import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import {
@@ -774,7 +774,7 @@ function SendOfferteMailModal({ offerte, customers, company, onClose, onSent }) 
 
 // ── OFFERTES PAGE ────────────────────────────────────────────────────────────
 
-export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, onNavConsumed }) {
+export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, onNavConsumed, backKlant, onBackKlant }) {
   const toast = useToast();
   const { profile, company } = useProfile();
   const canManageOffertes = profile?.role === 'admin' || profile?.role === 'planner';
@@ -899,6 +899,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
 
   return (
     <div>
+      {backKlant && <BackToKlant name={backKlant.klantNaam} onClick={() => onBackKlant?.(backKlant.klantId)} />}
       <div className="page-hd afu">
         <div>
           <h1>Offertes</h1>

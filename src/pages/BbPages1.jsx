@@ -806,7 +806,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
                 <thead><tr><th>Omschrijving</th><th style={{ width: 80, textAlign: 'right' }}>Bedrag</th><th style={{ width: 90 }}>Status</th></tr></thead>
                 <tbody>
                   {cOffertes.map(o => (
-                    <tr key={o.id}>
+                    <tr key={o.id} className="projecten-row" onClick={() => setPage('offertes', { id: o.id, from: 'klant', klantId: custId, klantNaam: c?.name })}>
                       <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.omschrijving || '—'}</td>
                       <td style={{ fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'right' }}>{fmt(o.totaalIncl)}</td>
                       <td style={{ whiteSpace: 'nowrap' }}><OfferteBadge status={o.status} /></td>
@@ -835,7 +835,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
                 <thead><tr><th>Omschrijving</th><th style={{ width: 80, textAlign: 'right' }}>Bedrag</th><th style={{ width: 90 }}>Status</th></tr></thead>
                 <tbody>
                   {cFacturen.map(f => (
-                    <tr key={f.id}>
+                    <tr key={f.id} className="projecten-row" onClick={() => setPage('facturen', { id: f.id, from: 'klant', klantId: custId, klantNaam: c?.name })}>
                       <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.omschrijving || '—'}</td>
                       <td style={{ fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'right' }}>{fmt(f.totaalIncl)}</td>
                       <td style={{ whiteSpace: 'nowrap' }}><FactuurBadge status={f.status} /></td>
@@ -908,7 +908,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
                 <thead><tr><th>Naam</th><th className="projecten-col-waarde" style={{ width: 80, textAlign: 'right' }}>Waarde</th><th style={{ width: 90 }}>Status</th></tr></thead>
                 <tbody>
                   {cProjecten.map(p => (
-                    <tr key={p.id} className="projecten-row" onClick={() => setPage('projecten', { id: p.id })}>
+                    <tr key={p.id} className="projecten-row" onClick={() => setPage('projecten', { id: p.id, from: 'klant', klantId: custId, klantNaam: c?.name })}>
                       <td style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</td>
                       <td className="projecten-col-waarde" style={{ fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'right' }}>{p.projectValue > 0 ? fmt(p.projectValue) : '—'}</td>
                       <td style={{ whiteSpace: 'nowrap' }}><ProjectBadge status={p.status} /></td>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { I, ModalX, fmt } from '../bb-shared.jsx';
+import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import {
@@ -297,7 +297,7 @@ function EmptyState({ icon, title, subtitle, action }) {
 
 // ── MAIN PAGE ────────────────────────────────────────────────────────────────
 
-export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjectId, onNavConsumed } = {}) {
+export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjectId, onNavConsumed, backKlant, onBackKlant } = {}) {
   const toast = useToast();
   const { profile } = useProfile();
   const canManage = !profile || ['admin', 'planner'].includes(profile.role);
@@ -402,6 +402,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
 
   return (
     <div>
+      {backKlant && <BackToKlant name={backKlant.klantNaam} onClick={() => onBackKlant?.(backKlant.klantId)} />}
       <div className="page-hd afu">
         <div>
           <h1>Projecten</h1>

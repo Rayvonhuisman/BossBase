@@ -203,3 +203,25 @@ export function Logo({ dark, size = 26 }) {
 export function ModalX({ onClose }) {
   return <button className="modal-x" onClick={onClose}>{I.x}</button>;
 }
+
+// Subtiele "Terug naar [klantnaam]" knop, getoond bovenaan een pagina wanneer
+// je vanuit een klantkaart naar een project/offerte/factuur bent genavigeerd.
+export function BackToKlant({ name, onClick }) {
+  if (!onClick) return null;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        background: 'none', border: 'none', cursor: 'pointer',
+        color: 'var(--dl)', fontSize: '.8rem', fontWeight: 600,
+        padding: '2px 0', marginBottom: 10,
+      }}
+      onMouseEnter={e => { e.currentTarget.style.color = 'var(--dk)'; }}
+      onMouseLeave={e => { e.currentTarget.style.color = 'var(--dl)'; }}
+    >
+      {I.chev_l} Terug naar {name || 'klant'}
+    </button>
+  );
+}

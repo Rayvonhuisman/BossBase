@@ -798,6 +798,9 @@ function AppInner() {
   const [drawerInvoice, setDrawerInvoice] = useState(null);
   const [drawerCalEvent, setDrawerCalEvent] = useState(null);
   const [navIntent,  setNavIntent]  = useState(null);
+  // Terug-naar-klant context: { page, klantId, klantNaam }. Blijft staan tot je
+  // ergens anders heen navigeert of op "Terug" klikt (niet gewist door navIntent).
+  const [backCtx,    setBackCtx]    = useState(null);
   const [user,       setUser]       = useState(null);
   const [profile,    setProfile]    = useState(null);
   const [company,    setCompany]    = useState(null);
@@ -994,12 +997,25 @@ function AppInner() {
     }
     const hasIntent = intent && (intent.id || intent.dealId);
     setNavIntent(hasIntent ? { page: p, ...intent } : null);
+    // Bewaar terug-naar-klant context als we vanuit een klantkaart komen.
+    if (intent?.from === 'klant' && intent?.klantId) {
+      setBackCtx({ page: p, klantId: intent.klantId, klantNaam: intent.klantNaam || '' });
+    } else {
+      setBackCtx(null);
+    }
     closeCustomer();
     closeDeal();
     closeInvoice();
     closeCalEvent();
   };
   const clearNavIntent = () => setNavIntent(null);
+  // Terug naar de klantkaart: ga naar de klantenpagina en open de klant.
+  const goBackToKlant = (klantId) => {
+    if (!klantId) return;
+    setBackCtx(null);
+    navigatePage('customers');
+    openCustomer(klantId);
+  };
   const handleLogout = async () => {
     try {
       await logout();
@@ -1089,9 +1105,9 @@ function AppInner() {
       case 'planning':   return <PlanningPage />;
       case 'costs':       return <CostsPage />;
       case 'revenue':     return <RevenuePage />;
-      case 'facturen':    return <FacturenPage openCustomer={openCustomer} />;
-      case 'offertes':    return <OffertesPage openCustomer={openCustomer} preOpenOfferteId={navIntent?.page === 'offertes' ? navIntent.id : null} preFillDealId={navIntent?.page === 'offertes' ? navIntent.dealId : null} onNavConsumed={clearNavIntent} />;
-      case 'projecten':   return <ProjectsPage openCustomer={openCustomer} openInvoice={openInvoice} setPage={navigatePage} preOpenProjectId={navIntent?.page === 'projecten' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
+      case 'facturen':    return <FacturenPage openCustomer={openCustomer} preOpenFactuurId={navIntent?.page === 'facturen' ? navIntent.id : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'facturen' ? backCtx : null} onBackKlant={goBackToKlant} />;
+      case 'offertes':    return <OffertesPage openCustomer={openCustomer} preOpenOfferteId={navIntent?.page === 'offertes' ? navIntent.id : null} preFillDealId={navIntent?.page === 'offertes' ? navIntent.dealId : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'offertes' ? backCtx : null} onBackKlant={goBackToKlant} />;
+      case 'projecten':   return <ProjectsPage openCustomer={openCustomer} openInvoice={openInvoice} setPage={navigatePage} preOpenProjectId={navIntent?.page === 'projecten' ? navIntent.id : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'projecten' ? backCtx : null} onBackKlant={goBackToKlant} />;
       case 'werkbonnen':  return <WerkbonPage preOpenWerkbonId={navIntent?.page === 'werkbonnen' ? navIntent.id : null} onNavConsumed={clearNavIntent} setPage={navigatePage} />;
       case 'uren':        return <UrenPage />;
       case 'database':    return <DatabasePage openCustomer={openCustomer} />;

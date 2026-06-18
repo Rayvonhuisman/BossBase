@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Download, MoreVertical, Send } from 'lucide-react';
 import { MailBodyEditor, plainToEditorHtml } from '../components/MailBodyEditor.jsx';
-import { I, ModalX, fmt } from '../bb-shared.jsx';
+import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import {
@@ -862,7 +862,7 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
 
 // ── FACTUREN PAGE ─────────────────────────────────────────────────────────────
 
-export function FacturenPage({ openCustomer }) {
+export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, backKlant, onBackKlant }) {
   const toast = useToast();
   const { profile, company } = useProfile();
   const canManage = profile?.role === 'admin' || profile?.role === 'planner';
@@ -888,6 +888,16 @@ export function FacturenPage({ openCustomer }) {
   };
 
   useEffect(() => { load(); }, []);
+
+  // Deep-open: open de factuur-weergave wanneer we vanuit een klantkaart komen.
+  useEffect(() => {
+    if (!preOpenFactuurId || loading) return;
+    const f = facturen.find(x => x.id === preOpenFactuurId);
+    if (f) {
+      setViewFactuur(f);
+      onNavConsumed?.();
+    }
+  }, [preOpenFactuurId, loading, facturen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const today = TODAY();
   const thisMonth = THIS_MONTH();
@@ -954,6 +964,7 @@ export function FacturenPage({ openCustomer }) {
 
   return (
     <div>
+      {backKlant && <BackToKlant name={backKlant.klantNaam} onClick={() => onBackKlant?.(backKlant.klantId)} />}
       <div className="page-hd afu">
         <div>
           <h1>Facturen</h1>
