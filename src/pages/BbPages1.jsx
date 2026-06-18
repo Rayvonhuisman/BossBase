@@ -793,32 +793,27 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
         </div>
       )}
 
-      {/* Quotes */}
+      {/* Offertes */}
       {tab === 'quotes' && (
         <div className="tw">
           <div className="tw-hd">
             <div className="card-title">Offertes</div>
             <button className="btn btn-p btn-xs" onClick={() => setShowNewOfferte(true)}>{I.plus} Nieuwe offerte</button>
           </div>
-          <div className="kk-scroll">
-            {cOffertes.length > 0 && (
-              <table className="dt">
-                <thead><tr><th>Omschrijving</th><th style={{ width: 80, textAlign: 'right' }}>Bedrag</th><th style={{ width: 90 }}>Status</th></tr></thead>
-                <tbody>
-                  {cOffertes.map(o => (
-                    <tr key={o.id} className="projecten-row" onClick={() => setPage('offertes', { id: o.id, from: 'klant', klantId: custId, klantNaam: c?.name })}>
-                      <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.omschrijving || '—'}</td>
-                      <td style={{ fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'right' }}>{fmt(o.totaalIncl)}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}><OfferteBadge status={o.status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-            {cOffertes.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '24px 0', color: '#9ca3af' }}>Geen offertes</div>
-            )}
-          </div>
+          {cOffertes.length === 0
+            ? <div className="kk-empty">Geen offertes</div>
+            : cOffertes.map(o => (
+              <div key={o.id} className="kk-row" onClick={() => setPage('offertes', { id: o.id, from: 'klant', klantId: custId, klantNaam: c?.name })}>
+                <div className="kk-row-left">
+                  <div className="kk-row-title">{o.omschrijving || o.nummer || '—'}</div>
+                  {o.omschrijving && o.nummer && <div className="kk-row-sub">{o.nummer}</div>}
+                </div>
+                <div className="kk-row-right">
+                  <div className="kk-row-amount">{fmt(o.totaalIncl)}</div>
+                  <OfferteBadge status={o.status} />
+                </div>
+              </div>
+            ))}
         </div>
       )}
 
@@ -829,29 +824,24 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
             <div className="card-title">Facturen</div>
             <button className="btn btn-p btn-xs" onClick={() => setShowNewFactuur(true)}>{I.plus} Nieuwe factuur</button>
           </div>
-          <div className="kk-scroll">
-            {cFacturen.length > 0 && (
-              <table className="dt">
-                <thead><tr><th>Omschrijving</th><th style={{ width: 80, textAlign: 'right' }}>Bedrag</th><th style={{ width: 90 }}>Status</th></tr></thead>
-                <tbody>
-                  {cFacturen.map(f => (
-                    <tr key={f.id} className="projecten-row" onClick={() => setPage('facturen', { id: f.id, from: 'klant', klantId: custId, klantNaam: c?.name })}>
-                      <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.omschrijving || '—'}</td>
-                      <td style={{ fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'right' }}>{fmt(f.totaalIncl)}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}><FactuurBadge status={f.status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-            {cFacturen.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '24px 0', color: '#9ca3af' }}>Geen facturen</div>
-            )}
-          </div>
+          {cFacturen.length === 0
+            ? <div className="kk-empty">Geen facturen</div>
+            : cFacturen.map(f => (
+              <div key={f.id} className="kk-row" onClick={() => setPage('facturen', { id: f.id, from: 'klant', klantId: custId, klantNaam: c?.name })}>
+                <div className="kk-row-left">
+                  <div className="kk-row-title">{f.omschrijving || f.notities || f.nummer || '—'}</div>
+                  {f.nummer && <div className="kk-row-sub">{f.nummer}</div>}
+                </div>
+                <div className="kk-row-right">
+                  <div className="kk-row-amount">{fmt(f.totaalIncl)}</div>
+                  <FactuurBadge f={f} />
+                </div>
+              </div>
+            ))}
         </div>
       )}
 
-      {/* Costs */}
+      {/* Kosten */}
       {tab === 'costs' && (
         <div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 14 }}>
@@ -871,56 +861,46 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
               <div className="card-title">Kostenregels</div>
               <button className="btn btn-p btn-xs" onClick={() => setShowCostModal(true)}>{I.plus} Kosten toevoegen</button>
             </div>
-            <div className="kk-scroll">
-              {cCosts.length > 0 && (
-                <table className="dt">
-                  <thead><tr><th style={{ width: 80 }}>Categorie</th><th>Omschrijving</th><th style={{ width: 80, textAlign: 'right' }}>Bedrag</th><th style={{ width: 70 }}>Datum</th></tr></thead>
-                  <tbody>
-                    {cCosts.map(r => (
-                      <tr key={r.id}>
-                        <td style={{ overflow: 'hidden' }}><span className="badge b-gray" style={{ textTransform: 'capitalize' }}>{r.cat}</span></td>
-                        <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.desc}</td>
-                        <td style={{ fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'right' }}>{fmt(r.amt)}</td>
-                        <td style={{ color: 'var(--dl)', whiteSpace: 'nowrap' }}>{r.date}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-              {cCosts.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '24px 0', color: '#9ca3af' }}>Nog geen kosten geboekt</div>
-              )}
-            </div>
+            {cCosts.length === 0
+              ? <div className="kk-empty">Nog geen kosten geboekt</div>
+              : cCosts.map(r => (
+                <div key={r.id} className="kk-row kk-row-static">
+                  <div className="kk-row-left">
+                    <div className="kk-row-title">{r.desc || '—'}</div>
+                    <div className="kk-row-sub"><span className="badge b-gray" style={{ textTransform: 'capitalize' }}>{r.cat}</span></div>
+                  </div>
+                  <div className="kk-row-right">
+                    <div className="kk-row-amount">{fmt(r.amt)}</div>
+                    <div className="kk-row-date">{r.date}</div>
+                  </div>
+                </div>
+              ))}
           </div>
         </div>
       )}
 
-      {/* Projecten tab */}
+      {/* Projecten */}
       {tab === 'projecten' && (
-        <div className="tw projecten-tw">
+        <div className="tw">
           <div className="tw-hd">
             <div className="card-title">Projecten</div>
             <button className="btn btn-p btn-xs" onClick={() => setShowNewProject(true)}>{I.plus} Nieuw project</button>
           </div>
-          <div className="kk-scroll">
-            {cProjecten.length > 0 && (
-              <table className="dt">
-                <thead><tr><th>Naam</th><th className="projecten-col-waarde" style={{ width: 80, textAlign: 'right' }}>Waarde</th><th style={{ width: 90 }}>Status</th></tr></thead>
-                <tbody>
-                  {cProjecten.map(p => (
-                    <tr key={p.id} className="projecten-row" onClick={() => setPage('projecten', { id: p.id, from: 'klant', klantId: custId, klantNaam: c?.name })}>
-                      <td style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</td>
-                      <td className="projecten-col-waarde" style={{ fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'right' }}>{p.projectValue > 0 ? fmt(p.projectValue) : '—'}</td>
-                      <td style={{ whiteSpace: 'nowrap' }}><ProjectBadge status={p.status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-            {cProjecten.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '24px 0', color: '#9ca3af' }}>Geen projecten</div>
-            )}
-          </div>
+          {cProjecten.length === 0
+            ? <div className="kk-empty">Geen projecten</div>
+            : cProjecten.map(p => (
+              <div key={p.id} className="kk-row" onClick={() => setPage('projecten', { id: p.id, from: 'klant', klantId: custId, klantNaam: c?.name })}>
+                <div className="kk-row-left">
+                  <div className="kk-row-title">{p.name}</div>
+                  <div className="kk-row-sub"><ProjectBadge status={p.status} /></div>
+                </div>
+                {p.projectValue > 0 && (
+                  <div className="kk-row-right">
+                    <div className="kk-row-amount">{fmt(p.projectValue)}</div>
+                  </div>
+                )}
+              </div>
+            ))}
         </div>
       )}
 

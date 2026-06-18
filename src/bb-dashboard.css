@@ -327,22 +327,20 @@ ul{list-style:none}
 .kk-tabs .tab{padding:6px 10px;font-size:12px;font-weight:500;flex-shrink:0;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center}
 .kk-tabs .tab.active{background:var(--p) !important;color:white !important;box-shadow:none}
 
-/* Klantkaart — scrollbare tabellen (permanent zichtbare scrollbar) */
-.kk-scroll{overflow-x:auto;scrollbar-width:thin;scrollbar-color:#d0d0d0 #f5f5f5}
-.kk-scroll::-webkit-scrollbar{height:6px;display:block}
-.kk-scroll::-webkit-scrollbar-track{background:#f5f5f5;border-radius:4px}
-.kk-scroll::-webkit-scrollbar-thumb{background:#d0d0d0;border-radius:4px}
-/* Klantkaart-tabellen: vaste kolombreedtes zodat alles past in smalle drawer */
-.kk-scroll .dt{table-layout:fixed}
-.kk-scroll .dt th,.kk-scroll .dt td{padding-left:10px;padding-right:10px}
-
-/* Projecten-tabel: container query → compacte weergave in smalle drawer (<500px) */
-.projecten-tw{container-type:inline-size}
-.projecten-row{cursor:pointer}
-@container (max-width:500px){
-  .projecten-col-waarde{display:none}
-  .projecten-tw .kk-scroll .dt th,.projecten-tw .kk-scroll .dt td{padding-top:7px;padding-bottom:7px}
-}
+/* Klantkaart-lijsten: flexbox-rijen i.p.v. tabellen. Passen altijd binnen
+   zowel full-screen als de smalle half-scherm drawer — geen scroll nodig. */
+.kk-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;border-bottom:1px solid var(--br);cursor:pointer;transition:background .12s ease}
+.kk-row:last-child{border-bottom:none}
+.kk-row:hover{background:var(--bgs)}
+.kk-row-static{cursor:default}
+.kk-row-static:hover{background:transparent}
+.kk-row-left{flex:1;min-width:0}
+.kk-row-title{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kk-row-sub{font-size:12px;color:var(--dl);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kk-row-right{flex-shrink:0;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.kk-row-amount{font-weight:700;white-space:nowrap;line-height:1.2}
+.kk-row-date{font-size:12px;color:var(--dl);white-space:nowrap}
+.kk-empty{text-align:center;padding:28px 16px;color:var(--dl);font-size:.85rem}
 
 /* Klantenlijst naast drawer: kaarten passen zich aan de smalle lijst aan */
 .cust-split-list .cust-card-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))!important;gap:10px!important}
