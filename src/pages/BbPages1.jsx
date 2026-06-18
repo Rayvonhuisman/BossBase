@@ -363,7 +363,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
     } catch { /* ignore */ }
   };
 
-  const TAB_LABELS = { overview: 'Overzicht', notities: 'Notities', quotes: 'Offertes', facturen: 'Facturen', costs: 'Kosten', projecten: 'Projecten', timeline: 'Tijdlijn', emails: 'E-mails', klantgegevens: 'Klantgegevens' };
+  const TAB_LABELS = { overview: 'Overzicht', notities: 'Notities', quotes: 'Offertes', facturen: 'Facturen', costs: 'Kosten', projecten: 'Projecten', timeline: 'Tijdlijn', emails: 'E-mails', klantgegevens: <User size={13} title="Klantgegevens" /> };
   const TABS = [
     'overview',
     'notities',

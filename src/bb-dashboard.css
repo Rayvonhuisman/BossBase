@@ -319,13 +319,9 @@ ul{list-style:none}
 .tab:hover:not(.active){color:var(--dk)}
 
 /* Klantkaart — compacte scrollbare tabbladen */
-.kk-tabs{width:100%;overflow-x:scroll;background:white !important;scrollbar-width:thin;scrollbar-color:transparent transparent}
-.kk-tabs.show-scrollbar{scrollbar-color:#d0d0d0 #f5f5f5}
-.kk-tabs::-webkit-scrollbar{height:6px;display:block !important}
-.kk-tabs::-webkit-scrollbar-track{background:#f5f5f5;border-radius:4px}
-.kk-tabs::-webkit-scrollbar-thumb{background:transparent;border-radius:4px}
-.kk-tabs.show-scrollbar::-webkit-scrollbar-thumb{background:#d0d0d0 !important}
-.kk-tabs .tab{padding:5px 9px;font-size:.74rem;flex-shrink:0}
+.kk-tabs{width:100%;overflow-x:auto;background:white !important;scrollbar-width:none}
+.kk-tabs::-webkit-scrollbar{display:none}
+.kk-tabs .tab{padding:6px 10px;font-size:12px;font-weight:500;flex-shrink:0;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center}
 .kk-tabs .tab.active{background:var(--p) !important;color:white !important;box-shadow:none}
 
 /* Klantkaart — scrollbare tabellen (hover = zichtbaar, anders transparant) */
