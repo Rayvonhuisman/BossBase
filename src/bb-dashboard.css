@@ -324,13 +324,11 @@ ul{list-style:none}
 .kk-tabs .tab{padding:6px 10px;font-size:12px;font-weight:500;flex-shrink:0;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center}
 .kk-tabs .tab.active{background:var(--p) !important;color:white !important;box-shadow:none}
 
-/* Klantkaart — scrollbare tabellen (hover = zichtbaar, anders transparant) */
-.kk-scroll{overflow-x:scroll !important;scrollbar-width:thin;scrollbar-color:transparent transparent}
-.kk-scroll.show-scrollbar{scrollbar-color:#d0d0d0 #f5f5f5}
-.kk-scroll::-webkit-scrollbar{height:6px;display:block !important}
+/* Klantkaart — scrollbare tabellen (overflow-x toggle bij hover) */
+.kk-scroll{overflow-x:auto}
+.kk-scroll::-webkit-scrollbar{height:6px}
 .kk-scroll::-webkit-scrollbar-track{background:#f5f5f5;border-radius:4px}
-.kk-scroll::-webkit-scrollbar-thumb{background:transparent;border-radius:4px;min-width:30px}
-.kk-scroll.show-scrollbar::-webkit-scrollbar-thumb{background:#d0d0d0 !important}
+.kk-scroll::-webkit-scrollbar-thumb{background:#d0d0d0;border-radius:4px}
 
 /* FORMS / MODALS */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.38);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px;animation:fadeIn .2s ease both;backdrop-filter:blur(4px)}

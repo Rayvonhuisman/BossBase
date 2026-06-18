@@ -274,13 +274,13 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
     if (tab !== 'overview' && !validTabs.includes(tab)) setTab('overview');
   }, []);
 
-  // Scrollbar zichtbaar bij hover — directe refs per tabel wrapper
+  // Scrollbar zichtbaar bij hover — toggle overflow-x forceert WebKit repaint
   useEffect(() => {
     const elements = [...scrollRefs.current].filter(Boolean);
     const handlers = [];
     elements.forEach(el => {
-      const show = () => el.classList.add('show-scrollbar');
-      const hide = () => el.classList.remove('show-scrollbar');
+      const show = () => { el.style.overflowX = 'scroll'; };
+      const hide = () => { el.style.overflowX = 'auto'; };
       el.addEventListener('mouseenter', show);
       el.addEventListener('mouseleave', hide);
       handlers.push({ el, show, hide });
