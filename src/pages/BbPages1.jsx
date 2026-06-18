@@ -272,6 +272,23 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
     if (tab !== 'overview' && !validTabs.includes(tab)) setTab('overview');
   }, []);
 
+  // Scrollbar zichtbaar bij hover — macOS verbergt scrollbars standaard
+  useEffect(() => {
+    const containers = document.querySelectorAll('.kk-scroll, .kk-tabs');
+    const handlers = [];
+    containers.forEach(el => {
+      const show = () => el.classList.add('show-scrollbar');
+      const hide = () => el.classList.remove('show-scrollbar');
+      el.addEventListener('mouseenter', show);
+      el.addEventListener('mouseleave', hide);
+      handlers.push({ el, show, hide });
+    });
+    return () => handlers.forEach(({ el, show, hide }) => {
+      el.removeEventListener('mouseenter', show);
+      el.removeEventListener('mouseleave', hide);
+    });
+  }, [tab]);
+
   if (loading) return <div className="card card-p">Klant laden...</div>;
   if (error) return <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>;
   if (!c) return null;
