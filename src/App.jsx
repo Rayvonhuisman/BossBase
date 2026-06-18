@@ -1188,13 +1188,18 @@ function AppInner() {
 
   if (route === '/superadmin') {
     if (!session) { navigate('/login', true); return null; }
-    if (!permissionsLoaded) return <div style={{ background: '#0D0D0D', minHeight: '100dvh' }} />;
+    // Render NIETS (alleen een donkere achtergrond) tot het profiel én de
+    // permissies volledig geladen zijn. Zo is de pagina geen enkel frame
+    // zichtbaar voordat de super-admin-check is uitgevoerd.
+    if (!permissionsLoaded || !profile) {
+      return <div style={{ background: '#0D0D0D', minHeight: '100dvh' }} />;
+    }
     const ALLOWED = ['info@bossbase.nl', 'nielsgrevink@gmail.com'];
-    if (!profile?.isSuperAdmin || !ALLOWED.includes(profile?.email || '')) {
+    if (profile.isSuperAdmin !== true || !ALLOWED.includes(profile.email)) {
       navigate('/dashboard', true);
       return null;
     }
-    return <SuperAdminPage navigate={navigate} />;
+    return <SuperAdminPage navigate={navigate} profile={profile} />;
   }
 
   if (!route.startsWith('/dashboard')) {

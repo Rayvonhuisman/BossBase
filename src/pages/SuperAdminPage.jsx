@@ -74,7 +74,15 @@ const menuItemStyle = {
 }
 
 // ── Hoofd component ───────────────────────────────────────────
-export function SuperAdminPage({ navigate }) {
+const ALLOWED_EMAILS = ['info@bossbase.nl', 'nielsgrevink@gmail.com']
+
+export function SuperAdminPage({ navigate, profile }) {
+  // Laag 2 — beveiliging binnen de pagina zelf. Naast de route-guard in
+  // App.jsx checkt de pagina nogmaals onafhankelijk of de gebruiker een
+  // super admin is. `authorized` wordt vóór de hooks berekend zodat het
+  // aantal hook-calls constant blijft (rules-of-hooks veilig).
+  const authorized = profile?.isSuperAdmin === true && ALLOWED_EMAILS.includes(profile?.email)
+
   const [companies,    setCompanies]    = useState([])
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState('')
@@ -110,7 +118,7 @@ export function SuperAdminPage({ navigate }) {
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { if (authorized) load() }, [authorized])
 
   // Sluit tabel-menu bij klik buiten
   useEffect(() => {
@@ -196,6 +204,10 @@ export function SuperAdminPage({ navigate }) {
     c.subscription?.status === 'actief' ? sum + Number(c.subscription.pricePerMonth || 0) : sum, 0)
 
   // ── Render ───────────────────────────────────────────────────
+  // Niet-geautoriseerd? Render NIETS. Staat na alle hooks zodat het aantal
+  // hook-calls constant blijft.
+  if (!authorized) return null
+
   return (
     <div style={{ minHeight: '100dvh', background: '#f8f9fa' }}>
 
