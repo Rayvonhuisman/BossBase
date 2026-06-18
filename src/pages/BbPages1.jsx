@@ -351,10 +351,9 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
     'klantgegevens',
   ].filter(Boolean);
 
-  // Reset tab naar 'overview' als huidige tab onzichtbaar is geworden
-  if (tab !== 'overview' && !TABS.includes(tab)) {
-    setTab('overview');
-  }
+  // Reset tab naar 'overview' als initiële tab niet zichtbaar is (permissies)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (tab !== 'overview' && !TABS.includes(tab)) setTab('overview'); }, []);
 
   const fmtNotitieDate = iso => {
     if (!iso) return '';

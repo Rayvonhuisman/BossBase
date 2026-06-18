@@ -1049,14 +1049,14 @@ function AppInner() {
 
   // Route-beveiliging: redirect naar dashboard als gebruiker geen toegang heeft
   useEffect(() => {
-    if (!profile) return;
+    if (!profile || !permissionsLoaded) return;
     const isAdmin = profile.role === 'admin';
     const requiredPerm = PROTECTED_PAGES[page];
     if (requiredPerm && !isAdmin && !userPermissions.includes(requiredPerm)) {
       toast.error('Je hebt geen toegang tot deze pagina');
       navigatePage('dashboard');
     }
-  }, [page, profile, userPermissions]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page, profile, userPermissions, permissionsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const renderPage = () => {
     const props = { setPage: navigatePage, openCustomer, openDeal, openInvoice, openCalendarEvent };
