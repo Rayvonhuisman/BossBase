@@ -333,6 +333,14 @@ ul{list-style:none}
 .kk-scroll .dt{table-layout:fixed}
 .kk-scroll .dt th,.kk-scroll .dt td{padding-left:10px;padding-right:10px}
 
+/* Projecten-tabel: container query → compacte weergave in smalle drawer (<500px) */
+.projecten-tw{container-type:inline-size}
+.projecten-row{cursor:pointer}
+@container (max-width:500px){
+  .projecten-col-waarde{display:none}
+  .projecten-tw .kk-scroll .dt th,.projecten-tw .kk-scroll .dt td{padding-top:7px;padding-bottom:7px}
+}
+
 /* Klantenlijst naast drawer: kaarten passen zich aan de smalle lijst aan */
 .cust-split-list .cust-card-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))!important;gap:10px!important}
 

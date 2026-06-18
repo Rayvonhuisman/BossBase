@@ -897,7 +897,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
 
       {/* Projecten tab */}
       {tab === 'projecten' && (
-        <div className="tw">
+        <div className="tw projecten-tw">
           <div className="tw-hd">
             <div className="card-title">Projecten</div>
             <button className="btn btn-p btn-xs" onClick={() => setShowNewProject(true)}>{I.plus} Nieuw project</button>
@@ -905,12 +905,12 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
           <div className="kk-scroll">
             {cProjecten.length > 0 && (
               <table className="dt">
-                <thead><tr><th>Naam</th><th style={{ width: 80, textAlign: 'right' }}>Waarde</th><th style={{ width: 90 }}>Status</th></tr></thead>
+                <thead><tr><th>Naam</th><th className="projecten-col-waarde" style={{ width: 80, textAlign: 'right' }}>Waarde</th><th style={{ width: 90 }}>Status</th></tr></thead>
                 <tbody>
                   {cProjecten.map(p => (
-                    <tr key={p.id}>
+                    <tr key={p.id} className="projecten-row" onClick={() => setPage('projecten', { id: p.id })}>
                       <td style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</td>
-                      <td style={{ fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'right' }}>{p.projectValue > 0 ? fmt(p.projectValue) : '—'}</td>
+                      <td className="projecten-col-waarde" style={{ fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'right' }}>{p.projectValue > 0 ? fmt(p.projectValue) : '—'}</td>
                       <td style={{ whiteSpace: 'nowrap' }}><ProjectBadge status={p.status} /></td>
                     </tr>
                   ))}
