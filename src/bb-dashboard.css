@@ -206,13 +206,12 @@ ul{list-style:none}
 .cust-split-list{flex:1;min-width:0;overflow-y:auto;padding:24px;background:var(--bgs)}
 .cust-split-list::-webkit-scrollbar{width:5px}
 .cust-split-list::-webkit-scrollbar-thumb{background:#e5e7eb;border-radius:99px}
-.cust-split-panel{width:max(680px,50%);flex-shrink:0;overflow-y:auto;border-left:1px solid var(--border);background:#fff;padding:24px}
+.cust-split-panel{width:480px;flex-shrink:0;overflow-y:auto;border-left:1px solid var(--border);background:#fff;padding:24px}
 .cust-split-panel::-webkit-scrollbar{width:5px}
 .cust-split-panel::-webkit-scrollbar-thumb{background:#e5e7eb;border-radius:99px}
-@media(max-width:1200px){.cust-split-panel{width:max(580px,50%)}}
-@media(max-width:960px){.cust-split-panel{width:max(480px,50%)}}
-@media(max-width:860px){.cust-split-panel{width:440px}}
-@media(max-width:640px){.cust-split{flex-direction:column}.cust-split-list{flex:0 0 40%;overflow-y:auto}.cust-split-panel{width:100%;border-left:none;border-top:1px solid var(--border);flex:1}}
+/* Lijst krijgt resterende ruimte links via flex:1; smaller scherm = smallere drawer + minder padding */
+@media(max-width:900px){.cust-split-panel{width:420px;padding:16px}}
+@media(max-width:700px){.cust-split-list{display:none}.cust-split-panel{width:100%;border-left:none;padding:16px}}
 
 /* ── SHARED ─────────────────────────────────────── */
 .page-hd{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;gap:12px;flex-wrap:wrap}
@@ -325,10 +324,16 @@ ul{list-style:none}
 .kk-tabs .tab.active{background:var(--p) !important;color:white !important;box-shadow:none}
 
 /* Klantkaart — scrollbare tabellen (permanent zichtbare scrollbar) */
-.kk-scroll{overflow-x:scroll;scrollbar-width:thin;scrollbar-color:#d0d0d0 #f5f5f5}
+.kk-scroll{overflow-x:auto;scrollbar-width:thin;scrollbar-color:#d0d0d0 #f5f5f5}
 .kk-scroll::-webkit-scrollbar{height:6px;display:block}
 .kk-scroll::-webkit-scrollbar-track{background:#f5f5f5;border-radius:4px}
 .kk-scroll::-webkit-scrollbar-thumb{background:#d0d0d0;border-radius:4px}
+/* Klantkaart-tabellen: vaste kolombreedtes zodat alles past in smalle drawer */
+.kk-scroll .dt{table-layout:fixed}
+.kk-scroll .dt th,.kk-scroll .dt td{padding-left:10px;padding-right:10px}
+
+/* Klantenlijst naast drawer: kaarten passen zich aan de smalle lijst aan */
+.cust-split-list .cust-card-grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))!important;gap:10px!important}
 
 /* FORMS / MODALS */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.38);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px;animation:fadeIn .2s ease both;backdrop-filter:blur(4px)}

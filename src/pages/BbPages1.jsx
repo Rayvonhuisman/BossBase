@@ -803,13 +803,12 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
           <div className="kk-scroll">
             {cOffertes.length > 0 && (
               <table className="dt">
-                <thead><tr><th>#</th><th>Omschrijving</th><th>Bedrag</th><th>Status</th></tr></thead>
+                <thead><tr><th>Omschrijving</th><th style={{ width: 80, textAlign: 'right' }}>Bedrag</th><th style={{ width: 90 }}>Status</th></tr></thead>
                 <tbody>
                   {cOffertes.map(o => (
                     <tr key={o.id}>
-                      <td style={{ color: 'var(--dl)', fontWeight: 600, whiteSpace: 'nowrap' }}>{o.nummer}</td>
-                      <td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.omschrijving || '—'}</td>
-                      <td style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{fmt(o.totaalIncl)}</td>
+                      <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.omschrijving || '—'}</td>
+                      <td style={{ fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'right' }}>{fmt(o.totaalIncl)}</td>
                       <td style={{ whiteSpace: 'nowrap' }}><OfferteBadge status={o.status} /></td>
                     </tr>
                   ))}
@@ -833,13 +832,12 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
           <div className="kk-scroll">
             {cFacturen.length > 0 && (
               <table className="dt">
-                <thead><tr><th>#</th><th>Omschrijving</th><th>Bedrag</th><th>Status</th></tr></thead>
+                <thead><tr><th>Omschrijving</th><th style={{ width: 80, textAlign: 'right' }}>Bedrag</th><th style={{ width: 90 }}>Status</th></tr></thead>
                 <tbody>
                   {cFacturen.map(f => (
                     <tr key={f.id}>
-                      <td style={{ color: 'var(--dl)', fontWeight: 600, whiteSpace: 'nowrap' }}>{f.nummer || '—'}</td>
-                      <td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.omschrijving || '—'}</td>
-                      <td style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{fmt(f.totaalIncl)}</td>
+                      <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.omschrijving || '—'}</td>
+                      <td style={{ fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'right' }}>{fmt(f.totaalIncl)}</td>
                       <td style={{ whiteSpace: 'nowrap' }}><FactuurBadge status={f.status} /></td>
                     </tr>
                   ))}
@@ -876,14 +874,14 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
             <div className="kk-scroll">
               {cCosts.length > 0 && (
                 <table className="dt">
-                  <thead><tr><th>Categorie</th><th>Omschrijving</th><th>Bedrag</th><th>Datum</th></tr></thead>
+                  <thead><tr><th style={{ width: 80 }}>Categorie</th><th>Omschrijving</th><th style={{ width: 80, textAlign: 'right' }}>Bedrag</th><th style={{ width: 70 }}>Datum</th></tr></thead>
                   <tbody>
                     {cCosts.map(r => (
                       <tr key={r.id}>
-                        <td><span className="badge b-gray" style={{ textTransform: 'capitalize' }}>{r.cat}</span></td>
-                        <td>{r.desc}</td>
-                        <td style={{ fontWeight: 700 }}>{fmt(r.amt)}</td>
-                        <td style={{ color: 'var(--dl)' }}>{r.date}</td>
+                        <td style={{ overflow: 'hidden' }}><span className="badge b-gray" style={{ textTransform: 'capitalize' }}>{r.cat}</span></td>
+                        <td style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.desc}</td>
+                        <td style={{ fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'right' }}>{fmt(r.amt)}</td>
+                        <td style={{ color: 'var(--dl)', whiteSpace: 'nowrap' }}>{r.date}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -907,12 +905,12 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
           <div className="kk-scroll">
             {cProjecten.length > 0 && (
               <table className="dt">
-                <thead><tr><th>Naam</th><th>Waarde</th><th>Status</th></tr></thead>
+                <thead><tr><th>Naam</th><th style={{ width: 80, textAlign: 'right' }}>Waarde</th><th style={{ width: 90 }}>Status</th></tr></thead>
                 <tbody>
                   {cProjecten.map(p => (
                     <tr key={p.id}>
-                      <td style={{ fontWeight: 600, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</td>
-                      <td style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{p.projectValue > 0 ? fmt(p.projectValue) : '—'}</td>
+                      <td style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</td>
+                      <td style={{ fontWeight: 700, whiteSpace: 'nowrap', textAlign: 'right' }}>{p.projectValue > 0 ? fmt(p.projectValue) : '—'}</td>
                       <td style={{ whiteSpace: 'nowrap' }}><ProjectBadge status={p.status} /></td>
                     </tr>
                   ))}
