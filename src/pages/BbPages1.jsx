@@ -256,7 +256,6 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
       setProjecten(projecten);
       setNotitiesVisible(10);
       setShowNotitiesInput(false);
-      setShowOverzichtInput(false);
       setError('');
     })
     .catch(err => alive && setError(err.message || 'Klant laden is mislukt.'))
