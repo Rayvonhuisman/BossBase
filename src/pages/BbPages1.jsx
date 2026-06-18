@@ -265,6 +265,13 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
 
   useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
 
+  // Moet vóór early returns staan (Rules of Hooks)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const validTabs = ['overview','notities', can('offertes') && 'quotes', can('facturen') && 'facturen', can('kosten') && 'costs', 'projecten','timeline','emails','klantgegevens'].filter(Boolean);
+    if (tab !== 'overview' && !validTabs.includes(tab)) setTab('overview');
+  }, []);
+
   if (loading) return <div className="card card-p">Klant laden...</div>;
   if (error) return <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>;
   if (!c) return null;
@@ -350,9 +357,6 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
     'klantgegevens',
   ].filter(Boolean);
 
-  // Reset tab naar 'overview' als initiële tab niet zichtbaar is (permissies)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (tab !== 'overview' && !TABS.includes(tab)) setTab('overview'); }, []);
 
   const fmtNotitieDate = iso => {
     if (!iso) return '';
