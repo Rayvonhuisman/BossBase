@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Clock, PartyPopper, SearchX } from 'lucide-react';
 import { Logo } from '../bb-shared.jsx';
 import { supabase } from '../lib/supabase.js';
+import { vertaalAuthFout } from '../services/authService.js';
 import { PasswordRequirements, PasswordMatch, passwordValid } from '../components/PasswordStrength.jsx';
 
 function AuthIcon({ icon: Icon, color, bg }) {
@@ -74,7 +75,7 @@ export function UitnodigingPage({ token, navigate }) {
       setDone(true);
       setTimeout(() => navigate('/dashboard'), 1500);
     } catch (err) {
-      setError(err.message || 'Er is iets misgegaan.');
+      setError(vertaalAuthFout(err.message) || 'Er is iets misgegaan.');
     } finally {
       setSaving(false);
     }

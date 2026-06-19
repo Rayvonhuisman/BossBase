@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, Clock, Link2Off, LoaderCircle } from 'lucide-react';
 import { Logo } from '../bb-shared.jsx';
-import { validateResetToken, applyPasswordReset } from '../services/authService.js';
+import { validateResetToken, applyPasswordReset, vertaalAuthFout } from '../services/authService.js';
 import { PasswordRequirements, PasswordMatch, passwordValid } from '../components/PasswordStrength.jsx';
 
 function AuthIcon({ icon: Icon, color, bg }) {
@@ -50,7 +50,7 @@ export function ResetPasswordPage({ token, navigate }) {
       } else if (err.code === 'USED') {
         setStatus('used');
       } else {
-        setError(err.message || 'Opslaan mislukt.');
+        setError(vertaalAuthFout(err.message) || 'Opslaan mislukt.');
       }
     } finally {
       setLoading(false);

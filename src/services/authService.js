@@ -1,5 +1,35 @@
 import { supabase } from "../lib/supabase"
 
+// Vertaalt Supabase/Engelse auth-foutmeldingen naar het Nederlands.
+// Onbekende (al-Nederlandse) meldingen worden ongewijzigd doorgegeven.
+export function vertaalAuthFout(message) {
+  const msg = (message || '').trim()
+  const vertalingen = {
+    'Invalid login credentials': 'Onjuist e-mailadres of wachtwoord',
+    'Email not confirmed': 'Je e-mailadres is nog niet bevestigd',
+    'User not found': 'Geen account gevonden met dit e-mailadres',
+    'Email rate limit exceeded': 'Te veel pogingen. Probeer het later opnieuw',
+    'Password should be at least 6 characters': 'Wachtwoord moet minimaal 6 tekens zijn',
+    'User already registered': 'Er bestaat al een account met dit e-mailadres',
+    'Unable to validate email address: invalid format': 'Vul een geldig e-mailadres in',
+    'Signup requires a valid password': 'Vul een geldig wachtwoord in',
+    'New password should be different from the old password': 'Het nieuwe wachtwoord moet verschillen van het oude',
+  }
+  if (vertalingen[msg]) return vertalingen[msg]
+  // Variaties die Supabase soms net anders formuleert
+  if (/invalid login credentials/i.test(msg)) return 'Onjuist e-mailadres of wachtwoord'
+  if (/email not confirmed|not confirmed/i.test(msg)) return 'Je e-mailadres is nog niet bevestigd'
+  if (/user not found/i.test(msg)) return 'Geen account gevonden met dit e-mailadres'
+  if (/rate limit/i.test(msg)) return 'Te veel pogingen. Probeer het later opnieuw'
+  if (/at least 6 characters/i.test(msg)) return 'Wachtwoord moet minimaal 6 tekens zijn'
+  if (/already registered/i.test(msg)) return 'Er bestaat al een account met dit e-mailadres'
+  // Engelse rest-meldingen → generieke fallback; al-Nederlandse meldingen ongewijzigd.
+  if (/[a-z]/i.test(msg) && /\b(the|invalid|error|failed|should|requires|please|try|credentials)\b/i.test(msg)) {
+    return 'Er ging iets mis. Probeer het opnieuw'
+  }
+  return msg || 'Er ging iets mis. Probeer het opnieuw'
+}
+
 export const DEFAULT_PIPELINE_STAGES = [
   "Nieuwe aanvraag",
   "Contact opgenomen",

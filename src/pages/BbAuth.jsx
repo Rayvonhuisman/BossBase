@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { I, Logo } from '../bb-shared.jsx';
-import { loginWithEmail, registerWithEmail, requestPasswordReset, resendVerificationEmail } from '../services/authService.js';
+import { loginWithEmail, registerWithEmail, requestPasswordReset, resendVerificationEmail, vertaalAuthFout } from '../services/authService.js';
 import { PasswordRequirements, PasswordMatch, passwordValid } from '../components/PasswordStrength.jsx';
 
 const TRADES = [
@@ -39,7 +39,7 @@ export function LoginPage({ onLogin, onRegister }) {
       if (/not confirmed|email.*confirm/i.test(msg)) {
         setUnconfirmed(true);
       } else {
-        setError(msg || 'Inloggen is mislukt.');
+        setError(vertaalAuthFout(msg) || 'Inloggen is mislukt.');
       }
     } finally {
       setLoading(false);
@@ -54,7 +54,7 @@ export function LoginPage({ onLogin, onRegister }) {
       await requestPasswordReset(forgotEmail);
       setForgot('sent');
     } catch (err) {
-      setForgotError(err.message || 'Versturen mislukt.');
+      setForgotError(vertaalAuthFout(err.message) || 'Versturen mislukt.');
     } finally {
       setForgotLoading(false);
     }
@@ -243,7 +243,7 @@ export function RegisterFlow({ onDone, onBack }) {
         onDone();
       }
     } catch (err) {
-      setError(err.message || 'Registreren is mislukt.');
+      setError(vertaalAuthFout(err.message) || 'Registreren is mislukt.');
     } finally {
       setLoading(false);
     }
