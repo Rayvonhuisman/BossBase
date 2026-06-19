@@ -90,7 +90,8 @@ export const toCalendarEvent = row => {
     title: row.title || "Afspraak",
     custId: row.customer_id,
     dealId: row.deal_id,
-    activityId: row.activity_id,
+    activityId: row.activiteit_id || row.activity_id || null,
+    activiteitId: row.activiteit_id || null,
     werkbonId: row.werkbon_id || null,
     comments: Array.isArray(row.comments) ? row.comments : [],
     location: row.location || "",
@@ -183,6 +184,58 @@ export async function upsertWerkbonEvent({ werkbonId, title, date, time, end, cu
     .single()
   if (error) throw error
   return toCalendarEvent(data)
+}
+
+// Maak/werk hét calendar_event van een activiteit bij (precies één per activiteit).
+export async function upsertActivityEvent({ activiteitId, title, date, time, end, customerId, location, description }) {
+  if (!activiteitId) return null
+  const times = buildEventTimes(date, time, end)
+  const base = {
+    title: title || "Activiteit",
+    customer_id: customerId || null,
+    location: location || null,
+    notes: description || null,
+    start_at: times.start_at,
+    end_at: times.end_at,
+  }
+
+  const { data: existing } = await supabase
+    .from("calendar_events")
+    .select("id")
+    .eq("activiteit_id", activiteitId)
+    .maybeSingle()
+
+  if (existing) {
+    const { data, error } = await supabase
+      .from("calendar_events")
+      .update(base)
+      .eq("id", existing.id)
+      .select()
+      .single()
+    if (error) throw error
+    return toCalendarEvent(data)
+  }
+
+  const payload = await withCompanyId({ ...base, activiteit_id: activiteitId })
+  const { data, error } = await supabase
+    .from("calendar_events")
+    .insert(payload)
+    .select()
+    .single()
+  if (error) throw error
+  return toCalendarEvent(data)
+}
+
+// Verwijder het gekoppelde calendar_event van een werkbon (bv. bij uit-plannen).
+export async function deleteWerkbonEvent(werkbonId) {
+  if (!werkbonId) return
+  await supabase.from("calendar_events").delete().eq("werkbon_id", werkbonId)
+}
+
+// Verwijder het gekoppelde calendar_event van een activiteit.
+export async function deleteActivityEvent(activiteitId) {
+  if (!activiteitId) return
+  await supabase.from("calendar_events").delete().eq("activiteit_id", activiteitId)
 }
 
 // Koppel (of ontkoppel met null) een werkbon aan een agenda-item.

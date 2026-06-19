@@ -12,7 +12,7 @@ import { getVoertuigen } from '../services/voertuigService.js';
 import { getTeamMembers, createAssignmentNotification } from '../services/notificatieService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
-import { createCalendarEvent, upsertWerkbonEvent } from '../services/calendarService.js';
+import { upsertWerkbonEvent, upsertActivityEvent, deleteWerkbonEvent, deleteActivityEvent } from '../services/calendarService.js';
 import { listActivities, createActivity, buildDueAt } from '../services/activityService.js';
 import { ActivityEditModal } from '../components/SharedModals.jsx';
 import { supabase } from '../lib/supabase.js';
@@ -447,15 +447,16 @@ function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, pro
         notes: form.omschrijving || null,
       });
 
-      // Calendar event aanmaken zodat activiteit in agenda verschijnt
+      // Eén calendar_event per activiteit (upsert op activiteit_id)
       if (form.datum && form.starttijd) {
-        createCalendarEvent({
+        upsertActivityEvent({
+          activiteitId: created.id,
           title: form.titel.trim(),
           date: form.datum,
           time: form.starttijd,
           end: form.eindtijd || minsToTime(timeToMins(form.starttijd) + 15),
-          customer_id: form.customer_id || null,
-          activity_id: created.id,
+          customerId: form.customer_id || null,
+          location: form.locatie || null,
           description: form.omschrijving || '',
         }).catch(() => {});
       }
@@ -761,6 +762,20 @@ function DetailModal({ werkbon, teamMembers, voertuigen, onClose, onUpdated }) {
         locatie: form.locatie || null,
         status: form.status,
       });
+      // Sync agenda: ingepland → upsert event, uit-gepland → event verwijderen.
+      if (form.gepland_op && form.starttijd) {
+        upsertWerkbonEvent({
+          werkbonId: werkbon.id,
+          title: form.titel.trim() || werkbon.titel,
+          date: form.gepland_op,
+          time: form.starttijd,
+          end: form.eindtijd || '',
+          customerId: werkbon.customerId || null,
+          description: werkbon.omschrijving || '',
+        }).catch(() => {});
+      } else {
+        deleteWerkbonEvent(werkbon.id).catch(() => {});
+      }
       onUpdated(updated);
       toast.success('Opgeslagen');
       onClose();
@@ -1200,6 +1215,20 @@ export function PlanningPage() {
           onClose={() => setSelectedActivity(null)}
           onSaved={updated => {
             setActivities(prev => prev.map(a => a.id === updated.id ? updated : a));
+            // Sync agenda: ingepland → upsert event, anders event verwijderen.
+            if (updated.date && updated.time) {
+              upsertActivityEvent({
+                activiteitId: updated.id,
+                title: updated.title,
+                date: updated.date,
+                time: updated.time,
+                end: updated.endTime || '',
+                customerId: updated.custId || null,
+                location: updated.location || null,
+              }).catch(() => {});
+            } else {
+              deleteActivityEvent(updated.id).catch(() => {});
+            }
             setSelectedActivity(null);
           }}
           onDeleted={id => {
