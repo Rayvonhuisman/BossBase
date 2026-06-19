@@ -12,7 +12,7 @@ import { getVoertuigen } from '../services/voertuigService.js';
 import { getTeamMembers, createAssignmentNotification } from '../services/notificatieService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
-import { createCalendarEvent } from '../services/calendarService.js';
+import { createCalendarEvent, upsertWerkbonEvent } from '../services/calendarService.js';
 import { listActivities, createActivity, buildDueAt } from '../services/activityService.js';
 import { ActivityEditModal } from '../components/SharedModals.jsx';
 import { supabase } from '../lib/supabase.js';
@@ -339,14 +339,16 @@ function QuickPlanModal({ werkbon, date, hour, teamMembers, onClose, onSaved }) 
         eindtijd:  eindtijd  || null,
         assigned_to: assignedTo || null,
       });
-      // Maak ook calendar_event aan
+      // Werk hét calendar_event van deze werkbon bij (upsert op werkbon_id) —
+      // geen nieuw event bij herhaald inplannen.
       if (date && starttijd) {
-        createCalendarEvent({
+        upsertWerkbonEvent({
+          werkbonId: werkbon.id,
           title: werkbon.titel,
           date,
           time: starttijd,
           end: eindtijd || '',
-          customer_id: werkbon.customerId || null,
+          customerId: werkbon.customerId || null,
           description: werkbon.omschrijving || '',
         }).catch(() => {});
       }
@@ -636,14 +638,15 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, onClose, onSa
         omschrijving: form.omschrijving || null,
         status: 'gepland',
       });
-      // Maak calendar_event aan
+      // Eén calendar_event per werkbon (upsert op werkbon_id)
       if (form.gepland_op && form.starttijd) {
-        createCalendarEvent({
+        upsertWerkbonEvent({
+          werkbonId: wb.id,
           title: form.titel.trim(),
           date: form.gepland_op,
           time: form.starttijd,
           end: form.eindtijd || '',
-          customer_id: form.customer_id || null,
+          customerId: form.customer_id || null,
           description: form.omschrijving || '',
         }).catch(() => {});
       }

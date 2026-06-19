@@ -144,6 +144,47 @@ export async function updateCalendarEventComments(id, comments) {
   return toCalendarEvent(data)
 }
 
+// Maak/werk hét calendar_event van een werkbon bij (precies één per werkbon).
+// Check eerst of er al een event bestaat met dit werkbon_id → UPDATE, anders INSERT.
+// Voorkomt dubbele agenda-items bij herhaald inplannen.
+export async function upsertWerkbonEvent({ werkbonId, title, date, time, end, customerId, description }) {
+  if (!werkbonId) return null
+  const times = buildEventTimes(date, time, end)
+  const base = {
+    title: title || "Werkbon",
+    customer_id: customerId || null,
+    notes: description || null,
+    start_at: times.start_at,
+    end_at: times.end_at,
+  }
+
+  const { data: existing } = await supabase
+    .from("calendar_events")
+    .select("id")
+    .eq("werkbon_id", werkbonId)
+    .maybeSingle()
+
+  if (existing) {
+    const { data, error } = await supabase
+      .from("calendar_events")
+      .update(base)
+      .eq("id", existing.id)
+      .select()
+      .single()
+    if (error) throw error
+    return toCalendarEvent(data)
+  }
+
+  const payload = await withCompanyId({ ...base, werkbon_id: werkbonId })
+  const { data, error } = await supabase
+    .from("calendar_events")
+    .insert(payload)
+    .select()
+    .single()
+  if (error) throw error
+  return toCalendarEvent(data)
+}
+
 // Koppel (of ontkoppel met null) een werkbon aan een agenda-item.
 export async function setCalendarEventWerkbon(id, werkbonId) {
   const { data, error } = await supabase

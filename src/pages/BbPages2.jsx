@@ -223,14 +223,17 @@ export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityI
     setLoading(true);
     Promise.all([listCalendarEvents(), listCustomers(), listActivities(), getWerkbonnen().catch(() => [])])
       .then(([data, custData, actData, wbs]) => {
-        // Merge ingeplande werkbonnen als synthetische agenda-events (alleen voor huidige gebruiker)
+        // Werkbon-gekoppelde calendar_events verbergen: de werkbon zelf wordt
+        // hieronder als (altijd actuele) synthetisch event getoond. Zo verschijnt
+        // elk item exact één keer — gededupliceerd op werkbon_id.
+        const manualEvents = data.filter(e => !e.werkbonId);
         const wbEvents = wbs
           .filter(w => w.geplandOp && w.status !== 'afgerond')
           .map(w => ({
             id: `wb-${w.id}`,
             title: w.titel,
             date: w.geplandOp,
-            time: w.starttijd || '08:00',
+            time: w.starttijd || '07:00',
             end: w.eindtijd || '',
             color: '#fff7ed',
             textColor: '#d97706',
@@ -239,7 +242,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityI
             customerName: w.customerName,
             locatie: w.locatie,
           }));
-        setEvents([...data, ...wbEvents]);
+        setEvents([...manualEvents, ...wbEvents]);
         setCustomers(custData);
         setActivities(actData);
         setError('');
@@ -340,7 +343,9 @@ export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityI
       const act = activities.find(a => a.id === e.activityId);
       if (act) { setEditActivity(act); return; }
     }
-    if (openCalendarEvent && e.id) { openCalendarEvent(e.id); return; }
+    // Synthetische werkbon-events (id 'wb-…') zijn geen echt calendar_event →
+    // toon de inline event-modal i.p.v. de detail-drawer.
+    if (openCalendarEvent && e.id && !String(e.id).startsWith('wb-')) { openCalendarEvent(e.id); return; }
     setShowEvent(e);
   };
   const saveEvent = async input => {

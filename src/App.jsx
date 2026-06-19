@@ -72,7 +72,7 @@ const NAV = [
   { id: 'customers',   label: 'Klanten',      icon: 'cust',    section: 'main' },
   { id: 'activities',  label: 'Activiteiten', icon: 'act',     section: 'main' },
   { id: 'calendar',    label: 'Agenda',        icon: 'cal',     section: 'work' },
-  { id: 'planning',    label: 'Planning',      icon: 'cal',     section: 'work', permission: 'planning' },
+  { id: 'planning',    label: 'Planning',      icon: 'planning',section: 'work', permission: 'planning' },
   { id: 'projecten',   label: 'Projecten',     icon: 'projects',section: 'work' },
   { id: 'werkbonnen',  label: 'Werkbonnen',    icon: 'wo',      section: 'work' },
   { id: 'uren',        label: 'Uren',          icon: 'hours',   section: 'work' },
