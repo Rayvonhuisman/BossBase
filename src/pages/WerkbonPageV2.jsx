@@ -724,6 +724,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage } = {})
   const [meerwerk, setMeerwerk] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [showHoursAdd, setShowHoursAdd] = useState(false);
+  const [teamMembers, setTeamMembers] = useState([]);
 
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -755,6 +756,9 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage } = {})
   };
 
   useEffect(() => { loadList(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Teamleden voor @ tagging in de notities-sectie van het werkbon-detail.
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
 
   useEffect(() => {
     if (!preOpenWerkbonId || loading) return;
