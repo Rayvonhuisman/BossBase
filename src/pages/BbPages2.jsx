@@ -813,8 +813,6 @@ export function CostsPage() {
       </div>
       {loading && <div className="card card-p">Kosten laden...</div>}
       {error && <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>}
-      {loading && <div className="card card-p">Kosten laden...</div>}
-      {error && <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>}
       <div className="stats-row afu2" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
         {[
           { label: 'Totale kosten',    val: fmt(total),                                                                             icon: I.costs  },

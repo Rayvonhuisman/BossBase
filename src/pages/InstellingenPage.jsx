@@ -907,7 +907,7 @@ export function InstellingenPage() {
                         style={{
                           padding: '5px 13px', borderRadius: 20, fontSize: '.82rem', fontWeight: 500, cursor: 'pointer', border: 'none',
                           background: active ? '#1DDB62' : 'var(--bgs)',
-                          color: active ? '#0D0D0D' : 'var(--tx)',
+                          color: active ? '#0D0D0D' : 'var(--dmu)',
                           outline: active ? 'none' : '1px solid var(--br)',
                         }}
                       >
@@ -935,7 +935,7 @@ export function InstellingenPage() {
                             style={{
                               padding: '5px 10px 5px 13px', borderRadius: '20px 0 0 20px', fontSize: '.82rem', fontWeight: 500, cursor: 'pointer', border: 'none',
                               background: active ? '#1DDB62' : 'var(--bgs)',
-                              color: active ? '#0D0D0D' : 'var(--tx)',
+                              color: active ? '#0D0D0D' : 'var(--dmu)',
                               outline: active ? 'none' : '1px solid var(--br)',
                             }}
                           >
@@ -988,7 +988,7 @@ export function InstellingenPage() {
                     )}
                   </div>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '.83rem', color: 'var(--dm)', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={form.actief} onChange={e => setTemplateField(t.id, 'actief', e.target.checked)} />
+                    <input type="checkbox" style={{ accentColor: 'var(--p)' }} checked={form.actief} onChange={e => setTemplateField(t.id, 'actief', e.target.checked)} />
                     Actief
                   </label>
                 </div>
@@ -1530,119 +1530,6 @@ export function InstellingenPage() {
             </div>
           </div>
 
-          {/* SnelStart tijdelijk verborgen - certificering nog nodig */}
-          {false && <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
-            <div className="integ-card-hd" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-              <img
-                src="https://logo.clearbit.com/snelstart.nl"
-                alt="SnelStart"
-                style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 6 }}
-                onError={e => { e.currentTarget.style.display = 'none'; }}
-              />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: '.95rem', marginBottom: 2 }}>SnelStart</div>
-                <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>
-                  Importeer inkoopfacturen als kostenregels en synchroniseer contacten vanuit SnelStart.
-                </div>
-              </div>
-              <div style={{ flexShrink: 0 }}>
-                {ssConnection?.subscriptionKey ? (
-                  <span style={{ fontSize: '.75rem', color: '#15A34A', fontWeight: 600 }}>Verbonden</span>
-                ) : (
-                  <span style={{ fontSize: '.75rem', color: 'var(--dmu)' }}>Niet verbonden</span>
-                )}
-              </div>
-            </div>
-
-            <div className="fg" style={{ marginBottom: 14 }}>
-              <div className="f s2">
-                <label>Abonnementssleutel</label>
-                <input
-                  type="password"
-                  value={ssForm.subscriptionKey}
-                  onChange={e => setSsForm(f => ({ ...f, subscriptionKey: e.target.value }))}
-                  placeholder="SnelStart abonnementssleutel..."
-                  disabled={!!(ssConnection?.subscriptionKey && !ssEditing)}
-                  style={{ opacity: ssConnection?.subscriptionKey && !ssEditing ? 0.6 : 1 }}
-                />
-              </div>
-              <div className="f s2">
-                <label>Maatwerksleutel</label>
-                <input
-                  type="password"
-                  value={ssForm.secondaryKey}
-                  onChange={e => setSsForm(f => ({ ...f, secondaryKey: e.target.value }))}
-                  placeholder="SnelStart maatwerksleutel..."
-                  disabled={!!(ssConnection?.subscriptionKey && !ssEditing)}
-                  style={{ opacity: ssConnection?.subscriptionKey && !ssEditing ? 0.6 : 1 }}
-                />
-              </div>
-              <div className="f s2">
-                <label>
-                  Administratie-ID
-                  <span style={{ fontSize: '.73rem', color: 'var(--dl)', fontWeight: 400, marginLeft: 6 }}>Optioneel</span>
-                </label>
-                <input
-                  value={ssForm.administrationId}
-                  onChange={e => setSsForm(f => ({ ...f, administrationId: e.target.value }))}
-                  placeholder="bijv. 123456789"
-                  disabled={!!(ssConnection?.subscriptionKey && !ssEditing)}
-                  style={{ opacity: ssConnection?.subscriptionKey && !ssEditing ? 0.6 : 1 }}
-                />
-              </div>
-            </div>
-
-            <div className="fa" style={{ flexWrap: 'wrap', gap: 8 }}>
-              {ssConnection?.subscriptionKey && (
-                <>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={handleSsImport}
-                    disabled={ssImporting}
-                  >
-                    {ssImporting ? 'Importeren...' : 'Kosten importeren'}
-                  </button>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={handleSsSyncContacten}
-                    disabled={ssSyncingContacten}
-                  >
-                    {ssSyncingContacten ? 'Synchroniseren...' : 'Contacten synchroniseren'}
-                  </button>
-                </>
-              )}
-              {ssConnection?.lastSyncedAt && (
-                <span style={{ fontSize: '.75rem', color: 'var(--dl)', alignSelf: 'center', marginRight: 'auto' }}>
-                  Laatste sync: {new Date(ssConnection.lastSyncedAt).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                </span>
-              )}
-              {ssConnection?.subscriptionKey && !ssEditing ? (
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => setSsEditing(true)}
-                >
-                  Wijzigen
-                </button>
-              ) : (
-                <>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={handleSsTest}
-                    disabled={ssTesting || !ssForm.subscriptionKey || !ssForm.secondaryKey}
-                  >
-                    {ssTesting ? 'Testen...' : 'Verbinding testen'}
-                  </button>
-                  <button
-                    className="btn btn-p btn-sm"
-                    onClick={handleSsSave}
-                    disabled={ssSaving || !ssForm.subscriptionKey || !ssForm.secondaryKey}
-                  >
-                    {ssSaving ? 'Opslaan...' : 'Opslaan'}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>}
 
           {/* AFAS */}
           <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>

@@ -10,7 +10,7 @@ const PLANS = [
 
 const STATUSES = [
   { id: 'trial',       label: 'Trial',       color: '#d97706', bg: '#fffbeb' },
-  { id: 'actief',      label: 'Actief',      color: '#16a34a', bg: '#f0fdf4' },
+  { id: 'actief',      label: 'Actief',      color: 'var(--pd)', bg: '#f0fdf4' },
   { id: 'geblokkeerd', label: 'Geblokkeerd', color: '#dc2626', bg: '#fef2f2' },
 ]
 
@@ -229,7 +229,7 @@ export function SuperAdminPage({ navigate, profile }) {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
           {[
             { label: 'Bedrijven', value: totalCompanies, accent: '#1DDB62' },
-            { label: 'Actief',    value: activeCount,    accent: '#16a34a' },
+            { label: 'Actief',    value: activeCount,    accent: 'var(--pd)' },
             { label: 'Trial',     value: trialCount,     accent: '#d97706' },
             { label: 'MRR',       value: `€${mrr}`,      accent: '#6366f1' },
           ].map(card => (
@@ -244,7 +244,7 @@ export function SuperAdminPage({ navigate, profile }) {
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ fontWeight: 700, fontSize: 14 }}>Bedrijven</div>
-            <button className="btn btn-ghost btn-s" onClick={() => load()} disabled={loading}>{loading ? 'Laden…' : 'Vernieuwen'}</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => load()} disabled={loading}>{loading ? 'Laden…' : 'Vernieuwen'}</button>
           </div>
           {error && <div style={{ padding: '16px 20px', color: '#dc2626', fontSize: 13 }}>Fout: {error}</div>}
           {!error && (
@@ -381,14 +381,14 @@ function CompanyDrawer({ company, notes, onNotesChange, onSaveNotes, onPlanSelec
                 <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>{company.email || '—'}</div>
               </div>
             </div>
-            <button className="btn btn-ghost btn-s" onClick={onClose} style={{ flexShrink: 0 }}>✕</button>
+            <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ flexShrink: 0 }}>✕</button>
           </div>
 
           {/* Actie knoppen */}
           <div style={{ padding: '0 24px 14px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {isBlocked ? (
               <button className="btn btn-s" onClick={handleUnblock} disabled={saving}
-                style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', fontWeight: 600 }}>
+                style={{ background: '#f0fdf4', color: 'var(--pd)', border: '1px solid #bbf7d0', fontWeight: 600 }}>
                 Deblokkeren
               </button>
             ) : (
@@ -397,11 +397,11 @@ function CompanyDrawer({ company, notes, onNotesChange, onSaveNotes, onPlanSelec
                 Blokkeer account
               </button>
             )}
-            <button className="btn btn-s btn-ghost" onClick={() => setDrawerPlan(v => !v)} disabled={saving}>
+            <button className="btn btn-sm btn-ghost" onClick={() => setDrawerPlan(v => !v)} disabled={saving}>
               Wijzig plan
             </button>
             {company.email && (
-              <button className="btn btn-s btn-ghost" onClick={() => window.open('mailto:' + company.email)}>
+              <button className="btn btn-sm btn-ghost" onClick={() => window.open('mailto:' + company.email)}>
                 Stuur mail
               </button>
             )}
@@ -426,7 +426,7 @@ function CompanyDrawer({ company, notes, onNotesChange, onSaveNotes, onPlanSelec
                         background: isCurrent ? '#f0fdf4' : '#fff', cursor: isCurrent ? 'default' : 'pointer',
                         textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                       }}>
-                      <span style={{ fontWeight: 600, fontSize: 13, color: isCurrent ? '#15a34a' : '#111' }}>{p.label}</span>
+                      <span style={{ fontWeight: 600, fontSize: 13, color: isCurrent ? 'var(--pd)' : '#111' }}>{p.label}</span>
                       <span style={{ fontSize: 12, color: '#6b7280' }}>€{p.price}/m</span>
                     </button>
                   )
@@ -536,7 +536,7 @@ function CompanyDrawer({ company, notes, onNotesChange, onSaveNotes, onPlanSelec
               placeholder="Interne notitie over dit account…"
               style={{ width: '100%', minHeight: 100, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }}
             />
-            <button className="btn btn-p btn-s" onClick={onSaveNotes} disabled={saving || !company.subscription?.id} style={{ marginTop: 8 }}>
+            <button className="btn btn-p btn-sm" onClick={onSaveNotes} disabled={saving || !company.subscription?.id} style={{ marginTop: 8 }}>
               {saving ? 'Opslaan…' : 'Notitie opslaan'}
             </button>
             {!company.subscription?.id && (
