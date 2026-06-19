@@ -20,6 +20,16 @@ import { LayoutPickerModal } from './LayoutPickerModal.jsx';
 
 const IS_DEV = import.meta.env.DEV;
 
+// Timing-debug, zelfde vlag als in App.jsx (localStorage 'bb_debug_auth').
+const authLog = (...args) => {
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('bb_debug_auth')) {
+      // eslint-disable-next-line no-console
+      console.log(`[bb:auth +${Math.round(performance.now())}ms] DashboardHome`, ...args);
+    }
+  } catch { /* ignore */ }
+};
+
 let localIdCounter = 0;
 const nextLocalId = () => `local-${++localIdCounter}`;
 
@@ -303,7 +313,7 @@ function EmployeeDashboard({ greeting, subline, activities, werkbonnen, calendar
 }
 
 export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, openCalendarEvent }) {
-  const { profile, user, company, loading: profileLoading, requestNewLead, requestNewActivity, refreshKey } = useProfile();
+  const { profile, user, company, loading: profileLoading, permissionsLoaded, requestNewLead, requestNewActivity, refreshKey } = useProfile();
   const { can, isAdmin } = usePermissions();
   const toast = useToast();
 
@@ -518,8 +528,15 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
   const todayStr = new Date().toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const subline = company?.name ? `${todayStr} · ${company.name}` : todayStr;
 
+  // Wacht tot de permissies bekend zijn. permissionsLoaded blijft `true` over
+  // achtergrond-refreshes heen, terwijl profileLoading telkens toggelt — daarom
+  // hier NIET op profileLoading gaten (dat veroorzaakte de flash van het
+  // volledige dashboard bij elke token-refresh).
+  authLog('render-beslissing', { permissionsLoaded, isAdmin, financieel: can('financieel'), profileLoading });
+  if (!permissionsLoaded) return null;
+
   // Medewerker zonder financieel recht → vereenvoudigd dashboard
-  if (!isAdmin && !can('financieel') && !profileLoading) {
+  if (!isAdmin && !can('financieel')) {
     return (
       <EmployeeDashboard
         greeting={greeting}

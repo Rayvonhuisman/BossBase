@@ -47,6 +47,18 @@ import { ActivityEditModal, NewActivityModal, NewLeadModal, ProfileModal } from 
 import { supabase } from './lib/supabase.js';
 import { listNotifications, markNotificationRead, markAllNotificationsRead } from './services/notificatieService.js';
 
+// Timing-debug voor de auth/permissie-laadvolgorde. Standaard uit; aanzetten
+// met `localStorage.setItem('bb_debug_auth','1')` + hard refresh om de volgorde
+// in de console te zien. Schrijft niets als de vlag uit staat.
+const authLog = (...args) => {
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('bb_debug_auth')) {
+      // eslint-disable-next-line no-console
+      console.log(`[bb:auth +${Math.round(performance.now())}ms]`, ...args);
+    }
+  } catch { /* ignore */ }
+};
+
 // ── NAV CONFIG ───────────────────────────────────────────────
 // permission: als gezet, verberg item als gebruiker dat recht niet heeft
 const NAV = [
@@ -873,10 +885,12 @@ function AppInner() {
   }, []);
 
   const refreshProfile = useCallback(async () => {
+    authLog('refreshProfile START');
     setProfileLoading(true);
     setProfileError(null);
     try {
       const ctx = await getCurrentUserContext();
+      authLog('profile geladen', { role: ctx.profile?.role, id: ctx.profile?.id });
       setUser(ctx.user);
       setProfile(ctx.profile);
       setCompany(ctx.company);
@@ -887,6 +901,7 @@ function AppInner() {
       if (ctx.profile && ctx.profile.role !== 'admin') {
         try {
           const perms = await getUserPermissions(ctx.profile.id);
+          authLog('userPermissions geladen', perms);
           setUserPermissions(perms);
         } catch {
           setUserPermissions([]);
@@ -895,6 +910,7 @@ function AppInner() {
         setUserPermissions([]); // admins: can() geeft altijd true via hook
       }
       setPermissionsLoaded(true);
+      authLog('permissionsLoaded = true');
 
       if (ctx.profileError) {
         if (import.meta?.env?.DEV) console.warn('[bb:profile] error:', ctx.profileError);
@@ -1063,7 +1079,7 @@ function AppInner() {
   }, [showProfileFetchError, profileError, toast]);
 
   const profileApi = useMemo(() => ({
-    user, profile, company, userPermissions,
+    user, profile, company, userPermissions, permissionsLoaded,
     loading: profileLoading,
     error: profileError,
     refresh: refreshProfile,
@@ -1071,7 +1087,7 @@ function AppInner() {
     repairProfile,
     requestNewLead, requestNewActivity, bumpRefresh,
     refreshKey,
-  }), [user, profile, company, userPermissions, profileLoading, profileError, refreshProfile, repairProfile, requestNewLead, requestNewActivity, bumpRefresh, refreshKey]);
+  }), [user, profile, company, userPermissions, permissionsLoaded, profileLoading, profileError, refreshProfile, repairProfile, requestNewLead, requestNewActivity, bumpRefresh, refreshKey]);
 
   // Route-beveiliging: redirect naar dashboard als gebruiker geen toegang heeft
   useEffect(() => {
@@ -1237,8 +1253,11 @@ function AppInner() {
   };
 
   if (!permissionsLoaded) {
+    authLog('shell GEBLOKKEERD — wacht op permissionsLoaded');
     return <div style={{ background: 'var(--bg)', minHeight: '100dvh' }} />;
   }
+
+  authLog('shell RENDER', { role: profile?.role, perms: userPermissions });
 
   return (
     <ProfileContext.Provider value={profileApi}>
