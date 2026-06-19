@@ -32,10 +32,42 @@
   --shadow-orange-lg: 0 8px 28px rgba(29,219,98,0.35);
   --sw: 232px;
   --th: 58px;
+
+  /* ── Fase 2 design-tokens (fundering — nog niet overal toegepast) ── */
+  /* Typografie-schaal (rem) */
+  --fs-xs: 0.7rem;    /* 11px - labels, badges */
+  --fs-sm: 0.78rem;   /* 12.5px - subtekst, kleine knoppen */
+  --fs-base: 0.84rem; /* 13.5px - body, knoppen */
+  --fs-md: 0.9rem;    /* 14.5px - nadruk */
+  --fs-lg: 1rem;      /* 16px - subtitels */
+  --fs-xl: 1.2rem;    /* 19px - sectie titels */
+  --fs-2xl: 1.375rem; /* 22px - pagina titels */
+  --fs-3xl: 1.65rem;  /* 26px - grote cijfers (statkaarten) */
+
+  /* Font-weights */
+  --fw-normal: 500;
+  --fw-medium: 600;
+  --fw-bold: 700;
+  --fw-heavy: 800;
+
+  /* Spacing (8-punts schaal) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  /* Label-kleur (vervangt het niet-bestaande --tx, dat al naar --dmu is gefixt) */
+  --label: var(--dl);
 }
 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;font-family:'Inter',system-ui,sans-serif;font-size:14px;background:var(--bgs);color:var(--dk);-webkit-font-smoothing:antialiased}
+
+/* Gedeelde "kleine label"-stijl (fase 2 — vervangt 5x gedupliceerde inline-varianten) */
+.label{font-size:var(--fs-xs);font-weight:var(--fw-medium);letter-spacing:0.05em;text-transform:uppercase;color:var(--label)}
 button{font-family:inherit;cursor:pointer;border:none;background:none}
 input,select,textarea{font-family:inherit}
 a{color:inherit;text-decoration:none}
