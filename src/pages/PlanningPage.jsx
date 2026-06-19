@@ -860,6 +860,7 @@ export function PlanningPage() {
   const toast = useToast();
   const { profile } = useProfile();
 
+  const timelineScrollRef = useRef(null);
   const [weekStart,      setWeekStart]      = useState(() => getMonday());
   const [viewMode,       setViewMode]       = useState('totaal'); // totaal | medewerker | voertuig
   const [selectedMember, setSelectedMember] = useState('');
@@ -993,6 +994,11 @@ export function PlanningPage() {
     setQuickDrop({ werkbon: wb, date, hour });
   };
 
+  // Scroll de tijdlijn bij laden naar 07:00 (= bovenkant).
+  useEffect(() => {
+    if (!loading && timelineScrollRef.current) timelineScrollRef.current.scrollTop = 0;
+  }, [loading]);
+
   // ── ADMIN GUARD ─────────────────────────────────────────────────────────────
 
   if (!profile || profile.role !== 'admin') {
@@ -1104,8 +1110,8 @@ export function PlanningPage() {
                 })}
               </div>
 
-              {/* Tijdlijn body */}
-              <div style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 280px)' }}>
+              {/* Tijdlijn body — paddingTop zodat het 07:00-label niet wordt afgesneden */}
+              <div ref={timelineScrollRef} style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 280px)', paddingTop: 10 }}>
                 <div style={{
                   display: 'grid',
                   gridTemplateColumns: `${TIME_COL_W}px repeat(7, ${DAY_COL_W})`,

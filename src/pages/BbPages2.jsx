@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   I, CAL_EVENTS, HOURS_DATA, COSTS_DATA, TEAM_DATA, CUSTOMERS_DATA, QUOTES_DATA,
   fmt, custById, Av, StatusBadge, ModalX, Logo,
@@ -56,6 +56,141 @@ function getISOWeek(date) {
   d.setUTCDate(d.getUTCDate() + 4 - dayNum); // Thursday of this week
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
   return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+}
+
+// ── AGENDA TIJDLIJN (zelfde look als de Planning-pagina) ─────────────────────
+const AG_HOUR_START  = 7;
+const AG_HOUR_END    = 20;
+const AG_TOTAL_HOURS = AG_HOUR_END - AG_HOUR_START; // 13
+const AG_PX_PER_HOUR = 64;
+const AG_TIMELINE_H  = AG_TOTAL_HOURS * AG_PX_PER_HOUR;
+const AG_TIME_COL_W  = 52;
+const AG_DAYS_SHORT  = ['Ma','Di','Wo','Do','Vr','Za','Zo'];
+
+function agTimeToMins(t) { if (!t) return 0; const [h, m] = String(t).split(':').map(Number); return h * 60 + (m || 0); }
+function agMinsToTime(mins) { return `${pad2(Math.floor(mins / 60))}:${pad2(mins % 60)}`; }
+function agTopPx(t) { const mins = agTimeToMins(t || `${AG_HOUR_START}:00`); return Math.max(0, (mins - AG_HOUR_START * 60) * AG_PX_PER_HOUR / 60); }
+function agHeightPx(start, end) { if (!start || !end) return AG_PX_PER_HOUR; const dur = agTimeToMins(end) - agTimeToMins(start); return Math.max(22, dur * AG_PX_PER_HOUR / 60); }
+function agFmtTime(t) { return t ? String(t).slice(0, 5) : ''; }
+
+// Overlappende blokken in dezelfde dag naast elkaar leggen (lanes).
+function agAssignLanes(blocks) {
+  const sorted = [...blocks].sort((a, b) => agTimeToMins(a.time || '07:00') - agTimeToMins(b.time || '07:00'));
+  const laneEnds = [];
+  const withLane = sorted.map(b => {
+    const start = agTimeToMins(b.time || '07:00');
+    const end = agTimeToMins(b.end || agMinsToTime(agTimeToMins(b.time || '07:00') + 60));
+    let lane = 0;
+    while (lane < laneEnds.length && laneEnds[lane] > start) lane++;
+    laneEnds[lane] = end;
+    return { ...b, _lane: lane };
+  });
+  const total = laneEnds.length || 1;
+  return withLane.map(b => ({ ...b, _totalLanes: total }));
+}
+
+function AgendaEventBlock({ ev, onClick }) {
+  const top = agTopPx(ev.time);
+  const height = agHeightPx(ev.time, ev.end);
+  const lane = ev._lane || 0;
+  const total = ev._totalLanes || 1;
+  const bg = ev.color || 'rgba(29,219,98,.14)';
+  const txt = ev.textColor || '#15803d';
+  return (
+    <div
+      onClick={e => { e.stopPropagation(); onClick(ev); }}
+      title={`${ev.title}\n${agFmtTime(ev.time)}${ev.end ? `–${agFmtTime(ev.end)}` : ''}\n${ev.customerName || ''}`}
+      style={{
+        position: 'absolute', top, left: `${(lane / total) * 100}%`, width: `${100 / total}%`, height,
+        background: bg, borderLeft: `3px solid ${txt}`, border: `1px solid ${txt}33`,
+        borderRadius: 4, padding: '3px 5px 2px', overflow: 'hidden', cursor: 'pointer',
+        boxSizing: 'border-box', zIndex: 3, transition: 'filter .1s',
+      }}
+      onMouseEnter={e => (e.currentTarget.style.filter = 'brightness(.96)')}
+      onMouseLeave={e => (e.currentTarget.style.filter = '')}
+    >
+      <div style={{ fontWeight: 700, fontSize: 10, color: txt, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>{ev.title}</div>
+      {height > 30 && (
+        <div style={{ fontSize: 9, color: txt, opacity: .75, lineHeight: 1.2 }}>
+          {agFmtTime(ev.time)}{ev.end ? `–${agFmtTime(ev.end)}` : ''}
+        </div>
+      )}
+      {height > 50 && ev.customerName && (
+        <div style={{ fontSize: 9, color: txt, opacity: .6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>{ev.customerName}</div>
+      )}
+    </div>
+  );
+}
+
+function AgendaDayColumn({ dayEvents, isToday, onEventClick }) {
+  const hours = Array.from({ length: AG_TOTAL_HOURS }, (_, i) => AG_HOUR_START + i);
+  const withLanes = agAssignLanes(dayEvents);
+  return (
+    <div style={{ position: 'relative', height: AG_TIMELINE_H, borderLeft: '1px solid var(--border)', background: isToday ? 'rgba(29,219,98,.03)' : '#fff' }}>
+      {hours.map(h => (
+        <div key={h} style={{ position: 'absolute', top: (h - AG_HOUR_START) * AG_PX_PER_HOUR, left: 0, right: 0, borderTop: '1px solid var(--border)', zIndex: 0 }} />
+      ))}
+      {hours.map(h => (
+        <div key={`h-${h}`} style={{ position: 'absolute', top: (h - AG_HOUR_START) * AG_PX_PER_HOUR + AG_PX_PER_HOUR / 2, left: 0, right: 0, borderTop: '1px dashed #f0ede9', zIndex: 0 }} />
+      ))}
+      {withLanes.map(ev => <AgendaEventBlock key={ev.id} ev={ev} onClick={onEventClick} />)}
+    </div>
+  );
+}
+
+// Gedeelde tijdlijn voor de week- en dagweergave van de agenda.
+function AgendaTimeline({ dates, events, todayKey, onEventClick }) {
+  const scrollRef = useRef(null);
+  // Scroll bij laden naar 07:00 (= bovenkant van de tijdlijn).
+  useEffect(() => {
+    const c = scrollRef.current;
+    if (c) c.scrollTop = 0;
+  }, []);
+  const hours = Array.from({ length: AG_TOTAL_HOURS }, (_, i) => AG_HOUR_START + i);
+  const cols = `${AG_TIME_COL_W}px repeat(${dates.length}, minmax(110px, 1fr))`;
+  return (
+    <div className="card" style={{ padding: 0, overflow: 'hidden', minWidth: 0 }}>
+      {/* Dag-header */}
+      <div style={{ display: 'grid', gridTemplateColumns: cols, position: 'sticky', top: 0, zIndex: 10, background: '#fff', borderBottom: '2px solid var(--border)' }}>
+        <div style={{ borderRight: '1px solid var(--border)', padding: '8px 6px' }} />
+        {dates.map(dt => {
+          const dk = dateKey(dt);
+          const isToday = dk === todayKey;
+          return (
+            <div key={dk} style={{
+              padding: '8px 6px', textAlign: 'center',
+              background: isToday ? 'var(--pll)' : '#fafaf8',
+              borderRight: '1px solid var(--border)',
+              fontWeight: isToday ? 800 : 600, fontSize: 11,
+              color: isToday ? 'var(--pd)' : 'var(--dk)',
+            }}>
+              {AG_DAYS_SHORT[(dt.getDay() + 6) % 7]} {dt.getDate()}
+              {isToday && <div style={{ fontSize: 9, color: 'var(--pd)', fontWeight: 700, marginTop: 1 }}>VANDAAG</div>}
+            </div>
+          );
+        })}
+      </div>
+      {/* Tijdlijn body — paddingTop zodat het 07:00-label niet wordt afgesneden */}
+      <div ref={scrollRef} style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 300px)', paddingTop: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: cols }}>
+          {/* Tijdlabels */}
+          <div style={{ position: 'relative', height: AG_TIMELINE_H, borderRight: '1px solid var(--border)' }}>
+            {hours.map(h => (
+              <div key={h} style={{ position: 'absolute', top: (h - AG_HOUR_START) * AG_PX_PER_HOUR - 7, right: 8, fontSize: 9, fontWeight: 600, color: 'var(--dl)', letterSpacing: '.02em' }}>
+                {pad2(h)}:00
+              </div>
+            ))}
+          </div>
+          {/* Dag-kolommen */}
+          {dates.map(dt => {
+            const dk = dateKey(dt);
+            const dayEvents = events.filter(e => toDayKey(e.date) === dk && e.time);
+            return <AgendaDayColumn key={dk} dayEvents={dayEvents} isToday={dk === todayKey} onEventClick={onEventClick} />;
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── CALENDAR ─────────────────────────────────────────────────
@@ -162,7 +297,6 @@ export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityI
   };
 
   const DAYS = ['Ma','Di','Wo','Do','Vr','Za','Zo'];
-  const HOURS_LIST = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00'];
 
   // Derived from weekStart — the seven Mon→Sun dates of the visible week.
   const weekDates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -292,73 +426,18 @@ export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityI
 
       {!loading && !error && view === 'week' && (
         <div className="afu3" style={{ overflowX: 'auto' }}>
-          <div className="cal-week-grid" style={{ minWidth: 700 }}>
-            <div className="cal-week-hdr" style={{ borderRight: '1px solid var(--border)' }}></div>
-            {DAYS.map((d, i) => {
-              const dt = weekDates[i];
-              const isToday = dateKey(dt) === todayKey;
-              return (
-                <div key={d} className={`cal-week-hdr${isToday ? ' today-hdr' : ''}`}>
-                  <div>{d}</div>
-                  <div style={{ fontSize: '.9rem', fontWeight: isToday ? 800 : 600, color: isToday ? 'var(--p)' : 'var(--dk)' }}>{dt.getDate()}</div>
-                </div>
-              );
-            })}
-            {HOURS_LIST.map(hour => (
-              <React.Fragment key={hour}>
-                <div className="cal-time-slot">{hour}</div>
-                {weekDates.map(dt => {
-                  const dk = dateKey(dt);
-                  const slotEvts = events.filter(e =>
-                    toDayKey(e.date) === dk && e.time && e.time.startsWith(hour.split(':')[0]),
-                  );
-                  return (
-                    <div key={`s-${dk}-${hour}`} className="cal-slot">
-                      {slotEvts.map(e => (
-                        <div key={e.id} className="cal-block" style={{ background: e.color, color: e.textColor }} onClick={() => handleEventClick(e)}>
-                          {e.title}
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </React.Fragment>
-            ))}
-          </div>
+          <AgendaTimeline dates={weekDates} events={events} todayKey={todayKey} onEventClick={handleEventClick} />
         </div>
       )}
 
       {!loading && !error && view === 'day' && (() => {
-        const dayKey = todayKey;
         const today = new Date();
         const dayLabel = `${NL_DAYS_FULL[today.getDay()].replace(/^./, c => c.toUpperCase())} ${today.getDate()} ${NL_MONTHS[today.getMonth()]} ${today.getFullYear()}`;
-        const dayEvts = events.filter(e => toDayKey(e.date) === dayKey);
         return (
-        <div className="afu3">
-          <div style={{ fontSize: '.9rem', fontWeight: 700, marginBottom: 12, color: 'var(--dk)' }}>{dayLabel}</div>
-          <div className="card card-p">
-            {dayEvts.length === 0
-              ? <div className="empty"><div className="empty-emoji">📅</div><div className="empty-title">Geen items vandaag</div></div>
-              : dayEvts.map(e => {
-                  return (
-                    <div key={e.id} style={{ display: 'flex', gap: 14, padding: '12px 0', borderBottom: '1px solid #f3f4f6', cursor: 'pointer' }} onClick={() => handleEventClick(e)}>
-                      <div style={{ width: 60, flexShrink: 0, textAlign: 'right', fontSize: '.8rem', color: 'var(--dl)', paddingTop: 3 }}>{e.time}</div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                          <div style={{ width: 4, height: 32, borderRadius: 2, background: e.textColor, flexShrink: 0 }} />
-                          <div>
-                            <div style={{ fontWeight: 700, fontSize: '.9rem' }}>{e.title}</div>
-                            <div style={{ fontSize: '.76rem', color: 'var(--dmu)', marginTop: 1 }}>{typeLabel(e.type)}</div>
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{ fontSize: '.76rem', color: 'var(--dl)', flexShrink: 0, paddingTop: 3 }}>{e.time}–{e.end}</div>
-                    </div>
-                  );
-                })
-            }
+          <div className="afu3">
+            <div style={{ fontSize: '.9rem', fontWeight: 700, marginBottom: 12, color: 'var(--dk)' }}>{dayLabel}</div>
+            <AgendaTimeline dates={[today]} events={events} todayKey={todayKey} onEventClick={handleEventClick} />
           </div>
-        </div>
         );
       })()}
 
