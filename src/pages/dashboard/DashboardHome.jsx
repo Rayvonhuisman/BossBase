@@ -4,13 +4,8 @@ import { I } from '../../bb-shared.jsx';
 import { useProfile, displayName } from '../../lib/profileContext.jsx';
 import { usePermissions } from '../../hooks/usePermissions.js';
 import { useToast } from '../../lib/toast.jsx';
-import { listDeals } from '../../services/dealService.js';
-import { listActivities } from '../../services/activityService.js';
-import { listCustomers } from '../../services/customerService.js';
-import { getOffertes } from '../../services/offerteService.js';
-import { getWerkbonnen } from '../../services/werkbonService.js';
+import { useData } from '../../lib/dataContext.jsx';
 import { getUrenregistratie } from '../../services/urenService.js';
-import { listCalendarEvents } from '../../services/calendarService.js';
 import { loadUserWidgets, saveUserWidgets } from '../../services/dashboardWidgetService.js';
 import { getDefaultWidgets, DEFAULT_LAYOUTS, DEFAULT_LAYOUT_KEY, normalizeWidgetSize } from '../../data/widgetRegistry.js';
 import { DashboardCustomizeBar } from './DashboardCustomizeBar.jsx';
@@ -316,6 +311,8 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
   const { profile, user, company, loading: profileLoading, permissionsLoaded, requestNewLead, requestNewActivity, refreshKey } = useProfile();
   const { can, isAdmin } = usePermissions();
   const toast = useToast();
+  // Gedeelde data (één fetch voor de hele shell) — geen eigen queries meer.
+  const { customers, deals, activities, offertes, werkbonnen, calendarEvents, loading: sharedLoading } = useData();
 
   // Demo mode: IS_DEV-only toggle that substitutes real data with static demo data
   const [demoMode, setDemoMode] = useState(IS_DEV);
@@ -336,15 +333,11 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
   const preEditRef = useRef([]);
   const preEditLayoutRef = useRef(null);
 
-  // Dashboard data
-  const [deals, setDeals] = useState([]);
-  const [activities, setActivities] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [offertes, setOffertes] = useState([]);
-  const [werkbonnen, setWerkbonnen] = useState([]);
+  // Dashboard data — alleen `uren` is dashboard-specifiek (6-weken venster);
+  // de rest komt uit de gedeelde DataContext.
   const [uren, setUren] = useState([]);
-  const [calendarEvents, setCalendarEvents] = useState([]);
-  const [dataLoading, setDataLoading] = useState(true);
+  const [urenLoading, setUrenLoading] = useState(true);
+  const dataLoading = sharedLoading || urenLoading;
 
   // Load widget layout from Supabase on mount
   useEffect(() => {
@@ -365,26 +358,18 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
       .finally(() => setWidgetsLoaded(true));
   }, []);
 
-  // Load dashboard data
+  // Load uren (dashboard-specifiek: laatste ~6 weken voor beide uren-widgets).
+  // customers/deals/activities/offertes/werkbonnen/calendarEvents komen uit DataContext.
   useEffect(() => {
     let alive = true;
-    setDataLoading(true);
-    // Limit urenregistratie to the last ~6 weeks (covers both hour widgets)
+    setUrenLoading(true);
     const wkMonday = new Date(); wkMonday.setHours(0, 0, 0, 0);
     wkMonday.setDate(wkMonday.getDate() - ((wkMonday.getDay() + 6) % 7) - 5 * 7);
     const urenVanaf = wkMonday.toISOString().slice(0, 10);
-    Promise.all([
-      listDeals(),
-      listActivities(),
-      listCustomers(),
-      getOffertes().catch(() => []),
-      getWerkbonnen().catch(() => []),
-      getUrenregistratie({ vanDatum: urenVanaf }).catch(() => []),
-      listCalendarEvents().catch(() => []),
-    ]).then(([d, a, c, o, w, u, ce]) => {
-      if (!alive) return;
-      setDeals(d); setActivities(a); setCustomers(c); setOffertes(o); setWerkbonnen(w); setUren(u); setCalendarEvents(ce);
-    }).catch(() => {}).finally(() => alive && setDataLoading(false));
+    getUrenregistratie({ vanDatum: urenVanaf })
+      .then(u => { if (alive) setUren(u); })
+      .catch(() => {})
+      .finally(() => { if (alive) setUrenLoading(false); });
     return () => { alive = false; };
   }, [refreshKey]);
 

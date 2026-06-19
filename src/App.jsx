@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { I, Logo, initials } from './bb-shared.jsx';
 import { LoginPage, RegisterFlow } from './pages/BbAuth.jsx';
@@ -12,16 +12,19 @@ import { InvoiceDetailDrawer } from './pages/dashboard/InvoiceDetailDrawer.jsx';
 import { CalendarEventDetailDrawer } from './pages/dashboard/CalendarEventDetailDrawer.jsx';
 import { CustomerPage, CustomersPage, ActivitiesPage } from './pages/BbPages1.jsx';
 import { ActivitiesPageV2 } from './pages/ActivitiesPageV2.jsx';
-import { CalendarPage, CostsPage, RevenuePage } from './pages/BbPages2.jsx';
+// Zware pagina's (recharts, exceljs, jszip, jspdf) lazy laden → uit de eerste bundle.
+const CalendarPage = lazy(() => import('./pages/BbPages2.jsx').then(m => ({ default: m.CalendarPage })));
+const CostsPage    = lazy(() => import('./pages/BbPages2.jsx').then(m => ({ default: m.CostsPage })));
+const RevenuePage  = lazy(() => import('./pages/BbPages2.jsx').then(m => ({ default: m.RevenuePage })));
 import { InstellingenPage } from './pages/InstellingenPage.jsx';
 import { TeamPage } from './pages/TeamPage.jsx';
-import { OffertesPage } from './pages/OffertesPage.jsx';
-import { FacturenPage } from './pages/FacturenPage.jsx';
+const OffertesPage = lazy(() => import('./pages/OffertesPage.jsx').then(m => ({ default: m.OffertesPage })));
+const FacturenPage = lazy(() => import('./pages/FacturenPage.jsx').then(m => ({ default: m.FacturenPage })));
 import { UrenPageV2 as UrenPage } from './pages/UrenPageV2.jsx';
 import { WerkbonPageV2 as WerkbonPage } from './pages/WerkbonPageV2.jsx';
 import { PlanningPage } from './pages/PlanningPage.jsx';
 import { ProjectsPage } from './pages/ProjectsPage.jsx';
-import { DatabasePage } from './pages/DatabasePage.jsx';
+const DatabasePage = lazy(() => import('./pages/DatabasePage.jsx').then(m => ({ default: m.DatabasePage })));
 import MarketingWebsite from './pages/MarketingWebsite.jsx';
 import FeaturesPage from './pages/marketing/FeaturesPage.jsx';
 import PricingPage from './pages/marketing/PricingPage.jsx';
@@ -38,11 +41,13 @@ import { usePermissions } from './hooks/usePermissions.js';
 import { clearCompanyId, setCompanyId } from './lib/currentCompany.js';
 import { ToastProvider, useToast } from './lib/toast.jsx';
 import { ProfileContext, displayName, profileInitials } from './lib/profileContext.jsx';
+import { DataContext, useData } from './lib/dataContext.jsx';
 import { listCustomers } from './services/customerService.js';
 import { listDeals, listPipelineStages } from './services/dealService.js';
 import { listActivities } from './services/activityService.js';
 import { getOffertes } from './services/offerteService.js';
 import { getWerkbonnen } from './services/werkbonService.js';
+import { listCalendarEvents } from './services/calendarService.js';
 import { ActivityEditModal, NewActivityModal, NewLeadModal, ProfileModal } from './components/SharedModals.jsx';
 import { supabase } from './lib/supabase.js';
 import { listNotifications, markNotificationRead, markAllNotificationsRead } from './services/notificatieService.js';
@@ -227,14 +232,10 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loadin
 
 // ── TOPBAR ───────────────────────────────────────────────────
 function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, onLogout, openCustomer, navigatePage, refreshKey }) {
+  const { customers: dCustomers, deals: dDeals, activities: dActivities, offertes: dOffertes, werkbonnen: dWerkbonnen, refresh: refreshData } = useData();
   const [openMenu, setOpenMenu] = useState(null);
   const [search, setSearch] = useState('');
-  const [searchData, setSearchData] = useState({ customers: [], deals: [], activities: [] });
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [searchError, setSearchError] = useState('');
-  const [notifData, setNotifData] = useState({ overdue: [], today: [], leads: [], offertes: [], werkbonnen: [] });
   const [notifActivity, setNotifActivity] = useState(null);
-  const [notifCustomers, setNotifCustomers] = useState([]);
   const [dbNotifs, setDbNotifs] = useState([]);
   const [markingAll, setMarkingAll] = useState(false);
   const wrapRef = useRef(null);
@@ -249,50 +250,36 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
     return () => document.removeEventListener('mousedown', onClick);
   }, [openMenu]);
 
-  const loadSearchData = useCallback(async () => {
-    setSearchLoading(true);
-    setSearchError('');
-    try {
-      const [customers, deals, activities] = await Promise.all([
-        listCustomers(), listDeals(), listActivities(),
-      ]);
-      setSearchData({ customers, deals, activities });
-    } catch (err) {
-      setSearchError(err.message || 'Zoekgegevens laden mislukt');
-    } finally {
-      setSearchLoading(false);
-    }
-  }, []);
+  // Zoekdata komt uit de gedeelde DataContext — geen eigen queries meer.
+  const searchData = useMemo(
+    () => ({ customers: dCustomers, deals: dDeals, activities: dActivities }),
+    [dCustomers, dDeals, dActivities]
+  );
+  const searchLoading = false;
+  const searchError = '';
+  const loadSearchData = () => {}; // no-op: data wordt al gedeeld geladen
+  const notifCustomers = dCustomers;
 
-  const loadNotifications = useCallback(async () => {
-    try {
-      const [activities, deals, offertes, werkbonnen, customers] = await Promise.all([
-        listActivities(), listDeals(), getOffertes(), getWerkbonnen(), listCustomers(),
-      ]);
-      const today = new Date().toISOString().slice(0, 10);
-      const overdue = activities.filter(a => a.status !== 'completed' && a.status !== 'done' && a.dueAt && a.dueAt.slice(0, 10) < today).slice(0, 5);
-      const todayItems = activities.filter(a => a.dueAt?.slice(0, 10) === today && a.status !== 'completed' && a.status !== 'done').slice(0, 5);
-      const leads = deals.filter(d => d.stage === 'new_lead').slice(0, 5);
-      const openOffertes = offertes.filter(o => o.status === 'concept' || o.status === 'verzonden').slice(0, 3);
-      const todayWerkbonnen = werkbonnen.filter(w => w.geplandOp === today && w.status !== 'afgerond').slice(0, 3);
-      setNotifData({ overdue, today: todayItems, leads, offertes: openOffertes, werkbonnen: todayWerkbonnen });
-      setNotifCustomers(customers);
-    } catch {
-      setNotifData({ overdue: [], today: [], leads: [], offertes: [], werkbonnen: [] });
-    }
-  }, []);
+  // Ephemere notificaties afgeleid uit gedeelde data — geen extra queries.
+  const notifData = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return {
+      overdue: dActivities.filter(a => a.status !== 'completed' && a.status !== 'done' && a.dueAt && a.dueAt.slice(0, 10) < today).slice(0, 5),
+      today: dActivities.filter(a => a.dueAt?.slice(0, 10) === today && a.status !== 'completed' && a.status !== 'done').slice(0, 5),
+      leads: dDeals.filter(d => d.stage === 'new_lead').slice(0, 5),
+      offertes: dOffertes.filter(o => o.status === 'concept' || o.status === 'verzonden').slice(0, 3),
+      werkbonnen: dWerkbonnen.filter(w => w.geplandOp === today && w.status !== 'afgerond').slice(0, 3),
+    };
+  }, [dActivities, dDeals, dOffertes, dWerkbonnen]);
 
-  // Load DB notifications
+  // DB-notificaties (mentions/toewijzingen): pas laden wanneer de bel opent.
   const loadDbNotifs = useCallback(async () => {
     try { setDbNotifs(await listNotifications()); } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
-    if (openMenu === 'notif') { loadNotifications(); loadDbNotifs(); }
-  }, [openMenu, loadNotifications, loadDbNotifs]);
-
-  // Initial DB notifs load (for unread dot)
-  useEffect(() => { loadDbNotifs(); }, [loadDbNotifs, refreshKey]);
+    if (openMenu === 'notif') loadDbNotifs();
+  }, [openMenu, loadDbNotifs]);
 
   // Realtime subscription on notifications table
   useEffect(() => {
@@ -322,19 +309,8 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
     return () => { supabase.removeChannel(channel); };
   }, [profile?.id]);
 
-  // Keep search data fresh after global mutations
-  useEffect(() => {
-    if (searchData.customers.length || searchData.deals.length || searchData.activities.length) {
-      loadSearchData();
-    }
-  }, [refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Initial fetch of notifications baseline so the dot reflects reality
-  useEffect(() => { loadNotifications(); }, [loadNotifications, refreshKey]);
-
   const onSearchChange = v => {
     setSearch(v);
-    if (!searchData.customers.length && !searchLoading) loadSearchData();
   };
 
   const filteredSearch = useMemo(() => {
@@ -604,8 +580,8 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
         activity={notifActivity}
         customers={notifCustomers}
         onClose={() => setNotifActivity(null)}
-        onSaved={updated => { setNotifActivity(null); loadNotifications(); }}
-        onDeleted={() => { setNotifActivity(null); loadNotifications(); }}
+        onSaved={updated => { setNotifActivity(null); refreshData(); }}
+        onDeleted={() => { setNotifActivity(null); refreshData(); }}
       />
     )}
     </>
@@ -828,6 +804,10 @@ function AppInner() {
   const [globalDeals, setGlobalDeals] = useState([]);
   const [globalStages, setGlobalStages] = useState([]);
   const [globalActivities, setGlobalActivities] = useState([]);
+  const [globalOffertes, setGlobalOffertes] = useState([]);
+  const [globalWerkbonnen, setGlobalWerkbonnen] = useState([]);
+  const [globalCalendarEvents, setGlobalCalendarEvents] = useState([]);
+  const [globalDataLoading, setGlobalDataLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const PAGE_META = useMemo(() => {
@@ -1050,17 +1030,44 @@ function AppInner() {
   useEffect(() => {
     if (!session) return;
     let alive = true;
-    Promise.all([listCustomers(), listDeals(), listPipelineStages(), listActivities()])
-      .then(([cs, ds, st, acts]) => {
+    setGlobalDataLoading(true);
+    // Eén gedeelde fetch voor de hele dashboard-shell (dashboard, sidebar-badges,
+    // notificaties en zoeken delen deze data via DataContext).
+    Promise.all([
+      listCustomers().catch(() => []),
+      listDeals().catch(() => []),
+      listPipelineStages().catch(() => []),
+      listActivities().catch(() => []),
+      getOffertes().catch(() => []),
+      getWerkbonnen().catch(() => []),
+      listCalendarEvents().catch(() => []),
+    ])
+      .then(([cs, ds, st, acts, offs, wbs, ces]) => {
         if (!alive) return;
         setGlobalCustomers(cs);
         setGlobalDeals(ds);
         setGlobalStages(st);
         setGlobalActivities(acts);
+        setGlobalOffertes(offs);
+        setGlobalWerkbonnen(wbs);
+        setGlobalCalendarEvents(ces);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { if (alive) setGlobalDataLoading(false); });
     return () => { alive = false; };
   }, [session, refreshKey]);
+
+  const dataApi = useMemo(() => ({
+    customers: globalCustomers,
+    deals: globalDeals,
+    stages: globalStages,
+    activities: globalActivities,
+    offertes: globalOffertes,
+    werkbonnen: globalWerkbonnen,
+    calendarEvents: globalCalendarEvents,
+    loading: globalDataLoading,
+    refresh: bumpRefresh,
+  }), [globalCustomers, globalDeals, globalStages, globalActivities, globalOffertes, globalWerkbonnen, globalCalendarEvents, globalDataLoading, bumpRefresh]);
 
   // Compute these here (BEFORE any early returns) so the useEffect below
   // is always called in the same order — required by React's hooks rules.
@@ -1261,6 +1268,7 @@ function AppInner() {
 
   return (
     <ProfileContext.Provider value={profileApi}>
+      <DataContext.Provider value={dataApi}>
       <div className="shell">
         <Sidebar
           page={page}
@@ -1341,7 +1349,11 @@ function AppInner() {
                   </div>
                 </div>
               </div>
-            ) : renderPage()}
+            ) : (
+              <Suspense fallback={<div style={{ padding: 24, color: 'var(--dl)' }}>Laden…</div>}>
+                {renderPage()}
+              </Suspense>
+            )}
           </div>
         </div>
 
@@ -1424,6 +1436,7 @@ function AppInner() {
           />
         )}
       </div>
+      </DataContext.Provider>
     </ProfileContext.Provider>
   );
 }

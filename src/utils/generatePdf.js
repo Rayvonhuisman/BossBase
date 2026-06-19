@@ -1,4 +1,13 @@
-import jsPDF from 'jspdf';
+// jsPDF wordt dynamisch geladen zodat de ~350KB lib niet in de hoofdbundle
+// zit — pas opgehaald wanneer er daadwerkelijk een PDF gemaakt wordt.
+let _jsPDF = null;
+async function loadJsPDF() {
+  if (!_jsPDF) {
+    const mod = await import('jspdf');
+    _jsPDF = mod.jsPDF || mod.default;
+  }
+  return _jsPDF;
+}
 
 const euro = n => `€ ${Number(n || 0).toFixed(2).replace('.', ',')}`;
 
@@ -560,51 +569,59 @@ async function buildPdf(doc, type, document, regels, customer, company) {
 // ── EXPORTS ──────────────────────────────────────────────────────────────────
 
 export async function generateFactuurPdf(factuur, regels, customer, company) {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const JsPDF = await loadJsPDF();
+  const doc = new JsPDF({ unit: 'mm', format: 'a4' });
   await buildPdf(doc, 'factuur', factuur, regels, customer, company);
   doc.save(`${factuur.nummer || 'factuur'}.pdf`);
 }
 
 export async function generateOffertePdf(offerte, items, customer, company) {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const JsPDF = await loadJsPDF();
+  const doc = new JsPDF({ unit: 'mm', format: 'a4' });
   await buildPdf(doc, 'offerte', offerte, items, customer, company);
   doc.save(`${offerte.nummer || 'offerte'}.pdf`);
 }
 
 export async function previewOffertePdf(offerte, items, customer, company) {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const JsPDF = await loadJsPDF();
+  const doc = new JsPDF({ unit: 'mm', format: 'a4' });
   await buildPdf(doc, 'offerte', offerte, items, customer, company);
   const url = doc.output('bloburl');
   window.open(url, '_blank');
 }
 
 export async function previewFactuurPdf(factuur, regels, customer, company) {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const JsPDF = await loadJsPDF();
+  const doc = new JsPDF({ unit: 'mm', format: 'a4' });
   await buildPdf(doc, 'factuur', factuur, regels, customer, company);
   const url = doc.output('bloburl');
   window.open(url, '_blank');
 }
 
 export async function getOffertePdfUrl(offerte, items, customer, company) {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const JsPDF = await loadJsPDF();
+  const doc = new JsPDF({ unit: 'mm', format: 'a4' });
   await buildPdf(doc, 'offerte', offerte, items, customer, company);
   return doc.output('bloburl');
 }
 
 export async function getFactuurPdfUrl(factuur, regels, customer, company) {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const JsPDF = await loadJsPDF();
+  const doc = new JsPDF({ unit: 'mm', format: 'a4' });
   await buildPdf(doc, 'factuur', factuur, regels, customer, company);
   return doc.output('bloburl');
 }
 
 export async function getOffertePdfBase64(offerte, items, customer, company) {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const JsPDF = await loadJsPDF();
+  const doc = new JsPDF({ unit: 'mm', format: 'a4' });
   await buildPdf(doc, 'offerte', offerte, items, customer, company);
   return doc.output('datauristring').split(',')[1];
 }
 
 export async function getFactuurPdfBase64(factuur, regels, customer, company) {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const JsPDF = await loadJsPDF();
+  const doc = new JsPDF({ unit: 'mm', format: 'a4' });
   await buildPdf(doc, 'factuur', factuur, regels, customer, company);
   return doc.output('datauristring').split(',')[1];
 }
