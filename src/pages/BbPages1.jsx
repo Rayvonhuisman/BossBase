@@ -592,7 +592,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Activiteiten</div>
-              <button onClick={() => setShowActivityModal(true)} style={{ width: 28, height: 28, borderRadius: '50%', background: '#1DDB62', border: 'none', color: '#fff', fontSize: 18, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0 }}>{I.plus}</button>
+              <button onClick={() => setShowActivityModal(true)} className="btn-plus">{I.plus}</button>
             </div>
             {cActs.length === 0 && <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Geen activiteiten</div>}
             {cActs.map(a => (
@@ -613,7 +613,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Offertes</div>
-              <button onClick={() => setShowNewOfferte(true)} style={{ width: 28, height: 28, borderRadius: '50%', background: '#1DDB62', border: 'none', color: '#fff', fontSize: 18, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0 }}>{I.plus}</button>
+              <button onClick={() => setShowNewOfferte(true)} className="btn-plus">{I.plus}</button>
             </div>
             {cOffertes.length === 0 && <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Geen offertes</div>}
             {cOffertes.map(o => (
@@ -634,7 +634,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Facturen</div>
-              <button onClick={() => setShowNewFactuur(true)} style={{ width: 28, height: 28, borderRadius: '50%', background: '#1DDB62', border: 'none', color: '#fff', fontSize: 18, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0 }}>{I.plus}</button>
+              <button onClick={() => setShowNewFactuur(true)} className="btn-plus">{I.plus}</button>
             </div>
             {cFacturen.length === 0 && <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Geen facturen</div>}
             {cFacturen.map(f => (
@@ -655,7 +655,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Projecten</div>
-              <button onClick={() => setShowNewProject(true)} style={{ width: 28, height: 28, borderRadius: '50%', background: '#1DDB62', border: 'none', color: '#fff', fontSize: 18, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0 }}>{I.plus}</button>
+              <button onClick={() => setShowNewProject(true)} className="btn-plus">{I.plus}</button>
             </div>
             {cProjecten.length === 0 && <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Geen projecten</div>}
             {cProjecten.map(p => (

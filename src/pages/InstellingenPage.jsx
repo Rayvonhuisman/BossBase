@@ -918,7 +918,8 @@ export function InstellingenPage() {
                   <button
                     onClick={() => setShowNewTemplate(true)}
                     title="Nieuw template aanmaken"
-                    style={{ width: 28, height: 28, borderRadius: '50%', background: '#1DDB62', border: 'none', color: '#fff', fontSize: 18, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, padding: 0, marginLeft: 'auto' }}
+                    className="btn-plus"
+                    style={{ marginLeft: 'auto' }}
                   >
                     {I.plus}
                   </button>
