@@ -1377,7 +1377,8 @@ export function InstellingenPage() {
       {!loading && tab === 'integraties' && (
         <div className="afu3" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-          {/* Google Agenda */}
+          {/* Google Agenda — tijdelijk verborgen voor klanten (OAuth nog niet geconfigureerd). Zet {false} op {true} om terug te zetten. */}
+          {false && (
           <div className="card card-p" style={{ border: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bgs)', borderRadius: 'var(--r8)', border: '1px solid var(--border)', flexShrink: 0 }}>
@@ -1417,6 +1418,7 @@ export function InstellingenPage() {
               </div>
             </div>
           </div>
+          )}
 
           {/* Moneybird */}
           <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
@@ -1531,7 +1533,8 @@ export function InstellingenPage() {
           </div>
 
 
-          {/* AFAS */}
+          {/* AFAS — tijdelijk verborgen voor klanten, nog niet actief. Zet {false} op {true} om terug te zetten. */}
+          {false && (
           <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
             <div className="integ-card-hd" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
               <img
@@ -1654,6 +1657,7 @@ export function InstellingenPage() {
               )}
             </div>
           </div>
+          )}
 
         </div>
       )}

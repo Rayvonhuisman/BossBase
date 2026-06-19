@@ -242,6 +242,8 @@ export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityI
         </div>
       </div>
 
+      {/* Google Agenda-koppeling tijdelijk verborgen voor klanten. Zet {false} op {true} om terug te zetten. */}
+      {false && (
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: 'white', border: '1px solid var(--border)', borderRadius: 'var(--r10)', marginBottom: 14, width: 'fit-content' }} className="afu2">
         {I.google}
         <span style={{ fontSize: '.8rem', color: 'var(--dmu)', fontWeight: 500 }}>Google Agenda</span>
@@ -259,6 +261,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityI
           </>
         )}
       </div>
+      )}
       {loading && <div className="card card-p">Agenda laden...</div>}
       {error && <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>}
 
