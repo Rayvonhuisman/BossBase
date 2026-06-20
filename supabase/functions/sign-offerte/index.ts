@@ -83,8 +83,19 @@ serve(async (req) => {
       })
     }
 
-    const { data: publicUrl } = admin.storage.from('signatures').getPublicUrl(sigFilename)
-    const signatureUrl = publicUrl.publicUrl
+    // De signatures-bucket is privé (PII-bescherming). We slaan een signed URL
+    // op met lange geldigheid (10 jaar) i.p.v. een publieke URL, zodat de
+    // handtekening niet zonder token via de publieke endpoint te benaderen is.
+    let signatureUrl: string
+    const { data: signed, error: signErr } = await admin.storage
+      .from('signatures')
+      .createSignedUrl(sigFilename, 60 * 60 * 24 * 365 * 10) // ~10 jaar
+    if (signErr || !signed?.signedUrl) {
+      return new Response(JSON.stringify({ success: false, error: `Signed URL maken mislukt: ${signErr?.message || 'onbekend'}` }), {
+        status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+      })
+    }
+    signatureUrl = signed.signedUrl
 
     // ── STAP 3: Offerte updaten ───────────────────────────────────────────────
     const now = new Date().toISOString()
