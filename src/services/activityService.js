@@ -83,7 +83,6 @@ export const toActivity = row => {
     title: row.title || "Activiteit",
     custId: row.customer_id,
     dealId: row.deal_id,
-    // TODO: remove inappropriate demo customer data from Supabase
     customerName: sanitizeName(row.customers?.name || ""),
     dueAt: row.due_at || "",
     date: splitDueAt(row.due_at).date,

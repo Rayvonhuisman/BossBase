@@ -76,13 +76,16 @@ export function calculateOfferteTotals({ arbeidsuren = 0, uurtarief = 55, materi
 /**
  * Genereert een volgend offertenummer op basis van het huidige aantal offertes
  * voor de company. Formaat: BB-001, BB-002, …
- * Valt terug op BB-XXX als de query mislukt.
+ * Gooit een fout als de query mislukt (geen ongeldig nummer toekennen).
  */
 export async function generateOfferteNumber() {
   const { count, error } = await supabase
     .from("offertes")
     .select("id", { count: "exact", head: true })
-  if (error) return "BB-XXX"
+  if (error) {
+    if (import.meta.env.DEV) console.error("[bb:offerte] offertenummer ophalen mislukt:", error.message)
+    throw new Error("Offertenummer kon niet worden gegenereerd. Probeer het opnieuw.")
+  }
   const next = (count || 0) + 1
   return `BB-${String(next).padStart(3, "0")}`
 }

@@ -140,12 +140,12 @@ export async function saveAfasConnection({ environmentId, token }) {
 
 export async function testAfasConnection(environmentId, token) {
   const afasUrl = `https://sb20.afasfocus.nl/${environmentId}/profitrestservices/metainfo`
-  console.log('[afas] testAfasConnection URL:', afasUrl)
+  if (import.meta.env.DEV) console.log('[afas] testAfasConnection URL:', afasUrl)
   const { data, error } = await supabase.functions.invoke('afas-test', {
     body: { environment_id: environmentId, token },
   })
   if (error) throw error
-  if (data?.url) console.log('[afas] Edge function gebruikte URL:', data.url)
+  if (import.meta.env.DEV && data?.url) console.log('[afas] Edge function gebruikte URL:', data.url)
   return data
 }
 

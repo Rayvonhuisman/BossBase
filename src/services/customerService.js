@@ -8,10 +8,8 @@ import { logTijdlijnSafe } from "./klantTijdlijnService"
 // UI may carry richer fields (company, source, type) — those are
 // kept as local UI state and stripped here before talking to Supabase.
 
-// TODO: remove inappropriate demo customer data from Supabase (customer named "Niels is gay")
-const BLOCKED_NAMES = new Set(['niels is gay']);
-export const sanitizeName = name =>
-  BLOCKED_NAMES.has((name || '').toLowerCase().trim()) ? 'Demo klant' : (name || 'Naamloos');
+// Nette weergavenaam met fallback wanneer de naam leeg is.
+export const sanitizeName = name => (name || '').trim() || 'Naamloos';
 
 const toCustomer = (row, index = 0) => ({
   id: row.id,
