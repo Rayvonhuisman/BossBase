@@ -4,7 +4,7 @@ import {
   fmt, custById, Av, StatusBadge, ModalX, Logo,
 } from '../bb-shared.jsx';
 import { createCalendarEvent, listCalendarEvents, updateCalendarEvent } from '../services/calendarService.js';
-import { createJobCost, deleteJobCost, listJobCosts, updateJobCost } from '../services/jobCostService.js';
+import { createJobCost, deleteJobCost, listJobCosts, updateJobCost, getKostenBijlageUrl } from '../services/jobCostService.js';
 import { getFacturen, getAllFactuurRegels } from '../services/factuurService.js';
 import { getConnection } from '../services/accountingService.js';
 import { getBtwPeriodes, syncBtwData } from '../services/btwService.js';
@@ -831,9 +831,10 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingTop: 2 }}>
             {cost.bijlageUrl && (
-              <a href={cost.bijlageUrl} target="_blank" rel="noreferrer" className="btn btn-s btn-sm">
+              <button type="button" className="btn btn-s btn-sm"
+                onClick={async () => { const u = await getKostenBijlageUrl(cost.bijlageUrl); if (u) window.open(u, '_blank', 'noopener'); }}>
                 {I.paperclip} Bijlage bekijken
-              </a>
+              </button>
             )}
             {mbUrl && (
               <a href={mbUrl} target="_blank" rel="noreferrer" className="btn btn-s btn-sm">
@@ -950,9 +951,11 @@ export function CostsPage() {
                   </td>
                   <td onClick={e => e.stopPropagation()}>
                     {r.bijlageUrl && (
-                      <a href={r.bijlageUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--dl)', fontSize: '1rem' }} title="Bijlage bekijken">
+                      <button type="button" title="Bijlage bekijken"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl)', fontSize: '1rem', padding: 0 }}
+                        onClick={async () => { const u = await getKostenBijlageUrl(r.bijlageUrl); if (u) window.open(u, '_blank', 'noopener'); }}>
                         {I.paperclip}
-                      </a>
+                      </button>
                     )}
                   </td>
                 </tr>

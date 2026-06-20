@@ -1,6 +1,24 @@
 import { supabase } from "../lib/supabase"
 import { withCompanyId } from "../lib/currentCompany"
 
+// kosten-bijlagen is een PRIVÉ bucket. De `bijlage_url`-kolom bevat een JSON-
+// array met opslagpaden ({company_id}/bestand). Deze helper geeft een tijdelijke
+// signed URL terug voor de eerste bijlage (legacy: een opgeslagen http-URL wordt
+// ongewijzigd teruggegeven).
+export async function getKostenBijlageUrl(stored) {
+  if (!stored) return null
+  let items
+  try { items = JSON.parse(stored) } catch { items = [stored] }
+  const first = Array.isArray(items) ? items[0] : items
+  if (!first) return null
+  if (String(first).startsWith("http")) return first // legacy publieke URL
+  const { data, error } = await supabase.storage
+    .from("kosten-bijlagen")
+    .createSignedUrl(first, 3600)
+  if (error) return null
+  return data?.signedUrl || null
+}
+
 
 // Real DB columns: id, company_id, deal_id, description, amount, category,
 // cost_date, created_at, updated_at.

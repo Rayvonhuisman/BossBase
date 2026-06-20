@@ -690,16 +690,18 @@ export function NewJobCostModal({ onClose, onSaved, customers, defaultCustId = '
     if (!validate()) return;
     setSaving(true);
     try {
-      const uploadedUrls = [];
+      // Bucket is privé + company-scoped: upload naar {company_id}/… en sla het
+      // pad op (geen publieke URL). Bekijken gebeurt via signed URLs.
+      const companyId = await getCompanyId();
+      const uploadedPaths = [];
       for (const file of bijlageFiles) {
         const ext = file.name.split('.').pop();
-        const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const path = `${companyId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
         const { error: uploadError } = await supabase.storage.from('kosten-bijlagen').upload(path, file);
         if (uploadError) throw uploadError;
-        const { data: { publicUrl } } = supabase.storage.from('kosten-bijlagen').getPublicUrl(path);
-        uploadedUrls.push(publicUrl);
+        uploadedPaths.push(path);
       }
-      const bijlage_url = uploadedUrls.length > 0 ? JSON.stringify(uploadedUrls) : null;
+      const bijlage_url = uploadedPaths.length > 0 ? JSON.stringify(uploadedPaths) : null;
       const header = {
         category: form.category,
         cost_date: form.cost_date,
