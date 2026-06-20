@@ -109,7 +109,7 @@ export async function inviteTeamMember(input) {
     inviterName,
     roleLabel,
   }
-  console.log('[invite-mail] Payload die verstuurd wordt →', mailPayload)
+  if (import.meta.env.DEV) console.log('[invite-mail] Payload die verstuurd wordt →', mailPayload)
 
   const emailErr = await sendEmail({
     to: mailPayload.to,
@@ -117,10 +117,10 @@ export async function inviteTeamMember(input) {
     html,
     fromName: companyName,
   }).then(response => {
-    console.log('[invite-mail] send-email response ✓', response)
+    if (import.meta.env.DEV) console.log('[invite-mail] send-email response ✓', response)
     return null
   }).catch(e => {
-    console.error('[invite-mail] send-email MISLUKT', {
+    if (import.meta.env.DEV) console.error('[invite-mail] send-email MISLUKT', {
       message: e.message,
       stack: e.stack,
       error: e,

@@ -18,11 +18,22 @@ const toNotification = row => ({
   createdAt: row.created_at,
 });
 
+// Collega-notificaties worden aangemaakt via de create-notification edge
+// function (service-role). De RLS INSERT-policy op notifications staat clients
+// alleen self-insert toe; meldingen voor collega's lopen daarom via deze edge
+// function, die valideert dat de doelgebruiker in hetzelfde bedrijf zit.
+async function pushNotifications(notifications) {
+  const list = (notifications || []).filter(Boolean);
+  if (!list.length) return;
+  try {
+    await supabase.functions.invoke('create-notification', { body: { notifications: list } });
+  } catch (e) {
+    if (import.meta.env.DEV) console.warn('[notificatie] edge insert mislukt', e?.message);
+  }
+}
+
 export async function createNotification(input) {
-  const companyId = await getCompanyId();
-  if (!companyId) return;
-  const { error } = await supabase.from('notifications').insert({
-    company_id: companyId,
+  await pushNotifications([{
     user_id: input.userId,
     type: input.type,
     title: input.title,
@@ -30,9 +41,7 @@ export async function createNotification(input) {
     link: input.link || null,
     related_type: input.relatedType || null,
     related_id: input.relatedId || null,
-    created_by: input.createdBy || null,
-  });
-  if (error) console.warn('[notificatie] insert mislukt', error.message);
+  }]);
 }
 
 export async function listNotifications() {
@@ -100,21 +109,18 @@ export async function createMentionNotifications({ text, relatedType, relatedId,
 
   const plain = stripMentions(text).slice(0, 120);
 
+  const notifRows = [];
   for (const { name, userId } of mentions) {
     if (userId === creatorId) continue;
-    try {
-      await supabase.from('notifications').insert({
-        company_id: companyId,
-        user_id: userId,
-        type: 'mention',
-        title: `${creatorName || 'Iemand'} heeft je getagd${contextName ? ` bij ${contextName}` : ''}`,
-        body: plain || null,
-        link: link || null,
-        related_type: relatedType || null,
-        related_id: relatedId || null,
-        created_by: creatorId || null,
-      });
-    } catch { /* best-effort */ }
+    notifRows.push({
+      user_id: userId,
+      type: 'mention',
+      title: `${creatorName || 'Iemand'} heeft je getagd${contextName ? ` bij ${contextName}` : ''}`,
+      body: plain || null,
+      link: link || null,
+      related_type: relatedType || null,
+      related_id: relatedId || null,
+    });
 
     // Email notification (best-effort, non-blocking)
     try {
@@ -141,6 +147,8 @@ export async function createMentionNotifications({ text, relatedType, relatedId,
       }
     } catch { /* email is non-blocking */ }
   }
+
+  await pushNotifications(notifRows);
 }
 
 // Create an assignment notification + optional email
@@ -150,19 +158,15 @@ export async function createAssignmentNotification({ assignedToUserId, assignedT
   const companyId = await getCompanyId();
   if (!companyId) return;
 
-  try {
-    await supabase.from('notifications').insert({
-      company_id: companyId,
-      user_id: assignedToUserId,
-      type,
-      title,
-      body: body || null,
-      link: link || null,
-      related_type: relatedType || null,
-      related_id: relatedId || null,
-      created_by: creatorId || null,
-    });
-  } catch { /* best-effort */ }
+  await pushNotifications([{
+    user_id: assignedToUserId,
+    type,
+    title,
+    body: body || null,
+    link: link || null,
+    related_type: relatedType || null,
+    related_id: relatedId || null,
+  }]);
 
   // Email notification (best-effort)
   try {
@@ -193,7 +197,7 @@ export async function createAssignmentNotification({ assignedToUserId, assignedT
 
 export async function getTeamMembers() {
   const companyId = await getCompanyId();
-  console.log('[getTeamMembers] companyId:', companyId);
+  if (import.meta.env.DEV) console.log('[getTeamMembers] companyId:', companyId);
   if (!companyId) return [];
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -208,6 +212,6 @@ export async function getTeamMembers() {
   if (currentUserId) query = query.neq('id', currentUserId);
 
   const { data, error } = await query;
-  console.log('[getTeamMembers] rows:', data?.length ?? 0, 'error:', error?.message ?? null);
+  if (import.meta.env.DEV) console.log('[getTeamMembers] rows:', data?.length ?? 0, 'error:', error?.message ?? null);
   return (data || []).map(r => ({ id: r.id, fullName: r.full_name || '' })).filter(m => m.fullName);
 }

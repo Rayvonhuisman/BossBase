@@ -33,6 +33,45 @@ serve(async (req) => {
     // Altijd success — geen user-existence leak
     if (!userId) return json({ success: true })
 
+    // ── Rate limiting (mail-spam tegengaan) ──────────────────────────────────
+    // Throttle per e-mailadres: min. 60s tussen mails én max. 3 per uur.
+    // Bij overschrijding altijd success:true teruggeven (geen enumeratie) maar
+    // GEEN mail versturen. De attempts-tabel heeft RLS aan zonder policies, dus
+    // alleen deze service-role-client kan erin lezen/schrijven.
+    const normEmail = email.toLowerCase()
+    const nowMs = Date.now()
+    const { data: attempt } = await supabase
+      .from('password_reset_attempts')
+      .select('email, last_attempt, attempt_count, window_start')
+      .eq('email', normEmail)
+      .maybeSingle()
+
+    if (attempt) {
+      const lastMs = new Date(attempt.last_attempt).getTime()
+      const windowMs = new Date(attempt.window_start).getTime()
+      const withinHour = nowMs - windowMs < 60 * 60 * 1000
+      // Te snel achter elkaar (< 60s) of meer dan 3 binnen het uurvenster?
+      if ((nowMs - lastMs < 60 * 1000) || (withinHour && attempt.attempt_count >= 3)) {
+        console.log('[request-password-reset] Throttled (geen mail):', { to: normEmail })
+        return json({ success: true })
+      }
+      // Reset het uurvenster als het verlopen is.
+      const newCount = withinHour ? attempt.attempt_count + 1 : 1
+      const newWindow = withinHour ? attempt.window_start : new Date(nowMs).toISOString()
+      await supabase.from('password_reset_attempts').update({
+        last_attempt: new Date(nowMs).toISOString(),
+        attempt_count: newCount,
+        window_start: newWindow,
+      }).eq('email', normEmail)
+    } else {
+      await supabase.from('password_reset_attempts').insert({
+        email: normEmail,
+        last_attempt: new Date(nowMs).toISOString(),
+        attempt_count: 1,
+        window_start: new Date(nowMs).toISOString(),
+      })
+    }
+
     // Genereer token, 1 uur geldig
     const token = crypto.randomUUID()
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()

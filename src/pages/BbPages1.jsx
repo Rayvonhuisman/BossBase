@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import DOMPurify from 'dompurify';
 import { Bold, Calendar, Check, Edit2, Euro, FileText, Folder, Italic, List, ListOrdered, Maximize2, Minimize2, PenLine, Plus, RotateCcw, ShoppingCart, Underline, User, Wrench, X } from 'lucide-react';
 import {
   I, CUSTOMERS_DATA, DEALS, ACTIVITIES_DATA, QUOTES_DATA, COSTS_DATA,
@@ -1030,7 +1031,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
                     padding: '14px 16px', background: 'white',
                   }}>
                     {m.body_html
-                      ? <div dangerouslySetInnerHTML={{ __html: m.body_html }} className="bb-notitie-content" style={{ fontSize: '.85rem', lineHeight: 1.7, color: 'var(--dk)' }} />
+                      ? <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(m.body_html) }} className="bb-notitie-content" style={{ fontSize: '.85rem', lineHeight: 1.7, color: 'var(--dk)' }} />
                       : <div style={{ color: 'var(--dl)', fontSize: '.82rem', fontStyle: 'italic' }}>Inhoud niet beschikbaar voor oudere e-mails</div>
                     }
                     <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>

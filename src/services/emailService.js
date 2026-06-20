@@ -8,6 +8,25 @@ export function substituteVars(template, vars = {}) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`)
 }
 
+// HTML-escape voor gebruikersinvoer die in een HTML-mail terechtkomt.
+export function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+// Zoals substituteVars, maar escapet elke variabele-waarde zodat HTML/markup in
+// klant-/offertevelden ({{klant_naam}} etc.) niet als HTML wordt geïnterpreteerd
+// (voorkomt stored XSS / HTML-injectie in verzonden mails en in-app weergave).
+export function substituteVarsHtml(template, vars = {}) {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+    const v = vars[key]
+    return v == null ? `{{${key}}}` : escapeHtml(v)
+  })
+}
+
 // ── TEMPLATE OPHALEN ─────────────────────────────────────────────────────────
 
 export async function getMailTemplate(type) {
@@ -45,13 +64,13 @@ export async function sendEmail({ to, subject, html, fromName, attachments }) {
   const body = { to, subject, html, from_name: resolvedFromName }
   if (attachments?.length) body.attachments = attachments
 
-  console.log('[sendEmail] invoke send-email →', { to, subject, from_name: resolvedFromName })
+  if (import.meta.env.DEV) console.log('[sendEmail] invoke send-email →', { to, subject, from_name: resolvedFromName })
   const { data, error } = await supabase.functions.invoke('send-email', { body })
-  console.log('[sendEmail] raw response →', { data, error: error ? { message: error.message, status: error.status, context: error.context } : null })
+  if (import.meta.env.DEV) console.log('[sendEmail] raw response →', { data, error: error ? { message: error.message, status: error.status, context: error.context } : null })
 
   if (error) {
     let message = error.message
-    try { const b = await error.context?.json(); console.log('[sendEmail] error body →', b); if (b?.error) message = b.error } catch {}
+    try { const b = await error.context?.json(); if (import.meta.env.DEV) console.log('[sendEmail] error body →', b); if (b?.error) message = b.error } catch {}
     throw new Error(message)
   }
   if (!data?.success) throw new Error(data?.error || 'Versturen mislukt')
@@ -103,7 +122,7 @@ export async function triggerAutoEmail(type, vars, toEmail, companyId, relatedTy
     if (!tpl || !toEmail) return
     const subject = substituteVars(tpl.onderwerp, vars)
     const innerBody = tpl.body_html
-      ? substituteVars(tpl.body_html, vars)
+      ? substituteVarsHtml(tpl.body_html, vars)
       : substituteVars(tpl.body, vars).split('\n').map(l => l.trim() === '' ? '' : `<p style="margin:0 0 8px 0">${l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>`).join('')
     const html = mailTemplate({ title: subject, body: innerBody, companyName: vars.bedrijfsnaam || 'BossBase' })
     await sendEmail({ to: toEmail, subject, html })

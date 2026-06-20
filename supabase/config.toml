@@ -7,3 +7,9 @@
 #
 # [functions.moneybird-sync-btw]
 # schedule = "0 6 * * *"
+
+# AFAS staat geparkeerd; afas-test was een open endpoint (verify_jwt=false) dat
+# als proxy/SSRF naar AFAS misbruikt kon worden. Dichtgezet: alleen ingelogde
+# gebruikers mogen het testendpoint aanroepen.
+[functions.afas-test]
+verify_jwt = true
