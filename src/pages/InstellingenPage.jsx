@@ -3,6 +3,7 @@ import { I, ModalX } from '../bb-shared.jsx';
 import { supabase } from '../lib/supabase.js';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { useUploads } from '../lib/uploadContext.jsx';
 import {
   getBedrijfsinstellingen,
   upsertBedrijfsinstellingen,
@@ -75,6 +76,7 @@ const COLOR_OPTIONS = [
 export function InstellingenPage() {
   const toast = useToast();
   const { company, refresh, profile } = useProfile();
+  const { startUpload } = useUploads();
   const isAdmin = profile?.role === 'admin';
 
   const [tab, setTab] = useState('profiel');
@@ -222,15 +224,16 @@ export function InstellingenPage() {
   const setStandaard = (k, v) => setStandaardForm(f => ({ ...f, [k]: v }));
   const setTemplateField = (id, k, v) => setTemplateForms(f => ({ ...f, [id]: { ...f[id], [k]: v } }));
 
-  const uploadLogo = async (e) => {
+  const uploadLogo = (e) => {
     const file = e.target.files?.[0];
     const input = e.target;
     if (!file) return;
+    input.value = '';
     if (file.size > 10 * 1024 * 1024) { toast.error('Maximum is 10MB'); return; }
     const allowed = ['image/jpeg', 'image/png', 'image/svg+xml'];
     if (!allowed.includes(file.type)) { toast.error('Alleen JPG, PNG en SVG zijn toegestaan'); return; }
-    setLogoUploading(true);
-    try {
+    // Niet-blokkerend: upload + koppelen op de achtergrond via de upload-indicator.
+    startUpload(file.name, async () => {
       const ext = file.name.split('.').pop().toLowerCase() || 'jpg';
       const path = `${company.id}/logo.${ext}`;
       const { error: uploadError } = await supabase.storage
@@ -240,14 +243,7 @@ export function InstellingenPage() {
       const { data: { publicUrl } } = supabase.storage.from('bedrijf-logos').getPublicUrl(path);
       await updateCompany(company.id, { logo_url: publicUrl });
       await refresh();
-      toast.success('Logo geüpload');
-    } catch (err) {
-      console.error('[bb:uploadLogo]', err);
-      toast.error(err.message || 'Upload mislukt');
-    } finally {
-      setLogoUploading(false);
-      input.value = '';
-    }
+    });
   };
 
   const saveBedrijf = async () => {
@@ -645,18 +641,22 @@ export function InstellingenPage() {
     { id: 'integraties', label: 'Integraties' },
   ];
 
-  const handleProfileAvatarUpload = async (file) => {
+  const handleProfileAvatarUpload = (file) => {
     if (!profile?.id || !profile?.companyId) {
-      throw new Error('Profiel niet beschikbaar — log opnieuw in');
+      toast.error('Profiel niet beschikbaar — log opnieuw in');
+      return;
     }
-    await uploadProfileAvatar({
-      profileId: profile.id,
-      companyId: profile.companyId,
-      file,
-      previousUrl: profile.avatarUrl,
+    // AvatarUpload toont meteen een lokale preview; de echte upload draait op
+    // de achtergrond via de globale upload-indicator.
+    startUpload(file.name || 'Profielfoto', async () => {
+      await uploadProfileAvatar({
+        profileId: profile.id,
+        companyId: profile.companyId,
+        file,
+        previousUrl: profile.avatarUrl,
+      });
+      await refresh();
     });
-    await refresh();
-    toast.success('Profielfoto bijgewerkt');
   };
 
   const handleProfileAvatarRemove = async () => {

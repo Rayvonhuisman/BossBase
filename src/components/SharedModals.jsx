@@ -10,9 +10,10 @@ import { useProfile } from '../lib/profileContext.jsx';
 import { triggerAutoEmail } from '../services/emailService.js';
 import { getCompanyId } from '../lib/currentCompany.js';
 import { createCalendarEvent } from '../services/calendarService.js';
-import { createJobCost } from '../services/jobCostService.js';
+import { createJobCost, updateJobCost } from '../services/jobCostService.js';
 import { updateProfile } from '../services/profileService.js';
 import { MentionEditor } from './MentionEditor.jsx';
+import { useUploads } from '../lib/uploadContext.jsx';
 import { getTeamMembers, createMentionNotifications, createAssignmentNotification } from '../services/notificatieService.js';
 
 const isEmail = v => !v || /^\S+@\S+\.\S+$/.test(v);
@@ -656,8 +657,9 @@ export function NewCalendarEventModal({ onClose, onSaved, customers, defaultDate
 }
 
 // ── NEW JOB COST MODAL ───────────────────────────────────────
-export function NewJobCostModal({ onClose, onSaved, customers, defaultCustId = '', lockCustomer = false }) {
+export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defaultCustId = '', lockCustomer = false }) {
   const toast = useToast();
+  const { startUpload } = useUploads();
   const [form, setForm] = useState({
     customer_id: defaultCustId,
     category: 'materiaal',
@@ -711,54 +713,54 @@ export function NewJobCostModal({ onClose, onSaved, customers, defaultCustId = '
   const submit = async () => {
     if (!validate()) return;
     setSaving(true);
-    console.time('[kosten] totaal opslaan');
+
+    // 1. Sla de kostenregels DIRECT op (zonder bijlage) zodat het item meteen
+    //    in de lijst verschijnt en de modal kan sluiten.
+    const companyId = await getCompanyId();
+    const header = {
+      category: form.category,
+      cost_date: form.cost_date,
+      bijlage_url: null,
+      klant_type: form.customer_id ? 'klant' : 'algemeen',
+    };
+    let created;
     try {
-      const companyId = await getCompanyId();
-
-      // Bijlagen: comprimeren + uploaden PARALLEL (privé, company-scoped pad).
-      // We slaan alleen het pad op; bekijken gebeurt later via een signed URL.
-      console.time('[kosten] upload bijlagen');
-      const uploadedPaths = await Promise.all(
-        bijlageFiles.map(async (file) => {
-          const prepared = await compressImage(file);
-          const ext = (prepared.name || file.name).split('.').pop();
-          const path = `${companyId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-          const { error: uploadError } = await supabase.storage.from('kosten-bijlagen').upload(path, prepared);
-          if (uploadError) throw uploadError;
-          return path;
-        })
-      );
-      console.timeEnd('[kosten] upload bijlagen');
-
-      const bijlage_url = uploadedPaths.length > 0 ? JSON.stringify(uploadedPaths) : null;
-      const header = {
-        category: form.category,
-        cost_date: form.cost_date,
-        bijlage_url,
-        klant_type: form.customer_id ? 'klant' : 'algemeen',
-      };
-
-      // Kostenregels PARALLEL inserten i.p.v. sequentieel.
-      console.time('[kosten] db-insert');
-      const created = await Promise.all(
+      created = await Promise.all(
         regels.map(r => {
           const { excl } = calcBtwHelper(r.bedrag, getRegelPct(r), r.btw_mode);
           return createJobCost({ ...header, amount: excl, description: r.omschrijving });
         })
       );
-      console.timeEnd('[kosten] db-insert');
-
-      toast.success(regels.length > 1 ? `${regels.length} kostenregels toegevoegd` : 'Kosten toegevoegd');
-      console.time('[kosten] ui-update');
-      onSaved?.(created[0]);
-      onClose();
-      console.timeEnd('[kosten] ui-update');
     } catch (err) {
       toast.error(err.message || 'Kosten opslaan is mislukt');
-    } finally {
       setSaving(false);
-      console.timeEnd('[kosten] totaal opslaan');
+      return;
     }
+
+    toast.success(regels.length > 1 ? `${regels.length} kostenregels toegevoegd` : 'Kosten toegevoegd');
+    onSaved?.(created[0]);
+
+    // 2. Bijlage(n) op de ACHTERGROND uploaden + koppelen via de globale
+    //    upload-indicator. De gebruiker kan meteen doorwerken.
+    const files = bijlageFiles;
+    if (files.length) {
+      const label = files.length === 1 ? files[0].name : `${files.length} bijlagen`;
+      startUpload(label, async () => {
+        const paths = await Promise.all(files.map(async (file) => {
+          const prepared = await compressImage(file);
+          const ext = (prepared.name || file.name).split('.').pop();
+          const path = `${companyId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+          const { error } = await supabase.storage.from('kosten-bijlagen').upload(path, prepared);
+          if (error) throw error;
+          return path;
+        }));
+        const bijlage_url = JSON.stringify(paths);
+        const updated = await Promise.all(created.map(c => updateJobCost(c.id, { bijlage_url })));
+        onAttached?.(updated[0]); // stil de lijst bijwerken met de gekoppelde bijlage
+      }, files.length);
+    }
+
+    onClose();
   };
 
   const inputStyle = (hasErr) => ({

@@ -973,6 +973,7 @@ export function CostsPage() {
           customers={customers}
           deals={deals}
           onSaved={created => { setCosts(cs => [created, ...cs]); }}
+          onAttached={updated => setCosts(cs => cs.map(c => c.id === updated.id ? updated : c))}
         />
       )}
       {selectedCost && (

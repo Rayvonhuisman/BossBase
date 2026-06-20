@@ -40,6 +40,7 @@ import { getUserPermissions } from './services/permissionsService.js';
 import { usePermissions } from './hooks/usePermissions.js';
 import { clearCompanyId, setCompanyId } from './lib/currentCompany.js';
 import { ToastProvider, useToast } from './lib/toast.jsx';
+import { UploadProvider } from './lib/uploadContext.jsx';
 import { ProfileContext, displayName, profileInitials } from './lib/profileContext.jsx';
 import { DataContext, useData } from './lib/dataContext.jsx';
 import { listCustomers } from './services/customerService.js';
@@ -1444,7 +1445,9 @@ function AppInner() {
 export default function App() {
   return (
     <ToastProvider>
-      <AppInner />
+      <UploadProvider>
+        <AppInner />
+      </UploadProvider>
     </ToastProvider>
   );
 }

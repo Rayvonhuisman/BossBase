@@ -1133,6 +1133,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
           customers={[c]}
           defaultCustId={c.id}
           onSaved={() => { reloadCosts(); }}
+          onAttached={() => reloadCosts()}
         />
       )}
       {showNewOfferte && (

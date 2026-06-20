@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { I, ModalX } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { useUploads } from '../lib/uploadContext.jsx';
 import { MentionEditor, renderMentions } from '../components/MentionEditor.jsx';
 import { getTeamMembers, createAssignmentNotification } from '../services/notificatieService.js';
 import {
@@ -704,6 +705,7 @@ function NotitiesSection({ notities, onSave, teamMembers = [] }) {
 export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage } = {}) {
   const toast = useToast();
   const { profile } = useProfile();
+  const { startUpload } = useUploads();
   const canManage = !profile || ['admin', 'planner'].includes(profile.role);
 
   const [loading, setLoading] = useState(true);
@@ -922,14 +924,19 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage } = {})
     }
   };
 
-  const handleUploadFoto = async (file, categorie) => {
-    try {
-      const created = await uploadWerkbonFoto(selectedId, file, categorie);
-      setFotos(prev => [...prev, created]);
-      toast.success('Foto opgeslagen');
-    } catch (e) {
-      toast.error(e.message || 'Upload mislukt');
-    }
+  const handleUploadFoto = (file, categorie) => {
+    // Optimistisch: toon de foto meteen via een lokale preview en upload op de
+    // achtergrond. De globale upload-indicator toont voortgang/fout + retry.
+    const wbId = selectedId;
+    const tempId = `pending-${Date.now()}-${Math.random()}`;
+    const previewUrl = URL.createObjectURL(file);
+    setFotos(prev => [...prev, { id: tempId, url: previewUrl, categorie, _pending: true }]);
+    startUpload(file.name, async () => {
+      const created = await uploadWerkbonFoto(wbId, file, categorie);
+      setFotos(prev => prev.some(f => f.id === tempId)
+        ? prev.map(f => (f.id === tempId ? created : f))
+        : [...prev, created]);
+    });
   };
 
   const handleDeleteFoto = async foto => {

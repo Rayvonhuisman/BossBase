@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { I, ModalX, initials, Av } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
+import { useUploads } from '../lib/uploadContext.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import {
   getTeamMembers,
@@ -132,6 +133,7 @@ function InviteModal({ onClose, onSaved }) {
 
 function EditModal({ member, onClose, onSaved }) {
   const toast = useToast();
+  const { startUpload } = useUploads();
   const [form, setForm] = useState({
     full_name: member.fullName || '',
     phone: member.phone || '',
@@ -156,17 +158,19 @@ function EditModal({ member, onClose, onSaved }) {
     }
   };
 
-  const handleAvatarUpload = async (file) => {
-    if (!member.companyId) throw new Error('Bedrijf niet bekend voor dit teamlid');
-    const newUrl = await uploadTeamMemberAvatar({
-      memberId: member.id,
-      companyId: member.companyId,
-      file,
-      previousUrl: avatarUrl,
+  const handleAvatarUpload = (file) => {
+    if (!member.companyId) { toast.error('Bedrijf niet bekend voor dit teamlid'); return; }
+    // AvatarUpload toont meteen een preview; upload draait op de achtergrond.
+    startUpload(file.name || 'Teamfoto', async () => {
+      const newUrl = await uploadTeamMemberAvatar({
+        memberId: member.id,
+        companyId: member.companyId,
+        file,
+        previousUrl: avatarUrl,
+      });
+      setAvatarUrl(newUrl);
+      onSaved?.({ ...member, avatarUrl: newUrl });
     });
-    setAvatarUrl(newUrl);
-    onSaved?.({ ...member, avatarUrl: newUrl });
-    toast.success('Foto bijgewerkt');
   };
 
   const handleAvatarRemove = async () => {
