@@ -41,6 +41,28 @@ const calcBtwHelper = (bedrag, pct, mode) => {
 const getRegelPct = r => r.btw_pct === 'anders' ? Number(r.btw_custom) || 0 : Number(r.btw_pct);
 const newKostenRegel = () => ({ id: Date.now() + Math.random(), omschrijving: '', bedrag: '', btw_mode: 'excl', btw_pct: 21, btw_custom: '' });
 
+// Comprimeert een afbeelding (bv. telefoonfoto van een bonnetje) client-side
+// vóór upload: schaalt naar max 1600px en her-encodeert als JPEG q0.8. Niet-
+// afbeeldingen (PDF) en gevallen zonder winst worden ongewijzigd teruggegeven.
+async function compressImage(file) {
+  if (!file?.type?.startsWith('image/')) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const maxDim = 1600;
+    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+    const w = Math.round(bitmap.width * scale);
+    const h = Math.round(bitmap.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.8));
+    if (!blob || blob.size >= file.size) return file; // geen winst → origineel
+    return new File([blob], file.name.replace(/\.\w+$/, '.jpg'), { type: 'image/jpeg' });
+  } catch {
+    return file; // bij twijfel: origineel uploaden
+  }
+}
+
 // Customer form keeps friendly UI fields. customerService.mapCustomerFormToPayload
 // strips anything Supabase doesn't actually have (source, type, company_name).
 
@@ -689,18 +711,25 @@ export function NewJobCostModal({ onClose, onSaved, customers, defaultCustId = '
   const submit = async () => {
     if (!validate()) return;
     setSaving(true);
+    console.time('[kosten] totaal opslaan');
     try {
-      // Bucket is privé + company-scoped: upload naar {company_id}/… en sla het
-      // pad op (geen publieke URL). Bekijken gebeurt via signed URLs.
       const companyId = await getCompanyId();
-      const uploadedPaths = [];
-      for (const file of bijlageFiles) {
-        const ext = file.name.split('.').pop();
-        const path = `${companyId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-        const { error: uploadError } = await supabase.storage.from('kosten-bijlagen').upload(path, file);
-        if (uploadError) throw uploadError;
-        uploadedPaths.push(path);
-      }
+
+      // Bijlagen: comprimeren + uploaden PARALLEL (privé, company-scoped pad).
+      // We slaan alleen het pad op; bekijken gebeurt later via een signed URL.
+      console.time('[kosten] upload bijlagen');
+      const uploadedPaths = await Promise.all(
+        bijlageFiles.map(async (file) => {
+          const prepared = await compressImage(file);
+          const ext = (prepared.name || file.name).split('.').pop();
+          const path = `${companyId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+          const { error: uploadError } = await supabase.storage.from('kosten-bijlagen').upload(path, prepared);
+          if (uploadError) throw uploadError;
+          return path;
+        })
+      );
+      console.timeEnd('[kosten] upload bijlagen');
+
       const bijlage_url = uploadedPaths.length > 0 ? JSON.stringify(uploadedPaths) : null;
       const header = {
         category: form.category,
@@ -708,19 +737,27 @@ export function NewJobCostModal({ onClose, onSaved, customers, defaultCustId = '
         bijlage_url,
         klant_type: form.customer_id ? 'klant' : 'algemeen',
       };
-      let first = null;
-      for (const r of regels) {
-        const { excl } = calcBtwHelper(r.bedrag, getRegelPct(r), r.btw_mode);
-        const created = await createJobCost({ ...header, amount: excl, description: r.omschrijving });
-        if (!first) first = created;
-      }
+
+      // Kostenregels PARALLEL inserten i.p.v. sequentieel.
+      console.time('[kosten] db-insert');
+      const created = await Promise.all(
+        regels.map(r => {
+          const { excl } = calcBtwHelper(r.bedrag, getRegelPct(r), r.btw_mode);
+          return createJobCost({ ...header, amount: excl, description: r.omschrijving });
+        })
+      );
+      console.timeEnd('[kosten] db-insert');
+
       toast.success(regels.length > 1 ? `${regels.length} kostenregels toegevoegd` : 'Kosten toegevoegd');
-      onSaved?.(first);
+      console.time('[kosten] ui-update');
+      onSaved?.(created[0]);
       onClose();
+      console.timeEnd('[kosten] ui-update');
     } catch (err) {
       toast.error(err.message || 'Kosten opslaan is mislukt');
     } finally {
       setSaving(false);
+      console.timeEnd('[kosten] totaal opslaan');
     }
   };
 

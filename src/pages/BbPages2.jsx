@@ -972,7 +972,7 @@ export function CostsPage() {
           onClose={() => setShowNew(false)}
           customers={customers}
           deals={deals}
-          onSaved={created => { setCosts(cs => [created, ...cs]); bumpRefresh?.(); }}
+          onSaved={created => { setCosts(cs => [created, ...cs]); }}
         />
       )}
       {selectedCost && (
