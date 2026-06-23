@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Logo } from '../bb-shared.jsx';
 import {
   Paintbrush, Trees, Hammer, AppWindow, Plug, Home, ShowerHead, Zap, Sparkles, HardHat,
   MailCheck, Rocket, User, Users, Check, Plus,
 } from 'lucide-react';
-import { loginWithEmail, registerWithEmail, requestPasswordReset, resendVerificationEmail, vertaalAuthFout } from '../services/authService.js';
+import { loginWithEmail, registerWithEmail, requestPasswordReset, resendVerificationEmail, requestVerificationCode, verifyCode, vertaalAuthFout } from '../services/authService.js';
 import { PasswordRequirements, PasswordMatch, passwordValid } from '../components/PasswordStrength.jsx';
 
 const TRADES = [
@@ -188,6 +188,107 @@ export function LoginPage({ onLogin, onRegister }) {
   );
 }
 
+// ── E-MAILVERIFICATIE (6-cijferige code) ─────────────────────────────────────
+// Herbruikt door RegisterFlow (na registratie) én door App.jsx (gating bij een
+// onbevestigde sessie, bv. na page-refresh).
+export function EmailVerificationScreen({ email, onVerified, onBack }) {
+  const [code, setCode] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [countdown, setCountdown] = useState(60); // code is zojuist verstuurd
+
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const t = setTimeout(() => setCountdown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdown]);
+
+  const submit = async () => {
+    if (code.length !== 6) { setError('Vul de 6-cijferige code in.'); return; }
+    setLoading(true); setError('');
+    try {
+      const res = await verifyCode(code);
+      if (res?.success) {
+        await onVerified();
+      } else {
+        setError(res?.error || 'Code is onjuist.');
+        if (res?.code === 'EXPIRED' || res?.code === 'TOO_MANY' || res?.code === 'NO_CODE') setCode('');
+      }
+    } catch {
+      setError('Er ging iets mis. Probeer het opnieuw.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resend = async () => {
+    setResendLoading(true); setError('');
+    try { await requestVerificationCode(); setCountdown(60); setCode(''); }
+    catch { /* stil — rate limiting geeft alsnog success terug */ }
+    finally { setResendLoading(false); }
+  };
+
+  return (
+    <div className="auth-shell">
+      <div className="auth-card afu">
+        <div className="auth-logo"><Logo /></div>
+        <div style={{ textAlign: 'center', marginBottom: 18 }}>
+          <div style={{ display: 'inline-flex', width: 56, height: 56, borderRadius: '50%', background: '#f0fdf4', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+            <MailCheck size={26} color="#15A34A" />
+          </div>
+          <div className="auth-title" style={{ marginBottom: 6 }}>Bevestig je e-mailadres</div>
+          <div className="auth-sub">
+            We hebben een 6-cijferige code gestuurd naar <strong>{email}</strong>.
+          </div>
+        </div>
+
+        <div className="auth-field">
+          <input
+            value={code}
+            onChange={e => { setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setError(''); }}
+            onKeyDown={e => { if (e.key === 'Enter' && code.length === 6) submit(); }}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder="••••••"
+            maxLength={6}
+            autoFocus
+            style={{ textAlign: 'center', fontSize: '1.8rem', letterSpacing: '0.5em', fontWeight: 700, paddingLeft: '0.5em' }}
+          />
+        </div>
+
+        {error && (
+          <div style={{ color: '#dc2626', fontSize: '.82rem', fontWeight: 600, marginBottom: 10, textAlign: 'center' }}>{error}</div>
+        )}
+
+        <button className="auth-submit" onClick={submit} disabled={loading || code.length !== 6} style={{ width: '100%' }}>
+          {loading ? 'Verifiëren…' : 'Verifiëren'}
+        </button>
+
+        <div style={{ textAlign: 'center', marginTop: 14, fontSize: '.82rem', color: 'var(--dmu)' }}>
+          {countdown > 0 ? (
+            <span>Geen code ontvangen? Opnieuw versturen kan over {countdown}s</span>
+          ) : (
+            <button
+              onClick={resend}
+              disabled={resendLoading}
+              style={{ background: 'none', border: 'none', color: 'var(--p)', fontWeight: 600, cursor: 'pointer', padding: 0 }}
+            >
+              {resendLoading ? 'Versturen…' : 'Code opnieuw versturen'}
+            </button>
+          )}
+        </div>
+
+        {onBack && (
+          <div className="auth-link" style={{ textAlign: 'center', marginTop: 10 }}>
+            <a href="#" onClick={e => { e.preventDefault(); onBack(); }}>Terug naar inloggen</a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function RegisterFlow({ onDone, onBack }) {
   const [step, setStep] = useState(0);
   const [trade, setTrade] = useState('');
@@ -196,6 +297,7 @@ export function RegisterFlow({ onDone, onBack }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const steps = ['Account', 'Bedrijf', 'Setup', 'Team'];
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -241,7 +343,9 @@ export function RegisterFlow({ onDone, onBack }) {
     setError('');
     try {
       const result = await registerWithEmail({ ...form, trade });
-      if (result?.requiresConfirmation) {
+      if (result?.requiresVerification) {
+        setNeedsVerification(true);
+      } else if (result?.requiresConfirmation) {
         setNeedsConfirmation(true);
       } else {
         onDone();
@@ -279,6 +383,10 @@ export function RegisterFlow({ onDone, onBack }) {
       ))}
     </div>
   );
+
+  if (needsVerification) {
+    return <EmailVerificationScreen email={form.email} onVerified={onDone} onBack={onBack} />;
+  }
 
   if (needsConfirmation) {
     return (

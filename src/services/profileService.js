@@ -15,6 +15,7 @@ const toProfile = (row, user) => ({
   avatarUrl: row.avatar_url || "",
   createdAt: row.created_at || null,
   isSuperAdmin: row.is_super_admin || false,
+  emailVerifiedAt: row.email_verified_at || null,
   raw: row,
 })
 

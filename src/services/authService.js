@@ -57,35 +57,45 @@ export async function loginWithEmail(email, password) {
 }
 
 export async function registerWithEmail({ email, password, fullName, companyName, phone, kvk }) {
-  // 1. Auth-user aanmaken. Metadata opslaan zodat de DB-trigger (handle_new_user)
-  //    en de repair-flow de naam kunnen gebruiken ook als stap 2 faalt.
+  // Auth-user aanmaken. Alle registratie-gegevens in metadata opslaan zodat
+  // verify-code het bedrijf later (na e-mailverificatie) kan provisionen.
   const signup = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { full_name: fullName, company_name: companyName } },
+    options: { data: { full_name: fullName, company_name: companyName, phone: phone || null, kvk: kvk || null } },
   })
   if (signup.error) throw signup.error
 
   if (!signup.data.session) {
-    // Email-bevestiging vereist: geen actieve sessie. De DB-trigger
-    // (handle_new_user) maakt alvast een minimaal profiel aan.
-    // Company + koppeling worden aangemaakt bij eerste login via provision_account.
+    // Supabase "Confirm email" staat AAN → geen sessie. Val terug op de
+    // Supabase-bevestigingsmail (defensief; in onze config staat dit UIT).
     return { ...signup.data, requiresConfirmation: true }
   }
 
-  // 2. Sessie beschikbaar → maak company + profiel atomair aan via de
-  //    SECURITY DEFINER RPC. Dit bypast RLS en lost het kip-en-ei
-  //    SELECT-probleem op (SELECT-policy blokkeert company-lezen zonder profiel).
-  const { data: rpcData, error: rpcError } = await supabase.rpc("provision_account", {
-    p_company_name: companyName,
-    p_full_name:    fullName,
-    p_email:        email    || null,
-    p_phone:        phone    || null,
-    p_kvk:          kvk     || null,
-  })
-  if (rpcError) throw new Error(`Account aanmaken mislukt: ${rpcError.message}`)
+  // Confirm email UIT → er is een sessie. We provisionen het bedrijf NIET meer
+  // hier; dat gebeurt pas ná e-mailverificatie in verify-code. Stuur de
+  // 6-cijferige code (best-effort; het verificatiescherm heeft een resend).
+  await requestVerificationCode().catch(() => {})
+  return { ...signup.data, requiresVerification: true }
+}
 
-  return { ...signup.data, company: { id: rpcData?.company_id } }
+// Vraag een (nieuwe) 6-cijferige verificatiecode aan voor de ingelogde user.
+export async function requestVerificationCode() {
+  const { data, error } = await supabase.functions.invoke('request-verification-code')
+  if (error) throw error
+  return data
+}
+
+// Controleer de ingevoerde code. Geeft het JSON-resultaat van de edge function
+// terug (ook bij 4xx), zodat de UI de specifieke foutmelding kan tonen.
+export async function verifyCode(code) {
+  const { data, error } = await supabase.functions.invoke('verify-code', { body: { code } })
+  if (error) {
+    let parsed = null
+    try { parsed = await error.context?.json() } catch { /* geen JSON-body */ }
+    return parsed || { success: false, error: error.message || 'Verifiëren mislukt' }
+  }
+  return data
 }
 
 export async function logout() {

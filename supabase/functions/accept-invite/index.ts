@@ -67,11 +67,15 @@ serve(async (req) => {
     // auth-user wordt aangemaakt. Insert faalt dan met "duplicate key".
     // In beide gevallen (nieuwe insert of bestaand profiel) moet company_id
     // en rol correct worden ingesteld.
+    // email_verified_at direct zetten: de invite-mail ís de verificatie, dus
+    // uitgenodigde teamleden hoeven geen 6-cijferige code in te vullen.
+    const nowIso = new Date().toISOString()
     const { error: profileErr } = await supabase.from('profiles').insert({
       id: userId,
       company_id: invite.company_id,
       full_name: fullName || '',
       role: invite.role || 'medewerker',
+      email_verified_at: nowIso,
     })
 
     if (profileErr) {
@@ -80,6 +84,7 @@ serve(async (req) => {
         company_id: invite.company_id,
         full_name: fullName || '',
         role: invite.role || 'medewerker',
+        email_verified_at: nowIso,
       }).eq('id', userId)
     }
 

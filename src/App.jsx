@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { I, Logo, initials } from './bb-shared.jsx';
-import { LoginPage, RegisterFlow } from './pages/BbAuth.jsx';
+import { LoginPage, RegisterFlow, EmailVerificationScreen } from './pages/BbAuth.jsx';
 import { ResetPasswordPage } from './pages/ResetPasswordPage.jsx';
 import { UitnodigingPage } from './pages/UitnodigingPage.jsx';
 import OfferteSigneren from './pages/OfferteSigneren.jsx';
@@ -898,9 +898,12 @@ function AppInner() {
       if (ctx.profileError) {
         if (import.meta?.env?.DEV) console.warn('[bb:profile] error:', ctx.profileError);
         setProfileError(ctx.profileError);
-      } else if (ctx.user && (!ctx.profile || !ctx.profile.companyId)) {
-        // Profiel ontbreekt OF profiel heeft nog geen company_id (trigger maakte
-        // een minimaal profiel aan tijdens email-confirmatie-flow).
+      } else if (ctx.user && (!ctx.profile || !ctx.profile.companyId)
+                 // Onbevestigd profiel zonder bedrijf = wacht op e-mailverificatie.
+                 // NIET auto-provisionen — verify-code maakt het bedrijf pas aan
+                 // ná verificatie. De gate (hieronder) toont het verificatiescherm.
+                 && !(ctx.profile && !ctx.profile.companyId && !ctx.profile.emailVerifiedAt)) {
+        // Profiel ontbreekt OF (geverifieerd) profiel heeft nog geen company_id.
         // Probeer automatisch te herstellen zonder foutscherm.
         try {
           await createMissingProfile();
@@ -1127,7 +1130,7 @@ function AppInner() {
           </div>
         ) : <CustomersPage openCustomer={openCustomer} />;
       case 'activities': return <ActivitiesPageV2 openCustomer={openCustomer} preOpenActivityId={navIntent?.page === 'activities' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
-      case 'calendar':   return <CalendarPage openCustomer={openCustomer} openCalendarEvent={openCalendarEvent} preOpenActivityId={navIntent?.page === 'calendar' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
+      case 'calendar':   return <CalendarPage openCustomer={openCustomer} openCalendarEvent={openCalendarEvent} setPage={navigatePage} preOpenActivityId={navIntent?.page === 'calendar' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'planning':   return <PlanningPage />;
       case 'costs':       return <CostsPage />;
       case 'revenue':     return <RevenuePage />;
@@ -1269,6 +1272,20 @@ function AppInner() {
   if (!permissionsLoaded) {
     authLog('shell GEBLOKKEERD — wacht op permissionsLoaded');
     return <div style={{ background: 'var(--bg)', minHeight: '100dvh' }} />;
+  }
+
+  // E-mailverificatie-gate: een ingelogde gebruiker met een profiel zonder
+  // bedrijf én zonder bevestiging moet eerst de 6-cijferige code invullen.
+  // Uitgenodigde teamleden hebben al een company_id en passeren dus direct.
+  if (profile && !profile.companyId && !profile.emailVerifiedAt) {
+    authLog('e-mailverificatie vereist — gate getoond');
+    return (
+      <EmailVerificationScreen
+        email={user?.email}
+        onVerified={async () => { await refreshProfile(); navigatePage('dashboard'); }}
+        onBack={handleLogout}
+      />
+    );
   }
 
   authLog('shell RENDER', { role: profile?.role, perms: userPermissions });
