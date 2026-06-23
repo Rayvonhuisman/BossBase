@@ -132,13 +132,13 @@ function PeriodTabs({ value, onChange }) {
     { id: 'maand', label: 'Deze maand' },
   ];
   return (
-    <div className="uren2-tabs" role="tablist">
+    <div className="tabs" role="tablist">
       {tabs.map(t => (
         <button
           key={t.id}
           role="tab"
           aria-selected={value === t.id}
-          className={`uren2-tab${value === t.id ? ' is-active' : ''}`}
+          className={`tab${value === t.id ? ' active' : ''}`}
           onClick={() => onChange(t.id)}
         >{t.label}</button>
       ))}

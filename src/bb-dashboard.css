@@ -1639,25 +1639,8 @@ ul{list-style:none}
   font-size:12px; color:var(--uren2-muted);
 }
 
-/* Period tabs (segmented) */
-.uren2-tabs{
-  display:inline-flex; align-items:center; gap:2px;
-  background:var(--uren2-soft); border:1px solid var(--uren2-border);
-  border-radius:10px; padding:3px;
-}
-.uren2-tab{
-  font-family:inherit; font-size:13px; font-weight:600;
-  padding:6px 12px; border-radius:7px;
-  border:none; cursor:pointer;
-  background:transparent; color:var(--uren2-muted);
-  transition:background .12s, color .12s;
-  white-space:nowrap;
-}
-.uren2-tab:hover{ color:var(--uren2-ink) }
-.uren2-tab.is-active{
-  background:#fff; color:var(--uren2-ink);
-  box-shadow:0 1px 2px rgba(15,23,42,.08);
-}
+/* Period tabs gebruiken de standaard .tabs/.tab classes (consistent met de
+   rest van het dashboard) — geen aparte uren2-tab stijl meer. */
 
 /* Dropdown */
 .uren2-dropdown{ position:relative; min-width:0 }
@@ -2041,8 +2024,6 @@ ul{list-style:none}
   .uren2-filter-right{
     justify-content:space-between; gap:10px;
   }
-  .uren2-tabs{ width:100%; overflow-x:auto; flex-wrap:nowrap; padding:3px }
-  .uren2-tab{ flex:0 0 auto }
   .uren2-modal{ max-width:none }
   .uren2-modal-ft{ background:#fff }
 }
