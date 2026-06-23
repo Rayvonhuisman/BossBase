@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, MoreVertical, Send } from 'lucide-react';
+import { Download, MoreVertical, Send, Lock } from 'lucide-react';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
@@ -14,8 +14,10 @@ import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
 import { getBedrijfsinstellingen } from '../services/instellingenService.js';
 import { generateFactuurPdf, previewFactuurPdf, getFactuurPdfBase64 } from '../utils/generatePdf.js';
+import { buildCompanySnapshot, companyForDocument, isFactuurLocked } from '../utils/documentSnapshot.js';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
+import { statusInfo } from '../utils/statusColors.js';
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -28,10 +30,8 @@ const isVerlopen = f =>
 const displayStatus = f => (isVerlopen(f) ? 'verlopen' : f.status);
 
 const factuurBadge = f => {
-  const s = displayStatus(f);
-  const map = { aangemaakt: 'b-concept', concept: 'b-concept', verzonden: 'b-sent', betaald: 'b-accepted', verlopen: 'b-declined' };
-  const labels = { aangemaakt: 'Aangemaakt', concept: 'Aangemaakt', verzonden: 'Verzonden', betaald: 'Betaald', verlopen: 'Te laat' };
-  return <span className={`badge ${map[s] || 'b-gray'}`}>{labels[s] || s}</span>;
+  const s = statusInfo(displayStatus(f), 'factuur');
+  return <span className={s.className}>{s.label}</span>;
 };
 
 export function FactuurBadge({ f }) { return factuurBadge(f); }
@@ -384,9 +384,13 @@ function EditFactuurModal({ factuur, customers, onClose, onSaved, onSaveAndSend 
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const locked = isFactuurLocked(factuur);
 
   const doSave = async () => {
-    const updated = await updateFactuur(factuur.id, form);
+    // Een verstuurde factuur is alleen-lezen: enkel de status (bijv. betaald
+    // markeren) mag nog wijzigen, de inhoud niet.
+    const payload = locked ? { status: form.status } : form;
+    const updated = await updateFactuur(factuur.id, payload);
     onSaved?.(updated);
     return updated;
   };
@@ -420,6 +424,11 @@ function EditFactuurModal({ factuur, customers, onClose, onSaved, onSaveAndSend 
           </div>
           <ModalX onClose={onClose} />
         </div>
+        {locked && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', margin: '0 0 4px', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: '.82rem', color: '#374151' }}>
+            <Lock size={14} /> Verstuurd · alleen-lezen — een verstuurde factuur kan niet meer gewijzigd worden. Alleen de status (bijv. betaald markeren) mag nog.
+          </div>
+        )}
         <div className="fg">
           <div className="f s2">
             <label>Status</label>
@@ -431,20 +440,20 @@ function EditFactuurModal({ factuur, customers, onClose, onSaved, onSaveAndSend 
           </div>
           <div className="f">
             <label>Betaaltermijn</label>
-            <input type="date" value={form.vervaldatum} onChange={e => set('vervaldatum', e.target.value)} />
+            <input type="date" value={form.vervaldatum} onChange={e => set('vervaldatum', e.target.value)} disabled={locked} />
           </div>
           <div className="f s2">
             <label>Betalingskenmerk</label>
-            <input type="text" value={form.betalingskenmerk} onChange={e => set('betalingskenmerk', e.target.value)} />
+            <input type="text" value={form.betalingskenmerk} onChange={e => set('betalingskenmerk', e.target.value)} disabled={locked} />
           </div>
           <div className="f s2">
             <label>Notities</label>
-            <textarea rows={3} value={form.notities} onChange={e => set('notities', e.target.value)} />
+            <textarea rows={3} value={form.notities} onChange={e => set('notities', e.target.value)} disabled={locked} />
           </div>
         </div>
         <div className="fa">
           <button className="btn btn-ghost" onClick={onClose}>Annuleren</button>
-          {onSaveAndSend && <button className="btn btn-s" onClick={submitAndSend} disabled={saving} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={14} />{saving ? 'Bezig...' : 'Opslaan en versturen'}</button>}
+          {onSaveAndSend && !locked && <button className="btn btn-s" onClick={submitAndSend} disabled={saving} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={14} />{saving ? 'Bezig...' : 'Opslaan en versturen'}</button>}
           <button className="btn btn-p" onClick={submit} disabled={saving}>{saving ? 'Opslaan...' : 'Opslaan'}</button>
         </div>
       </div>
@@ -622,7 +631,7 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }
     try {
       const customer = customers.find(c => String(c.id) === String(factuur.customerId));
       const factuurForPdf = factuur.isCredit ? { ...factuur, creditNote: factuur.notities } : factuur;
-      await generateFactuurPdf(factuurForPdf, regels, customer, company);
+      await generateFactuurPdf(factuurForPdf, regels, customer, companyForDocument(factuur, company));
     } catch (err) {
       console.error('PDF genereren mislukt:', err);
     } finally {
@@ -635,7 +644,7 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }
     try {
       const customer = customers.find(c => String(c.id) === String(factuur.customerId));
       const factuurForPdf = factuur.isCredit ? { ...factuur, creditNote: factuur.notities } : factuur;
-      await previewFactuurPdf(factuurForPdf, regels, customer, company);
+      await previewFactuurPdf(factuurForPdf, regels, customer, companyForDocument(factuur, company));
     } catch (err) {
       console.error('PDF preview mislukt:', err);
     } finally {
@@ -796,7 +805,7 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
       try {
         const regels = await getFactuurRegels(factuur.id);
         const factuurForPdf = factuur.isCredit ? { ...factuur, creditNote: factuur.notities } : factuur;
-        const pdfBase64 = await getFactuurPdfBase64(factuurForPdf, regels, customer, company);
+        const pdfBase64 = await getFactuurPdfBase64(factuurForPdf, regels, customer, companyForDocument(factuur, company));
         attachments = [{ filename: `Factuur-${factuur.nummer}.pdf`, content: pdfBase64 }];
       } catch (pdfErr) {
         console.warn('PDF bijlage genereren mislukt:', pdfErr.message);
@@ -804,7 +813,9 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
       await sendEmail({ to: form.to, subject: form.subject, html: form.body, attachments });
       await logSentEmail({ toEmail: form.to, subject: form.subject, bodyHtml: form.body, relatedType: 'factuur', relatedId: factuur.id, customerId: factuur.customerId });
       if ((templateType === 'factuur') && (factuur.status === 'aangemaakt' || factuur.status === 'concept')) {
-        await updateFactuur(factuur.id, { status: 'verzonden' });
+        // Bij versturen: bedrijfs-branding bevriezen op de factuur, zodat latere
+        // logo-/kleurwijzigingen deze verstuurde factuur niet meer veranderen.
+        await updateFactuur(factuur.id, { status: 'verzonden', ...buildCompanySnapshot(company) });
       }
       if (templateType === 'herinnering_1') {
         await updateFactuur(factuur.id, { herinnering_1_verstuurd_at: new Date().toISOString() });
@@ -950,7 +961,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
       const regels = await getFactuurRegels(f.id);
       const customer = customers.find(c => String(c.id) === String(f.customerId));
       const factuurForPdf = f.isCredit ? { ...f, creditNote: f.notities } : f;
-      await generateFactuurPdf(factuurForPdf, regels, customer, company);
+      await generateFactuurPdf(factuurForPdf, regels, customer, companyForDocument(f, company));
     } catch { toast.error('PDF genereren mislukt'); }
   };
 
@@ -1060,6 +1071,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
                       <td className="td" style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(f.totaalIncl)}</td>
                       <td className="td">
                         {factuurBadge(f)}
+                        {isFactuurLocked(f) && <Lock size={11} style={{ marginLeft: 5, color: 'var(--dl)', verticalAlign: 'middle' }} title="Verstuurd · alleen-lezen" />}
                         {f.gecrediteerd && <span className="badge b-gray" style={{ marginLeft: 4, fontSize: 10 }}>Gecrediteerd</span>}
                       </td>
                       <td className="td" style={{ color: isVerlopen(f) ? '#dc2626' : 'inherit' }}>{fmtDate(f.vervaldatum)}</td>

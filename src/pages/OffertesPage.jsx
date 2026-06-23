@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, MoreVertical, Send } from 'lucide-react';
+import { Download, MoreVertical, Send, Lock } from 'lucide-react';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
@@ -13,13 +13,14 @@ import { listCustomers } from '../services/customerService.js';
 import { listDeals } from '../services/dealService.js';
 import { NewFactuurModal, SendFactuurMailModal } from './FacturenPage.jsx';
 import { generateOffertePdf, previewOffertePdf, getOffertePdfBase64 } from '../utils/generatePdf.js';
+import { buildCompanySnapshot, companyForDocument, isOfferteLocked, isOfferteFullyLocked } from '../utils/documentSnapshot.js';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
+import { statusInfo } from '../utils/statusColors.js';
 
 const offerteBadge = status => {
-  const map = { concept: 'b-concept', verzonden: 'b-sent', geaccepteerd: 'b-accepted', afgewezen: 'b-declined' };
-  const labels = { concept: 'Concept', verzonden: 'Verzonden', geaccepteerd: 'Geaccepteerd', afgewezen: 'Afgewezen' };
-  return <span className={`badge ${map[status] || 'b-gray'}`}>{labels[status] || status}</span>;
+  const s = statusInfo(status, 'offerte');
+  return <span className={s.className}>{s.label}</span>;
 };
 
 export function OfferteBadge({ status }) { return offerteBadge(status); }
@@ -316,6 +317,9 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
   const [loadingRegels, setLoadingRegels] = useState(true);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  // Verstuurd/ondertekend = inhoud vast. Ondertekend/geaccepteerd = ook status vast.
+  const locked = isOfferteLocked(offerte);
+  const fullyLocked = isOfferteFullyLocked(offerte);
 
   useEffect(() => {
     getOfferteItems(offerte.id).then(items => {
@@ -356,6 +360,13 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
   const COLS = '78px minmax(0,1fr) 68px 84px 110px 84px 28px';
 
   const doSave = async () => {
+    // Verstuurde/ondertekende offerte: enkel status mag nog wijzigen, de inhoud
+    // (en regelitems) liggen vast. Geen wipe-and-recreate van items.
+    if (locked) {
+      const updated = await updateOfferte(offerte.id, fullyLocked ? {} : { status: form.status });
+      onSaved?.(updated);
+      return updated;
+    }
     const updated = await updateOfferte(offerte.id, {
       customer_id: form.customer_id, omschrijving: form.omschrijving,
       geldig_tot: form.geldig_tot || null,
@@ -400,23 +411,28 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
           </div>
           <ModalX onClose={onClose} />
         </div>
+        {locked && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', margin: '0 0 4px', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: '.82rem', color: '#374151' }}>
+            <Lock size={14} /> {fullyLocked ? 'Ondertekend · vergrendeld — een ondertekende offerte kan niet meer gewijzigd worden.' : 'Verstuurd · alleen-lezen — de inhoud van een verstuurde offerte ligt vast. Alleen de status mag nog wijzigen.'}
+          </div>
+        )}
         {loadingRegels ? (
           <div style={{ padding: '32px', textAlign: 'center', color: 'var(--dl)' }}>Regelitems laden…</div>
         ) : (
           <div className="fg">
             <div className="f s2">
               <label>Klant</label>
-              <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)}>
+              <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)} disabled={locked}>
                 <option value="">— Selecteer klant —</option>
                 {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div className="f s2">
               <label>Omschrijving</label>
-              <textarea rows={2} value={form.omschrijving} onChange={e => set('omschrijving', e.target.value)} />
+              <textarea rows={2} value={form.omschrijving} onChange={e => set('omschrijving', e.target.value)} disabled={locked} />
             </div>
 
-            <div className="f s2" style={{ flexDirection: 'column', gap: 6 }}>
+            <div className="f s2" style={{ flexDirection: 'column', gap: 6, ...(locked ? { pointerEvents: 'none', opacity: 0.55 } : {}) }}>
               <label style={{ marginBottom: 0 }}>Regelitems</label>
               {isMobile ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -487,7 +503,7 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
 
             <div className="f">
               <label>Status</label>
-              <select value={form.status} onChange={e => set('status', e.target.value)}>
+              <select value={form.status} onChange={e => set('status', e.target.value)} disabled={fullyLocked}>
                 <option value="concept">Concept</option>
                 <option value="verzonden">Verzonden</option>
                 <option value="geaccepteerd">Geaccepteerd</option>
@@ -496,7 +512,7 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
             </div>
             <div className="f">
               <label>Geldig tot</label>
-              <input type="date" value={form.geldig_tot} onChange={e => set('geldig_tot', e.target.value)} />
+              <input type="date" value={form.geldig_tot} onChange={e => set('geldig_tot', e.target.value)} disabled={locked} />
             </div>
 
             <div className="f s2" style={{ padding: '10px 14px', background: 'var(--pll)', borderRadius: 8, fontSize: 13 }}>
@@ -520,14 +536,14 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
 
             <div className="f s2">
               <label>Notities</label>
-              <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} />
+              <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} disabled={locked} />
             </div>
           </div>
         )}
         <div className="fa">
           <button className="btn btn-ghost" onClick={onClose}>Annuleren</button>
-          {onSaveAndSend && <button className="btn btn-s" onClick={submitAndSend} disabled={saving || loadingRegels} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={14} />{saving ? 'Bezig...' : 'Opslaan en versturen'}</button>}
-          <button className="btn btn-p" onClick={submit} disabled={saving || loadingRegels}>{saving ? 'Opslaan...' : 'Opslaan'}</button>
+          {onSaveAndSend && !locked && <button className="btn btn-s" onClick={submitAndSend} disabled={saving || loadingRegels} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={14} />{saving ? 'Bezig...' : 'Opslaan en versturen'}</button>}
+          <button className="btn btn-p" onClick={submit} disabled={saving || loadingRegels || fullyLocked}>{saving ? 'Opslaan...' : 'Opslaan'}</button>
         </div>
       </div>
     </div>
@@ -548,7 +564,7 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
     try {
       const customer = customers.find(c => String(c.id) === String(offerte.customerId));
       const items = await getOfferteItems(offerte.id);
-      await generateOffertePdf(offerte, items, customer, company);
+      await generateOffertePdf(offerte, items, customer, companyForDocument(offerte, company));
     } catch (err) {
       console.error('PDF genereren mislukt:', err);
       toast.error('PDF genereren mislukt: ' + (err.message || 'Onbekende fout'));
@@ -562,7 +578,7 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
     try {
       const customer = customers.find(c => String(c.id) === String(offerte.customerId));
       const items = await getOfferteItems(offerte.id);
-      await previewOffertePdf(offerte, items, customer, company);
+      await previewOffertePdf(offerte, items, customer, companyForDocument(offerte, company));
     } catch (err) {
       console.error('PDF preview mislukt:', err);
       toast.error('PDF preview mislukt: ' + (err.message || 'Onbekende fout'));
@@ -720,14 +736,16 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
       let attachments = [];
       try {
         const items = await getOfferteItems(offerte.id);
-        const pdfBase64 = await getOffertePdfBase64(offerte, items, customer, company);
+        const pdfBase64 = await getOffertePdfBase64(offerte, items, customer, companyForDocument(offerte, company));
         attachments = [{ filename: `Offerte-${offerte.nummer}.pdf`, content: pdfBase64 }];
       } catch (pdfErr) {
         console.warn('PDF bijlage genereren mislukt:', pdfErr.message);
       }
       await sendEmail({ to: form.to, subject: form.subject, html: form.body, attachments });
       await logSentEmail({ toEmail: form.to, subject: form.subject, bodyHtml: form.body, relatedType: 'offerte', relatedId: offerte.id, customerId: offerte.customerId });
-      await updateOfferte(offerte.id, { sent_to_email: form.to, ...(offerte.status === 'concept' ? { status: 'verzonden' } : {}) });
+      // Bij eerste verzending: bedrijfs-branding bevriezen op de offerte zodat
+      // latere logo-/kleurwijzigingen deze verstuurde offerte niet veranderen.
+      await updateOfferte(offerte.id, { sent_to_email: form.to, ...(offerte.status === 'concept' ? { status: 'verzonden', ...buildCompanySnapshot(company) } : {}) });
       logTijdlijnSafe(offerte.customerId, 'email_verstuurd', `E-mail verstuurd: ${form.subject}`, { to: form.to, subject: form.subject });
       toast.success('E-mail verstuurd');
       onSent?.();
@@ -892,7 +910,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
         listCustomers(),
       ]);
       const customer = customerList.find(c => c.id === o.customerId) || null;
-      await generateOffertePdf(o, items, customer, company);
+      await generateOffertePdf(o, items, customer, companyForDocument(o, company));
     } catch (e) {
       toast.error('PDF genereren mislukt: ' + e.message);
     }
@@ -1008,7 +1026,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
                       <td className="td" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.omschrijving || '—'}</td>
                       <td className="td" style={{ textAlign: 'right' }}>{fmt(o.totaalExcl)}</td>
                       <td className="td" style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(o.totaalIncl)}</td>
-                      <td className="td">{offerteBadge(o.status)}</td>
+                      <td className="td">{offerteBadge(o.status)}{isOfferteLocked(o) && <Lock size={11} style={{ marginLeft: 5, color: 'var(--dl)', verticalAlign: 'middle' }} title={isOfferteFullyLocked(o) ? 'Ondertekend · vergrendeld' : 'Verstuurd · alleen-lezen'} />}</td>
                       <td className="td">{fmtDate(o.geldigTot)}</td>
                       <td className="td">
                         <div style={{ display: 'flex', gap: 4 }}>

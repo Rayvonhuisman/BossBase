@@ -42,7 +42,7 @@ serve(async (req) => {
     // ── STAP 1: Offerte ophalen ───────────────────────────────────────────────
     const { data: offerte, error: offerteErr } = await admin
       .from('offertes')
-      .select('id, nummer, omschrijving, totaal_incl, company_id, customer_id, signed_at')
+      .select('id, nummer, omschrijving, totaal_incl, company_id, customer_id, signed_at, snapshot_bedrijfsnaam')
       .eq('sign_token', sign_token)
       .maybeSingle()
 
@@ -97,34 +97,49 @@ serve(async (req) => {
     }
     signatureUrl = signed.signedUrl
 
-    // ── STAP 3: Offerte updaten ───────────────────────────────────────────────
-    const now = new Date().toISOString()
-    const { error: updateErr } = await admin.from('offertes').update({
-      signed_at: now,
-      signature_url: signatureUrl,
-      signed_by_name: name,
-      signed_by_email: email,
-      status: 'geaccepteerd',
-    }).eq('id', offerte.id)
-
-    if (updateErr) {
-      return new Response(JSON.stringify({ success: false, error: `Offerte update mislukt: ${updateErr.message}` }), {
-        status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
-      })
-    }
-
-    // ── STAP 4: Company ophalen (voor response metadata) ─────────────────────
+    // ── STAP 3: Company ophalen (branding voor snapshot + response) ──────────
     let company: Record<string, unknown> = {}
     try {
       const { data, error } = await admin
         .from('companies')
-        .select('name, email')
+        .select('name, email, logo_url, branding_color, address, postal_code, city, kvk, btw_number')
         .eq('id', offerte.company_id)
         .maybeSingle()
       if (error) warnings.push(`Company ophalen: ${error.message}`)
       else company = data || {}
     } catch (err) {
       warnings.push(`Company ophalen mislukt: ${err}`)
+    }
+
+    // ── STAP 4: Offerte updaten (ondertekenen) ───────────────────────────────
+    // Branding-snapshot bevriezen als die nog niet bij het versturen is gezet,
+    // zodat de ondertekende offerte er altijd hetzelfde uit blijft zien — ook
+    // als het bedrijf later zijn logo of kleur wijzigt.
+    const now = new Date().toISOString()
+    const updatePayload: Record<string, unknown> = {
+      signed_at: now,
+      signature_url: signatureUrl,
+      signed_by_name: name,
+      signed_by_email: email,
+      status: 'geaccepteerd',
+    }
+    if (!offerte.snapshot_bedrijfsnaam) {
+      updatePayload.snapshot_logo_url = (company?.logo_url as string) ?? null
+      updatePayload.snapshot_branding_color = (company?.branding_color as string) ?? null
+      updatePayload.snapshot_bedrijfsnaam = (company?.name as string) ?? null
+      updatePayload.snapshot_adres = (company?.address as string) ?? null
+      updatePayload.snapshot_postcode = (company?.postal_code as string) ?? null
+      updatePayload.snapshot_plaats = (company?.city as string) ?? null
+      updatePayload.snapshot_email = (company?.email as string) ?? null
+      updatePayload.snapshot_kvk = (company?.kvk as string) ?? null
+      updatePayload.snapshot_btw = (company?.btw_number as string) ?? null
+    }
+    const { error: updateErr } = await admin.from('offertes').update(updatePayload).eq('id', offerte.id)
+
+    if (updateErr) {
+      return new Response(JSON.stringify({ success: false, error: `Offerte update mislukt: ${updateErr.message}` }), {
+        status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+      })
     }
 
     // ── STAP 5: PDF verwerken (frontend-gegenereerde PDF uploaden) ────────────

@@ -25,6 +25,16 @@ const toFactuur = row => ({
   isCredit: row.is_credit || false,
   creditVanFactuurId: row.credit_van_factuur_id || null,
   gecrediteerd: row.gecrediteerd || false,
+  // Bevroren bedrijfs-branding op moment van versturen (zie documentSnapshot.js)
+  snapshotLogoUrl: row.snapshot_logo_url || null,
+  snapshotBrandingColor: row.snapshot_branding_color || null,
+  snapshotBedrijfsnaam: row.snapshot_bedrijfsnaam || null,
+  snapshotAdres: row.snapshot_adres || null,
+  snapshotPostcode: row.snapshot_postcode || null,
+  snapshotPlaats: row.snapshot_plaats || null,
+  snapshotEmail: row.snapshot_email || null,
+  snapshotKvk: row.snapshot_kvk || null,
+  snapshotBtw: row.snapshot_btw || null,
 })
 
 const toRegel = row => ({
@@ -107,7 +117,20 @@ export async function createFactuur(input) {
   return factuur
 }
 
+// Inhoudelijke velden die op een verstuurde factuur niet meer mogen wijzigen.
+const FACTUUR_CONTENT_FIELDS = ['vervaldatum', 'betalingskenmerk', 'notities', 'totaal_excl', 'totaal_incl']
+
 export async function updateFactuur(id, input) {
+  // Een verstuurde/betaalde factuur is alleen-lezen: inhoud kan niet meer
+  // wijzigen. Status (betaald markeren), herinneringen en de branding-snapshot
+  // mogen nog wel. We controleren server-side voor de zekerheid.
+  if (FACTUUR_CONTENT_FIELDS.some(k => k in input)) {
+    const { data: cur } = await supabase.from('facturen').select('status').eq('id', id).maybeSingle()
+    if (cur && !['concept', 'aangemaakt'].includes(cur.status)) {
+      throw new Error('Een verstuurde factuur kan niet meer gewijzigd worden')
+    }
+  }
+
   const updates = {}
   if ('status' in input)                       updates.status = input.status
   if ('vervaldatum' in input)                  updates.vervaldatum = input.vervaldatum
@@ -117,6 +140,10 @@ export async function updateFactuur(id, input) {
   if ('totaal_incl' in input)                  updates.totaal_incl = input.totaal_incl
   if ('herinnering_1_verstuurd_at' in input)   updates.herinnering_1_verstuurd_at = input.herinnering_1_verstuurd_at
   if ('herinnering_2_verstuurd_at' in input)   updates.herinnering_2_verstuurd_at = input.herinnering_2_verstuurd_at
+  // Branding-snapshot (bevriezen bij versturen)
+  for (const k of ['snapshot_logo_url', 'snapshot_branding_color', 'snapshot_bedrijfsnaam', 'snapshot_adres', 'snapshot_postcode', 'snapshot_plaats', 'snapshot_email', 'snapshot_kvk', 'snapshot_btw']) {
+    if (k in input) updates[k] = input[k]
+  }
   if (input.status === 'betaald' && !input.betaald_op) {
     updates.betaald_op = new Date().toISOString().slice(0, 10)
   }
@@ -182,6 +209,17 @@ export async function createCreditFactuur(origineleFactuurId, regels, origineleF
     credit_van_factuur_id: origineleFactuurId,
     totaal_excl: Math.round(totaalExcl * 100) / 100,
     totaal_incl: Math.round(totaalIncl * 100) / 100,
+    // Een creditfactuur is meteen "verzonden"; bevries dezelfde branding als de
+    // originele (al bevroren) factuur, zodat ook hij niet meer wijzigt.
+    snapshot_logo_url: origineleFactuur.snapshotLogoUrl || null,
+    snapshot_branding_color: origineleFactuur.snapshotBrandingColor || null,
+    snapshot_bedrijfsnaam: origineleFactuur.snapshotBedrijfsnaam || null,
+    snapshot_adres: origineleFactuur.snapshotAdres || null,
+    snapshot_postcode: origineleFactuur.snapshotPostcode || null,
+    snapshot_plaats: origineleFactuur.snapshotPlaats || null,
+    snapshot_email: origineleFactuur.snapshotEmail || null,
+    snapshot_kvk: origineleFactuur.snapshotKvk || null,
+    snapshot_btw: origineleFactuur.snapshotBtw || null,
   }
   const payload = await withCompanyId(base)
   const { data, error } = await supabase

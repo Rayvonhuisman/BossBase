@@ -35,6 +35,16 @@ const toOfferte = row => ({
   signedPdfUrl: row.signed_pdf_url || null,
   signatureUrl: row.signature_url || null,
   sentToEmail: row.sent_to_email || null,
+  // Bevroren bedrijfs-branding op moment van versturen (zie documentSnapshot.js)
+  snapshotLogoUrl: row.snapshot_logo_url || null,
+  snapshotBrandingColor: row.snapshot_branding_color || null,
+  snapshotBedrijfsnaam: row.snapshot_bedrijfsnaam || null,
+  snapshotAdres: row.snapshot_adres || null,
+  snapshotPostcode: row.snapshot_postcode || null,
+  snapshotPlaats: row.snapshot_plaats || null,
+  snapshotEmail: row.snapshot_email || null,
+  snapshotKvk: row.snapshot_kvk || null,
+  snapshotBtw: row.snapshot_btw || null,
   // Joined klant (optional — alleen aanwezig bij select met customers(*))
   customerName: row.customers?.name || "",
   raw: row,
@@ -161,7 +171,20 @@ export async function createOfferte(input) {
   return offerte
 }
 
+// Inhoudelijke velden die op een verstuurde/ondertekende offerte vastliggen.
+const OFFERTE_CONTENT_FIELDS = ['customer_id', 'omschrijving', 'geldig_tot', 'notes', 'arbeidsuren', 'uurtarief', 'materiaalkosten', 'reiskosten', 'marge_pct', 'btw_pct', 'totaal_excl', 'totaal_incl']
+
 export async function updateOfferte(id, input) {
+  // Een verstuurde of ondertekende offerte is een vastgelegd document: de inhoud
+  // kan niet meer wijzigen. Status-wijzigingen, verzend-/ondertekengegevens en de
+  // branding-snapshot mogen nog wel.
+  if (OFFERTE_CONTENT_FIELDS.some(k => k in input)) {
+    const { data: cur } = await supabase.from('offertes').select('status, signed_at').eq('id', id).maybeSingle()
+    if (cur && (cur.status !== 'concept' || cur.signed_at)) {
+      throw new Error('Een verstuurde of ondertekende offerte kan niet meer gewijzigd worden')
+    }
+  }
+
   const updates = { ...input }
 
   // Herbereken totalen als financiële velden aanwezig zijn
