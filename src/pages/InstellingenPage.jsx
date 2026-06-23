@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase.js';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { useUploads } from '../lib/uploadContext.jsx';
+import { openCookieBanner } from '../components/CookieBanner.jsx';
 import {
   getBedrijfsinstellingen,
   upsertBedrijfsinstellingen,
@@ -713,6 +714,15 @@ export function InstellingenPage() {
               <label>Rol</label>
               <input value={profile?.role || ''} disabled />
             </div>
+          </div>
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+            <button
+              type="button"
+              onClick={openCookieBanner}
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--pd)', fontWeight: 600, fontSize: '.84rem', textDecoration: 'underline' }}
+            >
+              Cookievoorkeuren wijzigen
+            </button>
           </div>
         </div>
       )}

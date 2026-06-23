@@ -41,6 +41,8 @@ import { usePermissions } from './hooks/usePermissions.js';
 import { clearCompanyId, setCompanyId } from './lib/currentCompany.js';
 import { ToastProvider, useToast } from './lib/toast.jsx';
 import { UploadProvider } from './lib/uploadContext.jsx';
+import { CookieBanner } from './components/CookieBanner.jsx';
+import { CookieverklaringPage } from './pages/CookieverklaringPage.jsx';
 import { ProfileContext, displayName, profileInitials } from './lib/profileContext.jsx';
 import { DataContext, useData } from './lib/dataContext.jsx';
 import { listCustomers } from './services/customerService.js';
@@ -1177,6 +1179,10 @@ function AppInner() {
     return <DemoPage navigate={navigate} isAuthenticated={Boolean(session)} />;
   }
 
+  if (route === '/cookieverklaring') {
+    return <CookieverklaringPage navigate={navigate} />;
+  }
+
   if (route === '/login') {
     if (session) {
       navigate('/dashboard', true);
@@ -1437,6 +1443,7 @@ function AppInner() {
           />
         )}
       </div>
+      <CookieBanner navigate={navigate} />
       </DataContext.Provider>
     </ProfileContext.Provider>
   );
