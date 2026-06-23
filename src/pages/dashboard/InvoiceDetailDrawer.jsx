@@ -101,7 +101,11 @@ export function InvoiceDetailDrawer({ invoiceId, onClose, setPage, openCustomer 
             <span style={{ fontSize: 13, fontWeight: 700, color: '#6b7280', fontFamily: 'ui-monospace,Menlo,monospace' }}>{ref}</span>
             <span className={`badge ${tone}`}>{statusLabel}</span>
           </div>
-          <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.3, color: '#0a0a0a', marginTop: 6 }}>{inv.customerName || 'Geen klant'}</div>
+          <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.3, marginTop: 6 }}>
+            {inv.customerId && openCustomer
+              ? <button type="button" onClick={() => openCustomer(inv.customerId)} title="Open klantkaart" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', fontSize: 20, fontWeight: 800, letterSpacing: -0.3, color: 'var(--p)', textDecoration: 'none' }} onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')} onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}>{inv.customerName || 'Klant'}</button>
+              : <span style={{ color: '#0a0a0a' }}>{inv.customerName || 'Geen klant'}</span>}
+          </div>
           <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 16, fontWeight: 800, color: '#15A34A', letterSpacing: -0.2 }}>{fmt(inv.totaalIncl || 0)}</span>
             <span style={{ fontSize: 11.5, color: '#9ca3af' }}>incl. btw</span>

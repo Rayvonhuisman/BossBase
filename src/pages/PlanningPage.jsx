@@ -734,7 +734,7 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, onClose, onSa
 
 // ── WERKBON DETAIL MODAL ──────────────────────────────────────────────────────
 
-function DetailModal({ werkbon, teamMembers, voertuigen, onClose, onUpdated }) {
+function DetailModal({ werkbon, teamMembers, voertuigen, onClose, onUpdated, openCustomer }) {
   const toast = useToast();
   const [form, setForm] = useState({
     titel: werkbon.titel || '',
@@ -798,7 +798,11 @@ function DetailModal({ werkbon, teamMembers, voertuigen, onClose, onUpdated }) {
         <div className="modal-hd">
           <div>
             <div className="modal-title">{werkbon.titel}</div>
-            {werkbon.customerName && <div className="modal-sub">{werkbon.customerName}</div>}
+            {werkbon.customerName && (
+              werkbon.customerId && openCustomer
+                ? <button type="button" className="modal-sub" onClick={() => { onClose(); openCustomer(werkbon.customerId); }} title="Open klantkaart" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', color: 'var(--p)', fontWeight: 600, textDecoration: 'none' }} onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')} onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}>{werkbon.customerName}</button>
+                : <div className="modal-sub">{werkbon.customerName}</div>
+            )}
           </div>
           <ModalX onClose={onClose} />
         </div>
@@ -874,7 +878,7 @@ function Legend({ items }) {
 
 // ── PLANNING PAGE ─────────────────────────────────────────────────────────────
 
-export function PlanningPage() {
+export function PlanningPage({ openCustomer } = {}) {
   const toast = useToast();
   const { profile } = useProfile();
 
@@ -1264,6 +1268,7 @@ export function PlanningPage() {
             setWerkbonnen(prev => prev.map(w => w.id === updated.id ? updated : w));
             setDetailWb(null);
           }}
+          openCustomer={openCustomer}
         />
       )}
     </div>

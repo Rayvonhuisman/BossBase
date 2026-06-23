@@ -1161,7 +1161,7 @@ function AppInner() {
         ) : <CustomersPage openCustomer={openCustomer} />;
       case 'activities': return <ActivitiesPageV2 openCustomer={openCustomer} preOpenActivityId={navIntent?.page === 'activities' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'calendar':   return <CalendarPage openCustomer={openCustomer} openCalendarEvent={openCalendarEvent} setPage={navigatePage} preOpenActivityId={navIntent?.page === 'calendar' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
-      case 'planning':   return <PlanningPage />;
+      case 'planning':   return <PlanningPage openCustomer={openCustomer} />;
       case 'costs':       return <CostsPage />;
       case 'revenue':     return <RevenuePage />;
       case 'facturen':    return <FacturenPage openCustomer={openCustomer} preOpenFactuurId={navIntent?.page === 'facturen' ? navIntent.id : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'facturen' ? backCtx : null} onBackKlant={goBackToKlant} />;

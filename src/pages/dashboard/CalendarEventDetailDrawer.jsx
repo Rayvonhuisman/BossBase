@@ -358,7 +358,9 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
           <Row k="Starttijd" v={ev.time || '—'} />
           <Row k="Eindtijd" v={ev.end || '—'} />
           <Row k="Locatie" v={ev.location || '—'} />
-          <Row k="Klant" v={customers.find(c => c.id === ev.custId)?.name || (ev.custId ? 'Gekoppeld' : '—')} />
+          <Row k="Klant" v={ev.custId && openCustomer
+            ? <button type="button" onClick={() => openCustomer(ev.custId)} title="Open klantkaart" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', fontWeight: 700, color: 'var(--p)', textDecoration: 'none' }} onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')} onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}>{customers.find(c => c.id === ev.custId)?.name || 'Gekoppeld'}</button>
+            : '—'} />
         </Section>
       )}
 

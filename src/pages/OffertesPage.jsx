@@ -535,7 +535,7 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
 
 // ── VIEW OFFERTE MODAL ───────────────────────────────────────────────────────
 
-function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMail }) {
+function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMail, openCustomer }) {
   const { company } = useProfile();
   const toast = useToast();
   const customerName = offerte.customerName || customers.find(c => c.id == offerte.customerId)?.name || '—';
@@ -584,7 +584,9 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>Klant</div>
-              <div style={{ fontWeight: 500 }}>{customerName}</div>
+              {offerte.customerId && openCustomer
+                ? <button type="button" onClick={() => { onClose(); openCustomer(offerte.customerId); }} title="Open klantkaart" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', fontWeight: 500, color: 'var(--p)', textDecoration: 'none' }} onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')} onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}>{customerName}</button>
+                : <div style={{ fontWeight: 500 }}>{customerName}</div>}
             </div>
             <div>
               <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>Status</div>
@@ -1050,6 +1052,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
           onClose={() => setViewOfferte(null)}
           onMaakFactuur={handleMaakFactuur}
           onSendMail={o => setSendMailOfferte(o)}
+          openCustomer={openCustomer}
         />
       )}
       {factuurPrefill && (

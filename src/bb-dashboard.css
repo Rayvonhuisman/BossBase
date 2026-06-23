@@ -1315,6 +1315,8 @@ ul{list-style:none}
 
 /* ── Detail page (navigate-in view) ──────────────────────────────────── */
 .wb2-detail-page{display:flex;flex-direction:column;gap:14px}
+.wb2-cust-link{display:inline;padding:0;margin:0;border:0;background:none;font:inherit;color:var(--p);font-weight:700;letter-spacing:inherit;cursor:pointer;text-decoration:none;transition:color .12s}
+.wb2-cust-link:hover{text-decoration:underline}
 .wb2-detail-back{display:inline-flex;align-items:center;gap:6px;color:var(--dl);font-size:13px;font-weight:600;cursor:pointer;background:none;border:0;padding:0;font-family:inherit;transition:color .12s}
 .wb2-detail-back:hover{color:var(--dk)}
 .wb2-action-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}

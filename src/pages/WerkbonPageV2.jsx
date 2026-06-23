@@ -702,7 +702,7 @@ function NotitiesSection({ notities, onSave, teamMembers = [] }) {
 
 // ─── MAIN PAGE ──────────────────────────────────────────────────────────────
 
-export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage } = {}) {
+export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCustomer } = {}) {
   const toast = useToast();
   const { profile } = useProfile();
   const { startUpload } = useUploads();
@@ -1061,7 +1061,18 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage } = {})
                   )}
                 </div>
                 <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-.02em', color: 'var(--dk)', marginBottom: 3 }}>
-                  {detail.customerName || detail.titel}
+                  {detail.customerName && detail.customerId && openCustomer ? (
+                    <button
+                      type="button"
+                      className="wb2-cust-link"
+                      onClick={() => openCustomer(detail.customerId)}
+                      title="Open klantkaart"
+                    >
+                      {detail.customerName}
+                    </button>
+                  ) : (
+                    detail.customerName || detail.titel
+                  )}
                 </div>
                 {detail.customerName && (
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--dmu)', marginBottom: 6 }}>
