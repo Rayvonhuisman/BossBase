@@ -9,7 +9,7 @@ import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { getWerkbonnen, createWerkbon, updateWerkbon } from '../services/werkbonService.js';
 import { getVoertuigen } from '../services/voertuigService.js';
-import { getTeamMembers, createAssignmentNotification } from '../services/notificatieService.js';
+import { getActiveTeamMembers, createAssignmentNotification } from '../services/notificatieService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
 import { upsertWerkbonEvent, upsertActivityEvent, deleteWerkbonEvent, deleteActivityEvent } from '../services/calendarService.js';
@@ -912,7 +912,7 @@ export function PlanningPage({ openCustomer } = {}) {
     try {
       const [wbs, members, voerts, custs, projs, acts] = await Promise.all([
         getWerkbonnen(),
-        getTeamMembers().catch(() => []),
+        getActiveTeamMembers({ includeSelf: true }).catch(() => []),
         getVoertuigen().catch(() => []),
         listCustomers().catch(() => []),
         getProjects().catch(() => []),

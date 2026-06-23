@@ -3,6 +3,7 @@ import { withCompanyId } from "../lib/currentCompany"
 import { safeInsert } from "../lib/safeInsert"
 import { sanitizeName } from "./customerService"
 import { autoSyncActivitySafe, autoSyncDeleteSafe } from "./googleCalendarService"
+import { upsertActivityEvent } from "./calendarService"
 
 
 // Real DB columns: id, company_id, customer_id, deal_id, assigned_to, title, type,
@@ -165,12 +166,39 @@ export async function createActivity(input) {
   return activity
 }
 
+// Houd een eventueel gekoppeld agenda-item (calendar_event) in sync met de
+// activiteit. We werken ALLEEN een bestaand event bij — we maken geen nieuw
+// agenda-item voor activiteiten die nooit zijn ingepland. Zo loopt het agenda-
+// item overal mee (agenda, activiteiten-pagina, planning), niet alleen op de
+// plek waar de wijziging gebeurt. Best-effort, nooit blokkerend.
+async function syncLinkedActivityEvent(activity) {
+  try {
+    const { data: existing } = await supabase
+      .from("calendar_events")
+      .select("id")
+      .eq("activiteit_id", activity.id)
+      .maybeSingle()
+    if (!existing) return // niet ingepland → geen agenda-item om bij te werken
+    await upsertActivityEvent({
+      activiteitId: activity.id,
+      title: activity.title,
+      date: activity.date,
+      time: activity.time,
+      end: activity.endTime || "",
+      customerId: activity.custId || null,
+      location: activity.location || null,
+    })
+  } catch { /* sync is best-effort */ }
+}
+
 export async function updateActivity(id, input) {
   const payload = mapActivityFormToPayload(input)
   const { data, error } = await supabase.from("activities").update(payload).eq("id", id).select(ACTIVITY_SELECT).single()
   if (error) throw error
   const activity = toActivity(data)
   autoSyncActivitySafe(activity)
+  // Gekoppeld agenda-item meelopen (alleen als het al bestaat).
+  await syncLinkedActivityEvent(activity)
   return activity
 }
 
