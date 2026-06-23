@@ -26,7 +26,7 @@ import { getTeamMembers, createAssignmentNotification } from '../../services/not
 
 const TABS = [
   { id: 'overview',   label: 'Overzicht' },
-  { id: 'offerte',    label: 'Offerte' },
+  { id: 'offerte',    label: 'Offertes' },
   { id: 'uren',       label: 'Uren' },
   { id: 'facturen',   label: 'Facturen' },
   { id: 'werkbonnen', label: 'Werkbonnen' },
