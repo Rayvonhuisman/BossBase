@@ -45,6 +45,7 @@ import { CookieBanner } from './components/CookieBanner.jsx';
 import { CookieverklaringPage } from './pages/CookieverklaringPage.jsx';
 import { ProfileContext, displayName, profileInitials } from './lib/profileContext.jsx';
 import { DataContext, useData } from './lib/dataContext.jsx';
+import MobileBlock from './components/MobileBlock.jsx';
 import { listCustomers } from './services/customerService.js';
 import { listDeals, listPipelineStages } from './services/dealService.js';
 import { listActivities } from './services/activityService.js';
@@ -763,9 +764,27 @@ function MobileBottomNav({ page, setPage, badges = {}, profile }) {
   );
 }
 
+// Mobiel = smal scherm (< 768px). Tablets in landscape (≥768px) blijven als
+// desktop behandeld. Het dashboard is verplaatst naar een aparte app; op
+// mobiel tonen we het download-scherm i.p.v. het dashboard.
+const MOBILE_BREAKPOINT = 768;
+function useIsMobile() {
+  const getMatch = () => typeof window !== 'undefined'
+    && window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`).matches;
+  const [isMobile, setIsMobile] = useState(getMatch);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
+    const onChange = () => setIsMobile(mq.matches);
+    mq.addEventListener ? mq.addEventListener('change', onChange) : mq.addListener(onChange);
+    return () => { mq.removeEventListener ? mq.removeEventListener('change', onChange) : mq.removeListener(onChange); };
+  }, []);
+  return isMobile;
+}
+
 // ── INNER APP ────────────────────────────────────────────────
 function AppInner() {
   const toast = useToast();
+  const isMobile = useIsMobile();
   const [route,      setRoute]      = useState(() => window.location.pathname || '/');
   const [session,    setSession]    = useState(null);
   const [authReady,  setAuthReady]  = useState(false);
@@ -1286,6 +1305,13 @@ function AppInner() {
         onBack={handleLogout}
       />
     );
+  }
+
+  // Mobiel: het dashboard is verplaatst naar een aparte app → toon het
+  // download-scherm i.p.v. de dashboard-shell. Login/registratie/verificatie
+  // (hierboven), de ondertekenpagina en de marketingsite blijven mobiel werken.
+  if (isMobile) {
+    return <MobileBlock onLogout={handleLogout} />;
   }
 
   authLog('shell RENDER', { role: profile?.role, perms: userPermissions });
