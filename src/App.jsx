@@ -984,6 +984,17 @@ function AppInner() {
     }
   }, [company, session]); // eslint-disable-line
 
+  // Gedeactiveerd account → sessie direct verbreken. Een gedeactiveerd teamlid
+  // kan zo niet doorwerken met een nog geldige access-token: bij de volgende
+  // profiel-load (deze effect) wordt hij uitgelogd met melding.
+  useEffect(() => {
+    if (!session || !profile) return;
+    if (profile.actief === false) {
+      toast.info?.('Je account is gedeactiveerd. Neem contact op met je beheerder.');
+      supabase.auth.signOut();
+    }
+  }, [profile, session]); // eslint-disable-line
+
   const navigate = (path, replace = false) => {
     const nextPath = path === '/website' ? '/' : path === '/registreer' ? '/register' : path;
     const changed = window.location.pathname !== nextPath;
@@ -1156,7 +1167,7 @@ function AppInner() {
       case 'facturen':    return <FacturenPage openCustomer={openCustomer} preOpenFactuurId={navIntent?.page === 'facturen' ? navIntent.id : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'facturen' ? backCtx : null} onBackKlant={goBackToKlant} />;
       case 'offertes':    return <OffertesPage openCustomer={openCustomer} preOpenOfferteId={navIntent?.page === 'offertes' ? navIntent.id : null} preFillDealId={navIntent?.page === 'offertes' ? navIntent.dealId : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'offertes' ? backCtx : null} onBackKlant={goBackToKlant} />;
       case 'projecten':   return <ProjectsPage openCustomer={openCustomer} openInvoice={openInvoice} setPage={navigatePage} preOpenProjectId={navIntent?.page === 'projecten' ? navIntent.id : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'projecten' ? backCtx : null} onBackKlant={goBackToKlant} />;
-      case 'werkbonnen':  return <WerkbonPage preOpenWerkbonId={navIntent?.page === 'werkbonnen' ? navIntent.id : null} onNavConsumed={clearNavIntent} setPage={navigatePage} />;
+      case 'werkbonnen':  return <WerkbonPage preOpenWerkbonId={navIntent?.page === 'werkbonnen' ? navIntent.id : null} onNavConsumed={clearNavIntent} setPage={navigatePage} openCustomer={openCustomer} />;
       case 'uren':        return <UrenPage />;
       case 'database':    return <DatabasePage openCustomer={openCustomer} />;
       case 'team':        return <TeamPage />;

@@ -162,31 +162,39 @@ export async function updateTeamMember(id, input) {
 
 // ── STATUS WIJZIGEN ──────────────────────────────────────────────────────────
 
+// (De)activeren en verwijderen lopen via de edge function delete-team-member,
+// die met de service role óók het auth.users-account raakt. Anders zou een
+// gedeactiveerd/verwijderd teamlid met zijn bestaande sessie gewoon kunnen
+// doorwerken (alleen de company_members-rij aanpassen volstaat niet).
+async function callTeamMemberAction(memberId, action) {
+  const { data, error } = await supabase.functions.invoke("delete-team-member", {
+    body: { memberId, action },
+  })
+  if (error) {
+    let message = error.message
+    try { const b = await error.context?.json(); if (b?.error) message = b.error } catch {}
+    throw new Error(message)
+  }
+  if (!data?.success) throw new Error(data?.error || `${action} mislukt`)
+  return data
+}
+
 export async function activateTeamMember(id) {
-  const { data, error } = await supabase
-    .from("company_members")
-    .update({ status: "actief", accepted_at: new Date().toISOString() })
-    .eq("id", id)
-    .select()
-    .single()
-  if (error) throw error
-  return toTeamMember(data)
+  await callTeamMemberAction(id, "activate")
+  // Verse staat teruglezen voor de UI.
+  const { data } = await supabase.from("company_members").select("*").eq("id", id).maybeSingle()
+  return data ? toTeamMember(data) : null
 }
 
 export async function deactivateTeamMember(id) {
-  const { data, error } = await supabase
-    .from("company_members")
-    .update({ status: "inactief" })
-    .eq("id", id)
-    .select()
-    .single()
-  if (error) throw error
-  return toTeamMember(data)
+  await callTeamMemberAction(id, "deactivate")
+  const { data } = await supabase.from("company_members").select("*").eq("id", id).maybeSingle()
+  return data ? toTeamMember(data) : null
 }
 
 // ── VERWIJDEREN ──────────────────────────────────────────────────────────────
-
+// Hard verwijderen: auth.users + profiel weg, sessies ongeldig, company_members
+// en uren cascade'n mee, en assigned_to-verwijzingen worden NULL.
 export async function deleteTeamMember(id) {
-  const { error } = await supabase.from("company_members").delete().eq("id", id)
-  if (error) throw error
+  await callTeamMemberAction(id, "delete")
 }

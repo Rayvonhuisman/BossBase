@@ -16,6 +16,8 @@ const toProfile = (row, user) => ({
   createdAt: row.created_at || null,
   isSuperAdmin: row.is_super_admin || false,
   emailVerifiedAt: row.email_verified_at || null,
+  // actief === false → account gedeactiveerd; App.jsx logt deze sessie uit.
+  actief: row.actief !== false,
   raw: row,
 })
 

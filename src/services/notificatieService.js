@@ -194,10 +194,12 @@ export async function createAssignmentNotification({ assignedToUserId, assignedT
 }
 
 // ── TEAM MEMBERS HELPER ──────────────────────────────────────────────────────
+// Eén bron voor "actieve teamleden": dropdowns, @mentions, planning-rijen,
+// toewijzingen. Gedeactiveerde (actief=false) én verwijderde (rij weg) profielen
+// vallen hier automatisch buiten, zodat ze nergens meer opduiken.
 
-export async function getTeamMembers() {
+export async function getActiveTeamMembers({ includeSelf = false } = {}) {
   const companyId = await getCompanyId();
-  if (import.meta.env.DEV) console.log('[getTeamMembers] companyId:', companyId);
   if (!companyId) return [];
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -207,11 +209,17 @@ export async function getTeamMembers() {
     .from('profiles')
     .select('id, full_name')
     .eq('company_id', companyId)
+    .eq('actief', true)
     .order('full_name', { ascending: true });
 
-  if (currentUserId) query = query.neq('id', currentUserId);
+  if (!includeSelf && currentUserId) query = query.neq('id', currentUserId);
 
   const { data, error } = await query;
-  if (import.meta.env.DEV) console.log('[getTeamMembers] rows:', data?.length ?? 0, 'error:', error?.message ?? null);
+  if (import.meta.env.DEV) console.log('[getActiveTeamMembers] rows:', data?.length ?? 0, 'error:', error?.message ?? null);
   return (data || []).map(r => ({ id: r.id, fullName: r.full_name || '' })).filter(m => m.fullName);
+}
+
+// Backwards-compatibele naam — levert nu alleen nog actieve teamleden.
+export async function getTeamMembers() {
+  return getActiveTeamMembers();
 }
