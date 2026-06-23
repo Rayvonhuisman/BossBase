@@ -67,7 +67,6 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   const [teamMembers, setTeamMembers] = useState([]);
   const [savingNotitie, setSavingNotitie] = useState(false);
   const [savingOverzicht, setSavingOverzicht] = useState(false);
-  const [showNotitiesInput, setShowNotitiesInput] = useState(false);
   const [notitiesVisible, setNotitiesVisible] = useState(10);
   const [fullscreen, setFullscreen] = useState(() => localStorage.getItem('customer_fullscreen') === 'true');
   const [sbWidth, setSbWidth] = useState(232);
@@ -152,7 +151,6 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
       setFacturen(facturen);
       setProjecten(projecten);
       setNotitiesVisible(10);
-      setShowNotitiesInput(false);
       setError('');
     })
     .catch(err => alive && setError(err.message || 'Klant laden is mislukt.'))
