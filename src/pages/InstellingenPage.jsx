@@ -72,6 +72,13 @@ const COLOR_OPTIONS = [
   { label: 'Groen', value: 'b-green' },
   { label: 'Oranje', value: 'b-orange' },
   { label: 'Rood', value: 'b-red' },
+  { label: 'Paars', value: 'b-purple' },
+  { label: 'Nieuw (groen vol)', value: 'b-new' },
+  { label: 'Gepland (blauw)', value: 'b-planned' },
+  { label: 'In uitvoering', value: 'b-progress' },
+  { label: 'Afgerond', value: 'b-done' },
+  { label: 'Geaccepteerd', value: 'b-accepted' },
+  { label: 'Verloren', value: 'b-lost' },
 ];
 
 export function InstellingenPage() {
@@ -119,6 +126,7 @@ export function InstellingenPage() {
   const [savingStage, setSavingStage] = useState(false);
   const [editingStageId, setEditingStageId] = useState(null);
   const [editingStageValue, setEditingStageValue] = useState('');
+  const [editingStageColor, setEditingStageColor] = useState('b-gray');
 
   // Integraties
   // TODO: replace with real OAuth flow when Google API credentials are configured
@@ -1311,7 +1319,7 @@ export function InstellingenPage() {
               <div style={{ background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 'var(--r10)', padding: 14, marginBottom: 14, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div className="f" style={{ flex: '1 1 160px' }}>
                   <label>Naam *</label>
-                  <input autoFocus placeholder="Bijv. Busje 1" value={newVoertuigForm.naam} onChange={e => setNewVoertuigForm(f => ({ ...f, naam: e.target.value }))} />
+                  <input autoFocus placeholder="Bijv. Bus 1" value={newVoertuigForm.naam} onChange={e => setNewVoertuigForm(f => ({ ...f, naam: e.target.value }))} />
                 </div>
                 <div className="f" style={{ flex: '1 1 120px' }}>
                   <label>Kenteken</label>

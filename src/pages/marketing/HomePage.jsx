@@ -346,8 +346,8 @@ const FEATURES = [
   {
     icon: I.users,
     title: "Team & rollen",
-    desc: "Werk je met meerdere busjes? Plan teams, beheer rollen en houd beschikbaarheid en verlof bij.",
-    points: ["Meerdere teams en busjes plannen", "Rollen en rechten per medewerker", "Beschikbaarheid en verlof"],
+    desc: "Werk je met meerdere bussen? Plan teams, beheer rollen en houd beschikbaarheid en verlof bij.",
+    points: ["Meerdere teams en bussen plannen", "Rollen en rechten per medewerker", "Beschikbaarheid en verlof"],
     Visual: FeatureVisualTeam,
     flip: false,
     title4bar: "BossBase — Team",
@@ -759,10 +759,10 @@ const TIERS_HOME = [
     hot: true, btn: "btn-p glow",
   },
   {
-    tier: "Onderneming", who: "Grotere bedrijven met meerdere busjes",
+    tier: "Onderneming", who: "Grotere bedrijven met meerdere bussen",
     price: 59, extra: "+ € 10 per gebruiker (ook de eerste)",
     inherit: "Alles van Vakman, plus:",
-    items: ["Team & rollen", "Meerdere teams / busjes plannen", "Beschikbaarheid & verlof", "Nacalculatie: begroot vs. werkelijk"],
+    items: ["Team & rollen", "Meerdere teams / bussen plannen", "Beschikbaarheid & verlof", "Nacalculatie: begroot vs. werkelijk"],
     hot: false, btn: "btn-s",
   },
 ]
