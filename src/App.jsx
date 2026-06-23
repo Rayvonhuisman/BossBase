@@ -1074,9 +1074,11 @@ function AppInner() {
     }
     const hasIntent = intent && (intent.id || intent.dealId);
     setNavIntent(hasIntent ? { page: p, ...intent } : null);
-    // Bewaar terug-naar-klant context als we vanuit een klantkaart komen.
+    // Bewaar terug-context: vanuit een klantkaart óf vanuit een projectdetail.
     if (intent?.from === 'klant' && intent?.klantId) {
-      setBackCtx({ page: p, klantId: intent.klantId, klantNaam: intent.klantNaam || '' });
+      setBackCtx({ page: p, kind: 'klant', klantId: intent.klantId, klantNaam: intent.klantNaam || '' });
+    } else if (intent?.from === 'project' && intent?.projectId) {
+      setBackCtx({ page: p, kind: 'project', projectId: intent.projectId, klantNaam: intent.projectNaam || 'project' });
     } else {
       setBackCtx(null);
     }
@@ -1086,12 +1088,19 @@ function AppInner() {
     closeCalEvent();
   };
   const clearNavIntent = () => setNavIntent(null);
-  // Terug naar de klantkaart: ga naar de klantenpagina en open de klant.
-  const goBackToKlant = (klantId) => {
-    if (!klantId) return;
+  // Terug-navigatie: naar de klantkaart óf naar het projectdetail, afhankelijk
+  // van de bewaarde context (kind). Ontvangt de hele backCtx van de pagina.
+  const goBack = (ctx) => {
+    if (!ctx) return;
     setBackCtx(null);
-    navigatePage('customers');
-    openCustomer(klantId);
+    if (ctx.kind === 'project' && ctx.projectId) {
+      navigatePage('projecten', { id: ctx.projectId });
+      return;
+    }
+    if (ctx.klantId) {
+      navigatePage('customers');
+      openCustomer(ctx.klantId);
+    }
   };
   const handleLogout = async () => {
     try {
@@ -1209,10 +1218,10 @@ function AppInner() {
       case 'planning':   return <PlanningPage openCustomer={openCustomer} />;
       case 'costs':       return <CostsPage />;
       case 'revenue':     return <RevenuePage />;
-      case 'facturen':    return <FacturenPage openCustomer={openCustomer} preOpenFactuurId={navIntent?.page === 'facturen' ? navIntent.id : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'facturen' ? backCtx : null} onBackKlant={goBackToKlant} />;
-      case 'offertes':    return <OffertesPage openCustomer={openCustomer} preOpenOfferteId={navIntent?.page === 'offertes' ? navIntent.id : null} preFillDealId={navIntent?.page === 'offertes' ? navIntent.dealId : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'offertes' ? backCtx : null} onBackKlant={goBackToKlant} />;
-      case 'projecten':   return <ProjectsPage openCustomer={openCustomer} openInvoice={openInvoice} setPage={navigatePage} preOpenProjectId={navIntent?.page === 'projecten' ? navIntent.id : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'projecten' ? backCtx : null} onBackKlant={goBackToKlant} />;
-      case 'werkbonnen':  return <WerkbonPage preOpenWerkbonId={navIntent?.page === 'werkbonnen' ? navIntent.id : null} onNavConsumed={clearNavIntent} setPage={navigatePage} openCustomer={openCustomer} />;
+      case 'facturen':    return <FacturenPage openCustomer={openCustomer} preOpenFactuurId={navIntent?.page === 'facturen' ? navIntent.id : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'facturen' ? backCtx : null} onBackKlant={goBack} />;
+      case 'offertes':    return <OffertesPage openCustomer={openCustomer} preOpenOfferteId={navIntent?.page === 'offertes' ? navIntent.id : null} preFillDealId={navIntent?.page === 'offertes' ? navIntent.dealId : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'offertes' ? backCtx : null} onBackKlant={goBack} />;
+      case 'projecten':   return <ProjectsPage openCustomer={openCustomer} openInvoice={openInvoice} setPage={navigatePage} preOpenProjectId={navIntent?.page === 'projecten' ? navIntent.id : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'projecten' ? backCtx : null} onBackKlant={goBack} />;
+      case 'werkbonnen':  return <WerkbonPage preOpenWerkbonId={navIntent?.page === 'werkbonnen' ? navIntent.id : null} onNavConsumed={clearNavIntent} setPage={navigatePage} openCustomer={openCustomer} backKlant={backCtx?.page === 'werkbonnen' ? backCtx : null} onBackKlant={goBack} />;
       case 'uren':        return <UrenPage />;
       case 'database':    return <DatabasePage openCustomer={openCustomer} />;
       case 'team':        return <TeamPage />;

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import { I, ModalX, fmt } from '../../bb-shared.jsx';
 import { useToast } from '../../lib/toast.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
@@ -53,9 +54,17 @@ function HealthChip({ health }) {
 
 // ── HEADER ───────────────────────────────────────────────────────────────────
 
-function DrawerHeader({ project, onClose }) {
+function DrawerHeader({ project, onClose, fullscreen, onToggleFullscreen }) {
   return (
     <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--br)', display: 'flex', alignItems: 'flex-start', gap: 12, position: 'sticky', top: 0, background: '#fff', zIndex: 2 }}>
+      <button
+        className="btn-icon"
+        style={{ flexShrink: 0, marginTop: 2, color: 'var(--dl)' }}
+        onClick={onToggleFullscreen}
+        title={fullscreen ? 'Kleiner weergeven' : 'Volledig scherm'}
+      >
+        {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+      </button>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--dk)', letterSpacing: '-.01em', wordBreak: 'break-word', overflowWrap: 'break-word' }}>{project.name}</div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
@@ -73,7 +82,7 @@ function DrawerHeader({ project, onClose }) {
 
 function Tabs({ tab, setTab }) {
   return (
-    <div className="tabs" style={{ padding: '8px 16px', borderBottom: '1px solid var(--br)', overflowX: 'auto', whiteSpace: 'nowrap' }}>
+    <div className="tabs kk-tabs" style={{ padding: '8px 16px', borderBottom: '1px solid var(--br)' }}>
       {TABS.map(t => (
         <button
           key={t.id}
@@ -342,7 +351,7 @@ function OfferteTab({ project, offertes, setPage, onLink, canManage }) {
       </div>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button className="btn btn-s btn-sm" onClick={() => setPage?.('offertes', { id: linkedOfferte.id })}>
+        <button className="btn btn-s btn-sm" onClick={() => setPage?.('offertes', { id: linkedOfferte.id, from: 'project', projectId: project.id, projectNaam: project.name })}>
           Open offerte {I.arrow_r}
         </button>
         <button className="btn btn-s btn-sm" onClick={() => setPage?.('facturen')}>
@@ -509,8 +518,12 @@ function UrenTab({ project, entries, onAdd, onDelete, canManage }) {
 
 // ── FACTUREN TAB ─────────────────────────────────────────────────────────────
 
-function FacturenTab({ project, invoices, openInvoice, customers, onNew }) {
+function FacturenTab({ project, invoices, openInvoice, setPage, customers, onNew }) {
   const [showNewFactuur, setShowNewFactuur] = useState(false);
+  const openFactuur = f => {
+    if (setPage) setPage('facturen', { id: f.id, from: 'project', projectId: project.id, projectNaam: project.name });
+    else openInvoice?.(f.id);
+  };
   return (
     <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div className="card card-p" style={{ padding: 14, background: '#fafafa' }}>
@@ -548,7 +561,10 @@ function FacturenTab({ project, invoices, openInvoice, customers, onNew }) {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {invoices.map(f => (
-              <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--br)', borderRadius: 8, background: '#fff' }}>
+              <div key={f.id} role="button" tabIndex={0} title="Open factuur"
+                onClick={() => openFactuur(f)}
+                onKeyDown={e => { if (e.key === 'Enter') openFactuur(f); }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--br)', borderRadius: 8, background: '#fff', cursor: 'pointer' }}>
                 <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 13 }}>{f.nummer || '—'}</div>
                 <div style={{ flex: 1, fontSize: 12, color: 'var(--dl)' }}>
                   {fmtDate(f.factuurdatum)}
@@ -558,9 +574,6 @@ function FacturenTab({ project, invoices, openInvoice, customers, onNew }) {
                   {f.status}
                 </span>
                 <div style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{fmt(f.totaalIncl)}</div>
-                {openInvoice && (
-                  <button className="btn btn-xs btn-ghost btn-icon" title="Openen" onClick={() => openInvoice(f.id)}>{I.eye}</button>
-                )}
               </div>
             ))}
           </div>
@@ -659,7 +672,8 @@ const wbShortDate = d => {
   return `${WB_DAY[dt.getDay()]} ${dt.getDate()} ${WB_MONTH[dt.getMonth()]}`;
 };
 
-function WerkbonnenTab({ project, werkbonnen, onCreated, canManage }) {
+function WerkbonnenTab({ project, werkbonnen, onCreated, canManage, setPage }) {
+  const openWerkbon = w => setPage?.('werkbonnen', { id: w.id, from: 'project', projectId: project.id, projectNaam: project.name });
   const toast = useToast();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ titel: '', gepland_op: '' });
@@ -736,7 +750,10 @@ function WerkbonnenTab({ project, werkbonnen, onCreated, canManage }) {
           {werkbonnen.map(w => {
             const pct = w.taakTotal ? Math.round((w.taakDone / w.taakTotal) * 100) : 0;
             return (
-              <div key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--br)', borderRadius: 8, background: '#fff' }}>
+              <div key={w.id} role="button" tabIndex={0} title="Open werkbon"
+                onClick={() => openWerkbon(w)}
+                onKeyDown={e => { if (e.key === 'Enter') openWerkbon(w); }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--br)', borderRadius: 8, background: '#fff', cursor: 'pointer' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {w.titel}
@@ -791,6 +808,26 @@ export function ProjectDetailDrawer({
   const [invoices, setInvoices] = useState([]);
   const [notes, setNotes] = useState([]);
   const [werkbonnen, setWerkbonnen] = useState([]);
+  const [fullscreen, setFullscreen] = useState(false);
+
+  // Full-screen toggle — exact dezelfde aanpak als de klantkaart: voeg de
+  // klasse klant-fullscreen toe aan de .drawer zodat hij het hele scherm vult.
+  useEffect(() => {
+    const drawer = document.querySelector('.drawer');
+    if (!drawer) return;
+    if (fullscreen) {
+      const sb = document.querySelector('.sb');
+      drawer.style.setProperty('--fs-left', `${sb ? sb.offsetWidth : 232}px`);
+      drawer.classList.add('klant-fullscreen');
+    } else {
+      drawer.classList.remove('klant-fullscreen');
+      drawer.style.removeProperty('--fs-left');
+    }
+    return () => {
+      const d = document.querySelector('.drawer');
+      if (d) { d.classList.remove('klant-fullscreen'); d.style.removeProperty('--fs-left'); }
+    };
+  }, [fullscreen]);
 
   const loadAll = async () => {
     setLoading(true);
@@ -901,7 +938,7 @@ export function ProjectDetailDrawer({
             <div style={{ padding: 32, textAlign: 'center', color: 'var(--dl)' }}>Project laden…</div>
           ) : (
             <>
-              <DrawerHeader project={project} onClose={onClose} />
+              <DrawerHeader project={project} onClose={onClose} fullscreen={fullscreen} onToggleFullscreen={() => setFullscreen(f => !f)} />
               <Tabs tab={tab} setTab={setTab} />
 
               {tab === 'overview' && (
@@ -936,6 +973,7 @@ export function ProjectDetailDrawer({
                   project={project}
                   invoices={invoices}
                   openInvoice={openInvoice}
+                  setPage={setPage}
                   customers={customers}
                   onNew={saved => {
                     const next = [{ id: saved.id, nummer: saved.nummer, status: saved.status, factuurdatum: saved.factuurdatum, vervaldatum: saved.vervaldatum, totaalIncl: saved.totaalIncl, totaalExcl: saved.totaalExcl }, ...invoices];
@@ -949,6 +987,7 @@ export function ProjectDetailDrawer({
                 <WerkbonnenTab
                   project={project}
                   werkbonnen={werkbonnen}
+                  setPage={setPage}
                   onCreated={wb => setWerkbonnen(prev => [...prev, wb])}
                   canManage={canManage}
                 />

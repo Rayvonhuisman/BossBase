@@ -702,7 +702,7 @@ function NotitiesSection({ notities, onSave, teamMembers = [] }) {
 
 // ─── MAIN PAGE ──────────────────────────────────────────────────────────────
 
-export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCustomer } = {}) {
+export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCustomer, backKlant, onBackKlant } = {}) {
   const toast = useToast();
   const { profile } = useProfile();
   const { startUpload } = useUploads();
@@ -1022,8 +1022,8 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
     return (
       <div className="wb2-page">
         <div className="wb2-head">
-          <button className="wb2-detail-back" onClick={goBack} type="button">
-            ← Werkbonnen
+          <button className="wb2-detail-back" onClick={backKlant ? () => onBackKlant?.(backKlant) : goBack} type="button">
+            {backKlant ? `← Terug naar ${backKlant.klantNaam}` : '← Werkbonnen'}
           </button>
           <div className="wb2-head-spacer" />
           {canManage && (

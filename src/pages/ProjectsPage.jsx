@@ -402,7 +402,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
 
   return (
     <div>
-      {backKlant && <BackToKlant name={backKlant.klantNaam} onClick={() => onBackKlant?.(backKlant.klantId)} />}
+      {backKlant && <BackToKlant name={backKlant.klantNaam} onClick={() => onBackKlant?.(backKlant)} />}
       <div className="page-hd afu">
         <div>
           <h1>Projecten</h1>
