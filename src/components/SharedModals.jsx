@@ -687,6 +687,24 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
   const addRegel = () => setRegels(rs => [...rs, newKostenRegel()]);
   const removeRegel = id => setRegels(rs => rs.filter(r => r.id !== id));
 
+  // Klant filtert de werkbon-/projectkeuze; werkbon kiezen leidt project + klant
+  // automatisch af (zelfde aanpak als bij uren).
+  const filteredWerkbonnen = form.customer_id
+    ? werkbonnen.filter(w => w.customerId === form.customer_id)
+    : werkbonnen;
+  const filteredProjecten = form.customer_id
+    ? projecten.filter(p => p.customerId === form.customer_id)
+    : projecten;
+  const onWerkbonChange = wid => setForm(f => {
+    const next = { ...f, werkbon_id: wid };
+    const wb = werkbonnen.find(w => w.id === wid);
+    if (wb) {
+      if (wb.projectId) next.project_id = wb.projectId;
+      if (wb.customerId) next.customer_id = wb.customerId;
+    }
+    return next;
+  });
+
   const MAX_FILE_SIZE = 10 * 1024 * 1024;
   const addFiles = files => {
     const next = [];
@@ -814,12 +832,26 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
           <div className="f">
             <label>Categorie</label>
             <select value={form.category} onChange={e => setField('category', e.target.value)}>
-              <option value="materiaal">Materiaal</option>
-              <option value="arbeid">Arbeid</option>
-              <option value="reiskosten">Reiskosten</option>
-              <option value="onderaannemer">Onderaannemer</option>
-              <option value="inkoopfactuur">Inkoopfactuur</option>
-              <option value="overig">Overig</option>
+              <option value="Materiaal">Materiaal</option>
+              <option value="Arbeid">Arbeid</option>
+              <option value="Reiskosten">Reiskosten</option>
+              <option value="Inkoopfactuur">Inkoopfactuur</option>
+              <option value="Algemene kosten">Algemene kosten</option>
+              <option value="Overig">Overig</option>
+            </select>
+          </div>
+          <div className="f">
+            <label>Werkbon <span style={{ color: 'var(--dl)', fontWeight: 400 }}>(optioneel)</span></label>
+            <select value={form.werkbon_id} onChange={e => onWerkbonChange(e.target.value)}>
+              <option value="">Geen werkbon</option>
+              {filteredWerkbonnen.map(w => <option key={w.id} value={w.id}>{w.titel || 'Werkbon'}</option>)}
+            </select>
+          </div>
+          <div className="f">
+            <label>Project <span style={{ color: 'var(--dl)', fontWeight: 400 }}>(optioneel)</span></label>
+            <select value={form.project_id} onChange={e => setField('project_id', e.target.value)}>
+              <option value="">Geen project</option>
+              {filteredProjecten.map(p => <option key={p.id} value={p.id}>{p.name || 'Project'}</option>)}
             </select>
           </div>
           <div className="f s2">

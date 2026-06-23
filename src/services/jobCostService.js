@@ -1,6 +1,28 @@
 import { supabase } from "../lib/supabase"
 import { withCompanyId } from "../lib/currentCompany"
 
+// ── CATEGORIE → LABEL + KLEUR ────────────────────────────────────────────────
+// Eén bron voor categorie-weergave. Case-insensitief zodat 'materiaal' en
+// 'Materiaal' samenvallen. Onbekende categorieën → nette label + grijs.
+export const COST_CATEGORIES = {
+  materiaal:         { label: "Materiaal",       bg: "#eff6ff", color: "#2563eb" }, // blauw
+  arbeid:            { label: "Arbeid",          bg: "#f0fdf4", color: "#15a34a" }, // groen
+  reiskosten:        { label: "Reiskosten",      bg: "#fff7ed", color: "#ea580c" }, // oranje
+  inkoopfactuur:     { label: "Inkoopfactuur",   bg: "#faf5ff", color: "#9333ea" }, // paars
+  "algemene kosten": { label: "Algemene kosten", bg: "#f3f4f6", color: "#6b7280" }, // grijs
+  overig:            { label: "Overig",          bg: "#f3f4f6", color: "#6b7280" }, // grijs
+}
+
+export function costCategoryMeta(cat) {
+  const key = (cat || "").trim().toLowerCase()
+  if (COST_CATEGORIES[key]) return COST_CATEGORIES[key]
+  const label = cat ? cat.charAt(0).toUpperCase() + cat.slice(1) : "Overig"
+  return { label, bg: "#f3f4f6", color: "#6b7280" }
+}
+
+// Lijst voor dropdowns (vaste categorieën, consistente casing).
+export const COST_CATEGORY_OPTIONS = Object.values(COST_CATEGORIES).map(c => c.label)
+
 // kosten-bijlagen is een PRIVÉ bucket. De `bijlage_url`-kolom bevat een JSON-
 // array met opslagpaden ({company_id}/bestand). Deze helper geeft een tijdelijke
 // signed URL terug voor de eerste bijlage (legacy: een opgeslagen http-URL wordt
@@ -40,6 +62,12 @@ export function mapJobCostFormToPayload(input = {}) {
   if (input.deal_id !== undefined || input.dealId !== undefined) {
     payload.deal_id = input.deal_id ?? input.dealId ?? null
   }
+  if (input.project_id !== undefined || input.projectId !== undefined) {
+    payload.project_id = input.project_id ?? input.projectId ?? null
+  }
+  if (input.werkbon_id !== undefined || input.werkbonId !== undefined) {
+    payload.werkbon_id = input.werkbon_id ?? input.werkbonId ?? null
+  }
   if (input.company_id !== undefined || input.companyId !== undefined) {
     payload.company_id = input.company_id ?? input.companyId ?? null
   }
@@ -55,6 +83,8 @@ export function mapJobCostFormToPayload(input = {}) {
 export const toJobCost = row => ({
   id: row.id,
   dealId: row.deal_id,
+  projectId: row.project_id || null,
+  werkbonId: row.werkbon_id || null,
   companyId: row.company_id,
   cat: row.category || "overig",
   desc: row.description || "",
@@ -95,6 +125,52 @@ export async function deleteJobCost(id) {
   if (error) throw error
 }
 
+// ── PROJECT-KOSTEN (direct + via werkbon, één keer geteld) ───────────────────
+// Werkbon → project map voor de indirecte koppeling.
+async function getWerkbonProjectMap() {
+  const { data, error } = await supabase.from("werkbonnen").select("id, project_id")
+  if (error) return {}
+  const map = {}
+  for (const w of (data || [])) if (w.project_id) map[w.id] = w.project_id
+  return map
+}
+
+// Kosten van één project: rechtstreeks (project_id) óf via een werkbon van dit
+// project. Een kost die via BEIDE routes matcht is nog steeds één rij → telt
+// dus precies één keer (geen dubbeltelling).
+export async function getProjectCosts(projectId) {
+  if (!projectId) return []
+  const wbMap = await getWerkbonProjectMap()
+  const werkbonIds = Object.keys(wbMap).filter(id => wbMap[id] === projectId)
+
+  const orParts = [`project_id.eq.${projectId}`]
+  if (werkbonIds.length) orParts.push(`werkbon_id.in.(${werkbonIds.join(",")})`)
+
+  const { data, error } = await supabase
+    .from("job_costs")
+    .select("*")
+    .or(orParts.join(","))
+    .order("cost_date", { ascending: false })
+  if (error) throw error
+  return (data || []).map(toJobCost)
+}
+
+// Totale kosten per project (direct + via werkbon), één keer per kost-rij.
+// Geeft { projectId: totaalBedrag }.
+export async function getProjectCostsMap() {
+  const [costRes, wbMap] = await Promise.all([
+    supabase.from("job_costs").select("amount, project_id, werkbon_id"),
+    getWerkbonProjectMap(),
+  ])
+  const byProject = {}
+  for (const c of (costRes.data || [])) {
+    const pid = c.project_id || wbMap[c.werkbon_id] || null
+    if (!pid) continue
+    byProject[pid] = (byProject[pid] || 0) + Number(c.amount || 0)
+  }
+  return byProject
+}
+
 export async function updateJobCost(id, input) {
   const payload = mapJobCostFormToPayload(input)
   const { data, error } = await supabase.from('job_costs').update(payload).eq('id', id).select('*').single()
@@ -106,6 +182,22 @@ export async function createJobCost(input) {
   const base = mapJobCostFormToPayload(input)
   if (!base.description) throw new Error("Omschrijving is verplicht")
   if (!(base.amount > 0)) throw new Error("Voer een geldig bedrag in")
+
+  // Werkbon-koppeling → project en klant automatisch afleiden van de werkbon
+  // (tenzij expliciet meegegeven). Zo telt een werkbon-kost mee bij het project
+  // en hangt hij aan de juiste klant.
+  if (base.werkbon_id && (!base.project_id || !base.customer_id)) {
+    const { data: wb } = await supabase
+      .from("werkbonnen")
+      .select("project_id, customer_id")
+      .eq("id", base.werkbon_id)
+      .maybeSingle()
+    if (wb) {
+      if (!base.project_id) base.project_id = wb.project_id || null
+      if (!base.customer_id) base.customer_id = wb.customer_id || null
+    }
+  }
+
   const payload = await withCompanyId(base)
   let { data, error } = await supabase
     .from("job_costs")

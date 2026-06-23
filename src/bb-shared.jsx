@@ -1,4 +1,13 @@
 import React from 'react';
+import { costCategoryMeta } from './services/jobCostService.js';
+import { statusInfo } from './utils/statusColors.js';
+
+// Kosten-categorie als gekleurde badge — één weergave overal (kosten, klant,
+// project, werkbon). Kleur + genormaliseerd label komen uit costCategoryMeta.
+export function CostCategoryBadge({ category, style }) {
+  const m = costCategoryMeta(category);
+  return <span className="badge" style={{ background: m.bg, color: m.color, ...style }}>{m.label}</span>;
+}
 
 // ── ICONS ───────────────────────────────────────────────────
 export const I = {
@@ -207,18 +216,12 @@ export function Av({ name, size = 'md', idx = 0 }) {
   return <div className={`av av-${size} ${AV_COLORS[idx % 6]}`}>{initials(name)}</div>;
 }
 
-export function StatusBadge({ status }) {
-  const map = {
-    draft: ['b-draft','Concept'], sent: ['b-sent','Verzonden'], viewed: ['b-viewed','Bekeken'],
-    accepted: ['b-accepted','Geaccepteerd'], declined: ['b-declined','Afgewezen'],
-    expired: ['b-expired','Verlopen'], paid: ['b-paid','Betaald'],
-    open: ['b-open','Open'], overdue: ['b-overdue','Te laat'],
-    today: ['b-today','Vandaag'], planned: ['b-planned','Gepland'],
-    in_progress: ['b-progress','In uitvoering'], completed: ['b-done','Afgerond'],
-    done: ['b-done','Klaar'], lost: ['b-lost','Verloren'], new_lead: ['b-new','Nieuwe aanvragen'],
-  };
-  const [cls, lbl] = map[status] || ['b-gray', status];
-  return <span className={`badge ${cls}`}>{lbl}</span>;
+// Generieke status-badge die de centrale helper gebruikt. Geef `domain` mee
+// ('activiteit', 'offerte', …) zodat dezelfde status-key (bv. "open") de juiste
+// kleur per context krijgt.
+export function StatusBadge({ status, domain }) {
+  const s = statusInfo(status, domain);
+  return <span className={s.className}>{s.label}</span>;
 }
 
 export function Logo({ dark, size = 26 }) {

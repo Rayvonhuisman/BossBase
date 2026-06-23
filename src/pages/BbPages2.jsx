@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   I, CAL_EVENTS, HOURS_DATA, COSTS_DATA, TEAM_DATA, CUSTOMERS_DATA, QUOTES_DATA,
-  fmt, custById, Av, StatusBadge, ModalX, Logo,
+  fmt, custById, Av, StatusBadge, ModalX, Logo, CostCategoryBadge,
 } from '../bb-shared.jsx';
 import { createCalendarEvent, listCalendarEvents, updateCalendarEvent } from '../services/calendarService.js';
 import { createJobCost, deleteJobCost, listJobCosts, updateJobCost, getKostenBijlageUrl } from '../services/jobCostService.js';
@@ -722,12 +722,12 @@ export function HoursPage() {
 
 // ── KOSTEN DETAIL MODAL ───────────────────────────────────────
 const CAT_OPTIONS = [
-  { value: 'materiaal',       label: 'Materiaal' },
-  { value: 'arbeid',          label: 'Arbeid' },
-  { value: 'reiskosten',      label: 'Reiskosten' },
+  { value: 'Materiaal',       label: 'Materiaal' },
+  { value: 'Arbeid',          label: 'Arbeid' },
+  { value: 'Reiskosten',      label: 'Reiskosten' },
   { value: 'Inkoopfactuur',   label: 'Inkoopfactuur' },
   { value: 'Algemene kosten', label: 'Algemene kosten' },
-  { value: 'overig',          label: 'Overig' },
+  { value: 'Overig',          label: 'Overig' },
 ];
 
 function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onClose }) {
@@ -942,7 +942,7 @@ export function CostsPage() {
               return (
                 <tr key={r.id} onClick={() => setSelectedCost(r)} style={{ cursor: 'pointer' }}>
                   <td style={{ fontWeight: 600 }}>{r.customerId ? (customers.find(x => x.id === r.customerId)?.name || '—') : r.klantType === 'algemeen' ? 'Algemeen' : (c?.name || '—')}</td>
-                  <td><span className="badge b-gray" style={{ textTransform: 'capitalize' }}>{r.cat}</span></td>
+                  <td><CostCategoryBadge category={r.cat} /></td>
                   <td>{r.desc}</td>
                   <td style={{ fontWeight: 700 }}>
                     {fmt(r.amt)}

@@ -507,7 +507,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
                 </div>
                 <div style={{ flex: 1 }}>
                   <div className="act-title">{a.title}</div>
-                  <div className="act-meta"><span>{a.date}</span><span>·</span><span>{a.time}</span><StatusBadge status={a.status} /></div>
+                  <div className="act-meta"><span>{a.date}</span><span>·</span><span>{a.time}</span><StatusBadge status={a.status} domain="activiteit" /></div>
                 </div>
                 <button className="btn btn-s btn-xs" onClick={e => { e.stopPropagation(); setSelectedAct(a); }}>Open</button>
               </div>
@@ -1321,9 +1321,7 @@ export function ActivitiesPage({ openCustomer, preOpenActivityId, onNavConsumed 
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                    <span className={`badge ${a.status === 'overdue' ? 'b-overdue' : a.status === 'today' ? 'b-today' : isDone ? 'b-done' : 'b-gray'}`}>
-                      {a.status === 'overdue' ? 'Te laat' : a.status === 'today' ? 'Vandaag' : isDone ? 'Gereed' : 'Open'}
-                    </span>
+                    <StatusBadge status={a.status} domain="activiteit" />
                     {!isDone && <button className="btn btn-s btn-xs" onClick={e => { e.stopPropagation(); markDone(a); }}>{I.check} Gereed</button>}
                   </div>
                 </div>
@@ -1414,7 +1412,7 @@ export function QuotesPage({ openCustomer }) {
                   <td style={{ fontWeight: 700 }}>{fmt(q.amount)}</td>
                   <td style={{ color: 'var(--dl)', fontSize: '.8rem' }}>{q.date}</td>
                   <td style={{ color: 'var(--dl)', fontSize: '.8rem' }}>{q.valid}</td>
-                  <td><StatusBadge status={q.status} /></td>
+                  <td><StatusBadge status={q.status} domain="offerte" /></td>
                   <td>
                     <div style={{ display: 'flex', gap: 3 }}>
                       <button className="btn-icon" title="Bekijk">{I.eye}</button>

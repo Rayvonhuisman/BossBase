@@ -17,6 +17,7 @@ import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
 import { createUrenregel, getUrenregistratie, calculateHours } from '../services/urenService.js';
 import { createJobCost } from '../services/jobCostService.js';
+import { statusInfo } from '../utils/statusColors.js';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 
@@ -42,18 +43,6 @@ const shortDate = d => {
   return `${DAY_LABEL[dt.getDay()]} ${dt.getDate()} ${MONTH_LABEL[dt.getMonth()]}`;
 };
 
-const STATUS_LABEL = {
-  gepland: 'Gepland',
-  in_uitvoering: 'In uitvoering',
-  afgerond: 'Afgerond',
-};
-
-const STATUS_TONE = {
-  gepland: 'blue',
-  in_uitvoering: 'amber',
-  afgerond: 'green',
-};
-
 // ─── BADGES ─────────────────────────────────────────────────────────────────
 
 function WB2Badge({ tone = 'gray', size, children, dot = true }) {
@@ -64,11 +53,18 @@ function WB2Badge({ tone = 'gray', size, children, dot = true }) {
     </span>
   );
 }
-const StatusBadge = ({ status, size }) => (
-  <WB2Badge tone={STATUS_TONE[status] || 'gray'} size={size}>
-    {STATUS_LABEL[status] || status || 'Onbekend'}
-  </WB2Badge>
-);
+// Status-badge via de centrale helper: behoudt de wb2 pill+dot-stijl maar met
+// exact dezelfde kleuren als overal elders (Gepland = blauw, In uitvoering =
+// oranje, Afgerond = groen).
+const StatusBadge = ({ status, size }) => {
+  const s = statusInfo(status, 'werkbon');
+  return (
+    <span className={`wb2-badge ${size === 'sm' ? 'sm' : ''}`} style={{ background: s.bg, color: s.color }}>
+      <span className="wb2-badge-dot" style={{ background: s.dot }} />
+      {s.label}
+    </span>
+  );
+};
 
 // ─── NEW / EDIT WERKBON MODAL ───────────────────────────────────────────────
 
@@ -1249,9 +1245,9 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
       <div className="wb2-chips">
         {[
           ['all', 'Alle', counts.all, null],
-          ['gepland', 'Gepland', counts.gepland, '#2563EB'],
-          ['in_uitvoering', 'In uitvoering', counts.in_uitvoering, '#D97706'],
-          ['afgerond', 'Afgerond', counts.afgerond, '#13a849'],
+          ['gepland', 'Gepland', counts.gepland, statusInfo('gepland', 'werkbon').dot],
+          ['in_uitvoering', 'In uitvoering', counts.in_uitvoering, statusInfo('in_uitvoering', 'werkbon').dot],
+          ['afgerond', 'Afgerond', counts.afgerond, statusInfo('afgerond', 'werkbon').dot],
         ].map(([id, label, c, dot]) => (
           <button
             key={id}

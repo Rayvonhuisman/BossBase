@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Maximize2, Minimize2 } from 'lucide-react';
-import { I, ModalX, fmt, fmt0 } from '../../bb-shared.jsx';
+import { I, ModalX, fmt, fmt0, CostCategoryBadge } from '../../bb-shared.jsx';
 import { useToast } from '../../lib/toast.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
 import {
@@ -19,16 +19,19 @@ import {
   PROJECT_STATUS_OPTIONS,
 } from '../../services/projectsService.js';
 import { getWerkbonnenByProject, createWerkbon } from '../../services/werkbonService.js';
+import { getProjectCosts, createJobCost, deleteJobCost } from '../../services/jobCostService.js';
 import { NewFactuurModal } from '../FacturenPage.jsx';
 import { NewOfferteModal, SendOfferteMailModal } from '../OffertesPage.jsx';
 import { NoteEditor, renderNote } from '../../components/NoteEditor.jsx';
 import { getTeamMembers, createAssignmentNotification } from '../../services/notificatieService.js';
+import { statusInfo } from '../../utils/statusColors.js';
 
 const TABS = [
   { id: 'overview',   label: 'Overzicht' },
   { id: 'offerte',    label: 'Offertes' },
   { id: 'facturen',   label: 'Facturen' },
   { id: 'uren',       label: 'Uren' },
+  { id: 'kosten',     label: 'Kosten' },
   { id: 'werkbonnen', label: 'Werkbonnen' },
   { id: 'notes',      label: 'Notities' },
 ];
@@ -44,8 +47,8 @@ const fmtHours = h => `${Number(h || 0).toLocaleString('nl-NL', { minimumFractio
 const labelStyle = { fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 };
 
 function StatusBadge({ status }) {
-  const cfg = PROJECT_STATUS[status] || { label: status || '—', col: 'b-gray' };
-  return <span className={`badge ${cfg.col}`}>{cfg.label}</span>;
+  const s = statusInfo(status, 'project');
+  return <span className={s.className}>{s.label}</span>;
 }
 
 
@@ -355,7 +358,7 @@ function OfferteTab({ project, offertes, customers, deals = [], company, setPage
             <div style={{ fontSize: 13, color: 'var(--dl)', fontFamily: 'monospace', wordBreak: 'break-all' }}>{linkedOfferte.nummer}</div>
             <div style={{ fontWeight: 600, wordBreak: 'break-word', overflowWrap: 'break-word' }}>{linkedOfferte.omschrijving || project.name}</div>
           </div>
-          <span className={`badge b-${linkedOfferte.status || 'gray'}`}>{linkedOfferte.status}</span>
+          {(() => { const s = statusInfo(linkedOfferte.status, 'offerte'); return <span className={s.className}>{s.label}</span>; })()}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
           <div>
@@ -554,6 +557,156 @@ function UrenTab({ project, entries, onAdd, onDelete, canManage }) {
   );
 }
 
+// ── KOSTEN TAB ───────────────────────────────────────────────────────────────
+// Kosten van dit project: direct gekoppeld (project_id) + via werkbonnen van
+// dit project, gededupliceerd (één kost telt één keer). Winst = gefactureerd −
+// kosten.
+function KostenTab({ project, canManage }) {
+  const toast = useToast();
+  const [costs, setCosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({
+    cost_date: new Date().toISOString().slice(0, 10),
+    description: '',
+    amount: '',
+    category: 'Materiaal',
+  });
+  const [saving, setSaving] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const load = () => {
+    setLoading(true);
+    getProjectCosts(project.id).then(setCosts).catch(() => {}).finally(() => setLoading(false));
+  };
+  useEffect(() => { if (project.id) load(); }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const totalCosts = costs.reduce((s, c) => s + (Number(c.amt) || 0), 0);
+  const omzet = Number(project.invoicedAmount || 0);
+  const winst = omzet - totalCosts;
+
+  const submit = async () => {
+    const amt = Number(form.amount);
+    if (!amt || amt <= 0) { toast.error('Bedrag moet groter zijn dan 0'); return; }
+    setSaving(true);
+    try {
+      await createJobCost({
+        description: form.description || form.category,
+        amount: amt,
+        category: form.category,
+        cost_date: form.cost_date,
+        project_id: project.id,
+        customer_id: project.customerId || null,
+      });
+      setForm(f => ({ ...f, description: '', amount: '' }));
+      toast.success('Kosten toegevoegd');
+      load();
+    } catch (e) {
+      toast.error(e.message || 'Toevoegen mislukt');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (id) => {
+    if (!window.confirm('Deze kostenpost verwijderen?')) return;
+    try {
+      await deleteJobCost(id);
+      load();
+    } catch (e) {
+      toast.error(e.message || 'Verwijderen mislukt');
+    }
+  };
+
+  return (
+    <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div className="card card-p" style={{ padding: 14, background: '#fafafa' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+          <div>
+            <div style={labelStyle}>Gefactureerd</div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(omzet)}</div>
+          </div>
+          <div>
+            <div style={labelStyle}>Kosten</div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(totalCosts)}</div>
+          </div>
+          <div>
+            <div style={labelStyle}>Winst</div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: winst < 0 ? '#dc2626' : '#15A34A' }}>{fmt0(winst)}</div>
+          </div>
+        </div>
+      </div>
+
+      {canManage && (
+        <div className="card card-p" style={{ padding: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--dl)', marginBottom: 8 }}>Kosten toevoegen</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <div className="f" style={{ flex: '1 1 120px', minWidth: 0 }}>
+              <label>Datum</label>
+              <input type="date" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.cost_date} onChange={e => set('cost_date', e.target.value)} />
+            </div>
+            <div className="f" style={{ flex: '1 1 110px', minWidth: 0 }}>
+              <label>Bedrag (excl.)</label>
+              <input type="number" min="0" step="0.01" placeholder="0,00" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.amount} onChange={e => set('amount', e.target.value)} />
+            </div>
+            <div className="f" style={{ flex: '1 1 130px', minWidth: 0 }}>
+              <label>Categorie</label>
+              <select style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.category} onChange={e => set('category', e.target.value)}>
+                <option value="Materiaal">Materiaal</option>
+                <option value="Arbeid">Arbeid</option>
+                <option value="Reiskosten">Reiskosten</option>
+                <option value="Inkoopfactuur">Inkoopfactuur</option>
+                <option value="Algemene kosten">Algemene kosten</option>
+                <option value="Overig">Overig</option>
+              </select>
+            </div>
+            <div className="f" style={{ flex: '1 1 100%', minWidth: 0 }}>
+              <label>Omschrijving</label>
+              <input type="text" placeholder="Waar zijn de kosten voor?" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.description} onChange={e => set('description', e.target.value)} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+            <button className="btn btn-p btn-sm" onClick={submit} disabled={saving}>
+              {saving ? 'Toevoegen…' : 'Kosten toevoegen'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--dl)', marginBottom: 8 }}>
+          Kosten ({costs.length})
+        </div>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--dl)', fontSize: 13 }}>Laden…</div>
+        ) : costs.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--dl)', fontSize: 13 }}>
+            Nog geen kosten op dit project.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {costs.map(c => (
+              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: '1px solid var(--br)', borderRadius: 8, background: '#fff' }}>
+                <div style={{ minWidth: 60, fontSize: 11, color: 'var(--dl)' }}>{fmtDate(c.date)}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.desc || <span style={{ color: 'var(--dl)' }}>(geen omschrijving)</span>}</div>
+                  <div style={{ marginTop: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <CostCategoryBadge category={c.cat} style={{ fontSize: 11 }} />
+                    {c.werkbonId && <span style={{ fontSize: 11, color: 'var(--dl)' }}>· via werkbon</span>}
+                  </div>
+                </div>
+                <div style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{fmt(c.amt)}</div>
+                {canManage && (
+                  <button className="btn btn-xs btn-ghost btn-icon" title="Verwijderen" onClick={() => remove(c.id)}>{I.trash}</button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── FACTUREN TAB ─────────────────────────────────────────────────────────────
 
 function FacturenTab({ project, invoices, openInvoice, setPage, customers, onNew }) {
@@ -607,9 +760,7 @@ function FacturenTab({ project, invoices, openInvoice, setPage, customers, onNew
                   {fmtDate(f.factuurdatum)}
                   {f.vervaldatum && ` · vervalt ${fmtDate(f.vervaldatum)}`}
                 </div>
-                <span className={`badge b-${f.status === 'betaald' ? 'accepted' : f.status === 'verzonden' ? 'sent' : 'gray'}`}>
-                  {f.status}
-                </span>
+                {(() => { const s = statusInfo(f.status, 'factuur'); return <span className={s.className}>{s.label}</span>; })()}
                 <div className="lrow-amount">{fmt(f.totaalIncl)}</div>
               </div>
             ))}
@@ -695,10 +846,6 @@ function NotesTab({ notes, onAdd, onDelete }) {
 }
 
 // ── WERKBONNEN TAB ───────────────────────────────────────────────────────────
-
-const WB_STATUS_LABEL = { gepland: 'Gepland', in_uitvoering: 'In uitvoering', afgerond: 'Afgerond' };
-const WB_STATUS_COL   = { gepland: '#2563EB', in_uitvoering: '#D97706', afgerond: '#0F7A3F' };
-const WB_STATUS_BG    = { gepland: '#EFF4FF', in_uitvoering: '#FFF7E6', afgerond: '#E8FBEF' };
 
 const WB_DAY   = ['zo','ma','di','wo','do','vr','za'];
 const WB_MONTH = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
@@ -807,13 +954,14 @@ function WerkbonnenTab({ project, werkbonnen, onCreated, canManage, setPage }) {
                     )}
                   </div>
                 </div>
-                <span style={{
-                  fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999, whiteSpace: 'nowrap',
-                  background: WB_STATUS_BG[w.status] || '#f3f4f6',
-                  color: WB_STATUS_COL[w.status] || 'var(--dl)',
-                }}>
-                  {WB_STATUS_LABEL[w.status] || w.status}
-                </span>
+                {(() => { const s = statusInfo(w.status, 'werkbon'); return (
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999, whiteSpace: 'nowrap',
+                    background: s.bg, color: s.color,
+                  }}>
+                    {s.label}
+                  </span>
+                ); })()}
               </div>
             );
           })}
@@ -1008,6 +1156,9 @@ export function ProjectDetailDrawer({
                   onDelete={handleDeleteEntry}
                   canManage={canManage}
                 />
+              )}
+              {tab === 'kosten' && (
+                <KostenTab project={project} canManage={canManage} />
               )}
               {tab === 'facturen' && (
                 <FacturenTab
