@@ -680,7 +680,7 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
 
 // ── SEND EMAIL MODAL ─────────────────────────────────────────────────────────
 
-function SendOfferteMailModal({ offerte, customers, company, onClose, onSent }) {
+export function SendOfferteMailModal({ offerte, customers, company, onClose, onSent }) {
   const toast = useToast();
   const [form, setForm] = useState({ to: '', subject: '', body: '' });
   const [loading, setLoading] = useState(true);

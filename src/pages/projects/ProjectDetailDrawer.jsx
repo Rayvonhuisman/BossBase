@@ -20,6 +20,7 @@ import {
 } from '../../services/projectsService.js';
 import { getWerkbonnenByProject, createWerkbon } from '../../services/werkbonService.js';
 import { NewFactuurModal } from '../FacturenPage.jsx';
+import { NewOfferteModal, SendOfferteMailModal } from '../OffertesPage.jsx';
 import { MentionEditor, renderMentions } from '../../components/MentionEditor.jsx';
 import { getTeamMembers, createAssignmentNotification } from '../../services/notificatieService.js';
 
@@ -271,10 +272,12 @@ function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
 
 // ── OFFERTE TAB ──────────────────────────────────────────────────────────────
 
-function OfferteTab({ project, offertes, setPage, onLink, canManage }) {
+function OfferteTab({ project, offertes, customers, deals = [], company, setPage, onLink, onChanged, canManage }) {
   const toast = useToast();
   const [picking, setPicking] = useState(false);
   const [pickId, setPickId] = useState('');
+  const [showNew, setShowNew] = useState(false);
+  const [sendMail, setSendMail] = useState(null);
   const linkedOfferte = project.offerteId ? offertes.find(o => o.id === project.offerteId) : null;
 
   const submitLink = async () => {
@@ -288,6 +291,14 @@ function OfferteTab({ project, offertes, setPage, onLink, canManage }) {
     }
   };
 
+  // Nieuwe offerte gemaakt vanuit het project → direct aan dit project koppelen
+  // (project.offerte_id) en de lijst verversen zodat hij in de tab verschijnt.
+  const handleCreated = async saved => {
+    setShowNew(false);
+    try { await onLink(saved.id); } catch { /* koppelen best-effort */ }
+    onChanged?.();
+  };
+
   if (!linkedOfferte) {
     const eligible = project.customerId
       ? offertes.filter(o => o.customerId === project.customerId)
@@ -298,7 +309,12 @@ function OfferteTab({ project, offertes, setPage, onLink, canManage }) {
           <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--dk)', marginBottom: 6 }}>Nog geen offerte gekoppeld</div>
           <div style={{ fontSize: 13, marginBottom: 16 }}>Koppel een bestaande offerte zodat waarde, uren en facturatie automatisch worden gesynchroniseerd.</div>
           {!picking ? (
-            canManage && <button className="btn btn-p btn-sm" onClick={() => setPicking(true)}>{I.plus} Koppel offerte</button>
+            canManage && (
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+                <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>{I.plus} Nieuwe offerte</button>
+                <button className="btn btn-s btn-sm" onClick={() => setPicking(true)}>Bestaande koppelen</button>
+              </div>
+            )
           ) : (
             <div style={{ maxWidth: 360, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
               <select value={pickId} onChange={e => setPickId(e.target.value)}>
@@ -316,6 +332,25 @@ function OfferteTab({ project, offertes, setPage, onLink, canManage }) {
             </div>
           )}
         </div>
+        {showNew && (
+          <NewOfferteModal
+            customers={customers}
+            deals={deals}
+            prefillCustomerId={project.customerId || null}
+            onClose={() => setShowNew(false)}
+            onSaved={handleCreated}
+            onSaveAndSend={async saved => { await handleCreated(saved); setSendMail(saved); }}
+          />
+        )}
+        {sendMail && (
+          <SendOfferteMailModal
+            offerte={sendMail}
+            customers={customers}
+            company={company}
+            onClose={() => setSendMail(null)}
+            onSent={() => { setSendMail(null); onChanged?.(); }}
+          />
+        )}
       </div>
     );
   }
@@ -357,7 +392,28 @@ function OfferteTab({ project, offertes, setPage, onLink, canManage }) {
         <button className="btn btn-s btn-sm" onClick={() => setPage?.('facturen')}>
           Factuur maken {I.arrow_r}
         </button>
+        {canManage && <button className="btn btn-ghost btn-sm" onClick={() => setShowNew(true)}>{I.plus} Nieuwe offerte</button>}
       </div>
+
+      {showNew && (
+        <NewOfferteModal
+          customers={customers}
+          deals={deals}
+          prefillCustomerId={project.customerId || null}
+          onClose={() => setShowNew(false)}
+          onSaved={handleCreated}
+          onSaveAndSend={async saved => { await handleCreated(saved); setSendMail(saved); }}
+        />
+      )}
+      {sendMail && (
+        <SendOfferteMailModal
+          offerte={sendMail}
+          customers={customers}
+          company={company}
+          onClose={() => setSendMail(null)}
+          onSent={() => { setSendMail(null); onChanged?.(); }}
+        />
+      )}
     </div>
   );
 }
@@ -801,6 +857,7 @@ export function ProjectDetailDrawer({
   setPage,
 }) {
   const toast = useToast();
+  const { company } = useProfile();
   const [tab, setTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [project, setProject] = useState(null);
@@ -954,8 +1011,12 @@ export function ProjectDetailDrawer({
                 <OfferteTab
                   project={project}
                   offertes={offertes}
+                  customers={customers}
+                  deals={deals}
+                  company={company}
                   setPage={setPage}
                   onLink={handleLinkOfferte}
+                  onChanged={onChanged}
                   canManage={canManage}
                 />
               )}
