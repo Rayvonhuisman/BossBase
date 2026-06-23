@@ -14,6 +14,7 @@ import { getOffertes } from '../services/offerteService.js';
 import { ProjectDetailDrawer } from './projects/ProjectDetailDrawer.jsx';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { getTeamMembers, createAssignmentNotification } from '../services/notificatieService.js';
+import { statusInfo } from '../utils/statusColors.js';
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -31,8 +32,8 @@ const fmtHours = h => {
 };
 
 export function ProjectBadge({ status }) {
-  const cfg = PROJECT_STATUS[status] || { label: status || '—', col: 'b-gray' };
-  return <span className={`badge ${cfg.col}`}>{cfg.label}</span>;
+  const s = statusInfo(status, 'project');
+  return <span className={s.className}>{s.label}</span>;
 }
 
 export function HealthBadge({ health }) {

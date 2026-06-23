@@ -10,6 +10,7 @@ import { getFacturen, getFactuurRegels } from '../services/factuurService.js';
 import { getOffertes, getOfferteItems } from '../services/offerteService.js';
 import { getOffertePdfBase64, getFactuurPdfBase64 } from '../utils/generatePdf.js';
 import { getProjects, PROJECT_STATUS } from '../services/projectsService.js';
+import { statusInfo } from '../utils/statusColors.js';
 import { listDeals, listPipelineStages } from '../services/dealService.js';
 import { listActivities } from '../services/activityService.js';
 import { getEmailTemplates } from '../services/instellingenService.js';
@@ -150,16 +151,10 @@ function Checkbox({ checked, onChange, indeterminate = false }) {
 }
 
 // ── STATUS BADGE ─────────────────────────────────────────────
-const STATUS_COLORS = {
-  'in_uitvoering': { bg: '#FFF7ED', color: '#C2410C' },
-  'afgerond':      { bg: '#F0FDF4', color: '#16A34A' },
-  'concept':       { bg: '#F9FAFB', color: '#6B7280' },
-  'gepauzeerd':    { bg: '#FEFCE8', color: '#854D0E' },
-  'geannuleerd':   { bg: '#FFF1F2', color: '#BE123C' },
-};
+// Kleur + label via de centrale status-helper, zodat een projectstatus hier
+// exact dezelfde kleur heeft als op de projecten- en klantkaart-pagina's.
 function StatusBadge({ status }) {
-  const label = PROJECT_STATUS[status]?.label || status || '';
-  const s = STATUS_COLORS[status] || { bg: '#F3F4F6', color: '#6B7280' };
+  const s = statusInfo(status, 'project');
   return (
     <span style={{
       display: 'inline-block', padding: '2px 8px',
@@ -167,7 +162,7 @@ function StatusBadge({ status }) {
       borderRadius: 999, fontSize: 10, fontWeight: 600,
       letterSpacing: '.02em',
     }}>
-      {label}
+      {s.label}
     </span>
   );
 }

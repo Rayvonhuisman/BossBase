@@ -10,6 +10,7 @@ import { loadUserWidgets, saveUserWidgets } from '../../services/dashboardWidget
 import { getDefaultWidgets, DEFAULT_LAYOUTS, DEFAULT_LAYOUT_KEY, normalizeWidgetSize } from '../../data/widgetRegistry.js';
 import { DashboardCustomizeBar } from './DashboardCustomizeBar.jsx';
 import { DashboardWidgetGrid } from './DashboardWidgetGrid.jsx';
+import { statusInfo } from '../../utils/statusColors.js';
 import { AddWidgetModal } from './AddWidgetModal.jsx';
 import { LayoutPickerModal } from './LayoutPickerModal.jsx';
 
@@ -110,9 +111,9 @@ function deriveCharts({ deals = [], activities = [], offertes = [], customers = 
 
   const sc = st => offertes.filter(o => o.status === st).length;
   const invAll = [
-    { label: 'Geaccepteerd', value: sc('geaccepteerd'), color: '#1DDB62' },
-    { label: 'Verzonden', value: sc('verzonden'), color: '#d97706' },
-    { label: 'Concept', value: sc('concept'), color: '#9ca3af' },
+    { label: 'Geaccepteerd', value: sc('geaccepteerd'), color: statusInfo('geaccepteerd', 'offerte').color },
+    { label: 'Verzonden', value: sc('verzonden'), color: statusInfo('verzonden', 'offerte').color },
+    { label: 'Concept', value: sc('concept'), color: statusInfo('concept', 'offerte').color },
   ];
   const invoiceStatus = invAll.some(s => s.value > 0) ? invAll.filter(s => s.value > 0) : [];
 

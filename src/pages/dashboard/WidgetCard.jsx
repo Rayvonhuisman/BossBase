@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { I } from '../../bb-shared.jsx';
 import { getSupportedSizes } from '../../data/widgetRegistry.js';
 import { activiteitTypeLabel } from '../../services/activityService.js';
+import { statusInfo } from '../../utils/statusColors.js';
 
 // ── Design tokens (BossBase widget redesign v2) ───────────────
 // CSS classes (.bb-widget, .bb-kpi, .feed-row, .chip, .pill-tabs, …)
@@ -654,7 +655,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                       <div className="feed-meta">
                         {o.nummer && <span style={{ fontFamily: 'ui-monospace,Menlo,monospace' }}>{o.nummer}</span>}
                         <span className="sep">·</span>
-                        <Chip tone={o.status === 'verzonden' ? 'info' : 'neutral'}>{o.status}</Chip>
+                        <Chip tone={statusInfo(o.status, 'offerte').chip}>{statusInfo(o.status, 'offerte').label}</Chip>
                       </div>
                     </div>
                     <div className="feed-aside">
@@ -692,7 +693,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                       <div className="feed-meta">
                         <span style={{ fontFamily: 'ui-monospace,Menlo,monospace' }}>{ref}</span>
                         <span className="sep">·</span>
-                        <Chip tone="amber">Open</Chip>
+                        <Chip tone={statusInfo(o.status, 'offerte').chip}>{statusInfo(o.status, 'offerte').label}</Chip>
                       </div>
                     </div>
                     <div className="feed-aside">
@@ -711,8 +712,8 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     // ───────── Werkbonnen vandaag ─────────
     case 'werkbonnen_today': {
       const items = werkbonnen.filter(w => w.geplandOp === today || w.datum === today).slice(0, 6);
-      const tone = s => ({ afgerond: 'success', in_uitvoering: 'amber', gepland: 'info' }[s] || 'neutral');
-      const label = s => ({ afgerond: 'Afgerond', in_uitvoering: 'Onderweg', gepland: 'Gepland' }[s] || s);
+      const tone = s => statusInfo(s, 'werkbon').chip;
+      const label = s => statusInfo(s, 'werkbon').label;
       if (widget.size === 'small') {
         return <KpiCard tone="info" icon={I.wo} label="Werkbonnen" value={items.length} sub={items.length ? `${items.length} vandaag gepland` : 'geen vandaag'} onClick={() => setPage('werkbonnen')} />;
       }

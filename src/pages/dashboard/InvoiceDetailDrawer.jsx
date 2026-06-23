@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { I, fmt } from '../../bb-shared.jsx';
 import { getOfferteById, getOfferteItems } from '../../services/offerteService.js';
+import { statusInfo } from '../../utils/statusColors.js';
 
 // "Facturen" in BossBase zijn geaccepteerde offertes — er is (nog) geen aparte
 // facturentabel. Deze drawer toont de bron-offerte read-only, duidelijk
@@ -23,9 +24,6 @@ function Row({ k, v }) {
     </div>
   );
 }
-
-const STATUS_TONE = { geaccepteerd: 'b-orange', verzonden: 'b-blue', concept: 'b-gray', afgewezen: 'b-red', verlopen: 'b-red' };
-const STATUS_LABEL = { geaccepteerd: 'Open', verzonden: 'Verzonden', concept: 'Concept', afgewezen: 'Afgewezen', verlopen: 'Verlopen' };
 
 const dstr = v => (v ? String(v).slice(0, 10) : null);
 const daysBetween = (a, b) => {
@@ -86,8 +84,9 @@ export function InvoiceDetailDrawer({ invoiceId, onClose, setPage, openCustomer 
   }
 
   const ref = inv.nummer || 'Factuur';
-  const tone = STATUS_TONE[inv.status] || 'b-gray';
-  const statusLabel = STATUS_LABEL[inv.status] || inv.status;
+  const sInfo = statusInfo(inv.status, 'offerte');
+  const tone = sInfo.badgeClass;
+  const statusLabel = sInfo.label;
   const factuurDatum = dstr(inv.geaccepteerdOp) || dstr(inv.createdAt);
   const vervalDatum = dstr(inv.geldigTot);
   const daysOpen = daysBetween(factuurDatum, new Date().toISOString());
