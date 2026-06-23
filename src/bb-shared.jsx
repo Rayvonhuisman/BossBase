@@ -62,7 +62,7 @@ export const CUSTOMERS_DATA = [
 ];
 
 export const PIPELINE_STAGES = [
-  { id: 'new_lead',    label: 'Nieuwe lead',       col: 'b-new' },
+  { id: 'new_lead',    label: 'Nieuwe aanvragen',  col: 'b-new' },
   { id: 'contact',     label: 'Contact nodig',     col: 'b-orange' },
   { id: 'info_done',   label: 'Info compleet',     col: 'b-blue' },
   { id: 'quote_make',  label: 'Offerte maken',     col: 'b-blue' },
@@ -147,6 +147,9 @@ export const CAL_EVENTS = [
 // ── HELPERS ─────────────────────────────────────────────────
 export const initials = n => n.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase();
 export const fmt = n => '€' + Number(n).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Hele euro's (geen centen) — uitsluitend voor de grote inzicht-/stat-widgets
+// bovenin (bv. totale projectwaarde). Behoudt NL-notatie: €12.500.
+export const fmt0 = n => '€' + Number(Math.round(Number(n) || 0)).toLocaleString('nl-NL', { maximumFractionDigits: 0 });
 export const custById = id => CUSTOMERS_DATA.find(c => c.id === id);
 export const stageLabel = id => (PIPELINE_STAGES.find(s => s.id === id) || {}).label || id;
 export const stageCol   = id => (PIPELINE_STAGES.find(s => s.id === id) || {}).col   || 'b-gray';
@@ -212,7 +215,7 @@ export function StatusBadge({ status }) {
     open: ['b-open','Open'], overdue: ['b-overdue','Te laat'],
     today: ['b-today','Vandaag'], planned: ['b-planned','Gepland'],
     in_progress: ['b-progress','In uitvoering'], completed: ['b-done','Afgerond'],
-    done: ['b-done','Klaar'], lost: ['b-lost','Verloren'], new_lead: ['b-new','Nieuwe lead'],
+    done: ['b-done','Klaar'], lost: ['b-lost','Verloren'], new_lead: ['b-new','Nieuwe aanvragen'],
   };
   const [cls, lbl] = map[status] || ['b-gray', status];
   return <span className={`badge ${cls}`}>{lbl}</span>;

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Maximize2, Minimize2 } from 'lucide-react';
-import { I, ModalX, fmt } from '../../bb-shared.jsx';
+import { I, ModalX, fmt, fmt0 } from '../../bb-shared.jsx';
 import { useToast } from '../../lib/toast.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
 import {
@@ -181,14 +181,14 @@ function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
           </div>
           <div>
             <div style={labelStyle}>Budget</div>
-            <div style={{ fontWeight: 600, fontSize: 13 }}>{fmt(project.projectValue)}</div>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{fmt0(project.projectValue)}</div>
           </div>
           <div>
             <div style={labelStyle}>Gefactureerd</div>
             <div style={{ fontWeight: 600, fontSize: 13 }}>
-              {fmt(project.invoicedAmount)}
+              {fmt0(project.invoicedAmount)}
               {project.remainingToInvoice > 0 && (
-                <span style={{ color: '#f59e0b', fontSize: 11, marginLeft: 6 }}>nog {fmt(project.remainingToInvoice)}</span>
+                <span style={{ color: '#f59e0b', fontSize: 11, marginLeft: 6 }}>nog {fmt0(project.remainingToInvoice)}</span>
               )}
             </div>
           </div>
@@ -530,16 +530,16 @@ function FacturenTab({ project, invoices, openInvoice, setPage, customers, onNew
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           <div>
             <div style={labelStyle}>Projectwaarde</div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt(project.projectValue)}</div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(project.projectValue)}</div>
           </div>
           <div>
             <div style={labelStyle}>Gefactureerd</div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt(project.invoicedAmount)}</div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(project.invoicedAmount)}</div>
           </div>
           <div>
             <div style={labelStyle}>Te factureren</div>
             <div style={{ fontWeight: 700, fontSize: 16, color: project.remainingToInvoice > 0 ? '#f59e0b' : 'inherit' }}>
-              {fmt(project.remainingToInvoice)}
+              {fmt0(project.remainingToInvoice)}
             </div>
           </div>
         </div>

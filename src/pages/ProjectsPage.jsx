@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
+import { I, ModalX, fmt, fmt0, BackToKlant } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import {
@@ -428,12 +428,12 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
           </div>
           <div className="sc">
             <div className="sc-top"><div className="sc-icon">{I.euro}</div></div>
-            <div className="sc-val">{fmt(kpi.totalValue)}</div>
+            <div className="sc-val">{fmt0(kpi.totalValue)}</div>
             <div className="sc-label">Totale projectwaarde</div>
           </div>
           <div className="sc">
             <div className="sc-top"><div className="sc-icon">{I.clock}</div></div>
-            <div className="sc-val">{fmt(kpi.remainingToInvoice)}</div>
+            <div className="sc-val">{fmt0(kpi.remainingToInvoice)}</div>
             <div className="sc-label">Te factureren</div>
           </div>
           <div className="sc">
