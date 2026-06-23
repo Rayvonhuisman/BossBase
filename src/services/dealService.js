@@ -3,7 +3,9 @@ import { withCompanyId } from "../lib/currentCompany"
 import { safeInsert } from "../lib/safeInsert"
 import { logTijdlijnSafe } from "./klantTijdlijnService"
 
-// pipeline_stages table has no color_class column — derive from position/name
+// Kleur komt uit de DB-kolom pipeline_stages.color_class (zelfde bron als
+// Instellingen). De array is enkel een legacy-fallback voor rijen die nog niet
+// geseed zijn — na migratie 20260623040000 is color_class altijd gevuld.
 const STAGE_COLORS = ["b-new","b-orange","b-blue","b-blue","b-orange","b-orange","b-green","b-planned","b-progress","b-done","b-accepted","b-lost"]
 
 const toStage = (row, i) => ({

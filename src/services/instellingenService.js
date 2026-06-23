@@ -38,7 +38,7 @@ const toPipelineStage = row => ({
   companyId: row.company_id,
   name: row.name || "",
   position: Number(row.position ?? 0),
-  colorClass: row.color_class || "",
+  colorClass: row.color_class || "b-gray",
   createdAt: row.created_at,
   raw: row,
 })
@@ -198,10 +198,10 @@ export async function createPipelineStage(input) {
     .maybeSingle()
   const nextPosition = (last?.position ?? -1) + 1
 
-  // color_class column does not exist in pipeline_stages — omit it
   const base = {
     name: input.name,
     position: input.position != null ? Number(input.position) : nextPosition,
+    color_class: input.color_class || "b-gray",
   }
   Object.keys(base).forEach(k => base[k] === null && delete base[k])
 
@@ -216,10 +216,10 @@ export async function createPipelineStage(input) {
 }
 
 export async function updatePipelineStage(id, input) {
-  // color_class column does not exist in pipeline_stages — only update name/position
   const updates = {}
   if (input.name !== undefined) updates.name = input.name
   if (input.position !== undefined) updates.position = Number(input.position)
+  if (input.color_class !== undefined) updates.color_class = input.color_class
 
   const { data, error } = await supabase
     .from("pipeline_stages")

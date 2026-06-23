@@ -398,12 +398,16 @@ export function InstellingenPage() {
   const startEditStage = (stage) => {
     setEditingStageId(stage.id);
     setEditingStageValue(stage.name);
+    setEditingStageColor(stage.colorClass || 'b-gray');
   };
 
   const saveEditStage = async (id) => {
     if (!editingStageValue.trim()) { setEditingStageId(null); return; }
     try {
-      const updated = await updatePipelineStage(id, { name: editingStageValue.trim() });
+      const updated = await updatePipelineStage(id, {
+        name: editingStageValue.trim(),
+        color_class: editingStageColor,
+      });
       setStages(s => s.map(st => st.id === id ? updated : st));
       toast.success('Fase bijgewerkt');
     } catch (err) {
@@ -411,6 +415,7 @@ export function InstellingenPage() {
     } finally {
       setEditingStageId(null);
       setEditingStageValue('');
+      setEditingStageColor('b-gray');
     }
   };
 
@@ -1268,7 +1273,6 @@ export function InstellingenPage() {
                         <input
                           value={editingStageValue}
                           onChange={e => setEditingStageValue(e.target.value)}
-                          onBlur={() => saveEditStage(stage.id)}
                           onKeyDown={e => { if (e.key === 'Enter') saveEditStage(stage.id); if (e.key === 'Escape') setEditingStageId(null); }}
                           autoFocus
                           style={{ width: '100%' }}
@@ -1278,19 +1282,44 @@ export function InstellingenPage() {
                       )}
                     </td>
                     <td>
-                      <span className={`badge ${stage.colorClass || 'b-gray'}`}>
-                        {COLOR_OPTIONS.find(c => c.value === stage.colorClass)?.label || stage.colorClass || 'Grijs'}
-                      </span>
+                      {editingStageId === stage.id ? (
+                        <select
+                          value={editingStageColor}
+                          onChange={e => setEditingStageColor(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') saveEditStage(stage.id); if (e.key === 'Escape') setEditingStageId(null); }}
+                        >
+                          {COLOR_OPTIONS.map(c => (
+                            <option key={c.value} value={c.value}>{c.label}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className={`badge ${stage.colorClass || 'b-gray'}`}>
+                          {COLOR_OPTIONS.find(c => c.value === stage.colorClass)?.label || stage.colorClass || 'Grijs'}
+                        </span>
+                      )}
                     </td>
                     <td>
                       {isAdmin && (
                         <div style={{ display: 'flex', gap: 4 }}>
-                          <button className="btn-icon" title="Bewerken" onClick={() => startEditStage(stage)}>
-                            {I.edit}
-                          </button>
-                          <button className="btn-icon" title="Verwijderen" onClick={() => handleDeleteStage(stage.id)}>
-                            {I.trash}
-                          </button>
+                          {editingStageId === stage.id ? (
+                            <>
+                              <button className="btn-icon" title="Opslaan" onClick={() => saveEditStage(stage.id)}>
+                                {I.check || '✓'}
+                              </button>
+                              <button className="btn-icon" title="Annuleren" onClick={() => { setEditingStageId(null); setEditingStageValue(''); setEditingStageColor('b-gray'); }}>
+                                {I.x || '✕'}
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button className="btn-icon" title="Bewerken" onClick={() => startEditStage(stage)}>
+                                {I.edit}
+                              </button>
+                              <button className="btn-icon" title="Verwijderen" onClick={() => handleDeleteStage(stage.id)}>
+                                {I.trash}
+                              </button>
+                            </>
+                          )}
                         </div>
                       )}
                     </td>
