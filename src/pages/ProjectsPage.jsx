@@ -272,8 +272,7 @@ function ProjectCard({ p, onOpen }) {
         </div>
       </div>
       <ProgressBar pct={p.hoursPercentage} tone={p.health?.tone} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
-        <HealthBadge health={p.health} />
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
         <div style={{ fontSize: 11, color: 'var(--dl)' }}>
           {p.invoicedAmount > 0 ? `${fmt(p.invoicedAmount)} gefactureerd` : 'Nog niet gefactureerd'}
         </div>
@@ -506,7 +505,6 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
                     <th className="th">Uren</th>
                     <th className="th" style={{ minWidth: 110 }}>Budget</th>
                     <th className="th">Deadline</th>
-                    <th className="th">Health</th>
                     <th className="th">Acties</th>
                   </tr>
                 </thead>
@@ -548,7 +546,6 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
                         <td className="td" style={{ color: isOverdue ? '#dc2626' : 'inherit', whiteSpace: 'nowrap' }}>
                           {fmtDate(p.deadline)}
                         </td>
-                        <td className="td"><HealthBadge health={p.health} /></td>
                         <td className="td" onClick={e => e.stopPropagation()}>
                           <div style={{ display: 'flex', gap: 4 }}>
                             <button

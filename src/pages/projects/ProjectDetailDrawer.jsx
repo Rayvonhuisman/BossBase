@@ -27,8 +27,8 @@ import { getTeamMembers, createAssignmentNotification } from '../../services/not
 const TABS = [
   { id: 'overview',   label: 'Overzicht' },
   { id: 'offerte',    label: 'Offertes' },
-  { id: 'uren',       label: 'Uren' },
   { id: 'facturen',   label: 'Facturen' },
+  { id: 'uren',       label: 'Uren' },
   { id: 'werkbonnen', label: 'Werkbonnen' },
   { id: 'notes',      label: 'Notities' },
 ];
@@ -48,10 +48,6 @@ function StatusBadge({ status }) {
   return <span className={`badge ${cfg.col}`}>{cfg.label}</span>;
 }
 
-function HealthChip({ health }) {
-  if (!health) return null;
-  return <span className={`badge ${health.col}`}>{health.label}</span>;
-}
 
 // ── HEADER ───────────────────────────────────────────────────────────────────
 
@@ -70,7 +66,6 @@ function DrawerHeader({ project, onClose, fullscreen, onToggleFullscreen }) {
         <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--dk)', letterSpacing: '-.01em', wordBreak: 'break-word', overflowWrap: 'break-word' }}>{project.name}</div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
           <StatusBadge status={project.status} />
-          <HealthChip health={project.health} />
           {project.customerName && (
             <span style={{ fontSize: 12, color: 'var(--dl)' }}>· {project.customerName}</span>
           )}
@@ -200,9 +195,6 @@ function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
               {isOverdue && <span style={{ fontSize: 11, marginLeft: 6 }}>verlopen</span>}
             </div>
           </div>
-        </div>
-        <div style={{ marginTop: 12 }}>
-          <HealthChip health={project.health} />
         </div>
       </div>
 
