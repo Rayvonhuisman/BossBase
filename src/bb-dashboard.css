@@ -359,8 +359,12 @@ ul{list-style:none}
 /* Klantkaart — compacte scrollbare tabbladen */
 .kk-tabs{width:100%;overflow-x:auto;background:white !important;scrollbar-width:none}
 .kk-tabs::-webkit-scrollbar{display:none}
-.kk-tabs .tab{padding:6px 10px;font-size:12px;font-weight:500;flex-shrink:0;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center}
-.kk-tabs .tab.active{background:var(--p) !important;color:white !important;box-shadow:none}
+/* Tabs in de dashboard-knopstijl: inactief licht met subtiele border,
+   actief plat groen (var(--p)) met zwarte tekst (var(--dk)) — geen glow/ring. */
+.kk-tabs .tab{padding:6px 10px;font-size:12px;font-weight:600;flex-shrink:0;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;color:var(--dm);background:#fff;border:1px solid var(--bstrong);box-shadow:none;outline:none}
+.kk-tabs .tab:hover:not(.active){background:var(--bgs);color:var(--dk)}
+.kk-tabs .tab.active{background:var(--p) !important;color:var(--dk) !important;border-color:var(--p) !important;box-shadow:none !important}
+.kk-tabs .tab:focus,.kk-tabs .tab:focus-visible{outline:none;box-shadow:none}
 
 /* Klantkaart-lijsten: flexbox-rijen i.p.v. tabellen. Passen altijd binnen
    zowel full-screen als de smalle half-scherm drawer — geen scroll nodig. */
