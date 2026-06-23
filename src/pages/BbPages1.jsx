@@ -1413,7 +1413,7 @@ export function ActivitiesPage({ openCustomer, preOpenActivityId, onNavConsumed 
                     <div className="act-meta">
                       <span className="act-cust" style={{ cursor: 'pointer' }} onClick={e => { e.stopPropagation(); openCustomer(a.custId); }}>{a.customerName || c?.name}</span>
                       <span>·</span><span>{a.date}</span><span>·</span><span>{a.time}</span>
-                      <span>·</span><span style={{ fontSize: '.72rem' }}>{a.assignee}</span>
+                      {a.assigneeName && <><span>·</span><span style={{ fontSize: '.72rem' }}>{a.assigneeName}</span></>}
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>

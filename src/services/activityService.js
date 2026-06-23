@@ -29,6 +29,10 @@ function splitDueAt(dueAt) {
   }
 }
 
+// Join klant + de toegewezen medewerker (voor de naam), zodat we nooit een
+// ruw assigned_to-id hoeven te tonen. De embed gebruikt de FK-naam expliciet.
+const ACTIVITY_SELECT = "*, customers(*), assigned_profile:profiles!activities_assigned_to_fkey(full_name)"
+
 const ALLOWED_TYPES = new Set(["call", "email", "visit", "task", "follow"])
 
 const isCompletedStatus = status => status === "completed" || status === "done"
@@ -89,6 +93,7 @@ export const toActivity = row => {
     time: splitDueAt(row.due_at).time,
     notes: row.notes || "",
     assignee: row.assigned_to || "",
+    assigneeName: sanitizeName(row.assigned_profile?.full_name || ""),
     endTime: row.end_time || null,
     location: row.location || '',
     voertuigId: row.voertuig_id || null,
@@ -120,7 +125,7 @@ function computeOpenStatus(dueAt) {
 export async function listActivities() {
   const { data, error } = await supabase
     .from("activities")
-    .select("*, customers(*)")
+    .select(ACTIVITY_SELECT)
     .order("due_at", { ascending: true })
   if (error) throw error
   return (data || []).map(toActivity)
@@ -128,7 +133,15 @@ export async function listActivities() {
 
 export async function createActivity(input) {
   const payload = await withCompanyId(mapActivityFormToPayload(input))
-  const { data, error } = await safeInsert(supabase, "activities", payload, "*, customers(*)")
+  // Standaard toewijzen aan de ingelogde gebruiker als er niemand gekozen is.
+  // Zo is een activiteit nooit "niemand" en tonen we altijd een echte naam.
+  if (!payload.assigned_to) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user?.id) payload.assigned_to = user.id
+    } catch { /* ignore — blijft ongekoppeld als auth onbekend is */ }
+  }
+  const { data, error } = await safeInsert(supabase, "activities", payload, ACTIVITY_SELECT)
   if (error) throw error
   const activity = toActivity(data)
   autoSyncActivitySafe(activity)
@@ -137,7 +150,7 @@ export async function createActivity(input) {
 
 export async function updateActivity(id, input) {
   const payload = mapActivityFormToPayload(input)
-  const { data, error } = await supabase.from("activities").update(payload).eq("id", id).select("*, customers(*)").single()
+  const { data, error } = await supabase.from("activities").update(payload).eq("id", id).select(ACTIVITY_SELECT).single()
   if (error) throw error
   const activity = toActivity(data)
   autoSyncActivitySafe(activity)
@@ -164,7 +177,7 @@ export async function completeActivity(id) {
     .from("activities")
     .update({ completed: true })
     .eq("id", id)
-    .select("*, customers(*)")
+    .select(ACTIVITY_SELECT)
     .single()
   if (error) throw error
   return toActivity(data)
@@ -175,7 +188,7 @@ export async function reopenActivity(id) {
     .from("activities")
     .update({ completed: false })
     .eq("id", id)
-    .select("*, customers(*)")
+    .select(ACTIVITY_SELECT)
     .single()
   if (error) throw error
   return toActivity(data)

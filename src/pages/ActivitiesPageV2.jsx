@@ -123,10 +123,13 @@ function formatRowDate(a) {
 }
 
 // Top-level helper zodat zowel de page als Row het kunnen gebruiken
-function getMemberName(userId, teamMembers) {
+function getMemberName(userId, teamMembers, fallbackName = '') {
   if (!userId) return '';
   const m = (teamMembers || []).find(t => t.id === userId);
-  return m?.fullName || userId;
+  // Nooit het ruwe id tonen: val terug op de meegejoinde naam, anders "Onbekend".
+  // (teamMembers sluit de huidige gebruiker uit, dus de fallbackName vangt
+  // o.a. activiteiten die aan jezelf zijn toegewezen correct af.)
+  return m?.fullName || fallbackName || 'Onbekend';
 }
 
 // ─── Page ───────────────────────────────────────────────────────────────────
@@ -175,7 +178,7 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
     const map = new Map();
     acts.forEach(a => {
       if (a.assignee && !map.has(a.assignee)) {
-        map.set(a.assignee, getMemberName(a.assignee, teamMembers));
+        map.set(a.assignee, getMemberName(a.assignee, teamMembers, a.assigneeName));
       }
     });
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
@@ -428,7 +431,7 @@ function Row({ a, openCustomer, onSelect, onMark, teamMembers }) {
   const badge = STATUS_BADGE[a.status] || STATUS_BADGE.open;
   const stateCls = done ? 'is-done' : `is-${a.status || 'open'}`;
   const t = safeType(a.type);
-  const assigneeName = getMemberName(a.assignee, teamMembers);
+  const assigneeName = getMemberName(a.assignee, teamMembers, a.assigneeName);
   const initial = (assigneeName || '').trim().charAt(0).toUpperCase() || '·';
   return (
     <article className={`act2-row ${stateCls}`} onClick={() => onSelect(a)}>
