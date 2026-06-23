@@ -383,7 +383,7 @@ export function TeamPage() {
   const handleActivate = async (member) => {
     try {
       const updated = await activateTeamMember(member.id);
-      setMembers(ms => ms.map(m => m.id === updated.id ? updated : m));
+      setMembers(ms => updated ? ms.map(m => m.id === updated.id ? updated : m) : ms.filter(m => m.id !== member.id));
       toast.success('Teamlid geactiveerd');
     } catch (err) {
       toast.error(err.message || 'Activeren mislukt');
@@ -393,7 +393,7 @@ export function TeamPage() {
   const handleDeactivate = async (member) => {
     try {
       const updated = await deactivateTeamMember(member.id);
-      setMembers(ms => ms.map(m => m.id === updated.id ? updated : m));
+      setMembers(ms => updated ? ms.map(m => m.id === updated.id ? updated : m) : ms.filter(m => m.id !== member.id));
       toast.success('Teamlid gedeactiveerd');
     } catch (err) {
       toast.error(err.message || 'Deactiveren mislukt');
@@ -529,27 +529,33 @@ export function TeamPage() {
                             Rechten
                           </button>
                         )}
-                        {member.status === 'actief' ? (
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            onClick={() => handleDeactivate(member)}
-                          >
-                            Deactiveren
-                          </button>
+                        {member.profileId && member.profileId === profile?.id ? (
+                          <span style={{ fontSize: '.78rem', color: 'var(--dl)' }}>Jij</span>
                         ) : (
-                          <button
-                            className="btn btn-s btn-sm"
-                            onClick={() => handleActivate(member)}
-                          >
-                            Activeren
-                          </button>
+                          <>
+                            {member.status === 'actief' ? (
+                              <button
+                                className="btn btn-ghost btn-sm"
+                                onClick={() => handleDeactivate(member)}
+                              >
+                                Deactiveren
+                              </button>
+                            ) : (
+                              <button
+                                className="btn btn-s btn-sm"
+                                onClick={() => handleActivate(member)}
+                              >
+                                Activeren
+                              </button>
+                            )}
+                            <button
+                              className="btn btn-danger btn-sm"
+                              onClick={() => handleDelete(member)}
+                            >
+                              {I.trash}
+                            </button>
+                          </>
                         )}
-                        <button
-                          className="btn btn-danger btn-sm"
-                          onClick={() => handleDelete(member)}
-                        >
-                          {I.trash}
-                        </button>
                       </div>
                     )}
                   </td>

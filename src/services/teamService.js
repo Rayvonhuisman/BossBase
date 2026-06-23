@@ -23,15 +23,69 @@ const toTeamMember = row => ({
   raw: row,
 })
 
+// Een profiel-rij naar het teamlid-model. Echte teamleden leven in `profiles`
+// (zelfde bron als de rest van de app); company_members is voor veel bedrijven
+// leeg en bevat alleen nog openstaande uitnodigingen. E-mail/uren staan niet op
+// profiles en zijn client-side niet leesbaar uit auth.users → blijven leeg.
+const profileToMember = p => ({
+  id: p.id,
+  companyId: p.company_id,
+  profileId: p.id,
+  email: "",
+  fullName: p.full_name || "",
+  phone: "",
+  role: p.role || "medewerker",
+  status: p.actief === false ? "inactief" : "actief",
+  hoursPerWeek: 0,
+  avatarUrl: p.avatar_url || "",
+  invitedAt: null,
+  acceptedAt: null,
+  createdAt: p.created_at,
+  raw: p,
+})
+
 // ── LEZEN ────────────────────────────────────────────────────────────────────
 
 export async function getTeamMembers() {
-  const { data, error } = await supabase
-    .from("company_members")
-    .select("*")
-    .order("created_at", { ascending: true })
-  if (error) throw error
-  return (data || []).map(toTeamMember)
+  const companyId = await getCompanyId()
+  if (!companyId) return []
+
+  // Echte teamleden = profielen van het bedrijf. Openstaande uitnodigingen
+  // (company_members zonder profile_id) tonen we daarnaast; geaccepteerde leden
+  // verschijnen via hun profiel, dus die company_members-rijen sluiten we uit
+  // om dubbelingen te voorkomen.
+  const [profilesRes, invitesRes] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, company_id, full_name, role, actief, avatar_url, created_at")
+      .eq("company_id", companyId)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("company_members")
+      .select("*")
+      .eq("company_id", companyId)
+      .is("profile_id", null)
+      .order("created_at", { ascending: true }),
+  ])
+  if (profilesRes.error) throw profilesRes.error
+  if (invitesRes.error) throw invitesRes.error
+
+  const realMembers = (profilesRes.data || []).map(profileToMember)
+  const pendingInvites = (invitesRes.data || []).map(toTeamMember)
+  return [...realMembers, ...pendingInvites]
+}
+
+// Verse staat van een teamlid teruglezen na een actie. Het id kan een
+// company_members.id (uitnodiging) of een profiles.id (echt teamlid) zijn.
+async function readTeamMember(id) {
+  const { data: cm } = await supabase.from("company_members").select("*").eq("id", id).maybeSingle()
+  if (cm) return toTeamMember(cm)
+  const { data: p } = await supabase
+    .from("profiles")
+    .select("id, company_id, full_name, role, actief, avatar_url, created_at")
+    .eq("id", id)
+    .maybeSingle()
+  return p ? profileToMember(p) : null
 }
 
 // ── UITNODIGEN ───────────────────────────────────────────────────────────────
@@ -181,15 +235,13 @@ async function callTeamMemberAction(memberId, action) {
 
 export async function activateTeamMember(id) {
   await callTeamMemberAction(id, "activate")
-  // Verse staat teruglezen voor de UI.
-  const { data } = await supabase.from("company_members").select("*").eq("id", id).maybeSingle()
-  return data ? toTeamMember(data) : null
+  // Verse staat teruglezen voor de UI (profiel óf company_members).
+  return readTeamMember(id)
 }
 
 export async function deactivateTeamMember(id) {
   await callTeamMemberAction(id, "deactivate")
-  const { data } = await supabase.from("company_members").select("*").eq("id", id).maybeSingle()
-  return data ? toTeamMember(data) : null
+  return readTeamMember(id)
 }
 
 // ── VERWIJDEREN ──────────────────────────────────────────────────────────────

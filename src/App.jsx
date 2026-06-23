@@ -984,16 +984,61 @@ function AppInner() {
     }
   }, [company, session]); // eslint-disable-line
 
-  // Gedeactiveerd account → sessie direct verbreken. Een gedeactiveerd teamlid
-  // kan zo niet doorwerken met een nog geldige access-token: bij de volgende
-  // profiel-load (deze effect) wordt hij uitgelogd met melding.
+  // ── Actieve sessie-controle ───────────────────────────────────────────────
+  // Een al ingelogde gebruiker die verwijderd of gedeactiveerd wordt, mag niet
+  // blijven doorwerken tot zijn token verloopt. We controleren daarom periodiek
+  // (elke 45s) én bij window-focus / tab-zichtbaar of het auth-account nog
+  // bestaat en het profiel nog actief is. Zo niet → direct uitloggen + redirect.
   useEffect(() => {
-    if (!session || !profile) return;
-    if (profile.actief === false) {
-      toast.info?.('Je account is gedeactiveerd. Neem contact op met je beheerder.');
-      supabase.auth.signOut();
-    }
-  }, [profile, session]); // eslint-disable-line
+    if (!session) return;
+    let stopped = false;
+
+    const forceLogout = (message) => {
+      if (stopped) return;
+      stopped = true;
+      toast.error?.(message);
+      supabase.auth.signOut(); // onAuthStateChange handelt de redirect naar /login af
+    };
+
+    const checkAccountStatus = async () => {
+      if (stopped || document.visibilityState === 'hidden') return;
+      try {
+        // 1) Bestaat het auth-account nog? getUser() valideert bij de auth-server,
+        //    dus een verwijderd account geeft hier geen user terug.
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (stopped) return;
+        if (!user) {
+          // Alleen uitloggen bij een echte "user bestaat niet" — netwerkblips negeren.
+          const msg = error?.message || '';
+          const networkBlip = /network|fetch|timeout|failed to fetch|load failed/i.test(msg);
+          if (!networkBlip) forceLogout('Je account is niet meer actief. Je bent uitgelogd.');
+          return;
+        }
+        // 2) Profiel nog actief? (gedeactiveerd = actief=false)
+        const { data: prof, error: pErr } = await supabase
+          .from('profiles').select('actief').eq('id', user.id).maybeSingle();
+        if (stopped || pErr) return;
+        if (prof && prof.actief === false) {
+          forceLogout('Je account is gedeactiveerd. Je bent uitgelogd.');
+        }
+      } catch {
+        /* stil: de volgende tick probeert het opnieuw */
+      }
+    };
+
+    checkAccountStatus(); // meteen bij (her)load
+    const interval = setInterval(checkAccountStatus, 45000);
+    const onFocus = () => checkAccountStatus();
+    const onVisible = () => { if (document.visibilityState === 'visible') checkAccountStatus(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [session]); // eslint-disable-line
 
   const navigate = (path, replace = false) => {
     const nextPath = path === '/website' ? '/' : path === '/registreer' ? '/register' : path;
