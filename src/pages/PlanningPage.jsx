@@ -987,9 +987,11 @@ export function PlanningPage() {
   }, [activities, viewMode, selectedMember, teamMembers]);
 
   // Niet-ingepland: geen geplandOp OF (totaal: geen assignedTo) OF geen starttijd
+  // Een werkbon is "ingepland" zodra hij een datum + starttijd heeft — ook
+  // zonder toegewezen medewerker (die verschijnt dan in de Totaal-tijdlijn).
   const unplanned = useMemo(() => werkbonnen.filter(w =>
-    !w.geplandOp || !w.starttijd || (viewMode === 'totaal' && !w.assignedTo)
-  ), [werkbonnen, viewMode]);
+    !w.geplandOp || !w.starttijd
+  ), [werkbonnen]);
 
   // Active drag werkbon
   const activeDragWb = activeId

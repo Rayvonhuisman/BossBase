@@ -3,7 +3,7 @@ import { I, fmt } from '../../bb-shared.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
 import { useToast } from '../../lib/toast.jsx';
 import {
-  listCalendarEvents, updateCalendarEvent,
+  listCalendarEvents, updateCalendarEvent, deleteCalendarEvent,
   updateCalendarEventComments, setCalendarEventWerkbon,
 } from '../../services/calendarService.js';
 import {
@@ -70,9 +70,10 @@ function initialsOf(name) {
 }
 
 export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, openDeal }) {
-  const { profile } = useProfile();
+  const { profile, bumpRefresh } = useProfile();
   const toast = useToast();
   const canEdit = profile?.role === 'admin' || profile?.role === 'planner';
+  const [deleting, setDeleting] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
@@ -170,6 +171,20 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
       toast.error(e.message || 'Opslaan mislukt');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!ev || !window.confirm('Dit agenda-item verwijderen?')) return;
+    setDeleting(true);
+    try {
+      await deleteCalendarEvent(ev.id);
+      toast.success('Agenda-item verwijderd');
+      bumpRefresh?.();
+      onClose();
+    } catch (e) {
+      toast.error(e.message || 'Verwijderen mislukt');
+      setDeleting(false);
     }
   };
 
@@ -467,7 +482,10 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
       </Section>
 
       <div style={{ flex: 1 }} />
-      <div style={{ paddingTop: 16, marginTop: 16, borderTop: '1px solid #eef0f2', display: 'flex', justifyContent: 'flex-end' }}>
+      <div style={{ paddingTop: 16, marginTop: 16, borderTop: '1px solid #eef0f2', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        {canEdit
+          ? <button className="btn btn-danger btn-sm" onClick={handleDelete} disabled={deleting}>{deleting ? 'Verwijderen…' : 'Verwijderen'}</button>
+          : <span />}
         <button className="btn btn-s btn-sm" onClick={onClose}>Sluiten</button>
       </div>
     </div>

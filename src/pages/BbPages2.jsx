@@ -194,7 +194,7 @@ function AgendaTimeline({ dates, events, todayKey, onEventClick }) {
 }
 
 // ── CALENDAR ─────────────────────────────────────────────────
-export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityId, onNavConsumed }) {
+export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpenActivityId, onNavConsumed }) {
   const toast = useToast();
   const { refreshKey, bumpRefresh } = useProfile();
   const [view, setView] = useState('week');
@@ -339,12 +339,19 @@ export function CalendarPage({ openCustomer, openCalendarEvent, preOpenActivityI
   // Gekoppeld aan een activiteit → ActivityEditModal. Los agenda-event met een
   // id → globale CalendarEventDetailDrawer. Anders de inline event-modal.
   const handleEventClick = e => {
+    // Werkbon-item → open de werkbon zelf (bewerken/verwijderen gebeurt daar).
+    // Synthetische werkbon-events hebben id 'wb-…' en zijn geen echt
+    // calendar_event, dus mogen nooit naar de detail-drawer.
+    if (e.werkbonId) {
+      if (setPage) setPage('werkbonnen', { id: e.werkbonId });
+      return;
+    }
+    // Activiteit → activiteit-modal.
     if (e.activityId) {
       const act = activities.find(a => a.id === e.activityId);
       if (act) { setEditActivity(act); return; }
     }
-    // Synthetische werkbon-events (id 'wb-…') zijn geen echt calendar_event →
-    // toon de inline event-modal i.p.v. de detail-drawer.
+    // Echt calendar_event → detail-drawer.
     if (openCalendarEvent && e.id && !String(e.id).startsWith('wb-')) { openCalendarEvent(e.id); return; }
     setShowEvent(e);
   };

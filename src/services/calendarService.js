@@ -133,6 +133,12 @@ export async function updateCalendarEvent(id, input) {
   return toCalendarEvent(data)
 }
 
+export async function deleteCalendarEvent(id) {
+  if (!id) return
+  const { error } = await supabase.from("calendar_events").delete().eq("id", id)
+  if (error) throw error
+}
+
 // Werk alleen het notities/communicatie-veld bij (raakt tijden/velden niet aan).
 export async function updateCalendarEventComments(id, comments) {
   const { data, error } = await supabase
