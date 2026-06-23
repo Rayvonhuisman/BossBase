@@ -14,7 +14,7 @@ export const ALL_SIZES = ['small', 'medium', 'large', 'full'];
 // Widgets without supportedSizes support every size.
 export const WIDGET_REGISTRY = [
   // ── Popular ──────────────────────────────────────────────
-  { type: 'actions_today',          iconKey: 'act',     label: 'Acties vandaag',          category: 'popular',  defaultSize: 'large',  description: 'Openstaande activiteiten voor vandaag' },
+  { type: 'actions_today',          iconKey: 'act',     label: 'Activiteiten vandaag',          category: 'popular',  defaultSize: 'large',  description: 'Openstaande activiteiten voor vandaag' },
   { type: 'quick_actions',          iconKey: 'dash',    label: 'Snelle acties',           category: 'popular',  defaultSize: 'medium', description: 'Knoppen voor veelgebruikte acties' },
   { type: 'notes',                  iconKey: 'note',    label: 'Notities',                category: 'popular',  defaultSize: 'medium', description: 'Persoonlijk notitieblok' },
   { type: 'overdue_tasks',          iconKey: 'clock',   label: 'Taken die te laat zijn',  category: 'popular',  defaultSize: 'medium', description: 'Activiteiten die over datum zijn' },

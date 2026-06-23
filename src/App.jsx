@@ -839,7 +839,7 @@ function AppInner() {
       dashboard:  { title: 'Dashboard',    sub: greet },
       pipeline:   { title: 'Pipeline',     sub: 'Jouw sales & werk overzicht' },
       customers:  { title: 'Klanten',      sub: 'CRM — alle klantprofielen' },
-      activities: { title: 'Activiteiten', sub: 'Openstaande acties en taken' },
+      activities: { title: 'Activiteiten', sub: 'Openstaande activiteiten en taken' },
       calendar:    { title: 'Agenda',        sub: 'Planning en afspraken' },
       planning:    { title: 'Planning',     sub: 'Weekplanning per medewerker en voertuig' },
       projecten:   { title: 'Projecten',    sub: 'Beheer projecten, uren, offertes en facturatie' },

@@ -243,9 +243,9 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
 
   const SUMMARY = [
     { id: 'overdue', tone: 's-overdue', label: 'Te laat',           count: counts.overdue, sub: 'Pak deze het eerst aan' },
-    { id: 'today',   tone: 's-today',   label: 'Vandaag',           count: counts.today,   sub: 'Geplande acties vandaag' },
+    { id: 'today',   tone: 's-today',   label: 'Vandaag',           count: counts.today,   sub: 'Geplande activiteiten vandaag' },
     { id: 'open',    tone: 's-open',    label: 'Open',              count: counts.open,    sub: 'Verspreid over de week' },
-    { id: 'done',    tone: 's-done',    label: 'Gereed deze week',  count: counts.done,    sub: 'Afgeronde acties' },
+    { id: 'done',    tone: 's-done',    label: 'Gereed deze week',  count: counts.done,    sub: 'Afgeronde activiteiten' },
   ];
 
   const totalOpenLabel = counts.open + counts.today + counts.overdue;
@@ -259,7 +259,7 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
         <div className="act2-pgh-left">
           <h1>Activiteiten</h1>
           <p>
-            <span className="act2-accent">{totalOpenLabel}</span> openstaande acties
+            <span className="act2-accent">{totalOpenLabel}</span> openstaande activiteiten
             {counts.overdue > 0 && <> · <span className="act2-accent-warn">{counts.overdue} te laat</span></>}
           </p>
         </div>

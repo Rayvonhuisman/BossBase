@@ -35,6 +35,23 @@ const ACTIVITY_SELECT = "*, customers(*), assigned_profile:profiles!activities_a
 
 const ALLOWED_TYPES = new Set(["call", "email", "visit", "task", "follow"])
 
+// Engelse type-waardes blijven in de DB staan; voor weergave tonen we altijd
+// een Nederlands label. Extra varianten zijn meegenomen voor de zekerheid.
+export const ACTIVITEIT_TYPE_LABELS = {
+  call: "Bellen",
+  email: "E-mail",
+  visit: "Bezoek",
+  task: "Taak",
+  follow: "Opvolgen",
+  meeting: "Vergadering",
+  note: "Notitie",
+  quote: "Offerte",
+  offer: "Offerte",
+}
+
+export const activiteitTypeLabel = t =>
+  ACTIVITEIT_TYPE_LABELS[t] || (t ? t.charAt(0).toUpperCase() + t.slice(1) : "")
+
 const isCompletedStatus = status => status === "completed" || status === "done"
 
 export function mapActivityFormToPayload(input = {}) {

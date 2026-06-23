@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { I } from '../../bb-shared.jsx';
 import { getSupportedSizes } from '../../data/widgetRegistry.js';
+import { activiteitTypeLabel } from '../../services/activityService.js';
 
 // ── Design tokens (BossBase widget redesign v2) ───────────────
 // CSS classes (.bb-widget, .bb-kpi, .feed-row, .chip, .pill-tabs, …)
@@ -427,14 +428,14 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const items = activities.filter(a => isOpenAct(a) && (a.dueAt?.slice(0, 10) === today || a.status === 'today' || a.status === 'overdue')).slice(0, 8);
       const overdue = activities.filter(a => isOpenAct(a) && a.dueAt && a.dueAt.slice(0, 10) < today).length;
       if (widget.size === 'small') {
-        return <KpiCard tone={overdue > 0 ? 'warn' : 'info'} icon={I.act} label="Acties vandaag" value={items.length} sub={overdue > 0 ? <>{overdue} <Delta dir="down">te laat</Delta></> : 'alles op tijd'} onClick={() => setPage('activities')} />;
+        return <KpiCard tone={overdue > 0 ? 'warn' : 'info'} icon={I.act} label="Activiteiten vandaag" value={items.length} sub={overdue > 0 ? <>{overdue} <Delta dir="down">te laat</Delta></> : 'alles op tijd'} onClick={() => setPage('activities')} />;
       }
       return (
         <div className="bb-widget">
-          <WHead title="Acties vandaag" sub={`${items.length} openstaand · ${overdue} te laat`}
+          <WHead title="Activiteiten vandaag" sub={`${items.length} openstaand · ${overdue} te laat`}
             right={<Chip tone={overdue > 0 ? 'warn' : 'success'} noDot={overdue === 0}>{overdue > 0 ? `${overdue} te laat` : 'Op schema'}</Chip>} />
           {items.length === 0 ? (
-            <EmptyState title="Geen acties vandaag" text="Tijd om vooruit te plannen of even adem te halen." />
+            <EmptyState title="Geen activiteiten vandaag" text="Tijd om vooruit te plannen of even adem te halen." />
           ) : (
             <div className="feed">
               {items.map(a => {
@@ -447,7 +448,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                       <div className="feed-title">{a.title}{c && <> · <strong>{c.name}</strong></>}</div>
                       <div className="feed-meta">
                         <span>{a.time || a.dueAt?.slice(0, 10) || '—'}</span>
-                        {a.type && (<><span className="sep">·</span><span>{a.type}</span></>)}
+                        {a.type && (<><span className="sep">·</span><span>{activiteitTypeLabel(a.type)}</span></>)}
                       </div>
                     </div>
                     <div className="feed-aside">
@@ -567,6 +568,8 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const count = all.length;
       const totalVal = all.reduce((s, d) => s + (d.value || 0), 0);
       const items = all.slice(0, 6);
+      // Mock/demo-fallback (string-stage-ids). Echte deals dragen een stage_id
+      // (uuid) → die zoeken we op in `stages` voor naam + kleur.
       const stageMeta = {
         contact:     { label: 'Contact',       tone: 'amber' },
         quote_sent:  { label: 'Offerte verz.', tone: 'neutral' },
@@ -574,6 +577,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
         planned:     { label: 'Gepland',       tone: 'info' },
         in_progress: { label: 'In uitvoering', tone: 'purple' },
       };
+      const toneBadge = { amber: 'b-orange', neutral: 'b-gray', success: 'b-green', info: 'b-blue', purple: 'b-purple' };
       const nextAct = custId => {
         const na = activities.filter(a => a.custId === custId && isOpenAct(a) && a.dueAt).sort((x, y) => new Date(x.dueAt) - new Date(y.dueAt))[0];
         if (!na) return null;
@@ -591,7 +595,10 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
               {items.map(d => {
                 const c = customerById(d.custId);
                 const name = c?.name || d.customerName || '?';
-                const sm = stageMeta[d.stage] || { label: d.stage, tone: 'neutral' };
+                const stage = stages.find(s => s.id === d.stage);
+                const sm = stageMeta[d.stage];
+                const stageLabel = stage?.label || sm?.label || 'Onbekend';
+                const stageCol = stage?.col || (sm ? toneBadge[sm.tone] : null) || 'b-gray';
                 const nx = nextAct(d.custId);
                 return (
                   <button key={d.id} className="feed-row ic-deal" onClick={goDeal(d)}>
@@ -604,7 +611,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                       </div>
                     </div>
                     <div className="feed-aside">
-                      <Chip tone={sm.tone}>{sm.label}</Chip>
+                      <span className={`badge ${stageCol}`}>{stageLabel}</span>
                       <span style={{ fontWeight: 800, color: C.dk, fontVariantNumeric: 'tabular-nums' }}>{eur(d.value)}</span>
                     </div>
                   </button>
@@ -847,7 +854,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
         <div className="bb-widget">
           <WHead title="Laatste klantactiviteit" sub="Realtime feed" right={<Chip tone="green" noDot>● Live</Chip>} />
           {sorted.length === 0 ? (
-            <EmptyState title="Geen klantactiviteiten" text="Acties op klanten verschijnen hier." />
+            <EmptyState title="Geen klantactiviteiten" text="Activiteiten op klanten verschijnen hier." />
           ) : (
             <div className="feed">
               {sorted.map(a => {
@@ -859,7 +866,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                     <div className="feed-main">
                       <div className="feed-title"><strong>{c?.name || 'Onbekende klant'}</strong> — {a.title}</div>
                       <div className="feed-meta">
-                        {a.type && <span>{a.type}</span>}
+                        {a.type && <span>{activiteitTypeLabel(a.type)}</span>}
                         {ago && (<><span className="sep">·</span><span>{ago} geleden</span></>)}
                       </div>
                     </div>
