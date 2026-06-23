@@ -810,49 +810,53 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
 
       {/* Offertes */}
       {tab === 'quotes' && (
-        <div className="tw">
-          <div className="tw-hd">
-            <div className="card-title">Offertes</div>
-            <button className="btn btn-p btn-xs" onClick={() => setShowNewOfferte(true)}>{I.plus} Nieuwe offerte</button>
+        <div>
+          <div className="lsec-hd">
+            <div className="lsec-title">Offertes ({cOffertes.length})</div>
+            <button className="btn btn-s btn-sm" onClick={() => setShowNewOfferte(true)}>{I.plus} Nieuwe offerte</button>
           </div>
           {cOffertes.length === 0
-            ? <div className="kk-empty">Geen offertes</div>
-            : cOffertes.map(o => (
-              <div key={o.id} className="kk-row" onClick={() => setPage('offertes', { id: o.id, from: 'klant', klantId: custId, klantNaam: c?.name })}>
-                <div className="kk-row-left">
-                  <div className="kk-row-title">{o.omschrijving || o.nummer || '—'}</div>
-                  {o.omschrijving && o.nummer && <div className="kk-row-sub">{o.nummer}</div>}
-                </div>
-                <div className="kk-row-right">
-                  <div className="kk-row-amount">{fmt(o.totaalIncl)}</div>
-                  <OfferteBadge status={o.status} />
-                </div>
+            ? <div className="lsec-empty">Geen offertes</div>
+            : (
+              <div className="lrows">
+                {cOffertes.map(o => (
+                  <div key={o.id} className="lrow" onClick={() => setPage('offertes', { id: o.id, from: 'klant', klantId: custId, klantNaam: c?.name })}>
+                    <div className="lrow-main">
+                      <div className="lrow-title">{o.omschrijving || o.nummer || '—'}</div>
+                      {o.omschrijving && o.nummer && <div className="lrow-sub">{o.nummer}</div>}
+                    </div>
+                    <OfferteBadge status={o.status} />
+                    <div className="lrow-amount">{fmt(o.totaalIncl)}</div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
         </div>
       )}
 
       {/* Facturen */}
       {tab === 'facturen' && (
-        <div className="tw">
-          <div className="tw-hd">
-            <div className="card-title">Facturen</div>
-            <button className="btn btn-p btn-xs" onClick={() => setShowNewFactuur(true)}>{I.plus} Nieuwe factuur</button>
+        <div>
+          <div className="lsec-hd">
+            <div className="lsec-title">Facturen ({cFacturen.length})</div>
+            <button className="btn btn-s btn-sm" onClick={() => setShowNewFactuur(true)}>{I.plus} Nieuwe factuur</button>
           </div>
           {cFacturen.length === 0
-            ? <div className="kk-empty">Geen facturen</div>
-            : cFacturen.map(f => (
-              <div key={f.id} className="kk-row" onClick={() => setPage('facturen', { id: f.id, from: 'klant', klantId: custId, klantNaam: c?.name })}>
-                <div className="kk-row-left">
-                  <div className="kk-row-title">{f.omschrijving || f.notities || f.nummer || '—'}</div>
-                  {f.nummer && <div className="kk-row-sub">{f.nummer}</div>}
-                </div>
-                <div className="kk-row-right">
-                  <div className="kk-row-amount">{fmt(f.totaalIncl)}</div>
-                  <FactuurBadge f={f} />
-                </div>
+            ? <div className="lsec-empty">Geen facturen</div>
+            : (
+              <div className="lrows">
+                {cFacturen.map(f => (
+                  <div key={f.id} className="lrow" onClick={() => setPage('facturen', { id: f.id, from: 'klant', klantId: custId, klantNaam: c?.name })}>
+                    <div className="lrow-main">
+                      <div className="lrow-title">{f.omschrijving || f.notities || f.nummer || '—'}</div>
+                      {f.nummer && <div className="lrow-sub">{f.nummer}</div>}
+                    </div>
+                    <FactuurBadge f={f} />
+                    <div className="lrow-amount">{fmt(f.totaalIncl)}</div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
         </div>
       )}
 
@@ -871,51 +875,53 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
               </div>
             ))}
           </div>
-          <div className="tw">
-            <div className="tw-hd">
-              <div className="card-title">Kostenregels</div>
-              <button className="btn btn-p btn-xs" onClick={() => setShowCostModal(true)}>{I.plus} Kosten toevoegen</button>
+          <div>
+            <div className="lsec-hd">
+              <div className="lsec-title">Kostenregels ({cCosts.length})</div>
+              <button className="btn btn-s btn-sm" onClick={() => setShowCostModal(true)}>{I.plus} Kosten toevoegen</button>
             </div>
             {cCosts.length === 0
-              ? <div className="kk-empty">Nog geen kosten geboekt</div>
-              : cCosts.map(r => (
-                <div key={r.id} className="kk-row kk-row-static">
-                  <div className="kk-row-left">
-                    <div className="kk-row-title">{r.desc || '—'}</div>
-                    <div className="kk-row-sub"><span className="badge b-gray" style={{ textTransform: 'capitalize' }}>{r.cat}</span></div>
-                  </div>
-                  <div className="kk-row-right">
-                    <div className="kk-row-amount">{fmt(r.amt)}</div>
-                    <div className="kk-row-date">{r.date}</div>
-                  </div>
+              ? <div className="lsec-empty">Nog geen kosten geboekt</div>
+              : (
+                <div className="lrows">
+                  {cCosts.map(r => (
+                    <div key={r.id} className="lrow lrow-static">
+                      <div className="lrow-main">
+                        <div className="lrow-title">{r.desc || '—'}</div>
+                        <div className="lrow-sub"><span className="badge b-gray" style={{ textTransform: 'capitalize' }}>{r.cat}</span></div>
+                      </div>
+                      <div className="lrow-amount">{fmt(r.amt)}</div>
+                      <div className="lrow-date">{r.date}</div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
           </div>
         </div>
       )}
 
       {/* Projecten */}
       {tab === 'projecten' && (
-        <div className="tw">
-          <div className="tw-hd">
-            <div className="card-title">Projecten</div>
-            <button className="btn btn-p btn-xs" onClick={() => setShowNewProject(true)}>{I.plus} Nieuw project</button>
+        <div>
+          <div className="lsec-hd">
+            <div className="lsec-title">Projecten ({cProjecten.length})</div>
+            <button className="btn btn-s btn-sm" onClick={() => setShowNewProject(true)}>{I.plus} Nieuw project</button>
           </div>
           {cProjecten.length === 0
-            ? <div className="kk-empty">Geen projecten</div>
-            : cProjecten.map(p => (
-              <div key={p.id} className="kk-row" onClick={() => setPage('projecten', { id: p.id, from: 'klant', klantId: custId, klantNaam: c?.name })}>
-                <div className="kk-row-left">
-                  <div className="kk-row-title">{p.name}</div>
-                  <div className="kk-row-sub"><ProjectBadge status={p.status} /></div>
-                </div>
-                {p.projectValue > 0 && (
-                  <div className="kk-row-right">
-                    <div className="kk-row-amount">{fmt(p.projectValue)}</div>
+            ? <div className="lsec-empty">Geen projecten</div>
+            : (
+              <div className="lrows">
+                {cProjecten.map(p => (
+                  <div key={p.id} className="lrow" onClick={() => setPage('projecten', { id: p.id, from: 'klant', klantId: custId, klantNaam: c?.name })}>
+                    <div className="lrow-main">
+                      <div className="lrow-title">{p.name}</div>
+                    </div>
+                    <ProjectBadge status={p.status} />
+                    {p.projectValue > 0 && <div className="lrow-amount">{fmt(p.projectValue)}</div>}
                   </div>
-                )}
+                ))}
               </div>
-            ))}
+            )}
         </div>
       )}
 

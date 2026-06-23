@@ -597,21 +597,20 @@ function FacturenTab({ project, invoices, openInvoice, setPage, customers, onNew
             Nog geen facturen aangemaakt voor dit project.
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div className="lrows">
             {invoices.map(f => (
-              <div key={f.id} role="button" tabIndex={0} title="Open factuur"
+              <div key={f.id} role="button" tabIndex={0} title="Open factuur" className="lrow"
                 onClick={() => openFactuur(f)}
-                onKeyDown={e => { if (e.key === 'Enter') openFactuur(f); }}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--br)', borderRadius: 8, background: '#fff', cursor: 'pointer' }}>
-                <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 13 }}>{f.nummer || '—'}</div>
-                <div style={{ flex: 1, fontSize: 12, color: 'var(--dl)' }}>
+                onKeyDown={e => { if (e.key === 'Enter') openFactuur(f); }}>
+                <div className="lrow-num">{f.nummer || '—'}</div>
+                <div className="lrow-meta">
                   {fmtDate(f.factuurdatum)}
                   {f.vervaldatum && ` · vervalt ${fmtDate(f.vervaldatum)}`}
                 </div>
                 <span className={`badge b-${f.status === 'betaald' ? 'accepted' : f.status === 'verzonden' ? 'sent' : 'gray'}`}>
                   {f.status}
                 </span>
-                <div style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{fmt(f.totaalIncl)}</div>
+                <div className="lrow-amount">{fmt(f.totaalIncl)}</div>
               </div>
             ))}
           </div>
@@ -784,19 +783,18 @@ function WerkbonnenTab({ project, werkbonnen, onCreated, canManage, setPage }) {
           Nog geen werkbonnen gekoppeld aan dit project.
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div className="lrows">
           {werkbonnen.map(w => {
             const pct = w.taakTotal ? Math.round((w.taakDone / w.taakTotal) * 100) : 0;
             return (
-              <div key={w.id} role="button" tabIndex={0} title="Open werkbon"
+              <div key={w.id} role="button" tabIndex={0} title="Open werkbon" className="lrow"
                 onClick={() => openWerkbon(w)}
-                onKeyDown={e => { if (e.key === 'Enter') openWerkbon(w); }}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--br)', borderRadius: 8, background: '#fff', cursor: 'pointer' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                onKeyDown={e => { if (e.key === 'Enter') openWerkbon(w); }}>
+                <div className="lrow-main">
+                  <div className="lrow-title">
                     {w.titel}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--dl)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div className="lrow-sub" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     {wbShortDate(w.geplandOp)}
                     {w.taakTotal > 0 && (
                       <>

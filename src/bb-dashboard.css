@@ -381,6 +381,23 @@ ul{list-style:none}
 .kk-row-date{font-size:12px;color:var(--dl);white-space:nowrap}
 .kk-empty{text-align:center;padding:28px 16px;color:var(--dl);font-size:.85rem}
 
+/* Gedeelde lijst-rij layout — standaard overgenomen uit de project-tab
+   (ProjectDetailDrawer). Gebruikt in zowel de project-tab als de klantkaart
+   zodat facturen/offertes/werkbonnen/kosten/projecten overal identiek zijn. */
+.lrows{display:flex;flex-direction:column;gap:6px}
+.lrow{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--br);border-radius:8px;background:#fff;cursor:pointer}
+.lrow-static{cursor:default}
+.lrow-num{font-family:monospace;font-weight:700;font-size:13px;flex-shrink:0}
+.lrow-meta{flex:1;min-width:0;font-size:12px;color:var(--dl);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow-main{flex:1;min-width:0}
+.lrow-title{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lrow-sub{font-size:11px;color:var(--dl);margin-top:2px}
+.lrow-amount{font-weight:700;white-space:nowrap;flex-shrink:0}
+.lrow-date{font-size:12px;color:var(--dl);white-space:nowrap;flex-shrink:0}
+.lsec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px}
+.lsec-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--dl)}
+.lsec-empty{text-align:center;padding:24px 0;color:var(--dl);font-size:13px}
+
 /* Klantenlijst naast drawer: kaarten passen zich aan de smalle lijst aan */
 .cust-split-list .cust-card-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))!important;gap:10px!important}
 
