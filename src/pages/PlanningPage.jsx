@@ -16,7 +16,7 @@ import { upsertWerkbonEvent, upsertActivityEvent, deleteWerkbonEvent, deleteActi
 import { listActivities, createActivity, buildDueAt } from '../services/activityService.js';
 import { ActivityEditModal } from '../components/SharedModals.jsx';
 import { supabase } from '../lib/supabase.js';
-import { MentionEditor } from '../components/MentionEditor.jsx';
+import { NoteEditor } from '../components/NoteEditor.jsx';
 
 // ── TIJDLIJN CONSTANTEN ───────────────────────────────────────────────────────
 
@@ -573,7 +573,7 @@ function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, pro
           </div>
           <div className="f" style={{ gridColumn: '1 / -1' }}>
             <label>Notities</label>
-            <MentionEditor value={form.omschrijving} onChange={v => set('omschrijving', v)} rows={3}
+            <NoteEditor mentions={true} value={form.omschrijving} onChange={v => set('omschrijving', v)} rows={3}
               placeholder="Instructies, agenda punten…" teamMembers={teamMembers} />
           </div>
 
@@ -719,7 +719,7 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, onClose, onSa
           </div>
           <div className="f" style={{ gridColumn: '1 / -1' }}>
             <label>Omschrijving</label>
-            <MentionEditor value={form.omschrijving} onChange={v => set('omschrijving', v)} rows={3}
+            <NoteEditor mentions={true} value={form.omschrijving} onChange={v => set('omschrijving', v)} rows={3}
               placeholder="Instructies voor de medewerker…" teamMembers={teamMembers} />
           </div>
         </div>

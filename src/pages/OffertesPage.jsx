@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Download, MoreVertical, Send } from 'lucide-react';
-import { MailBodyEditor, plainToEditorHtml } from '../components/MailBodyEditor.jsx';
+import { NoteEditor } from '../components/NoteEditor.jsx';
+import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -759,7 +760,7 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
             <div className="f"><label>Onderwerp</label><input value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} /></div>
             <div className="f">
               <label>Bericht</label>
-              <MailBodyEditor value={form.body} onChange={html => setForm(f => ({ ...f, body: html }))} placeholder="Schrijf uw bericht hier..." minHeight={200} />
+              <NoteEditor mentions={false} value={form.body} onChange={html => setForm(f => ({ ...f, body: html }))} placeholder="Schrijf uw bericht hier..." minHeight={200} />
             </div>
           </div>
         )}

@@ -11,8 +11,10 @@ import { triggerAutoEmail } from '../services/emailService.js';
 import { getCompanyId } from '../lib/currentCompany.js';
 import { createCalendarEvent } from '../services/calendarService.js';
 import { createJobCost, updateJobCost } from '../services/jobCostService.js';
+import { getWerkbonnen } from '../services/werkbonService.js';
+import { getProjects } from '../services/projectsService.js';
 import { updateProfile } from '../services/profileService.js';
-import { MentionEditor } from './MentionEditor.jsx';
+import { NoteEditor } from './NoteEditor.jsx';
 import { useUploads } from '../lib/uploadContext.jsx';
 import { getTeamMembers, createMentionNotifications, createAssignmentNotification } from '../services/notificatieService.js';
 
@@ -171,7 +173,7 @@ export function NewCustomerModal({ onClose, onSaved }) {
           </div>
           <div className="f s2">
             <label>Notities</label>
-            <MentionEditor value={form.notes} onChange={v => set('notes', v)} placeholder="Extra informatie… Typ @ om iemand te taggen" teamMembers={teamMembersNC} disabled={saving} />
+            <NoteEditor mentions={true} value={form.notes} onChange={v => set('notes', v)} placeholder="Extra informatie… Typ @ om iemand te taggen" teamMembers={teamMembersNC} disabled={saving} />
           </div>
         </div>
         <div className="fa">
@@ -332,7 +334,7 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
           </div>
           <div className="f s2">
             <label>Omschrijving</label>
-            <MentionEditor value={form.description} onChange={v => set('description', v)} placeholder="Wat moet er gebeuren? Welke afspraken zijn al gemaakt? Typ @ om iemand te taggen" teamMembers={teamMembersNL} disabled={saving} />
+            <NoteEditor mentions={true} value={form.description} onChange={v => set('description', v)} placeholder="Wat moet er gebeuren? Welke afspraken zijn al gemaakt? Typ @ om iemand te taggen" teamMembers={teamMembersNL} disabled={saving} />
           </div>
         </div>
         <div className="fa">
@@ -512,7 +514,7 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
           )}
           <div className="f s2">
             <label>Notities</label>
-            <MentionEditor value={form.notes} onChange={v => set('notes', v)} teamMembers={teamMembers} disabled={saving} />
+            <NoteEditor mentions={true} value={form.notes} onChange={v => set('notes', v)} teamMembers={teamMembers} disabled={saving} />
           </div>
         </div>
         <div className="fa">
@@ -642,7 +644,7 @@ export function NewCalendarEventModal({ onClose, onSaved, customers, defaultDate
           </div>
           <div className="f s2">
             <label>Notities</label>
-            <MentionEditor value={form.notes} onChange={v => setForm(f => ({ ...f, notes: v }))} placeholder="Notities… Typ @ om iemand te taggen" teamMembers={teamMembersCE} disabled={saving} />
+            <NoteEditor mentions={true} value={form.notes} onChange={v => setForm(f => ({ ...f, notes: v }))} placeholder="Notities… Typ @ om iemand te taggen" teamMembers={teamMembersCE} disabled={saving} />
           </div>
         </div>
         <div className="fa">
@@ -662,9 +664,17 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
   const { startUpload } = useUploads();
   const [form, setForm] = useState({
     customer_id: defaultCustId,
-    category: 'materiaal',
+    category: 'Materiaal',
     cost_date: new Date().toISOString().slice(0, 10),
+    project_id: '',
+    werkbon_id: '',
   });
+  const [werkbonnen, setWerkbonnen] = useState([]);
+  const [projecten, setProjecten] = useState([]);
+  useEffect(() => {
+    getWerkbonnen().then(setWerkbonnen).catch(() => {});
+    getProjects().then(setProjecten).catch(() => {});
+  }, []);
   const [regels, setRegels] = useState(() => [newKostenRegel()]);
   const [bijlageFiles, setBijlageFiles] = useState([]);
   const [dragOver, setDragOver] = useState(false);
@@ -722,6 +732,9 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
       cost_date: form.cost_date,
       bijlage_url: null,
       klant_type: form.customer_id ? 'klant' : 'algemeen',
+      customer_id: form.customer_id || null,
+      project_id: form.project_id || null,
+      werkbon_id: form.werkbon_id || null,
     };
     let created;
     try {
@@ -1214,7 +1227,7 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
           </div>
           <div className="f s2">
             <label>Notities</label>
-            <MentionEditor value={form.notes} onChange={v => set('notes', v)} teamMembers={teamMembers} disabled={!canEdit || busy} />
+            <NoteEditor mentions={true} value={form.notes} onChange={v => set('notes', v)} teamMembers={teamMembers} disabled={!canEdit || busy} />
           </div>
           {activity?.dueAt && (
             <div className="f s2" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

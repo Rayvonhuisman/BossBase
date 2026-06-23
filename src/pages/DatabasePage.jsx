@@ -14,7 +14,8 @@ import { listDeals, listPipelineStages } from '../services/dealService.js';
 import { listActivities } from '../services/activityService.js';
 import { getEmailTemplates } from '../services/instellingenService.js';
 import { sendEmail, logSentEmail, substituteVars } from '../services/emailService.js';
-import { MailBodyEditor, plainToEditorHtml } from '../components/MailBodyEditor.jsx';
+import { NoteEditor } from '../components/NoteEditor.jsx';
+import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { getCompanyId } from '../lib/currentCompany.js';
 
@@ -1657,7 +1658,7 @@ export function DatabasePage({ openCustomer }) {
                 {/* Bericht */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Bericht</label>
-                  <MailBodyEditor
+                  <NoteEditor mentions={false}
                     ref={mailBodyRef}
                     value={mailForm.body}
                     onChange={v => setMailForm(f => ({ ...f, body: v }))}

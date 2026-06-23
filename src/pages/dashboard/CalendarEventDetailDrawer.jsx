@@ -13,7 +13,7 @@ import {
 import { listCustomers } from '../../services/customerService.js';
 import { listDeals } from '../../services/dealService.js';
 import { getTeamMembers, createMentionNotifications } from '../../services/notificatieService.js';
-import { MentionEditor, renderMentions } from '../../components/MentionEditor.jsx';
+import { NoteEditor, renderNote } from '../../components/NoteEditor.jsx';
 
 const TYPE_LABEL = { job: 'Klus', visit: 'Opname', activity: 'Activiteit', event: 'Afspraak' };
 const TYPE_TONE = { job: 'b-orange', visit: 'b-new', activity: 'b-blue', event: 'b-green' };
@@ -462,14 +462,14 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
                     <span style={{ fontSize: 12.5, fontWeight: 700, color: '#0a0a0a' }}>{cm.name}</span>
                     <span style={{ fontSize: 11, color: '#9ca3af', flexShrink: 0 }}>{fmtWhen(cm.at)}</span>
                   </div>
-                  <div className="bb-notitie-content" style={{ fontSize: 13, color: '#0a0a0a', lineHeight: 1.5, wordBreak: 'break-word' }}>{renderMentions(cm.text)}</div>
+                  <div className="bb-notitie-content" style={{ fontSize: 13, color: '#0a0a0a', lineHeight: 1.5, wordBreak: 'break-word' }}>{renderNote(cm.text)}</div>
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        <MentionEditor
+        <NoteEditor mentions={true}
           value={draft}
           onChange={setDraft}
           rows={3}

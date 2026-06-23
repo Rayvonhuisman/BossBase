@@ -21,7 +21,7 @@ import {
 import { getWerkbonnenByProject, createWerkbon } from '../../services/werkbonService.js';
 import { NewFactuurModal } from '../FacturenPage.jsx';
 import { NewOfferteModal, SendOfferteMailModal } from '../OffertesPage.jsx';
-import { MentionEditor, renderMentions } from '../../components/MentionEditor.jsx';
+import { NoteEditor, renderNote } from '../../components/NoteEditor.jsx';
 import { getTeamMembers, createAssignmentNotification } from '../../services/notificatieService.js';
 
 const TABS = [
@@ -657,7 +657,7 @@ function NotesTab({ notes, onAdd, onDelete }) {
   return (
     <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
       <div className="card card-p" style={{ padding: 10 }}>
-        <MentionEditor
+        <NoteEditor mentions={true}
           value={text}
           onChange={setText}
           rows={3}
@@ -679,7 +679,7 @@ function NotesTab({ notes, onAdd, onDelete }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {notes.map(n => (
             <div key={n.id} style={{ padding: 10, border: '1px solid var(--br)', borderRadius: 8, background: '#fff', overflow: 'hidden' }}>
-              <div style={{ fontSize: 13, color: 'var(--dk)', lineHeight: 1.5, wordBreak: 'break-word', overflowWrap: 'break-word' }}>{renderMentions(n.note)}</div>
+              <div style={{ fontSize: 13, color: 'var(--dk)', lineHeight: 1.5, wordBreak: 'break-word', overflowWrap: 'break-word' }}>{renderNote(n.note)}</div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
                 <div style={{ fontSize: 11, color: 'var(--dl)' }}>
                   {n.authorName || 'Onbekend'} · {fmtDate(String(n.createdAt || '').slice(0, 10))}

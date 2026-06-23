@@ -3,7 +3,7 @@ import { I, ModalX } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { useUploads } from '../lib/uploadContext.jsx';
-import { MentionEditor, renderMentions } from '../components/MentionEditor.jsx';
+import { NoteEditor, renderNote } from '../components/NoteEditor.jsx';
 import { getTeamMembers, createAssignmentNotification } from '../services/notificatieService.js';
 import {
   getWerkbonnen, getWerkbonById, createWerkbon, updateWerkbon,
@@ -201,11 +201,11 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
           </div>
           <div className="f full">
             <label>Omschrijving</label>
-            <MentionEditor value={form.omschrijving} onChange={v => set('omschrijving', v)} placeholder="Wat moet er gebeuren op locatie? Typ @ om iemand te taggen" rows={3} disabled={saving} teamMembers={teamMembers} />
+            <NoteEditor mentions={true} value={form.omschrijving} onChange={v => set('omschrijving', v)} placeholder="Wat moet er gebeuren op locatie? Typ @ om iemand te taggen" rows={3} disabled={saving} teamMembers={teamMembers} />
           </div>
           <div className="f full">
             <label>Interne notities</label>
-            <MentionEditor value={form.notes} onChange={v => set('notes', v)} placeholder="Bv. klant heeft hond, deur dicht houden… Typ @ om iemand te taggen" rows={2} disabled={saving} teamMembers={teamMembers} />
+            <NoteEditor mentions={true} value={form.notes} onChange={v => set('notes', v)} placeholder="Bv. klant heeft hond, deur dicht houden… Typ @ om iemand te taggen" rows={2} disabled={saving} teamMembers={teamMembers} />
           </div>
           {teamMembers.length > 0 && (
             <div className="f full">
@@ -682,7 +682,7 @@ function NotitiesSection({ notities, onSave, teamMembers = [] }) {
     <div className="wb2-card">
       <div className="wb2-card-hd"><div className="wb2-card-hd-title">Notities uitvoerder</div></div>
       <div className="wb2-card-body">
-        <MentionEditor
+        <NoteEditor mentions={true}
           value={value}
           onChange={setValue}
           placeholder="Bijzonderheden, bevindingen, aandachtspunten voor de baas… Typ @ om iemand te taggen"
@@ -874,6 +874,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
           category: 'Materiaal',
           cost_date: new Date().toISOString().slice(0, 10),
           customer_id: detail.customerId,
+          werkbon_id: selectedId, // project_id wordt hiervan automatisch afgeleid
         }).catch(() => {});
       }
     } catch (e) {
@@ -1124,13 +1125,13 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
                 <div className="wb2-card-body">
                   {detail.omschrijving && (
                     <div style={{ fontSize: 13.5, color: 'var(--dmu)', lineHeight: 1.6, whiteSpace: 'pre-wrap', marginBottom: detail.notes ? 10 : 0 }}>
-                      {renderMentions(detail.omschrijving)}
+                      {renderNote(detail.omschrijving)}
                     </div>
                   )}
                   {detail.notes && (
                     <div className="wb2-note">
                       <span className="wb2-note-ic">{I.bell}</span>
-                      <div className="wb2-note-txt"><b>Interne notitie:</b> {renderMentions(detail.notes)}</div>
+                      <div className="wb2-note-txt"><b>Interne notitie:</b> {renderNote(detail.notes)}</div>
                     </div>
                   )}
                 </div>

@@ -12,7 +12,7 @@ import { listCustomers } from '../services/customerService.js';
 import { listDeals } from '../services/dealService.js';
 import { getOffertes } from '../services/offerteService.js';
 import { ProjectDetailDrawer } from './projects/ProjectDetailDrawer.jsx';
-import { MentionEditor } from '../components/MentionEditor.jsx';
+import { NoteEditor } from '../components/NoteEditor.jsx';
 import { getTeamMembers, createAssignmentNotification } from '../services/notificatieService.js';
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
@@ -227,7 +227,7 @@ export function NewProjectModal({ onClose, onSaved, customers, deals, offertes, 
           </div>
           <div className="f s2" style={{ gridColumn: '1 / -1' }}>
             <label>Omschrijving</label>
-            <MentionEditor value={form.description} onChange={v => set('description', v)} rows={3} placeholder="Werkomschrijving, bijzonderheden, aandachtspunten… Typ @ om iemand te taggen" teamMembers={teamMembers} />
+            <NoteEditor mentions={true} value={form.description} onChange={v => set('description', v)} rows={3} placeholder="Werkomschrijving, bijzonderheden, aandachtspunten… Typ @ om iemand te taggen" teamMembers={teamMembers} />
           </div>
         </div>
         <div className="fa">

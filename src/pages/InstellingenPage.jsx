@@ -21,7 +21,8 @@ import { getVoertuigen, createVoertuig, updateVoertuig, deleteVoertuig } from '.
 import { updateCompany } from '../services/profileService.js';
 import { uploadProfileAvatar, removeProfileAvatar } from '../services/avatarService.js';
 import { AvatarUpload } from '../components/AvatarUpload.jsx';
-import { MailBodyEditor, plainToEditorHtml } from '../components/MailBodyEditor.jsx';
+import { NoteEditor } from '../components/NoteEditor.jsx';
+import { plainToEditorHtml } from '../lib/noteFormat.js';
 import {
   getConnection,
   saveConnection,
@@ -1072,7 +1073,7 @@ export function InstellingenPage() {
                   </div>
                   <div className="f s2">
                     <label>Berichttekst</label>
-                    <MailBodyEditor
+                    <NoteEditor mentions={false}
                       ref={bodyRef}
                       value={form.body}
                       onChange={html => setTemplateField(t.id, 'body', html)}
@@ -1199,7 +1200,7 @@ export function InstellingenPage() {
               </div>
               <div className="f s2">
                 <label>Berichttekst</label>
-                <MailBodyEditor
+                <NoteEditor mentions={false}
                   ref={newBodyRef}
                   value={newTemplateForm.body}
                   onChange={html => setNewTemplateForm(f => ({ ...f, body: html }))}

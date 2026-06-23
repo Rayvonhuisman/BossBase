@@ -3,7 +3,7 @@ import DOMPurify from 'dompurify';
 import { Bold, Calendar, Check, Edit2, Euro, FileText, Folder, Italic, List, ListOrdered, Maximize2, Minimize2, PenLine, Plus, RotateCcw, ShoppingCart, Underline, User, Wrench, X } from 'lucide-react';
 import {
   I, CUSTOMERS_DATA, DEALS, ACTIVITIES_DATA, QUOTES_DATA, COSTS_DATA,
-  fmt, custById, stageLabel, stageCol, Av, StatusBadge, ModalX,
+  fmt, custById, stageLabel, stageCol, Av, StatusBadge, ModalX, CostCategoryBadge,
 } from '../bb-shared.jsx';
 import { createCustomer, deleteCustomer, getCustomer, listCustomers, updateCustomer } from '../services/customerService.js';
 import { getKlantNotities, addKlantNotitie, getTijdlijnByCustomer, logTijdlijnSafe } from '../services/klantTijdlijnService.js';
@@ -291,10 +291,6 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
     }
   };
 
-  const cancelNotitie = (clearText, closeFn) => {
-    clearText('');
-    closeFn();
-  };
 
   const fmtTijdlijnDate = iso => {
     if (!iso) return '';
@@ -586,40 +582,31 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
       {tab === 'notities' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div className="card card-p">
-            <div style={{ fontWeight: 700, fontSize: '.9rem', marginBottom: showNotitiesInput ? 12 : 0 }}>Notities</div>
-            {!showNotitiesInput && (
-              <div
-                onClick={() => setShowNotitiesInput(true)}
-                style={{ cursor: 'pointer', padding: '10px 2px', color: '#9ca3af', fontSize: '.84rem', fontStyle: 'italic' }}
-              >
-                Klik om een notitie toe te voegen...
-              </div>
-            )}
-            <div className={`notitie-input-wrap${showNotitiesInput ? ' open' : ''}`}>
-              <div>
-                <NoteEditor
-                  value={newNotitiesText}
-                  onChange={setNewNotitiesText}
-                  mentions={true}
-                  minHeight={96}
-                  placeholder="Schrijf hier je notitie over deze klant… Typ @ om iemand te taggen"
-                  teamMembers={teamMembers}
-                />
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 10, paddingBottom: 2 }}>
-                  <button
-                    className="btn btn-s btn-sm"
-                    onClick={() => cancelNotitie(setNewNotitiesText, () => setShowNotitiesInput(false))}
-                  >
-                    Annuleren
-                  </button>
-                  <button
-                    className="btn btn-p btn-sm"
-                    disabled={savingNotitie || !newNotitiesText.trim()}
-                    onClick={() => addNotitie(newNotitiesText, setNewNotitiesText, setSavingNotitie, () => setShowNotitiesInput(false))}
-                  >
-                    {savingNotitie ? 'Opslaan...' : 'Opslaan'}
-                  </button>
-                </div>
+            <div style={{ fontWeight: 700, fontSize: '.9rem', marginBottom: 12 }}>Notities</div>
+            <div>
+              <NoteEditor
+                value={newNotitiesText}
+                onChange={setNewNotitiesText}
+                mentions={true}
+                minHeight={96}
+                placeholder="Schrijf een notitie… Typ @ om iemand te taggen"
+                teamMembers={teamMembers}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 10, paddingBottom: 2 }}>
+                <button
+                  className="btn btn-s btn-sm"
+                  disabled={!newNotitiesText.trim()}
+                  onClick={() => setNewNotitiesText('')}
+                >
+                  Wissen
+                </button>
+                <button
+                  className="btn btn-p btn-sm"
+                  disabled={savingNotitie || !newNotitiesText.trim()}
+                  onClick={() => addNotitie(newNotitiesText, setNewNotitiesText, setSavingNotitie)}
+                >
+                  {savingNotitie ? 'Opslaan...' : 'Opslaan'}
+                </button>
               </div>
             </div>
           </div>
@@ -784,7 +771,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
                     <div key={r.id} className="lrow lrow-static">
                       <div className="lrow-main">
                         <div className="lrow-title">{r.desc || '—'}</div>
-                        <div className="lrow-sub"><span className="badge b-gray" style={{ textTransform: 'capitalize' }}>{r.cat}</span></div>
+                        <div className="lrow-sub"><CostCategoryBadge category={r.cat} /></div>
                       </div>
                       <div className="lrow-amount">{fmt(r.amt)}</div>
                       <div className="lrow-date">{r.date}</div>

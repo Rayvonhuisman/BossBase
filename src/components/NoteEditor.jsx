@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Bold, Italic, Underline } from 'lucide-react';
-import { normalizeToHtml, htmlToPlain } from '../lib/noteFormat.js';
+import { normalizeToHtml, htmlToPlain, plainToEditorHtml } from '../lib/noteFormat.js';
 
 // ── Gedeeld notitie-component ─────────────────────────────────────────────────
 // Combineert de @-tagging van MentionEditor met de B/I/U-opmaak van
@@ -44,7 +44,7 @@ export function renderNote(value) {
 
 const EMPTY_FORMATS = { bold: false, italic: false, underline: false };
 
-export function NoteEditor({
+export const NoteEditor = forwardRef(function NoteEditor({
   value = '',
   onChange,
   mentions = true,
@@ -52,13 +52,19 @@ export function NoteEditor({
   placeholder,
   disabled = false,
   minHeight = 90,
-}) {
+}, ref) {
   injectNoteStyles();
 
   const editorRef = useRef(null);
   const wrapperRef = useRef(null);
   const lastValueRef = useRef(value);
   const isFocused = useRef(false);
+
+  // Laad-conversie verschilt per modus:
+  //  - mentions=true  (interne notitie): legacy markup → spans + strikte sanitize
+  //  - mentions=false (mail): behoud HTML/links, geen strikte allowlist
+  //    (XSS bij mail wordt op het lees-pad afgevangen met DOMPurify).
+  const loadHtml = (v) => (mentions ? normalizeToHtml(v) : plainToEditorHtml(v || ''));
 
   const [focused, setFocused] = useState(false);
   const [activeFormats, setActiveFormats] = useState(EMPTY_FORMATS);
@@ -73,10 +79,10 @@ export function NoteEditor({
     : [];
   const showDd = mentions && query !== null && filtered.length > 0;
 
-  // ── Init DOM bij mount (legacy markup → spans, gesanitized)
+  // ── Init DOM bij mount
   useEffect(() => {
     if (!editorRef.current) return;
-    editorRef.current.innerHTML = normalizeToHtml(value);
+    editorRef.current.innerHTML = loadHtml(value);
     lastValueRef.current = value;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -85,7 +91,7 @@ export function NoteEditor({
     if (!editorRef.current) return;
     if (value === lastValueRef.current) return; // eigen input → niet overschrijven
     lastValueRef.current = value;
-    editorRef.current.innerHTML = normalizeToHtml(value);
+    editorRef.current.innerHTML = loadHtml(value);
   }, [value]);
 
   // ── Sluit dropdown bij klik buiten
@@ -123,6 +129,36 @@ export function NoteEditor({
     lastValueRef.current = out;
     onChange?.(out);
   };
+
+  // ── Imperatieve API (mail-composers: {{variabele}} invoegen / body zetten)
+  useImperativeHandle(ref, () => ({
+    insertAtCursor(text) {
+      const editor = editorRef.current;
+      if (!editor) return;
+      editor.focus();
+      const sel = window.getSelection();
+      if (sel?.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        const node = document.createTextNode(text);
+        range.insertNode(node);
+        range.setStartAfter(node);
+        range.setEndAfter(node);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } else {
+        editor.innerHTML = (editor.innerHTML || '') + text;
+      }
+      emit();
+    },
+    setHtml(html) {
+      const editor = editorRef.current;
+      if (!editor) return;
+      editor.innerHTML = loadHtml(html);
+      lastValueRef.current = html;
+      emit();
+    },
+  }), [mentions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── @-detectie op cursor-positie
   const detectMention = () => {
@@ -340,4 +376,4 @@ export function NoteEditor({
       )}
     </div>
   );
-}
+});

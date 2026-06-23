@@ -45,10 +45,28 @@ export function sanitizeNoteHtml(html) {
   });
 }
 
-// Detecteert of een string al HTML-opmaak bevat (zelfde heuristiek als
-// MailBodyEditor.plainToEditorHtml).
-function looksLikeHtml(value) {
+// Detecteert of een string al HTML-opmaak bevat.
+export function looksLikeHtml(value) {
   return /<[a-zA-Z]/.test(value);
+}
+
+// Platte tekst (met \n) → editor-HTML (<div> per regel, zoals Chrome's
+// contentEditable). Bestaande HTML wordt ongewijzigd teruggegeven.
+// Gebruikt voor de mail-modus (mentions={false}), waar opmaak/links behouden
+// blijven en NIET de strikte notitie-allowlist geldt.
+export function plainToEditorHtml(text) {
+  if (!text) return '';
+  if (looksLikeHtml(text)) return text;
+  return text
+    .split('\n')
+    .map(line => {
+      const escaped = line
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      return `<div>${escaped || '<br>'}</div>`;
+    })
+    .join('');
 }
 
 // Legacy markup of HTML → veilige, genormaliseerde HTML voor opslag/weergave.

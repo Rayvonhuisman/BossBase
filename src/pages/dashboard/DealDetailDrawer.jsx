@@ -8,7 +8,7 @@ import { getOffertes } from '../../services/offerteService.js';
 import { listNotes, createNote } from '../../services/noteService.js';
 import { listJobCosts } from '../../services/jobCostService.js';
 import { getWerkbonnen } from '../../services/werkbonService.js';
-import { MentionEditor } from '../../components/MentionEditor.jsx';
+import { NoteEditor, renderNote } from '../../components/NoteEditor.jsx';
 import { getTeamMembers, createMentionNotifications, createAssignmentNotification } from '../../services/notificatieService.js';
 
 const GREEN = '#1DDB62';
@@ -296,13 +296,13 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
       {/* Notities */}
       <Section title={`Notities (${notes.length})`}>
         <div style={{ marginBottom: 10 }}>
-          <MentionEditor value={noteText} onChange={setNoteText} placeholder="Nieuwe notitie… Typ @ om iemand te taggen" rows={3} disabled={addingNote} teamMembers={teamMembers} />
+          <NoteEditor mentions={true} value={noteText} onChange={setNoteText} placeholder="Nieuwe notitie… Typ @ om iemand te taggen" rows={3} disabled={addingNote} teamMembers={teamMembers} />
           <button className="btn btn-s btn-sm" disabled={addingNote || !noteText.trim()} onClick={addNote} style={{ marginTop: 8 }}>Toevoegen</button>
         </div>
         {notes.length === 0 && <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Nog geen notities</div>}
         {notes.map(n => (
           <div key={n.id} style={{ padding: '10px 12px', border: '1px solid #eef0f2', borderRadius: 9, background: '#f7f8f7', marginBottom: 6 }}>
-            <div style={{ fontSize: 13, color: '#0a0a0a', whiteSpace: 'pre-wrap' }}>{n.body}</div>
+            <div className="bb-notitie-content" style={{ fontSize: 13, color: '#0a0a0a', whiteSpace: 'pre-wrap' }}>{renderNote(n.body)}</div>
             <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>{(n.createdAt || '').slice(0, 10)}{n.author ? ` · ${n.author}` : ''}</div>
           </div>
         ))}
