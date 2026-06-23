@@ -240,7 +240,7 @@ function FeatureVisualOfferte() {
       <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 10, fontWeight: 800, color: "var(--dk)" }}>
         <span>Totaal excl. btw</span><span>€ 4.850</span>
       </div>
-      <div style={{ marginTop: 12, fontFamily: "var(--sans)", fontSize: 19, color: "var(--dm)", borderTop: "1.5px solid var(--border)", paddingTop: 6 }}>J. Bakker</div>
+      <div style={{ marginTop: 12, fontFamily: "cursive", fontSize: 19, color: "var(--dm)", borderTop: "1.5px solid var(--border)", paddingTop: 6 }}>J. Bakker</div>
     </div>
   )
 }
