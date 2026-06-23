@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
-import { I, Logo } from '../bb-shared.jsx';
+import { Logo } from '../bb-shared.jsx';
+import {
+  Paintbrush, Trees, Hammer, AppWindow, Plug, Home, ShowerHead, Zap, Sparkles, HardHat,
+  MailCheck, Rocket, User, Users, Check, Plus,
+} from 'lucide-react';
 import { loginWithEmail, registerWithEmail, requestPasswordReset, resendVerificationEmail, vertaalAuthFout } from '../services/authService.js';
 import { PasswordRequirements, PasswordMatch, passwordValid } from '../components/PasswordStrength.jsx';
 
 const TRADES = [
-  { icon: '🖌️', label: 'Schilder' }, { icon: '🌿', label: 'Hovenier' },
-  { icon: '🔨', label: 'Aannemer' }, { icon: '🪟', label: 'Kozijnen' },
-  { icon: '🔧', label: 'Installateur' }, { icon: '🏠', label: 'Dakdekker' },
-  { icon: '🚿', label: 'Loodgieter' }, { icon: '⚡', label: 'Elektricien' },
-  { icon: '🧹', label: 'Schoonmaak' }, { icon: '🏗️', label: 'Anders' },
+  { Icon: Paintbrush, label: 'Schilder' }, { Icon: Trees, label: 'Hovenier' },
+  { Icon: Hammer, label: 'Aannemer' }, { Icon: AppWindow, label: 'Kozijnen' },
+  { Icon: Plug, label: 'Installateur' }, { Icon: Home, label: 'Dakdekker' },
+  { Icon: ShowerHead, label: 'Loodgieter' }, { Icon: Zap, label: 'Elektricien' },
+  { Icon: Sparkles, label: 'Schoonmaak' }, { Icon: HardHat, label: 'Anders' },
 ];
 
 export function LoginPage({ onLogin, onRegister }) {
@@ -81,7 +85,7 @@ export function LoginPage({ onLogin, onRegister }) {
         <div className="auth-card afu">
           <div className="auth-logo"><Logo /></div>
           <div style={{ textAlign: 'center', marginBottom: 16 }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>📬</div>
+            <div style={{ marginBottom: 12 }}><MailCheck size={42} strokeWidth={1.6} color="var(--p)" /></div>
             <div className="auth-title" style={{ marginBottom: 6 }}>Check je e-mail</div>
             <div className="auth-sub">
               We hebben een resetlink gestuurd naar <strong>{forgotEmail}</strong>.
@@ -268,7 +272,7 @@ export function RegisterFlow({ onDone, onBack }) {
       {steps.map((s, i) => (
         <React.Fragment key={i}>
           <div className={`onboard-step-dot ${i < step ? 'done' : i === step ? 'active' : 'todo'}`}>
-            {i < step ? I.check : i + 1}
+            {i < step ? <Check size={14} strokeWidth={2.5} /> : i + 1}
           </div>
           {i < steps.length - 1 && <div className={`onboard-step-line ${i < step ? 'done' : ''}`} />}
         </React.Fragment>
@@ -282,7 +286,7 @@ export function RegisterFlow({ onDone, onBack }) {
         <div className="auth-card afu">
           <div className="auth-logo"><Logo /></div>
           <div style={{ textAlign: 'center', marginBottom: 16 }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>📬</div>
+            <div style={{ marginBottom: 12 }}><MailCheck size={42} strokeWidth={1.6} color="var(--p)" /></div>
             <div className="auth-title" style={{ marginBottom: 6 }}>Bevestig je e-mailadres</div>
             <div className="auth-sub">
               We hebben een verificatiemail gestuurd naar <strong>{form.email}</strong>.
@@ -336,7 +340,7 @@ export function RegisterFlow({ onDone, onBack }) {
               <div className="trade-grid">
                 {TRADES.map(t => (
                   <button key={t.label} className={`trade-option${trade === t.label ? ' selected' : ''}`} onClick={() => setTrade(t.label)}>
-                    <span>{t.icon}</span>{t.label}
+                    <t.Icon size={18} strokeWidth={1.8} style={{ flexShrink: 0 }} />{t.label}
                   </button>
                 ))}
               </div>
@@ -348,14 +352,14 @@ export function RegisterFlow({ onDone, onBack }) {
         {step === 2 && (
           <div className="setup-options">
             <button className={`setup-option${setup === 'solo' ? ' selected' : ''}`} onClick={() => setSetup('solo')}>
-              <div className="setup-option-icon">👤</div>
+              <div className="setup-option-icon"><User size={20} strokeWidth={2} /></div>
               <div>
                 <div className="setup-option-label">Ik werk alleen (zzp)</div>
                 <div className="setup-option-sub">Je doet alles zelf — offertes, planning, uitvoering en administratie.</div>
               </div>
             </button>
             <button className={`setup-option${setup === 'team' ? ' selected' : ''}`} onClick={() => setSetup('team')}>
-              <div className="setup-option-icon">👥</div>
+              <div className="setup-option-icon"><Users size={20} strokeWidth={2} /></div>
               <div>
                 <div className="setup-option-label">Ik werk met een team</div>
                 <div className="setup-option-sub">Je hebt medewerkers of onderaannemers aan wie je werk toewijst.</div>
@@ -375,7 +379,7 @@ export function RegisterFlow({ onDone, onBack }) {
               <select><option>Medewerker</option><option>Admin</option></select>
             </div>
             <button className="btn btn-s btn-sm" style={{ width: '100%', justifyContent: 'center', marginBottom: 8 }}>
-              {I.plus} Nog een medewerker toevoegen
+              <Plus size={15} strokeWidth={2} /> Nog een medewerker toevoegen
             </button>
           </>
         )}
@@ -384,7 +388,7 @@ export function RegisterFlow({ onDone, onBack }) {
           {step > 0 && <button className="btn btn-s" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setStep(s => s - 1)}>Terug</button>}
           {step < 3
             ? <button className="auth-submit" style={{ flex: 1 }} onClick={next} disabled={step === 0 && !step0Valid}>Volgende →</button>
-            : <button className="auth-submit" style={{ flex: 1 }} onClick={submit} disabled={loading}>{loading ? 'Bezig...' : 'BossBase starten 🚀'}</button>
+            : <button className="auth-submit" style={{ flex: 1 }} onClick={submit} disabled={loading}>{loading ? 'Bezig...' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>BossBase starten <Rocket size={16} strokeWidth={1.8} /></span>}</button>
           }
         </div>
         {step === 3 && (
