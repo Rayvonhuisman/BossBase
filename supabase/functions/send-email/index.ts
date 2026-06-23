@@ -9,7 +9,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
-    const { to, subject, html, from_name, attachments } = await req.json()
+    const { to, subject, html, from_name, reply_to, attachments } = await req.json()
 
     if (!to || !subject || !html) {
       return new Response(JSON.stringify({ success: false, error: 'to, subject en html zijn verplicht' }), {
@@ -20,7 +20,10 @@ serve(async (req) => {
 
     const apiKey = Deno.env.get('RESEND_API_KEY')
     const fromEmail = Deno.env.get('RESEND_FROM_EMAIL') || 'noreply@bossbase.nl'
-    const fromLabel = from_name ? `${from_name} <${fromEmail}>` : fromEmail
+    // From-naam: "[Bedrijfsnaam] via BossBase" zodat de klant herkent van wie de
+    // mail komt. Systeemmails (from_name leeg of 'BossBase') tonen enkel BossBase.
+    const label = from_name && from_name !== 'BossBase' ? `${from_name} via BossBase` : 'BossBase'
+    const fromLabel = `${label} <${fromEmail}>`
 
     if (!apiKey) {
       return new Response(JSON.stringify({ success: false, error: 'RESEND_API_KEY niet geconfigureerd' }), {
@@ -30,6 +33,9 @@ serve(async (req) => {
     }
 
     const payload: Record<string, unknown> = { from: fromLabel, to, subject, html }
+    // Reply-to: antwoorden van de klant gaan naar het door het bedrijf
+    // ingestelde adres i.p.v. naar noreply@bossbase.nl.
+    if (typeof reply_to === 'string' && reply_to.includes('@')) payload.reply_to = reply_to
     if (Array.isArray(attachments) && attachments.length > 0) payload.attachments = attachments
 
     const res = await fetch('https://api.resend.com/emails', {

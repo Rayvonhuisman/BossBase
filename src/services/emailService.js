@@ -40,28 +40,42 @@ export async function getMailTemplate(type) {
   return data
 }
 
-// ── BEDRIJFSNAAM OPHALEN ─────────────────────────────────────────────────────
+// ── BEDRIJFS-MAILGEGEVENS OPHALEN (naam + reply-to) ──────────────────────────
 
-async function getCompanyName() {
+async function getCompanyMailMeta() {
   try {
     const companyId = await getCompanyId()
-    if (!companyId) return 'BossBase'
+    if (!companyId) return { name: 'BossBase', replyTo: null }
     const { data } = await supabase
       .from('companies')
-      .select('name')
+      .select('name, reply_to_email, email')
       .eq('id', companyId)
       .maybeSingle()
-    return data?.name || 'BossBase'
+    // Reply-to: ingesteld antwoord-adres, anders het bedrijfs-emailadres,
+    // anders geen reply-to header.
+    return {
+      name: data?.name || 'BossBase',
+      replyTo: data?.reply_to_email || data?.email || null,
+    }
   } catch {
-    return 'BossBase'
+    return { name: 'BossBase', replyTo: null }
   }
 }
 
 // ── E-MAIL VERSTUREN VIA EDGE FUNCTION ──────────────────────────────────────
 
-export async function sendEmail({ to, subject, html, fromName, attachments }) {
-  const resolvedFromName = fromName !== undefined ? fromName : await getCompanyName()
+export async function sendEmail({ to, subject, html, fromName, replyTo, attachments }) {
+  // Bedrijfsnaam én reply-to centraal oplossen, tenzij expliciet meegegeven.
+  // Zo krijgen ALLE verzendplekken automatisch het juiste antwoord-adres.
+  let resolvedFromName = fromName
+  let resolvedReplyTo = replyTo
+  if (resolvedFromName === undefined || resolvedReplyTo === undefined) {
+    const meta = await getCompanyMailMeta()
+    if (resolvedFromName === undefined) resolvedFromName = meta.name
+    if (resolvedReplyTo === undefined) resolvedReplyTo = meta.replyTo
+  }
   const body = { to, subject, html, from_name: resolvedFromName }
+  if (resolvedReplyTo) body.reply_to = resolvedReplyTo
   if (attachments?.length) body.attachments = attachments
 
   if (import.meta.env.DEV) console.log('[sendEmail] invoke send-email →', { to, subject, from_name: resolvedFromName })

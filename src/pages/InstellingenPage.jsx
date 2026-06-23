@@ -209,6 +209,7 @@ export function InstellingenPage() {
       setBedrijfForm({
         name: company.name || '',
         email: company.email || '',
+        reply_to_email: company.replyToEmail || '',
         phone: company.phone || '',
         kvk: company.kvk || '',
         btw_number: company.btwNumber || '',
@@ -251,6 +252,10 @@ export function InstellingenPage() {
     if (!company?.id) return;
     if (bedrijfForm.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bedrijfForm.email)) {
       toast.error('E-mailadres heeft geen geldig formaat');
+      return;
+    }
+    if (bedrijfForm.reply_to_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bedrijfForm.reply_to_email)) {
+      toast.error('Antwoord e-mailadres heeft geen geldig formaat');
       return;
     }
     if (bedrijfForm.kvk && !/^\d{8}$/.test(bedrijfForm.kvk.trim())) {
@@ -799,6 +804,13 @@ export function InstellingenPage() {
             <div className="f">
               <label>E-mailadres</label>
               <input type="email" value={bedrijfForm.email} onChange={e => setBedrijf('email', e.target.value)} placeholder="Nog niet ingevuld" />
+            </div>
+            <div className="f s2">
+              <label>Antwoord e-mailadres</label>
+              <input type="email" value={bedrijfForm.reply_to_email} onChange={e => setBedrijf('reply_to_email', e.target.value)} placeholder="bijv. info@jouwbedrijf.nl" />
+              <div style={{ fontSize: 11, color: 'var(--dmu)', marginTop: 5, lineHeight: 1.5 }}>
+                Wanneer een klant op 'Beantwoorden' klikt bij een mail van BossBase, komt het antwoord op dit adres binnen. Mails worden verzonden vanaf noreply@bossbase.nl.
+              </div>
             </div>
             <div className="f">
               <label>Telefoonnummer</label>

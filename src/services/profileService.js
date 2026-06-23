@@ -32,6 +32,7 @@ const toCompany = row => ({
   website: row.website || "",
   logoUrl: row.logo_url || "",
   brandingColor: row.branding_color || '#f97316',
+  replyToEmail: row.reply_to_email || "",
   status: row.status || 'actief',
   raw: row,
 })
@@ -144,6 +145,7 @@ export async function updateCompany(id, input) {
   for (const k of [
     "name", "email", "kvk", "btw_number", "phone",
     "address", "city", "postal_code", "website", "logo_url", "branding_color",
+    "reply_to_email",
   ]) {
     if (input[k] !== undefined) allowed[k] = input[k]
   }
