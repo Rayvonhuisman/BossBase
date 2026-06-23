@@ -496,25 +496,15 @@ function UrenTab({ project, entries, onAdd, onDelete, canManage }) {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <div className="f" style={{ flex: '1 1 120px', minWidth: 0 }}>
               <label>Datum</label>
-              <input type="date" style={{ minWidth: 0 }} value={form.entry_date} onChange={e => set('entry_date', e.target.value)} />
+              <input type="date" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.entry_date} onChange={e => set('entry_date', e.target.value)} />
             </div>
             <div className="f" style={{ flex: '1 1 90px', minWidth: 0 }}>
               <label>Uren</label>
-              <input type="number" min="0" step="0.25" placeholder="0,0" style={{ minWidth: 0 }} value={form.hours} onChange={e => set('hours', e.target.value)} />
-            </div>
-            <div className="f" style={{ flex: '1 1 120px', minWidth: 0 }}>
-              <label>Tarief (optioneel)</label>
-              <input type="number" min="0" step="0.01" placeholder="€/uur" style={{ minWidth: 0 }} value={form.hourly_rate} onChange={e => set('hourly_rate', e.target.value)} />
-            </div>
-            <div className="f" style={{ flex: '1 1 140px', minWidth: 0, justifyContent: 'flex-end' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                <input type="checkbox" style={{ width: 'auto' }} checked={form.billable} onChange={e => set('billable', e.target.checked)} />
-                Factureerbaar
-              </label>
+              <input type="number" min="0" step="0.25" placeholder="0,0" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.hours} onChange={e => set('hours', e.target.value)} />
             </div>
             <div className="f" style={{ flex: '1 1 100%', minWidth: 0 }}>
               <label>Omschrijving</label>
-              <input type="text" placeholder="Wat heb je gedaan?" style={{ minWidth: 0 }} value={form.description} onChange={e => set('description', e.target.value)} />
+              <input type="text" placeholder="Wat heb je gedaan?" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.description} onChange={e => set('description', e.target.value)} />
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
@@ -1049,8 +1039,8 @@ export function ProjectDetailDrawer({
                 <NotesTab notes={notes} onAdd={handleAddNote} onDelete={handleDeleteNote} />
               )}
 
-              {/* Footer actions */}
-              {canManage && (
+              {/* Footer actions — alleen onderaan de Overzicht-tab */}
+              {canManage && tab === 'overview' && (
                 <div style={{ padding: '12px 20px 20px', borderTop: '1px solid var(--br)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                   <button className="btn btn-ghost btn-sm" style={{ color: '#dc2626' }} onClick={handleDeleteProject}>
                     {I.trash} Verwijder project
