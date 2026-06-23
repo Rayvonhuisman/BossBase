@@ -1298,9 +1298,10 @@ export function RevenuePage() {
         </div>
       </div>
 
-      {/* ── BTW-overzicht ── */}
+      {/* ── BTW-overzicht — alleen tonen bij een actieve boekhoudkoppeling (Moneybird) ── */}
+      {mbConnection?.apiToken && (
       <div className="tw afu3" style={{ marginBottom: 20 }}>
-        <div className="tw-hd" style={{ flexWrap: 'wrap', gap: 10, marginBottom: mbConnection?.apiToken ? 16 : 0 }}>
+        <div className="tw-hd" style={{ flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
           <div>
             <div className="card-title">BTW-overzicht</div>
             {btwPerioden.find(p => p.periode_label === btwSelectedLabel)?.last_synced_at && (
@@ -1309,27 +1310,21 @@ export function RevenuePage() {
               </div>
             )}
           </div>
-          {mbConnection?.apiToken && (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <div className="tabs">
-                <button className={`tab${btwPeriodeType === 'kwartaal' ? ' active' : ''}`} onClick={() => setBtwPeriodeType('kwartaal')}>Kwartaal</button>
-                <button className={`tab${btwPeriodeType === 'maand' ? ' active' : ''}`} onClick={() => setBtwPeriodeType('maand')}>Maand</button>
-              </div>
-              <select value={btwSelectedLabel} onChange={e => setBtwSelectedLabel(e.target.value)}>
-                {generatePeriodeOpties(btwPeriodeType).map(l => <option key={l} value={l}>{l}</option>)}
-              </select>
-              <button className="btn btn-s btn-sm" onClick={handleSyncBtw} disabled={btwSyncing}>
-                {btwSyncing ? 'Synchroniseren...' : 'Synchroniseer BTW'}
-              </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="tabs">
+              <button className={`tab${btwPeriodeType === 'kwartaal' ? ' active' : ''}`} onClick={() => setBtwPeriodeType('kwartaal')}>Kwartaal</button>
+              <button className={`tab${btwPeriodeType === 'maand' ? ' active' : ''}`} onClick={() => setBtwPeriodeType('maand')}>Maand</button>
             </div>
-          )}
+            <select value={btwSelectedLabel} onChange={e => setBtwSelectedLabel(e.target.value)}>
+              {generatePeriodeOpties(btwPeriodeType).map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+            <button className="btn btn-s btn-sm" onClick={handleSyncBtw} disabled={btwSyncing}>
+              {btwSyncing ? 'Synchroniseren...' : 'Synchroniseer BTW'}
+            </button>
+          </div>
         </div>
 
-        {!mbConnection?.apiToken ? (
-          <div style={{ fontSize: '.84rem', color: 'var(--dl)', paddingTop: 4 }}>
-            Verbind Moneybird om BTW-overzicht te zien.
-          </div>
-        ) : btwLoading ? (
+        {btwLoading ? (
           <div style={{ fontSize: '.84rem', color: 'var(--dl)', padding: '8px 0' }}>Laden...</div>
         ) : (() => {
           const p = btwPerioden.find(x => x.periode_label === btwSelectedLabel);
@@ -1387,6 +1382,7 @@ export function RevenuePage() {
           );
         })()}
       </div>
+      )}
 
       <div className="tw afu3">
         <div className="tw-hd"><div className="card-title">Per klant / opdracht</div></div>
