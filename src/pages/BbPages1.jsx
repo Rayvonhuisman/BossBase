@@ -7,8 +7,9 @@ import {
 } from '../bb-shared.jsx';
 import { createCustomer, deleteCustomer, getCustomer, listCustomers, updateCustomer } from '../services/customerService.js';
 import { getKlantNotities, addKlantNotitie, getTijdlijnByCustomer, logTijdlijnSafe } from '../services/klantTijdlijnService.js';
-import { MentionEditor, renderMentions } from '../components/MentionEditor.jsx';
-import { getTeamMembers } from '../services/notificatieService.js';
+import { MentionEditor } from '../components/MentionEditor.jsx';
+import { NoteEditor, renderNote } from '../components/NoteEditor.jsx';
+import { getTeamMembers, createMentionNotifications } from '../services/notificatieService.js';
 import { updateContactInMoneybird } from '../services/accountingService.js';
 import { buildDueAt, createActivity, listActivities, updateActivity } from '../services/activityService.js';
 import { createNote, listNotes } from '../services/noteService.js';
@@ -182,7 +183,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   const [emailForm, setEmailForm] = useState({ to: '', templateId: '', subject: '', body: '' });
   const [emailSending, setEmailSending] = useState(false);
   const [expandedEmailId, setExpandedEmailId] = useState(null);
-  const { company } = useProfile();
+  const { company, profile } = useProfile();
   const { can } = usePermissions();
   const tabsRef   = useRef(null);
 
@@ -374,6 +375,18 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
       const created = await addKlantNotitie(c.id, text);
       setKlantNotities(list => [created, ...list]);
       setTijdlijn(list => [created, ...list]);
+      // Tag-notificaties (+ mail) voor @-genoemde teamleden. Best-effort.
+      if (profile?.id) {
+        createMentionNotifications({
+          text,
+          relatedType: 'klant',
+          relatedId: c.id,
+          link: 'customers',
+          creatorId: profile.id,
+          creatorName: profile.fullName,
+          contextName: c.name,
+        }).catch(() => {});
+      }
       clearText('');
       onDone?.();
       toast.success('Notitie opgeslagen');
@@ -575,7 +588,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {klantNotities.slice(0, 2).map(n => (
                   <div key={n.id} style={{ padding: '8px 10px', background: 'var(--bgs)', borderRadius: 'var(--r8)', border: '1px solid var(--border)' }}>
-                    <div className="bb-notitie-content" style={{ fontSize: '.83rem', color: 'var(--dk)', lineHeight: 1.5 }}>{renderMentions(n.omschrijving)}</div>
+                    <div className="bb-notitie-content" style={{ fontSize: '.83rem', color: 'var(--dk)', lineHeight: 1.5 }}>{renderNote(n.omschrijving)}</div>
                     <div style={{ fontSize: '.7rem', color: 'var(--dl)', marginTop: 4 }}>{fmtNotitieDate(n.aangemaaktop)}</div>
                   </div>
                 ))}
@@ -689,10 +702,11 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
             )}
             <div className={`notitie-input-wrap${showNotitiesInput ? ' open' : ''}`}>
               <div>
-                <MentionEditor
+                <NoteEditor
                   value={newNotitiesText}
                   onChange={setNewNotitiesText}
-                  rows={4}
+                  mentions={true}
+                  minHeight={96}
                   placeholder="Schrijf hier je notitie over deze klant… Typ @ om iemand te taggen"
                   teamMembers={teamMembers}
                 />
@@ -719,7 +733,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {klantNotities.slice(0, notitiesVisible).map(n => (
                 <div key={n.id} className="card card-p" style={{ padding: '12px 16px' }}>
-                  <div className="bb-notitie-content" style={{ fontSize: '.85rem', color: 'var(--dk)', lineHeight: 1.6 }}>{renderMentions(n.omschrijving)}</div>
+                  <div className="bb-notitie-content" style={{ fontSize: '.85rem', color: 'var(--dk)', lineHeight: 1.6 }}>{renderNote(n.omschrijving)}</div>
                   <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginTop: 6, fontWeight: 600 }}>
                     {fmtNotitieDate(n.aangemaaktop)}
                   </div>
@@ -781,7 +795,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 3 }}>
                     <div style={{ fontSize: '.83rem', fontWeight: 600, color: 'var(--dk)', lineHeight: 1.4 }}>
-                      {item.omschrijving}
+                      {renderNote(item.omschrijving)}
                     </div>
                     <div style={{ fontSize: '.7rem', color: 'var(--dl)', flexShrink: 0, paddingTop: 1 }}>
                       {fmtTijdlijnDate(item.aangemaaktop)}
@@ -1356,7 +1370,7 @@ export function ActivitiesPage({ openCustomer, preOpenActivityId, onNavConsumed 
   return (
     <div>
       <div className="page-hd afu">
-        <div><h1>Activiteiten</h1><p>{acts.filter(a => a.status !== 'done' && a.status !== 'completed').length} openstaande acties</p></div>
+        <div><h1>Activiteiten</h1><p>{acts.filter(a => a.status !== 'done' && a.status !== 'completed').length} openstaande activiteiten</p></div>
         <div className="page-hd-actions">
           <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>{I.plus} Nieuwe activiteit</button>
         </div>

@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
 import { withCompanyId } from '../lib/currentCompany'
+import { sanitizeNoteHtml, htmlToPlain } from '../lib/noteFormat'
 
 const toEntry = row => ({
   id: row.id,
@@ -37,13 +38,15 @@ export async function getKlantNotities(customerId) {
 
 export async function addKlantNotitie(customerId, tekst) {
   if (!customerId) throw new Error('customerId is verplicht')
-  const trimmed = (tekst || '').replace(/<[^>]*>/g, '').trim()
-  if (!trimmed) throw new Error('Notitie mag niet leeg zijn')
+  // Sanitize (defense-in-depth) i.p.v. HTML strippen, zodat opmaak én
+  // mention-spans behouden blijven. Leeg-check op de platte tekst.
+  const clean = sanitizeNoteHtml(tekst || '')
+  if (!htmlToPlain(clean) && !/bb-mention/.test(clean)) throw new Error('Notitie mag niet leeg zijn')
 
   const base = {
     customer_id: customerId,
     type: 'notitie_toegevoegd',
-    omschrijving: trimmed,
+    omschrijving: clean,
     aangemaakt_op: new Date().toISOString(),
   }
 

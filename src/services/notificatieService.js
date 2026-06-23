@@ -81,22 +81,48 @@ function toAbsoluteUrl(link) {
 
 // ── MENTION HELPERS ──────────────────────────────────────────────────────────
 
-// Parse @[Name](userId) from text → [{ name, userId }]
+// Parse mentions from text → [{ name, userId }]. Herkent ZOWEL de legacy
+// platte-tekst markup @[Naam](id) ALS de nieuwe mention-spans uit NoteEditor:
+//   <span class="bb-mention" data-id="u123" data-name="Jan">@Jan</span>
+// Dubbele user-ids worden ontdubbeld zodat iemand niet twee notificaties krijgt.
 export function extractMentions(text) {
   if (!text) return [];
   const results = [];
+
+  // 1. Legacy markup @[Naam](id)
   const re = /@\[([^\]]+)\]\(([^)]+)\)/g;
   let m;
   while ((m = re.exec(text)) !== null) {
     results.push({ name: m[1], userId: m[2] });
   }
-  return results;
+
+  // 2. Mention-spans (attribuut-volgorde maakt niet uit)
+  const reSpan = /<span\b[^>]*\bclass="[^"]*\bbb-mention\b[^"]*"[^>]*>/gi;
+  let s;
+  while ((s = reSpan.exec(text)) !== null) {
+    const tag = s[0];
+    const id = (tag.match(/\bdata-id="([^"]*)"/) || [])[1];
+    const name = (tag.match(/\bdata-name="([^"]*)"/) || [])[1];
+    if (id) results.push({ name: name || '', userId: id });
+  }
+
+  // Ontdubbel op userId
+  const seen = new Set();
+  return results.filter(r => r.userId && !seen.has(r.userId) && seen.add(r.userId));
 }
 
-// Strip mention markup to plain text for display/body
+// Strip mentions + HTML-opmaak naar leesbare platte tekst (voor notificatie-body).
 export function stripMentions(text) {
   if (!text) return '';
-  return text.replace(/@\[([^\]]+)\]\([^)]+\)/g, '@$1');
+  return text
+    .replace(/@\[([^\]]+)\]\([^)]+\)/g, '@$1') // legacy markup → @Naam
+    .replace(/<[^>]*>/g, ' ')                  // alle HTML-tags weg (mention-span laat @Naam-tekst staan)
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 // Create in-app notifications + optional email for all @mentions in a text
