@@ -7,7 +7,6 @@ import {
 } from '../bb-shared.jsx';
 import { createCustomer, deleteCustomer, getCustomer, listCustomers, updateCustomer } from '../services/customerService.js';
 import { getKlantNotities, addKlantNotitie, getTijdlijnByCustomer, logTijdlijnSafe } from '../services/klantTijdlijnService.js';
-import { MentionEditor } from '../components/MentionEditor.jsx';
 import { NoteEditor, renderNote } from '../components/NoteEditor.jsx';
 import { getTeamMembers, createMentionNotifications } from '../services/notificatieService.js';
 import { updateContactInMoneybird } from '../services/accountingService.js';
@@ -27,113 +26,8 @@ import { usePermissions } from '../hooks/usePermissions.js';
 import { ActivityEditModal, NewActivityModal, NewCustomerModal, NewJobCostModal } from '../components/SharedModals.jsx';
 import { ChevronDown, Download, Mail, Send } from 'lucide-react';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail, getSentEmailsByCustomer } from '../services/emailService.js';
-import { MailBodyEditor, plainToEditorHtml } from '../components/MailBodyEditor.jsx';
+import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { getEmailTemplates } from '../services/instellingenService.js';
-
-const EMPTY_FORMATS = { bold: false, italic: false, underline: false, insertUnorderedList: false, insertOrderedList: false };
-
-function NotitieEditor({ editorRef, minHeight = 200, maxHeight, placeholder, onHasContent }) {
-  const [focused, setFocused] = useState(false);
-  const [isEmpty, setIsEmpty] = useState(true);
-  const [activeFormats, setActiveFormats] = useState(EMPTY_FORMATS);
-  const isFocused = useRef(false);
-
-  const updateActiveState = () => {
-    setActiveFormats({
-      bold:                document.queryCommandState('bold'),
-      italic:              document.queryCommandState('italic'),
-      underline:           document.queryCommandState('underline'),
-      insertUnorderedList: document.queryCommandState('insertUnorderedList'),
-      insertOrderedList:   document.queryCommandState('insertOrderedList'),
-    });
-  };
-
-  useEffect(() => {
-    const onSelectionChange = () => { if (isFocused.current) updateActiveState(); };
-    document.addEventListener('selectionchange', onSelectionChange);
-    return () => document.removeEventListener('selectionchange', onSelectionChange);
-  }, []);
-
-  const exec = cmd => {
-    editorRef.current?.focus();
-    document.execCommand(cmd, false, null);
-    updateActiveState();
-  };
-
-  const handleInput = () => {
-    const hasText = Boolean(editorRef.current?.textContent?.trim());
-    setIsEmpty(!hasText);
-    onHasContent?.(hasText);
-    updateActiveState();
-  };
-
-  const TOOLBAR = [
-    { cmd: 'bold',               icon: <Bold size={13} />,        title: 'Vet (Ctrl+B)' },
-    { cmd: 'italic',             icon: <Italic size={13} />,      title: 'Cursief (Ctrl+I)' },
-    { cmd: 'underline',          icon: <Underline size={13} />,   title: 'Onderstrepen (Ctrl+U)' },
-    null,
-    { cmd: 'insertUnorderedList', icon: <List size={13} />,        title: 'Bullet lijst' },
-    { cmd: 'insertOrderedList',  icon: <ListOrdered size={13} />, title: 'Genummerde lijst' },
-  ];
-
-  return (
-    <div style={{
-      border: `1px solid ${focused ? '#1DDB62' : 'var(--border)'}`,
-      borderRadius: 'var(--r8)', overflow: 'hidden', background: 'var(--bg)',
-      transition: 'border-color .15s',
-    }}>
-      <div style={{
-        display: 'flex', gap: 1, padding: '4px 6px',
-        borderBottom: '1px solid var(--border)', background: 'var(--bgs)',
-        alignItems: 'center', flexWrap: 'wrap',
-      }}>
-        {TOOLBAR.map((item, i) =>
-          !item ? (
-            <div key={i} style={{ width: 1, background: 'var(--border)', height: 14, margin: '0 3px', alignSelf: 'center', flexShrink: 0 }} />
-          ) : (
-            <button
-              key={i}
-              type="button"
-              title={item.title}
-              className={`bb-tb-btn${activeFormats[item.cmd] ? ' active' : ''}`}
-              onMouseDown={e => { e.preventDefault(); exec(item.cmd); }}
-            >
-              {item.icon}
-            </button>
-          )
-        )}
-      </div>
-      <div style={{ position: 'relative' }}>
-        {isEmpty && placeholder && (
-          <div style={{
-            position: 'absolute', top: 10, left: 12,
-            color: '#9ca3af', fontSize: '.85rem',
-            pointerEvents: 'none', userSelect: 'none', lineHeight: 1.6,
-          }}>
-            {placeholder}
-          </div>
-        )}
-        <div
-          ref={editorRef}
-          contentEditable
-          suppressContentEditableWarning
-          className="bb-notitie-editor"
-          onInput={handleInput}
-          onKeyUp={updateActiveState}
-          onMouseUp={updateActiveState}
-          onFocus={() => { isFocused.current = true; setFocused(true); updateActiveState(); }}
-          onBlur={() => { isFocused.current = false; setFocused(false); setActiveFormats(EMPTY_FORMATS); }}
-          style={{
-            minHeight, maxHeight, padding: '10px 12px',
-            outline: 'none', fontSize: '.85rem', lineHeight: 1.6,
-            color: 'var(--dk)', fontFamily: 'inherit',
-            overflowY: maxHeight ? 'auto' : undefined,
-          }}
-        />
-      </div>
-    </div>
-  );
-}
 
 // Customer form keeps friendly UI fields; service-layer maps to real DB columns.
 // `type` and `source` are local-only display state for now (no DB columns yet).
@@ -568,10 +462,11 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Notities</div>
             </div>
-            <MentionEditor
+            <NoteEditor
+              mentions={true}
               value={newOverzichtText}
               onChange={setNewOverzichtText}
-              rows={3}
+              minHeight={72}
               placeholder="Schrijf een notitie… Typ @ om iemand te taggen"
               teamMembers={teamMembers}
             />
@@ -847,9 +742,10 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
               <div className="lrows">
                 {cFacturen.map(f => (
                   <div key={f.id} className="lrow" onClick={() => setPage('facturen', { id: f.id, from: 'klant', klantId: custId, klantNaam: c?.name })}>
-                    <div className="lrow-main">
-                      <div className="lrow-title">{f.omschrijving || f.notities || f.nummer || '—'}</div>
-                      {f.nummer && <div className="lrow-sub">{f.nummer}</div>}
+                    <div className="lrow-num">{f.nummer || '—'}</div>
+                    <div className="lrow-meta">
+                      {fmtRowDate(f.factuurdatum)}
+                      {f.vervaldatum && ` · vervalt ${fmtRowDate(f.vervaldatum)}`}
                     </div>
                     <FactuurBadge f={f} />
                     <div className="lrow-amount">{fmt(f.totaalIncl)}</div>
@@ -963,7 +859,8 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
 
             {/* Bericht body */}
             <div style={{ marginBottom: 12 }}>
-              <MailBodyEditor
+              <NoteEditor
+                mentions={false}
                 value={emailForm.body}
                 onChange={html => setEmailForm(f => ({ ...f, body: html }))}
                 placeholder="Schrijf uw bericht hier..."
