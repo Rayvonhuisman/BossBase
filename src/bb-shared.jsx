@@ -151,6 +151,52 @@ export const custById = id => CUSTOMERS_DATA.find(c => c.id === id);
 export const stageLabel = id => (PIPELINE_STAGES.find(s => s.id === id) || {}).label || id;
 export const stageCol   = id => (PIPELINE_STAGES.find(s => s.id === id) || {}).col   || 'b-gray';
 
+// ── PIPELINE-FASE KLEUREN ───────────────────────────────────
+// Vaste set kleuren met Nederlandse namen. De gekozen hex wordt opgeslagen in
+// pipeline_stages.color_class — één bron voor zowel Instellingen als de pipeline.
+export const STAGE_COLOR_OPTIONS = [
+  { label: 'Blauw',  value: '#3b82f6' },
+  { label: 'Groen',  value: '#1DDB62' },
+  { label: 'Oranje', value: '#f97316' },
+  { label: 'Rood',   value: '#ef4444' },
+  { label: 'Paars',  value: '#a855f7' },
+  { label: 'Geel',   value: '#eab308' },
+  { label: 'Roze',   value: '#ec4899' },
+  { label: 'Grijs',  value: '#6b7280' },
+];
+
+// Oude CSS-class waarden → hex, zodat bestaande fases de juiste kleur tonen en
+// naar hex migreren zodra ze opnieuw worden opgeslagen.
+const LEGACY_STAGE_CLASS_HEX = {
+  'b-blue': '#3b82f6', 'b-planned': '#3b82f6',
+  'b-green': '#1DDB62', 'b-new': '#1DDB62', 'b-done': '#1DDB62', 'b-accepted': '#1DDB62',
+  'b-orange': '#f97316', 'b-progress': '#f97316',
+  'b-red': '#ef4444',
+  'b-purple': '#a855f7',
+  'b-yellow': '#eab308',
+  'b-pink': '#ec4899',
+  'b-gray': '#6b7280', 'b-lost': '#6b7280',
+};
+
+// Normaliseer een opgeslagen kleurwaarde (hex of legacy class) naar hex.
+export const stageColToHex = col => {
+  if (!col || typeof col !== 'string') return '#6b7280';
+  if (col[0] === '#') return col;
+  return LEGACY_STAGE_CLASS_HEX[col] || '#6b7280';
+};
+
+// Naam van de kleur (voor labels in Instellingen).
+export const stageColorLabel = col => {
+  const hex = stageColToHex(col).toLowerCase();
+  return (STAGE_COLOR_OPTIONS.find(c => c.value.toLowerCase() === hex) || {}).label || 'Grijs';
+};
+
+// Inline-stijl voor een fase-badge: lichte tint + verzadigde tekstkleur.
+export const stageBadgeStyle = col => {
+  const hex = stageColToHex(col);
+  return { background: hex + '1A', color: hex };
+};
+
 // ── SHARED COMPONENTS ───────────────────────────────────────
 const AV_COLORS = ['av-0','av-1','av-2','av-3','av-4','av-5'];
 

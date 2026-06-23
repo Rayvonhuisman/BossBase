@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { I, fmt } from '../../bb-shared.jsx';
+import { I, fmt, stageBadgeStyle } from '../../bb-shared.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
 import { useToast } from '../../lib/toast.jsx';
 import { listDeals, listPipelineStages, updateDeal } from '../../services/dealService.js';

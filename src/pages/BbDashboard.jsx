@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { I, PIPELINE_STAGES, fmt, Av, ModalX } from '../bb-shared.jsx';
+import { I, PIPELINE_STAGES, fmt, Av, ModalX, stageBadgeStyle } from '../bb-shared.jsx';
 import { listDeals, listPipelineStages, updateDealStage } from '../services/dealService.js';
 import { listActivities } from '../services/activityService.js';
 import { listCustomers } from '../services/customerService.js';
@@ -211,7 +211,7 @@ function MoveStageSheet({ deal, stages, moveDeal, onClose, setActiveIdx }) {
                 setActiveIdx(i);
                 onClose();
               }}>
-              <span className={`badge ${s.col}`} style={{ fontSize: 12 }}>{s.label}</span>
+              <span className="badge" style={{ ...stageBadgeStyle(s.col), fontSize: 12 }}>{s.label}</span>
               {deal.stage === s.id
                 ? <span style={{ marginLeft: 'auto', fontSize: 12, color: '#15A34A', fontWeight: 700, marginRight: 4 }}>✓ Huidig</span>
                 : <span className="meer-row-chev">{I.chev_r}</span>}
@@ -278,7 +278,7 @@ function MobilePipeline({ stages, dealsInStage, openCustomer, moveDeal, markLost
         {/* Header */}
         <div className="pipe-mob-stage-hd">
           <div>
-            <span className={`badge ${stage.col}`}>{stage.label}</span>
+            <span className="badge" style={stageBadgeStyle(stage.col)}>{stage.label}</span>
             <div className="pipe-mob-stage-meta">
               {stageDeals.length} {stageDeals.length === 1 ? 'lead' : 'leads'}
               {stageTotal > 0 && ` · ${fmt(stageTotal)}`}
@@ -423,7 +423,7 @@ function DealDetailModal({ deal, stages, customers, onClose, setPage }) {
         <div style={{ padding: '0 24px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Stage + waarde */}
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            {stage && <span className={`badge ${stage.col}`}>{stage.label}</span>}
+            {stage && <span className="badge" style={stageBadgeStyle(stage.col)}>{stage.label}</span>}
             {deal.value > 0 && (
               <span style={{ fontSize: 15, fontWeight: 700, color: '#0F7A3F' }}>{fmt(deal.value)}</span>
             )}
@@ -972,7 +972,7 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
               onDrop={e => onColDrop(e, stageId)}>
               <div className="pipe-col-hd">
                 <div>
-                  <span className={`badge ${stage.col}`} style={{ marginBottom: 2 }}>{stage.label}</span>
+                  <span className="badge" style={{ ...stageBadgeStyle(stage.col), marginBottom: 2 }}>{stage.label}</span>
                   <div style={{ fontSize: '.7rem', color: 'var(--dl)', marginTop: 3 }}>
                     {fmt(stageDeals.reduce((s, d) => s + d.value, 0))}
                   </div>

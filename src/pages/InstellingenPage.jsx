@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { I, ModalX } from '../bb-shared.jsx';
+import { I, ModalX, STAGE_COLOR_OPTIONS, stageColToHex, stageColorLabel, stageBadgeStyle } from '../bb-shared.jsx';
 import { supabase } from '../lib/supabase.js';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -66,20 +66,38 @@ const DEFAULT_BODY = {
   afspraak_herinnering: 'Beste {{klant_naam}},\n\nDit is een herinnering voor uw afspraak van morgen.\n\nDatum: {{afspraak_datum}}\nTijdstip: {{afspraak_tijd}}\n\nWij zien u graag tegemoet!\n\nMet vriendelijke groet,\n{{bedrijfsnaam}}',
 };
 
-const COLOR_OPTIONS = [
-  { label: 'Grijs', value: 'b-gray' },
-  { label: 'Blauw', value: 'b-blue' },
-  { label: 'Groen', value: 'b-green' },
-  { label: 'Oranje', value: 'b-orange' },
-  { label: 'Rood', value: 'b-red' },
-  { label: 'Paars', value: 'b-purple' },
-  { label: 'Nieuw (groen vol)', value: 'b-new' },
-  { label: 'Gepland (blauw)', value: 'b-planned' },
-  { label: 'In uitvoering', value: 'b-progress' },
-  { label: 'Afgerond', value: 'b-done' },
-  { label: 'Geaccepteerd', value: 'b-accepted' },
-  { label: 'Verloren', value: 'b-lost' },
-];
+const DEFAULT_STAGE_COLOR = '#6b7280'; // Grijs
+
+// Kleurkiezer voor pipeline-fases: kleurvakje + naam, één keuze uit de vaste set.
+function ColorSwatchPicker({ value, onChange }) {
+  const current = stageColToHex(value);
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      {STAGE_COLOR_OPTIONS.map(c => {
+        const selected = current.toLowerCase() === c.value.toLowerCase();
+        return (
+          <button
+            key={c.value}
+            type="button"
+            onClick={() => onChange(c.value)}
+            title={c.label}
+            aria-pressed={selected}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '4px 9px', borderRadius: 8, cursor: 'pointer',
+              border: selected ? '2px solid var(--dk)' : '1px solid var(--border)',
+              background: selected ? 'var(--bgs)' : '#fff',
+              fontSize: 12.5, fontWeight: 600, color: 'var(--dk)', fontFamily: 'inherit',
+            }}
+          >
+            <span style={{ width: 14, height: 14, borderRadius: 4, background: c.value, flexShrink: 0 }} />
+            {c.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export function InstellingenPage() {
   const toast = useToast();
@@ -122,11 +140,11 @@ export function InstellingenPage() {
   // Pipeline stages
   const [stages, setStages] = useState([]);
   const [showNewStage, setShowNewStage] = useState(false);
-  const [newStageForm, setNewStageForm] = useState({ name: '', color_class: 'b-gray' });
+  const [newStageForm, setNewStageForm] = useState({ name: '', color_class: DEFAULT_STAGE_COLOR });
   const [savingStage, setSavingStage] = useState(false);
   const [editingStageId, setEditingStageId] = useState(null);
   const [editingStageValue, setEditingStageValue] = useState('');
-  const [editingStageColor, setEditingStageColor] = useState('b-gray');
+  const [editingStageColor, setEditingStageColor] = useState(DEFAULT_STAGE_COLOR);
 
   // Integraties
   // TODO: replace with real OAuth flow when Google API credentials are configured
@@ -374,7 +392,7 @@ export function InstellingenPage() {
     try {
       const created = await createPipelineStage(newStageForm);
       setStages(s => [...s, created]);
-      setNewStageForm({ name: '', color_class: 'b-gray' });
+      setNewStageForm({ name: '', color_class: DEFAULT_STAGE_COLOR });
       setShowNewStage(false);
       toast.success('Fase aangemaakt');
     } catch (err) {
@@ -398,7 +416,7 @@ export function InstellingenPage() {
   const startEditStage = (stage) => {
     setEditingStageId(stage.id);
     setEditingStageValue(stage.name);
-    setEditingStageColor(stage.colorClass || 'b-gray');
+    setEditingStageColor(stageColToHex(stage.colorClass));
   };
 
   const saveEditStage = async (id) => {
@@ -415,7 +433,7 @@ export function InstellingenPage() {
     } finally {
       setEditingStageId(null);
       setEditingStageValue('');
-      setEditingStageColor('b-gray');
+      setEditingStageColor(DEFAULT_STAGE_COLOR);
     }
   };
 
@@ -1227,18 +1245,14 @@ export function InstellingenPage() {
                   </div>
                   <div className="f">
                     <label>Kleur</label>
-                    <select
+                    <ColorSwatchPicker
                       value={newStageForm.color_class}
-                      onChange={e => setNewStageForm(f => ({ ...f, color_class: e.target.value }))}
-                    >
-                      {COLOR_OPTIONS.map(c => (
-                        <option key={c.value} value={c.value}>{c.label}</option>
-                      ))}
-                    </select>
+                      onChange={val => setNewStageForm(f => ({ ...f, color_class: val }))}
+                    />
                   </div>
                 </div>
                 <div className="fa">
-                  <button className="btn btn-ghost" onClick={() => { setShowNewStage(false); setNewStageForm({ name: '', color_class: 'b-gray' }); }}>
+                  <button className="btn btn-ghost" onClick={() => { setShowNewStage(false); setNewStageForm({ name: '', color_class: DEFAULT_STAGE_COLOR }); }}>
                     Annuleren
                   </button>
                   <button className="btn btn-p" onClick={handleCreateStage} disabled={savingStage || !newStageForm.name.trim()}>
@@ -1283,18 +1297,13 @@ export function InstellingenPage() {
                     </td>
                     <td>
                       {editingStageId === stage.id ? (
-                        <select
+                        <ColorSwatchPicker
                           value={editingStageColor}
-                          onChange={e => setEditingStageColor(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter') saveEditStage(stage.id); if (e.key === 'Escape') setEditingStageId(null); }}
-                        >
-                          {COLOR_OPTIONS.map(c => (
-                            <option key={c.value} value={c.value}>{c.label}</option>
-                          ))}
-                        </select>
+                          onChange={setEditingStageColor}
+                        />
                       ) : (
-                        <span className={`badge ${stage.colorClass || 'b-gray'}`}>
-                          {COLOR_OPTIONS.find(c => c.value === stage.colorClass)?.label || stage.colorClass || 'Grijs'}
+                        <span className="badge" style={stageBadgeStyle(stage.colorClass)}>
+                          {stageColorLabel(stage.colorClass)}
                         </span>
                       )}
                     </td>
@@ -1306,7 +1315,7 @@ export function InstellingenPage() {
                               <button className="btn-icon" title="Opslaan" onClick={() => saveEditStage(stage.id)}>
                                 {I.check || '✓'}
                               </button>
-                              <button className="btn-icon" title="Annuleren" onClick={() => { setEditingStageId(null); setEditingStageValue(''); setEditingStageColor('b-gray'); }}>
+                              <button className="btn-icon" title="Annuleren" onClick={() => { setEditingStageId(null); setEditingStageValue(''); setEditingStageColor(DEFAULT_STAGE_COLOR); }}>
                                 {I.x || '✕'}
                               </button>
                             </>
