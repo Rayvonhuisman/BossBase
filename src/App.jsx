@@ -512,7 +512,7 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
                   <button key={`l-${d.id}`} className="tb-pop-item" onClick={() => { close(); navigatePage('pipeline'); }}>
                     <div className="tb-pop-icon blue">{I.plus}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="tb-pop-title">Nieuwe lead: {d.title}</div>
+                      <div className="tb-pop-title">Nieuwe aanvraag: {d.title}</div>
                       <div className="tb-pop-sub">{d.customerName || 'Onbekende klant'}</div>
                     </div>
                   </button>

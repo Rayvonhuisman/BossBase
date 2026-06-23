@@ -69,7 +69,7 @@ function _LegacyDashboardHome({ setPage, openCustomer }) {
         </div>
         <div className="page-hd-actions">
           <button className="btn btn-s btn-sm" onClick={() => requestNewActivity?.()}>{I.act} Nieuwe activiteit</button>
-          <button className="btn btn-p btn-sm" onClick={() => requestNewLead?.()}>{I.plus} Nieuwe lead</button>
+          <button className="btn btn-p btn-sm" onClick={() => requestNewLead?.()}>{I.plus} Nieuwe aanvraag</button>
         </div>
       </div>
 
@@ -134,7 +134,7 @@ function _LegacyDashboardHome({ setPage, openCustomer }) {
         {!loading && !error && <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div className="card">
             <div className="card-hd">
-              <div className="card-title">Nieuwe leads</div>
+              <div className="card-title">Nieuwe aanvragen</div>
               <button className="btn btn-ghost btn-xs" onClick={() => setPage('pipeline')}>{I.arrow_r}</button>
             </div>
             <div style={{ padding: '4px 14px 10px' }}>
@@ -151,7 +151,7 @@ function _LegacyDashboardHome({ setPage, openCustomer }) {
                   </div>
                 );
               })}
-              {newLeads.length === 0 && <div className="empty"><div className="empty-title">Geen nieuwe leads</div></div>}
+              {newLeads.length === 0 && <div className="empty"><div className="empty-title">Geen nieuwe aanvragen</div></div>}
             </div>
           </div>
 
@@ -841,7 +841,7 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
           <button className={`btn btn-s btn-sm${showFilter ? ' active' : ''}`} onClick={() => setShowFilter(s => !s)}>
             {I.flag} Filter{filterActive ? ' (actief)' : ''}
           </button>
-          <button className="btn btn-p btn-sm" onClick={() => { setNewStage(null); setShowNew(true); }}>{I.plus} Nieuwe lead</button>
+          <button className="btn btn-p btn-sm" onClick={() => { setNewStage(null); setShowNew(true); }}>{I.plus} Nieuwe aanvraag</button>
         </div>
       </div>
 
@@ -889,11 +889,11 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
         <div className="pipe-empty afu3">
           <div style={{ fontWeight: 700, marginBottom: 6, color: 'var(--dk)' }}>Geen trajecten gevonden</div>
           <div style={{ fontSize: '.86rem', marginBottom: 14 }}>
-            {filterActive ? 'Pas je filter aan of voeg een nieuwe lead toe.' : 'Begin met je eerste lead.'}
+            {filterActive ? 'Pas je filter aan of voeg een nieuwe aanvraag toe.' : 'Begin met je eerste aanvraag.'}
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
             {filterActive && <button className="btn btn-s btn-sm" onClick={resetFilter}>Reset filter</button>}
-            <button className="btn btn-p btn-sm" onClick={() => { setNewStage(null); setShowNew(true); }}>{I.plus} Nieuwe lead</button>
+            <button className="btn btn-p btn-sm" onClick={() => { setNewStage(null); setShowNew(true); }}>{I.plus} Nieuwe aanvraag</button>
           </div>
         </div>
       )}

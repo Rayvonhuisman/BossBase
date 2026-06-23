@@ -87,7 +87,7 @@ function deriveCharts({ deals = [], activities = [], offertes = [], customers = 
   const monthlyProfit = hasRev ? monthlyRevenue.map(m => ({ label: m.label, value: Math.round(m.value * 0.28) })) : [];
 
   const stageDefs = [
-    { keys: ['new_lead'], label: 'Nieuwe lead', color: '#1DDB62' },
+    { keys: ['new_lead'], label: 'Nieuwe aanvragen', color: '#1DDB62' },
     { keys: ['contact'], label: 'Contact', color: '#d97706' },
     { keys: ['quote_sent'], label: 'Offerte verz.', color: '#2563eb' },
     { keys: ['approved'], label: 'Akkoord', color: '#7c3aed' },
@@ -312,7 +312,7 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
   const { can, isAdmin } = usePermissions();
   const toast = useToast();
   // Gedeelde data (één fetch voor de hele shell) — geen eigen queries meer.
-  const { customers, deals, activities, offertes, werkbonnen, calendarEvents, loading: sharedLoading } = useData();
+  const { customers, deals, stages, activities, offertes, werkbonnen, calendarEvents, loading: sharedLoading } = useData();
 
   // Demo mode: IS_DEV-only toggle that substitutes real data with static demo data
   const [demoMode, setDemoMode] = useState(IS_DEV);
@@ -379,7 +379,7 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
   );
   const sharedData = demoMode
     ? demoData
-    : { deals, activities, customers, offertes, werkbonnen, calendarEvents, loading: dataLoading, charts: realCharts };
+    : { deals, stages, activities, customers, offertes, werkbonnen, calendarEvents, loading: dataLoading, charts: realCharts };
 
   // Dirty check: anything changed since entering edit mode?
   const isDirty = useMemo(
@@ -562,7 +562,7 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
             {!editMode && (
               <>
                 <button className="btn btn-s btn-sm" onClick={() => requestNewActivity?.()}>{I.act} Nieuwe activiteit</button>
-                <button className="btn btn-s btn-sm" onClick={() => requestNewLead?.()}>{I.plus} Nieuwe lead</button>
+                <button className="btn btn-s btn-sm" onClick={() => requestNewLead?.()}>{I.plus} Nieuwe aanvraag</button>
                 <button className="btn btn-p btn-sm" onClick={enterEdit}>{I.edit} Dashboard aanpassen</button>
               </>
             )}

@@ -1563,7 +1563,7 @@ export function SettingsPage() {
             <>
               <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: 20 }}>Pipeline stadia</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {['Nieuwe lead','Contact nodig','Info compleet','Offerte maken','Offerte verstuurd','Wacht op akkoord','Akkoord','Gepland','In uitvoering','Afgerond','Betaald / Gesloten'].map((s, i) => (
+                {['Nieuwe aanvragen','Contact nodig','Info compleet','Offerte maken','Offerte verstuurd','Wacht op akkoord','Akkoord','Gepland','In uitvoering','Afgerond','Betaald / Gesloten'].map((s, i) => (
                   <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 'var(--r8)' }}>
                     <span style={{ color: 'var(--dl)', fontSize: '.72rem', fontWeight: 700, width: 20 }}>{i + 1}</span>
                     <span style={{ flex: 1, fontSize: '.88rem', fontWeight: 600 }}>{s}</span>

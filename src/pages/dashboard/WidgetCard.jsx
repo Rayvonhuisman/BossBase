@@ -278,7 +278,7 @@ const actIcoSvg = t => {
 
 // ── Widget content renderer ───────────────────────────────────
 function renderContent(type, data, widget, setPage, openCustomer, onSettingsChange, ux, openDeal, openInvoice, openCalendarEvent) {
-  const { deals = [], activities = [], customers = [], offertes = [], werkbonnen = [], calendarEvents = [], loading } = data;
+  const { deals = [], stages = [], activities = [], customers = [], offertes = [], werkbonnen = [], calendarEvents = [], loading } = data;
   const charts = data.charts || {};
   if (loading) return (
     <div className="bb-widget">
@@ -505,14 +505,20 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       );
     }
 
-    // ───────── Nieuwe leads ─────────
+    // ───────── Nieuwe aanvragen ─────────
     case 'new_leads': {
-      const allLeads = deals.filter(d => d.stage === 'new_lead');
+      // Eerste pipeline-fase ("Nieuwe aanvragen") bepalen uit de echte stages
+      // (deals dragen een stage_id/uuid; de oude 'new_lead'-string blijft als
+      // fallback voor demo-data).
+      const firstStageId = stages.length
+        ? [...stages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0]?.id
+        : null;
+      const allLeads = deals.filter(d => d.stage === firstStageId || d.stage === 'new_lead');
       const count = allLeads.length;
       const totalVal = allLeads.reduce((s, d) => s + (d.value || 0), 0);
       const items = allLeads.slice(0, 6);
       if (widget.size === 'small') {
-        return <KpiCard tone="info" icon={I.pipe} label="Nieuwe leads" value={count} sub={count ? `${kEur(totalVal)} potentieel` : 'geen leads deze week'} onClick={() => setPage('pipeline')} />;
+        return <KpiCard tone="info" icon={I.pipe} label="Nieuwe aanvragen" value={count} sub={count ? `${kEur(totalVal)} potentieel` : 'geen aanvragen deze week'} onClick={() => setPage('pipeline')} />;
       }
       const WK = 7 * 864e5, nm = Date.now();
       const dated = allLeads.filter(d => d.createdAt);
@@ -521,10 +527,10 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const delta = thisWk - lastWk;
       return (
         <div className="bb-widget">
-          <WHead title="Nieuwe leads" sub={`${thisWk} deze week · ${delta >= 0 ? '+' : ''}${delta} t.o.v. vorige`}
+          <WHead title="Nieuwe aanvragen" sub={`${thisWk} deze week · ${delta >= 0 ? '+' : ''}${delta} t.o.v. vorige`}
             right={<Chip tone="info" noDot>{count} totaal</Chip>} />
           {items.length === 0 ? (
-            <EmptyState title="Geen nieuwe leads" text="Tijd om je netwerk aan te spreken." />
+            <EmptyState title="Geen nieuwe aanvragen" text="Tijd om je netwerk aan te spreken." />
           ) : (
             <div className="feed">
               {items.map(d => {
@@ -550,7 +556,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
               })}
             </div>
           )}
-          <WFoot meta={`${kEur(totalVal)} potentieel`} linkText="Alle leads" onLink={() => setPage('pipeline')} />
+          <WFoot meta={`${kEur(totalVal)} potentieel`} linkText="Alle aanvragen" onLink={() => setPage('pipeline')} />
         </div>
       );
     }
@@ -922,7 +928,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     // ───────── Conversie overzicht ─────────
     case 'conversion_overview': {
       const stages = [
-        { key: 'new_lead',    label: 'Nieuwe lead',      c: '#9ca3af' },
+        { key: 'new_lead',    label: 'Nieuwe aanvragen', c: '#9ca3af' },
         { key: 'contact',     label: 'Contact',          c: '#60a5fa' },
         { key: 'quote_sent',  label: 'Offerte gestuurd', c: '#a78bfa' },
         { key: 'approved',    label: 'Akkoord',          c: '#fb923c' },
@@ -963,7 +969,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     // ───────── Snelle acties ─────────
     case 'quick_actions': {
       const acts = [
-        { icon: I.pipe,   l: 'Nieuwe lead',    d: 'voeg toe aan pipeline', tone: { qaBg: '#ecfdf5', qaFg: '#15A34A' }, go: 'pipeline', primary: true },
+        { icon: I.pipe,   l: 'Nieuwe aanvraag', d: 'voeg toe aan pipeline', tone: { qaBg: '#ecfdf5', qaFg: '#15A34A' }, go: 'pipeline', primary: true },
         { icon: I.act,    l: 'Activiteit',     d: 'plan een belactie',     tone: { qaBg: '#eff6ff', qaFg: '#2563eb' }, go: 'activities' },
         { icon: I.quotes, l: 'Offerte',        d: 'nieuwe offerte maken',  tone: { qaBg: '#f5f3ff', qaFg: '#7c3aed' }, go: 'offertes' },
         { icon: I.wo,     l: 'Werkbon',        d: 'nieuwe werkbon',        tone: { qaBg: '#fffbeb', qaFg: '#b45309' }, go: 'werkbonnen' },
@@ -1268,7 +1274,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                 ))}
               </div>
             </div>
-          ) : <EmptyState title="Geen bron-data" text="Vul lead-bron in op nieuwe leads." />}
+          ) : <EmptyState title="Geen bron-data" text="Vul lead-bron in op nieuwe aanvragen." />}
         </div>
       );
     }

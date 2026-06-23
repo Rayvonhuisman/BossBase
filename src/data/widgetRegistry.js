@@ -34,7 +34,7 @@ export const WIDGET_REGISTRY = [
   { type: 'open_facturen',          iconKey: 'euro',    label: 'Openstaande facturen',    category: 'financial', defaultSize: 'large',  supportedSizes: ['medium', 'large', 'full'], description: 'Geaccepteerde offertes nog niet betaald' },
   // ── CRM ──────────────────────────────────────────────────
   { type: 'customers',              iconKey: 'cust',    label: 'Klanten',                 category: 'crm',       defaultSize: 'small', description: 'Totaal aantal actieve klanten' },
-  { type: 'new_leads',              iconKey: 'pipe',    label: 'Nieuwe leads',            category: 'crm',       defaultSize: 'medium', description: 'Deals in de fase Nieuwe lead' },
+  { type: 'new_leads',              iconKey: 'pipe',    label: 'Nieuwe aanvragen',        category: 'crm',       defaultSize: 'medium', description: 'Deals in de fase Nieuwe aanvragen' },
   { type: 'active_deals',           iconKey: 'pipe',    label: 'Actieve deals',           category: 'crm',       defaultSize: 'large',  supportedSizes: ['large', 'full'], description: 'Deals in actieve pipeline fasen' },
   { type: 'last_customer_activity', iconKey: 'act',     label: 'Laatste klantactiviteit', category: 'crm',       defaultSize: 'large',  supportedSizes: ['medium', 'large', 'full'], description: 'Recente activiteiten per klant' },
   { type: 'lead_followup',          iconKey: 'call',    label: 'Lead opvolging',          category: 'crm',       defaultSize: 'medium', supportedSizes: ['medium', 'large', 'full'], description: 'Leads gesorteerd op opvolgdatum met belknop' },

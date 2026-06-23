@@ -130,7 +130,7 @@ const DEMO_CHARTS = {
     { label: MONTH_LABELS[5], value: 10900 },
   ],
   pipelineByStage: [
-    { label: 'Nieuwe lead',  value: 39300, color: '#3b82f6' },
+    { label: 'Nieuwe aanvragen', value: 39300, color: '#3b82f6' },
     { label: 'Contact',      value: 12500, color: '#8b5cf6' },
     { label: 'Offerte',      value: 20418, color: '#f59e0b' },
     { label: 'Akkoord',      value: 8900,  color: '#10b981' },

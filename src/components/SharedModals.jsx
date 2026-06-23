@@ -264,7 +264,7 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
             cust.email, companyId, 'deal', deal.id, customerId)
         );
       }
-      toast.success('Nieuwe lead toegevoegd');
+      toast.success('Nieuwe aanvraag toegevoegd');
       onSaved?.(deal);
       onClose();
     } catch (err) {
@@ -279,7 +279,7 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
       <div className="modal modal-wide">
         <div className="modal-hd">
           <div>
-            <div className="modal-title">Nieuwe lead</div>
+            <div className="modal-title">Nieuwe aanvraag</div>
             <div className="modal-sub">Voeg een nieuwe deal toe aan je pipeline.</div>
           </div>
           <ModalX onClose={onClose} />
