@@ -537,7 +537,7 @@ export function DatabasePage({ openCustomer }) {
       (async () => {
         const companyId = await getCompanyId();
         if (!companyId) return [];
-        const { data } = await supabase.from('time_entries').select('id,project_id,user_id,hours,entry_date,billable').eq('company_id', companyId);
+        const { data } = await supabase.from('urenregistratie').select('id,project_id,werkbon_id,customer_id,profile_id,uren,datum').eq('company_id', companyId);
         return data || [];
       })(),
       (async () => {
@@ -664,9 +664,13 @@ export function DatabasePage({ openCustomer }) {
       if (filters.mailTemplateType && !rel.emails.some(e => e.related_type === filters.mailTemplateType)) return false;
 
       if (filters.heeftFactureerbareUren) {
+        // Uren leven in urenregistratie: gekoppeld aan de klant direct (customer_id)
+        // of aan een project van deze klant (project_id).
         const custProjects = rel.projects.map(p => p.id);
-        const billableUren = urenData.filter(u => custProjects.includes(u.project_id) && u.billable);
-        if (billableUren.length === 0) return false;
+        const heeftUren = urenData.some(u =>
+          (u.customer_id && u.customer_id === c.id) || custProjects.includes(u.project_id)
+        );
+        if (!heeftUren) return false;
       }
 
       if (filters.heeftOffertes && rel.offertes.length === 0) return false;

@@ -3,7 +3,7 @@ import { withCompanyId, getCompanyId } from '../lib/currentCompany'
 import { logTijdlijnSafe } from './klantTijdlijnService'
 
 // =============================================================================
-// projects / time_entries / project_notes  service-laag
+// projects / uren (urenregistratie) / project_notes  service-laag
 // Schema: zie supabase/migrations/017_projects.sql
 // =============================================================================
 
@@ -34,18 +34,23 @@ const toProject = row => ({
   raw: row,
 })
 
-const toTimeEntry = row => ({
+// Uren leven in urenregistratie (de enige bron van waarheid). We mappen een
+// urenregistratie-rij naar het time-entry model dat de project-UI verwacht.
+// `resolvedProjectId` is project_id direct, of afgeleid via de werkbon.
+const toTimeEntry = (row, resolvedProjectId = null) => ({
   id: row.id,
   companyId: row.company_id,
-  projectId: row.project_id,
-  userId: row.user_id,
-  description: row.description || '',
-  hours: Number(row.hours || 0),
-  entryDate: row.entry_date,
-  billable: row.billable !== false,
-  hourlyRate: row.hourly_rate != null ? Number(row.hourly_rate) : null,
+  projectId: row.project_id || resolvedProjectId || null,
+  userId: row.profile_id,
+  description: row.notitie || '',
+  hours: Number(row.uren || 0),
+  entryDate: row.datum,
+  billable: true,
+  hourlyRate: null,
   createdAt: row.created_at,
   userName: row.profiles?.full_name || '',
+  werkbonId: row.werkbon_id || null,
+  viaWerkbon: !row.project_id && !!row.werkbon_id,
   raw: row,
 })
 
@@ -212,28 +217,53 @@ export async function deleteProject(projectId) {
 }
 
 // =============================================================================
-// TIME ENTRIES
+// TIME ENTRIES  (bron: urenregistratie — de enige urentabel)
 // =============================================================================
 
-export async function getTimeEntries(projectId) {
-  if (!projectId) return []
-  const { data, error } = await supabase
-    .from('time_entries')
-    .select('*, profiles(full_name)')
-    .eq('project_id', projectId)
-    .order('entry_date', { ascending: false })
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return (data || []).map(toTimeEntry)
+// Map werkbon → project, zodat we uren die via een werkbon zijn geboekt kunnen
+// toewijzen aan het project van die werkbon.
+async function getWerkbonProjectMap() {
+  const { data, error } = await supabase.from('werkbonnen').select('id, project_id')
+  if (error) return {}
+  const map = {}
+  for (const w of (data || [])) if (w.project_id) map[w.id] = w.project_id
+  return map
 }
 
-export async function getAllTimeEntries() {
+// Uren van één project: rechtstreeks (project_id) óf via een werkbon van dit
+// project (werkbonnen.project_id = projectId).
+export async function getTimeEntries(projectId) {
+  if (!projectId) return []
+  const wbMap = await getWerkbonProjectMap()
+  const werkbonIds = Object.keys(wbMap).filter(id => wbMap[id] === projectId)
+
+  const orParts = [`project_id.eq.${projectId}`]
+  if (werkbonIds.length) orParts.push(`werkbon_id.in.(${werkbonIds.join(',')})`)
+
   const { data, error } = await supabase
-    .from('time_entries')
+    .from('urenregistratie')
     .select('*, profiles(full_name)')
-    .order('entry_date', { ascending: false })
+    .or(orParts.join(','))
+    .order('datum', { ascending: false })
+    .order('created_at', { ascending: false })
   if (error) throw error
-  return (data || []).map(toTimeEntry)
+  return (data || []).map(r => toTimeEntry(r, projectId))
+}
+
+// Totaal geregistreerde uren per project (direct + via werkbon), voor de
+// project-lijst (nacalculatie). Geeft { projectId: totaalUren }.
+export async function getProjectHoursMap() {
+  const [urenRes, wbMap] = await Promise.all([
+    supabase.from('urenregistratie').select('uren, project_id, werkbon_id'),
+    getWerkbonProjectMap(),
+  ])
+  const byProject = {}
+  for (const u of (urenRes.data || [])) {
+    const pid = u.project_id || wbMap[u.werkbon_id] || null
+    if (!pid) continue
+    byProject[pid] = (byProject[pid] || 0) + Number(u.uren || 0)
+  }
+  return byProject
 }
 
 export async function addTimeEntry(projectId, entryData = {}) {
@@ -241,48 +271,47 @@ export async function addTimeEntry(projectId, entryData = {}) {
   const hours = Number(entryData.hours ?? 0)
   if (!hours || hours <= 0) throw new Error('Uren moet groter zijn dan 0')
 
-  const base = {
-    project_id: projectId,
-    description: entryData.description || null,
-    hours,
-    entry_date: entryData.entry_date || entryData.entryDate || new Date().toISOString().slice(0, 10),
-    billable: entryData.billable !== false,
-    hourly_rate: entryData.hourly_rate ?? entryData.hourlyRate ?? null,
-  }
-
-  // user_id: prefer expliciet, anders ingelogde gebruiker
-  let userId = entryData.user_id || entryData.userId || null
-  if (!userId) {
+  // profile_id: expliciet of de ingelogde gebruiker.
+  let profileId = entryData.user_id || entryData.userId || entryData.profile_id || entryData.profileId || null
+  if (!profileId) {
     try {
       const { data: u } = await supabase.auth.getUser()
-      userId = u?.user?.id || null
+      profileId = u?.user?.id || null
     } catch { /* ignore */ }
   }
-  if (userId) base.user_id = userId
+  if (!profileId) throw new Error('Geen medewerker bekend voor deze urenregistratie')
 
+  const base = {
+    profile_id: profileId,
+    project_id: projectId,
+    datum: entryData.entry_date || entryData.entryDate || new Date().toISOString().slice(0, 10),
+    uren: hours,
+    type: entryData.type || 'arbeid',
+    notitie: entryData.description || null,
+  }
   Object.keys(base).forEach(k => base[k] === null && delete base[k])
   const payload = await withCompanyId(base)
 
   const { data, error } = await supabase
-    .from('time_entries')
+    .from('urenregistratie')
     .insert(payload)
     .select('*, profiles(full_name)')
     .single()
   if (error) throw error
-  return toTimeEntry(data)
+  return toTimeEntry(data, projectId)
 }
 
 export async function updateTimeEntry(entryId, patch) {
   if (!entryId) throw new Error('entryId is verplicht')
   const updates = {}
   const map = {
-    description: 'description',
-    hours: 'hours',
-    entryDate: 'entry_date',
-    entry_date: 'entry_date',
-    billable: 'billable',
-    hourlyRate: 'hourly_rate',
-    hourly_rate: 'hourly_rate',
+    description: 'notitie',
+    notitie: 'notitie',
+    hours: 'uren',
+    uren: 'uren',
+    entryDate: 'datum',
+    entry_date: 'datum',
+    datum: 'datum',
   }
   Object.keys(patch || {}).forEach(k => {
     if (k in map) updates[map[k]] = patch[k]
@@ -290,7 +319,7 @@ export async function updateTimeEntry(entryId, patch) {
   if (Object.keys(updates).length === 0) return null
 
   const { data, error } = await supabase
-    .from('time_entries')
+    .from('urenregistratie')
     .update(updates)
     .eq('id', entryId)
     .select('*, profiles(full_name)')
@@ -301,7 +330,7 @@ export async function updateTimeEntry(entryId, patch) {
 
 export async function deleteTimeEntry(entryId) {
   if (!entryId) throw new Error('entryId is verplicht')
-  const { error } = await supabase.from('time_entries').delete().eq('id', entryId)
+  const { error } = await supabase.from('urenregistratie').delete().eq('id', entryId)
   if (error) throw error
 }
 
@@ -392,11 +421,14 @@ export async function linkFactuurToProject(factuurId, projectId) {
 // =============================================================================
 
 /**
- * Verrijkt een project met afgeleide totalen op basis van time_entries + invoices.
+ * Verrijkt een project met afgeleide totalen op basis van urenregistratie + invoices.
  * Geeft een nieuw object terug; muteert het origineel niet.
  */
-export function enrichProject(project, { timeEntries = [], invoices = [] } = {}) {
-  const usedHours = timeEntries.reduce((s, t) => s + (Number(t.hours) || 0), 0)
+export function enrichProject(project, { timeEntries = [], invoices = [], usedHours: usedHoursArg } = {}) {
+  // usedHours expliciet (uit de hours-map) of afgeleid uit de meegegeven regels.
+  const usedHours = usedHoursArg != null
+    ? Number(usedHoursArg)
+    : timeEntries.reduce((s, t) => s + (Number(t.hours) || 0), 0)
   const quoted = Number(project.quotedHours || 0)
   const remainingHours = Math.max(0, quoted - usedHours)
   const hoursPercentage = quoted > 0 ? usedHours / quoted : 0
@@ -468,21 +500,16 @@ export function calculateProjectHealth(p = {}) {
 // =============================================================================
 
 /**
- * Haalt projecten + bijbehorende time_entries en facturen op, en verrijkt
+ * Haalt projecten + geregistreerde uren (urenregistratie) en facturen op, en verrijkt
  * elk project met live totals. Eén batch-query per resource.
  */
 export async function getEnrichedProjects() {
-  const [projects, allEntries, allInvoices] = await Promise.all([
+  const [projects, hoursByProject, allInvoices] = await Promise.all([
     getProjects(),
-    getAllTimeEntries().catch(() => []),
+    getProjectHoursMap().catch(() => ({})),
     supabase.from('facturen').select('*').then(r => (r.error ? [] : r.data || [])),
   ])
 
-  const entriesByProject = {}
-  for (const e of allEntries) {
-    if (!entriesByProject[e.projectId]) entriesByProject[e.projectId] = []
-    entriesByProject[e.projectId].push(e)
-  }
   const invoicesByProject = {}
   for (const f of allInvoices) {
     if (!f.project_id) continue
@@ -493,7 +520,7 @@ export async function getEnrichedProjects() {
     })
   }
   return projects.map(p => enrichProject(p, {
-    timeEntries: entriesByProject[p.id] || [],
+    usedHours: hoursByProject[p.id] || 0,
     invoices: invoicesByProject[p.id] || [],
   }))
 }

@@ -2,7 +2,7 @@ import { supabase } from "../lib/supabase"
 import { withCompanyId } from "../lib/currentCompany"
 
 // DB columns: id, company_id, profile_id, customer_id, werkbon_id, deal_id,
-// datum, start_tijd, eind_tijd, uren, type, notitie, created_at, updated_at
+// project_id, datum, start_tijd, eind_tijd, uren, type, notitie, created_at, updated_at
 
 const toUrenregel = row => ({
   id: row.id,
@@ -11,6 +11,7 @@ const toUrenregel = row => ({
   customerId: row.customer_id,
   werkbonId: row.werkbon_id,
   dealId: row.deal_id,
+  projectId: row.project_id,
   datum: row.datum,
   startTijd: row.start_tijd || null,
   eindTijd: row.eind_tijd || null,
@@ -105,11 +106,30 @@ export async function createUrenregel(input) {
   if (!uren || uren <= 0) throw new Error("uren moet groter zijn dan 0")
   if (!input.datum) throw new Error("datum is verplicht")
 
+  // Werkbon-koppeling → project en klant automatisch afleiden van de werkbon
+  // (tenzij expliciet meegegeven). Zo tellen werkbon-uren mee in de
+  // project-nacalculatie en hangen ze aan de juiste klant.
+  const werkbon_id = input.werkbon_id || input.werkbonId || null
+  let project_id = input.project_id || input.projectId || null
+  let customer_id = input.customer_id || input.customerId || null
+  if (werkbon_id && (!project_id || !customer_id)) {
+    const { data: wb } = await supabase
+      .from("werkbonnen")
+      .select("project_id, customer_id")
+      .eq("id", werkbon_id)
+      .maybeSingle()
+    if (wb) {
+      if (!project_id) project_id = wb.project_id || null
+      if (!customer_id) customer_id = wb.customer_id || null
+    }
+  }
+
   const base = {
     profile_id: input.profile_id || input.profileId,
-    customer_id: input.customer_id || input.customerId || null,
-    werkbon_id: input.werkbon_id || input.werkbonId || null,
+    customer_id: customer_id || null,
+    werkbon_id,
     deal_id: input.deal_id || input.dealId || null,
+    project_id: project_id || null,
     datum: input.datum,
     start_tijd: input.start_tijd || input.startTijd || null,
     eind_tijd: input.eind_tijd || input.eindTijd || null,
@@ -143,11 +163,13 @@ export async function updateUrenregel(id, input) {
     delete updates.eindTijd
   }
 
-  // Verwijder frontend-aliases
+  // Verwijder frontend-aliases (camelCase → echte kolommen blijven staan)
+  if ("projectId" in updates && updates.project_id === undefined) updates.project_id = updates.projectId
   delete updates.profileId
   delete updates.customerId
   delete updates.werkbonId
   delete updates.dealId
+  delete updates.projectId
   delete updates.medewerkerNaam
   delete updates.customerName
 

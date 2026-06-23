@@ -5,6 +5,8 @@ import {
   getUrenregistratie, createUrenregel, updateUrenregel, deleteUrenregel,
 } from '../services/urenService.js';
 import { listCustomers } from '../services/customerService.js';
+import { getWerkbonnen } from '../services/werkbonService.js';
+import { getProjects } from '../services/projectsService.js';
 
 // ── Date / time helpers ─────────────────────────────────────────────────────
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -359,13 +361,15 @@ function ModalShell({ open, onClose, busy, mobile, children, maxWidth = 640 }) {
 }
 
 // ── Register / Edit modal ───────────────────────────────────────────────────
-function UrenModal({ open, mode, initial, klanten, profiles, onClose, onSave, mobile }) {
+function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = [], profiles, onClose, onSave, mobile }) {
   const empty = useMemo(() => ({
     datum: todayIso(),
     type: 'arbeid',
     start_tijd: '',
     eind_tijd: '',
     customer_id: '',
+    werkbon_id: '',
+    project_id: '',
     notitie: '',
   }), []);
   const [form, setForm] = useState(empty);
@@ -381,6 +385,8 @@ function UrenModal({ open, mode, initial, klanten, profiles, onClose, onSave, mo
         start_tijd: trimTime(initial.startTijd) || '',
         eind_tijd: trimTime(initial.eindTijd) || '',
         customer_id: initial.customerId || '',
+        werkbon_id: initial.werkbonId || '',
+        project_id: initial.projectId || '',
         notitie: initial.notitie || '',
       });
     } else {
@@ -391,6 +397,16 @@ function UrenModal({ open, mode, initial, klanten, profiles, onClose, onSave, mo
   }, [open, initial, empty]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  // Werkbon kiezen → project en klant automatisch overnemen van de werkbon.
+  const onWerkbonChange = (wid) => setForm(f => {
+    const next = { ...f, werkbon_id: wid };
+    const wb = werkbonnen.find(w => w.id === wid);
+    if (wb) {
+      if (wb.projectId) next.project_id = wb.projectId;
+      if (wb.customerId) next.customer_id = wb.customerId;
+    }
+    return next;
+  });
   const hint = computeUren(form.start_tijd, form.eind_tijd);
   const datumInvalid = touched.datum && !form.datum;
   const timeInvalid = form.start_tijd && form.eind_tijd && hint === null;
@@ -420,6 +436,8 @@ function UrenModal({ open, mode, initial, klanten, profiles, onClose, onSave, mo
   });
 
   const klantOptions = [{ value: '', label: 'Geen klant' }, ...klanten.map(k => ({ value: k.id, label: k.name }))];
+  const werkbonOptions = [{ value: '', label: 'Geen werkbon' }, ...werkbonnen.map(w => ({ value: w.id, label: w.titel || 'Werkbon' }))];
+  const projectOptions = [{ value: '', label: 'Geen project' }, ...projecten.map(p => ({ value: p.id, label: p.name || 'Project' }))];
   const typeOptions = [
     { value: 'arbeid', label: 'Arbeid' },
     { value: 'reiskosten', label: 'Reiskosten' },
@@ -483,6 +501,15 @@ function UrenModal({ open, mode, initial, klanten, profiles, onClose, onSave, mo
             {timeInvalid && <div className="uren2-error">Eindtijd moet later zijn dan starttijd</div>}
           </div>
 
+          <div className="uren2-field">
+            <label className="uren2-label">Werkbon <span className="uren2-opt">(optioneel)</span></label>
+            <Dropdown value={form.werkbon_id} options={werkbonOptions} onChange={onWerkbonChange} ariaLabel="Werkbon" />
+          </div>
+          <div className="uren2-field">
+            <label className="uren2-label">Project <span className="uren2-opt">(optioneel)</span></label>
+            <Dropdown value={form.project_id} options={projectOptions} onChange={v => set('project_id', v)} ariaLabel="Project" />
+          </div>
+
           <div className="uren2-field uren2-field-full">
             <label className="uren2-label">Klant</label>
             <Dropdown value={form.customer_id} options={klantOptions} onChange={v => set('customer_id', v)} ariaLabel="Klant" />
@@ -526,6 +553,8 @@ export function UrenPageV2() {
   const { profile } = useProfile();
   const [allRows, setAllRows] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [werkbonnen, setWerkbonnen] = useState([]);
+  const [projecten, setProjecten] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -546,8 +575,16 @@ export function UrenPageV2() {
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    Promise.all([getUrenregistratie(), listCustomers()])
-      .then(([r, c]) => { if (!alive) return; setAllRows(r); setCustomers(c); setError(''); })
+    Promise.all([
+      getUrenregistratie(),
+      listCustomers(),
+      getWerkbonnen().catch(() => []),
+      getProjects().catch(() => []),
+    ])
+      .then(([r, c, w, p]) => {
+        if (!alive) return;
+        setAllRows(r); setCustomers(c); setWerkbonnen(w); setProjecten(p); setError('');
+      })
       .catch(err => { if (!alive) return; setError(err.message || 'Laden mislukt'); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
@@ -604,6 +641,8 @@ export function UrenPageV2() {
       eind_tijd: form.eind_tijd || null,
       type: form.type,
       customer_id: form.customer_id || null,
+      werkbon_id: form.werkbon_id || null,
+      project_id: form.project_id || null,
       notitie: form.notitie || null,
     };
     try {
@@ -730,6 +769,8 @@ export function UrenPageV2() {
         mode={modal?.mode || 'register'}
         initial={modal?.initial || null}
         klanten={customers}
+        werkbonnen={werkbonnen}
+        projecten={projecten}
         onClose={() => setModal(null)}
         onSave={handleSave}
         mobile={isMobile}
