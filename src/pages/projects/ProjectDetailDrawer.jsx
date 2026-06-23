@@ -501,28 +501,28 @@ function UrenTab({ project, entries, onAdd, onDelete, canManage }) {
       {canManage && (
         <div className="card card-p" style={{ padding: 12 }}>
           <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--dl)', marginBottom: 8 }}>Uren toevoegen</div>
-          <div className="fg" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-            <div className="f">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            <div className="f" style={{ flex: '1 1 120px', minWidth: 0 }}>
               <label>Datum</label>
-              <input type="date" value={form.entry_date} onChange={e => set('entry_date', e.target.value)} />
+              <input type="date" style={{ minWidth: 0 }} value={form.entry_date} onChange={e => set('entry_date', e.target.value)} />
             </div>
-            <div className="f">
+            <div className="f" style={{ flex: '1 1 90px', minWidth: 0 }}>
               <label>Uren</label>
-              <input type="number" min="0" step="0.25" placeholder="0,0" value={form.hours} onChange={e => set('hours', e.target.value)} />
+              <input type="number" min="0" step="0.25" placeholder="0,0" style={{ minWidth: 0 }} value={form.hours} onChange={e => set('hours', e.target.value)} />
             </div>
-            <div className="f">
+            <div className="f" style={{ flex: '1 1 120px', minWidth: 0 }}>
               <label>Tarief (optioneel)</label>
-              <input type="number" min="0" step="0.01" placeholder="€/uur" value={form.hourly_rate} onChange={e => set('hourly_rate', e.target.value)} />
+              <input type="number" min="0" step="0.01" placeholder="€/uur" style={{ minWidth: 0 }} value={form.hourly_rate} onChange={e => set('hourly_rate', e.target.value)} />
             </div>
-            <div className="f" style={{ justifyContent: 'flex-end' }}>
+            <div className="f" style={{ flex: '1 1 140px', minWidth: 0, justifyContent: 'flex-end' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                <input type="checkbox" checked={form.billable} onChange={e => set('billable', e.target.checked)} />
+                <input type="checkbox" style={{ width: 'auto' }} checked={form.billable} onChange={e => set('billable', e.target.checked)} />
                 Factureerbaar
               </label>
             </div>
-            <div className="f" style={{ gridColumn: '1 / -1' }}>
+            <div className="f" style={{ flex: '1 1 100%', minWidth: 0 }}>
               <label>Omschrijving</label>
-              <input type="text" placeholder="Wat heb je gedaan?" value={form.description} onChange={e => set('description', e.target.value)} />
+              <input type="text" placeholder="Wat heb je gedaan?" style={{ minWidth: 0 }} value={form.description} onChange={e => set('description', e.target.value)} />
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
