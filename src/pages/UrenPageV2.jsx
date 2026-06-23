@@ -403,7 +403,30 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
     const wb = werkbonnen.find(w => w.id === wid);
     if (wb) {
       if (wb.projectId) next.project_id = wb.projectId;
-      if (wb.customerId) next.customer_id = wb.customerId;
+      if (wb.customerId) {
+        next.customer_id = wb.customerId;
+        // Project resetten als het niet bij de klant van de werkbon hoort.
+        const pr = projecten.find(p => p.id === next.project_id);
+        if (pr && pr.customerId !== wb.customerId) next.project_id = '';
+      }
+    }
+    return next;
+  });
+  // Project kiezen → klant automatisch afleiden van het project.
+  const onProjectChange = (pid) => setForm(f => {
+    const next = { ...f, project_id: pid };
+    const pr = projecten.find(p => p.id === pid);
+    if (pr && pr.customerId) next.customer_id = pr.customerId;
+    return next;
+  });
+  // Klant kiezen → werkbon/project resetten als ze niet bij deze klant horen.
+  const onKlantChange = (cid) => setForm(f => {
+    const next = { ...f, customer_id: cid };
+    if (cid) {
+      const wb = werkbonnen.find(w => w.id === f.werkbon_id);
+      if (wb && wb.customerId !== cid) next.werkbon_id = '';
+      const pr = projecten.find(p => p.id === f.project_id);
+      if (pr && pr.customerId !== cid) next.project_id = '';
     }
     return next;
   });
@@ -436,8 +459,20 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
   });
 
   const klantOptions = [{ value: '', label: 'Geen klant' }, ...klanten.map(k => ({ value: k.id, label: k.name }))];
-  const werkbonOptions = [{ value: '', label: 'Geen werkbon' }, ...werkbonnen.map(w => ({ value: w.id, label: w.titel || 'Werkbon' }))];
-  const projectOptions = [{ value: '', label: 'Geen project' }, ...projecten.map(p => ({ value: p.id, label: p.name || 'Project' }))];
+  // Met een gekozen klant alleen de werkbonnen/projecten van die klant tonen;
+  // zonder klant: alles.
+  const werkbonOptions = [
+    { value: '', label: 'Geen werkbon' },
+    ...werkbonnen
+      .filter(w => !form.customer_id || w.customerId === form.customer_id)
+      .map(w => ({ value: w.id, label: w.titel || 'Werkbon' })),
+  ];
+  const projectOptions = [
+    { value: '', label: 'Geen project' },
+    ...projecten
+      .filter(p => !form.customer_id || p.customerId === form.customer_id)
+      .map(p => ({ value: p.id, label: p.name || 'Project' })),
+  ];
   const typeOptions = [
     { value: 'arbeid', label: 'Arbeid' },
     { value: 'reiskosten', label: 'Reiskosten' },
@@ -507,12 +542,12 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
           </div>
           <div className="uren2-field">
             <label className="uren2-label">Project <span className="uren2-opt">(optioneel)</span></label>
-            <Dropdown value={form.project_id} options={projectOptions} onChange={v => set('project_id', v)} ariaLabel="Project" />
+            <Dropdown value={form.project_id} options={projectOptions} onChange={onProjectChange} ariaLabel="Project" />
           </div>
 
           <div className="uren2-field uren2-field-full">
             <label className="uren2-label">Klant</label>
-            <Dropdown value={form.customer_id} options={klantOptions} onChange={v => set('customer_id', v)} ariaLabel="Klant" />
+            <Dropdown value={form.customer_id} options={klantOptions} onChange={onKlantChange} ariaLabel="Klant" />
           </div>
 
           <div className="uren2-field uren2-field-full">
