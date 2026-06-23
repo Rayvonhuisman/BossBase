@@ -518,20 +518,34 @@ async function buildPdf(doc, type, document, regels, customer, company) {
       fy += 5.5;
     });
 
-    // Handtekening afbeelding (rechts)
+    // Handtekening afbeelding (rechts) — behoud de aspect ratio van de
+    // originele afbeelding zodat de handtekening niet vervormt.
     if (hasImg) {
       try {
-        const sigW = 58, sigH = 15;
-        const sigX = W - M - sigW - 2;
+        const maxW = 58, maxH = 22;
+        let drawW = maxW, drawH = maxH;
+        const dims = await new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+          img.onerror = () => resolve(null);
+          img.src = sigImgData;
+        });
+        if (dims && dims.w > 0 && dims.h > 0) {
+          const ratio = dims.w / dims.h;
+          drawW = maxW;
+          drawH = maxW / ratio;
+          if (drawH > maxH) { drawH = maxH; drawW = maxH * ratio; }
+        }
+        const sigX = W - M - drawW - 2;
         const sigY = y + 16;
-        doc.addImage(sigImgData, 'PNG', sigX, sigY, sigW, sigH, '', 'FAST');
+        doc.addImage(sigImgData, 'PNG', sigX, sigY, drawW, drawH, '', 'FAST');
         dc(C.lineStr);
         doc.setLineWidth(0.3);
-        doc.line(sigX, sigY + sigH + 1, sigX + sigW, sigY + sigH + 1);
+        doc.line(sigX, sigY + drawH + 1, sigX + drawW, sigY + drawH + 1);
         tc(C.muted);
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(7.5);
-        doc.text(`Handtekening — ${signedByName}`, sigX + sigW, sigY + sigH + 5, { align: 'right' });
+        doc.text(`Handtekening — ${signedByName}`, sigX + drawW, sigY + drawH + 5, { align: 'right' });
       } catch {}
     }
 

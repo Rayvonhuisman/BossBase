@@ -1,7 +1,7 @@
 /* ════════════════════════════════════════════════════════════
    BOSSBASE MARKETING — Atelier Premium (Refined)
    Scope: everything under `.mkt` root.
-   Typography: Plus Jakarta Sans across the board (no italics).
+   Typography: Inter across the board (matches dashboard, no italics).
    Dark surfaces: atelier deep green — never pure black.
    ════════════════════════════════════════════════════════════ */
 
@@ -22,7 +22,7 @@
   --atelier-mute:  rgba(255,255,255,0.66);
   --cream:         #EFE9DC;
 
-  --sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
   background: var(--paper);
