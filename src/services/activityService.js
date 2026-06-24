@@ -72,8 +72,17 @@ export function mapActivityFormToPayload(input = {}) {
   if (input.deal_id !== undefined || input.dealId !== undefined) {
     payload.deal_id = input.deal_id ?? input.dealId ?? null
   }
-  if (input.assigned_to !== undefined) {
-    payload.assigned_to = input.assigned_to || null
+  // Toewijzing: meerdere medewerkers (assigned_to_ids) + de primaire (assigned_to).
+  if (input.assigned_to_ids !== undefined || input.assignedToIds !== undefined
+      || input.assigned_to !== undefined || input.assignedTo !== undefined) {
+    let ids = input.assigned_to_ids ?? input.assignedToIds
+    if (!Array.isArray(ids)) {
+      const single = input.assigned_to ?? input.assignedTo
+      ids = single ? [single] : []
+    }
+    ids = ids.filter(Boolean)
+    payload.assigned_to_ids = ids
+    payload.assigned_to = ids[0] || null
   }
   if (input.endTime !== undefined || input.end_time !== undefined) {
     payload.end_time = input.endTime ?? input.end_time ?? null
@@ -111,6 +120,10 @@ export const toActivity = row => {
     time: splitDueAt(row.due_at).time,
     notes: row.notes || "",
     assignee: row.assigned_to || "",
+    // Meerdere toegewezen medewerkers; valt terug op de enkele assigned_to.
+    assignedToIds: Array.isArray(row.assigned_to_ids) && row.assigned_to_ids.length
+      ? row.assigned_to_ids
+      : (row.assigned_to ? [row.assigned_to] : []),
     assigneeName: sanitizeName(row.assigned_profile?.full_name || ""),
     endTime: row.end_time || null,
     location: row.location || '',
@@ -153,10 +166,10 @@ export async function createActivity(input) {
   const payload = await withCompanyId(mapActivityFormToPayload(input))
   // Standaard toewijzen aan de ingelogde gebruiker als er niemand gekozen is.
   // Zo is een activiteit nooit "niemand" en tonen we altijd een echte naam.
-  if (!payload.assigned_to) {
+  if (!payload.assigned_to && (!payload.assigned_to_ids || payload.assigned_to_ids.length === 0)) {
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (user?.id) payload.assigned_to = user.id
+      if (user?.id) { payload.assigned_to = user.id; payload.assigned_to_ids = [user.id] }
     } catch { /* ignore — blijft ongekoppeld als auth onbekend is */ }
   }
   const { data, error } = await safeInsert(supabase, "activities", payload, ACTIVITY_SELECT)

@@ -318,7 +318,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
   // items van de ingelogde gebruiker — ook voor admin, want het dashboard is
   // persoonlijk (de Planning-pagina blijft het volledige team-overzicht). Voor
   // een medewerker is dit al via RLS afgedwongen; dit dekt admin/planner af.
-  const myActivities = currentUserId ? activities.filter(a => a.assignee === currentUserId) : activities;
+  const myActivities = currentUserId ? activities.filter(a => (a.assignedToIds && a.assignedToIds.includes(currentUserId)) || a.assignee === currentUserId) : activities;
   const myWerkbonnen = currentUserId ? werkbonnen.filter(w => (w.assignedToIds && w.assignedToIds.includes(currentUserId)) || w.assignedTo === currentUserId) : werkbonnen;
   const myCalendarEvents = currentUserId ? calendarEvents.filter(e => e.assignedTo === currentUserId) : calendarEvents;
   const charts = data.charts || {};

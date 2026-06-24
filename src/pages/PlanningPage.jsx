@@ -16,6 +16,7 @@ import { getProjects } from '../services/projectsService.js';
 import { upsertWerkbonEvent, upsertActivityEvent, deleteWerkbonEvent, deleteActivityEvent } from '../services/calendarService.js';
 import { listActivities, createActivity, buildDueAt } from '../services/activityService.js';
 import { ActivityEditModal } from '../components/SharedModals.jsx';
+import { MemberMultiSelect } from '../components/MemberMultiSelect.jsx';
 import { supabase } from '../lib/supabase.js';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 
@@ -115,37 +116,6 @@ function buildColorMap(ids) {
   return map;
 }
 
-// Multi-select voor het toewijzen van één of meerdere medewerkers aan een werkbon.
-// `value` is een array van profile-ids; lege selectie = niet toegewezen.
-function MemberMultiSelect({ members = [], value = [], onChange }) {
-  const toggle = (id) => {
-    onChange(value.includes(id) ? value.filter(x => x !== id) : [...value, id]);
-  };
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: 8, border: '1px solid var(--bstrong)', borderRadius: 8, background: '#fff', maxHeight: 132, overflowY: 'auto' }}>
-      {members.length === 0 && <span style={{ fontSize: 12, color: 'var(--dl)' }}>Geen teamleden</span>}
-      {members.map(m => {
-        const sel = value.includes(m.id);
-        return (
-          <button
-            type="button"
-            key={m.id}
-            onClick={() => toggle(m.id)}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 999,
-              fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              border: sel ? '1px solid var(--p)' : '1px solid var(--bstrong)',
-              background: sel ? 'var(--pll)' : '#fff', color: sel ? 'var(--pd)' : 'var(--dm)',
-            }}
-          >
-            <span style={{ width: 14, height: 14, borderRadius: 4, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 10, color: '#fff', background: sel ? 'var(--p)' : '#fff', border: sel ? 'none' : '1px solid var(--bstrong)' }}>{sel ? '✓' : ''}</span>
-            {m.fullName}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 // ── OVERLAPCALCULATOR (voor blokken in dezelfde kolom) ────────────────────────
 
@@ -461,7 +431,7 @@ function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, pro
   const [form, setForm] = useState({
     titel: '', type: 'task', customer_id: '',
     datum: toISO(new Date()), starttijd: '09:00', eindtijd: '09:15',
-    assigned_to: '', voertuig_id: '', locatie: '', omschrijving: '',
+    assigned_to_ids: [], voertuig_id: '', locatie: '', omschrijving: '',
     werkbon_id: '',
   });
   const [eindtijdManual, setEindtijdManual] = useState(false);
@@ -485,7 +455,7 @@ function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, pro
         customer_id: form.customer_id || null,
         due_at: buildDueAt(form.datum, form.starttijd),
         end_time: form.eindtijd || null,
-        assigned_to: form.assigned_to || null,
+        assigned_to_ids: form.assigned_to_ids,
         location: form.locatie || null,
         voertuig_id: form.voertuig_id || null,
         notes: form.omschrijving || null,
@@ -505,11 +475,11 @@ function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, pro
         }).catch(() => {});
       }
 
-      // Notificatie naar toegewezen medewerker
-      if (form.assigned_to) {
-        const member = teamMembers.find(m => m.id === form.assigned_to);
+      // Notificatie naar elke toegewezen medewerker (behalve jezelf).
+      (form.assigned_to_ids || []).filter(uid => uid && uid !== profile?.id).forEach(uid => {
+        const member = teamMembers.find(m => m.id === uid);
         createAssignmentNotification({
-          assignedToUserId: form.assigned_to,
+          assignedToUserId: uid,
           assignedToName: member?.fullName,
           type: 'toewijzing_activiteit',
           title: `Je bent toegewezen aan ${form.titel.trim()}`,
@@ -520,7 +490,7 @@ function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, pro
           creatorId: profile?.id,
           creatorName: profile?.fullName,
         }).catch(() => {});
-      }
+      });
 
       // Bestaande werkbon koppelen
       if (form.werkbon_id) {
@@ -534,7 +504,7 @@ function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, pro
           gepland_op: form.datum,
           starttijd: form.starttijd || null,
           eindtijd: form.eindtijd || null,
-          assigned_to: form.assigned_to || null,
+          assigned_to_ids: form.assigned_to_ids,
           voertuig_id: form.voertuig_id || null,
           locatie: form.locatie || null,
           omschrijving: form.omschrijving || null,
@@ -741,11 +711,8 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, onClose, onSa
             <input type="time" value={form.eindtijd} onChange={e => set('eindtijd', e.target.value)} />
           </div>
           <div className="f">
-            <label>Medewerker</label>
-            <select value={form.assigned_to} onChange={e => set('assigned_to', e.target.value)}>
-              <option value="">— Niet toegewezen —</option>
-              {teamMembers.map(m => <option key={m.id} value={m.id}>{m.fullName}</option>)}
-            </select>
+            <label>Medewerkers <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(meerdere mogelijk)</span></label>
+            <MemberMultiSelect members={teamMembers} value={form.assigned_to_ids} onChange={ids => set('assigned_to_ids', ids)} />
           </div>
           <div className="f">
             <label>Voertuig</label>
@@ -1029,10 +996,10 @@ export function PlanningPage({ openCustomer } = {}) {
 
   // Activiteiten gefilterd per viewMode
   const filteredActivities = useMemo(() => {
-    if (viewMode === 'medewerker') return activities.filter(a => a.assignee === selectedMember);
+    if (viewMode === 'medewerker') return activities.filter(a => (a.assignedToIds && a.assignedToIds.includes(selectedMember)) || a.assignee === selectedMember);
     if (viewMode === 'voertuig')   return []; // activiteiten niet per voertuig tonen
-    // totaal: toon alle activiteiten met assigned_to, of eigen activiteiten bij solo ZZP
-    return activities.filter(a => a.assignee || !teamMembers.length);
+    // totaal: toon alle activiteiten met een toewijzing, of eigen activiteiten bij solo ZZP
+    return activities.filter(a => (a.assignedToIds && a.assignedToIds.length) || a.assignee || !teamMembers.length);
   }, [activities, viewMode, selectedMember, teamMembers]);
 
   // Niet-ingepland: geen geplandOp OF (totaal: geen assignedTo) OF geen starttijd

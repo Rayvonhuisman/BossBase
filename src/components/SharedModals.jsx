@@ -18,6 +18,7 @@ import { updateProfile } from '../services/profileService.js';
 import { NoteEditor } from './NoteEditor.jsx';
 import { useUploads } from '../lib/uploadContext.jsx';
 import { getTeamMembers, createMentionNotifications, createAssignmentNotification } from '../services/notificatieService.js';
+import { MemberMultiSelect } from './MemberMultiSelect.jsx';
 
 const isEmail = v => !v || /^\S+@\S+\.\S+$/.test(v);
 
@@ -352,7 +353,7 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
     dealId: defaultDealId,
     status: 'open',
     notes: '',
-    assignedTo: '',
+    assignedToIds: [],
   });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -389,18 +390,18 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
         deal_id: form.dealId || null,
         due_at: buildDueAt(form.date, form.time),
         end_time: form.endTime || null,
-        assigned_to: form.assignedTo || null,
+        assigned_to_ids: form.assignedToIds,
       });
       // Mention notifications in notes
       if (form.notes && profile?.id) {
         const custName = customers?.find(c => c.id === form.custId)?.name || '';
         createMentionNotifications({ text: form.notes, relatedType: 'activiteit', relatedId: created.id, link: 'activities', creatorId: profile.id, creatorName: profile.fullName, contextName: custName }).catch(() => {});
       }
-      // Assignment notification
-      if (form.assignedTo) {
-        const assignedMember = teamMembers.find(m => m.id === form.assignedTo);
-        createAssignmentNotification({ assignedToUserId: form.assignedTo, assignedToName: assignedMember?.fullName, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${form.date}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: created.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
-      }
+      // Assignment notification naar elke toegewezen medewerker (behalve jezelf)
+      (form.assignedToIds || []).filter(uid => uid && uid !== profile?.id).forEach(uid => {
+        const assignedMember = teamMembers.find(m => m.id === uid);
+        createAssignmentNotification({ assignedToUserId: uid, assignedToName: assignedMember?.fullName, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${form.date}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: created.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
+      });
       if (form.type === 'visit' && form.custId) {
         const cust = customers?.find(c => c.id === form.custId);
         if (cust?.email) {
@@ -494,11 +495,8 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
           )}
           {teamMembers.length > 0 && (
             <div className="f">
-              <label>Toegewezen aan</label>
-              <select value={form.assignedTo || ''} onChange={e => set('assignedTo', e.target.value)}>
-                <option value="">— Niet toegewezen —</option>
-                {teamMembers.map(m => <option key={m.id} value={m.id}>{m.fullName}</option>)}
-              </select>
+              <label>Toegewezen aan <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(meerdere mogelijk)</span></label>
+              <MemberMultiSelect members={teamMembers} value={form.assignedToIds} onChange={ids => set('assignedToIds', ids)} />
             </div>
           )}
           <div className="f s2">
@@ -1083,7 +1081,7 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
     status: activity?.completed ? 'completed' : (activity?.status === 'completed' || activity?.status === 'done' ? 'completed' : 'open'),
     priority: 'med',
     notes: activity?.notes || '',
-    assignedTo: activity?.assignee || '',
+    assignedToIds: activity?.assignedToIds || (activity?.assignee ? [activity.assignee] : []),
   });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -1114,17 +1112,18 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
         end_time: form.endTime || null,
         status: form.status,
         notes: form.notes,
-        assigned_to: form.assignedTo || null,
+        assigned_to_ids: form.assignedToIds,
       });
       if (form.notes && profile?.id) {
         const custName = customers?.find(c => c.id === form.custId)?.name || '';
         createMentionNotifications({ text: form.notes, relatedType: 'activiteit', relatedId: activity.id, link: 'activities', creatorId: profile.id, creatorName: profile.fullName, contextName: custName }).catch(() => {});
       }
-      const prevAssigned = activity?.assignee || '';
-      if (form.assignedTo && form.assignedTo !== prevAssigned) {
-        const assignedMember = teamMembers.find(m => m.id === form.assignedTo);
-        createAssignmentNotification({ assignedToUserId: form.assignedTo, assignedToName: assignedMember?.fullName, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${form.date}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: activity.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
-      }
+      // Notificatie naar nieuw toegevoegde toegewezen medewerkers (behalve jezelf).
+      const prevIds = activity?.assignedToIds || (activity?.assignee ? [activity.assignee] : []);
+      (form.assignedToIds || []).filter(uid => uid && uid !== profile?.id && !prevIds.includes(uid)).forEach(uid => {
+        const assignedMember = teamMembers.find(m => m.id === uid);
+        createAssignmentNotification({ assignedToUserId: uid, assignedToName: assignedMember?.fullName, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${form.date}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: activity.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
+      });
       toast.success('Activiteit bijgewerkt');
       onSaved?.(updated);
       onClose();
@@ -1249,11 +1248,8 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
           )}
           {teamMembers.length > 0 && (
             <div className="f">
-              <label>Toegewezen aan</label>
-              <select value={form.assignedTo || ''} onChange={e => set('assignedTo', e.target.value)} disabled={!canEdit || busy}>
-                <option value="">Niemand</option>
-                {teamMembers.map(m => <option key={m.id} value={m.id}>{m.fullName}</option>)}
-              </select>
+              <label>Toegewezen aan <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(meerdere mogelijk)</span></label>
+              <MemberMultiSelect members={teamMembers} value={form.assignedToIds} onChange={ids => set('assignedToIds', ids)} disabled={!canEdit || busy} />
             </div>
           )}
           <div className="f">

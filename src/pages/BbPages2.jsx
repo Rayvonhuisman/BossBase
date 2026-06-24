@@ -233,6 +233,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
         const uid = profile?.id;
         const mine = owner => !uid || owner === uid;
         const mineWerkbon = w => !uid || (w.assignedToIds && w.assignedToIds.includes(uid)) || w.assignedTo === uid;
+        const mineActivity = a => !uid || (a.assignedToIds && a.assignedToIds.includes(uid)) || a.assignee === uid;
         // Werkbon-gekoppelde calendar_events verbergen: de werkbon zelf wordt
         // hieronder als (altijd actuele) synthetisch event getoond. Zo verschijnt
         // elk item exact één keer — gededupliceerd op werkbon_id.
@@ -254,7 +255,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
           }));
         setEvents([...manualEvents, ...wbEvents]);
         setCustomers(custData);
-        setActivities(actData.filter(a => mine(a.assignee)));
+        setActivities(actData.filter(mineActivity));
         setError('');
       })
       .catch(err => setError(err.message || 'Agenda laden is mislukt.'))
