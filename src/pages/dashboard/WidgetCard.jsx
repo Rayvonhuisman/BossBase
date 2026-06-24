@@ -772,9 +772,11 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
               <div className="bb-kpi-value" style={{ marginTop: 0 }}>{total}u</div>
               <div style={{ fontSize: 12.5, color: C.dmu }}>van {target}u</div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginTop: 14, height: 100 }}>
+            {/* minHeight i.p.v. vaste height: bij hoge balkjes groeit het blok mee
+                zodat de waarde-labels niet omhoog over het grote cijfer heen lopen. */}
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginTop: 18, minHeight: 100 }}>
               {showDays.map((d, i) => {
-                const h = Math.max(4, (d.value / max) * 88);
+                const h = Math.max(4, (d.value / max) * 80);
                 const isT = i === todIdx;
                 return (
                   <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
@@ -822,29 +824,37 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
         />
       );
 
-      // ── Vandaag: verticale lijst, past binnen het blok ──
+      // ── Vandaag: zelfde lijststijl als de Activiteiten-widget ──
       if (agendaView === 'today') {
         const todayItems = [...allItems].sort((x, y) => (x.time || '99:99').localeCompare(y.time || '99:99'));
         return (
           <div className="bb-widget">
-            <WHead eyebrow="Agenda" title="Vandaag" sub={`${todayItems.length} agenda-items`} right={seg} />
+            <WHead title="Agenda vandaag" sub={`${todayItems.length} agenda-items`} right={seg} />
             {todayItems.length === 0 ? (
               <EmptyState title="Geen agenda-items voor vandaag" text="Plan een afspraak vanuit een klant of activiteit." />
             ) : (
               <div className="feed">
-                {todayItems.map((it, k) => (
-                  <button key={k} className={`feed-row compact ${it.kind === 'event' ? 'ev-teal' : (evClass[it.atype] || 'ev-info')}`} onClick={openAgendaItem(it)}>
-                    <span className="feed-icon">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
-                    </span>
-                    <div className="feed-main">
-                      <div className="feed-title">{it.title}</div>
-                      {it.time && <div className="feed-meta"><span>{it.time}</span></div>}
-                    </div>
-                  </button>
-                ))}
+                {todayItems.map((it, k) => {
+                  const c = customerById(it.custId);
+                  const icoT = it.kind === 'event' ? 'visit' : it.atype;
+                  return (
+                    <button key={k} className={`feed-row ${actIcoClass(icoT)}`} onClick={openAgendaItem(it)}>
+                      <span className="feed-icon">{actIcoSvg(icoT)}</span>
+                      <div className="feed-main">
+                        <div className="feed-title">{it.title}{c && <> · <strong>{c.name}</strong></>}</div>
+                        <div className="feed-meta">
+                          <span>{it.kind === 'event' ? 'Afspraak' : activiteitTypeLabel(it.atype)}</span>
+                        </div>
+                      </div>
+                      <div className="feed-aside">
+                        <Chip tone="info">{it.time || 'Vandaag'}</Chip>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
+            <WFoot meta={`${todayItems.length} vandaag`} linkText="Naar agenda" onLink={() => setPage('calendar')} />
           </div>
         );
       }
@@ -856,7 +866,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
         .slice(0, 4);
       return (
         <div className="bb-widget">
-          <WHead eyebrow="Agenda" title="Deze week" sub={`${allItems.length} agenda-items`} right={seg} />
+          <WHead title="Agenda deze week" sub={`${allItems.length} agenda-items`} right={seg} />
           {allItems.length === 0 ? (
             <EmptyState title="Geen agenda-items deze week" text="Plan een afspraak vanuit een klant of activiteit." />
           ) : (
