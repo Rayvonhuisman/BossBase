@@ -11,6 +11,7 @@ import { getDefaultWidgets, DEFAULT_LAYOUTS, DEFAULT_LAYOUT_KEY, DEFAULT_MEDEWER
 import { DashboardCustomizeBar } from './DashboardCustomizeBar.jsx';
 import { DashboardWidgetGrid } from './DashboardWidgetGrid.jsx';
 import { statusInfo } from '../../utils/statusColors.js';
+import { buildStageIndex, stageCategory } from '../../utils/pipeline.js';
 import { AddWidgetModal } from './AddWidgetModal.jsx';
 import { LayoutPickerModal } from './LayoutPickerModal.jsx';
 
@@ -70,62 +71,78 @@ function isoWeekNr(d) {
   return 1 + Math.ceil((firstThursday - dt.getTime()) / (7 * 864e5));
 }
 
-function deriveCharts({ deals = [], activities = [], offertes = [], customers = [], uren = [] }) {
+function deriveCharts({ deals = [], activities = [], offertes = [], customers = [], uren = [], facturen = [], jobCosts = [], stages = [] }) {
   const now = new Date();
-  const monthlyRevenue = [];
+  const today = now.toISOString().slice(0, 10);
+  const stageIndex = buildStageIndex(stages);
+  const dealCat = d => stageIndex.get(d.stage)?.category || 'open';
+  const dealOrd = d => stageIndex.get(d.stage)?.order ?? -1;
+  const monthKey = v => { const x = new Date(v); return isNaN(x.getTime()) ? null : x.getFullYear() * 12 + x.getMonth(); };
+
+  // ── Omzet/winst uit ECHTE facturen + job_costs (excl. BTW) ──
+  const months = [];
   for (let k = 5; k >= 0; k--) {
     const d = new Date(now.getFullYear(), now.getMonth() - k, 1);
-    const key = d.getFullYear() * 12 + d.getMonth();
-    const val = deals.reduce((s, dl) => {
-      if (!['paid', 'completed'].includes(dl.stage) || !dl.createdAt) return s;
-      const dt = new Date(dl.createdAt);
-      if (isNaN(dt.getTime())) return s;
-      return dt.getFullYear() * 12 + dt.getMonth() === key ? s + (dl.value || 0) : s;
-    }, 0);
-    monthlyRevenue.push({ label: MONTHS_NL[d.getMonth()], value: Math.round(val) });
+    months.push({ label: MONTHS_NL[d.getMonth()], key: d.getFullYear() * 12 + d.getMonth() });
   }
-  const hasRev = monthlyRevenue.some(m => m.value > 0);
-  const monthlyProfit = hasRev ? monthlyRevenue.map(m => ({ label: m.label, value: Math.round(m.value * 0.28) })) : [];
+  const revInMonth = mk => facturen.reduce((s, f) => (monthKey(f.factuurdatum) === mk ? s + (Number(f.totaalExcl) || 0) : s), 0);
+  const costInMonth = mk => jobCosts.reduce((s, c) => (monthKey(c.date) === mk ? s + (Number(c.amt) || 0) : s), 0);
+  const monthlyRevenueAll = months.map(m => ({ label: m.label, value: Math.round(revInMonth(m.key)) }));
+  const monthlyProfitAll = months.map(m => ({ label: m.label, value: Math.round(revInMonth(m.key) - costInMonth(m.key)) }));
+  const hasRev = monthlyRevenueAll.some(m => m.value !== 0);
+  const monthlyRevenue = hasRev ? monthlyRevenueAll : [];
+  const monthlyProfit = monthlyProfitAll.some(m => m.value !== 0) ? monthlyProfitAll : [];
 
-  const stageDefs = [
-    { keys: ['new_lead'], label: 'Nieuwe aanvragen', color: '#1DDB62' },
-    { keys: ['contact'], label: 'Contact', color: '#d97706' },
-    { keys: ['quote_sent'], label: 'Offerte verz.', color: '#2563eb' },
-    { keys: ['approved'], label: 'Akkoord', color: '#7c3aed' },
-    { keys: ['planned', 'in_progress'], label: 'In uitvoering', color: '#15A34A' },
-  ];
-  const pipelineByStage = stageDefs
-    .map(sd => ({ label: sd.label, color: sd.color, value: deals.filter(d => sd.keys.includes(d.stage)).reduce((s, d) => s + (d.value || 0), 0) }))
+  // ── Pipeline per ECHTE fase (waarde per stage_id) ──
+  const stageColors = ['#1DDB62', '#d97706', '#2563eb', '#7c3aed', '#15A34A', '#0d9488', '#db2777', '#e8784a', '#9ca3af'];
+  const orderedStages = [...stages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const pipelineByStage = orderedStages
+    .filter(s => stageCategory(s.label) !== 'lost')
+    .map((s, i) => ({ label: s.label, color: stageColors[i % stageColors.length], value: deals.filter(d => d.stage === s.id).reduce((sum, d) => sum + (d.value || 0), 0) }))
     .filter(x => x.value > 0);
 
+  // ── Conversiefunnel (mijlpalen afgeleid uit de echte fasenamen) ──
+  const milestoneOrder = re => {
+    const s = orderedStages.find(st => re.test((st.label || '').toLowerCase()));
+    return s ? (stageIndex.get(s.id)?.order ?? Infinity) : Infinity;
+  };
+  const offerteOrder = milestoneOrder(/offerte/);
+  const akkoordOrder = (() => {
+    const s = orderedStages.find(st => { const n = (st.label || '').toLowerCase(); return /akkoord/.test(n) && !/wacht/.test(n); });
+    return s ? (stageIndex.get(s.id)?.order ?? Infinity) : Infinity;
+  })();
   const leads = deals.length;
-  const cnt = pred => deals.filter(pred).length;
+  const nonLost = deals.filter(d => dealCat(d) !== 'lost');
   const fSteps = [
     { label: 'Leads', value: leads },
-    { label: 'Contact', value: cnt(d => !['new_lead', 'lost'].includes(d.stage)) },
-    { label: 'Offerte', value: cnt(d => ['quote_sent', 'approved', 'planned', 'in_progress', 'completed', 'paid'].includes(d.stage)) },
-    { label: 'Akkoord', value: cnt(d => ['approved', 'planned', 'in_progress', 'completed', 'paid'].includes(d.stage)) },
-    { label: 'Gewonnen', value: cnt(d => ['completed', 'paid'].includes(d.stage)) },
+    { label: 'Offerte', value: nonLost.filter(d => dealOrd(d) >= offerteOrder).length },
+    { label: 'Akkoord', value: nonLost.filter(d => dealOrd(d) >= akkoordOrder).length },
+    { label: 'Gewonnen', value: deals.filter(d => ['won', 'paid'].includes(dealCat(d))).length },
   ];
   const conversionFunnel = leads ? fSteps.map(s => ({ ...s, pct: Math.round((s.value / leads) * 100) })) : [];
 
-  const sc = st => offertes.filter(o => o.status === st).length;
-  const invAll = [
-    { label: 'Geaccepteerd', value: sc('geaccepteerd'), color: statusInfo('geaccepteerd', 'offerte').color },
-    { label: 'Verzonden', value: sc('verzonden'), color: statusInfo('verzonden', 'offerte').color },
-    { label: 'Concept', value: sc('concept'), color: statusInfo('concept', 'offerte').color },
-  ];
-  const invoiceStatus = invAll.some(s => s.value > 0) ? invAll.filter(s => s.value > 0) : [];
+  // ── Factuurstatus uit ECHTE facturen ──
+  const factuurBucket = f => {
+    if (f.status === 'betaald') return 'Betaald';
+    if (f.status === 'verzonden') return (f.vervaldatum && f.vervaldatum < today) ? 'Te laat' : 'Openstaand';
+    return 'Concept';
+  };
+  const invColors = { Betaald: '#15A34A', Openstaand: '#2563eb', 'Te laat': '#dc2626', Concept: '#9ca3af' };
+  const invMap = new Map();
+  facturen.forEach(f => { const b = factuurBucket(f); invMap.set(b, (invMap.get(b) || 0) + 1); });
+  const invoiceStatus = [...invMap.entries()].map(([label, value]) => ({ label, value, color: invColors[label] || '#9ca3af' }));
 
+  // ── Kosten per klant uit ECHTE job_costs ──
   const nameOf = d => d.customerName || customers.find(c => c.id === d.custId)?.name || null;
-  const costMap = new Map();
-  deals.filter(d => ['completed', 'paid'].includes(d.stage)).forEach(d => {
-    const nm = nameOf(d) || 'Onbekend';
-    costMap.set(nm, (costMap.get(nm) || 0) + (d.value || 0) * 0.35);
+  const custName = id => (id ? customers.find(c => c.id === id)?.name : null);
+  const jcMap = new Map();
+  jobCosts.forEach(c => {
+    const nm = custName(c.customerId) || custName(c.custId) || 'Overig';
+    jcMap.set(nm, (jcMap.get(nm) || 0) + (Number(c.amt) || 0));
   });
-  const jobCostsByCustomer = [...costMap.entries()]
+  const jobCostsByCustomer = [...jcMap.entries()]
     .map(([label, value]) => ({ label, value: Math.round(value) }))
-    .sort((a, b) => b.value - a.value).slice(0, 6);
+    .filter(x => x.value > 0).sort((a, b) => b.value - a.value).slice(0, 6);
 
   const DN = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'];
   const monday = new Date(); monday.setHours(0, 0, 0, 0);
@@ -199,7 +216,7 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
   const { can, isAdmin } = usePermissions();
   const toast = useToast();
   // Gedeelde data (één fetch voor de hele shell) — geen eigen queries meer.
-  const { customers, deals, stages, activities, offertes, werkbonnen, calendarEvents, loading: sharedLoading } = useData();
+  const { customers, deals, stages, activities, offertes, werkbonnen, calendarEvents, facturen, jobCosts, loading: sharedLoading } = useData();
 
   // Demo mode: IS_DEV-only toggle that substitutes real data with static demo data
   const [demoMode, setDemoMode] = useState(IS_DEV);
@@ -267,12 +284,12 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
   }, [refreshKey]);
 
   const realCharts = useMemo(
-    () => deriveCharts({ deals, activities, offertes, customers, uren }),
-    [deals, activities, offertes, customers, uren]
+    () => deriveCharts({ deals, activities, offertes, customers, uren, facturen, jobCosts, stages }),
+    [deals, activities, offertes, customers, uren, facturen, jobCosts, stages]
   );
   const sharedData = demoMode
     ? demoData
-    : { deals, stages, activities, customers, offertes, werkbonnen, calendarEvents, loading: dataLoading, charts: realCharts, currentUserId: profile?.id || null };
+    : { deals, stages, activities, customers, offertes, werkbonnen, calendarEvents, facturen, jobCosts, loading: dataLoading, charts: realCharts, currentUserId: profile?.id || null };
 
   // Dirty check: anything changed since entering edit mode?
   const isDirty = useMemo(

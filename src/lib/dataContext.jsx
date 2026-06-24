@@ -11,6 +11,8 @@ export const DataContext = createContext({
   offertes: [],
   werkbonnen: [],
   calendarEvents: [],
+  facturen: [],
+  jobCosts: [],
   loading: false,
   refresh: () => {},
 });

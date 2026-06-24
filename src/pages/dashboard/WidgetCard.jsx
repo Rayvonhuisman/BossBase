@@ -3,6 +3,7 @@ import { I } from '../../bb-shared.jsx';
 import { getSupportedSizes } from '../../data/widgetRegistry.js';
 import { activiteitTypeLabel } from '../../services/activityService.js';
 import { statusInfo } from '../../utils/statusColors.js';
+import { buildStageIndex, firstStageId } from '../../utils/pipeline.js';
 
 // ── Design tokens (BossBase widget redesign v2) ───────────────
 // CSS classes (.bb-widget, .bb-kpi, .feed-row, .chip, .pill-tabs, …)
@@ -313,7 +314,20 @@ const actIcoSvg = t => {
 
 // ── Widget content renderer ───────────────────────────────────
 function renderContent(type, data, widget, setPage, openCustomer, onSettingsChange, ux, openDeal, openInvoice, openCalendarEvent) {
-  const { deals = [], stages = [], activities = [], customers = [], offertes = [], werkbonnen = [], calendarEvents = [], loading, currentUserId = null } = data;
+  const { deals = [], stages = [], activities = [], customers = [], offertes = [], werkbonnen = [], calendarEvents = [], facturen = [], jobCosts = [], loading, currentUserId = null } = data;
+  // Fase-categorie per deal (stage_id = uuid → semantische groep) zodat de
+  // pipeline-/financiële widgets op echte data werken.
+  const stageIndex = buildStageIndex(stages);
+  const dealCat = d => stageIndex.get(d.stage)?.category || 'open';
+  const orderedStages = [...stages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const dealOrd = d => stageIndex.get(d.stage)?.order ?? -1;
+  // "Akkoord"-mijlpaal (geaccepteerd) afgeleid uit de echte fasenamen.
+  const akkoordOrder = (() => {
+    const s = orderedStages.find(st => { const n = (st.label || '').toLowerCase(); return /akkoord/.test(n) && !/wacht/.test(n); });
+    return s ? (stageIndex.get(s.id)?.order ?? Infinity) : Infinity;
+  })();
+  const thisMonthKey = (() => { const n = new Date(); return n.getFullYear() * 12 + n.getMonth(); })();
+  const inThisMonth = v => { const d = new Date(v); return !isNaN(d.getTime()) && d.getFullYear() * 12 + d.getMonth() === thisMonthKey; };
   // Persoonlijke widgets (eigen activiteiten/werkbonnen/agenda) tonen alleen de
   // items van de ingelogde gebruiker — ook voor admin, want het dashboard is
   // persoonlijk (de Planning-pagina blijft het volledige team-overzicht). Voor
@@ -368,39 +382,43 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
 
     // ───────── KPI cards ─────────
     case 'open_pipeline_value': {
-      const open = deals.filter(d => !['lost', 'completed', 'paid'].includes(d.stage));
+      const open = deals.filter(d => dealCat(d) === 'open');
       const val = open.reduce((s, d) => s + (d.value || 0), 0);
       return <KpiCard tone="green" icon={I.brief} label="Open pipeline" value={eur(val)} sub={<><span>{open.length} deals</span><span>·</span><Delta dir="up">Live</Delta></>} onClick={() => setPage('pipeline')} />;
     }
     case 'accepted_value': {
-      const acc = deals.filter(d => ['approved', 'planned', 'in_progress', 'completed', 'paid'].includes(d.stage));
+      // Geaccepteerd = deals die de Akkoord-fase of verder hebben bereikt.
+      const acc = deals.filter(d => dealCat(d) !== 'lost' && dealOrd(d) >= akkoordOrder);
       const val = acc.reduce((s, d) => s + (d.value || 0), 0);
-      return <KpiCard tone="success" icon={I.euro} label="Geaccepteerd" value={eur(val)} sub={<><span>{acc.length} deals</span><span>·</span><Delta dir="up">Akkoord</Delta></>} onClick={() => setPage('pipeline')} />;
+      return <KpiCard tone="success" icon={I.euro} label="Geaccepteerd" value={eur(val)} sub={<><span>{acc.length} deals</span><span>·</span><Delta dir="up">Akkoord+</Delta></>} onClick={() => setPage('pipeline')} />;
     }
     case 'customers':
       return <KpiCard tone="info" icon={I.cust} label="Klanten" value={customers.length} sub={`${customers.length} actief in CRM`} onClick={() => setPage('customers')} />;
 
     case 'costs_per_job': {
-      const done = deals.filter(d => ['completed', 'paid'].includes(d.stage));
-      const avg = done.length ? done.reduce((s, d) => s + (d.value || 0) * 0.35, 0) / done.length : 0;
-      return <KpiCard tone="neutral" icon={I.costs} label="Kosten per klus" value={avg > 0 ? eur(avg) : '—'} sub={done.length ? `gemiddeld · ${done.length} klussen` : 'geen afgeronde klussen'} onClick={() => setPage('costs')} />;
+      // Echte job_costs, gegroepeerd per klus (deal/project/werkbon).
+      const byJob = new Map();
+      jobCosts.forEach(c => { const k = c.dealId || c.projectId || c.werkbonId || c.id; byJob.set(k, (byJob.get(k) || 0) + (Number(c.amt) || 0)); });
+      const jobs = [...byJob.values()];
+      const avg = jobs.length ? jobs.reduce((s, v) => s + v, 0) / jobs.length : 0;
+      return <KpiCard tone="neutral" icon={I.costs} label="Kosten per klus" value={avg > 0 ? eur(avg) : '—'} sub={jobs.length ? `gemiddeld · ${jobs.length} klussen` : 'geen kosten geregistreerd'} onClick={() => setPage('costs')} />;
     }
     case 'costs_month': {
-      const now = new Date();
-      const md = deals.filter(d => ['paid', 'completed'].includes(d.stage) && d.createdAt && new Date(d.createdAt).getMonth() === now.getMonth());
-      const val = md.reduce((s, d) => s + (d.value || 0) * 0.35, 0);
-      return <KpiCard tone="amber" icon={I.costs} label="Kosten deze maand" value={val > 0 ? eur(val) : '—'} sub={<><span>~35% marge</span><span>·</span><span>{md.length} klussen</span></>} onClick={() => setPage('costs')} />;
+      const md = jobCosts.filter(c => inThisMonth(c.date));
+      const val = md.reduce((s, c) => s + (Number(c.amt) || 0), 0);
+      return <KpiCard tone="amber" icon={I.costs} label="Kosten deze maand" value={val > 0 ? eur(val) : '—'} sub={`${md.length} kostenposten`} onClick={() => setPage('costs')} />;
     }
     case 'billable': {
-      const b = deals.filter(d => ['approved', 'planned', 'in_progress'].includes(d.stage));
+      // Te factureren = afgeronde klussen (deals in een 'afgerond'-fase).
+      const b = deals.filter(d => dealCat(d) === 'won');
       const val = b.reduce((s, d) => s + (d.value || 0), 0);
-      return <KpiCard tone="warn" icon={I.euro} label="Te factureren" value={val > 0 ? eur(val) : '—'} sub={b.length ? `${b.length} klussen klaar` : 'niets in de wacht'} onClick={() => setPage('revenue')} />;
+      return <KpiCard tone="warn" icon={I.euro} label="Te factureren" value={val > 0 ? eur(val) : '—'} sub={b.length ? `${b.length} afgeronde klussen` : 'niets in de wacht'} onClick={() => setPage('facturen')} />;
     }
 
     case 'revenue_month': {
-      const now = new Date();
-      const md = deals.filter(d => ['paid', 'completed'].includes(d.stage) && d.createdAt && new Date(d.createdAt).getMonth() === now.getMonth());
-      const val = md.reduce((s, d) => s + (d.value || 0), 0);
+      // Omzet = gefactureerd deze maand (excl. BTW), uit echte facturen.
+      const md = facturen.filter(f => inThisMonth(f.factuurdatum));
+      const val = md.reduce((s, f) => s + (Number(f.totaalExcl) || 0), 0);
       const series = (charts.monthlyRevenue || []);
       const spark = series.slice(-6);
       const prevVal = series.length > 1 ? series[series.length - 2].value : 0;
@@ -434,11 +452,12 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     }
 
     case 'profit_month': {
-      const now = new Date();
-      const md = deals.filter(d => ['paid', 'completed'].includes(d.stage) && d.createdAt && new Date(d.createdAt).getMonth() === now.getMonth());
-      const val = md.reduce((s, d) => s + (d.value || 0) * 0.28, 0);
-      const target = 9700;
-      const p = Math.min(100, Math.round((val / target) * 100));
+      // Winst = omzet (facturen excl. BTW) − kosten (job_costs), deze maand.
+      const rev = facturen.filter(f => inThisMonth(f.factuurdatum)).reduce((s, f) => s + (Number(f.totaalExcl) || 0), 0);
+      const cost = jobCosts.filter(c => inThisMonth(c.date)).reduce((s, c) => s + (Number(c.amt) || 0), 0);
+      const val = rev - cost;
+      const target = Math.max(1, Math.round(rev));
+      const p = rev > 0 ? Math.min(100, Math.round((val / target) * 100)) : 0;
       return (
         <div className="bb-kpi kpi-green" onClick={() => setPage('revenue')} role="button" tabIndex={0}
           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPage('revenue'); } }}>
@@ -448,9 +467,9 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
           </div>
           <FitValue>{eur(val)}</FitValue>
           <div className="bb-kpi-sub">
-            <span>marge ~28%</span>
+            <span>omzet {eur(rev)}</span>
             <span>·</span>
-            <Delta dir="up">van doel {eur(target)}</Delta>
+            <span>kosten {eur(cost)}</span>
           </div>
           <div style={{ marginTop: 'auto', paddingTop: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -552,10 +571,8 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       // Eerste pipeline-fase ("Nieuwe aanvragen") bepalen uit de echte stages
       // (deals dragen een stage_id/uuid; de oude 'new_lead'-string blijft als
       // fallback voor demo-data).
-      const firstStageId = stages.length
-        ? [...stages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0]?.id
-        : null;
-      const allLeads = deals.filter(d => d.stage === firstStageId || d.stage === 'new_lead');
+      const firstId = firstStageId(stages);
+      const allLeads = deals.filter(d => d.stage === firstId || d.stage === 'new_lead');
       const count = allLeads.length;
       const totalVal = allLeads.reduce((s, d) => s + (d.value || 0), 0);
       const items = allLeads.slice(0, 6);
@@ -605,7 +622,11 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
 
     // ───────── Actieve deals ─────────
     case 'active_deals': {
-      const all = deals.filter(d => !['lost', 'completed', 'paid', 'new_lead'].includes(d.stage));
+      // Echte deals in de pipeline: niet verloren/afgerond/betaald, en niet de
+      // eerste (nieuwe aanvragen) fase. Valt terug op demo-strings.
+      const all = deals.filter(d => stageIndex.size
+        ? (dealCat(d) === 'open' && !stageIndex.get(d.stage)?.isFirst)
+        : !['lost', 'completed', 'paid', 'new_lead'].includes(d.stage));
       const count = all.length;
       const totalVal = all.reduce((s, d) => s + (d.value || 0), 0);
       const items = all.slice(0, 6);
@@ -712,39 +733,41 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       );
     }
 
-    // ───────── Openstaande facturen ─────────
+    // ───────── Openstaande facturen (echte facturen, niet betaald) ─────────
     case 'open_facturen': {
-      const items = offertes.filter(o => o.status === 'geaccepteerd').slice(0, 6);
-      const totalOpen = items.reduce((s, o) => s + (o.totaalIncl || 0), 0);
+      const openF = facturen.filter(f => f.status && f.status !== 'betaald' && f.status !== 'concept' && f.status !== 'aangemaakt');
+      const items = openF.slice(0, 6);
+      const totalOpen = openF.reduce((s, f) => s + (f.totaalIncl || 0), 0);
       return (
         <div className="bb-widget">
-          <WHead title="Openstaande facturen" sub={`${items.length} facturen · ${eur(totalOpen)}`} />
-          {items.length === 0 ? (
-            <EmptyState title="Niets openstaand" text="Alle geaccepteerde offertes zijn afgehandeld." />
+          <WHead title="Openstaande facturen" sub={`${openF.length} facturen · ${eur(totalOpen)}`} />
+          {openF.length === 0 ? (
+            <EmptyState title="Niets openstaand" text="Alle facturen zijn betaald." />
           ) : (
             <div className="feed">
-              {items.map((o, idx) => {
-                const ref = o.nummer || `F-${String(idx + 1).padStart(3, '0')}`;
+              {items.map((f, idx) => {
+                const ref = f.nummer || `F-${String(idx + 1).padStart(3, '0')}`;
+                const overdue = f.vervaldatum && f.vervaldatum < today;
                 return (
-                  <button key={o.id} className="feed-row ic-invoice" onClick={goInvoice(o)}>
+                  <button key={f.id} className="feed-row ic-invoice" onClick={goInvoice(f)}>
                     <span className="feed-icon" style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontWeight: 800, fontSize: 10.5 }}>{String(ref).slice(0, 2)}</span>
                     <div className="feed-main">
-                      <div className="feed-title">{o.customerName || 'Geen klant'}</div>
+                      <div className="feed-title">{f.customerName || 'Geen klant'}</div>
                       <div className="feed-meta">
                         <span style={{ fontFamily: 'ui-monospace,Menlo,monospace' }}>{ref}</span>
                         <span className="sep">·</span>
-                        <Chip tone={statusInfo(o.status, 'offerte').chip}>{statusInfo(o.status, 'offerte').label}</Chip>
+                        <Chip tone={overdue ? 'warn' : 'info'}>{overdue ? 'Te laat' : 'Openstaand'}</Chip>
                       </div>
                     </div>
                     <div className="feed-aside">
-                      <span style={{ fontWeight: 800, color: C.dk, fontVariantNumeric: 'tabular-nums' }}>{eur(o.totaalIncl || 0)}</span>
+                      <span style={{ fontWeight: 800, color: C.dk, fontVariantNumeric: 'tabular-nums' }}>{eur(f.totaalIncl || 0)}</span>
                     </div>
                   </button>
                 );
               })}
             </div>
           )}
-          <WFoot meta={`Totaal ${eur(totalOpen)}`} linkText="Alle facturen" onLink={() => setPage('revenue')} />
+          <WFoot meta={`Totaal ${eur(totalOpen)}`} linkText="Alle facturen" onLink={() => setPage('facturen')} />
         </div>
       );
     }
@@ -970,7 +993,9 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
 
     // ───────── Lead opvolging ─────────
     case 'lead_followup': {
-      const leadDeals = deals.filter(d => ['new_lead', 'contact'].includes(d.stage)).slice(0, 6);
+      // Vroege pipeline: de eerste twee echte fases (val terug op demo-strings).
+      const earlyIds = orderedStages.slice(0, 2).map(s => s.id);
+      const leadDeals = (earlyIds.length ? deals.filter(d => earlyIds.includes(d.stage)) : deals.filter(d => ['new_lead', 'contact'].includes(d.stage))).slice(0, 6);
       const when = iso => {
         if (!iso) return { txt: 'plan actie', tone: 'neutral' };
         const diff = Math.round((new Date(iso.slice(0, 10)) - new Date(today)) / 864e5);
@@ -1023,37 +1048,41 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
 
     // ───────── Conversie overzicht ─────────
     case 'conversion_overview': {
-      const stages = [
-        { key: 'new_lead',    label: 'Nieuwe aanvragen', c: '#9ca3af' },
-        { key: 'contact',     label: 'Contact',          c: '#60a5fa' },
-        { key: 'quote_sent',  label: 'Offerte gestuurd', c: '#a78bfa' },
-        { key: 'approved',    label: 'Akkoord',          c: '#fb923c' },
-        { key: 'completed',   label: 'Gewonnen',         c: C.green },
-      ];
-      const counts = stages.map(s => deals.filter(d => d.stage === s.key).length);
-      const max = Math.max(...counts, 1);
-      const totalLeads = counts[0] || 0;
-      const won = counts[counts.length - 1] || 0;
+      // Echte pipeline_stages, deals geteld per stage_id (val terug op demo-strings).
+      const palette = ['#9ca3af', '#60a5fa', '#a78bfa', '#fb923c', '#34d399', '#2dd4bf', '#f472b6', '#fb7185', C.green];
+      const rows = (orderedStages.length
+        ? orderedStages.filter(s => stageIndex.get(s.id)?.category !== 'lost')
+            .map((s, i) => ({ key: s.id, label: s.label, c: palette[i % palette.length], count: deals.filter(d => d.stage === s.id).length }))
+        : [
+            { key: 'new_lead', label: 'Nieuwe aanvragen', c: '#9ca3af', count: deals.filter(d => d.stage === 'new_lead').length },
+            { key: 'contact', label: 'Contact', c: '#60a5fa', count: deals.filter(d => d.stage === 'contact').length },
+            { key: 'quote_sent', label: 'Offerte gestuurd', c: '#a78bfa', count: deals.filter(d => d.stage === 'quote_sent').length },
+            { key: 'approved', label: 'Akkoord', c: '#fb923c', count: deals.filter(d => d.stage === 'approved').length },
+            { key: 'completed', label: 'Gewonnen', c: C.green, count: deals.filter(d => d.stage === 'completed').length },
+          ]);
+      const max = Math.max(...rows.map(r => r.count), 1);
+      const totalLeads = deals.length;
+      const won = deals.filter(d => ['won', 'paid'].includes(dealCat(d))).length;
       const conv = totalLeads ? Math.round((won / totalLeads) * 100) : 0;
       const totalVal = deals.reduce((s, d) => s + (d.value || 0), 0);
       return (
         <div className="bb-widget">
           <WHead eyebrow="Pipeline" title="Deals per fase" right={<Chip tone="neutral" noDot>{eur(totalVal)} totaal</Chip>} />
           <div style={{ padding: '8px 0 14px' }}>
-            {stages.map((s, i) => (
+            {rows.map(s => (
               <div key={s.key} className="pipe-row" onClick={() => setPage('pipeline')}>
                 <div>
                   <div className="pipe-label">{s.label}</div>
-                  <div className="pipe-meta">{counts[i]} deals</div>
+                  <div className="pipe-meta">{s.count} deals</div>
                 </div>
                 <div className="pipe-bar">
                   <div className="pipe-fill" style={{
-                    width: `${(counts[i] / max) * 100}%`,
+                    width: `${(s.count / max) * 100}%`,
                     background: s.c,
                     boxShadow: s.c === C.green ? 'var(--shadow-green)' : 'none',
                   }} />
                 </div>
-                <div className="pipe-val">{counts[i]}</div>
+                <div className="pipe-val">{s.count}</div>
               </div>
             ))}
           </div>

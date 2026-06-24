@@ -52,6 +52,8 @@ import { listDeals, listPipelineStages } from './services/dealService.js';
 import { listActivities } from './services/activityService.js';
 import { getOffertes } from './services/offerteService.js';
 import { getWerkbonnen } from './services/werkbonService.js';
+import { getFacturen } from './services/factuurService.js';
+import { listJobCosts } from './services/jobCostService.js';
 import { listCalendarEvents } from './services/calendarService.js';
 import { ActivityEditModal, NewActivityModal, NewLeadModal, ProfileModal } from './components/SharedModals.jsx';
 import { supabase } from './lib/supabase.js';
@@ -833,6 +835,8 @@ function AppInner() {
   const [globalOffertes, setGlobalOffertes] = useState([]);
   const [globalWerkbonnen, setGlobalWerkbonnen] = useState([]);
   const [globalCalendarEvents, setGlobalCalendarEvents] = useState([]);
+  const [globalFacturen, setGlobalFacturen] = useState([]);
+  const [globalJobCosts, setGlobalJobCosts] = useState([]);
   const [globalDataLoading, setGlobalDataLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -1137,8 +1141,10 @@ function AppInner() {
       getOffertes().catch(() => []),
       getWerkbonnen().catch(() => []),
       listCalendarEvents().catch(() => []),
+      getFacturen().catch(() => []),
+      listJobCosts().catch(() => []),
     ])
-      .then(([cs, ds, st, acts, offs, wbs, ces]) => {
+      .then(([cs, ds, st, acts, offs, wbs, ces, facs, jcs]) => {
         if (!alive) return;
         setGlobalCustomers(cs);
         setGlobalDeals(ds);
@@ -1147,6 +1153,8 @@ function AppInner() {
         setGlobalOffertes(offs);
         setGlobalWerkbonnen(wbs);
         setGlobalCalendarEvents(ces);
+        setGlobalFacturen(facs);
+        setGlobalJobCosts(jcs);
       })
       .catch(() => {})
       .finally(() => { if (alive) setGlobalDataLoading(false); });
@@ -1161,9 +1169,11 @@ function AppInner() {
     offertes: globalOffertes,
     werkbonnen: globalWerkbonnen,
     calendarEvents: globalCalendarEvents,
+    facturen: globalFacturen,
+    jobCosts: globalJobCosts,
     loading: globalDataLoading,
     refresh: bumpRefresh,
-  }), [globalCustomers, globalDeals, globalStages, globalActivities, globalOffertes, globalWerkbonnen, globalCalendarEvents, globalDataLoading, bumpRefresh]);
+  }), [globalCustomers, globalDeals, globalStages, globalActivities, globalOffertes, globalWerkbonnen, globalCalendarEvents, globalFacturen, globalJobCosts, globalDataLoading, bumpRefresh]);
 
   // Compute these here (BEFORE any early returns) so the useEffect below
   // is always called in the same order — required by React's hooks rules.
