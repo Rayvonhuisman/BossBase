@@ -17,7 +17,7 @@ import { NewFactuurModal, SendFactuurMailModal } from './FacturenPage.jsx';
 import { generateOffertePdf, previewOffertePdf, getOffertePdfBase64 } from '../utils/generatePdf.js';
 import { buildCompanySnapshot, companyForDocument, isOfferteLocked, isOfferteFullyLocked } from '../utils/documentSnapshot.js';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
-import { mailTemplate } from '../utils/mailTemplate.js';
+import { mailTemplate, mailButton } from '../utils/mailTemplate.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { statusInfo } from '../utils/statusColors.js';
 
@@ -33,11 +33,6 @@ const fmtDate = d => {
   const [y, m, day] = d.split('-');
   return `${day}-${m}-${y}`;
 };
-
-// Ondertekenknop voor de offerte-mail, in de bedrijfskleur. Wordt inline in de
-// body geplaatst (op de plek van {{link}}) zodat hij boven "Heeft u vragen" valt.
-const offerteKnopHtml = (url, color) =>
-  `<table cellpadding="0" cellspacing="0" role="presentation" style="margin:10px 0;"><tr><td style="border-radius:8px;background:${color || '#1DDB62'};"><a href="${url}" style="display:inline-block;padding:13px 26px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">Offerte bekijken &amp; ondertekenen</a></td></tr></table>`;
 
 // ── NEW OFFERTE MODAL ────────────────────────────────────────────────────────
 
@@ -720,7 +715,7 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
         const rawBody = tpl
           ? substituteVars(tplBody, vars)
           : `Beste ${vars.klant_naam},\n\nHierbij sturen wij u offerte ${offerte.nummer} toe.\n\nVia onderstaande knop kunt u de offerte bekijken en digitaal ondertekenen:\n%%KNOP%%\n\nHeeft u vragen? Neem gerust contact met ons op.\n\nMet vriendelijke groet,\n${company?.name || ''}`;
-        const knop = offerte.sign_token ? offerteKnopHtml(signLink, company?.brandingColor) : '';
+        const knop = offerte.sign_token ? mailButton('Offerte bekijken &amp; ondertekenen', signLink, company?.brandingColor) : '';
         const bodyHtml = plainToEditorHtml(rawBody).replace(/%%KNOP%%/g, knop);
         setForm({ to: customer?.email || '', subject: sub, body: bodyHtml });
       })

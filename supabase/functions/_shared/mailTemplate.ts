@@ -18,6 +18,27 @@ const BOSSBASE_LOGO_URL =
   'https://app.bossbase.nl/brand/icon-512.png'
 const BOSSBASE_GREEN = '#1DDB62'
 
+// Leesbare tekstkleur op een achtergrondkleur: donkere tekst op lichte kleuren
+// (bv. geel), witte tekst op donkere kleuren. O.b.v. waargenomen helderheid.
+export function readableTextColor(hex?: string): string {
+  let h = String(hex || '').trim().replace(/^#/, '')
+  if (h.length === 3) h = h.split('').map(c => c + c).join('')
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return '#ffffff'
+  const r = parseInt(h.slice(0, 2), 16)
+  const g = parseInt(h.slice(2, 4), 16)
+  const b = parseInt(h.slice(4, 6), 16)
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+  return lum > 0.6 ? '#0a0a0a' : '#ffffff'
+}
+
+// Eén bron voor een mail-knop: achtergrond = bedrijfskleur (val terug op
+// BossBase-groen, nooit een vaste oranje), tekstkleur o.b.v. leesbaarheid.
+export function mailButton(text: string, url: string, brandColor?: string): string {
+  const bg = brandColor || BOSSBASE_GREEN
+  const fg = readableTextColor(bg)
+  return `<table cellpadding="0" cellspacing="0" role="presentation" style="margin:10px 0;"><tr><td style="border-radius:8px;background:${bg};"><a href="${url}" style="display:inline-block;padding:13px 26px;font-size:15px;font-weight:600;color:${fg};text-decoration:none;border-radius:8px;">${text}</a></td></tr></table>`
+}
+
 export function mailTemplate({
   title,
   preheader,
@@ -48,12 +69,13 @@ export function mailTemplate({
     ? `BossBase &middot; <a href="https://www.bossbase.nl" style="color:#9ca3af;">bossbase.nl</a>`
     : `Verstuurd met <a href="https://www.bossbase.nl" style="color:#9ca3af;text-decoration:none;font-weight:600;">BossBase</a>`
 
+  const accentText = readableTextColor(accent)
   const buttonHtml = buttonText && buttonUrl ? `
               <table cellpadding="0" cellspacing="0" role="presentation" style="margin:28px 0 0;">
                 <tr>
                   <td style="border-radius:8px;background:${accent};">
                     <a href="${buttonUrl}"
-                       style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">
+                       style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;color:${accentText};text-decoration:none;border-radius:8px;">
                       ${buttonText}
                     </a>
                   </td>

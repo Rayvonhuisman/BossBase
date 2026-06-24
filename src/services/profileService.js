@@ -33,7 +33,7 @@ const toCompany = row => ({
   postalCode: row.postal_code || "",
   website: row.website || "",
   logoUrl: row.logo_url || "",
-  brandingColor: row.branding_color || '#f97316',
+  brandingColor: row.branding_color || '#1DDB62',
   replyToEmail: row.reply_to_email || "",
   status: row.status || 'actief',
   raw: row,

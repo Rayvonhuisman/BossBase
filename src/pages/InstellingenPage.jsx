@@ -125,7 +125,7 @@ export function InstellingenPage() {
   // Bedrijfsprofiel
   const [bedrijfForm, setBedrijfForm] = useState({
     name: '', email: '', phone: '', kvk: '', btw_number: '',
-    address: '', city: '', postal_code: '', website: '', branding_color: '#f97316',
+    address: '', city: '', postal_code: '', website: '', branding_color: '#1DDB62',
   });
   const [savingBedrijf, setSavingBedrijf] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
@@ -261,7 +261,7 @@ export function InstellingenPage() {
         city: company.city || '',
         postal_code: company.postalCode || '',
         website: company.website || '',
-        branding_color: company.brandingColor || '#f97316',
+        branding_color: company.brandingColor || '#1DDB62',
       });
     }
   }, [company]);
@@ -996,7 +996,7 @@ export function InstellingenPage() {
                 onClick={() => document.getElementById('branding-color-input').click()}
                 style={{
                   position: 'relative', width: 40, height: 40, borderRadius: 8, flexShrink: 0,
-                  background: /^#([0-9a-f]{3}){1,2}$/i.test(bedrijfForm.branding_color) ? bedrijfForm.branding_color : '#f97316',
+                  background: /^#([0-9a-f]{3}){1,2}$/i.test(bedrijfForm.branding_color) ? bedrijfForm.branding_color : '#1DDB62',
                   border: '1px solid #e5e7eb', cursor: 'pointer', transition: 'box-shadow .15s',
                 }}
                 onMouseEnter={e => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,.15)'}
@@ -1005,7 +1005,7 @@ export function InstellingenPage() {
                 <input
                   id="branding-color-input"
                   type="color"
-                  value={/^#([0-9a-f]{3}){1,2}$/i.test(bedrijfForm.branding_color) ? bedrijfForm.branding_color : '#f97316'}
+                  value={/^#([0-9a-f]{3}){1,2}$/i.test(bedrijfForm.branding_color) ? bedrijfForm.branding_color : '#1DDB62'}
                   onChange={e => setBedrijf('branding_color', e.target.value)}
                   style={{ opacity: 0, position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'pointer' }}
                 />
@@ -1018,7 +1018,7 @@ export function InstellingenPage() {
                   setBedrijf('branding_color', v);
                 }}
                 maxLength={7}
-                placeholder="#f97316"
+                placeholder="#1DDB62"
                 style={{ width: 110, fontFamily: 'monospace' }}
               />
             </div>

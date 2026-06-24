@@ -329,7 +329,7 @@ export default function OfferteSigneren({ token }) {
     }
   }
 
-  const brandColor = company?.branding_color || '#f97316'
+  const brandColor = company?.branding_color || '#1DDB62'
 
   if (loading) {
     return (
