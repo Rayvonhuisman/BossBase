@@ -45,6 +45,21 @@ export async function getCurrentUser() {
   return data?.user || null
 }
 
+// ── Account verwijderen (soft delete) ────────────────────────────────────────
+// Medewerker: alleen het eigen profiel wordt gedeactiveerd + gemarkeerd als
+// verwijderd. Toegang vervalt direct (sessiecontrole in App.jsx logt uit).
+export async function deleteOwnAccount() {
+  const { error } = await supabase.rpc("delete_own_account")
+  if (error) throw error
+}
+
+// Admin/eigenaar: het hele bedrijf wordt opgezegd en alle teamleden
+// gedeactiveerd. Gegevens blijven volgens het bewaarbeleid bewaard.
+export async function cancelCompanyAccount() {
+  const { error } = await supabase.rpc("cancel_company_account")
+  if (error) throw error
+}
+
 export async function getCurrentProfile() {
   const user = await getCurrentUser()
   if (!user) return null

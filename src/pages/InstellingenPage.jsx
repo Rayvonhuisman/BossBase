@@ -3,6 +3,7 @@ import { I, ModalX, STAGE_COLOR_OPTIONS, stageColToHex, stageColorLabel, stageBa
 import { supabase } from '../lib/supabase.js';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { usePermissions } from '../hooks/usePermissions.js';
 import { useUploads } from '../lib/uploadContext.jsx';
 import { openCookieBanner } from '../components/CookieBanner.jsx';
 import {
@@ -19,7 +20,7 @@ import {
 } from '../services/instellingenService.js';
 import { getVoertuigen, createVoertuig, updateVoertuig, deleteVoertuig } from '../services/voertuigService.js';
 import { getEigenEenheden, createEigenEenheid, updateEigenEenheid, deleteEigenEenheid } from '../services/eigenEenheidService.js';
-import { updateCompany, updateProfile } from '../services/profileService.js';
+import { updateCompany, updateProfile, deleteOwnAccount, cancelCompanyAccount } from '../services/profileService.js';
 import { changePassword } from '../services/authService.js';
 import { uploadProfileAvatar, removeProfileAvatar } from '../services/avatarService.js';
 import { AvatarUpload } from '../components/AvatarUpload.jsx';
@@ -106,8 +107,12 @@ function ColorSwatchPicker({ value, onChange }) {
 export function InstellingenPage() {
   const toast = useToast();
   const { company, refresh, profile } = useProfile();
+  const { can } = usePermissions();
   const { startUpload } = useUploads();
   const isAdmin = profile?.role === 'admin';
+  // Bedrijfsinstellingen-tabs zijn voor admins (of medewerkers met het recht);
+  // iedereen kan z'n eigen "Mijn profiel" beheren (incl. account verwijderen).
+  const canCompanySettings = can('instellingen');
 
   const [tab, setTab] = useState('profiel');
   const [loading, setLoading] = useState(true);
@@ -120,6 +125,9 @@ export function InstellingenPage() {
   const [pwOpen, setPwOpen] = useState(false);
   const [pwForm, setPwForm] = useState({ current: '', next: '', next2: '' });
   const [savingPw, setSavingPw] = useState(false);
+  const [delOpen, setDelOpen] = useState(false);
+  const [delConfirm, setDelConfirm] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const setPw = (k, v) => setPwForm(f => ({ ...f, [k]: v }));
 
   // Bedrijfsprofiel
@@ -207,10 +215,14 @@ export function InstellingenPage() {
   const [afasShowToken, setAfasShowToken] = useState(false);
 
   useEffect(() => {
+    if (!canCompanySettings) return;
     getVoertuigen({ inclusiefInactief: true }).then(setVoertuigen).catch(() => {});
-  }, []);
+  }, [canCompanySettings]);
 
   useEffect(() => {
+    // Medewerkers zonder instellingen-recht zien alleen "Mijn profiel" — geen
+    // bedrijfsdata of integratie-tokens laden.
+    if (!canCompanySettings) { setLoading(false); return; }
     setLoading(true);
     getEigenEenheden().then(setEenheden).catch(() => {});
     Promise.all([getBedrijfsinstellingen(), getEmailTemplates(), getPipelineStages(), getConnection(), getConnection('snelstart'), getConnection('afas')])
@@ -246,7 +258,7 @@ export function InstellingenPage() {
       })
       .catch(err => toast.error(err.message || 'Laden mislukt'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [canCompanySettings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (company) {
@@ -724,12 +736,14 @@ export function InstellingenPage() {
 
   const TABS = [
     { id: 'profiel', label: 'Mijn profiel' },
-    { id: 'bedrijf', label: 'Bedrijfsprofiel' },
-    { id: 'standaard', label: 'Standaardwaarden' },
-    { id: 'templates', label: 'E-mailtemplates' },
-    { id: 'pipeline', label: 'Pipeline' },
-    ...(isAdmin ? [{ id: 'voertuigen', label: 'Voertuigen' }] : []),
-    { id: 'integraties', label: 'Integraties' },
+    ...(canCompanySettings ? [
+      { id: 'bedrijf', label: 'Bedrijfsprofiel' },
+      { id: 'standaard', label: 'Standaardwaarden' },
+      { id: 'templates', label: 'E-mailtemplates' },
+      { id: 'pipeline', label: 'Pipeline' },
+      ...(isAdmin ? [{ id: 'voertuigen', label: 'Voertuigen' }] : []),
+      { id: 'integraties', label: 'Integraties' },
+    ] : []),
   ];
 
   const handleProfileAvatarUpload = (file) => {
@@ -794,6 +808,21 @@ export function InstellingenPage() {
       toast.error(err.message || 'Wachtwoord wijzigen mislukt');
     } finally {
       setSavingPw(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (delConfirm.trim().toUpperCase() !== 'VERWIJDEREN') return;
+    setDeleting(true);
+    try {
+      if (isAdmin) await cancelCompanyAccount();
+      else await deleteOwnAccount();
+      toast.success('Je account is verwijderd. Je kunt binnen 2 jaar terugkeren door contact op te nemen.');
+      // Uitloggen → onAuthStateChange in App.jsx redirect naar /login.
+      await supabase.auth.signOut();
+    } catch (err) {
+      toast.error(err.message || 'Verwijderen mislukt');
+      setDeleting(false);
     }
   };
 
@@ -957,6 +986,70 @@ export function InstellingenPage() {
               Cookievoorkeuren wijzigen
             </button>
           </div>
+
+          {/* ── Gevarenzone: account verwijderen ── */}
+          <div style={{ marginTop: 'var(--sp-6)', paddingTop: 'var(--sp-5)', borderTop: '1px solid #fecaca' }}>
+            <div className="label" style={{ marginBottom: 'var(--sp-2)', color: '#b91c1c' }}>Gevarenzone</div>
+            <p style={{ fontSize: '.82rem', color: 'var(--dl)', lineHeight: 1.5, marginBottom: 'var(--sp-3)', maxWidth: 560 }}>
+              {isAdmin
+                ? 'Je bent beheerder. Je account verwijderen zegt het hele bedrijf op: alle teamleden verliezen toegang en alle bedrijfsgegevens worden gedeactiveerd.'
+                : 'Je verwijdert alleen je eigen account uit het team. Je verliest direct toegang.'}
+            </p>
+            <button
+              type="button"
+              onClick={() => { setDelConfirm(''); setDelOpen(true); }}
+              style={{ background: 'none', border: '1px solid #fecaca', borderRadius: 'var(--r8)', padding: '7px 14px', cursor: 'pointer', color: '#b91c1c', fontWeight: 600, fontSize: '.84rem' }}
+            >
+              Account verwijderen
+            </button>
+          </div>
+
+          {delOpen && (
+            <div className="overlay" onClick={e => e.target === e.currentTarget && !deleting && setDelOpen(false)}>
+              <div className="modal">
+                <div className="modal-hd">
+                  <div>
+                    <div className="modal-title">{isAdmin ? 'Bedrijf opzeggen' : 'Account verwijderen'}</div>
+                    <div className="modal-sub">Lees dit goed door — deze actie heeft gevolgen.</div>
+                  </div>
+                  <ModalX onClose={() => !deleting && setDelOpen(false)} />
+                </div>
+                <div style={{ padding: '4px 24px 8px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {isAdmin && (
+                    <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 'var(--r8)', padding: '10px 12px', fontSize: '.84rem', color: '#991b1b' }}>
+                      Let op: je bent beheerder. Hiermee zeg je het <strong>hele bedrijf</strong> op. Alle teamleden verliezen direct toegang.
+                    </div>
+                  )}
+                  <p style={{ fontSize: '.86rem', color: 'var(--dk)', lineHeight: 1.55, margin: 0 }}>
+                    Je account wordt gedeactiveerd en je wordt uitgelogd. Je gegevens blijven <strong>2 jaar</strong> bewaard
+                    zodat je kunt terugkeren. Financiële administratie (facturen, BTW) bewaren we wettelijk <strong>7 jaar</strong>.
+                    Na deze termijnen worden gegevens definitief verwijderd.
+                  </p>
+                  <div className="f">
+                    <label>Typ <strong>VERWIJDEREN</strong> om te bevestigen</label>
+                    <input
+                      type="text"
+                      value={delConfirm}
+                      onChange={e => setDelConfirm(e.target.value)}
+                      placeholder="VERWIJDEREN"
+                      autoFocus
+                      disabled={deleting}
+                    />
+                  </div>
+                </div>
+                <div className="fa">
+                  <button className="btn btn-ghost" onClick={() => setDelOpen(false)} disabled={deleting}>Annuleren</button>
+                  <button
+                    className="btn btn-danger"
+                    onClick={handleDeleteAccount}
+                    disabled={deleting || delConfirm.trim().toUpperCase() !== 'VERWIJDEREN'}
+                  >
+                    {deleting ? 'Verwijderen…' : (isAdmin ? 'Bedrijf definitief opzeggen' : 'Account definitief verwijderen')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

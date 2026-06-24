@@ -100,7 +100,9 @@ const PROTECTED_PAGES = {
   planning:    'planning',
   database:    'database',
   team:        'team',
-  instellingen:'instellingen',
+  // 'instellingen' is NIET beschermd: iedereen mag "Mijn profiel" beheren
+  // (incl. account verwijderen). De bedrijfs-tabs binnen Instellingen zijn
+  // zelf afgeschermd op het 'instellingen'-recht.
 };
 
 const SECTIONS = [
@@ -1016,12 +1018,14 @@ function AppInner() {
           if (!networkBlip) forceLogout('Je account is niet meer actief. Je bent uitgelogd.');
           return;
         }
-        // 2) Profiel nog actief? (gedeactiveerd = actief=false)
+        // 2) Profiel nog actief? (gedeactiveerd of verwijderd = actief=false)
         const { data: prof, error: pErr } = await supabase
-          .from('profiles').select('actief').eq('id', user.id).maybeSingle();
+          .from('profiles').select('actief, verwijderd_op').eq('id', user.id).maybeSingle();
         if (stopped || pErr) return;
         if (prof && prof.actief === false) {
-          forceLogout('Je account is gedeactiveerd. Je bent uitgelogd.');
+          forceLogout(prof.verwijderd_op
+            ? 'Je account is verwijderd. Je kunt binnen 2 jaar terugkeren door contact op te nemen.'
+            : 'Je account is gedeactiveerd. Je bent uitgelogd.');
         }
       } catch {
         /* stil: de volgende tick probeert het opnieuw */
