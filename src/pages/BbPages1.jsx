@@ -33,6 +33,15 @@ import { getEmailTemplates } from '../services/instellingenService.js';
 // `type` and `source` are local-only display state for now (no DB columns yet).
 const emptyCustomerForm = { name: '', company: '', email: '', phone: '', city: '', address: '', postcode: '', kvkNumber: '', btwNumber: '', iban: '', type: 'Zakelijk', source: 'Handmatig', notes: '' };
 
+// Zelfde datumweergave als de project-tab (ProjectDetailDrawer) zodat de
+// facturenlijst identiek is: 'YYYY-MM-DD' → 'DD-MM-YYYY'. Null-safe.
+const fmtRowDate = d => {
+  if (!d) return '—';
+  const [y, m, day] = String(d).split('-');
+  if (!day) return d;
+  return `${day}-${m}-${y}`;
+};
+
 
 // ── CUSTOMER DETAIL DRAWER ───────────────────────────────────
 export function CustomerPage({ custId, initialTab, onClose, setPage }) {
