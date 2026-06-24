@@ -82,15 +82,21 @@ export function mapJobCostFormToPayload(input = {}) {
   if (input.customer_id !== undefined || input.customerId !== undefined) {
     payload.customer_id = input.customer_id ?? input.customerId ?? null
   }
+  if (input.werkbon_materiaal_id !== undefined || input.werkbonMateriaalId !== undefined) {
+    payload.werkbon_materiaal_id = input.werkbon_materiaal_id ?? input.werkbonMateriaalId ?? null
+  }
 
   return payload
 }
+
+const isMateriaal = cat => (cat || '').trim().toLowerCase() === 'materiaal'
 
 export const toJobCost = row => ({
   id: row.id,
   dealId: row.deal_id,
   projectId: row.project_id || null,
   werkbonId: row.werkbon_id || null,
+  werkbonMateriaalId: row.werkbon_materiaal_id || null,
   companyId: row.company_id,
   cat: row.category || "overig",
   desc: row.description || "",
@@ -129,6 +135,16 @@ export async function listJobCosts() {
 }
 
 export async function deleteJobCost(id) {
+  // Heeft de kost een gekoppeld werkbon-materiaal? Verwijder dat materiaal —
+  // de FK (ON DELETE CASCADE) ruimt de kost dan mee op. Zo blijven materiaal en
+  // kost in sync, ongeacht vanaf welke kant je verwijdert.
+  const { data: cost } = await supabase
+    .from('job_costs').select('werkbon_materiaal_id').eq('id', id).maybeSingle()
+  if (cost?.werkbon_materiaal_id) {
+    const { error } = await supabase.from('werkbon_materialen').delete().eq('id', cost.werkbon_materiaal_id)
+    if (error) throw error
+    return
+  }
   const { error } = await supabase.from('job_costs').delete().eq('id', id)
   if (error) throw error
 }
@@ -194,16 +210,38 @@ export async function createJobCost(input) {
   // Werkbon-koppeling → project en klant automatisch afleiden van de werkbon
   // (tenzij expliciet meegegeven). Zo telt een werkbon-kost mee bij het project
   // en hangt hij aan de juiste klant.
-  if (base.werkbon_id && (!base.project_id || !base.customer_id)) {
+  let wbCompanyId = null
+  if (base.werkbon_id && (!base.project_id || !base.customer_id || (isMateriaal(base.category) && !base.werkbon_materiaal_id))) {
     const { data: wb } = await supabase
       .from("werkbonnen")
-      .select("project_id, customer_id")
+      .select("project_id, customer_id, company_id")
       .eq("id", base.werkbon_id)
       .maybeSingle()
     if (wb) {
       if (!base.project_id) base.project_id = wb.project_id || null
       if (!base.customer_id) base.customer_id = wb.customer_id || null
+      wbCompanyId = wb.company_id || null
     }
+  }
+
+  // Materiaalkost gekoppeld aan een werkbon (en nog niet aan een materiaal):
+  // maak een spiegel-regel in werkbon_materialen zodat hij ook in de materiaal-
+  // lijst van de werkbon verschijnt. De lijst leest werkbon_materialen, de
+  // kosten lezen job_costs → elk item telt precies één keer.
+  if (base.werkbon_id && isMateriaal(base.category) && !base.werkbon_materiaal_id && wbCompanyId) {
+    const { data: mat } = await supabase
+      .from("werkbon_materialen")
+      .insert({
+        werkbon_id: base.werkbon_id,
+        company_id: wbCompanyId,
+        naam: (base.description || "Materiaal").replace(/^Materiaal:\s*/i, ""),
+        aantal: 1,
+        prijs_per: base.amount,
+        subtotaal: base.amount,
+      })
+      .select("id")
+      .single()
+    if (mat?.id) base.werkbon_materiaal_id = mat.id
   }
 
   const payload = await withCompanyId(base)

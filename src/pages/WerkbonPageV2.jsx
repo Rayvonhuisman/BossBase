@@ -863,7 +863,10 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
     try {
       const created = await createWerkbonMateriaal({ werkbon_id: selectedId, ...input });
       setMaterialen(prev => [...prev, created]);
-      if (detail?.customerId && created.subtotaal > 0) {
+      // Spiegel-kost zodat het materiaal meetelt in het project/kosten. Het
+      // werkbon_materiaal_id koppelt beide → één keer geteld; project en klant
+      // worden in createJobCost afgeleid van de werkbon.
+      if (created.subtotaal > 0) {
         createJobCost({
           description: `Materiaal: ${created.naam}`,
           amount: created.subtotaal, // subtotaal is exclusief BTW
@@ -871,8 +874,8 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
           btw_inclusief: false,
           category: 'Materiaal',
           cost_date: new Date().toISOString().slice(0, 10),
-          customer_id: detail.customerId,
-          werkbon_id: selectedId, // project_id wordt hiervan automatisch afgeleid
+          werkbon_id: selectedId,
+          werkbon_materiaal_id: created.id,
         }).catch(() => {});
       }
     } catch (e) {
