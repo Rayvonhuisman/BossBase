@@ -987,9 +987,8 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
                 <tr>
                   <th className="th">Nummer</th>
                   <th className="th">Klant</th>
-                  <th className="th">Omschrijving</th>
-                  <th className="th" style={{ textAlign: 'right' }}>Excl. BTW</th>
-                  <th className="th" style={{ textAlign: 'right' }}>Incl. BTW</th>
+                  <th className="th">Excl. BTW</th>
+                  <th className="th">Incl. BTW</th>
                   <th className="th">Status</th>
                   <th className="th">Geldig tot</th>
                   <th className="th">Acties</th>
@@ -998,7 +997,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
               <tbody>
                 {filtered.length === 0 && (
                   <tr>
-                    <td className="td" colSpan={8} style={{ textAlign: 'center', color: 'var(--dl)', padding: '32px 0' }}>
+                    <td className="td" colSpan={7} style={{ textAlign: 'center', color: 'var(--dl)', padding: '32px 0' }}>
                       Geen offertes gevonden
                     </td>
                   </tr>
@@ -1018,7 +1017,6 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
                           onMouseLeave={e => { e.currentTarget.style.color = 'inherit'; e.currentTarget.style.textDecoration = 'none'; }}
                         >{customerName}</button>
                       </td>
-                      <td className="td" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.omschrijving || '—'}</td>
                       <td className="td" style={{ textAlign: 'right' }}>{fmt(o.totaalExcl)}</td>
                       <td className="td" style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(o.totaalIncl)}</td>
                       <td className="td">{offerteBadge(o.status)}</td>
