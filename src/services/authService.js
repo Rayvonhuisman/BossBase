@@ -164,6 +164,26 @@ export async function resendVerificationEmail(email) {
   if (error) throw error
 }
 
+// Wachtwoord wijzigen voor een ingelogde gebruiker. Verifieert eerst het
+// huidige wachtwoord (door opnieuw in te loggen) en zet daarna het nieuwe.
+export async function changePassword(currentPassword, newPassword) {
+  const { data: { user } } = await supabase.auth.getUser()
+  const email = user?.email
+  if (!email) throw new Error('Geen actieve sessie gevonden — log opnieuw in')
+
+  // Verifieer het huidige wachtwoord.
+  const { error: signInError } = await supabase.auth.signInWithPassword({ email, password: currentPassword })
+  if (signInError) {
+    const err = new Error('Huidig wachtwoord is onjuist')
+    err.code = 'WRONG_CURRENT'
+    throw err
+  }
+
+  // Zet het nieuwe wachtwoord.
+  const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
+  if (updateError) throw new Error(vertaalAuthFout(updateError.message) || 'Wachtwoord wijzigen mislukt')
+}
+
 // Repair flow: wordt aangeroepen als een ingelogde user geen (volledig) profiel heeft.
 // Gebruikt de SECURITY DEFINER RPC zodat RLS geen probleem is.
 export async function createMissingProfile() {

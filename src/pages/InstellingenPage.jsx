@@ -18,9 +18,11 @@ import {
   deletePipelineStage,
 } from '../services/instellingenService.js';
 import { getVoertuigen, createVoertuig, updateVoertuig, deleteVoertuig } from '../services/voertuigService.js';
-import { updateCompany } from '../services/profileService.js';
+import { updateCompany, updateProfile } from '../services/profileService.js';
+import { changePassword } from '../services/authService.js';
 import { uploadProfileAvatar, removeProfileAvatar } from '../services/avatarService.js';
 import { AvatarUpload } from '../components/AvatarUpload.jsx';
+import { PasswordRequirements, PasswordMatch, passwordValid } from '../components/PasswordStrength.jsx';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
 import {
@@ -108,6 +110,16 @@ export function InstellingenPage() {
 
   const [tab, setTab] = useState('profiel');
   const [loading, setLoading] = useState(true);
+
+  // Eigen profiel — naam bewerken
+  const [naam, setNaam] = useState('');
+  const [savingNaam, setSavingNaam] = useState(false);
+
+  // Eigen profiel — wachtwoord wijzigen
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwForm, setPwForm] = useState({ current: '', next: '', next2: '' });
+  const [savingPw, setSavingPw] = useState(false);
+  const setPw = (k, v) => setPwForm(f => ({ ...f, [k]: v }));
 
   // Bedrijfsprofiel
   const [bedrijfForm, setBedrijfForm] = useState({
@@ -704,6 +716,46 @@ export function InstellingenPage() {
     toast.success('Profielfoto verwijderd');
   };
 
+  // Houd het naam-veld in sync met het geladen profiel.
+  useEffect(() => { setNaam(profile?.fullName || ''); }, [profile?.fullName]);
+
+  const naamGewijzigd = naam.trim() !== (profile?.fullName || '').trim();
+
+  const handleSaveNaam = async () => {
+    if (!profile?.id) { toast.error('Profiel niet beschikbaar — log opnieuw in'); return; }
+    const nieuw = naam.trim();
+    if (!nieuw) { toast.error('Naam mag niet leeg zijn'); return; }
+    setSavingNaam(true);
+    try {
+      await updateProfile(profile.id, { full_name: nieuw });
+      await refresh();
+      toast.success('Naam opgeslagen');
+    } catch (err) {
+      toast.error(err.message || 'Opslaan mislukt');
+    } finally {
+      setSavingNaam(false);
+    }
+  };
+
+  const pwKanOpslaan = pwForm.current.length > 0
+    && passwordValid(pwForm.next)
+    && pwForm.next === pwForm.next2;
+
+  const handleChangePassword = async () => {
+    if (!pwKanOpslaan) return;
+    setSavingPw(true);
+    try {
+      await changePassword(pwForm.current, pwForm.next);
+      toast.success('Wachtwoord gewijzigd');
+      setPwForm({ current: '', next: '', next2: '' });
+      setPwOpen(false);
+    } catch (err) {
+      toast.error(err.message || 'Wachtwoord wijzigen mislukt');
+    } finally {
+      setSavingPw(false);
+    }
+  };
+
   return (
     <div>
       <div className="page-hd afu">
@@ -727,32 +779,134 @@ export function InstellingenPage() {
 
       {!loading && tab === 'profiel' && (
         <div className="card card-p afu3">
-          <div className="card-hd" style={{ marginBottom: 18 }}>
+          <div className="card-hd" style={{ marginBottom: 'var(--sp-5)' }}>
             <div className="card-title">Mijn profiel</div>
-            <div className="card-sub">Je profielfoto wordt overal in BossBase getoond</div>
+            <div className="card-sub">Beheer je naam, profielfoto en wachtwoord</div>
           </div>
-          <AvatarUpload
-            src={profile?.avatarUrl}
-            name={profile?.fullName || profile?.email}
-            size="xl"
-            onUpload={handleProfileAvatarUpload}
-            onRemove={profile?.avatarUrl ? handleProfileAvatarRemove : null}
-          />
-          <div className="fg" style={{ marginTop: 22 }}>
-            <div className="f">
-              <label>Naam</label>
-              <input value={profile?.fullName || ''} disabled placeholder="Geen naam ingesteld" />
-            </div>
-            <div className="f">
-              <label>E-mail</label>
-              <input value={profile?.email || ''} disabled />
-            </div>
-            <div className="f">
-              <label>Rol</label>
-              <input value={profile?.role || ''} disabled />
+
+          {/* Identiteit — avatar links, naam + e-mail ernaast */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-5)', flexWrap: 'wrap' }}>
+            <AvatarUpload
+              src={profile?.avatarUrl}
+              name={profile?.fullName || profile?.email}
+              size="xl"
+              onUpload={handleProfileAvatarUpload}
+              onRemove={profile?.avatarUrl ? handleProfileAvatarRemove : null}
+            />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--dk)', letterSpacing: '-.01em', wordBreak: 'break-word' }}>
+                {profile?.fullName || 'Geen naam ingesteld'}
+              </div>
+              <div style={{ fontSize: '.84rem', color: 'var(--dl)', marginTop: 2, wordBreak: 'break-all' }}>
+                {profile?.email || ''}
+              </div>
+              {profile?.role && (
+                <div style={{ fontSize: '.74rem', color: 'var(--dl)', marginTop: 6, textTransform: 'capitalize' }}>
+                  {profile.role}
+                </div>
+              )}
             </div>
           </div>
-          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+
+          {/* Persoonsgegevens */}
+          <div style={{ marginTop: 'var(--sp-6)', paddingTop: 'var(--sp-5)', borderTop: '1px solid var(--border)' }}>
+            <div className="label" style={{ marginBottom: 'var(--sp-3)' }}>Persoonsgegevens</div>
+            <div className="fg">
+              <div className="f s2">
+                <label>Naam</label>
+                <div style={{ display: 'flex', gap: 'var(--sp-2)', alignItems: 'stretch' }}>
+                  <input
+                    style={{ flex: 1, minWidth: 0 }}
+                    value={naam}
+                    onChange={e => setNaam(e.target.value)}
+                    placeholder="Je volledige naam"
+                    onKeyDown={e => { if (e.key === 'Enter' && naamGewijzigd && naam.trim()) handleSaveNaam(); }}
+                  />
+                  <button
+                    className="btn btn-p"
+                    style={{ flexShrink: 0 }}
+                    disabled={savingNaam || !naamGewijzigd || !naam.trim()}
+                    onClick={handleSaveNaam}
+                  >
+                    {savingNaam ? 'Opslaan…' : 'Opslaan'}
+                  </button>
+                </div>
+              </div>
+              <div className="f">
+                <label>E-mailadres</label>
+                <input value={profile?.email || ''} disabled />
+                <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginTop: 4 }}>
+                  Je e-mailadres kan niet worden gewijzigd.
+                </div>
+              </div>
+              <div className="f">
+                <label>Rol</label>
+                <input value={profile?.role || ''} disabled style={{ textTransform: 'capitalize' }} />
+              </div>
+            </div>
+          </div>
+
+          {/* Wachtwoord */}
+          <div style={{ marginTop: 'var(--sp-6)', paddingTop: 'var(--sp-5)', borderTop: '1px solid var(--border)' }}>
+            <div className="label" style={{ marginBottom: 'var(--sp-3)' }}>Wachtwoord</div>
+            {!pwOpen ? (
+              <button className="btn btn-s" onClick={() => setPwOpen(true)}>Wachtwoord wijzigen</button>
+            ) : (
+              <div className="fg">
+                <div className="f s2">
+                  <label>Huidig wachtwoord</label>
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    value={pwForm.current}
+                    onChange={e => setPw('current', e.target.value)}
+                    placeholder="Je huidige wachtwoord"
+                  />
+                </div>
+                <div className="f">
+                  <label>Nieuw wachtwoord</label>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    value={pwForm.next}
+                    onChange={e => setPw('next', e.target.value)}
+                    placeholder="Nieuw wachtwoord"
+                  />
+                  <PasswordRequirements password={pwForm.next} />
+                </div>
+                <div className="f">
+                  <label>Herhaal nieuw wachtwoord</label>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    value={pwForm.next2}
+                    onChange={e => setPw('next2', e.target.value)}
+                    placeholder="Herhaal nieuw wachtwoord"
+                  />
+                  <PasswordMatch password={pwForm.next} password2={pwForm.next2} />
+                </div>
+                <div className="f s2" style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 'var(--sp-2)' }}>
+                  <button
+                    className="btn btn-ghost"
+                    disabled={savingPw}
+                    onClick={() => { setPwOpen(false); setPwForm({ current: '', next: '', next2: '' }); }}
+                  >
+                    Annuleren
+                  </button>
+                  <button
+                    className="btn btn-p"
+                    disabled={!pwKanOpslaan || savingPw}
+                    onClick={handleChangePassword}
+                  >
+                    {savingPw ? 'Wijzigen…' : 'Wachtwoord wijzigen'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Overig */}
+          <div style={{ marginTop: 'var(--sp-6)', paddingTop: 'var(--sp-5)', borderTop: '1px solid var(--border)' }}>
             <button
               type="button"
               onClick={openCookieBanner}
