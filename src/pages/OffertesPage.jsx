@@ -15,6 +15,7 @@ import { NewFactuurModal, SendFactuurMailModal } from './FacturenPage.jsx';
 import { generateOffertePdf, previewOffertePdf, getOffertePdfBase64 } from '../utils/generatePdf.js';
 import { buildCompanySnapshot, companyForDocument, isOfferteLocked, isOfferteFullyLocked } from '../utils/documentSnapshot.js';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
+import { mailTemplate } from '../utils/mailTemplate.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { statusInfo } from '../utils/statusColors.js';
 
@@ -736,8 +737,17 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
       } catch (pdfErr) {
         console.warn('PDF bijlage genereren mislukt:', pdfErr.message);
       }
-      await sendEmail({ to: form.to, subject: form.subject, html: form.body, attachments });
-      await logSentEmail({ toEmail: form.to, subject: form.subject, bodyHtml: form.body, relatedType: 'offerte', relatedId: offerte.id, customerId: offerte.customerId });
+      // Zakelijke mail: wikkel de opgestelde body in de centrale template met
+      // bedrijfslogo + bedrijfskleur (variant 1), consistent met alle mails.
+      const wrappedHtml = mailTemplate({
+        title: form.subject,
+        body: form.body,
+        companyName: company?.name || 'Ons bedrijf',
+        logoUrl: company?.logoUrl,
+        brandColor: company?.brandingColor,
+      });
+      await sendEmail({ to: form.to, subject: form.subject, html: wrappedHtml, attachments });
+      await logSentEmail({ toEmail: form.to, subject: form.subject, bodyHtml: wrappedHtml, relatedType: 'offerte', relatedId: offerte.id, customerId: offerte.customerId });
       // Bij eerste verzending: bedrijfs-branding bevriezen op de offerte zodat
       // latere logo-/kleurwijzigingen deze verstuurde offerte niet veranderen.
       await updateOfferte(offerte.id, { sent_to_email: form.to, ...(offerte.status === 'concept' ? { status: 'verzonden', ...buildCompanySnapshot(company) } : {}) });

@@ -55,7 +55,7 @@ serve(async (req) => {
     // ── Betaalherinneringen ───────────────────────────────────────────────────
     const { data: facturen } = await db
       .from('facturen')
-      .select('*, customers(name, email), companies(name, email)')
+      .select('*, customers(name, email), companies(name, email, logo_url, branding_color)')
       .neq('status', 'betaald')
       .not('vervaldatum', 'is', null)
       .lt('vervaldatum', todayStr)
@@ -95,7 +95,7 @@ serve(async (req) => {
         const innerBody = tpl1.body_html
           ? substituteVars(tpl1.body_html, vars)
           : plainTextToHtml(substituteVars(tpl1.body, vars))
-        const html = mailTemplate({ title: subject, body: innerBody, companyName: company.name })
+        const html = mailTemplate({ title: subject, body: innerBody, companyName: company.name, logoUrl: company.logo_url || undefined, brandColor: company.branding_color || undefined })
         const msgId = await sendMail(f.customers.email, subject, html, company.name)
         if (msgId !== null) {
           await db.from('facturen').update({ herinnering_1_verstuurd_at: new Date().toISOString() }).eq('id', f.id)
@@ -110,7 +110,7 @@ serve(async (req) => {
         const innerBody = tpl2.body_html
           ? substituteVars(tpl2.body_html, vars)
           : plainTextToHtml(substituteVars(tpl2.body, vars))
-        const html = mailTemplate({ title: subject, body: innerBody, companyName: company.name })
+        const html = mailTemplate({ title: subject, body: innerBody, companyName: company.name, logoUrl: company.logo_url || undefined, brandColor: company.branding_color || undefined })
         const msgId = await sendMail(f.customers.email, subject, html, company.name)
         if (msgId !== null) {
           await db.from('facturen').update({ herinnering_2_verstuurd_at: new Date().toISOString() }).eq('id', f.id)
@@ -128,7 +128,7 @@ serve(async (req) => {
 
     const { data: activiteiten } = await db
       .from('activities')
-      .select('*, customers(name, email), companies:company_id(name, email)')
+      .select('*, customers(name, email), companies:company_id(name, email, logo_url, branding_color)')
       .eq('type', 'visit')
       .gte('due_at', tomorrowStart)
       .lte('due_at', tomorrowEnd)
@@ -170,7 +170,7 @@ serve(async (req) => {
       const innerBody = tpl.body_html
         ? substituteVars(tpl.body_html, vars)
         : plainTextToHtml(substituteVars(tpl.body, vars))
-      const html = mailTemplate({ title: subject, body: innerBody, companyName: company.name })
+      const html = mailTemplate({ title: subject, body: innerBody, companyName: company.name, logoUrl: company.logo_url || undefined, brandColor: company.branding_color || undefined })
       const msgId = await sendMail(act.customers.email, subject, html, company.name)
       if (msgId !== null) {
         await db.from('sent_emails').insert({ company_id: act.company_id, to_email: act.customers.email, subject, related_type: 'activity', related_id: act.id, customer_id: act.customer_id, appointment_id: act.id, status: 'sent' })

@@ -20,9 +20,9 @@ serve(async (req) => {
 
     const apiKey = Deno.env.get('RESEND_API_KEY')
     const fromEmail = Deno.env.get('RESEND_FROM_EMAIL') || 'noreply@bossbase.nl'
-    // From-naam: "[Bedrijfsnaam] via BossBase" zodat de klant herkent van wie de
-    // mail komt. Systeemmails (from_name leeg of 'BossBase') tonen enkel BossBase.
-    const label = from_name && from_name !== 'BossBase' ? `${from_name} via BossBase` : 'BossBase'
+    // From-naam: puur de bedrijfsnaam (geen "via BossBase"). Systeemmails geven
+    // 'BossBase' mee. Het e-mailadres blijft technisch noreply@bossbase.nl.
+    const label = from_name && from_name.trim() ? from_name.trim() : 'BossBase'
     const fromLabel = `${label} <${fromEmail}>`
 
     if (!apiKey) {

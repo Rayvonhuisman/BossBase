@@ -6,7 +6,17 @@ interface MailTemplateOptions {
   buttonUrl?: string
   footerText?: string
   companyName?: string
+  logoUrl?: string
+  brandColor?: string
 }
+
+// Het BossBase-logo moet via een geldige publieke https-URL geladen worden
+// (e-mailclients laden geen lokale assets en blokkeren data-URI's). Overschrijfbaar
+// via de BOSSBASE_LOGO_URL secret; valt anders terug op het app-domein.
+const BOSSBASE_LOGO_URL =
+  (typeof Deno !== 'undefined' && Deno.env.get('BOSSBASE_LOGO_URL')) ||
+  'https://app.bossbase.nl/brand/icon-512.png'
+const BOSSBASE_GREEN = '#1DDB62'
 
 export function mailTemplate({
   title,
@@ -16,16 +26,32 @@ export function mailTemplate({
   buttonUrl,
   footerText,
   companyName = 'BossBase',
+  logoUrl,
+  brandColor,
 }: MailTemplateOptions): string {
   const isSystem = companyName === 'BossBase'
+  // Zakelijke mail volgt de bedrijfskleur; systeemmail altijd BossBase-groen.
+  const accent = isSystem ? BOSSBASE_GREEN : (brandColor || BOSSBASE_GREEN)
+
+  // Header: systeem → BossBase-logo + woordmerk; zakelijk → bedrijfslogo of,
+  // als dat ontbreekt, de bedrijfsnaam als tekst.
+  let headerHtml: string
+  if (isSystem) {
+    headerHtml = `<img src="${logoUrl || BOSSBASE_LOGO_URL}" alt="BossBase" width="32" height="32" style="display:inline-block;vertical-align:middle;border-radius:8px;border:0;outline:none;text-decoration:none;"><span style="vertical-align:middle;margin-left:9px;font-size:20px;font-weight:700;color:#0a0a0a;letter-spacing:-0.5px;">BossBase</span>`
+  } else if (logoUrl) {
+    headerHtml = `<img src="${logoUrl}" alt="${companyName}" height="40" style="max-height:48px;max-width:220px;display:inline-block;border:0;outline:none;text-decoration:none;">`
+  } else {
+    headerHtml = `<span style="font-size:20px;font-weight:700;color:#0a0a0a;letter-spacing:-0.5px;">${companyName}</span>`
+  }
+
   const footerLine = isSystem
     ? `BossBase &middot; <a href="https://www.bossbase.nl" style="color:#9ca3af;">bossbase.nl</a>`
-    : `Verstuurd door ${companyName} via BossBase &middot; <a href="https://www.bossbase.nl" style="color:#9ca3af;">bossbase.nl</a>`
+    : `Verstuurd door ${companyName}`
 
   const buttonHtml = buttonText && buttonUrl ? `
               <table cellpadding="0" cellspacing="0" role="presentation" style="margin:28px 0 0;">
                 <tr>
-                  <td style="border-radius:8px;background:#1DDB62;">
+                  <td style="border-radius:8px;background:${accent};">
                     <a href="${buttonUrl}"
                        style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">
                       ${buttonText}
@@ -54,9 +80,7 @@ export function mailTemplate({
                style="max-width:560px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
           <tr>
             <td style="padding:32px 40px 24px;border-bottom:1px solid #f3f4f6;">
-              <div style="font-size:20px;font-weight:700;color:#0a0a0a;letter-spacing:-0.5px;">
-                <span style="color:#1DDB62;">&#9679;</span> ${companyName}
-              </div>
+              ${headerHtml}
             </td>
           </tr>
           <tr>

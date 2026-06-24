@@ -27,6 +27,7 @@ import { ActivityEditModal, NewActivityModal, NewCustomerModal, NewJobCostModal 
 import { ChevronDown, Download, Mail, Send } from 'lucide-react';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail, getSentEmailsByCustomer } from '../services/emailService.js';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
+import { mailTemplate } from '../utils/mailTemplate.js';
 import { getEmailTemplates } from '../services/instellingenService.js';
 
 // Customer form keeps friendly UI fields; service-layer maps to real DB columns.
@@ -328,8 +329,16 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
     if (!emailForm.subject) { toast.error('Onderwerp is verplicht'); return; }
     setEmailSending(true);
     try {
-      const html = emailForm.body || `<p>${emailForm.subject}</p>`;
+      const innerBody = emailForm.body || `<p>${emailForm.subject}</p>`;
       const tpl = emailTemplates.find(t => t.id === emailForm.templateId);
+      // Zakelijke mail: wikkel in de centrale template met bedrijfslogo + kleur.
+      const html = mailTemplate({
+        title: emailForm.subject,
+        body: innerBody,
+        companyName: company?.name || 'Ons bedrijf',
+        logoUrl: company?.logoUrl,
+        brandColor: company?.brandingColor,
+      });
       await sendEmail({ to: emailForm.to, subject: emailForm.subject, html });
       await logSentEmail({
         toEmail: emailForm.to,

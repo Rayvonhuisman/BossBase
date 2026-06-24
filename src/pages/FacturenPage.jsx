@@ -16,6 +16,7 @@ import { getBedrijfsinstellingen } from '../services/instellingenService.js';
 import { generateFactuurPdf, previewFactuurPdf, getFactuurPdfBase64 } from '../utils/generatePdf.js';
 import { buildCompanySnapshot, companyForDocument, isFactuurLocked } from '../utils/documentSnapshot.js';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
+import { mailTemplate } from '../utils/mailTemplate.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { statusInfo } from '../utils/statusColors.js';
 
@@ -805,8 +806,17 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
       } catch (pdfErr) {
         console.warn('PDF bijlage genereren mislukt:', pdfErr.message);
       }
-      await sendEmail({ to: form.to, subject: form.subject, html: form.body, attachments });
-      await logSentEmail({ toEmail: form.to, subject: form.subject, bodyHtml: form.body, relatedType: 'factuur', relatedId: factuur.id, customerId: factuur.customerId });
+      // Zakelijke mail: wikkel de body in de centrale template met bedrijfslogo
+      // + bedrijfskleur (variant 1).
+      const wrappedHtml = mailTemplate({
+        title: form.subject,
+        body: form.body,
+        companyName: company?.name || 'Ons bedrijf',
+        logoUrl: company?.logoUrl,
+        brandColor: company?.brandingColor,
+      });
+      await sendEmail({ to: form.to, subject: form.subject, html: wrappedHtml, attachments });
+      await logSentEmail({ toEmail: form.to, subject: form.subject, bodyHtml: wrappedHtml, relatedType: 'factuur', relatedId: factuur.id, customerId: factuur.customerId });
       if ((templateType === 'factuur') && (factuur.status === 'aangemaakt' || factuur.status === 'concept')) {
         // Bij versturen: bedrijfs-branding bevriezen op de factuur, zodat latere
         // logo-/kleurwijzigingen deze verstuurde factuur niet meer veranderen.

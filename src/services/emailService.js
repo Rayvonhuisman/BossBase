@@ -138,7 +138,18 @@ export async function triggerAutoEmail(type, vars, toEmail, companyId, relatedTy
     const innerBody = tpl.body_html
       ? substituteVarsHtml(tpl.body_html, vars)
       : substituteVars(tpl.body, vars).split('\n').map(l => l.trim() === '' ? '' : `<p style="margin:0 0 8px 0">${l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>`).join('')
-    const html = mailTemplate({ title: subject, body: innerBody, companyName: vars.bedrijfsnaam || 'BossBase' })
+    // Bedrijfs-branding (logo + kleur) ophalen voor de zakelijke variant.
+    let logoUrl, brandColor
+    try {
+      const { data: co } = await supabase
+        .from('companies')
+        .select('logo_url, branding_color')
+        .eq('id', companyId)
+        .maybeSingle()
+      logoUrl = co?.logo_url || undefined
+      brandColor = co?.branding_color || undefined
+    } catch { /* fallback: geen logo/kleur */ }
+    const html = mailTemplate({ title: subject, body: innerBody, companyName: vars.bedrijfsnaam || 'Ons bedrijf', logoUrl, brandColor })
     await sendEmail({ to: toEmail, subject, html })
     await logSentEmail({ toEmail, subject, bodyHtml: html, relatedType, relatedId, customerId })
   } catch (e) {

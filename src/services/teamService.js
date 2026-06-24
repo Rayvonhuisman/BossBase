@@ -158,7 +158,8 @@ export async function inviteTeamMember(input) {
   const mailPayload = {
     to: input.email.trim().toLowerCase(),
     subject: `Je bent uitgenodigd voor ${companyName} op BossBase`,
-    from_name: companyName,
+    // Systeemmail (platform-uitnodiging) → afzender BossBase, niet het bedrijf.
+    from_name: 'BossBase',
     inviteUrl,
     inviterName,
     roleLabel,
@@ -169,7 +170,7 @@ export async function inviteTeamMember(input) {
     to: mailPayload.to,
     subject: mailPayload.subject,
     html,
-    fromName: companyName,
+    fromName: 'BossBase',
   }).then(response => {
     if (import.meta.env.DEV) console.log('[invite-mail] send-email response ✓', response)
     return null
