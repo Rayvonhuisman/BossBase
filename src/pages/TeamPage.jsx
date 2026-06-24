@@ -105,9 +105,9 @@ function InviteModal({ onClose, onSaved }) {
             <label>Rol</label>
             <select value={form.role} onChange={e => set('role', e.target.value)}>
               <option value="medewerker">Medewerker</option>
-              <option value="planner">Planner</option>
               <option value="admin">Admin</option>
             </select>
+            <span style={{ fontSize: '.75rem', color: 'var(--dl)', marginTop: 4 }}>Planning is een recht: kies medewerker en geef het planning-recht via Rechten.</span>
           </div>
           <div className="f">
             <label>Uren per week (optioneel)</label>
@@ -221,9 +221,9 @@ function EditModal({ member, onClose, onSaved }) {
             <label>Rol</label>
             <select value={form.role} onChange={e => set('role', e.target.value)}>
               <option value="medewerker">Medewerker</option>
-              <option value="planner">Planner</option>
               <option value="admin">Admin</option>
             </select>
+            <span style={{ fontSize: '.75rem', color: 'var(--dl)', marginTop: 4 }}>Planning is een recht: kies medewerker en geef het planning-recht via Rechten.</span>
           </div>
           <div className="f">
             <label>Uren per week</label>

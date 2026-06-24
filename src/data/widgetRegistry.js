@@ -77,6 +77,17 @@ const w = (type, size) => ({
 });
 
 export const DEFAULT_LAYOUTS = {
+  medewerker: {
+    label: 'Medewerker',
+    iconKey: 'wo',
+    description: 'Werkbonnen, activiteiten, agenda en je uren',
+    widgets: [
+      w('werkbonnen_today',  'medium'),  // 4
+      w('uren_registratie',  'medium'),  // 4
+      w('agenda_week',       'large'),   // 6
+      w('actions_today',     'large'),   // 6
+    ],
+  },
   standaard: {
     label: 'Standaard',
     iconKey: 'dash',
@@ -146,9 +157,13 @@ export const DEFAULT_LAYOUTS = {
 };
 
 export const DEFAULT_LAYOUT_KEY = 'standaard';
+// Medewerkers (en planners) starten met een uitvoerende layout i.p.v. de
+// admin-standaard met financiële/pipeline-widgets.
+export const DEFAULT_MEDEWERKER_LAYOUT_KEY = 'medewerker';
 
-export function getDefaultWidgets() {
-  return DEFAULT_LAYOUTS[DEFAULT_LAYOUT_KEY].widgets.map((wd, i) => ({
+export function getDefaultWidgets(layoutKey = DEFAULT_LAYOUT_KEY) {
+  const layout = DEFAULT_LAYOUTS[layoutKey] || DEFAULT_LAYOUTS[DEFAULT_LAYOUT_KEY];
+  return layout.widgets.map((wd, i) => ({
     id: `default-${i}`,
     widget_type: wd.widget_type,
     title: null,
@@ -160,6 +175,15 @@ export function getDefaultWidgets() {
 
 export function getWidgetMeta(type) {
   return WIDGET_REGISTRY.find(r => r.type === type) || { type, label: type, category: 'popular', defaultSize: 'medium' };
+}
+
+// De rechten die een vooraf gedefinieerde layout vereist = de unie van de
+// rechten van alle widgets erin. Een layout is alleen kiesbaar als de gebruiker
+// ál die rechten heeft (zie LayoutPickerModal).
+export function layoutPermissions(layoutKey) {
+  const layout = DEFAULT_LAYOUTS[layoutKey];
+  if (!layout) return [];
+  return [...new Set(layout.widgets.map(wd => widgetPermission(wd.widget_type)).filter(Boolean))];
 }
 
 // Welke widgets een recht vereisen. Financiële widgets (omzet, winst, waarde,
@@ -186,6 +210,13 @@ export const WIDGET_PERMISSION = {
   invoice_status_chart:  'facturen',
   // Offertes
   open_offertes:         'offertes',
+  // Pipeline / CRM (deals) — alleen zichtbaar met can('pipeline')
+  new_leads:             'pipeline',
+  active_deals:          'pipeline',
+  conversion_overview:   'pipeline',
+  conversion_funnel:     'pipeline',
+  lead_followup:         'pipeline',
+  lead_source_chart:     'pipeline',
 };
 
 // Het recht dat een widget vereist, of null als hij voor iedereen zichtbaar is.

@@ -72,7 +72,7 @@ const authLog = (...args) => {
 // permission: als gezet, verberg item als gebruiker dat recht niet heeft
 const NAV = [
   { id: 'dashboard',   label: 'Dashboard',    icon: 'dash',    section: 'main' },
-  { id: 'pipeline',    label: 'Pipeline',     icon: 'pipe',    section: 'main' },
+  { id: 'pipeline',    label: 'Pipeline',     icon: 'pipe',    section: 'main', permission: 'pipeline' },
   { id: 'customers',   label: 'Klanten',      icon: 'cust',    section: 'main' },
   { id: 'activities',  label: 'Activiteiten', icon: 'act',     section: 'main' },
   { id: 'calendar',    label: 'Agenda',        icon: 'cal',     section: 'work' },
@@ -91,6 +91,7 @@ const NAV = [
 
 // Pagina's die een bepaald recht vereisen voor toegang
 const PROTECTED_PAGES = {
+  pipeline:    'pipeline',
   offertes:    'offertes',
   facturen:    'facturen',
   costs:       'kosten',
@@ -715,17 +716,17 @@ function MeerMenu({ page, onNavigate, onClose, profile }) {
 // ── MOBILE BOTTOM NAV ─────────────────────────────────────────
 const MEER_PAGE_IDS = ['calendar','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','team','instellingen'];
 
-function MobileBottomNav({ page, setPage, badges = {}, profile }) {
+function MobileBottomNav({ page, setPage, badges = {}, profile, can }) {
   const [showMeer, setShowMeer] = useState(false);
   const isOnMeerPage = MEER_PAGE_IDS.includes(page);
 
   const items = [
     { id: 'dashboard',  label: 'Dashboard',    icon: I.dash },
-    { id: 'pipeline',   label: 'Pipeline',     icon: I.pipe,  badge: badges.pipeline },
+    { id: 'pipeline',   label: 'Pipeline',     icon: I.pipe,  badge: badges.pipeline, permission: 'pipeline' },
     { id: 'customers',  label: 'Klanten',      icon: I.cust },
     { id: 'activities', label: 'Activiteiten', icon: I.act,   badge: badges.activities },
     { id: 'meer',       label: 'Meer',         icon: I.meer },
-  ];
+  ].filter(it => !it.permission || !can || can(it.permission));
 
   const go = id => { setPage(id); setShowMeer(false); };
 
@@ -1477,6 +1478,7 @@ function AppInner() {
           setPage={navigatePage}
           badges={sidebarBadges}
           profile={profile}
+          can={(p) => profile?.role === 'admin' || (profile?.role === 'planner' && p === 'planning') || (userPermissions || []).includes(p)}
         />
 
         {drawerCust !== null && page !== 'customers' && (

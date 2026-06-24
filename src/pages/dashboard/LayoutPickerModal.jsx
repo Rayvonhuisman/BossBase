@@ -1,8 +1,9 @@
 import { I } from '../../bb-shared.jsx';
-import { DEFAULT_LAYOUTS } from '../../data/widgetRegistry.js';
+import { DEFAULT_LAYOUTS, layoutPermissions } from '../../data/widgetRegistry.js';
 
 // Mini grid preview showing approximate widget row proportions
 const LAYOUT_ROWS = {
+  medewerker:[[6,6], [6,6]],
   standaard: [[3,3,3,3], [6,6], [6,6], [12]],
   sales:     [[3,3,3,3], [6,6], [4,4,4]],
   planning:  [[3,3,3,3], [6,6], [4,4,4]],
@@ -42,7 +43,10 @@ function LayoutThumb({ widgetCount }) {
   );
 }
 
-export function LayoutPickerModal({ onApply, onClose, currentLayout }) {
+export function LayoutPickerModal({ onApply, onClose, currentLayout, can }) {
+  // Toon een layout alleen als de gebruiker alle rechten heeft voor de widgets erin.
+  const visibleLayouts = Object.entries(DEFAULT_LAYOUTS)
+    .filter(([key]) => layoutPermissions(key).every(p => !can || can(p)));
   return (
     <div className="overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 660 }}>
@@ -65,7 +69,7 @@ export function LayoutPickerModal({ onApply, onClose, currentLayout }) {
 
         {/* Desktop: 2-col grid with previews / Mobile: single column list */}
         <div className="dw-layout-modal-grid">
-          {Object.entries(DEFAULT_LAYOUTS).map(([key, layout]) => {
+          {visibleLayouts.map(([key, layout]) => {
             const isActive = currentLayout === key;
             return (
               <button

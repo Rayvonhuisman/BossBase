@@ -4,6 +4,7 @@ export const AVAILABLE_PERMISSIONS = [
   { key: 'financieel',         label: 'Financieel dashboard', categorie: 'Financieel' },
   { key: 'kosten',             label: 'Kosten',               categorie: 'Financieel' },
   // BTW-overzicht valt onder 'financieel' (Financieel dashboard) — geen apart recht.
+  { key: 'pipeline',           label: 'Pipeline / CRM bekijken', categorie: 'Klanten' },
   { key: 'klanten_bewerken',   label: 'Klanten bewerken',     categorie: 'Klanten' },
   { key: 'klanten_verwijderen',label: 'Klanten verwijderen',  categorie: 'Klanten' },
   { key: 'projecten',          label: 'Projecten',            categorie: 'Operationeel' },

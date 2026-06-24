@@ -7,7 +7,7 @@ import { useToast } from '../../lib/toast.jsx';
 import { useData } from '../../lib/dataContext.jsx';
 import { getUrenregistratie } from '../../services/urenService.js';
 import { loadUserWidgets, saveUserWidgets } from '../../services/dashboardWidgetService.js';
-import { getDefaultWidgets, DEFAULT_LAYOUTS, DEFAULT_LAYOUT_KEY, normalizeWidgetSize } from '../../data/widgetRegistry.js';
+import { getDefaultWidgets, DEFAULT_LAYOUTS, DEFAULT_LAYOUT_KEY, DEFAULT_MEDEWERKER_LAYOUT_KEY, normalizeWidgetSize } from '../../data/widgetRegistry.js';
 import { DashboardCustomizeBar } from './DashboardCustomizeBar.jsx';
 import { DashboardWidgetGrid } from './DashboardWidgetGrid.jsx';
 import { statusInfo } from '../../utils/statusColors.js';
@@ -226,24 +226,30 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
   const [urenLoading, setUrenLoading] = useState(true);
   const dataLoading = sharedLoading || urenLoading;
 
-  // Load widget layout from Supabase on mount
+  // Load widget layout from Supabase. Pas laden zodra de rechten bekend zijn,
+  // zodat we voor een medewerker (zonder opgeslagen layout) de medewerker-layout
+  // kiezen i.p.v. de admin-standaard. Eén keer uitvoeren via een ref.
+  const didLoadWidgetsRef = useRef(false);
   useEffect(() => {
+    if (!permissionsLoaded || didLoadWidgetsRef.current) return;
+    didLoadWidgetsRef.current = true;
+    const defaultKey = isAdmin ? DEFAULT_LAYOUT_KEY : DEFAULT_MEDEWERKER_LAYOUT_KEY;
     loadUserWidgets()
       .then(rows => {
-        const loaded = rows && rows.length > 0 ? rows.map(mapDbWidget) : getDefaultWidgets();
+        const loaded = rows && rows.length > 0 ? rows.map(mapDbWidget) : getDefaultWidgets(defaultKey);
         setWidgets(loaded);
         setCurrentLayout(matchLayoutKey(loaded));
         setSavedFingerprint(widgetFingerprint(loaded));
       })
       .catch(err => {
         console.warn('[bb:dashboard] falling back to default layout:', err?.message);
-        const defaults = getDefaultWidgets();
+        const defaults = getDefaultWidgets(defaultKey);
         setWidgets(defaults);
         setCurrentLayout(matchLayoutKey(defaults));
         setSavedFingerprint(widgetFingerprint(defaults));
       })
       .finally(() => setWidgetsLoaded(true));
-  }, []);
+  }, [permissionsLoaded, isAdmin]);
 
   // Load uren (dashboard-specifiek: laatste ~6 weken voor beide uren-widgets).
   // customers/deals/activities/offertes/werkbonnen/calendarEvents komen uit DataContext.
@@ -308,8 +314,9 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
 
   // Reset: updates local state only — stays dirty until saved or cancelled
   const handleReset = () => {
-    setWidgets(getDefaultWidgets());
-    setCurrentLayout(DEFAULT_LAYOUT_KEY);
+    const defaultKey = isAdmin ? DEFAULT_LAYOUT_KEY : DEFAULT_MEDEWERKER_LAYOUT_KEY;
+    setWidgets(getDefaultWidgets(defaultKey));
+    setCurrentLayout(defaultKey);
     setSaveError('');
   };
 
@@ -501,6 +508,7 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
           currentLayout={currentLayout}
           onApply={applyLayout}
           onClose={() => setShowLayoutModal(false)}
+          can={can}
         />
       )}
     </>
