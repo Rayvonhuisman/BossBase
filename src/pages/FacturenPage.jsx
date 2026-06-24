@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, MoreVertical, Send, Lock } from 'lucide-react';
+import { Download, MoreVertical, Send } from 'lucide-react';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
@@ -424,11 +424,6 @@ function EditFactuurModal({ factuur, customers, onClose, onSaved, onSaveAndSend 
           </div>
           <ModalX onClose={onClose} />
         </div>
-        {locked && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', margin: '0 0 4px', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: '.82rem', color: '#374151' }}>
-            <Lock size={14} /> Verstuurd · alleen-lezen — een verstuurde factuur kan niet meer gewijzigd worden. Alleen de status (bijv. betaald markeren) mag nog.
-          </div>
-        )}
         <div className="fg">
           <div className="f s2">
             <label>Status</label>
@@ -1071,7 +1066,6 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
                       <td className="td" style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(f.totaalIncl)}</td>
                       <td className="td">
                         {factuurBadge(f)}
-                        {isFactuurLocked(f) && <Lock size={11} style={{ marginLeft: 5, color: 'var(--dl)', verticalAlign: 'middle' }} title="Verstuurd · alleen-lezen" />}
                         {f.gecrediteerd && <span className="badge b-gray" style={{ marginLeft: 4, fontSize: 10 }}>Gecrediteerd</span>}
                       </td>
                       <td className="td" style={{ color: isVerlopen(f) ? '#dc2626' : 'inherit' }}>{fmtDate(f.vervaldatum)}</td>

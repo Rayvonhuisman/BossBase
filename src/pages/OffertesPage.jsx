@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, MoreVertical, Send, Lock } from 'lucide-react';
+import { Download, MoreVertical, Send } from 'lucide-react';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
@@ -411,11 +411,6 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
           </div>
           <ModalX onClose={onClose} />
         </div>
-        {locked && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', margin: '0 0 4px', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: '.82rem', color: '#374151' }}>
-            <Lock size={14} /> {fullyLocked ? 'Ondertekend · vergrendeld — een ondertekende offerte kan niet meer gewijzigd worden.' : 'Verstuurd · alleen-lezen — de inhoud van een verstuurde offerte ligt vast. Alleen de status mag nog wijzigen.'}
-          </div>
-        )}
         {loadingRegels ? (
           <div style={{ padding: '32px', textAlign: 'center', color: 'var(--dl)' }}>Regelitems laden…</div>
         ) : (
@@ -1026,7 +1021,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
                       <td className="td" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.omschrijving || '—'}</td>
                       <td className="td" style={{ textAlign: 'right' }}>{fmt(o.totaalExcl)}</td>
                       <td className="td" style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(o.totaalIncl)}</td>
-                      <td className="td">{offerteBadge(o.status)}{isOfferteLocked(o) && <Lock size={11} style={{ marginLeft: 5, color: 'var(--dl)', verticalAlign: 'middle' }} title={isOfferteFullyLocked(o) ? 'Ondertekend · vergrendeld' : 'Verstuurd · alleen-lezen'} />}</td>
+                      <td className="td">{offerteBadge(o.status)}</td>
                       <td className="td">{fmtDate(o.geldigTot)}</td>
                       <td className="td">
                         <div style={{ display: 'flex', gap: 4 }}>
