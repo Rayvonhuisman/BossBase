@@ -693,6 +693,22 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
     }
     return next;
   });
+  // Project kiezen → klant automatisch afleiden.
+  const onProjectChange = pid => setForm(f => {
+    const next = { ...f, project_id: pid };
+    const p = projecten.find(x => x.id === pid);
+    if (p?.customerId) next.customer_id = p.customerId;
+    return next;
+  });
+  // Klant wisselen → project/werkbon loskoppelen als ze niet bij die klant horen.
+  const onCustomerChange = cid => setForm(f => {
+    const next = { ...f, customer_id: cid };
+    if (cid) {
+      if (f.project_id && !projecten.some(p => p.id === f.project_id && p.customerId === cid)) next.project_id = '';
+      if (f.werkbon_id && !werkbonnen.some(w => w.id === f.werkbon_id && w.customerId === cid)) next.werkbon_id = '';
+    }
+    return next;
+  });
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024;
   const addFiles = files => {
@@ -813,11 +829,25 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
             <label>Klant</label>
             <select
               value={form.customer_id}
-              onChange={e => setField('customer_id', e.target.value)}
+              onChange={e => onCustomerChange(e.target.value)}
               disabled={lockCustomer || Boolean(defaultCustId)}
             >
               <option value="">Algemeen</option>
               {(customers || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="f">
+            <label>Project <span style={{ color: 'var(--dl)', fontWeight: 400 }}>(optioneel)</span></label>
+            <select value={form.project_id} onChange={e => onProjectChange(e.target.value)}>
+              <option value="">Geen project</option>
+              {filteredProjecten.map(p => <option key={p.id} value={p.id}>{p.name || 'Project'}</option>)}
+            </select>
+          </div>
+          <div className="f">
+            <label>Werkbon <span style={{ color: 'var(--dl)', fontWeight: 400 }}>(optioneel)</span></label>
+            <select value={form.werkbon_id} onChange={e => onWerkbonChange(e.target.value)}>
+              <option value="">Geen werkbon</option>
+              {filteredWerkbonnen.map(w => <option key={w.id} value={w.id}>{w.titel || 'Werkbon'}</option>)}
             </select>
           </div>
           <div className="f">
@@ -829,20 +859,6 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
               <option value="Inkoopfactuur">Inkoopfactuur</option>
               <option value="Algemene kosten">Algemene kosten</option>
               <option value="Overig">Overig</option>
-            </select>
-          </div>
-          <div className="f">
-            <label>Werkbon <span style={{ color: 'var(--dl)', fontWeight: 400 }}>(optioneel)</span></label>
-            <select value={form.werkbon_id} onChange={e => onWerkbonChange(e.target.value)}>
-              <option value="">Geen werkbon</option>
-              {filteredWerkbonnen.map(w => <option key={w.id} value={w.id}>{w.titel || 'Werkbon'}</option>)}
-            </select>
-          </div>
-          <div className="f">
-            <label>Project <span style={{ color: 'var(--dl)', fontWeight: 400 }}>(optioneel)</span></label>
-            <select value={form.project_id} onChange={e => setField('project_id', e.target.value)}>
-              <option value="">Geen project</option>
-              {filteredProjecten.map(p => <option key={p.id} value={p.id}>{p.name || 'Project'}</option>)}
             </select>
           </div>
           <div className="f s2">

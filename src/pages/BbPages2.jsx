@@ -15,6 +15,7 @@ import { listDeals } from '../services/dealService.js';
 import { listActivities } from '../services/activityService.js';
 import { getConnectionStatus, startGoogleCalendarConnect, disconnectGoogleCalendar } from '../services/googleCalendarService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
+import { getProjects } from '../services/projectsService.js';
 import { calcBtw, BTW_PCT_OPTIONS } from '../utils/btw.js';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -734,41 +735,80 @@ const CAT_OPTIONS = [
 function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onClose }) {
   const [cat, setCat] = useState(cost.cat);
   const [custId, setCustId] = useState(cost.customerId || '');
+  const [projectId, setProjectId] = useState(cost.projectId || '');
+  const [werkbonId, setWerkbonId] = useState(cost.werkbonId || '');
   const [btwPct, setBtwPct] = useState(cost.btwPercentage ?? 21);
+  const [amt, setAmt] = useState(String(cost.amt ?? ''));
+  const [date, setDate] = useState(cost.date || '');
+  const [desc, setDesc] = useState(cost.desc || '');
   const [savedField, setSavedField] = useState(null);
-  // amount is exclusief BTW → btw-bedrag en incl. afgeleid.
-  const btwCalc = calcBtw(cost.amt, btwPct, 'excl');
   const [deleting, setDeleting] = useState(false);
+
+  const [werkbonnen, setWerkbonnen] = useState([]);
+  const [projecten, setProjecten] = useState([]);
+  useEffect(() => {
+    getWerkbonnen().then(setWerkbonnen).catch(() => {});
+    getProjects().then(setProjecten).catch(() => {});
+  }, []);
+
+  // amount is exclusief BTW → btw-bedrag en incl. afgeleid (live).
+  const btwCalc = calcBtw(amt, btwPct, 'excl');
+
+  // Afhankelijke filtering: klant filtert project- en werkbonkeuze (zoals uren).
+  const filteredProjecten = custId ? projecten.filter(p => p.customerId === custId) : projecten;
+  const filteredWerkbonnen = custId ? werkbonnen.filter(w => w.customerId === custId) : werkbonnen;
 
   const isMoneybird = !!cost.externeRef;
   const mbUrl = (isMoneybird && mbAdminId && cost.moneybirdDocumentId)
     ? `https://moneybird.com/${mbAdminId}/documents/${cost.moneybirdDocumentId}`
     : null;
 
-  const save = async (field, value) => {
+  const savePatch = async (patch, flagField) => {
     try {
-      const updated = await updateJobCost(cost.id, { [field]: value || null });
+      const updated = await updateJobCost(cost.id, patch);
       onUpdate?.(updated);
-      setSavedField(field);
-      setTimeout(() => setSavedField(null), 2000);
+      if (flagField) { setSavedField(flagField); setTimeout(() => setSavedField(null), 2000); }
     } catch { /* silent */ }
   };
+  const save = (field, value) => savePatch({ [field]: value === '' ? null : value }, field);
+  const Saved = ({ field }) => savedField === field
+    ? <span style={{ marginLeft: 8, color: '#15A34A', fontSize: '.7rem', fontWeight: 700 }}>{I.check} Opgeslagen</span>
+    : null;
 
-  const handleCatChange = e => {
-    setCat(e.target.value);
-    save('category', e.target.value);
-  };
+  const handleCatChange = e => { setCat(e.target.value); save('category', e.target.value); };
+  const handleBtwChange = e => { const v = Number(e.target.value); setBtwPct(v); save('btw_percentage', v); };
 
+  // Klant kiezen → project/werkbon die niet bij die klant horen loskoppelen.
   const handleCustChange = e => {
     const val = e.target.value;
     setCustId(val);
-    save('customer_id', val || null);
+    const patch = { customer_id: val || null };
+    if (val) {
+      if (projectId && !projecten.some(p => p.id === projectId && p.customerId === val)) { setProjectId(''); patch.project_id = null; }
+      if (werkbonId && !werkbonnen.some(w => w.id === werkbonId && w.customerId === val)) { setWerkbonId(''); patch.werkbon_id = null; }
+    }
+    savePatch(patch, 'customer_id');
   };
-
-  const handleBtwChange = e => {
-    const val = Number(e.target.value);
-    setBtwPct(val);
-    save('btw_percentage', val);
+  // Project kiezen → klant automatisch afleiden.
+  const handleProjectChange = e => {
+    const val = e.target.value;
+    setProjectId(val);
+    const patch = { project_id: val || null };
+    const p = projecten.find(x => x.id === val);
+    if (p?.customerId) { setCustId(p.customerId); patch.customer_id = p.customerId; }
+    savePatch(patch, 'project_id');
+  };
+  // Werkbon kiezen → project + klant automatisch afleiden.
+  const handleWerkbonChange = e => {
+    const val = e.target.value;
+    setWerkbonId(val);
+    const patch = { werkbon_id: val || null };
+    const w = werkbonnen.find(x => x.id === val);
+    if (w) {
+      if (w.projectId) { setProjectId(w.projectId); patch.project_id = w.projectId; }
+      if (w.customerId) { setCustId(w.customerId); patch.customer_id = w.customerId; }
+    }
+    savePatch(patch, 'werkbon_id');
   };
 
   const handleDelete = async () => {
@@ -786,7 +826,7 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: 500 }} onClick={e => e.stopPropagation()}>
         <div className="modal-hd">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontWeight: 700, fontSize: '1rem' }}>Kostendetail</span>
@@ -797,69 +837,81 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
           </div>
           <ModalX onClose={onClose} />
         </div>
-        <div className="fg" style={{ gap: 12 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div>
-              <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 2 }}>Bedrag (excl. BTW)</div>
-              <div style={{ fontSize: '1.2rem', fontWeight: 800 }}>{fmt(cost.amt)}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)' }}>
+          {/* Rij 1: Bedrag · Datum · BTW */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-3)' }}>
+            <div className="f" style={{ flex: '1 1 130px', minWidth: 0 }}>
+              <label>Bedrag (excl. BTW) <Saved field="amount" /></label>
+              <input type="number" min="0" step="0.01" value={amt}
+                onChange={e => setAmt(e.target.value)} onBlur={() => save('amount', Number(amt) || 0)} />
             </div>
-            <div>
-              <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 2 }}>Datum</div>
-              <div style={{ fontWeight: 600 }}>{cost.date || '—'}</div>
+            <div className="f" style={{ flex: '1 1 130px', minWidth: 0 }}>
+              <label>Datum <Saved field="cost_date" /></label>
+              <input type="date" value={date}
+                onChange={e => { setDate(e.target.value); save('cost_date', e.target.value); }} />
+            </div>
+            <div className="f" style={{ flex: '1 1 90px', minWidth: 0 }}>
+              <label>BTW <Saved field="btw_percentage" /></label>
+              <select value={btwPct} onChange={handleBtwChange}>
+                {BTW_PCT_OPTIONS.map(p => <option key={p} value={p}>{p}%</option>)}
+              </select>
             </div>
           </div>
-          <div>
-            <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 4 }}>
-              BTW
-              {savedField === 'btw_percentage' && <span style={{ marginLeft: 8, color: '#15A34A', fontSize: '.7rem', fontWeight: 700 }}>{I.check} Opgeslagen</span>}
-            </div>
-            <select className="btn btn-s btn-sm" style={{ padding: '5px 10px', width: '100%' }} value={btwPct} onChange={handleBtwChange}>
-              {BTW_PCT_OPTIONS.map(p => <option key={p} value={p}>{p}%</option>)}
-            </select>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: '.82rem' }}>
+
+          {/* BTW-samenvatting */}
+          <div style={{ background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 'var(--r8)', padding: '10px 12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.82rem' }}>
               <span style={{ color: 'var(--dl)' }}>BTW {btwPct}%</span>
               <span style={{ fontWeight: 600 }}>{fmt(btwCalc.btw)}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: '.9rem', borderTop: '1px solid var(--border)', paddingTop: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--border)', fontSize: '.9rem' }}>
               <span style={{ fontWeight: 700 }}>Totaal incl. BTW</span>
               <span style={{ fontWeight: 800 }}>{fmt(btwCalc.incl)}</span>
             </div>
           </div>
-          <div>
-            <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 2 }}>Leverancier / omschrijving</div>
-            <div>{cost.desc || '—'}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 4 }}>
-              Categorie
-              {savedField === 'category' && <span style={{ marginLeft: 8, color: '#15A34A', fontSize: '.7rem', fontWeight: 700 }}>{I.check} Opgeslagen</span>}
+
+          {/* Rij 2: Omschrijving · Categorie */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-3)' }}>
+            <div className="f" style={{ flex: '2 1 200px', minWidth: 0 }}>
+              <label>Leverancier / omschrijving <Saved field="description" /></label>
+              <input type="text" value={desc} placeholder="—"
+                onChange={e => setDesc(e.target.value)} onBlur={() => save('description', desc)} />
             </div>
-            <select
-              className="btn btn-s btn-sm"
-              style={{ padding: '5px 10px', width: '100%' }}
-              value={cat}
-              onChange={handleCatChange}
-            >
-              {CAT_OPTIONS.some(o => o.value === cat) ? null : <option value={cat}>{cat}</option>}
-              {CAT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 4 }}>
-              Klant / project
-              {savedField === 'customer_id' && <span style={{ marginLeft: 8, color: '#15A34A', fontSize: '.7rem', fontWeight: 700 }}>{I.check} Opgeslagen</span>}
+            <div className="f" style={{ flex: '1 1 150px', minWidth: 0 }}>
+              <label>Categorie <Saved field="category" /></label>
+              <select value={cat} onChange={handleCatChange}>
+                {CAT_OPTIONS.some(o => o.value === cat) ? null : <option value={cat}>{cat}</option>}
+                {CAT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
             </div>
-            <select
-              className="btn btn-s btn-sm"
-              style={{ padding: '5px 10px', width: '100%' }}
-              value={custId}
-              onChange={handleCustChange}
-            >
-              <option value="">Algemeen</option>
-              {(customers || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingTop: 2 }}>
+
+          {/* Rij 3: Klant · Project · Werkbon (afhankelijke filtering) */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-3)' }}>
+            <div className="f" style={{ flex: '1 1 140px', minWidth: 0 }}>
+              <label>Klant <Saved field="customer_id" /></label>
+              <select value={custId} onChange={handleCustChange}>
+                <option value="">Algemeen</option>
+                {(customers || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div className="f" style={{ flex: '1 1 140px', minWidth: 0 }}>
+              <label>Project <Saved field="project_id" /></label>
+              <select value={projectId} onChange={handleProjectChange}>
+                <option value="">Geen project</option>
+                {filteredProjecten.map(p => <option key={p.id} value={p.id}>{p.name || 'Project'}</option>)}
+              </select>
+            </div>
+            <div className="f" style={{ flex: '1 1 140px', minWidth: 0 }}>
+              <label>Werkbon <Saved field="werkbon_id" /></label>
+              <select value={werkbonId} onChange={handleWerkbonChange}>
+                <option value="">Geen werkbon</option>
+                {filteredWerkbonnen.map(w => <option key={w.id} value={w.id}>{w.titel || 'Werkbon'}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {cost.bijlageUrl && (
               <button type="button" className="btn btn-s btn-sm"
                 onClick={async () => { const u = await getKostenBijlageUrl(cost.bijlageUrl); if (u) window.open(u, '_blank', 'noopener'); }}>
