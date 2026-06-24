@@ -18,6 +18,7 @@ import { getProjects } from '../services/projectsService.js';
 import { createUrenregel, getUrenregistratie, calculateHours } from '../services/urenService.js';
 import { createJobCost } from '../services/jobCostService.js';
 import { statusInfo } from '../utils/statusColors.js';
+import { calcBtw, BTW_PCT_OPTIONS } from '../utils/btw.js';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 
@@ -433,10 +434,16 @@ function TakenSection({ taken, onToggle, onAdd, onDelete }) {
 // ─── MATERIALS ──────────────────────────────────────────────────────────────
 
 function MaterialenSection({ materialen, onAdd, onDelete }) {
-  const [form, setForm] = useState({ naam: '', eenheid: 'stuk', aantal: 1, prijs_per: 0 });
+  const [form, setForm] = useState({ naam: '', eenheid: 'stuk', aantal: 1, prijs_per: 0, btw_pct: 21 });
   const [adding, setAdding] = useState(false);
 
-  const total = materialen.reduce((s, m) => s + (m.subtotaal || m.aantal * m.prijsPer || 0), 0);
+  // Totalen: excl. BTW (subtotalen) en incl. BTW (per regel met eigen percentage).
+  const totalEx = materialen.reduce((s, m) => s + (m.subtotaal || m.aantal * m.prijsPer || 0), 0);
+  const totalIncl = materialen.reduce((s, m) => {
+    const sub = m.subtotaal || m.aantal * m.prijsPer || 0;
+    return s + calcBtw(sub, m.btwPercentage ?? 21, 'excl').incl;
+  }, 0);
+  const addSub = (Number(form.aantal) || 0) * (Number(form.prijs_per) || 0);
 
   const submit = async () => {
     if (!form.naam.trim()) return;
@@ -447,8 +454,9 @@ function MaterialenSection({ materialen, onAdd, onDelete }) {
         eenheid: form.eenheid || null,
         aantal: Number(form.aantal) || 1,
         prijs_per: Number(form.prijs_per) || 0,
+        btw_pct: Number(form.btw_pct) || 0,
       });
-      setForm({ naam: '', eenheid: 'stuk', aantal: 1, prijs_per: 0 });
+      setForm({ naam: '', eenheid: 'stuk', aantal: 1, prijs_per: 0, btw_pct: 21 });
     } finally {
       setAdding(false);
     }
@@ -466,6 +474,7 @@ function MaterialenSection({ materialen, onAdd, onDelete }) {
             <div>Eenheid</div>
             <div className="right">Aantal</div>
             <div className="right">Per stuk</div>
+            <div className="right">BTW</div>
             <div className="right">Subtotaal</div>
             <div />
           </div>
@@ -474,13 +483,19 @@ function MaterialenSection({ materialen, onAdd, onDelete }) {
           )}
           {materialen.map(m => {
             const sub = m.subtotaal || m.aantal * m.prijsPer;
+            const pct = m.btwPercentage ?? 21;
+            const incl = calcBtw(sub, pct, 'excl').incl;
             return (
               <div key={m.id} className="wb2-mat-grid row">
                 <div>{m.naam}</div>
                 <div style={{ color: 'var(--dl)' }}>{m.eenheid || '—'}</div>
                 <div className="right mono">{m.aantal}</div>
                 <div className="right mono" style={{ color: 'var(--dmu)' }}>{fmtEur(m.prijsPer)}</div>
-                <div className="right mono" style={{ fontWeight: 600 }}>{fmtEur(sub)}</div>
+                <div className="right mono" style={{ color: 'var(--dmu)' }}>{pct}%</div>
+                <div className="right mono" style={{ fontWeight: 600 }}>
+                  {fmtEur(sub)}
+                  <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--dl)' }}>{fmtEur(incl)} incl.</div>
+                </div>
                 <button onClick={() => onDelete(m)} aria-label="Verwijderen">{I.trash}</button>
               </div>
             );
@@ -513,8 +528,17 @@ function MaterialenSection({ materialen, onAdd, onDelete }) {
               onChange={e => setForm(f => ({ ...f, prijs_per: e.target.value }))}
               style={{ textAlign: 'right' }}
             />
+            <select
+              value={form.btw_pct}
+              onChange={e => setForm(f => ({ ...f, btw_pct: Number(e.target.value) }))}
+              style={{ textAlign: 'right' }}
+              aria-label="BTW-percentage"
+            >
+              {BTW_PCT_OPTIONS.map(p => <option key={p} value={p}>{p}%</option>)}
+            </select>
             <div className="right mono" style={{ fontWeight: 600, color: 'var(--dmu)' }}>
-              {fmtEur((Number(form.aantal) || 0) * (Number(form.prijs_per) || 0))}
+              {fmtEur(addSub)}
+              <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--dl)' }}>{fmtEur(calcBtw(addSub, form.btw_pct, 'excl').incl)} incl.</div>
             </div>
             <button onClick={submit} disabled={adding || !form.naam.trim()} className="wb2-mat-add-btn" aria-label="Materiaal toevoegen" title="Toevoegen">
               {I.plus}
@@ -524,8 +548,9 @@ function MaterialenSection({ materialen, onAdd, onDelete }) {
         <div className="wb2-mat-foot">
           <div className="wb2-mat-foot-add" style={{ visibility: 'hidden' }}>spacer</div>
           <div style={{ textAlign: 'right' }}>
-            <div className="wb2-mat-foot-total-lbl">Totaal materiaal</div>
-            <div className="wb2-mat-foot-total">{fmtEur(total)}</div>
+            <div className="wb2-mat-foot-total-lbl">Totaal materiaal (excl. BTW)</div>
+            <div className="wb2-mat-foot-total">{fmtEur(totalEx)}</div>
+            <div style={{ fontSize: 12, color: 'var(--dl)', marginTop: 2 }}>{fmtEur(totalIncl)} incl. BTW</div>
           </div>
         </div>
       </div>
@@ -861,16 +886,18 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
 
   const handleAddMaterial = async input => {
     try {
+      const btwPct = Number(input.btw_pct ?? 21);
       const created = await createWerkbonMateriaal({ werkbon_id: selectedId, ...input });
-      setMaterialen(prev => [...prev, created]);
+      // BTW leeft op de gekoppelde kost; toon hem ook meteen optimistisch.
+      setMaterialen(prev => [...prev, { ...created, btwPercentage: btwPct }]);
       // Spiegel-kost zodat het materiaal meetelt in het project/kosten. Het
       // werkbon_materiaal_id koppelt beide → één keer geteld; project en klant
-      // worden in createJobCost afgeleid van de werkbon.
+      // worden in createJobCost afgeleid van de werkbon. BTW = dezelfde keuze.
       if (created.subtotaal > 0) {
         createJobCost({
           description: `Materiaal: ${created.naam}`,
           amount: created.subtotaal, // subtotaal is exclusief BTW
-          btw_percentage: 21,        // materiaal: standaard 21%
+          btw_percentage: btwPct,
           btw_inclusief: false,
           category: 'Materiaal',
           cost_date: new Date().toISOString().slice(0, 10),

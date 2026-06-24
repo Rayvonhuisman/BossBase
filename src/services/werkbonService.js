@@ -45,17 +45,22 @@ const toWerkbonTaak = row => ({
   raw: row,
 })
 
-const toWerkbonMateriaal = row => ({
-  id: row.id,
-  werkbonId: row.werkbon_id,
-  companyId: row.company_id,
-  naam: row.naam,
-  eenheid: row.eenheid || "",
-  aantal: Number(row.aantal || 1),
-  prijsPer: Number(row.prijs_per || 0),
-  subtotaal: Number(row.subtotaal || 0),
-  raw: row,
-})
+const toWerkbonMateriaal = row => {
+  // BTW leeft op de gekoppelde job_cost (geen apart systeem). Join geeft die mee.
+  const jc = Array.isArray(row.job_costs) ? row.job_costs[0] : row.job_costs
+  return {
+    id: row.id,
+    werkbonId: row.werkbon_id,
+    companyId: row.company_id,
+    naam: row.naam,
+    eenheid: row.eenheid || "",
+    aantal: Number(row.aantal || 1),
+    prijsPer: Number(row.prijs_per || 0),
+    subtotaal: Number(row.subtotaal || 0),
+    btwPercentage: jc?.btw_percentage != null ? Number(jc.btw_percentage) : 21,
+    raw: row,
+  }
+}
 
 // ── WERKBONNEN ───────────────────────────────────────────────────────────────
 
@@ -216,11 +221,17 @@ export async function deleteWerkbonTaak(id) {
 // ── WERKBON MATERIALEN ───────────────────────────────────────────────────────
 
 export async function getWerkbonMaterialen(werkbonId) {
-  const { data, error } = await supabase
+  // BTW-percentage komt van de gekoppelde job_cost (werkbon_materiaal_id).
+  let { data, error } = await supabase
     .from("werkbon_materialen")
-    .select("*")
+    .select("*, job_costs!werkbon_materiaal_id(btw_percentage)")
     .eq("werkbon_id", werkbonId)
     .order("created_at", { ascending: true })
+  if (error && /could not find.*relationship|foreign key/i.test(error.message)) {
+    const fb = await supabase
+      .from("werkbon_materialen").select("*").eq("werkbon_id", werkbonId).order("created_at", { ascending: true })
+    data = fb.data; error = fb.error
+  }
   if (error) throw error
   return (data || []).map(toWerkbonMateriaal)
 }
