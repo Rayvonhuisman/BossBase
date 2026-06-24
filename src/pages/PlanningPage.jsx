@@ -99,11 +99,52 @@ function entityColor(index) {
   };
 }
 
+// Grijs voor werkbonnen die (nog) aan niemand zijn toegewezen.
+const UNASSIGNED_COLOR = {
+  bg:     '#f3f4f6',
+  text:   '#6b7280',
+  border: '#e5e7eb',
+  bar:    '#9ca3af',
+  dot:    '#9ca3af',
+};
+
 // Bouw een map: entityId → kleur (stabiel op volgorde in de array)
 function buildColorMap(ids) {
   const map = {};
   [...new Set(ids)].forEach((id, i) => { map[id] = entityColor(i); });
   return map;
+}
+
+// Multi-select voor het toewijzen van één of meerdere medewerkers aan een werkbon.
+// `value` is een array van profile-ids; lege selectie = niet toegewezen.
+function MemberMultiSelect({ members = [], value = [], onChange }) {
+  const toggle = (id) => {
+    onChange(value.includes(id) ? value.filter(x => x !== id) : [...value, id]);
+  };
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: 8, border: '1px solid var(--bstrong)', borderRadius: 8, background: '#fff', maxHeight: 132, overflowY: 'auto' }}>
+      {members.length === 0 && <span style={{ fontSize: 12, color: 'var(--dl)' }}>Geen teamleden</span>}
+      {members.map(m => {
+        const sel = value.includes(m.id);
+        return (
+          <button
+            type="button"
+            key={m.id}
+            onClick={() => toggle(m.id)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 999,
+              fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              border: sel ? '1px solid var(--p)' : '1px solid var(--bstrong)',
+              background: sel ? 'var(--pll)' : '#fff', color: sel ? 'var(--pd)' : 'var(--dm)',
+            }}
+          >
+            <span style={{ width: 14, height: 14, borderRadius: 4, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 10, color: '#fff', background: sel ? 'var(--p)' : '#fff', border: sel ? 'none' : '1px solid var(--bstrong)' }}>{sel ? '✓' : ''}</span>
+            {m.fullName}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 // ── OVERLAPCALCULATOR (voor blokken in dezelfde kolom) ────────────────────────
@@ -155,7 +196,12 @@ function WerkbonBlock({ werkbon, color, onClick }) {
       onMouseEnter={e => (e.currentTarget.style.filter = 'brightness(.96)')}
       onMouseLeave={e => (e.currentTarget.style.filter = '')}
     >
-      <div style={{ fontWeight: 700, fontSize: 10, color: color.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>
+      {werkbon.assignedToIds && werkbon.assignedToIds.length > 1 && (
+        <div title={`${werkbon.assignedToIds.length} medewerkers toegewezen`} style={{ position: 'absolute', top: 2, right: 3, fontSize: 8, fontWeight: 800, color: color.text, background: color.border, borderRadius: 6, padding: '0 4px', lineHeight: 1.6 }}>
+          +{werkbon.assignedToIds.length - 1}
+        </div>
+      )}
+      <div style={{ fontWeight: 700, fontSize: 10, color: color.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3, paddingRight: werkbon.assignedToIds && werkbon.assignedToIds.length > 1 ? 18 : 0 }}>
         {werkbon.titel}
       </div>
       {height > 30 && (
@@ -328,7 +374,7 @@ function QuickPlanModal({ werkbon, date, hour, teamMembers, onClose, onSaved }) 
   const toast = useToast();
   const [starttijd, setStarttijd] = useState(minsToTime(hour * 60));
   const [eindtijd,  setEindtijd]  = useState(minsToTime(hour * 60 + 60));
-  const [assignedTo, setAssignedTo] = useState(werkbon.assignedTo || '');
+  const [assignedToIds, setAssignedToIds] = useState(werkbon.assignedToIds || (werkbon.assignedTo ? [werkbon.assignedTo] : []));
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
@@ -338,7 +384,7 @@ function QuickPlanModal({ werkbon, date, hour, teamMembers, onClose, onSaved }) 
         gepland_op: date,
         starttijd: starttijd || null,
         eindtijd:  eindtijd  || null,
-        assigned_to: assignedTo || null,
+        assigned_to_ids: assignedToIds,
       });
       // Werk hét calendar_event van deze werkbon bij (upsert op werkbon_id) —
       // geen nieuw event bij herhaald inplannen.
@@ -387,11 +433,8 @@ function QuickPlanModal({ werkbon, date, hour, teamMembers, onClose, onSaved }) 
             </div>
           </div>
           <div className="f">
-            <label>Medewerker</label>
-            <select value={assignedTo} onChange={e => setAssignedTo(e.target.value)}>
-              <option value="">— Niet toegewezen —</option>
-              {teamMembers.map(m => <option key={m.id} value={m.id}>{m.fullName}</option>)}
-            </select>
+            <label>Medewerkers <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(meerdere mogelijk)</span></label>
+            <MemberMultiSelect members={teamMembers} value={assignedToIds} onChange={setAssignedToIds} />
           </div>
         </div>
         <div className="fa" style={{ justifyContent: 'flex-end', gap: 8, paddingTop: 12 }}>
@@ -555,11 +598,8 @@ function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, pro
             <input type="time" value={form.eindtijd} onChange={e => { setEindtijdManual(true); set('eindtijd', e.target.value); }} />
           </div>
           <div className="f">
-            <label>Medewerker</label>
-            <select value={form.assigned_to} onChange={e => set('assigned_to', e.target.value)}>
-              <option value="">— Niet toegewezen —</option>
-              {teamMembers.map(m => <option key={m.id} value={m.id}>{m.fullName}</option>)}
-            </select>
+            <label>Medewerkers <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(meerdere mogelijk)</span></label>
+            <MemberMultiSelect members={teamMembers} value={form.assigned_to_ids} onChange={ids => set('assigned_to_ids', ids)} />
           </div>
           <div className="f">
             <label>Voertuig <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(optioneel)</span></label>
@@ -614,7 +654,7 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, onClose, onSa
   const toast = useToast();
   const [form, setForm] = useState({
     titel: '', customer_id: '', project_id: '', gepland_op: toISO(new Date()),
-    starttijd: '09:00', eindtijd: '11:00', assigned_to: '', voertuig_id: '', locatie: '', omschrijving: '',
+    starttijd: '09:00', eindtijd: '11:00', assigned_to_ids: [], voertuig_id: '', locatie: '', omschrijving: '',
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -634,7 +674,7 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, onClose, onSa
         gepland_op: form.gepland_op || null,
         starttijd: form.starttijd || null,
         eindtijd: form.eindtijd || null,
-        assigned_to: form.assigned_to || null,
+        assigned_to_ids: form.assigned_to_ids,
         voertuig_id: form.voertuig_id || null,
         locatie: form.locatie || null,
         omschrijving: form.omschrijving || null,
@@ -742,7 +782,7 @@ function DetailModal({ werkbon, teamMembers, voertuigen, onClose, onUpdated, ope
     gepland_op: werkbon.geplandOp || '',
     starttijd: werkbon.starttijd || '',
     eindtijd: werkbon.eindtijd || '',
-    assigned_to: werkbon.assignedTo || '',
+    assigned_to_ids: werkbon.assignedToIds || (werkbon.assignedTo ? [werkbon.assignedTo] : []),
     voertuig_id: werkbon.voertuigId || '',
     locatie: werkbon.locatie || '',
     status: werkbon.status || 'gepland',
@@ -758,7 +798,7 @@ function DetailModal({ werkbon, teamMembers, voertuigen, onClose, onUpdated, ope
         gepland_op: form.gepland_op || null,
         starttijd: form.starttijd || null,
         eindtijd: form.eindtijd || null,
-        assigned_to: form.assigned_to || null,
+        assigned_to_ids: form.assigned_to_ids,
         voertuig_id: form.voertuig_id || null,
         locatie: form.locatie || null,
         status: form.status,
@@ -831,11 +871,8 @@ function DetailModal({ werkbon, teamMembers, voertuigen, onClose, onUpdated, ope
             <input type="time" value={form.eindtijd} onChange={e => set('eindtijd', e.target.value)} />
           </div>
           <div className="f">
-            <label>Medewerker</label>
-            <select value={form.assigned_to} onChange={e => set('assigned_to', e.target.value)}>
-              <option value="">— Geen —</option>
-              {teamMembers.map(m => <option key={m.id} value={m.id}>{m.fullName}</option>)}
-            </select>
+            <label>Medewerkers <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(meerdere mogelijk)</span></label>
+            <MemberMultiSelect members={teamMembers} value={form.assigned_to_ids} onChange={ids => set('assigned_to_ids', ids)} />
           </div>
           <div className="f">
             <label>Voertuig</label>
@@ -946,7 +983,10 @@ export function PlanningPage({ openCustomer } = {}) {
 
   const colorMap = useMemo(() => {
     if (viewMode === 'totaal') {
-      return buildColorMap(teamMembers.map(m => m.id));
+      const map = buildColorMap(teamMembers.map(m => m.id));
+      // Niet-toegewezen werkbonnen krijgen grijs i.p.v. de kleur van het 1e lid.
+      map['__none__'] = UNASSIGNED_COLOR;
+      return map;
     }
     // Per medewerker / voertuig: kleur per project
     const projectIds = [...new Set(werkbonnen.map(w => w.projectId || '__none__'))];
@@ -955,7 +995,11 @@ export function PlanningPage({ openCustomer } = {}) {
 
   const legendItems = useMemo(() => {
     if (viewMode === 'totaal') {
-      return teamMembers.map(m => ({ id: m.id, label: m.fullName, color: colorMap[m.id] || entityColor(0) }));
+      const items = teamMembers.map(m => ({ id: m.id, label: m.fullName, color: colorMap[m.id] || entityColor(0) }));
+      if (werkbonnen.some(w => !w.assignedTo)) {
+        items.push({ id: '__none__', label: 'Niet toegewezen', color: UNASSIGNED_COLOR });
+      }
+      return items;
     }
     const seen = new Set();
     const items = [];
@@ -972,7 +1016,7 @@ export function PlanningPage({ openCustomer } = {}) {
   // ── FILTER & COLOR KEY ─────────────────────────────────────────────────────
 
   const filteredWb = useMemo(() => {
-    if (viewMode === 'medewerker') return werkbonnen.filter(w => w.assignedTo === selectedMember);
+    if (viewMode === 'medewerker') return werkbonnen.filter(w => (w.assignedToIds && w.assignedToIds.includes(selectedMember)) || w.assignedTo === selectedMember);
     if (viewMode === 'voertuig')   return werkbonnen.filter(w => w.voertuigId === selectedVehicle);
     return werkbonnen;
   }, [werkbonnen, viewMode, selectedMember, selectedVehicle]);

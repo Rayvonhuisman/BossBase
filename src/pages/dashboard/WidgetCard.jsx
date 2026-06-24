@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { I } from '../../bb-shared.jsx';
 import { getSupportedSizes } from '../../data/widgetRegistry.js';
 import { activiteitTypeLabel } from '../../services/activityService.js';
@@ -22,12 +22,45 @@ const C = {
   green: '#1DDB62', greenDark: '#15A34A', greenSoft: '#d1fae5', greenSofter: '#f0fdf4', greenInk: '#15A34A',
 };
 
-const eur  = n => '€ ' + (Number(n) || 0).toLocaleString('nl-NL');
+// Dashboard-widgets tonen hele euro's (geen centen) in NL-notatie: € 1.250.000.
+// Centen elders (offertes, facturen, kostenregels, PDF's) blijven ongemoeid.
+const eur  = n => '€ ' + Math.round(Number(n) || 0).toLocaleString('nl-NL', { maximumFractionDigits: 0 });
 const kEur = n => {
   n = Number(n) || 0;
   if (Math.abs(n) >= 1000) return '€ ' + (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
-  return '€ ' + n.toLocaleString('nl-NL');
+  return '€ ' + Math.round(n).toLocaleString('nl-NL', { maximumFractionDigits: 0 });
 };
+
+// Schaalt de hoofdwaarde automatisch terug zodat grote bedragen (tonnen,
+// € 1.250.000) altijd binnen de vaste widgetbreedte passen — zonder de widget
+// te laten groeien, afkappen of overflowen. Tussen min en max font-size.
+function FitValue({ children, className = 'bb-kpi-value', style, max = 26, min = 14 }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      let s = max;
+      el.style.fontSize = s + 'px';
+      let guard = 60;
+      // Krimp tot de inhoud binnen de eigen breedte past (of de min bereikt is).
+      while (s > min && el.scrollWidth > el.clientWidth && guard-- > 0) {
+        s -= 1;
+        el.style.fontSize = s + 'px';
+      }
+    };
+    fit();
+    const parent = el.parentElement;
+    const ro = parent ? new ResizeObserver(fit) : null;
+    if (ro && parent) ro.observe(parent);
+    return () => ro?.disconnect();
+  }, [children, max, min]);
+  return (
+    <div ref={ref} className={className} style={{ ...style, whiteSpace: 'nowrap', overflow: 'hidden' }}>
+      {children}
+    </div>
+  );
+}
 const initialsOf = s => (s || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
 function toLocalDateKey(dateLike) {
   if (!dateLike) return null;
@@ -184,7 +217,7 @@ function KpiCard({ icon, label, value, sub, tone = 'green', onClick }) {
         {icon && <span className="tile">{icon}</span>}
         {label}
       </div>
-      <div className="bb-kpi-value">{value}</div>
+      <FitValue>{value}</FitValue>
       {sub && <div className="bb-kpi-sub">{sub}</div>}
     </div>
   );
@@ -286,7 +319,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
   // persoonlijk (de Planning-pagina blijft het volledige team-overzicht). Voor
   // een medewerker is dit al via RLS afgedwongen; dit dekt admin/planner af.
   const myActivities = currentUserId ? activities.filter(a => a.assignee === currentUserId) : activities;
-  const myWerkbonnen = currentUserId ? werkbonnen.filter(w => w.assignedTo === currentUserId) : werkbonnen;
+  const myWerkbonnen = currentUserId ? werkbonnen.filter(w => (w.assignedToIds && w.assignedToIds.includes(currentUserId)) || w.assignedTo === currentUserId) : werkbonnen;
   const myCalendarEvents = currentUserId ? calendarEvents.filter(e => e.assignedTo === currentUserId) : calendarEvents;
   const charts = data.charts || {};
   if (loading) return (
@@ -337,12 +370,12 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     case 'open_pipeline_value': {
       const open = deals.filter(d => !['lost', 'completed', 'paid'].includes(d.stage));
       const val = open.reduce((s, d) => s + (d.value || 0), 0);
-      return <KpiCard tone="green" icon={I.brief} label="Open pipeline" value={kEur(val)} sub={<><span>{open.length} deals</span><span>·</span><Delta dir="up">Live</Delta></>} onClick={() => setPage('pipeline')} />;
+      return <KpiCard tone="green" icon={I.brief} label="Open pipeline" value={eur(val)} sub={<><span>{open.length} deals</span><span>·</span><Delta dir="up">Live</Delta></>} onClick={() => setPage('pipeline')} />;
     }
     case 'accepted_value': {
       const acc = deals.filter(d => ['approved', 'planned', 'in_progress', 'completed', 'paid'].includes(d.stage));
       const val = acc.reduce((s, d) => s + (d.value || 0), 0);
-      return <KpiCard tone="success" icon={I.euro} label="Geaccepteerd" value={kEur(val)} sub={<><span>{acc.length} deals</span><span>·</span><Delta dir="up">Akkoord</Delta></>} onClick={() => setPage('pipeline')} />;
+      return <KpiCard tone="success" icon={I.euro} label="Geaccepteerd" value={eur(val)} sub={<><span>{acc.length} deals</span><span>·</span><Delta dir="up">Akkoord</Delta></>} onClick={() => setPage('pipeline')} />;
     }
     case 'customers':
       return <KpiCard tone="info" icon={I.cust} label="Klanten" value={customers.length} sub={`${customers.length} actief in CRM`} onClick={() => setPage('customers')} />;
@@ -350,18 +383,18 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     case 'costs_per_job': {
       const done = deals.filter(d => ['completed', 'paid'].includes(d.stage));
       const avg = done.length ? done.reduce((s, d) => s + (d.value || 0) * 0.35, 0) / done.length : 0;
-      return <KpiCard tone="neutral" icon={I.costs} label="Kosten per klus" value={avg > 0 ? kEur(avg) : '—'} sub={done.length ? `gemiddeld · ${done.length} klussen` : 'geen afgeronde klussen'} onClick={() => setPage('costs')} />;
+      return <KpiCard tone="neutral" icon={I.costs} label="Kosten per klus" value={avg > 0 ? eur(avg) : '—'} sub={done.length ? `gemiddeld · ${done.length} klussen` : 'geen afgeronde klussen'} onClick={() => setPage('costs')} />;
     }
     case 'costs_month': {
       const now = new Date();
       const md = deals.filter(d => ['paid', 'completed'].includes(d.stage) && d.createdAt && new Date(d.createdAt).getMonth() === now.getMonth());
       const val = md.reduce((s, d) => s + (d.value || 0) * 0.35, 0);
-      return <KpiCard tone="amber" icon={I.costs} label="Kosten deze maand" value={val > 0 ? kEur(val) : '—'} sub={<><span>~35% marge</span><span>·</span><span>{md.length} klussen</span></>} onClick={() => setPage('costs')} />;
+      return <KpiCard tone="amber" icon={I.costs} label="Kosten deze maand" value={val > 0 ? eur(val) : '—'} sub={<><span>~35% marge</span><span>·</span><span>{md.length} klussen</span></>} onClick={() => setPage('costs')} />;
     }
     case 'billable': {
       const b = deals.filter(d => ['approved', 'planned', 'in_progress'].includes(d.stage));
       const val = b.reduce((s, d) => s + (d.value || 0), 0);
-      return <KpiCard tone="warn" icon={I.euro} label="Te factureren" value={val > 0 ? kEur(val) : '—'} sub={b.length ? `${b.length} klussen klaar` : 'niets in de wacht'} onClick={() => setPage('revenue')} />;
+      return <KpiCard tone="warn" icon={I.euro} label="Te factureren" value={val > 0 ? eur(val) : '—'} sub={b.length ? `${b.length} klussen klaar` : 'niets in de wacht'} onClick={() => setPage('revenue')} />;
     }
 
     case 'revenue_month': {
@@ -381,7 +414,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
             <span className="tile">{I.revenue}</span>
             Omzet deze maand
           </div>
-          <div className="bb-kpi-value">{eur(val)}</div>
+          <FitValue>{eur(val)}</FitValue>
           <div className="bb-kpi-sub">
             <span>vs. vorige maand</span>
             <span>·</span>
@@ -413,7 +446,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
             <span className="tile">{I.trend}</span>
             Winst deze maand
           </div>
-          <div className="bb-kpi-value">{eur(val)}</div>
+          <FitValue>{eur(val)}</FitValue>
           <div className="bb-kpi-sub">
             <span>marge ~28%</span>
             <span>·</span>
@@ -776,7 +809,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
           <WHead title="Uren deze week" sub={`Doel ${target}u · ${daily.length ? (total / daily.length).toFixed(1) : 0}u/dag gem.`} right={<Chip tone={pctDoel >= 100 ? 'success' : 'neutral'} noDot>{pctDoel}%</Chip>} />
           <div style={{ padding: '6px 16px 18px' }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <div className="bb-kpi-value" style={{ marginTop: 0 }}>{total}u</div>
+              <FitValue style={{ marginTop: 0 }}>{total}u</FitValue>
               <div style={{ fontSize: 12.5, color: C.dmu }}>van {target}u</div>
             </div>
             {/* minHeight i.p.v. vaste height: bij hoge balkjes groeit het blok mee
@@ -1425,7 +1458,7 @@ function MonthlyRevenueChart({ charts, widget, ux, onNav }) {
       <div style={{ padding: '6px 16px 4px', display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
         <div>
           <div className="bb-widget-eyebrow" style={{ fontSize: 10.5 }}>Deze maand</div>
-          <div className="bb-kpi-value" style={{ marginTop: 4 }}>{eur(last)}</div>
+          <FitValue style={{ marginTop: 4 }}>{eur(last)}</FitValue>
         </div>
         {prev > 0 && <Delta dir={change >= 0 ? 'up' : 'down'}>{change >= 0 ? '+' : ''}{change}% vs vorige</Delta>}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 14, fontSize: 12, color: C.dmu }}>

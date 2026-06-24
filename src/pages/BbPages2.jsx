@@ -232,12 +232,13 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
         // alles mag zien voor Planning) doen we het hier app-side.
         const uid = profile?.id;
         const mine = owner => !uid || owner === uid;
+        const mineWerkbon = w => !uid || (w.assignedToIds && w.assignedToIds.includes(uid)) || w.assignedTo === uid;
         // Werkbon-gekoppelde calendar_events verbergen: de werkbon zelf wordt
         // hieronder als (altijd actuele) synthetisch event getoond. Zo verschijnt
         // elk item exact één keer — gededupliceerd op werkbon_id.
         const manualEvents = data.filter(e => !e.werkbonId && mine(e.assignedTo));
         const wbEvents = wbs
-          .filter(w => w.geplandOp && w.status !== 'afgerond' && mine(w.assignedTo))
+          .filter(w => w.geplandOp && w.status !== 'afgerond' && mineWerkbon(w))
           .map(w => ({
             id: `wb-${w.id}`,
             title: w.titel,

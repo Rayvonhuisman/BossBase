@@ -14,6 +14,10 @@ const toWerkbon = row => ({
   offerteId: row.offerte_id,
   projectId: row.project_id || null,
   assignedTo: row.assigned_to,
+  // Meerdere toegewezen medewerkers; valt terug op de enkele assigned_to.
+  assignedToIds: Array.isArray(row.assigned_to_ids) && row.assigned_to_ids.length
+    ? row.assigned_to_ids
+    : (row.assigned_to ? [row.assigned_to] : []),
   voertuigId: row.voertuig_id || null,
   titel: row.titel || "",
   omschrijving: row.omschrijving || "",
@@ -96,13 +100,27 @@ export async function getWerkbonById(id) {
   return toWerkbon(data)
 }
 
+// Bepaal de lijst toegewezen medewerkers + de primaire (eerste) uit de input,
+// zodat assigned_to_ids en assigned_to altijd consistent zijn.
+function normalizeAssignees(input) {
+  let ids = input.assigned_to_ids ?? input.assignedToIds
+  if (!Array.isArray(ids)) {
+    const single = input.assigned_to ?? input.assignedTo
+    ids = single ? [single] : []
+  }
+  ids = ids.filter(Boolean)
+  return { ids, primary: ids[0] || null }
+}
+
 export async function createWerkbon(input) {
+  const { ids: assigneeIds, primary } = normalizeAssignees(input)
   const base = {
     customer_id: input.customer_id || input.customerId || null,
     deal_id: input.deal_id || input.dealId || null,
     offerte_id: input.offerte_id || input.offerteId || null,
     project_id: input.project_id || input.projectId || null,
-    assigned_to: input.assigned_to || input.assignedTo || null,
+    assigned_to: primary,
+    assigned_to_ids: assigneeIds,
     voertuig_id: input.voertuig_id || input.voertuigId || null,
     titel: input.titel,
     omschrijving: input.omschrijving || null,
@@ -128,6 +146,14 @@ export async function createWerkbon(input) {
 
 export async function updateWerkbon(id, input) {
   const updates = { ...input }
+  // Toewijzing: houd assigned_to_ids (lijst) en assigned_to (primair) in sync
+  // zodra één van beide wordt meegegeven.
+  if ('assigned_to_ids' in input || 'assignedToIds' in input || 'assigned_to' in input || 'assignedTo' in input) {
+    const { ids, primary } = normalizeAssignees(input)
+    updates.assigned_to_ids = ids
+    updates.assigned_to = primary
+  }
+  delete updates.assignedToIds
   // Verwijder frontend-aliases
   delete updates.customerId
   delete updates.dealId
