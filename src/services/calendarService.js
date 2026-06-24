@@ -56,6 +56,9 @@ export function mapCalendarEventFormToPayload(input = {}) {
   if (input.werkbon_id !== undefined || input.werkbonId !== undefined) {
     payload.werkbon_id = input.werkbon_id ?? input.werkbonId ?? null
   }
+  if (input.assigned_to !== undefined || input.assignedTo !== undefined) {
+    payload.assigned_to = input.assigned_to ?? input.assignedTo ?? null
+  }
 
   payload.start_at = input.start_at || input.startAt || times.start_at
   payload.end_at = input.end_at || input.endAt || times.end_at
@@ -93,6 +96,7 @@ export const toCalendarEvent = row => {
     activityId: row.activiteit_id || row.activity_id || null,
     activiteitId: row.activiteit_id || null,
     werkbonId: row.werkbon_id || null,
+    assignedTo: row.assigned_to || null,
     comments: Array.isArray(row.comments) ? row.comments : [],
     location: row.location || "",
     description: row.notes || "",
@@ -116,6 +120,12 @@ export async function listCalendarEvents() {
 
 export async function createCalendarEvent(input) {
   const payload = await withCompanyId(mapCalendarEventFormToPayload(input))
+  // Persoonlijke agenda: een handmatig agenda-item hoort standaard bij de maker,
+  // zodat het in zijn eigen agenda verschijnt (en niet in die van collega's).
+  if (payload.assigned_to == null) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) payload.assigned_to = user.id
+  }
   const { data, error } = await safeInsert(supabase, "calendar_events", payload)
   if (error) throw error
   const event = toCalendarEvent(data)
@@ -157,10 +167,13 @@ export async function updateCalendarEventComments(id, comments) {
 export async function upsertWerkbonEvent({ werkbonId, title, date, time, end, customerId, description }) {
   if (!werkbonId) return null
   const times = buildEventTimes(date, time, end)
+  // Agenda-item erft de eigenaar van de werkbon (persoonlijke agenda).
+  const { data: wb } = await supabase.from("werkbonnen").select("assigned_to").eq("id", werkbonId).maybeSingle()
   const base = {
     title: title || "Werkbon",
     customer_id: customerId || null,
     notes: description || null,
+    assigned_to: wb?.assigned_to || null,
     start_at: times.start_at,
     end_at: times.end_at,
   }
@@ -196,11 +209,14 @@ export async function upsertWerkbonEvent({ werkbonId, title, date, time, end, cu
 export async function upsertActivityEvent({ activiteitId, title, date, time, end, customerId, location, description }) {
   if (!activiteitId) return null
   const times = buildEventTimes(date, time, end)
+  // Agenda-item erft de eigenaar van de activiteit (persoonlijke agenda).
+  const { data: act } = await supabase.from("activities").select("assigned_to").eq("id", activiteitId).maybeSingle()
   const base = {
     title: title || "Activiteit",
     customer_id: customerId || null,
     location: location || null,
     notes: description || null,
+    assigned_to: act?.assigned_to || null,
     start_at: times.start_at,
     end_at: times.end_at,
   }

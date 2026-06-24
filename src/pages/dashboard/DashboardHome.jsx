@@ -272,7 +272,7 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
   );
   const sharedData = demoMode
     ? demoData
-    : { deals, stages, activities, customers, offertes, werkbonnen, calendarEvents, loading: dataLoading, charts: realCharts };
+    : { deals, stages, activities, customers, offertes, werkbonnen, calendarEvents, loading: dataLoading, charts: realCharts, currentUserId: profile?.id || null };
 
   // Dirty check: anything changed since entering edit mode?
   const isDirty = useMemo(

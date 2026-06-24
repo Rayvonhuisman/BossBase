@@ -280,7 +280,14 @@ const actIcoSvg = t => {
 
 // ── Widget content renderer ───────────────────────────────────
 function renderContent(type, data, widget, setPage, openCustomer, onSettingsChange, ux, openDeal, openInvoice, openCalendarEvent) {
-  const { deals = [], stages = [], activities = [], customers = [], offertes = [], werkbonnen = [], calendarEvents = [], loading } = data;
+  const { deals = [], stages = [], activities = [], customers = [], offertes = [], werkbonnen = [], calendarEvents = [], loading, currentUserId = null } = data;
+  // Persoonlijke widgets (eigen activiteiten/werkbonnen/agenda) tonen alleen de
+  // items van de ingelogde gebruiker — ook voor admin, want het dashboard is
+  // persoonlijk (de Planning-pagina blijft het volledige team-overzicht). Voor
+  // een medewerker is dit al via RLS afgedwongen; dit dekt admin/planner af.
+  const myActivities = currentUserId ? activities.filter(a => a.assignee === currentUserId) : activities;
+  const myWerkbonnen = currentUserId ? werkbonnen.filter(w => w.assignedTo === currentUserId) : werkbonnen;
+  const myCalendarEvents = currentUserId ? calendarEvents.filter(e => e.assignedTo === currentUserId) : calendarEvents;
   const charts = data.charts || {};
   if (loading) return (
     <div className="bb-widget">
@@ -426,8 +433,8 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
 
     // ───────── Acties vandaag ─────────
     case 'actions_today': {
-      const items = activities.filter(a => isOpenAct(a) && (a.dueAt?.slice(0, 10) === today || a.status === 'today' || a.status === 'overdue')).slice(0, 8);
-      const overdue = activities.filter(a => isOpenAct(a) && a.dueAt && a.dueAt.slice(0, 10) < today).length;
+      const items = myActivities.filter(a => isOpenAct(a) && (a.dueAt?.slice(0, 10) === today || a.status === 'today' || a.status === 'overdue')).slice(0, 8);
+      const overdue = myActivities.filter(a => isOpenAct(a) && a.dueAt && a.dueAt.slice(0, 10) < today).length;
       if (widget.size === 'small') {
         return <KpiCard tone={overdue > 0 ? 'warn' : 'info'} icon={I.act} label="Activiteiten vandaag" value={items.length} sub={overdue > 0 ? <>{overdue} <Delta dir="down">te laat</Delta></> : 'alles op tijd'} onClick={() => setPage('activities')} />;
       }
@@ -467,7 +474,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
 
     // ───────── Taken te laat ─────────
     case 'overdue_tasks': {
-      const items = activities.filter(a => isOpenAct(a) && a.dueAt && a.dueAt.slice(0, 10) < today).slice(0, 6);
+      const items = myActivities.filter(a => isOpenAct(a) && a.dueAt && a.dueAt.slice(0, 10) < today).slice(0, 6);
       if (widget.size === 'small') {
         return <KpiCard tone={items.length ? 'warn' : 'success'} icon={I.clock} label="Taken te laat" value={items.length} sub={items.length ? `${items.length} over datum` : 'alles op tijd'} onClick={() => setPage('activities')} />;
       }
@@ -711,7 +718,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
 
     // ───────── Werkbonnen vandaag ─────────
     case 'werkbonnen_today': {
-      const items = werkbonnen.filter(w => w.geplandOp === today || w.datum === today).slice(0, 6);
+      const items = myWerkbonnen.filter(w => w.geplandOp === today || w.datum === today).slice(0, 6);
       const tone = s => statusInfo(s, 'werkbon').chip;
       const label = s => statusInfo(s, 'werkbon').label;
       if (widget.size === 'small') {
@@ -807,11 +814,11 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const evClass = { call: 'ev-info', email: 'ev-green', visit: 'ev-purple', task: 'ev-orange', follow: 'ev-warn' };
       const inWeek = iso => iso && iso >= cols[0].iso && iso <= cols[6].iso;
       const inRange = agendaView === 'today' ? (iso => iso === todayKey) : inWeek;
-      const actItems = activities
+      const actItems = myActivities
         .map(a => ({ a, iso: a.dueAt ? toLocalDateKey(a.dueAt) : null }))
         .filter(({ a, iso }) => isOpenAct(a) && inRange(iso))
         .map(({ a, iso }) => ({ kind: 'activity', id: a.id, activityId: a.id, title: a.title, time: a.time || '', iso, atype: a.type, custId: a.custId, dealId: a.dealId }));
-      const evItems = (calendarEvents || [])
+      const evItems = (myCalendarEvents || [])
         .map(e => ({ e, iso: toLocalDateKey(e.startAt || e.date) }))
         .filter(({ e, iso }) => !e.activityId && e.id && inRange(iso))
         .map(({ e, iso }) => ({ kind: 'event', id: e.id, title: e.title || 'Afspraak', time: e.time || '', iso, custId: e.custId, dealId: e.dealId }));
