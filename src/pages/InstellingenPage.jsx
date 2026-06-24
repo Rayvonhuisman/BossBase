@@ -792,6 +792,7 @@ export function InstellingenPage() {
               size="xl"
               onUpload={handleProfileAvatarUpload}
               onRemove={profile?.avatarUrl ? handleProfileAvatarRemove : null}
+              helperText="JPG, PNG of WEBP"
             />
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--dk)', letterSpacing: '-.01em', wordBreak: 'break-word' }}>
