@@ -1527,7 +1527,7 @@ function RevStat({ label, value, sub }) {
   return (
     <div style={{ minWidth: 0 }}>
       <div className="bb-widget-eyebrow" style={{ fontSize: 10.5 }}>{label}</div>
-      <div style={{ fontSize: 16, fontWeight: 800, color: C.dk, letterSpacing: -0.3, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
+      <FitValue className="" max={16} min={10} style={{ fontWeight: 800, color: C.dk, letterSpacing: -0.3, marginTop: 4 }}>{value}</FitValue>
       {sub && <div style={{ fontSize: 11.5, color: C.dmu, fontWeight: 600, marginTop: 2 }}>{sub}</div>}
     </div>
   );
