@@ -46,7 +46,7 @@ export function mailTemplate({
 
   const footerLine = isSystem
     ? `BossBase &middot; <a href="https://www.bossbase.nl" style="color:#9ca3af;">bossbase.nl</a>`
-    : `Verstuurd door ${companyName}`
+    : `Verstuurd met <a href="https://www.bossbase.nl" style="color:#9ca3af;text-decoration:none;font-weight:600;">BossBase</a>`
 
   const buttonHtml = buttonText && buttonUrl ? `
               <table cellpadding="0" cellspacing="0" role="presentation" style="margin:28px 0 0;">
