@@ -696,6 +696,8 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
   const fmtDate = d => d ? new Date(d).toLocaleDateString('nl-NL') : '—';
 
   useEffect(() => {
+    // Let op: GEEN `link` in vars. Zo blijft {{link}} als zichtbare placeholder
+    // in de tekst-editor staan; pas bij verzenden wordt het een nette knop.
     const vars = {
       klant_naam: customer?.name || offerte.customerName || 'klant',
       bedrijfsnaam: company?.name || 'ons bedrijf',
@@ -703,21 +705,14 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
       omschrijving: offerte.omschrijving || '',
       totaal_bedrag: fmt2(offerte.totaalIncl),
       vervaldatum: fmtDate(offerte.geldigTot),
-      link: signLink,
     };
     getMailTemplate('offerte')
       .then(tpl => {
         const sub = tpl ? substituteVars(tpl.onderwerp || '', vars) : `Offerte ${offerte.nummer} van ${company?.name || ''}`;
-        // {{link}} wordt een sentinel zodat we de ondertekenlink als nette KNOP
-        // op exact die plek in de tekst tonen (boven "Heeft u vragen"), i.p.v.
-        // een uitgetypte URL.
-        const tplBody = (tpl?.body || '').replace(/\{\{\s*link\s*\}\}/g, '%%KNOP%%');
         const rawBody = tpl
-          ? substituteVars(tplBody, vars)
-          : `Beste ${vars.klant_naam},\n\nHierbij sturen wij u offerte ${offerte.nummer} toe.\n\nVia onderstaande knop kunt u de offerte bekijken en digitaal ondertekenen:\n%%KNOP%%\n\nHeeft u vragen? Neem gerust contact met ons op.\n\nMet vriendelijke groet,\n${company?.name || ''}`;
-        const knop = offerte.sign_token ? mailButton('Offerte bekijken &amp; ondertekenen', signLink, company?.brandingColor) : '';
-        const bodyHtml = plainToEditorHtml(rawBody).replace(/%%KNOP%%/g, knop);
-        setForm({ to: customer?.email || '', subject: sub, body: bodyHtml });
+          ? substituteVars(tpl.body || '', vars)
+          : `Beste ${vars.klant_naam},\n\nHierbij sturen wij u offerte ${offerte.nummer} toe.\n\nVia onderstaande knop kunt u de offerte bekijken en digitaal ondertekenen:\n{{link}}\n\nHeeft u vragen? Neem gerust contact met ons op.\n\nMet vriendelijke groet,\n${company?.name || ''}`;
+        setForm({ to: customer?.email || '', subject: sub, body: plainToEditorHtml(rawBody) });
       })
       .catch(() => setForm({ to: customer?.email || '', subject: `Offerte ${offerte.nummer}`, body: '' }))
       .finally(() => setLoading(false));
@@ -735,13 +730,17 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
       } catch (pdfErr) {
         console.warn('PDF bijlage genereren mislukt:', pdfErr.message);
       }
-      // Zakelijke mail: wikkel de opgestelde body in de centrale template met
-      // bedrijfslogo + bedrijfskleur (variant 1), consistent met alle mails.
-      // De ondertekenknop staat al inline in de body (boven "Heeft u vragen"),
-      // dus géén losse knop onderaan de template.
+      // Pas bij verzenden wordt de {{link}}/{{knop}} placeholder een nette knop
+      // (in de bedrijfskleur). In de composer blijft het dus pure tekst.
+      const knop = offerte.sign_token
+        ? mailButton('Offerte bekijken &amp; ondertekenen', signLink, company?.brandingColor)
+        : signLink;
+      const bodyForSend = form.body.replace(/\{\{\s*(?:link|knop)\s*\}\}/gi, knop);
+      // Zakelijke mail: wikkel de body in de centrale template met bedrijfslogo
+      // + bedrijfskleur (variant 1), consistent met alle mails.
       const wrappedHtml = mailTemplate({
         title: form.subject,
-        body: form.body,
+        body: bodyForSend,
         companyName: company?.name || 'Ons bedrijf',
         logoUrl: company?.logoUrl,
         brandColor: company?.brandingColor,
