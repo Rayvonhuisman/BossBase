@@ -38,7 +38,7 @@ function InviteModal({ onClose, onSaved }) {
     full_name: '',
     phone: '',
     role: 'medewerker',
-    hours_per_week: 40,
+    hours_per_week: '',
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -110,13 +110,14 @@ function InviteModal({ onClose, onSaved }) {
             </select>
           </div>
           <div className="f">
-            <label>Uren per week</label>
+            <label>Uren per week (optioneel)</label>
             <input
               type="number"
               min="0"
               max="60"
+              placeholder="bijv. 40"
               value={form.hours_per_week}
-              onChange={e => set('hours_per_week', Number(e.target.value))}
+              onChange={e => set('hours_per_week', e.target.value)}
             />
           </div>
         </div>
