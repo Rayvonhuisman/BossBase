@@ -440,13 +440,6 @@ export function enrichProject(project, { timeEntries = [], invoices = [], usedHo
   const value = Number(project.projectValue || 0)
   const remainingToInvoice = Math.max(0, value - invoicedAmount)
 
-  const health = calculateProjectHealth({
-    ...project,
-    usedHours,
-    hoursPercentage,
-    remainingToInvoice,
-  })
-
   return {
     ...project,
     usedHours: Math.round(usedHours * 100) / 100,
@@ -454,45 +447,7 @@ export function enrichProject(project, { timeEntries = [], invoices = [], usedHo
     hoursPercentage,
     invoicedAmount: Math.round(invoicedAmount * 100) / 100,
     remainingToInvoice: Math.round(remainingToInvoice * 100) / 100,
-    health,
   }
-}
-
-/**
- * Berekent een health-label voor een project.
- * Regels:
- *   - 'overschreden' wanneer hoursPercentage > 1 (>100%)
- *   - 'risk' wanneer deadline verlopen en status niet 'afgerond'
- *   - 'warning' wanneer hoursPercentage >= 0.8
- *   - 'invoice'  wanneer status 'te_factureren' en remainingToInvoice > 0
- *   - anders 'healthy'
- */
-export function calculateProjectHealth(p = {}) {
-  const used = Number(p.usedHours ?? p.used_hours ?? 0)
-  const quoted = Number(p.quotedHours ?? p.quoted_hours ?? 0)
-  const pct = p.hoursPercentage != null
-    ? Number(p.hoursPercentage)
-    : (quoted > 0 ? used / quoted : 0)
-
-  const today = new Date().toISOString().slice(0, 10)
-  const status = p.status || 'concept'
-  const deadlineRisk = Boolean(p.deadline) && p.deadline < today && status !== 'afgerond'
-  const invoiceRisk = status === 'te_factureren' && Number(p.remainingToInvoice || 0) > 0
-
-  // overschreden gaat boven alles
-  if (pct > 1) {
-    return { id: 'overschreden', label: 'Uren overschreden', col: 'b-lost', tone: 'risk' }
-  }
-  if (deadlineRisk) {
-    return { id: 'deadline', label: 'Deadline verlopen', col: 'b-lost', tone: 'risk' }
-  }
-  if (pct >= 0.8) {
-    return { id: 'warning', label: 'Let op urenbudget', col: 'b-orange', tone: 'warning' }
-  }
-  if (invoiceRisk) {
-    return { id: 'invoice', label: 'Facturatie openstaand', col: 'b-blue', tone: 'warning' }
-  }
-  return { id: 'healthy', label: 'Gezond', col: 'b-accepted', tone: 'healthy' }
 }
 
 // =============================================================================

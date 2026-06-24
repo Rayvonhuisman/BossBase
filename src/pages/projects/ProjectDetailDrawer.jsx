@@ -173,7 +173,7 @@ function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
             <div style={{ fontWeight: 600, fontSize: 13 }}>
               {fmtHours(project.usedHours)} van {fmtHours(project.quotedHours)}
               {project.quotedHours > 0 && (
-                <span style={{ color: project.health?.tone === 'risk' ? '#dc2626' : project.health?.tone === 'warning' ? '#f59e0b' : 'var(--dl)', marginLeft: 6, fontSize: 12 }}>
+                <span style={{ color: (project.hoursPercentage || 0) > 1 ? '#dc2626' : (project.hoursPercentage || 0) >= 0.8 ? '#f59e0b' : 'var(--dl)', marginLeft: 6, fontSize: 12 }}>
                   ({Math.round((project.hoursPercentage || 0) * 100)}%)
                 </span>
               )}

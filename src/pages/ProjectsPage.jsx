@@ -36,16 +36,11 @@ export function ProjectBadge({ status }) {
   return <span className={s.className}>{s.label}</span>;
 }
 
-export function HealthBadge({ health }) {
-  if (!health) return null;
-  return <span className={`badge ${health.col}`}>{health.label}</span>;
-}
-
-// Slanke progress bar (uren-budget)
-function ProgressBar({ pct, tone }) {
+// Slanke progress bar (uren-budget). Kleur volgt het uren-percentage zelf.
+function ProgressBar({ pct }) {
   const ratio = Math.max(0, Math.min(1.2, Number(pct) || 0));
   const display = Math.min(1, ratio);
-  const color = tone === 'risk' ? '#dc2626' : tone === 'warning' ? '#f59e0b' : '#1DDB62';
+  const color = ratio > 1 ? '#dc2626' : ratio >= 0.8 ? '#f59e0b' : '#1DDB62';
   return (
     <div style={{ width: '100%', height: 6, background: '#f3f4f6', borderRadius: 999, overflow: 'hidden', position: 'relative' }}>
       <div style={{ width: `${display * 100}%`, height: '100%', background: color, borderRadius: 999, transition: 'width .3s ease' }} />
@@ -272,7 +267,7 @@ function ProjectCard({ p, onOpen }) {
           <div style={{ fontWeight: 600 }}>{fmtDate(p.deadline)}</div>
         </div>
       </div>
-      <ProgressBar pct={p.hoursPercentage} tone={p.health?.tone} />
+      <ProgressBar pct={p.hoursPercentage} />
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
         <div style={{ fontSize: 11, color: 'var(--dl)' }}>
           {p.invoicedAmount > 0 ? `${fmt(p.invoicedAmount)} gefactureerd` : 'Nog niet gefactureerd'}
@@ -310,7 +305,6 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
   const [offertes, setOffertes] = useState([]);
 
   const [statusFilter, setStatusFilter] = useState('all'); // all | concept | lopend | te_factureren | afgerond
-  const [riskFilter, setRiskFilter] = useState('all'); // all | risk_only
   const [invoiceFilter, setInvoiceFilter] = useState('all'); // all | unbilled | billed
   const [search, setSearch] = useState('');
 
@@ -363,7 +357,6 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
     const q = search.trim().toLowerCase();
     return projects.filter(p => {
       if (statusFilter !== 'all' && p.status !== statusFilter) return false;
-      if (riskFilter === 'risk_only' && !(p.health?.tone === 'risk')) return false;
       if (invoiceFilter === 'unbilled' && !(p.remainingToInvoice > 0)) return false;
       if (invoiceFilter === 'billed' && !(p.invoicedAmount > 0)) return false;
       if (!q) return true;
@@ -371,7 +364,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
         .filter(Boolean).join(' ').toLowerCase();
       return hay.includes(q);
     });
-  }, [projects, statusFilter, riskFilter, invoiceFilter, search]);
+  }, [projects, statusFilter, invoiceFilter, search]);
 
   // ── KPI's ─────────────────────────────────────────────────────────────────
 
@@ -384,13 +377,11 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
     // direct uit time_entries gefilterd op maand zijn, maar dat vergt een
     // extra query. We tonen totale gewerkte uren tot nu toe.
     const hoursTotal = projects.reduce((s, p) => s + (p.usedHours || 0), 0);
-    const risky = projects.filter(p => p.health?.tone === 'risk').length;
     return {
       active: active.length,
       totalValue,
       remainingToInvoice: totalRemainingToInvoice,
       hours: hoursTotal,
-      risky,
     };
   }, [projects]);
 
@@ -420,7 +411,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
 
       <div className="afu2">
         {/* KPI cards */}
-        <div className="stats-row" style={{ gridTemplateColumns: 'repeat(5,1fr)', marginBottom: 20 }}>
+        <div className="stats-row" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 20 }}>
           <div className="sc">
             <div className="sc-top"><div className="sc-icon">{I.projects}</div></div>
             <div className="sc-val">{kpi.active}</div>
@@ -440,11 +431,6 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
             <div className="sc-top"><div className="sc-icon">{I.hours}</div></div>
             <div className="sc-val">{fmtHours(kpi.hours)}</div>
             <div className="sc-label">Gewerkte uren</div>
-          </div>
-          <div className="sc">
-            <div className="sc-top"><div className="sc-icon">{I.flag}</div></div>
-            <div className="sc-val" style={{ color: kpi.risky > 0 ? '#dc2626' : undefined }}>{kpi.risky}</div>
-            <div className="sc-label">Risico</div>
           </div>
         </div>
 
@@ -466,10 +452,6 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
                 <option value="all">Alle facturatie</option>
                 <option value="unbilled">Nog te factureren</option>
                 <option value="billed">Al gefactureerd</option>
-              </select>
-              <select value={riskFilter} onChange={e => setRiskFilter(e.target.value)} className="filter-select" aria-label="Filter risico">
-                <option value="all">Alle health</option>
-                <option value="risk_only">Alleen risico</option>
               </select>
             </div>
             <div className="search">
@@ -542,7 +524,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
                           {fmtHours(p.usedHours)} / {fmtHours(p.quotedHours)}
                         </td>
                         <td className="td">
-                          <ProgressBar pct={p.hoursPercentage} tone={p.health?.tone} />
+                          <ProgressBar pct={p.hoursPercentage} />
                         </td>
                         <td className="td" style={{ color: isOverdue ? '#dc2626' : 'inherit', whiteSpace: 'nowrap' }}>
                           {fmtDate(p.deadline)}
