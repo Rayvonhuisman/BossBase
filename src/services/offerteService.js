@@ -56,6 +56,9 @@ const toOfferteItem = row => ({
   companyId: row.company_id,
   omschrijving: row.omschrijving,
   eenheid: row.eenheid || "",
+  // type + btwPct zijn null voor regels van vóór de migratie (oude data).
+  type: row.type || null,
+  btwPct: row.btw_pct != null ? Number(row.btw_pct) : null,
   aantal: Number(row.aantal || 1),
   prijsPer: Number(row.prijs_per || 0),
   subtotaal: Number(row.subtotaal || 0),
@@ -246,10 +249,13 @@ export async function getOfferteItems(offerteId) {
 
 export async function createOfferteItem(input) {
   const subtotaal = Math.round(Number(input.aantal || 1) * Number(input.prijs_per || 0) * 100) / 100
+  const btwPct = input.btw_pct ?? input.btwPct
   const base = {
     offerte_id: input.offerte_id || input.offerteId,
     omschrijving: input.omschrijving,
     eenheid: input.eenheid || null,
+    type: input.type || null,
+    btw_pct: btwPct != null ? Number(btwPct) : null,
     aantal: Number(input.aantal || 1),
     prijs_per: Number(input.prijs_per || input.prijsPer || 0),
     subtotaal,

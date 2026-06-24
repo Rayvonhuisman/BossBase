@@ -46,6 +46,14 @@ const TYPE_CFG = {
   vast:  { label: 'Vast bedrag', omschrPh: 'Overige kosten', v1Ph: '0',      v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal} × €${r.eenheidsprijs}` },
 };
 
+// Een opgeslagen BTW-percentage (getal) → de juiste dropdown-staat.
+// 21/9 zijn vaste opties; al het andere valt onder "Anders".
+const btwToSelect = pct => {
+  if (pct === 21) return { btw: '21', btwAnders: '' };
+  if (pct === 9)  return { btw: '9',  btwAnders: '' };
+  return { btw: 'anders', btwAnders: String(pct) };
+};
+
 function BtwSelect({ r, setRegel }) {
   return (
     <div style={{ display: 'flex', gap: 3, alignItems: 'center', minWidth: 0, overflow: 'hidden' }}>
@@ -122,7 +130,7 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
     for (let i = 0; i < regels.length; i++) {
       const r = regels[i];
       const omschrijving = r.omschrijving.trim() || TYPE_CFG[r.type]?.omschrPh || '';
-      await createOfferteItem({ offerte_id: created.id, omschrijving, aantal: Number(r.aantal || 1), prijs_per: Number(r.eenheidsprijs || 0), subtotaal: getRegelprijs(r), volgorde: i });
+      await createOfferteItem({ offerte_id: created.id, omschrijving, type: r.type, btw_pct: getEffBtw(r), aantal: Number(r.aantal || 1), prijs_per: Number(r.eenheidsprijs || 0), subtotaal: getRegelprijs(r), volgorde: i });
     }
     return created;
   };
@@ -325,15 +333,26 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
   useEffect(() => {
     getOfferteItems(offerte.id).then(items => {
       if (items.length > 0) {
-        setRegels(items.map(item => ({
-          id: crypto.randomUUID(),
-          omschrijving: item.omschrijving,
-          type: item.aantal > 1 ? 'uren' : 'vast',
-          aantal: item.aantal,
-          eenheidsprijs: item.prijsPer ?? 0,
-          btw: '21',
-          btwAnders: '',
-        })));
+        // Oude data (vóór de migratie) heeft geen type/btw_pct. Leid het tarief
+        // dan af uit de offerte-totalen zodat het BEDRAG niet verandert; en raad
+        // het type alleen als laatste redmiddel. Nieuwe regels lezen de echte
+        // opgeslagen waarden terug.
+        const fallbackBtw = offerte.totaalExcl > 0
+          ? Math.round((offerte.totaalIncl / offerte.totaalExcl - 1) * 1000) / 10
+          : 21;
+        const snapStd = pct => [9, 21].find(s => Math.abs(s - pct) < 1.5) ?? pct;
+        setRegels(items.map(item => {
+          const pct = item.btwPct != null ? item.btwPct : snapStd(fallbackBtw);
+          const type = item.type || (item.aantal > 1 ? 'uren' : 'vast');
+          return {
+            id: crypto.randomUUID(),
+            omschrijving: item.omschrijving,
+            type,
+            aantal: item.aantal,
+            eenheidsprijs: item.prijsPer ?? 0,
+            ...btwToSelect(pct),
+          };
+        }));
       }
       setLoadingRegels(false);
     }).catch(() => setLoadingRegels(false));
@@ -377,7 +396,7 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
     for (let i = 0; i < regels.length; i++) {
       const r = regels[i];
       const omschrijving = r.omschrijving.trim() || TYPE_CFG[r.type]?.omschrPh || '';
-      await createOfferteItem({ offerte_id: offerte.id, omschrijving, aantal: Number(r.aantal || 1), prijs_per: Number(r.eenheidsprijs || 0), subtotaal: getRegelprijs(r), volgorde: i });
+      await createOfferteItem({ offerte_id: offerte.id, omschrijving, type: r.type, btw_pct: getEffBtw(r), aantal: Number(r.aantal || 1), prijs_per: Number(r.eenheidsprijs || 0), subtotaal: getRegelprijs(r), volgorde: i });
     }
     onSaved?.(updated);
     return updated;
