@@ -189,7 +189,15 @@ async function buildPdf(doc, type, document, regels, customer, company) {
   };
 
   metaRow(type === 'factuur' ? 'Factuurnummer' : 'Offertenummer', document.nummer);
-  const docDate = type === 'factuur' ? document.factuurdatum : (document.createdAt || document.created_at)?.slice(0, 10);
+  // Offertedatum: pak het eerste beschikbare datumveld, ongeacht de objectvorm
+  // (mapped camelCase, ruwe snake_case, of een al-geformatteerd datum-veld).
+  // Zo verschijnt de datum altijd — net als de factuurdatum op de factuur-PDF.
+  const offerteDatum = document.createdAt || document.created_at
+    || document.datum || document.offertedatum
+    || document.verzondenOp || document.verzonden_op || null;
+  const docDate = type === 'factuur'
+    ? document.factuurdatum
+    : (offerteDatum ? String(offerteDatum).slice(0, 10) : null);
   metaRow('Datum', fmtDate(docDate));
   if (type === 'factuur') {
     metaRow('Vervaldatum', fmtDate(document.vervaldatum));
