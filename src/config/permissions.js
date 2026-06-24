@@ -3,7 +3,7 @@ export const AVAILABLE_PERMISSIONS = [
   { key: 'facturen',           label: 'Facturen',             categorie: 'Financieel' },
   { key: 'financieel',         label: 'Financieel dashboard', categorie: 'Financieel' },
   { key: 'kosten',             label: 'Kosten',               categorie: 'Financieel' },
-  { key: 'btw',                label: 'BTW overzicht',        categorie: 'Financieel' },
+  // BTW-overzicht valt onder 'financieel' (Financieel dashboard) — geen apart recht.
   { key: 'klanten_bewerken',   label: 'Klanten bewerken',     categorie: 'Klanten' },
   { key: 'klanten_verwijderen',label: 'Klanten verwijderen',  categorie: 'Klanten' },
   { key: 'projecten',          label: 'Projecten',            categorie: 'Operationeel' },
