@@ -18,6 +18,7 @@ import {
   deletePipelineStage,
 } from '../services/instellingenService.js';
 import { getVoertuigen, createVoertuig, updateVoertuig, deleteVoertuig } from '../services/voertuigService.js';
+import { getEigenEenheden, createEigenEenheid, updateEigenEenheid, deleteEigenEenheid } from '../services/eigenEenheidService.js';
 import { updateCompany, updateProfile } from '../services/profileService.js';
 import { changePassword } from '../services/authService.js';
 import { uploadProfileAvatar, removeProfileAvatar } from '../services/avatarService.js';
@@ -133,11 +134,15 @@ export function InstellingenPage() {
   const [standaardForm, setStandaardForm] = useState({
     uurtarief: 55,
     reiskosten_per_km: 0.23,
-    standaard_marge: 25,
     btw_pct: 21,
     offerte_geldig_dagen: 14,
   });
   const [savingStandaard, setSavingStandaard] = useState(false);
+
+  // Eigen prijzen / eenheden
+  const [eenheden, setEenheden] = useState([]);
+  const [eenheidForm, setEenheidForm] = useState(null); // {id?, naam, standaard_prijs, eenheid_label, btw_pct}
+  const [savingEenheid, setSavingEenheid] = useState(false);
 
   // E-mailtemplates
   const [templates, setTemplates] = useState([]);
@@ -207,13 +212,13 @@ export function InstellingenPage() {
 
   useEffect(() => {
     setLoading(true);
+    getEigenEenheden().then(setEenheden).catch(() => {});
     Promise.all([getBedrijfsinstellingen(), getEmailTemplates(), getPipelineStages(), getConnection(), getConnection('snelstart'), getConnection('afas')])
       .then(([instellingen, emailTemplates, pipelineStages, mbConn, ssConn, afasConn]) => {
         if (instellingen) {
           setStandaardForm({
             uurtarief: instellingen.uurtarief ?? 55,
             reiskosten_per_km: instellingen.reiskostenPerKm ?? 0.23,
-            standaard_marge: instellingen.standaardMarge ?? 25,
             btw_pct: instellingen.btwPct ?? 21,
             offerte_geldig_dagen: instellingen.offerteGeldigDagen ?? 14,
           });
@@ -322,6 +327,42 @@ export function InstellingenPage() {
       toast.error(err.message || 'Opslaan mislukt');
     } finally {
       setSavingStandaard(false);
+    }
+  };
+
+  // ── Eigen prijzen / eenheden ──
+  const newEenheid = () => setEenheidForm({ naam: '', standaard_prijs: '', eenheid_label: '', btw_pct: '' });
+  const editEenheid = e => setEenheidForm({ id: e.id, naam: e.naam, standaard_prijs: e.standaardPrijs, eenheid_label: e.eenheidLabel, btw_pct: e.btwPct ?? '' });
+  const setEenheidVal = (k, v) => setEenheidForm(f => ({ ...f, [k]: v }));
+
+  const saveEenheid = async () => {
+    if (!eenheidForm?.naam.trim()) { toast.error('Naam is verplicht'); return; }
+    setSavingEenheid(true);
+    try {
+      if (eenheidForm.id) {
+        const upd = await updateEigenEenheid(eenheidForm.id, eenheidForm);
+        setEenheden(list => list.map(x => x.id === upd.id ? upd : x).sort((a, b) => a.naam.localeCompare(b.naam)));
+      } else {
+        const created = await createEigenEenheid(eenheidForm);
+        setEenheden(list => [...list, created].sort((a, b) => a.naam.localeCompare(b.naam)));
+      }
+      setEenheidForm(null);
+      toast.success('Eenheid opgeslagen');
+    } catch (err) {
+      toast.error(err.message || 'Opslaan mislukt');
+    } finally {
+      setSavingEenheid(false);
+    }
+  };
+
+  const removeEenheid = async (id) => {
+    if (!window.confirm('Deze eigen eenheid verwijderen? Bestaande offertes/facturen behouden hun bedrag.')) return;
+    try {
+      await deleteEigenEenheid(id);
+      setEenheden(list => list.filter(x => x.id !== id));
+      toast.success('Eenheid verwijderd');
+    } catch (err) {
+      toast.error(err.message || 'Verwijderen mislukt');
     }
   };
 
@@ -1037,6 +1078,7 @@ export function InstellingenPage() {
       )}
 
       {!loading && tab === 'standaard' && (
+        <>
         <div className="card card-p afu3">
           <div className="card-hd" style={{ marginBottom: 18 }}>
             <div className="card-title">Standaardwaarden</div>
@@ -1059,15 +1101,6 @@ export function InstellingenPage() {
                 step="0.01"
                 value={standaardForm.reiskosten_per_km}
                 onChange={e => setStandaard('reiskosten_per_km', e.target.value)}
-              />
-            </div>
-            <div className="f">
-              <label>Standaard marge (%)</label>
-              <input
-                type="number"
-                step="0.1"
-                value={standaardForm.standaard_marge}
-                onChange={e => setStandaard('standaard_marge', e.target.value)}
               />
             </div>
             <div className="f">
@@ -1095,6 +1128,67 @@ export function InstellingenPage() {
             </button>
           </div>
         </div>
+
+        {/* ── Eigen prijzen / eenheden ── */}
+        <div className="card card-p afu3" style={{ marginTop: 16 }}>
+          <div className="card-hd" style={{ marginBottom: 14 }}>
+            <div className="card-title">Eigen prijzen / eenheden</div>
+            <div className="card-sub">Eigen regeltypes met een standaardprijs — verschijnen naast Uren/Km/Overig in offertes en facturen</div>
+          </div>
+
+          {eenheden.length === 0 && !eenheidForm && (
+            <div style={{ color: 'var(--dl)', fontSize: '.86rem', padding: '4px 0 12px' }}>Nog geen eigen eenheden aangemaakt.</div>
+          )}
+
+          {eenheden.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+              {eenheden.map(e => (
+                <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 'var(--r8)', background: 'var(--bgs)' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: '.9rem' }}>{e.naam}</div>
+                    <div style={{ fontSize: '.78rem', color: 'var(--dl)' }}>
+                      €{Number(e.standaardPrijs).toFixed(2)}{e.eenheidLabel ? ` / ${e.eenheidLabel}` : ''} · BTW {e.btwPct != null ? `${e.btwPct}%` : 'bedrijfsstandaard'}
+                    </div>
+                  </div>
+                  <button className="btn btn-s btn-xs" onClick={() => editEenheid(e)}>Bewerken</button>
+                  <button className="btn btn-ghost btn-xs btn-icon" title="Verwijderen" onClick={() => removeEenheid(e.id)}>{I.trash}</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {eenheidForm ? (
+            <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--r8)', padding: 14 }}>
+              <div className="fg">
+                <div className="f s2">
+                  <label>Naam *</label>
+                  <input type="text" value={eenheidForm.naam} placeholder="Bijv. Liter verf" onChange={e => setEenheidVal('naam', e.target.value)} />
+                </div>
+                <div className="f">
+                  <label>Standaardprijs (€)</label>
+                  <input type="number" step="0.01" value={eenheidForm.standaard_prijs} placeholder="0,00" onChange={e => setEenheidVal('standaard_prijs', e.target.value)} />
+                </div>
+                <div className="f">
+                  <label>Eenheid-label (optioneel)</label>
+                  <input type="text" value={eenheidForm.eenheid_label} placeholder="Bijv. liter" onChange={e => setEenheidVal('eenheid_label', e.target.value)} />
+                </div>
+                <div className="f">
+                  <label>BTW % (optioneel)</label>
+                  <input type="number" step="0.1" value={eenheidForm.btw_pct} placeholder="Bedrijfsstandaard" onChange={e => setEenheidVal('btw_pct', e.target.value)} />
+                </div>
+              </div>
+              <div className="fa">
+                <button className="btn btn-ghost" onClick={() => setEenheidForm(null)} disabled={savingEenheid}>Annuleren</button>
+                <button className="btn btn-p" onClick={saveEenheid} disabled={savingEenheid || !eenheidForm.naam.trim()}>
+                  {savingEenheid ? 'Opslaan...' : 'Opslaan'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button className="btn btn-s btn-sm" onClick={newEenheid}>{I.plus} Nieuwe toevoegen</button>
+          )}
+        </div>
+        </>
       )}
 
       {!loading && tab === 'templates' && (

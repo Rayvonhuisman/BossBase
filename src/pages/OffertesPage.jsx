@@ -9,6 +9,8 @@ import {
   getOffertes, createOfferte, updateOfferte, deleteOfferte, calculateOfferteTotals, createOfferteItem, getOfferteItems, deleteOfferteItemsByOfferteId,
 } from '../services/offerteService.js';
 import { getBedrijfsinstellingen } from '../services/instellingenService.js';
+import { getEigenEenheden } from '../services/eigenEenheidService.js';
+import { typeCfg, typeOptionsWith, applyTypeChange, omschrijvingFallback, reconstructRegel } from '../lib/regelTypes.js';
 import { listCustomers } from '../services/customerService.js';
 import { listDeals } from '../services/dealService.js';
 import { NewFactuurModal, SendFactuurMailModal } from './FacturenPage.jsx';
@@ -43,22 +45,6 @@ const emptyRegel = () => ({
   id: crypto.randomUUID(), omschrijving: '', type: 'uren', aantal: 1, eenheidsprijs: 0, btw: '21', btwAnders: '',
 });
 
-const TYPE_CFG = {
-  uren:  { label: 'Uren',       omschrPh: 'Arbeidsuren',     v1Ph: '0 uur',  v2Ph: '0,00', hasV1: true,  v1Step: '0.5',  regelLabel: r => `${r.aantal}u × €${r.eenheidsprijs}` },
-  m2:    { label: 'm²',         omschrPh: 'Prijs per m²',   v1Ph: '0 m²',   v2Ph: '0,00', hasV1: true,  v1Step: '0.01', regelLabel: r => `${r.aantal}m² × €${r.eenheidsprijs}` },
-  stuks: { label: 'Stuks',      omschrPh: 'Materiaalkosten', v1Ph: '0 st',   v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal} st × €${r.eenheidsprijs}` },
-  km:    { label: 'Km',         omschrPh: 'Reisvergoeding',  v1Ph: '0 km',   v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal}km × €${r.eenheidsprijs}` },
-  vast:  { label: 'Vast bedrag', omschrPh: 'Overige kosten', v1Ph: '0',      v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal} × €${r.eenheidsprijs}` },
-};
-
-// Een opgeslagen BTW-percentage (getal) → de juiste dropdown-staat.
-// 21/9 zijn vaste opties; al het andere valt onder "Anders".
-const btwToSelect = pct => {
-  if (pct === 21) return { btw: '21', btwAnders: '' };
-  if (pct === 9)  return { btw: '9',  btwAnders: '' };
-  return { btw: 'anders', btwAnders: String(pct) };
-};
-
 function BtwSelect({ r, setRegel }) {
   return (
     <div style={{ display: 'flex', gap: 3, alignItems: 'center', minWidth: 0, overflow: 'hidden' }}>
@@ -80,9 +66,11 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
   const [regels, setRegels] = useState([emptyRegel()]);
   const [saving, setSaving] = useState(false);
   const [instDefaults, setInstDefaults] = useState(null);
+  const [eenheden, setEenheden] = useState([]);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
+    getEigenEenheden().then(setEenheden).catch(() => {});
     getBedrijfsinstellingen().then(s => {
       if (!s) return;
       setInstDefaults(s);
@@ -97,15 +85,9 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
     }).catch(() => {});
   }, []);
 
-  const setRegel = (id, k, v) => setRegels(rs => rs.map(r => {
-    if (r.id !== id) return r;
-    if (k === 'type') {
-      if (v === 'uren') return { ...r, type: v, eenheidsprijs: instDefaults?.uurtarief ?? 0 };
-      if (v === 'km')   return { ...r, type: v, eenheidsprijs: instDefaults?.reiskostenPerKm ?? 0 };
-      if (v === 'vast') return { ...r, type: v, eenheidsprijs: 0 };
-    }
-    return { ...r, [k]: v };
-  }));
+  const setRegel = (id, k, v) => setRegels(rs => rs.map(r =>
+    r.id === id ? (k === 'type' ? applyTypeChange(r, v, instDefaults, eenheden) : { ...r, [k]: v }) : r
+  ));
   const addRegel = () => setRegels(rs => [...rs, {
     id: crypto.randomUUID(), omschrijving: '', type: 'uren', aantal: 1,
     eenheidsprijs: instDefaults?.uurtarief ?? 0, btw: String(instDefaults?.btwPct ?? 21), btwAnders: '',
@@ -134,7 +116,7 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
     const created = await createOfferte({ ...form, marge_pct: 0, totaal_excl: totaalExcl, totaal_incl: totaalIncl });
     for (let i = 0; i < regels.length; i++) {
       const r = regels[i];
-      const omschrijving = r.omschrijving.trim() || TYPE_CFG[r.type]?.omschrPh || '';
+      const omschrijving = r.omschrijving.trim() || omschrijvingFallback(r.type, eenheden);
       await createOfferteItem({ offerte_id: created.id, omschrijving, type: r.type, btw_pct: getEffBtw(r), aantal: Number(r.aantal || 1), prijs_per: Number(r.eenheidsprijs || 0), subtotaal: getRegelprijs(r), volgorde: i });
     }
     return created;
@@ -207,12 +189,12 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
               /* ── Mobiel: gestapeld per regel ── */
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {regels.map(r => {
-                  const cfg = TYPE_CFG[r.type] || TYPE_CFG.uren;
+                  const cfg = typeCfg(r.type, eenheden);
                   return (
                     <div key={r.id} style={{ border: '1px solid var(--bstrong)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                         <select value={r.type} onChange={e => setRegel(r.id, 'type', e.target.value)} style={{ flex: 1 }}>
-                          {Object.entries(TYPE_CFG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                          {typeOptionsWith(eenheden, r.type).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </select>
                         <button className="btn btn-xs btn-danger btn-icon" onClick={() => removeRegel(r.id)} disabled={regels.length === 1} title="Verwijderen">{I.trash}</button>
                       </div>
@@ -243,11 +225,11 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
                   <span>Type</span><span>Omschrijving</span><span>Hoev.</span><span>Prijs</span><span>BTW</span><span style={{ textAlign: 'right' }}>Bedrag</span><span />
                 </div>
                 {regels.map(r => {
-                  const cfg = TYPE_CFG[r.type] || TYPE_CFG.uren;
+                  const cfg = typeCfg(r.type, eenheden);
                   return (
                     <div key={r.id} style={{ display: 'grid', gridTemplateColumns: COLS, gap: 5, alignItems: 'center', marginBottom: 5 }}>
                       <select value={r.type} onChange={e => setRegel(r.id, 'type', e.target.value)} style={{ minWidth: 0 }}>
-                        {Object.entries(TYPE_CFG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                        {typeOptionsWith(eenheden, r.type).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
                       <input type="text" placeholder={cfg.omschrPh} value={r.omschrijving} onChange={e => setRegel(r.id, 'omschrijving', e.target.value)} style={{ minWidth: 0 }} />
                       <input
@@ -330,40 +312,29 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
   const [regels, setRegels] = useState([emptyRegel()]);
   const [loadingRegels, setLoadingRegels] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [instDefaults, setInstDefaults] = useState(null);
+  const [eenheden, setEenheden] = useState([]);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   // Verstuurd/ondertekend = inhoud vast. Ondertekend/geaccepteerd = ook status vast.
   const locked = isOfferteLocked(offerte);
   const fullyLocked = isOfferteFullyLocked(offerte);
 
   useEffect(() => {
+    getEigenEenheden().then(setEenheden).catch(() => {});
+    getBedrijfsinstellingen().then(s => s && setInstDefaults(s)).catch(() => {});
     getOfferteItems(offerte.id).then(items => {
       if (items.length > 0) {
-        // Oude data (vóór de migratie) heeft geen type/btw_pct. Leid het tarief
-        // dan af uit de offerte-totalen zodat het BEDRAG niet verandert; en raad
-        // het type alleen als laatste redmiddel. Nieuwe regels lezen de echte
-        // opgeslagen waarden terug.
-        const fallbackBtw = offerte.totaalExcl > 0
-          ? Math.round((offerte.totaalIncl / offerte.totaalExcl - 1) * 1000) / 10
-          : 21;
-        const snapStd = pct => [9, 21].find(s => Math.abs(s - pct) < 1.5) ?? pct;
-        setRegels(items.map(item => {
-          const pct = item.btwPct != null ? item.btwPct : snapStd(fallbackBtw);
-          const type = item.type || (item.aantal > 1 ? 'uren' : 'vast');
-          return {
-            id: crypto.randomUUID(),
-            omschrijving: item.omschrijving,
-            type,
-            aantal: item.aantal,
-            eenheidsprijs: item.prijsPer ?? 0,
-            ...btwToSelect(pct),
-          };
-        }));
+        // Lees type + BTW per regel terug (oude data valt veilig terug, zie
+        // reconstructRegel) zodat het bedrag niet verandert bij bewerken.
+        setRegels(items.map(item => reconstructRegel(item, offerte, eenheden)));
       }
       setLoadingRegels(false);
     }).catch(() => setLoadingRegels(false));
   }, [offerte.id]);
 
-  const setRegel = (id, k, v) => setRegels(rs => rs.map(r => r.id === id ? { ...r, [k]: v } : r));
+  const setRegel = (id, k, v) => setRegels(rs => rs.map(r =>
+    r.id === id ? (k === 'type' ? applyTypeChange(r, v, instDefaults, eenheden) : { ...r, [k]: v }) : r
+  ));
   const addRegel = () => setRegels(rs => [...rs, emptyRegel()]);
   const removeRegel = (id) => setRegels(rs => rs.filter(r => r.id !== id));
 
@@ -400,7 +371,7 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
     await deleteOfferteItemsByOfferteId(offerte.id);
     for (let i = 0; i < regels.length; i++) {
       const r = regels[i];
-      const omschrijving = r.omschrijving.trim() || TYPE_CFG[r.type]?.omschrPh || '';
+      const omschrijving = r.omschrijving.trim() || omschrijvingFallback(r.type, eenheden);
       await createOfferteItem({ offerte_id: offerte.id, omschrijving, type: r.type, btw_pct: getEffBtw(r), aantal: Number(r.aantal || 1), prijs_per: Number(r.eenheidsprijs || 0), subtotaal: getRegelprijs(r), volgorde: i });
     }
     onSaved?.(updated);
@@ -457,12 +428,12 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
               {isMobile ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {regels.map(r => {
-                    const cfg = TYPE_CFG[r.type] || TYPE_CFG.uren;
+                    const cfg = typeCfg(r.type, eenheden);
                     return (
                       <div key={r.id} style={{ border: '1px solid var(--bstrong)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                           <select value={r.type} onChange={e => setRegel(r.id, 'type', e.target.value)} style={{ flex: 1 }}>
-                            {Object.entries(TYPE_CFG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                            {typeOptionsWith(eenheden, r.type).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                           </select>
                           <button className="btn btn-xs btn-danger btn-icon" onClick={() => removeRegel(r.id)} disabled={regels.length === 1} title="Verwijderen">{I.trash}</button>
                         </div>
@@ -492,11 +463,11 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
                     <span>Type</span><span>Omschrijving</span><span>Hoev.</span><span>Prijs</span><span>BTW</span><span style={{ textAlign: 'right' }}>Bedrag</span><span />
                   </div>
                   {regels.map(r => {
-                    const cfg = TYPE_CFG[r.type] || TYPE_CFG.uren;
+                    const cfg = typeCfg(r.type, eenheden);
                     return (
                       <div key={r.id} style={{ display: 'grid', gridTemplateColumns: COLS, gap: 5, alignItems: 'center', marginBottom: 5 }}>
                         <select value={r.type} onChange={e => setRegel(r.id, 'type', e.target.value)} style={{ minWidth: 0 }}>
-                          {Object.entries(TYPE_CFG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                          {typeOptionsWith(eenheden, r.type).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </select>
                         <input type="text" placeholder={cfg.omschrPh} value={r.omschrijving} onChange={e => setRegel(r.id, 'omschrijving', e.target.value)} style={{ minWidth: 0 }} />
                         <input type="number" min="0" step={cfg.v1Step} placeholder={cfg.v1Ph || ''}
@@ -916,15 +887,9 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
     setViewOfferte(null);
     try {
       const items = await getOfferteItems(offerte.id);
-      const regels = items.map(item => ({
-        id: crypto.randomUUID(),
-        omschrijving: item.omschrijving || '',
-        type: item.aantal > 1 ? 'uren' : 'vast',
-        aantal: item.aantal || 1,
-        eenheidsprijs: item.prijsPer ?? 0,
-        btw: '21',
-        btwAnders: '',
-      }));
+      // Neem type + BTW per regel mee naar de factuur (oude data valt veilig
+      // terug, zie reconstructRegel) zodat type/percentage/bedrag klopt.
+      const regels = items.map(item => reconstructRegel(item, offerte));
       setFactuurPrefill({
         customer_id: offerte.customerId,
         regels: regels.length ? regels : undefined,

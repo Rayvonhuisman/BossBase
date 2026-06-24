@@ -13,6 +13,8 @@ import {
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
 import { getBedrijfsinstellingen } from '../services/instellingenService.js';
+import { getEigenEenheden } from '../services/eigenEenheidService.js';
+import { typeCfg, typeOptionsWith, applyTypeChange, omschrijvingFallback } from '../lib/regelTypes.js';
 import { generateFactuurPdf, previewFactuurPdf, getFactuurPdfBase64 } from '../utils/generatePdf.js';
 import { buildCompanySnapshot, companyForDocument, isFactuurLocked } from '../utils/documentSnapshot.js';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
@@ -47,13 +49,6 @@ const DL_STYLE = { fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransf
 
 // ── REGEL HELPERS (gedeeld tussen nieuw en bewerk) ───────────────────────────
 
-const TYPE_CFG = {
-  uren:  { label: 'Uren',       omschrPh: 'Arbeidsuren',     v1Ph: '0 uur',  v2Ph: '0,00', hasV1: true,  v1Step: '0.5',  regelLabel: r => `${r.aantal}u × €${r.eenheidsprijs}` },
-  m2:    { label: 'm²',         omschrPh: 'Prijs per m²',   v1Ph: '0 m²',   v2Ph: '0,00', hasV1: true,  v1Step: '0.01', regelLabel: r => `${r.aantal}m² × €${r.eenheidsprijs}` },
-  stuks: { label: 'Stuks',      omschrPh: 'Materiaalkosten', v1Ph: '0 st',   v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal} st × €${r.eenheidsprijs}` },
-  km:    { label: 'Km',         omschrPh: 'Reisvergoeding',  v1Ph: '0 km',   v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal}km × €${r.eenheidsprijs}` },
-  vast:  { label: 'Vast bedrag', omschrPh: 'Overige kosten', v1Ph: '0',      v2Ph: '0,00', hasV1: true,  v1Step: '1',    regelLabel: r => `${r.aantal} × €${r.eenheidsprijs}` },
-};
 
 const emptyRegel = (defaults) => ({
   id: crypto.randomUUID(), omschrijving: '', type: 'uren', aantal: 1,
@@ -91,16 +86,10 @@ function useRegelTotals(regels) {
   return { getRegelprijs, totaalExcl, btwPerTarief, totaalIncl };
 }
 
-function RegelItemsForm({ regels, setRegels, defaults }) {
-  const setRegel = (id, k, v) => setRegels(rs => rs.map(r => {
-    if (r.id !== id) return r;
-    if (k === 'type') {
-      if (v === 'uren') return { ...r, type: v, eenheidsprijs: defaults?.uurtarief ?? 0 };
-      if (v === 'km')   return { ...r, type: v, eenheidsprijs: defaults?.reiskostenPerKm ?? 0 };
-      if (v === 'vast') return { ...r, type: v, eenheidsprijs: 0 };
-    }
-    return { ...r, [k]: v };
-  }));
+function RegelItemsForm({ regels, setRegels, defaults, eenheden = [] }) {
+  const setRegel = (id, k, v) => setRegels(rs => rs.map(r =>
+    r.id === id ? (k === 'type' ? applyTypeChange(r, v, defaults, eenheden) : { ...r, [k]: v }) : r
+  ));
   const addRegel = () => setRegels(rs => [...rs, emptyRegel(defaults)]);
   const removeRegel = id => setRegels(rs => rs.filter(r => r.id !== id));
   const { getRegelprijs } = useRegelTotals(regels);
@@ -114,12 +103,12 @@ function RegelItemsForm({ regels, setRegels, defaults }) {
       {isMobile ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {regels.map(r => {
-            const cfg = TYPE_CFG[r.type] || TYPE_CFG.uren;
+            const cfg = typeCfg(r.type, eenheden);
             return (
               <div key={r.id} style={{ border: '1px solid var(--bstrong)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                   <select value={r.type} onChange={e => setRegel(r.id, 'type', e.target.value)} style={{ flex: 1 }}>
-                    {Object.entries(TYPE_CFG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    {typeOptionsWith(eenheden, r.type).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                   <button className="btn btn-xs btn-danger btn-icon" onClick={() => removeRegel(r.id)} disabled={regels.length === 1}>{I.trash}</button>
                 </div>
@@ -149,11 +138,11 @@ function RegelItemsForm({ regels, setRegels, defaults }) {
             <span>Type</span><span>Omschrijving</span><span>Hoev.</span><span>Prijs</span><span>BTW</span><span style={{ textAlign: 'right' }}>Bedrag</span><span />
           </div>
           {regels.map(r => {
-            const cfg = TYPE_CFG[r.type] || TYPE_CFG.uren;
+            const cfg = typeCfg(r.type, eenheden);
             return (
               <div key={r.id} style={{ display: 'grid', gridTemplateColumns: COLS, gap: 5, alignItems: 'center', marginBottom: 5 }}>
                 <select value={r.type} onChange={e => setRegel(r.id, 'type', e.target.value)} style={{ minWidth: 0 }}>
-                  {Object.entries(TYPE_CFG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                  {typeOptionsWith(eenheden, r.type).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
                 <input type="text" placeholder={cfg.omschrPh} value={r.omschrijving} onChange={e => setRegel(r.id, 'omschrijving', e.target.value)} style={{ minWidth: 0 }} />
                 <input type="number" min="0" step={cfg.v1Step} placeholder={cfg.v1Ph || ''} value={r.aantal}
@@ -220,9 +209,11 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
   const [regels, setRegels] = useState(prefill?.regels?.length ? prefill.regels : [emptyRegel()]);
   const [saving, setSaving] = useState(false);
   const [instDefaults, setInstDefaults] = useState(null);
+  const [eenheden, setEenheden] = useState([]);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
+    getEigenEenheden().then(setEenheden).catch(() => {});
     getBedrijfsinstellingen().then(s => {
       if (!s) return;
       setInstDefaults(s);
@@ -265,7 +256,7 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
     const created = await createFactuur({ ...form, project_id: form.project_id || null, status: 'aangemaakt', nummer, betalingskenmerk: nummer, totaal_excl: totaalExcl, totaal_incl: totaalIncl });
     for (let i = 0; i < regels.length; i++) {
       const r = regels[i];
-      const omschrijving = r.omschrijving.trim() || TYPE_CFG[r.type]?.omschrPh || '';
+      const omschrijving = r.omschrijving.trim() || omschrijvingFallback(r.type, eenheden);
       const btwPct = r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw);
       await createFactuurRegel({ factuur_id: created.id, type: r.type, omschrijving, aantal: Number(r.aantal || 1), eenheidsprijs: Number(r.eenheidsprijs || 0), btw_pct: btwPct, volgorde: i });
     }
@@ -350,7 +341,7 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
             <input type="date" value={form.vervaldatum} onChange={e => set('vervaldatum', e.target.value)} />
           </div>
 
-          <RegelItemsForm regels={regels} setRegels={setRegels} defaults={instDefaults} />
+          <RegelItemsForm regels={regels} setRegels={setRegels} defaults={instDefaults} eenheden={eenheden} />
           <div className="f">
             <label>Betalingskenmerk</label>
             <div style={{ padding: '9px 11px', border: '1px solid var(--bstrong)', borderRadius: 'var(--r8)', fontSize: '.85rem', color: 'var(--dl)', background: 'var(--bgs)' }}>
@@ -573,7 +564,7 @@ function CrediteerModal({ factuur, regels, onClose, onSuccess }) {
                   />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.omschrijving}</div>
-                    <div style={{ fontSize: 11, color: 'var(--dl)' }}>{TYPE_CFG[r.type]?.label}</div>
+                    <div style={{ fontSize: 11, color: 'var(--dl)' }}>{typeCfg(r.type).label}</div>
                   </div>
                   {r.type !== 'vast' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end' }}>
@@ -692,7 +683,7 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }
                 {regels.map(r => (
                   <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '4px 0', borderBottom: '1px solid #f3f4f6' }}>
                     <div>
-                      <span style={{ color: 'var(--dl)', fontSize: 11, marginRight: 6 }}>{TYPE_CFG[r.type]?.label || r.type}</span>
+                      <span style={{ color: 'var(--dl)', fontSize: 11, marginRight: 6 }}>{typeCfg(r.type).label}</span>
                       {r.omschrijving}
                       <span style={{ color: 'var(--dl)', fontSize: 11, marginLeft: 6 }}>{r.aantal} × {fmt(r.eenheidsprijs)}</span>
                     </div>
