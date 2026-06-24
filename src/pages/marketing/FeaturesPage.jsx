@@ -1,4 +1,5 @@
 import { useEffect } from "react"
+import { Calendar, Mail, Briefcase, CreditCard, MessageSquare, MessageCircle, Zap, Bird } from "lucide-react"
 import { Nav, Footer, Reveal, I, initChoreo, ScrollLine } from "./MktShared"
 
 /* ── Feature visuals ── */
@@ -190,14 +191,14 @@ const BLOCKS = [
 ]
 
 const INTEGRATIONS = [
-  { name: "Google Calendar", icon: "📅", soon: false },
-  { name: "Outlook",         icon: "📧", soon: false },
-  { name: "Exact Online",    icon: "💼", soon: false },
-  { name: "Mollie",          icon: "💳", soon: false },
-  { name: "Slack",           icon: "💬", soon: true },
-  { name: "Zapier",          icon: "⚡",  soon: true },
-  { name: "Moneybird",       icon: "🐦",  soon: true },
-  { name: "WhatsApp",        icon: "📱",  soon: true },
+  { name: "Google Calendar", icon: <Calendar size={20} />,      soon: false },
+  { name: "Outlook",         icon: <Mail size={20} />,          soon: false },
+  { name: "Exact Online",    icon: <Briefcase size={20} />,     soon: false },
+  { name: "Mollie",          icon: <CreditCard size={20} />,    soon: false },
+  { name: "Slack",           icon: <MessageSquare size={20} />, soon: true },
+  { name: "Zapier",          icon: <Zap size={20} />,           soon: true },
+  { name: "Moneybird",       icon: <Bird size={20} />,          soon: true },
+  { name: "WhatsApp",        icon: <MessageCircle size={20} />, soon: true },
 ]
 
 const VROEGER = [

@@ -213,7 +213,7 @@ function MoveStageSheet({ deal, stages, moveDeal, onClose, setActiveIdx }) {
               }}>
               <span className="badge" style={{ ...stageBadgeStyle(s.col), fontSize: 12 }}>{s.label}</span>
               {deal.stage === s.id
-                ? <span style={{ marginLeft: 'auto', fontSize: 12, color: '#15A34A', fontWeight: 700, marginRight: 4 }}>✓ Huidig</span>
+                ? <span style={{ marginLeft: 'auto', fontSize: 12, color: '#15A34A', fontWeight: 700, marginRight: 4, display: 'inline-flex', alignItems: 'center', gap: 3 }}>{I.check} Huidig</span>
                 : <span className="meer-row-chev">{I.chev_r}</span>}
             </button>
           ))}

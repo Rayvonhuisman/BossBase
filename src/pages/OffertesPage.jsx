@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, MoreVertical, Send } from 'lucide-react';
+import { Download, MoreVertical, Send, CheckCircle2 } from 'lucide-react';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
@@ -674,7 +674,7 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
               background: '#f0fdf4', border: '1px solid #bbf7d0',
               borderRadius: 8, padding: '10px 14px',
             }}>
-              <span style={{ fontSize: 16 }}>✅</span>
+              <CheckCircle2 size={16} style={{ color: '#15803d', flexShrink: 0 }} />
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#15803d' }}>Ondertekend</div>
                 <div style={{ fontSize: 11, color: '#166534' }}>

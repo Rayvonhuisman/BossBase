@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { X } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 
 const PLANS = [
@@ -381,7 +382,7 @@ function CompanyDrawer({ company, notes, onNotesChange, onSaveNotes, onPlanSelec
                 <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>{company.email || '—'}</div>
               </div>
             </div>
-            <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ flexShrink: 0 }}>✕</button>
+            <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ flexShrink: 0 }}><X size={16} /></button>
           </div>
 
           {/* Actie knoppen */}

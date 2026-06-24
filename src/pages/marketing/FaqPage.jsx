@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react"
+import { Search } from "lucide-react"
 import { Nav, Footer, Reveal, I, ScrollLine, initChoreo } from "./MktShared"
 
 const FAQ_DATA = [
@@ -181,7 +182,7 @@ export default function FaqPage({ navigate }) {
         {/* FAQ Secties */}
         {filtered.length === 0 ? (
           <div className="faq-empty">
-            <div style={{ fontSize: 48, marginBottom: 16 }}>🔍</div>
+            <div style={{ marginBottom: 16, color: "var(--dmu)", display: "flex", justifyContent: "center" }}><Search size={48} strokeWidth={1.5} /></div>
             <h3 style={{ fontSize: 20, fontWeight: 700, color: "var(--dk)", margin: "0 0 8px" }}>Geen resultaten voor "{search}"</h3>
             <p style={{ color: "var(--dmu)", marginBottom: 20 }}>Probeer een ander zoekwoord, of neem contact met ons op.</p>
             <a href="/contact" className="btn btn-p" onClick={e => go(e, "/contact")}>

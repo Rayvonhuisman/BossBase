@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { X, Check } from 'lucide-react';
 
 // Globale, niet-blokkerende upload-manager. Een aanroeper start een upload met
 // startUpload(label, run [, count]) waarbij `run` een async functie is die de
@@ -118,16 +119,16 @@ function UploadIndicator({ tasks, onRetry, onDismiss }) {
           type="button"
           onClick={() => errored.forEach(t => onDismiss(t.id))}
           aria-label="Sluiten"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 15, padding: '0 2px', lineHeight: 1 }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', padding: '0 2px', lineHeight: 1, display: 'inline-flex', alignItems: 'center' }}
         >
-          ✕
+          <X size={15} />
         </button>
       </>
     );
   } else if (done.length > 0) {
     content = (
       <>
-        <span style={{ color: '#16a34a', fontWeight: 800, fontSize: 14, flexShrink: 0 }}>✓</span>
+        <span style={{ color: '#16a34a', flexShrink: 0, display: 'inline-flex', alignItems: 'center' }}><Check size={15} strokeWidth={3} /></span>
         <span style={{ fontWeight: 600, fontSize: 13 }}>
           {done.length === 1 ? 'Bestand geüpload' : `${done.length} bestanden geüpload`}
         </span>

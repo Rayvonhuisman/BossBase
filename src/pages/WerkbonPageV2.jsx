@@ -1142,7 +1142,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
                 type="button"
               >
                 <div className="wb2-action-btn-ic">{detail.status === 'gepland' ? I.flag : I.check}</div>
-                {detail.status === 'gepland' ? 'Start klus' : detail.status === 'in_uitvoering' ? 'Afronden' : 'Afgerond ✓'}
+                {detail.status === 'gepland' ? 'Start klus' : detail.status === 'in_uitvoering' ? 'Afronden' : 'Afgerond'}
               </button>
             </div>
 

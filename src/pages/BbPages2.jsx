@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Smartphone, Phone, Navigation, Camera, Clock, Package, CheckCircle2, ExternalLink } from 'lucide-react';
 import {
   I, CAL_EVENTS, HOURS_DATA, COSTS_DATA, TEAM_DATA, CUSTOMERS_DATA, QUOTES_DATA,
   fmt, custById, Av, StatusBadge, ModalX, Logo, CostCategoryBadge,
@@ -198,7 +199,7 @@ function AgendaTimeline({ dates, events, todayKey, onEventClick }) {
 // ── CALENDAR ─────────────────────────────────────────────────
 export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpenActivityId, onNavConsumed }) {
   const toast = useToast();
-  const { refreshKey, bumpRefresh } = useProfile();
+  const { refreshKey, bumpRefresh, profile } = useProfile();
   const [view, setView] = useState('week');
   // Monday of the visible week. Lazy initializer → on every fresh mount the
   // Agenda opens on the *current* week (no stale week is carried over).
@@ -225,12 +226,18 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
     setLoading(true);
     Promise.all([listCalendarEvents(), listCustomers(), listActivities(), getWerkbonnen().catch(() => [])])
       .then(([data, custData, actData, wbs]) => {
+        // Persoonlijke agenda: IEDEREEN (medewerker én admin/planner) ziet hier
+        // alleen ZIJN EIGEN toegewezen items, niet die van collega's. Voor een
+        // medewerker filtert RLS al server-side; voor admin/planner (die via RLS
+        // alles mag zien voor Planning) doen we het hier app-side.
+        const uid = profile?.id;
+        const mine = owner => !uid || owner === uid;
         // Werkbon-gekoppelde calendar_events verbergen: de werkbon zelf wordt
         // hieronder als (altijd actuele) synthetisch event getoond. Zo verschijnt
         // elk item exact één keer — gededupliceerd op werkbon_id.
-        const manualEvents = data.filter(e => !e.werkbonId);
+        const manualEvents = data.filter(e => !e.werkbonId && mine(e.assignedTo));
         const wbEvents = wbs
-          .filter(w => w.geplandOp && w.status !== 'afgerond')
+          .filter(w => w.geplandOp && w.status !== 'afgerond' && mine(w.assignedTo))
           .map(w => ({
             id: `wb-${w.id}`,
             title: w.titel,
@@ -246,7 +253,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
           }));
         setEvents([...manualEvents, ...wbEvents]);
         setCustomers(custData);
-        setActivities(actData);
+        setActivities(actData.filter(a => mine(a.assignee)));
         setError('');
       })
       .catch(err => setError(err.message || 'Agenda laden is mislukt.'))
@@ -613,7 +620,7 @@ export function WorkOrdersPage() {
         </div>
 
         <div>
-          <div style={{ fontSize: '.78rem', color: 'var(--dl)', marginBottom: 8, fontWeight: 600 }}>📱 Medewerkerweergave — telefoon</div>
+          <div style={{ fontSize: '.78rem', color: 'var(--dl)', marginBottom: 8, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><Smartphone size={14} /> Medewerkerweergave — telefoon</div>
           <div className="wo-mobile afu3">
             <div className="wo-hd">
               <div className="wo-hd-top">
@@ -626,12 +633,12 @@ export function WorkOrdersPage() {
             </div>
             <div className="wo-actions">
               {[
-                { icon: '📞', label: 'Bel klant' },
-                { icon: '🗺️', label: 'Route' },
-                { icon: '📸', label: 'Foto toevoegen' },
-                { icon: '⏱️', label: 'Uren registreren' },
-                { icon: '🔩', label: 'Materiaal toevoegen' },
-                { icon: '✅', label: 'Afronden' },
+                { icon: <Phone size={22} />, label: 'Bel klant' },
+                { icon: <Navigation size={22} />, label: 'Route' },
+                { icon: <Camera size={22} />, label: 'Foto toevoegen' },
+                { icon: <Clock size={22} />, label: 'Uren registreren' },
+                { icon: <Package size={22} />, label: 'Materiaal toevoegen' },
+                { icon: <CheckCircle2 size={22} />, label: 'Afronden' },
               ].map(a => (
                 <button key={a.label} className="wo-action-btn">
                   <div className="icon">{a.icon}</div>
@@ -920,7 +927,7 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
             )}
             {mbUrl && (
               <a href={mbUrl} target="_blank" rel="noreferrer" className="btn btn-s btn-sm">
-                🐦 Bekijk in Moneybird
+                <ExternalLink size={14} /> Bekijk in Moneybird
               </a>
             )}
           </div>

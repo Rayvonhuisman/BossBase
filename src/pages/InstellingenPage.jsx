@@ -1469,10 +1469,10 @@ export function InstellingenPage() {
                           {editingStageId === stage.id ? (
                             <>
                               <button className="btn-icon" title="Opslaan" onClick={() => saveEditStage(stage.id)}>
-                                {I.check || '✓'}
+                                {I.check}
                               </button>
                               <button className="btn-icon" title="Annuleren" onClick={() => { setEditingStageId(null); setEditingStageValue(''); setEditingStageColor(DEFAULT_STAGE_COLOR); }}>
-                                {I.x || '✕'}
+                                {I.x}
                               </button>
                             </>
                           ) : (

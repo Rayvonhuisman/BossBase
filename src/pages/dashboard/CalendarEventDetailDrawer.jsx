@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { MapPin } from 'lucide-react';
 import { I, fmt } from '../../bb-shared.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
 import { useToast } from '../../lib/toast.jsx';
@@ -391,7 +392,7 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
           <div style={{ border: '1px solid #eef0f2', borderRadius: 10, overflow: 'hidden' }}>
             <div style={{ padding: '12px 14px', background: '#f9fafb', borderBottom: '1px solid #eef0f2' }}>
               <div style={{ fontWeight: 700, fontSize: 14, color: '#0a0a0a' }}>{werkbon.titel || 'Werkbon'}</div>
-              {werkbon.locatie && <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>📍 {werkbon.locatie}</div>}
+              {werkbon.locatie && <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}><MapPin size={12} style={{ flexShrink: 0 }} /> {werkbon.locatie}</div>}
             </div>
             <div style={{ padding: '12px 14px' }}>
               {werkbon.omschrijving && (

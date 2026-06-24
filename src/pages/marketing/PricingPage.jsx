@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { Star } from "lucide-react"
 import { Nav, Footer, Reveal, I, ScrollLine, initChoreo } from "./MktShared"
 
 const TIERS = [
@@ -163,7 +164,7 @@ export default function PricingPage({ navigate }) {
               <div className="price-grid-full choreo-body">
                 {TIERS.map(t => (
                   <div key={t.tier} className={`price-card${t.hot ? " hot" : ""}`}>
-                    {t.hot && <div className="hot-badge">⚡ Meest gekozen</div>}
+                    {t.hot && <div className="hot-badge" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Star size={12} fill="currentColor" /> Meest gekozen</div>}
                     <div className="tier">{t.tier}</div>
                     <div className="who">{t.who}</div>
                     <div className="amount">

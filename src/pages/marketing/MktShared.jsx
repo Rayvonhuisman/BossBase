@@ -454,7 +454,7 @@ export function Footer({ navigate }) {
         </div>
         <div className="footer-bottom">
           <span>© 2026 BossBase</span>
-          <span>Gemaakt in Nederland 🇳🇱</span>
+          <span>Gemaakt in Nederland</span>
         </div>
       </div>
     </footer>

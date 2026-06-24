@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Maximize2, Minimize2 } from 'lucide-react';
+import { Maximize2, Minimize2, AlertTriangle, AlertOctagon } from 'lucide-react';
 import { I, ModalX, fmt, fmt0, CostCategoryBadge } from '../../bb-shared.jsx';
 import { useToast } from '../../lib/toast.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
@@ -481,13 +481,15 @@ function UrenTab({ project, entries, onAdd, onDelete, canManage }) {
             }} />
           </div>
           {warningTone === 'warning' && (
-            <div style={{ color: '#b45309', fontSize: 12, marginTop: 6 }}>
-              ⚠️ Boven 80% van het urenbudget. Houd uren goed in de gaten.
+            <div style={{ color: '#b45309', fontSize: 12, marginTop: 6, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+              <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>Boven 80% van het urenbudget. Houd uren goed in de gaten.</span>
             </div>
           )}
           {warningTone === 'risk' && (
-            <div style={{ color: '#dc2626', fontSize: 12, marginTop: 6, fontWeight: 600 }}>
-              🚨 Urenbudget overschreden ({Math.round(pct * 100)}%).
+            <div style={{ color: '#dc2626', fontSize: 12, marginTop: 6, fontWeight: 600, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+              <AlertOctagon size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>Urenbudget overschreden ({Math.round(pct * 100)}%).</span>
             </div>
           )}
         </div>

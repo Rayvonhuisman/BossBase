@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Lock } from 'lucide-react';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable,
@@ -1028,7 +1029,7 @@ export function PlanningPage({ openCustomer } = {}) {
   if (!profile || profile.role !== 'admin') {
     return (
       <div style={{ padding: 48, textAlign: 'center', color: 'var(--dl)' }}>
-        <div style={{ fontSize: 36, marginBottom: 12 }}>🔒</div>
+        <div style={{ marginBottom: 12, color: 'var(--dl)' }}><Lock size={36} strokeWidth={1.75} /></div>
         <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--dk)', marginBottom: 6 }}>Geen toegang</div>
         <div>De Planning pagina is alleen voor admins.</div>
       </div>

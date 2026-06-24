@@ -346,7 +346,6 @@ export default function OfferteSigneren({ token }) {
       <div style={styles.shell}>
         <div style={styles.card}>
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
-            <div style={{ fontSize: '2rem', marginBottom: 12 }}>⚠️</div>
             <div style={{ fontWeight: 700, marginBottom: 8 }}>Offerte niet gevonden</div>
             <div style={{ color: '#6b7280', fontSize: '.9rem' }}>{error}</div>
           </div>
@@ -365,7 +364,6 @@ export default function OfferteSigneren({ token }) {
             </div>
           )}
           <div style={{ textAlign: 'center', padding: '32px 0' }}>
-            <div style={{ fontSize: '3rem', marginBottom: 16 }}>✅</div>
             <div style={{ fontWeight: 800, fontSize: '1.25rem', marginBottom: 8 }}>
               Bedankt! Uw handtekening is ontvangen.
             </div>
@@ -528,7 +526,7 @@ export default function OfferteSigneren({ token }) {
             transition: 'background .2s',
           }}
         >
-          {signing ? 'Ondertekening verwerken…' : '✍️ Akkoord en ondertekenen'}
+          {signing ? 'Ondertekening verwerken…' : 'Akkoord en ondertekenen'}
         </button>
       </div>
     </div>

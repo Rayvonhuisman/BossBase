@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Wrench, AlertTriangle } from 'lucide-react';
 import { I, Logo, initials } from './bb-shared.jsx';
 import { LoginPage, RegisterFlow, EmailVerificationScreen } from './pages/BbAuth.jsx';
 import { ResetPasswordPage } from './pages/ResetPasswordPage.jsx';
@@ -1422,7 +1423,7 @@ function AppInner() {
             {showProfileMissing ? (
               <div className="bb-profile-missing">
                 <div className="bb-profile-missing-card">
-                  <div className="bb-profile-missing-emoji">🛠️</div>
+                  <div className="bb-profile-missing-emoji"><Wrench size={38} strokeWidth={1.75} /></div>
                   <div className="bb-profile-missing-title">Geen profiel gevonden voor dit account.</div>
                   <div className="bb-profile-missing-sub">
                     Je bent ingelogd als <strong>{user?.email}</strong>, maar de zoekopdracht
@@ -1448,7 +1449,7 @@ function AppInner() {
             ) : showProfileFetchError ? (
               <div className="bb-profile-missing">
                 <div className="bb-profile-missing-card">
-                  <div className="bb-profile-missing-emoji">⚠️</div>
+                  <div className="bb-profile-missing-emoji"><AlertTriangle size={38} strokeWidth={1.75} /></div>
                   <div className="bb-profile-missing-title">Profiel kon niet worden geladen</div>
                   <div className="bb-profile-missing-sub">
                     Supabase gaf een fout terug bij het ophalen van je profiel.

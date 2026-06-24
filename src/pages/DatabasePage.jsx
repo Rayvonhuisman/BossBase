@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import JSZip from 'jszip';
 import { supabase } from '../lib/supabase.js';
@@ -1695,8 +1696,9 @@ export function DatabasePage({ openCustomer }) {
 
                 {/* Waarschuwing */}
                 {withoutEmail.length > 0 && (
-                  <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 'var(--r8)', padding: '10px 14px', fontSize: 12, color: '#92400e' }}>
-                    ⚠️ {withoutEmail.length} klant{withoutEmail.length !== 1 ? 'en hebben' : ' heeft'} geen e-mailadres en {withoutEmail.length !== 1 ? 'worden' : 'wordt'} overgeslagen.
+                  <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 'var(--r8)', padding: '10px 14px', fontSize: 12, color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                    <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <span>{withoutEmail.length} klant{withoutEmail.length !== 1 ? 'en hebben' : ' heeft'} geen e-mailadres en {withoutEmail.length !== 1 ? 'worden' : 'wordt'} overgeslagen.</span>
                   </div>
                 )}
               </div>

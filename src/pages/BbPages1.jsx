@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import DOMPurify from 'dompurify';
-import { Bold, Calendar, Check, Edit2, Euro, FileText, Folder, Italic, List, ListOrdered, Maximize2, Minimize2, PenLine, Plus, RotateCcw, ShoppingCart, Underline, User, Wrench, X } from 'lucide-react';
+import { Bold, Calendar, Check, Edit2, Euro, FileText, Folder, Italic, List, ListOrdered, Maximize2, Minimize2, PenLine, Plus, RotateCcw, ShoppingCart, Sparkles, Underline, User, Wrench, X } from 'lucide-react';
 import {
   I, CUSTOMERS_DATA, DEALS, ACTIVITIES_DATA, QUOTES_DATA, COSTS_DATA,
   fmt, custById, stageLabel, stageCol, Av, StatusBadge, ModalX, CostCategoryBadge,
@@ -1464,8 +1464,9 @@ export function QuotesPage({ openCustomer }) {
               <div className="f"><label>BTW (%)</label><select><option>21%</option><option>9%</option><option>0%</option></select></div>
               <div className="f"><label>Geldig t/m</label><input type="date" /></div>
             </div>
-            <div style={{ background: 'var(--pll)', border: '1px solid rgba(29,219,98,.2)', borderRadius: 'var(--r8)', padding: '10px 14px', marginTop: 14, fontSize: '.8rem', color: 'var(--pd)', fontWeight: 600 }}>
-              ✦ BossBase stelt automatisch een concepttotaal voor. Controleer alle regels voordat je verstuurt.
+            <div style={{ background: 'var(--pll)', border: '1px solid rgba(29,219,98,.2)', borderRadius: 'var(--r8)', padding: '10px 14px', marginTop: 14, fontSize: '.8rem', color: 'var(--pd)', fontWeight: 600, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+              <Sparkles size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>BossBase stelt automatisch een concepttotaal voor. Controleer alle regels voordat je verstuurt.</span>
             </div>
             <div className="fa">
               <button className="btn btn-s" onClick={() => setShowNew(false)}>Annuleren</button>

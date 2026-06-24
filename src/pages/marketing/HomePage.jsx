@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react"
+import { Star } from "lucide-react"
 import { Nav, Footer, ScrollLine, Reveal, Wordmark, I, initChoreo, useReducedMotion, useScrollY } from "./MktShared"
 
 /* ── Float cards (Variant D) ── */
@@ -261,7 +262,7 @@ function FeatureVisualAgenda() {
       ))}
       <div className="mini-card" style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--pll, #f0fdf4)", borderColor: "var(--pl)" }}>
         {I.bell}
-        <span style={{ fontSize: 12.5, color: "var(--dm)" }}>Klant kreeg automatisch een herinnering 📅</span>
+        <span style={{ fontSize: 12.5, color: "var(--dm)" }}>Klant kreeg automatisch een herinnering</span>
       </div>
     </div>
   )
@@ -516,7 +517,7 @@ function ScreenDashboard({ toast }) {
   return (
     <div>
       <div className="demo-h">
-        <h3>Goedemorgen, Mark 👋</h3>
+        <h3>Goedemorgen, Mark</h3>
         <button className="btn btn-p" onClick={toast}>+ Nieuwe klus</button>
       </div>
       <DemoStats items={[
@@ -696,7 +697,7 @@ function DemoSection() {
               ))}
             </nav>
             <div className="demo-main"><Screen toast={toast} /></div>
-            <div className={`demo-toast${toastOn ? " show" : ""}`} role="status">Dit is een demo ✨</div>
+            <div className={`demo-toast${toastOn ? " show" : ""}`} role="status">Dit is een demo</div>
           </div>
         </Reveal>
       </div>
@@ -798,7 +799,7 @@ function Pricing({ navigate }) {
               const expanded = !!showAll[t.tier]
               return (
                 <div key={t.tier} className={`price-card${t.hot ? " hot" : ""}${expanded ? " expanded" : ""}`}>
-                  {t.hot && <span className="hot-badge">⭐ Meest gekozen</span>}
+                  {t.hot && <span className="hot-badge" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Star size={12} fill="currentColor" /> Meest gekozen</span>}
                   <div className="tier">{t.tier}</div>
                   <div className="who">{t.who}</div>
                   <div className="amount">

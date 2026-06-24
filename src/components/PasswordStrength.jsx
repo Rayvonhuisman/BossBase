@@ -1,4 +1,5 @@
 // Gedeeld wachtwoordvalidatie component
+import { Check, X, Circle } from 'lucide-react';
 
 export const RULES = [
   { key: 'len',     label: 'Minimaal 8 tekens',          test: p => p.length >= 8 },
@@ -23,8 +24,8 @@ export function PasswordRequirements({ password }) {
             color: ok ? '#15A34A' : '#9ca3af',
             display: 'flex', alignItems: 'center', gap: 5,
           }}>
-            <span style={{ fontSize: '.7rem', width: 12, textAlign: 'center' }}>
-              {ok ? '✓' : '○'}
+            <span style={{ width: 12, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+              {ok ? <Check size={12} strokeWidth={3} /> : <Circle size={9} />}
             </span>
             {r.label}
           </li>
@@ -43,7 +44,7 @@ export function PasswordMatch({ password, password2 }) {
       color: match ? '#15A34A' : '#dc2626',
       display: 'flex', alignItems: 'center', gap: 5,
     }}>
-      <span style={{ fontSize: '.7rem' }}>{match ? '✓' : '✗'}</span>
+      <span style={{ display: 'inline-flex', alignItems: 'center' }}>{match ? <Check size={12} strokeWidth={3} /> : <X size={12} strokeWidth={3} />}</span>
       {match ? 'Wachtwoorden komen overeen' : 'Wachtwoorden komen niet overeen'}
     </div>
   );

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, MoreVertical, Send } from 'lucide-react';
+import { Download, MoreVertical, Send, CheckCircle2 } from 'lucide-react';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
@@ -502,7 +502,7 @@ function CrediteerModal({ factuur, regels, onClose, onSuccess }) {
             <ModalX onClose={() => { onSuccess?.(); onClose(); }} />
           </div>
           <div style={{ padding: '32px 24px', textAlign: 'center' }}>
-            <div style={{ fontSize: 36, marginBottom: 12, color: '#1DDB62' }}>✓</div>
+            <div style={{ marginBottom: 12, color: '#1DDB62', display: 'flex', justifyContent: 'center' }}><CheckCircle2 size={36} /></div>
             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{success}</div>
             <div style={{ fontSize: 13, color: 'var(--dl)' }}>Creditfactuur succesvol aangemaakt</div>
           </div>
