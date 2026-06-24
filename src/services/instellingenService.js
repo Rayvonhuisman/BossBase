@@ -47,7 +47,10 @@ const toPipelineStage = row => ({
 
 /**
  * Haalt de bedrijfsinstellingen op voor de ingelogde company.
- * Retourneert null als er nog geen rij bestaat.
+ * Geeft ALTIJD een object terug: als er nog geen rij bestaat, de standaard
+ * fallback-waarden (uurtarief 55, BTW 21, reiskosten 0,23, geldig 14 dagen).
+ * Zo werken de voorgevulde defaults bij nieuwe offertes/facturen ook voordat
+ * een bedrijf zijn instellingen ooit heeft opgeslagen.
  */
 export async function getBedrijfsinstellingen() {
   const { data, error } = await supabase
@@ -55,7 +58,7 @@ export async function getBedrijfsinstellingen() {
     .select("*")
     .maybeSingle()
   if (error) throw error
-  return data ? toBedrijfsinstellingen(data) : null
+  return toBedrijfsinstellingen(data || {})
 }
 
 /**
@@ -63,20 +66,19 @@ export async function getBedrijfsinstellingen() {
  * Gebruik: upsertBedrijfsinstellingen({ uurtarief: 60, standaard_marge: 30 })
  */
 export async function upsertBedrijfsinstellingen(input) {
+  // Let op: haakjes rond (a ?? b) zijn nodig — zonder haakjes bindt `!=` sterker
+  // dan `??`, waardoor waarde 0 (bijv. BTW 0% of reiskosten 0) per ongeluk werd
+  // weggelaten en dus niet opgeslagen.
+  const reiskosten = input.reiskosten_per_km ?? input.reiskostenPerKm
+  const marge = input.standaard_marge ?? input.standaardMarge
+  const btw = input.btw_pct ?? input.btwPct
+  const geldig = input.offerte_geldig_dagen ?? input.offerteGeldigDagen
   const updates = {
     uurtarief: input.uurtarief != null ? Number(input.uurtarief) : undefined,
-    reiskosten_per_km: input.reiskosten_per_km ?? input.reiskostenPerKm != null
-      ? Number(input.reiskosten_per_km ?? input.reiskostenPerKm)
-      : undefined,
-    standaard_marge: input.standaard_marge ?? input.standaardMarge != null
-      ? Number(input.standaard_marge ?? input.standaardMarge)
-      : undefined,
-    btw_pct: input.btw_pct ?? input.btwPct != null
-      ? Number(input.btw_pct ?? input.btwPct)
-      : undefined,
-    offerte_geldig_dagen: input.offerte_geldig_dagen ?? input.offerteGeldigDagen != null
-      ? Number(input.offerte_geldig_dagen ?? input.offerteGeldigDagen)
-      : undefined,
+    reiskosten_per_km: reiskosten != null ? Number(reiskosten) : undefined,
+    standaard_marge: marge != null ? Number(marge) : undefined,
+    btw_pct: btw != null ? Number(btw) : undefined,
+    offerte_geldig_dagen: geldig != null ? Number(geldig) : undefined,
     updated_at: new Date().toISOString(),
   }
   // Verwijder undefined waarden zodat bestaande DB-waarden niet worden overschreven
