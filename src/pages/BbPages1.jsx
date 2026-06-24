@@ -412,7 +412,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
         </button>
         <Av name={c.name} size="xl" idx={c.av} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 4, paddingRight: 48 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
               <h2 style={{ fontWeight: 800, fontSize: '1.25rem', letterSpacing: '-.025em', wordBreak: 'break-word' }}>{c.name}</h2>
               <span className={`badge ${c.type === 'Zakelijk' ? 'b-blue' : 'b-gray'}`}>{c.type}</span>
