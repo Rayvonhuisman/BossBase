@@ -794,6 +794,8 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     case 'agenda_week': {
       const DN = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'];
       const todayKey = toLocalDateKey(new Date());
+      // Standaard "Vandaag" (past netjes in het blok); via de toggle naar "Week".
+      const agendaView = widget.settings?.agendaView === 'week' ? 'week' : 'today';
       const monday = new Date(); monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
       const cols = Array.from({ length: 7 }, (_, i) => {
         const dt = new Date(monday); dt.setDate(monday.getDate() + i);
@@ -802,24 +804,60 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       });
       const evClass = { call: 'ev-info', email: 'ev-green', visit: 'ev-purple', task: 'ev-orange', follow: 'ev-warn' };
       const inWeek = iso => iso && iso >= cols[0].iso && iso <= cols[6].iso;
+      const inRange = agendaView === 'today' ? (iso => iso === todayKey) : inWeek;
       const actItems = activities
         .map(a => ({ a, iso: a.dueAt ? toLocalDateKey(a.dueAt) : null }))
-        .filter(({ a, iso }) => isOpenAct(a) && inWeek(iso))
+        .filter(({ a, iso }) => isOpenAct(a) && inRange(iso))
         .map(({ a, iso }) => ({ kind: 'activity', id: a.id, activityId: a.id, title: a.title, time: a.time || '', iso, atype: a.type, custId: a.custId, dealId: a.dealId }));
       const evItems = (calendarEvents || [])
         .map(e => ({ e, iso: toLocalDateKey(e.startAt || e.date) }))
-        .filter(({ e, iso }) => !e.activityId && e.id && inWeek(iso))
+        .filter(({ e, iso }) => !e.activityId && e.id && inRange(iso))
         .map(({ e, iso }) => ({ kind: 'event', id: e.id, title: e.title || 'Afspraak', time: e.time || '', iso, custId: e.custId, dealId: e.dealId }));
-      const weekItems = [...actItems, ...evItems];
-      const itemsOn = iso => weekItems
+      const allItems = [...actItems, ...evItems];
+      const seg = (
+        <Seg
+          options={['Vandaag', 'Week']}
+          active={agendaView === 'week' ? 'Week' : 'Vandaag'}
+          onPick={o => onSettingsChange && onSettingsChange({ ...widget.settings, agendaView: o === 'Week' ? 'week' : 'today' })}
+        />
+      );
+
+      // ── Vandaag: verticale lijst, past binnen het blok ──
+      if (agendaView === 'today') {
+        const todayItems = [...allItems].sort((x, y) => (x.time || '99:99').localeCompare(y.time || '99:99'));
+        return (
+          <div className="bb-widget">
+            <WHead eyebrow="Agenda" title="Vandaag" sub={`${todayItems.length} agenda-items`} right={seg} />
+            {todayItems.length === 0 ? (
+              <EmptyState title="Geen agenda-items voor vandaag" text="Plan een afspraak vanuit een klant of activiteit." />
+            ) : (
+              <div className="feed">
+                {todayItems.map((it, k) => (
+                  <button key={k} className={`feed-row compact ${it.kind === 'event' ? 'ev-teal' : (evClass[it.atype] || 'ev-info')}`} onClick={openAgendaItem(it)}>
+                    <span className="feed-icon">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
+                    </span>
+                    <div className="feed-main">
+                      <div className="feed-title">{it.title}</div>
+                      {it.time && <div className="feed-meta"><span>{it.time}</span></div>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      // ── Week: 7-koloms rooster ──
+      const itemsOn = iso => allItems
         .filter(it => it.iso === iso)
         .sort((x, y) => (x.time || '99:99').localeCompare(y.time || '99:99'))
         .slice(0, 4);
       return (
         <div className="bb-widget">
-          <WHead eyebrow="Agenda" title="Deze week" sub={`${weekItems.length} agenda-items`}
-            right={<Seg options={['Week', 'Maand']} active="Week" />} />
-          {weekItems.length === 0 ? (
+          <WHead eyebrow="Agenda" title="Deze week" sub={`${allItems.length} agenda-items`} right={seg} />
+          {allItems.length === 0 ? (
             <EmptyState title="Geen agenda-items deze week" text="Plan een afspraak vanuit een klant of activiteit." />
           ) : (
             <div className="agenda-week">

@@ -82,10 +82,10 @@ export const DEFAULT_LAYOUTS = {
     iconKey: 'wo',
     description: 'Werkbonnen, activiteiten, agenda en je uren',
     widgets: [
-      w('werkbonnen_today',  'medium'),  // 4
-      w('uren_registratie',  'medium'),  // 4
-      w('agenda_week',       'large'),   // 6
-      w('actions_today',     'large'),   // 6
+      w('werkbonnen_today',  'large'),   // 6
+      w('uren_registratie',  'large'),   // 6  → rij 1 = 12 ✓
+      w('agenda_week',       'large'),   // 6  (toont standaard "Vandaag")
+      w('actions_today',     'large'),   // 6  → rij 2 = 12 ✓
     ],
   },
   standaard: {
