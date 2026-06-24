@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { WidgetCard } from './WidgetCard.jsx';
+import { widgetPermission } from '../../data/widgetRegistry.js';
 
 // Coordinates HTML5 drag-and-drop across widgets in edit mode.
 // - draggable={editMode} on each WidgetCard
@@ -11,10 +12,15 @@ import { WidgetCard } from './WidgetCard.jsx';
 // - dragend always clears state so the UI never gets stuck if the user
 //   drops outside the grid
 export function DashboardWidgetGrid({
-  widgets, editMode, data,
+  widgets, editMode, data, can,
   setPage, openCustomer, openDeal, openInvoice, openCalendarEvent,
   onMoveUp, onMoveDown, onResize, onRemove, onReorder, onSettingsChange,
 }) {
+  // Een widget wordt verborgen als de gebruiker het vereiste recht mist. De
+  // index blijft gelijk aan de positie in de volledige widgets-array, zodat de
+  // verplaats-/verwijder-handlers (die op index werken) blijven kloppen.
+  const maySee = (w) => { const p = widgetPermission(w.widget_type); return !p || !can || can(p); };
+  const visibleCount = widgets.filter(maySee).length;
   const [dragIdx, setDragIdx] = useState(null);
   const [overIdx, setOverIdx] = useState(null);
   // We dedupe rapid dragover events to avoid jank.
@@ -54,7 +60,7 @@ export function DashboardWidgetGrid({
       onDragOver={editMode ? (e => e.preventDefault()) : undefined}
       onDrop={editMode ? handleDrop : undefined}
     >
-      {widgets.map((widget, idx) => (
+      {widgets.map((widget, idx) => !maySee(widget) ? null : (
         <WidgetCard
           key={widget.id}
           widget={widget}
@@ -81,7 +87,7 @@ export function DashboardWidgetGrid({
           openCalendarEvent={openCalendarEvent}
         />
       ))}
-      {widgets.length === 0 && (
+      {visibleCount === 0 && (
         <div className="dw-empty-state">
           <div className="empty-title">Geen widgets op je dashboard</div>
           <div className="empty-sub">Klik op "+ Blok toevoegen" om widgets toe te voegen</div>

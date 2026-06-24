@@ -161,3 +161,34 @@ export function getDefaultWidgets() {
 export function getWidgetMeta(type) {
   return WIDGET_REGISTRY.find(r => r.type === type) || { type, label: type, category: 'popular', defaultSize: 'medium' };
 }
+
+// Welke widgets een recht vereisen. Financiële widgets (omzet, winst, waarde,
+// kosten, facturen, offertes) zijn alleen zichtbaar voor wie het bijbehorende
+// recht heeft; admins zien alles. Widgets die hier niet in staan zijn voor
+// iedereen zichtbaar (eigen activiteiten, werkbonnen, agenda, nieuwe aanvragen, etc.).
+export const WIDGET_PERMISSION = {
+  // Financieel dashboard (omzet/winst/pipeline-waarde)
+  open_pipeline_value:   'financieel',
+  accepted_value:        'financieel',
+  revenue_month:         'financieel',
+  profit_month:          'financieel',
+  monthly_revenue_chart: 'financieel',
+  monthly_profit_chart:  'financieel',
+  pipeline_stage_chart:  'financieel',
+  top_customers_chart:   'financieel',
+  // Kosten
+  costs_per_job:         'kosten',
+  costs_month:           'kosten',
+  job_costs_bar_chart:   'kosten',
+  // Facturen
+  billable:              'facturen',
+  open_facturen:         'facturen',
+  invoice_status_chart:  'facturen',
+  // Offertes
+  open_offertes:         'offertes',
+};
+
+// Het recht dat een widget vereist, of null als hij voor iedereen zichtbaar is.
+export function widgetPermission(type) {
+  return WIDGET_PERMISSION[type] || null;
+}

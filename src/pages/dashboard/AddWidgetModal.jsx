@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import { I } from '../../bb-shared.jsx';
-import { WIDGET_REGISTRY, WIDGET_CATEGORIES } from '../../data/widgetRegistry.js';
+import { WIDGET_REGISTRY, WIDGET_CATEGORIES, widgetPermission } from '../../data/widgetRegistry.js';
 
 const widgetIcon = w => I[w.iconKey] ?? I.dash;
 
 const SIZE_LABELS = { small: 'Klein', medium: 'Middel', large: 'Groot', full: 'Breed' };
 
-export function AddWidgetModal({ existingTypes, onAdd, onClose }) {
+export function AddWidgetModal({ existingTypes, onAdd, onClose, can }) {
   const [activeCategory, setActiveCategory] = useState('popular');
   const [search, setSearch] = useState('');
 
-  const available = WIDGET_REGISTRY.filter(w => !existingTypes.includes(w.type));
+  // Verberg widgets waar de gebruiker geen recht voor heeft (zelfde filter als
+  // het dashboard), zodat een medewerker ze ook niet kan toevoegen.
+  const maySee = w => { const p = widgetPermission(w.type); return !p || !can || can(p); };
+  const available = WIDGET_REGISTRY.filter(w => !existingTypes.includes(w.type) && maySee(w));
 
   const filtered = search.trim()
     ? available.filter(w =>
