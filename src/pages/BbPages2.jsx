@@ -15,6 +15,7 @@ import { listDeals } from '../services/dealService.js';
 import { listActivities } from '../services/activityService.js';
 import { getConnectionStatus, startGoogleCalendarConnect, disconnectGoogleCalendar } from '../services/googleCalendarService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
+import { calcBtw, BTW_PCT_OPTIONS } from '../utils/btw.js';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { ActivityEditModal, NewCalendarEventModal, NewJobCostModal } from '../components/SharedModals.jsx';
@@ -733,7 +734,10 @@ const CAT_OPTIONS = [
 function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onClose }) {
   const [cat, setCat] = useState(cost.cat);
   const [custId, setCustId] = useState(cost.customerId || '');
+  const [btwPct, setBtwPct] = useState(cost.btwPercentage ?? 21);
   const [savedField, setSavedField] = useState(null);
+  // amount is exclusief BTW → btw-bedrag en incl. afgeleid.
+  const btwCalc = calcBtw(cost.amt, btwPct, 'excl');
   const [deleting, setDeleting] = useState(false);
 
   const isMoneybird = !!cost.externeRef;
@@ -759,6 +763,12 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
     const val = e.target.value;
     setCustId(val);
     save('customer_id', val || null);
+  };
+
+  const handleBtwChange = e => {
+    const val = Number(e.target.value);
+    setBtwPct(val);
+    save('btw_percentage', val);
   };
 
   const handleDelete = async () => {
@@ -790,16 +800,29 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
         <div className="fg" style={{ gap: 12 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
-              <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 2 }}>Bedrag</div>
-              <div style={{ fontSize: '1.2rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}>
-                {fmt(cost.amt)}
-                {cost.btwInclusief === true && <span style={{ fontSize: '.68rem', color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 5px', fontWeight: 400 }}>incl. BTW</span>}
-                {cost.btwInclusief === false && <span style={{ fontSize: '.68rem', color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 5px', fontWeight: 400 }}>excl. BTW</span>}
-              </div>
+              <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 2 }}>Bedrag (excl. BTW)</div>
+              <div style={{ fontSize: '1.2rem', fontWeight: 800 }}>{fmt(cost.amt)}</div>
             </div>
             <div>
               <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 2 }}>Datum</div>
               <div style={{ fontWeight: 600 }}>{cost.date || '—'}</div>
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600, marginBottom: 4 }}>
+              BTW
+              {savedField === 'btw_percentage' && <span style={{ marginLeft: 8, color: '#15A34A', fontSize: '.7rem', fontWeight: 700 }}>{I.check} Opgeslagen</span>}
+            </div>
+            <select className="btn btn-s btn-sm" style={{ padding: '5px 10px', width: '100%' }} value={btwPct} onChange={handleBtwChange}>
+              {BTW_PCT_OPTIONS.map(p => <option key={p} value={p}>{p}%</option>)}
+            </select>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: '.82rem' }}>
+              <span style={{ color: 'var(--dl)' }}>BTW {btwPct}%</span>
+              <span style={{ fontWeight: 600 }}>{fmt(btwCalc.btw)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: '.9rem', borderTop: '1px solid var(--border)', paddingTop: 6 }}>
+              <span style={{ fontWeight: 700 }}>Totaal incl. BTW</span>
+              <span style={{ fontWeight: 800 }}>{fmt(btwCalc.incl)}</span>
             </div>
           </div>
           <div>
@@ -944,10 +967,10 @@ export function CostsPage() {
                   <td style={{ fontWeight: 600 }}>{r.customerId ? (customers.find(x => x.id === r.customerId)?.name || '—') : r.klantType === 'algemeen' ? 'Algemeen' : (c?.name || '—')}</td>
                   <td><CostCategoryBadge category={r.cat} /></td>
                   <td>{r.desc}</td>
-                  <td style={{ fontWeight: 700 }}>
+                  <td style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
                     {fmt(r.amt)}
-                    {r.btwInclusief === true && <span style={{ marginLeft: 5, fontSize: '.68rem', color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 5px', fontWeight: 400 }}>incl. BTW</span>}
-                    {r.btwInclusief === false && <span style={{ marginLeft: 5, fontSize: '.68rem', color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 5px', fontWeight: 400 }}>excl. BTW</span>}
+                    <span style={{ marginLeft: 5, fontSize: '.68rem', color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 5px', fontWeight: 400 }}>excl. · {r.btwPercentage ?? 21}% btw</span>
+                    <div style={{ fontSize: '.7rem', color: 'var(--dl)', fontWeight: 400 }}>{fmt(calcBtw(r.amt, r.btwPercentage ?? 21, 'excl').incl)} incl.</div>
                   </td>
                   <td style={{ color: 'var(--dl)', fontSize: '.8rem' }}>{r.date}</td>
                   <td>

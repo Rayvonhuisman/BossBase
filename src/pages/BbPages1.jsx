@@ -780,7 +780,10 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
                         <div className="lrow-title">{r.desc || '—'}</div>
                         <div className="lrow-sub"><CostCategoryBadge category={r.cat} /></div>
                       </div>
-                      <div className="lrow-amount">{fmt(r.amt)}</div>
+                      <div className="lrow-amount" style={{ textAlign: 'right' }}>
+                        {fmt(r.amt)}
+                        <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--dl)' }}>excl. · {r.btwPercentage ?? 21}% btw</div>
+                      </div>
                       <div className="lrow-date">{r.date}</div>
                     </div>
                   ))}

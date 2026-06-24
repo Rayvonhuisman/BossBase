@@ -13,6 +13,7 @@ import { createCalendarEvent } from '../services/calendarService.js';
 import { createJobCost, updateJobCost } from '../services/jobCostService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
 import { getProjects } from '../services/projectsService.js';
+import { calcBtw } from '../utils/btw.js';
 import { updateProfile } from '../services/profileService.js';
 import { NoteEditor } from './NoteEditor.jsx';
 import { useUploads } from '../lib/uploadContext.jsx';
@@ -28,19 +29,7 @@ function addMins(time, mins) {
 }
 
 // ── KOSTEN BTW HELPERS ───────────────────────────────────────
-const calcBtwHelper = (bedrag, pct, mode) => {
-  const b = Number(bedrag) || 0;
-  const p = Number(pct) || 0;
-  if (mode === 'excl') {
-    const excl = b;
-    const btw = Math.round(excl * p / 100 * 100) / 100;
-    return { excl, btw, incl: Math.round((excl + btw) * 100) / 100 };
-  }
-  const incl = b;
-  const excl = Math.round(incl / (1 + p / 100) * 100) / 100;
-  const btw = Math.round((incl - excl) * 100) / 100;
-  return { excl, btw, incl };
-};
+const calcBtwHelper = (bedrag, pct, mode) => calcBtw(bedrag, pct, mode);
 const getRegelPct = r => r.btw_pct === 'anders' ? Number(r.btw_custom) || 0 : Number(r.btw_pct);
 const newKostenRegel = () => ({ id: Date.now() + Math.random(), omschrijving: '', bedrag: '', btw_mode: 'excl', btw_pct: 21, btw_custom: '' });
 
@@ -758,8 +747,10 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
     try {
       created = await Promise.all(
         regels.map(r => {
-          const { excl } = calcBtwHelper(r.bedrag, getRegelPct(r), r.btw_mode);
-          return createJobCost({ ...header, amount: excl, description: r.omschrijving });
+          const pct = getRegelPct(r);
+          const { excl } = calcBtwHelper(r.bedrag, pct, r.btw_mode);
+          // amount = exclusief BTW; btw_percentage apart opgeslagen (incl./btw afgeleid).
+          return createJobCost({ ...header, amount: excl, btw_percentage: pct, btw_inclusief: false, description: r.omschrijving });
         })
       );
     } catch (err) {

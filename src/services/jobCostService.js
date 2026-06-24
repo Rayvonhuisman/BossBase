@@ -73,6 +73,12 @@ export function mapJobCostFormToPayload(input = {}) {
   }
   if (input.bijlage_url !== undefined) payload.bijlage_url = input.bijlage_url
   if (input.klant_type !== undefined) payload.klant_type = input.klant_type
+  if (input.btw_percentage !== undefined || input.btwPercentage !== undefined) {
+    payload.btw_percentage = input.btw_percentage ?? input.btwPercentage ?? 21
+  }
+  if (input.btw_inclusief !== undefined || input.btwInclusief !== undefined) {
+    payload.btw_inclusief = input.btw_inclusief ?? input.btwInclusief ?? null
+  }
   if (input.customer_id !== undefined || input.customerId !== undefined) {
     payload.customer_id = input.customer_id ?? input.customerId ?? null
   }
@@ -89,6 +95,8 @@ export const toJobCost = row => ({
   cat: row.category || "overig",
   desc: row.description || "",
   amt: Number(row.amount || 0),
+  // amount is exclusief BTW; btw-bedrag en incl. worden hieruit afgeleid.
+  btwPercentage: row.btw_percentage != null ? Number(row.btw_percentage) : 21,
   date: row.cost_date || row.created_at?.slice(0, 10) || "",
   // Best-effort linkage to a customer via the deal — populated by joins where needed.
   custId: row.deals?.customer_id ?? null,

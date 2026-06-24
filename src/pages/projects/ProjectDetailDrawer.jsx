@@ -20,6 +20,7 @@ import {
 } from '../../services/projectsService.js';
 import { getWerkbonnenByProject, createWerkbon } from '../../services/werkbonService.js';
 import { getProjectCosts, createJobCost, deleteJobCost } from '../../services/jobCostService.js';
+import { calcBtw, BTW_PCT_OPTIONS } from '../../utils/btw.js';
 import { NewFactuurModal } from '../FacturenPage.jsx';
 import { NewOfferteModal, SendOfferteMailModal } from '../OffertesPage.jsx';
 import { NoteEditor, renderNote } from '../../components/NoteEditor.jsx';
@@ -570,9 +571,12 @@ function KostenTab({ project, canManage }) {
     description: '',
     amount: '',
     category: 'Materiaal',
+    btw_mode: 'excl',
+    btw_pct: 21,
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const btwLive = calcBtw(form.amount, form.btw_pct, form.btw_mode);
 
   const load = () => {
     setLoading(true);
@@ -585,13 +589,15 @@ function KostenTab({ project, canManage }) {
   const winst = omzet - totalCosts;
 
   const submit = async () => {
-    const amt = Number(form.amount);
-    if (!amt || amt <= 0) { toast.error('Bedrag moet groter zijn dan 0'); return; }
+    if (!Number(form.amount) || Number(form.amount) <= 0) { toast.error('Bedrag moet groter zijn dan 0'); return; }
     setSaving(true);
     try {
+      const { excl } = calcBtw(form.amount, form.btw_pct, form.btw_mode);
       await createJobCost({
         description: form.description || form.category,
-        amount: amt,
+        amount: excl, // exclusief BTW opslaan
+        btw_percentage: form.btw_pct,
+        btw_inclusief: false,
         category: form.category,
         cost_date: form.cost_date,
         project_id: project.id,
@@ -645,8 +651,21 @@ function KostenTab({ project, canManage }) {
               <input type="date" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.cost_date} onChange={e => set('cost_date', e.target.value)} />
             </div>
             <div className="f" style={{ flex: '1 1 110px', minWidth: 0 }}>
-              <label>Bedrag (excl.)</label>
+              <label>Bedrag</label>
               <input type="number" min="0" step="0.01" placeholder="0,00" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.amount} onChange={e => set('amount', e.target.value)} />
+            </div>
+            <div className="f" style={{ flex: '1 1 90px', minWidth: 0 }}>
+              <label>Ex / incl.</label>
+              <select style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.btw_mode} onChange={e => set('btw_mode', e.target.value)}>
+                <option value="excl">Excl. BTW</option>
+                <option value="incl">Incl. BTW</option>
+              </select>
+            </div>
+            <div className="f" style={{ flex: '1 1 80px', minWidth: 0 }}>
+              <label>BTW</label>
+              <select style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.btw_pct} onChange={e => set('btw_pct', Number(e.target.value))}>
+                {BTW_PCT_OPTIONS.map(p => <option key={p} value={p}>{p}%</option>)}
+              </select>
             </div>
             <div className="f" style={{ flex: '1 1 130px', minWidth: 0 }}>
               <label>Categorie</label>
@@ -664,7 +683,10 @@ function KostenTab({ project, canManage }) {
               <input type="text" placeholder="Waar zijn de kosten voor?" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.description} onChange={e => set('description', e.target.value)} />
             </div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--dl)' }}>
+              {fmt(btwLive.excl)} excl. · {fmt(btwLive.btw)} btw · <strong style={{ color: 'var(--dk)' }}>{fmt(btwLive.incl)} incl.</strong>
+            </div>
             <button className="btn btn-p btn-sm" onClick={submit} disabled={saving}>
               {saving ? 'Toevoegen…' : 'Kosten toevoegen'}
             </button>
@@ -694,7 +716,10 @@ function KostenTab({ project, canManage }) {
                     {c.werkbonId && <span style={{ fontSize: 11, color: 'var(--dl)' }}>· via werkbon</span>}
                   </div>
                 </div>
-                <div style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{fmt(c.amt)}</div>
+                <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontWeight: 700 }}>{fmt(c.amt)}</div>
+                  <div style={{ fontSize: 10.5, color: 'var(--dl)' }}>excl. · {c.btwPercentage ?? 21}% btw</div>
+                </div>
                 {canManage && (
                   <button className="btn btn-xs btn-ghost btn-icon" title="Verwijderen" onClick={() => remove(c.id)}>{I.trash}</button>
                 )}
