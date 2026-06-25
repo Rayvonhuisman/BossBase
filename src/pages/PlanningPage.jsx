@@ -963,7 +963,7 @@ export function PlanningPage({ openCustomer } = {}) {
   const legendItems = useMemo(() => {
     if (viewMode === 'totaal') {
       const items = teamMembers.map(m => ({ id: m.id, label: m.fullName, color: colorMap[m.id] || entityColor(0) }));
-      if (werkbonnen.some(w => !w.assignedTo)) {
+      if (werkbonnen.some(w => !(w.assignedToIds && w.assignedToIds.length) && !w.assignedTo)) {
         items.push({ id: '__none__', label: 'Niet toegewezen', color: UNASSIGNED_COLOR });
       }
       return items;
@@ -991,7 +991,9 @@ export function PlanningPage({ openCustomer } = {}) {
   // Voeg _colorKey toe per werkbon
   const colorKeyedWb = useMemo(() => filteredWb.map(w => ({
     ...w,
-    _colorKey: viewMode === 'totaal' ? (w.assignedTo || '__none__') : (w.projectId || '__none__'),
+    // Kleur volgt de toewijzing: eerste toegewezen medewerker (assignedToIds is
+    // de bron van waarheid), val terug op de enkele assignedTo, anders grijs.
+    _colorKey: viewMode === 'totaal' ? ((w.assignedToIds && w.assignedToIds[0]) || w.assignedTo || '__none__') : (w.projectId || '__none__'),
   })), [filteredWb, viewMode]);
 
   // Activiteiten gefilterd per viewMode

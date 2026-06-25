@@ -245,7 +245,10 @@ export async function getActiveTeamMembers({ includeSelf = false } = {}) {
   return (data || []).map(r => ({ id: r.id, fullName: r.full_name || '' })).filter(m => m.fullName);
 }
 
-// Backwards-compatibele naam — levert nu alleen nog actieve teamleden.
+// Backwards-compatibele naam — levert ALLE actieve teamleden, inclusief jezelf,
+// zodat je in "Toegewezen aan"-dropdowns (activiteit, werkbon, agenda) ook
+// jezelf kunt kiezen. @-tagging toont zo ook jezelf (zelf-notificatie wordt
+// elders al uitgefilterd).
 export async function getTeamMembers() {
-  return getActiveTeamMembers();
+  return getActiveTeamMembers({ includeSelf: true });
 }
