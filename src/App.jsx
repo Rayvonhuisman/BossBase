@@ -9,7 +9,6 @@ import OfferteSigneren from './pages/OfferteSigneren.jsx';
 import { DashboardHome } from './pages/dashboard/DashboardHome.jsx';
 import { Pipeline } from './pages/BbDashboard.jsx';
 import { DealDetailDrawer } from './pages/dashboard/DealDetailDrawer.jsx';
-import { InvoiceDetailDrawer } from './pages/dashboard/InvoiceDetailDrawer.jsx';
 import { CalendarEventDetailDrawer } from './pages/dashboard/CalendarEventDetailDrawer.jsx';
 import { CustomerPage, CustomersPage, ActivitiesPage } from './pages/BbPages1.jsx';
 import { ActivitiesPageV2 } from './pages/ActivitiesPageV2.jsx';
@@ -626,20 +625,6 @@ function DealDrawer({ dealId, onClose, setPage, openCustomer }) {
   );
 }
 
-// ── INVOICE DRAWER ───────────────────────────────────────────
-function InvoiceDrawer({ invoiceId, onClose, setPage, openCustomer }) {
-  return (
-    <>
-      <div className="drawer-overlay" onClick={onClose} />
-      <div className="drawer">
-        <div className="drawer-body">
-          <InvoiceDetailDrawer invoiceId={invoiceId} onClose={onClose} setPage={setPage} openCustomer={openCustomer} />
-        </div>
-      </div>
-    </>
-  );
-}
-
 // ── CALENDAR EVENT DRAWER ────────────────────────────────────
 function CalEventDrawer({ eventId, onClose, setPage, openCustomer, openDeal }) {
   return (
@@ -811,7 +796,6 @@ function AppInner() {
   const [drawerCust, setDrawerCust] = useState(null); // { id, tab? }
 
   const [drawerDeal, setDrawerDeal] = useState(null);
-  const [drawerInvoice, setDrawerInvoice] = useState(null);
   const [drawerCalEvent, setDrawerCalEvent] = useState(null);
   const [navIntent,  setNavIntent]  = useState(null);
   // Terug-naar-klant context: { page, klantId, klantNaam }. Blijft staan tot je
@@ -1065,14 +1049,15 @@ function AppInner() {
     }
   };
 
-  // Customer / deal / invoice / calendar-event drawers are mutually exclusive
-  const openCustomer     = (id, tab) => { setDrawerDeal(null); setDrawerInvoice(null); setDrawerCalEvent(null); setDrawerCust(tab ? { id, tab } : id); };
+  // Customer / deal / calendar-event drawers are mutually exclusive
+  const openCustomer     = (id, tab) => { setDrawerDeal(null); setDrawerCalEvent(null); setDrawerCust(tab ? { id, tab } : id); };
   const closeCustomer    = () => setDrawerCust(null);
-  const openDeal         = id => { setDrawerCust(null); setDrawerInvoice(null); setDrawerCalEvent(null); setDrawerDeal(id); };
+  const openDeal         = id => { setDrawerCust(null); setDrawerCalEvent(null); setDrawerDeal(id); };
   const closeDeal        = () => setDrawerDeal(null);
-  const openInvoice      = id => { setDrawerCust(null); setDrawerDeal(null); setDrawerCalEvent(null); setDrawerInvoice(id); };
-  const closeInvoice     = () => setDrawerInvoice(null);
-  const openCalendarEvent = id => { setDrawerCust(null); setDrawerDeal(null); setDrawerInvoice(null); setDrawerCalEvent(id); };
+  // Facturen worden geopend in de echte Facturen-module (/dashboard/facturen),
+  // consistent met de klantkaart en projecten — geen aparte factuur-drawer meer.
+  const openInvoice      = id => navigatePage('facturen', { id });
+  const openCalendarEvent = id => { setDrawerCust(null); setDrawerDeal(null); setDrawerCalEvent(id); };
   const closeCalEvent    = () => setDrawerCalEvent(null);
   // Optional deep-open intent: { page, id } so a target page can open a
   // specific record via its own existing modal. Cleared once consumed.
@@ -1094,7 +1079,6 @@ function AppInner() {
     }
     closeCustomer();
     closeDeal();
-    closeInvoice();
     closeCalEvent();
   };
   const clearNavIntent = () => setNavIntent(null);
@@ -1509,15 +1493,6 @@ function AppInner() {
           <DealDrawer
             dealId={drawerDeal}
             onClose={closeDeal}
-            setPage={navigatePage}
-            openCustomer={openCustomer}
-          />
-        )}
-
-        {drawerInvoice !== null && (
-          <InvoiceDrawer
-            invoiceId={drawerInvoice}
-            onClose={closeInvoice}
             setPage={navigatePage}
             openCustomer={openCustomer}
           />

@@ -31,7 +31,7 @@ export const WIDGET_REGISTRY = [
   { type: 'costs_month',            iconKey: 'costs',   label: 'Kosten deze maand',        category: 'financial', defaultSize: 'small', description: 'Geschatte kosten afgelopen maand' },
   { type: 'billable',               iconKey: 'euro',    label: 'Te factureren',            category: 'financial', defaultSize: 'small', description: 'Waarde van klussen klaar voor facturatie' },
   { type: 'open_offertes',          iconKey: 'quotes',  label: 'Open offertes',           category: 'financial', defaultSize: 'large',  supportedSizes: ['medium', 'large', 'full'], description: 'Offertes in concept of verstuurd' },
-  { type: 'open_facturen',          iconKey: 'euro',    label: 'Openstaande facturen',    category: 'financial', defaultSize: 'large',  supportedSizes: ['medium', 'large', 'full'], description: 'Geaccepteerde offertes nog niet betaald' },
+  { type: 'open_facturen',          iconKey: 'euro',    label: 'Openstaande facturen',    category: 'financial', defaultSize: 'large',  supportedSizes: ['medium', 'large', 'full'], description: 'Verzonden facturen die nog niet betaald zijn' },
   // ── CRM ──────────────────────────────────────────────────
   { type: 'customers',              iconKey: 'cust',    label: 'Klanten',                 category: 'crm',       defaultSize: 'small', description: 'Totaal aantal actieve klanten' },
   { type: 'new_leads',              iconKey: 'pipe',    label: 'Nieuwe aanvragen',        category: 'crm',       defaultSize: 'medium', description: 'Deals in de fase Nieuwe aanvragen' },
