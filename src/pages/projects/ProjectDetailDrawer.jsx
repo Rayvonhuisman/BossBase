@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Maximize2, Minimize2, AlertTriangle, AlertOctagon } from 'lucide-react';
-import { I, ModalX, fmt, fmt0, CostCategoryBadge } from '../../bb-shared.jsx';
+import { I, ModalX, NotifyMailToggle, fmt, fmt0, CostCategoryBadge } from '../../bb-shared.jsx';
 import { useToast } from '../../lib/toast.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
 import {
@@ -21,10 +21,10 @@ import {
 import { getWerkbonnenByProject, createWerkbon } from '../../services/werkbonService.js';
 import { getProjectCosts, createJobCost, deleteJobCost } from '../../services/jobCostService.js';
 import { calcBtw, BTW_PCT_OPTIONS } from '../../utils/btw.js';
-import { NewFactuurModal } from '../FacturenPage.jsx';
+import { NewFactuurModal, SendFactuurMailModal } from '../FacturenPage.jsx';
 import { NewOfferteModal, SendOfferteMailModal } from '../OffertesPage.jsx';
 import { NoteEditor, renderNote } from '../../components/NoteEditor.jsx';
-import { getTeamMembers, createAssignmentNotification } from '../../services/notificatieService.js';
+import { getTeamMembers, notifyNewAssignees } from '../../services/notificatieService.js';
 import { statusInfo } from '../../utils/statusColors.js';
 
 const TABS = [
@@ -112,6 +112,7 @@ function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
     assigned_to: project.assignedTo || '',
   });
   const [saving, setSaving] = useState(false);
+  const [notifyMail, setNotifyMail] = useState(true);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
@@ -146,10 +147,7 @@ function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
         customer_id: form.customer_id || null,
         assigned_to: form.assigned_to || null,
       });
-      if (form.assigned_to && form.assigned_to !== prevAssigned && profile?.id) {
-        const m = teamMembers.find(x => x.id === form.assigned_to);
-        createAssignmentNotification({ assignedToUserId: form.assigned_to, assignedToName: m?.fullName, type: 'toewijzing_project', title: `Je bent toegewezen aan ${form.name.trim() || project.name}`, link: 'projecten', relatedType: 'project', relatedId: project.id, creatorId: profile.id, creatorName: profile.fullName }).catch(() => {});
-      }
+      notifyNewAssignees({ userIds: form.assigned_to ? [form.assigned_to] : [], prevUserIds: prevAssigned ? [prevAssigned] : [], members: teamMembers, sendMail: notifyMail, type: 'toewijzing_project', title: `Je bent toegewezen aan ${form.name.trim() || project.name}`, link: 'projecten', relatedType: 'project', relatedId: project.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
       toast.success('Project opgeslagen');
     } catch (e) {
       toast.error(e.message || 'Opslaan mislukt');
@@ -243,6 +241,7 @@ function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
             <option value="">— Geen medewerker —</option>
             {teamMembers.map(m => <option key={m.id} value={m.id}>{m.fullName}</option>)}
           </select>
+          {canManage && <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />}
         </div>
         <div className="f" style={{ gridColumn: '1 / -1' }}>
           <label>Omschrijving</label>
@@ -736,8 +735,9 @@ function KostenTab({ project, canManage }) {
 
 // ── FACTUREN TAB ─────────────────────────────────────────────────────────────
 
-function FacturenTab({ project, invoices, openInvoice, setPage, customers, onNew }) {
+function FacturenTab({ project, invoices, openInvoice, setPage, customers, company, onNew, onRefresh }) {
   const [showNewFactuur, setShowNewFactuur] = useState(false);
+  const [sendMail, setSendMail] = useState(null);
   const openFactuur = f => {
     if (setPage) setPage('facturen', { id: f.id, from: 'project', projectId: project.id, projectNaam: project.name });
     else openInvoice?.(f.id);
@@ -802,6 +802,17 @@ function FacturenTab({ project, invoices, openInvoice, setPage, customers, onNew
           prefill={{ customer_id: project.customerId || '', project_id: project.id }}
           onClose={() => setShowNewFactuur(false)}
           onSaved={saved => { setShowNewFactuur(false); onNew?.(saved); }}
+          onSaveAndSend={saved => setSendMail(saved)}
+        />
+      )}
+      {sendMail && (
+        <SendFactuurMailModal
+          factuur={sendMail}
+          customers={customers}
+          company={company}
+          templateType="factuur"
+          onClose={() => setSendMail(null)}
+          onSent={() => { setSendMail(null); onRefresh?.(); }}
         />
       )}
     </div>
@@ -1194,6 +1205,8 @@ export function ProjectDetailDrawer({
                   openInvoice={openInvoice}
                   setPage={setPage}
                   customers={customers}
+                  company={company}
+                  onRefresh={loadAll}
                   onNew={saved => {
                     const next = [{ id: saved.id, nummer: saved.nummer, status: saved.status, factuurdatum: saved.factuurdatum, vervaldatum: saved.vervaldatum, totaalIncl: saved.totaalIncl, totaalExcl: saved.totaalExcl }, ...invoices];
                     setInvoices(next);

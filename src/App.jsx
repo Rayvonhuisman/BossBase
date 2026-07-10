@@ -10,6 +10,7 @@ import { DashboardHome } from './pages/dashboard/DashboardHome.jsx';
 import { Pipeline } from './pages/BbDashboard.jsx';
 import { DealDetailDrawer } from './pages/dashboard/DealDetailDrawer.jsx';
 import { CalendarEventDetailDrawer } from './pages/dashboard/CalendarEventDetailDrawer.jsx';
+import { PageErrorBoundary } from './components/PageErrorBoundary.jsx';
 import { CustomerPage, CustomersPage, ActivitiesPage } from './pages/BbPages1.jsx';
 import { ActivitiesPageV2 } from './pages/ActivitiesPageV2.jsx';
 // Zware pagina's (recharts, exceljs, jszip, jspdf) lazy laden → uit de eerste bundle.
@@ -1465,9 +1466,11 @@ function AppInner() {
                 </div>
               </div>
             ) : (
-              <Suspense fallback={<div style={{ padding: 24, color: 'var(--dl)' }}>Laden…</div>}>
-                {renderPage()}
-              </Suspense>
+              <PageErrorBoundary resetKey={page}>
+                <Suspense fallback={<div style={{ padding: 24, color: 'var(--dl)' }}>Laden…</div>}>
+                  {renderPage()}
+                </Suspense>
+              </PageErrorBoundary>
             )}
           </div>
         </div>

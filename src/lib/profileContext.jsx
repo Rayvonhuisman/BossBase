@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react';
+import { DEFAULT_TIER } from './tiers.js';
 
 export const ProfileContext = createContext({
   user: null,
@@ -12,6 +13,14 @@ export const ProfileContext = createContext({
 });
 
 export const useProfile = () => useContext(ProfileContext);
+
+// Abonnementstier van het huidige bedrijf ('starter' | 'groei' | 'team').
+// Nog geen functie-/rechtenverschillen — puur uitleesbaar zodat we straks
+// conditioneel functionaliteit kunnen tonen/verbergen (bv. solo vs team).
+export const useTier = () => {
+  const { company } = useProfile();
+  return company?.tier || DEFAULT_TIER;
+};
 
 // Derives the display name in priority order: profile.full_name → user.email
 // local-part → null. Returns null (not '??') when nothing is available so the

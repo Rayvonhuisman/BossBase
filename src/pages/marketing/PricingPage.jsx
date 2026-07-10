@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react"
 import { Star } from "lucide-react"
 import { Nav, Footer, Reveal, I, ScrollLine, initChoreo } from "./MktShared"
+import { tierLabel, tierPrice, tierPriceYearly, extraUserLabel, YEARLY_DISCOUNT_LABEL } from "../../lib/tiers.js"
 
-const TIERS = [
+// Prijzen/tiernamen komen uit ../../lib/tiers.js (enige bron). Hier staat alleen
+// de presentatie per plan: doelgroep, features en of het het "hot" plan is.
+const PLAN_CARDS = [
   {
-    tier: "Starter", who: "Perfect voor ZZP'ers",
-    monthly: 19, yearly: 15, extra: null,
+    id: "starter", who: "Perfect voor ZZP'ers", hasExtra: false,
     features: [
       "1 gebruiker",
       "Onbeperkt klanten",
@@ -18,8 +20,7 @@ const TIERS = [
     hot: false,
   },
   {
-    tier: "Groei", who: "Voor groeiende bedrijven",
-    monthly: 39, yearly: 29, extra: "+ € 9/extra gebruiker",
+    id: "groei", who: "Voor groeiende bedrijven", hasExtra: true,
     features: [
       "Tot 5 gebruikers",
       "Alles van Starter",
@@ -32,8 +33,7 @@ const TIERS = [
     hot: true,
   },
   {
-    tier: "Team", who: "Grotere teams & bedrijven",
-    monthly: 79, yearly: 59, extra: "+ € 7/extra gebruiker",
+    id: "team", who: "Grotere teams & bedrijven", hasExtra: true,
     features: [
       "Tot 15 gebruikers",
       "Alles van Groei",
@@ -158,20 +158,20 @@ export default function PricingPage({ navigate }) {
                 <button className={!yearly ? "on" : ""} onClick={() => setYearly(false)}>Maandelijks</button>
                 <button className={yearly ? "on" : ""} onClick={() => setYearly(true)}>Jaarlijks</button>
               </div>
-              {yearly && <div className="bill-hook pop">{I.bolt} Bespaar 25% bij jaarabonnement</div>}
+              {yearly && <div className="bill-hook pop">{I.bolt} {YEARLY_DISCOUNT_LABEL}</div>}
             </div>
             <Reveal stagger>
               <div className="price-grid-full choreo-body">
-                {TIERS.map(t => (
-                  <div key={t.tier} className={`price-card${t.hot ? " hot" : ""}`}>
+                {PLAN_CARDS.map(t => (
+                  <div key={t.id} className={`price-card${t.hot ? " hot" : ""}`}>
                     {t.hot && <div className="hot-badge" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Star size={12} fill="currentColor" /> Meest gekozen</div>}
-                    <div className="tier">{t.tier}</div>
+                    <div className="tier">{tierLabel(t.id)}</div>
                     <div className="who">{t.who}</div>
                     <div className="amount">
-                      <strong>€ {yearly ? t.yearly : t.monthly}</strong>
+                      <strong>€ {yearly ? tierPriceYearly(t.id) : tierPrice(t.id)}</strong>
                       <span>/ maand{yearly ? " (jaarlijks)" : ""}</span>
                     </div>
-                    <div className="extra-user">{t.extra || " "}</div>
+                    <div className="extra-user">{t.hasExtra ? extraUserLabel() : " "}</div>
                     <ul>{t.features.map(f => <li key={f}>{I.check} {f}</li>)}</ul>
                     <a href="/registreer" className={`btn ${t.hot ? "btn-p glow" : "btn-s"}`}
                       style={{ width: "100%", justifyContent: "center" }}
@@ -200,9 +200,9 @@ export default function PricingPage({ navigate }) {
                 <thead>
                   <tr>
                     <th>Functie</th>
-                    <th>Starter</th>
-                    <th className="col-hot">Groei</th>
-                    <th>Team</th>
+                    <th>{tierLabel('starter')}</th>
+                    <th className="col-hot">{tierLabel('groei')}</th>
+                    <th>{tierLabel('team')}</th>
                   </tr>
                 </thead>
                 <tbody>

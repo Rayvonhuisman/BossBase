@@ -13,6 +13,7 @@ import { getOffertePdfBase64, getFactuurPdfBase64 } from '../utils/generatePdf.j
 import { getProjects, PROJECT_STATUS } from '../services/projectsService.js';
 import { statusInfo } from '../utils/statusColors.js';
 import { listDeals, listPipelineStages } from '../services/dealService.js';
+import { getLostReasons } from '../services/lostReasonService.js';
 import { listActivities } from '../services/activityService.js';
 import { getEmailTemplates } from '../services/instellingenService.js';
 import { sendEmail, logSentEmail, substituteVars } from '../services/emailService.js';
@@ -40,7 +41,7 @@ const EMPTY_FILTERS = {
   factuurStatussen: [], factuurVervallen: false,
   herinnering1: 'alles', herinnering2: 'alles',
   isCreditnota: false, betaaldVan: '', betaaldTot: '',
-  dealFasen: [], dealWaardeMin: '', dealWaardeMax: '',
+  dealFasen: [], dealVerlorenRedenen: [], dealWaardeMin: '', dealWaardeMax: '',
   heeftOpenActiviteiten: false, activiteitTypen: [],
   heeftMail: 'alles', mailOuderDanDagen: '', mailTemplateType: '',
   heeftFactureerbareUren: false, urenVan: '', urenTot: '',
@@ -460,6 +461,7 @@ export function DatabasePage({ openCustomer }) {
   const [sentEmails, setSentEmails]   = useState([]);
   const [urenData, setUrenData]       = useState([]);
   const [stages, setStages]           = useState([]);
+  const [lostReasons, setLostReasons] = useState([]);
   const [templates, setTemplates]     = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [connectedIntegrations, setConnectedIntegrations] = useState(new Set());
@@ -525,6 +527,7 @@ export function DatabasePage({ openCustomer }) {
       listActivities(),
       getEmailTemplates(),
       listPipelineStages(),
+      getLostReasons().catch(() => []),
       (async () => {
         const companyId = await getCompanyId();
         if (!companyId) return [];
@@ -549,10 +552,10 @@ export function DatabasePage({ openCustomer }) {
         const { data } = await supabase.from('accounting_connections').select('provider,api_token,subscription_key,is_connected').eq('company_id', companyId);
         return data || [];
       })(),
-    ]).then(([c, p, f, o, d, a, tpl, st, se, ur, tm, ac]) => {
+    ]).then(([c, p, f, o, d, a, tpl, st, lr, se, ur, tm, ac]) => {
       setCustomers(c); setProjects(p); setFacturen(f); setOffertes(o);
       setDeals(d); setActivities(a); setTemplates(tpl); setStages(st);
-      setSentEmails(se); setUrenData(ur); setTeamMembers(tm);
+      setLostReasons(lr); setSentEmails(se); setUrenData(ur); setTeamMembers(tm);
       const connected = new Set();
       (ac || []).forEach(row => {
         if (row.provider === 'moneybird' && row.api_token) connected.add('moneybird');
@@ -643,6 +646,7 @@ export function DatabasePage({ openCustomer }) {
       if (filters.betaaldTot && !rel.facturen.some(f => f.betaaldOp <= filters.betaaldTot)) return false;
 
       if (filters.dealFasen.length > 0 && !rel.deals.some(d => filters.dealFasen.includes(d.stage))) return false;
+      if (filters.dealVerlorenRedenen?.length > 0 && !rel.deals.some(d => d.lostReason && filters.dealVerlorenRedenen.includes(d.lostReason))) return false;
       if (filters.dealWaardeMin && !rel.deals.some(d => (d.value || 0) >= Number(filters.dealWaardeMin))) return false;
       if (filters.dealWaardeMax && !rel.deals.some(d => (d.value || 0) <= Number(filters.dealWaardeMax))) return false;
       if (filters.heeftOpenActiviteiten && !rel.activities.some(a => !a.completed)) return false;
@@ -1066,6 +1070,15 @@ export function DatabasePage({ openCustomer }) {
   const ACTIVITEIT_TYPEN   = [{ id: 'call', label: 'Bellen' }, { id: 'email', label: 'E-mail' }, { id: 'visit', label: 'Bezoek' }, { id: 'task', label: 'Taak' }, { id: 'follow', label: 'Follow-up' }];
   const PROJECT_STATUSSEN  = Object.entries(PROJECT_STATUS).map(([id, v]) => ({ id, label: v.label }));
   const teamOpties         = teamMembers.map(m => ({ id: m.id, label: m.full_name }));
+  // Opties = de instelbare lijst + eventuele reeds opgeslagen redenen die niet
+  // (meer) in de lijst staan (bijv. na hernoemen), zodat historisch filteren blijft werken.
+  const verlorenRedenOpties = useMemo(() => {
+    const seen = new Set();
+    const opts = [];
+    lostReasons.forEach(r => { if (r.label && !seen.has(r.label)) { seen.add(r.label); opts.push({ id: r.label, label: r.label }); } });
+    deals.forEach(d => { const r = d.lostReason; if (r && !seen.has(r)) { seen.add(r); opts.push({ id: r, label: r }); } });
+    return opts;
+  }, [lostReasons, deals]);
   const clearAll = () => { setFilters(EMPTY_FILTERS); setQuickTab('alle'); setSearchQuery(''); setCurrentPage(1); };
 
   if (loading) return (
@@ -1103,7 +1116,7 @@ export function DatabasePage({ openCustomer }) {
               borderRadius: 999, overflow: 'hidden', boxShadow: T.shadow,
             }}>
               <button
-                onClick={() => { setFilters(seg.filters); setCurrentPage(1); }}
+                onClick={() => { setFilters({ ...EMPTY_FILTERS, ...seg.filters }); setCurrentPage(1); }}
                 style={{ padding: '4px 11px 4px 13px', fontSize: 12, fontWeight: 600, color: 'var(--dk)', background: 'none', border: 'none', cursor: 'pointer' }}
               >
                 {seg.name}
@@ -1290,6 +1303,11 @@ export function DatabasePage({ openCustomer }) {
             {stages.length > 0 && (
               <FilterRow label="Fase">
                 <MultiSelect options={stages.map(s => ({ id: s.id, label: s.name }))} value={filters.dealFasen} onChange={v => setFilter('dealFasen', v)} />
+              </FilterRow>
+            )}
+            {verlorenRedenOpties.length > 0 && (
+              <FilterRow label="Verloren-reden">
+                <MultiSelect options={verlorenRedenOpties} value={filters.dealVerlorenRedenen} onChange={v => setFilter('dealVerlorenRedenen', v)} />
               </FilterRow>
             )}
             <FilterRow label="Dealwaarde min (€)"><input type="number" min="0" value={filters.dealWaardeMin} onChange={e => setFilter('dealWaardeMin', e.target.value)} placeholder="0" style={FIN} /></FilterRow>

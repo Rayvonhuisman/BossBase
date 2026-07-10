@@ -1,13 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
-
-const PLANS = [
-  { id: 'trial',       label: 'Trial',       price: 0  },
-  { id: 'starter',     label: 'Starter',     price: 29 },
-  { id: 'vakman',      label: 'Vakman',      price: 39 },
-  { id: 'onderneming', label: 'Onderneming', price: 59 },
-]
+import { TIERS, tierLabel, tierPrice } from '../lib/tiers.js'
 
 const STATUSES = [
   { id: 'trial',       label: 'Trial',       color: '#d97706', bg: '#fffbeb' },
@@ -28,13 +22,12 @@ function StatusBadge({ status }) {
 }
 
 function PlanBadge({ plan }) {
-  const p = PLANS.find(x => x.id === plan)
   return (
     <span style={{
       display: 'inline-block', padding: '2px 8px', borderRadius: 99,
       fontSize: 11, fontWeight: 600, background: '#f1f5f9', color: '#475569',
     }}>
-      {p?.label || plan}
+      {tierLabel(plan)}
     </span>
   )
 }
@@ -137,7 +130,7 @@ export function SuperAdminPage({ navigate, profile }) {
   const handlePlanSelect = async (company, planId) => {
     setSaving(true)
     try {
-      const price = PLANS.find(p => p.id === planId)?.price ?? 0
+      const price = tierPrice(planId)
       if (company.subscription?.id) {
         const { error } = await supabase.from('subscriptions')
           .update({ plan: planId, price_per_month: price })
@@ -202,7 +195,7 @@ export function SuperAdminPage({ navigate, profile }) {
   const activeCount    = companies.filter(c => c.subscription?.status === 'actief').length
   const trialCount     = companies.filter(c => !c.subscription || c.subscription.status === 'trial').length
   const mrr = companies.reduce((sum, c) =>
-    c.subscription?.status === 'actief' ? sum + Number(c.subscription.pricePerMonth || 0) : sum, 0)
+    c.subscription?.status === 'actief' ? sum + tierPrice(c.subscription.plan) : sum, 0)
 
   // ── Render ───────────────────────────────────────────────────
   // Niet-geautoriseerd? Render NIETS. Staat na alle hooks zodat het aantal
@@ -292,7 +285,7 @@ export function SuperAdminPage({ navigate, profile }) {
                               {menuMode === 'plan' && (
                                 <>
                                   <div style={{ padding: '7px 14px', fontSize: 11, fontWeight: 700, color: '#9ca3af', borderBottom: '1px solid var(--border)' }}>Plan kiezen</div>
-                                  {PLANS.map(p => (
+                                  {TIERS.map(p => (
                                     <button key={p.id} style={{ ...menuItemStyle, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                                       onMouseEnter={e => e.currentTarget.style.background = '#f8f9fa'} onMouseLeave={e => e.currentTarget.style.background = 'none'}
                                       onClick={() => handlePlanSelect(c, p.id)}>
@@ -417,7 +410,7 @@ function CompanyDrawer({ company, notes, onNotesChange, onSaveNotes, onPlanSelec
             <div style={{ background: '#f8f9fa', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', marginBottom: 20 }}>
               <div style={{ fontWeight: 700, fontSize: 12, color: '#6b7280', marginBottom: 10 }}>Plan kiezen</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-                {PLANS.map(p => {
+                {TIERS.map(p => {
                   const isCurrent = sub?.plan === p.id
                   return (
                     <button key={p.id} onClick={() => onPlanSelect(company, p.id)}
@@ -466,7 +459,7 @@ function CompanyDrawer({ company, notes, onNotesChange, onSaveNotes, onPlanSelec
           <DrawerSection title="Abonnement">
             <DrawerRow label="Plan"          value={<PlanBadge plan={sub?.plan || 'trial'} />} />
             <DrawerRow label="Status"        value={<StatusBadge status={sub?.status || 'trial'} />} />
-            <DrawerRow label="Prijs"         value={`€${sub?.pricePerMonth ?? 0} / maand`} />
+            <DrawerRow label="Prijs"         value={`€${sub ? tierPrice(sub.plan) : 0} / maand`} />
             <DrawerRow label="Gestart op"    value={fmtDate(sub?.startedAt)} />
             {(!sub || sub.plan === 'trial') && (
               <DrawerRow label="Trial eindigt" value={fmtDate(sub?.trialEndsAt)} />

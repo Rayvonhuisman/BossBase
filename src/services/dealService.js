@@ -26,6 +26,7 @@ const toDeal = row => ({
   // value/amount/revenue are kept only as defensive fallbacks.
   value: Number(row.expected_revenue ?? row.final_revenue ?? row.value ?? row.amount ?? row.revenue ?? 0),
   priority: row.priority || "med",
+  lostReason: row.lost_reason || "",
   nextAct: row.next_activity || "",
   nextDate: row.next_date || "",
   notes: row.notes_count || 0,
@@ -83,15 +84,42 @@ export async function updateDealStage(dealId, stageId) {
   return deal
 }
 
+// Markeer een deal als verloren: verschuif naar de "Verloren"-fase én bewaar de
+// gekozen reden (+ optionele toelichting) op de deal, zodat later terug te zien
+// is waarom de lead afhaakte. Reden wordt als tekst bewaard (zie migratie
+// 20260708130000) zodat hij leesbaar blijft ook na hernoemen/verwijderen.
+export async function markDealLost(dealId, stageId, reason, note) {
+  // Bewaar alleen het schone reden-LABEL in lost_reason zodat het database-filter
+  // exact kan matchen op de instelbare lijst. De optionele toelichting gaat mee
+  // in de klant-tijdlijn (audit), niet in het filterbare veld.
+  const lost_reason = (reason || "").trim() || null
+  const noteTxt = (note || "").trim()
+  const { data, error } = await supabase
+    .from("deals")
+    .update({ stage_id: stageId, lost_reason })
+    .eq("id", dealId)
+    .select("*, customers!deals_customer_id_fkey(*)")
+    .single()
+  if (error) {
+    console.error("[bb:pipeline] markDealLost mislukt", { message: error.message, code: error.code, dealId, stage_id: stageId })
+    throw error
+  }
+  const deal = toDeal(data)
+  if (deal.custId) {
+    const label = [lost_reason, noteTxt].filter(Boolean).join(' — ')
+    logTijdlijnSafe(deal.custId, 'deal_verloren', `Deal verloren: ${deal.title}${label ? ` (${label})` : ''}`, { dealId: deal.id, stageId, reason: lost_reason, note: noteTxt || null })
+  }
+  return deal
+}
+
 const isUuid = v => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
 
 export async function createDeal(input) {
   const stageCandidate = input.stage_id || input.stage || null
   const revenue = Number(input.value || input.amount || input.expected_revenue || 0)
-  // Map to the ACTUAL deals columns. The previous payload sent value/notes/
-  // priority — none of which exist (real columns: expected_revenue,
-  // description, no priority) — so safeInsert dropped them and the entered
-  // amount/description were silently lost.
+  // Map to the ACTUAL deals columns: title, customer_id, stage_id (uuid),
+  // expected_revenue, description, priority. (priority bestaat sinds migratie
+  // 20260708120000 — daarvoor werd de gekozen prioriteit stil weggelaten.)
   const base = {
     title: input.title,
     customer_id: input.customer_id || input.custId || null,
@@ -100,6 +128,8 @@ export async function createDeal(input) {
     stage_id: isUuid(stageCandidate) ? stageCandidate : null,
     expected_revenue: Number.isFinite(revenue) ? revenue : 0,
     description: input.notes || input.description || null,
+    // Standaard 'med' (= Normaal) als er geen prioriteit is meegegeven.
+    priority: input.priority || "med",
   }
   Object.keys(base).forEach(k => base[k] === null && delete base[k])
   const payload = await withCompanyId(base)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { I, fmt, stageBadgeStyle } from '../../bb-shared.jsx';
+import { I, NotifyMailToggle, fmt, stageBadgeStyle } from '../../bb-shared.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
 import { useToast } from '../../lib/toast.jsx';
 import { listDeals, listPipelineStages, updateDeal } from '../../services/dealService.js';
@@ -9,7 +9,7 @@ import { listNotes, createNote } from '../../services/noteService.js';
 import { listJobCosts } from '../../services/jobCostService.js';
 import { getWerkbonnen } from '../../services/werkbonService.js';
 import { NoteEditor, renderNote } from '../../components/NoteEditor.jsx';
-import { getTeamMembers, createMentionNotifications, createAssignmentNotification } from '../../services/notificatieService.js';
+import { getTeamMembers, createMentionNotifications, notifyNewAssignees } from '../../services/notificatieService.js';
 
 const GREEN = '#1DDB62';
 
@@ -60,8 +60,9 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
   const [wbs, setWbs] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
 
-  const [form, setForm] = useState({ title: '', value: '', stageId: '', nextAct: '', assignedTo: '' });
+  const [form, setForm] = useState({ title: '', value: '', stageId: '', nextAct: '', assignedTo: '', priority: 'med' });
   const [saving, setSaving] = useState(false);
+  const [notifyMail, setNotifyMail] = useState(true);
   const [noteText, setNoteText] = useState('');
   const [addingNote, setAddingNote] = useState(false);
 
@@ -87,7 +88,7 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
       setNotes(n.filter(x => x.dealId === dealId));
       setCosts(jc.filter(x => x.dealId === dealId));
       setWbs(w.filter(x => x.dealId === dealId));
-      if (d) setForm({ title: d.title || '', value: d.value || 0, stageId: d.stage || '', nextAct: d.nextAct || '', assignedTo: d.assignedTo || '' });
+      if (d) setForm({ title: d.title || '', value: d.value || 0, stageId: d.stage || '', nextAct: d.nextAct || '', assignedTo: d.assignedTo || '', priority: d.priority || 'med' });
     }).catch(e => { if (alive) setErr(e.message || 'Laden mislukt'); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
@@ -108,6 +109,7 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
   const valueCol = firstKey('value', 'amount', 'revenue', 'deal_value', 'estimated_value', 'price');
   const stageCol = firstKey('stage_id', 'pipeline_stage_id');
   const nextCol = firstKey('next_activity', 'next_action', 'nextAct');
+  const priorityCol = firstKey('priority');
 
   const save = async () => {
     if (!deal) return;
@@ -116,18 +118,16 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
     if (valueCol) payload[valueCol] = Number(form.value) || 0;
     if (stageCol && form.stageId && form.stageId !== deal.stage) payload[stageCol] = form.stageId;
     if (nextCol) payload[nextCol] = form.nextAct;
+    if (priorityCol) payload[priorityCol] = form.priority;
     payload.assigned_to = form.assignedTo || null;
     if (Object.keys(payload).length === 0) { onClose(); return; }
     setSaving(true);
     try {
       const updated = await updateDeal(deal.id, payload);
       const prevAssigned = deal.assignedTo || '';
-      if (form.assignedTo && form.assignedTo !== prevAssigned && profile?.id) {
-        const assignedMember = teamMembers.find(m => m.id === form.assignedTo);
-        createAssignmentNotification({ assignedToUserId: form.assignedTo, assignedToName: assignedMember?.fullName, type: 'toewijzing_deal', title: `Je bent toegewezen aan ${form.title}`, link: 'pipeline', relatedType: 'deal', relatedId: deal.id, creatorId: profile.id, creatorName: profile.fullName }).catch(() => {});
-      }
+      notifyNewAssignees({ userIds: form.assignedTo ? [form.assignedTo] : [], prevUserIds: prevAssigned ? [prevAssigned] : [], members: teamMembers, sendMail: notifyMail, type: 'toewijzing_deal', title: `Je bent toegewezen aan ${form.title}`, link: 'pipeline', relatedType: 'deal', relatedId: deal.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
       setDeal(updated);
-      setForm(f => ({ ...f, title: updated.title || '', value: updated.value || 0, stageId: updated.stage || '', nextAct: updated.nextAct || '', assignedTo: updated.assignedTo || '' }));
+      setForm(f => ({ ...f, title: updated.title || '', value: updated.value || 0, stageId: updated.stage || '', nextAct: updated.nextAct || '', assignedTo: updated.assignedTo || '', priority: updated.priority || 'med' }));
       bumpRefresh && bumpRefresh();
       toast.success('Deal opgeslagen');
     } catch (e) {
@@ -221,6 +221,14 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
             </select>
             {!stageCol && <Hint>Fase kan voor deze deal nog niet worden aangepast.</Hint>}
           </Field>
+          <Field label="Prioriteit">
+            <select style={priorityCol ? inputStyle : roStyle} disabled={!priorityCol} value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}>
+              <option value="high">Hoog</option>
+              <option value="med">Normaal</option>
+              <option value="low">Laag</option>
+            </select>
+            {!priorityCol && <Hint>Prioriteit kan voor deze deal nog niet worden aangepast.</Hint>}
+          </Field>
           <div style={{ gridColumn: '1 / -1' }}>
             <Field label="Volgende actie">
               <input style={nextCol ? inputStyle : roStyle} disabled={!nextCol} value={form.nextAct} placeholder={nextCol ? 'bv. Offerte nabellen' : ''} onChange={e => setForm(f => ({ ...f, nextAct: e.target.value }))} />
@@ -234,6 +242,7 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
                   <option value="">Niemand</option>
                   {teamMembers.map(m => <option key={m.id} value={m.id}>{m.fullName}</option>)}
                 </select>
+                <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />
               </Field>
             </div>
           )}
@@ -243,7 +252,7 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
             {deal.city ? `Plaats: ${deal.city}` : ''}{deal.city && deal.raw?.source ? ' · ' : ''}{deal.raw?.source ? `Bron: ${deal.raw.source}` : ''}
           </div>
         )}
-        {(titleCol || valueCol || stageCol || nextCol) ? (
+        {(titleCol || valueCol || stageCol || nextCol || priorityCol) ? (
           <button className="btn btn-p btn-sm" disabled={saving} onClick={save}
             style={{ marginTop: 14, background: GREEN, color: '#0a0a0a', border: 'none', fontWeight: 700 }}>
             {saving ? 'Opslaan…' : 'Opslaan'}

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { I, ModalX } from '../bb-shared.jsx';
+import { I, ModalX, NotifyMailToggle } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { useUploads } from '../lib/uploadContext.jsx';
 import { NoteEditor, renderNote } from '../components/NoteEditor.jsx';
-import { getTeamMembers, createAssignmentNotification } from '../services/notificatieService.js';
+import { AssigneeResponsibleSelect } from '../components/AssigneeResponsibleSelect.jsx';
+import { getTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
 import {
   getWerkbonnen, getWerkbonById, createWerkbon, updateWerkbon,
   getWerkbonTaken, createWerkbonTaak, toggleWerkbonTaak, deleteWerkbonTaak,
@@ -86,13 +87,20 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
     locatie: werkbon?.locatie || '',
     notes: werkbon?.notes || '',
     status: werkbon?.status || 'gepland',
-    assignedTo: werkbon?.assignedTo || '',
+    assignedToIds: werkbon?.assignedToIds || (werkbon?.assignedTo ? [werkbon.assignedTo] : []),
+    verantwoordelijkeIds: werkbon?.verantwoordelijkeIds || (werkbon?.assignedTo ? [werkbon.assignedTo] : []),
   }));
   const [saving, setSaving] = useState(false);
+  const [notifyMail, setNotifyMail] = useState(true);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const submit = async () => {
     if (!form.titel.trim()) { toast.error('Titel is verplicht'); return; }
+    // Minimaal één verantwoordelijke zodra er medewerkers gekoppeld zijn.
+    if (form.assignedToIds.length && !form.verantwoordelijkeIds.length) {
+      toast.error('Wijs minimaal één verantwoordelijke aan.');
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -105,24 +113,21 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
         eindtijd: form.eindtijd || null,
         locatie: form.locatie || null,
         notes: form.notes || null,
-        assigned_to: form.assignedTo || null,
+        assigned_to_ids: form.assignedToIds,
+        verantwoordelijke_ids: form.verantwoordelijkeIds,
       };
       let saved;
       if (isEdit) {
         saved = await updateWerkbon(werkbon.id, { ...payload, status: form.status });
         toast.success('Werkbon bijgewerkt');
-        const prevAssigned = werkbon?.assignedTo || '';
-        if (form.assignedTo && form.assignedTo !== prevAssigned && profile?.id) {
-          const m = teamMembers.find(x => x.id === form.assignedTo);
-          createAssignmentNotification({ assignedToUserId: form.assignedTo, assignedToName: m?.fullName, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile.id, creatorName: profile.fullName }).catch(() => {});
-        }
+        // Diff t.o.v. de volledige vorige toewijzing (assigned_to_ids), zodat al
+        // gekoppelde collega's niet opnieuw gemaild worden.
+        const prevIds = werkbon?.assignedToIds || (werkbon?.assignedTo ? [werkbon.assignedTo] : []);
+        notifyNewAssignees({ userIds: form.assignedToIds, prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
       } else {
         saved = await createWerkbon(payload);
         toast.success('Werkbon aangemaakt');
-        if (form.assignedTo && profile?.id) {
-          const m = teamMembers.find(x => x.id === form.assignedTo);
-          createAssignmentNotification({ assignedToUserId: form.assignedTo, assignedToName: m?.fullName, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile.id, creatorName: profile.fullName }).catch(() => {});
-        }
+        notifyNewAssignees({ userIds: form.assignedToIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
       }
       onSaved?.(saved);
       onClose();
@@ -205,13 +210,16 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
             <NoteEditor mentions={true} value={form.notes} onChange={v => set('notes', v)} placeholder="Bv. klant heeft hond, deur dicht houden… Typ @ om iemand te taggen" rows={2} disabled={saving} teamMembers={teamMembers} />
           </div>
           {teamMembers.length > 0 && (
-            <div className="f full">
-              <label>Toegewezen aan</label>
-              <select value={form.assignedTo || ''} onChange={e => set('assignedTo', e.target.value)} disabled={saving}>
-                <option value="">Niemand</option>
-                {teamMembers.map(m => <option key={m.id} value={m.id}>{m.fullName}</option>)}
-              </select>
-            </div>
+            <AssigneeResponsibleSelect
+              members={teamMembers}
+              assignedIds={form.assignedToIds}
+              verantwoordelijkeIds={form.verantwoordelijkeIds}
+              disabled={saving}
+              fieldClassName="f full"
+              onChange={({ assignedIds, verantwoordelijkeIds }) => setForm(f => ({ ...f, assignedToIds: assignedIds, verantwoordelijkeIds }))}
+            >
+              <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />
+            </AssigneeResponsibleSelect>
           )}
         </div>
         <div className="fa">
@@ -377,7 +385,7 @@ function HoursQuickAdd({ werkbon, customers, onSaved }) {
 
 // ─── TASKS ──────────────────────────────────────────────────────────────────
 
-function TakenSection({ taken, onToggle, onAdd, onDelete }) {
+function TakenSection({ taken, onToggle, onAdd, onDelete, canEdit = true }) {
   const [text, setText] = useState('');
   const total = taken.length;
   const done = taken.filter(t => t.afgerond).length;
@@ -405,27 +413,30 @@ function TakenSection({ taken, onToggle, onAdd, onDelete }) {
             <button
               type="button"
               className={`wb2-taak-check${t.afgerond ? ' done' : ''}`}
-              onClick={() => onToggle(t)}
+              onClick={() => canEdit && onToggle(t)}
+              disabled={!canEdit}
               aria-label={t.afgerond ? 'Markeer als open' : 'Markeer als afgerond'}
             >
               {t.afgerond && I.check}
             </button>
             <div className={`wb2-taak-label${t.afgerond ? ' done' : ''}`}>{t.omschrijving}</div>
-            <button className="wb2-taak-del" onClick={() => onDelete(t)} aria-label="Verwijderen">{I.trash}</button>
+            {canEdit && <button className="wb2-taak-del" onClick={() => onDelete(t)} aria-label="Verwijderen">{I.trash}</button>}
           </div>
         ))}
-        <div className="wb2-taak-add">
-          <input
-            type="text"
-            value={text}
-            onChange={e => setText(e.target.value)}
-            placeholder="Nieuwe taak…"
-            onKeyDown={e => { if (e.key === 'Enter') submit(); }}
-          />
-          <button className="btn btn-s btn-sm" onClick={submit} disabled={!text.trim()}>
-            {I.plus} Taak
-          </button>
-        </div>
+        {canEdit && (
+          <div className="wb2-taak-add">
+            <input
+              type="text"
+              value={text}
+              onChange={e => setText(e.target.value)}
+              placeholder="Nieuwe taak…"
+              onKeyDown={e => { if (e.key === 'Enter') submit(); }}
+            />
+            <button className="btn btn-s btn-sm" onClick={submit} disabled={!text.trim()}>
+              {I.plus} Taak
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -433,7 +444,7 @@ function TakenSection({ taken, onToggle, onAdd, onDelete }) {
 
 // ─── MATERIALS ──────────────────────────────────────────────────────────────
 
-function MaterialenSection({ materialen, onAdd, onDelete }) {
+function MaterialenSection({ materialen, onAdd, onDelete, canEdit = true }) {
   const [form, setForm] = useState({ naam: '', eenheid: 'stuk', aantal: 1, prijs_per: 0, btw_pct: 21 });
   const [adding, setAdding] = useState(false);
 
@@ -496,10 +507,11 @@ function MaterialenSection({ materialen, onAdd, onDelete }) {
                   {fmtEur(sub)}
                   <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--dl)' }}>{fmtEur(incl)} incl.</div>
                 </div>
-                <button onClick={() => onDelete(m)} aria-label="Verwijderen">{I.trash}</button>
+                {canEdit ? <button onClick={() => onDelete(m)} aria-label="Verwijderen">{I.trash}</button> : <div />}
               </div>
             );
           })}
+          {canEdit && (
           <div className="wb2-mat-add">
             <input
               type="text"
@@ -544,6 +556,7 @@ function MaterialenSection({ materialen, onAdd, onDelete }) {
               {I.plus}
             </button>
           </div>
+          )}
         </div>
         <div className="wb2-mat-foot">
           <div className="wb2-mat-foot-add" style={{ visibility: 'hidden' }}>spacer</div>
@@ -566,7 +579,7 @@ const FOTO_CATS = [
   { key: 'na',      label: 'Na',      color: '#0F7A3F', bg: '#E8FBEF' },
 ];
 
-function FotoSection({ fotos, onUpload, onDelete }) {
+function FotoSection({ fotos, onUpload, onDelete, canEdit = true }) {
   const inputRefs = useRef({});
   const [uploading, setUploading] = useState({});
 
@@ -600,22 +613,29 @@ function FotoSection({ fotos, onUpload, onDelete }) {
                       <a href={f.url} target="_blank" rel="noopener noreferrer">
                         <img src={f.url} alt={cat.label} loading="lazy" />
                       </a>
-                      <button className="wb2-foto-thumb-del" onClick={() => onDelete(f)} title="Verwijderen">×</button>
+                      {canEdit && <button className="wb2-foto-thumb-del" onClick={() => onDelete(f)} title="Verwijderen">×</button>}
                     </div>
                   ))}
+                  {!canEdit && catFotos.length === 0 && (
+                    <span style={{ fontSize: 12, color: '#9ca3af' }}>Geen foto's</span>
+                  )}
                 </div>
-                <button
-                  className="wb2-foto-upload-btn"
-                  disabled={uploading[cat.key]}
-                  onClick={() => inputRefs.current[cat.key]?.click()}
-                >
-                  {I.camera} {uploading[cat.key] ? 'Uploaden…' : 'Foto toevoegen'}
-                </button>
-                <input
-                  ref={el => { inputRefs.current[cat.key] = el; }}
-                  type="file" accept="image/*" capture="environment" hidden
-                  onChange={e => handleFileChange(cat.key, e)}
-                />
+                {canEdit && (
+                  <>
+                    <button
+                      className="wb2-foto-upload-btn"
+                      disabled={uploading[cat.key]}
+                      onClick={() => inputRefs.current[cat.key]?.click()}
+                    >
+                      {I.camera} {uploading[cat.key] ? 'Uploaden…' : 'Foto toevoegen'}
+                    </button>
+                    <input
+                      ref={el => { inputRefs.current[cat.key] = el; }}
+                      type="file" accept="image/*" capture="environment" hidden
+                      onChange={e => handleFileChange(cat.key, e)}
+                    />
+                  </>
+                )}
               </div>
             );
           })}
@@ -627,7 +647,7 @@ function FotoSection({ fotos, onUpload, onDelete }) {
 
 // ─── MEERWERK SECTION ────────────────────────────────────────────────────────
 
-function MeerwerkSection({ meerwerk, onAdd, onDelete }) {
+function MeerwerkSection({ meerwerk, onAdd, onDelete, canEdit = true }) {
   const [form, setForm] = useState({ omschrijving: '', prijs: '' });
   const [adding, setAdding] = useState(false);
 
@@ -654,7 +674,7 @@ function MeerwerkSection({ meerwerk, onAdd, onDelete }) {
             <div className="wb2-meerwerk-omschr">{m.omschrijving}</div>
             <span className="wb2-meerwerk-akkoord">Klant akkoord gevraagd</span>
             <div className="wb2-meerwerk-prijs">{fmtEur(m.prijs)}</div>
-            <button className="wb2-taak-del" onClick={() => onDelete(m)}>{I.trash}</button>
+            {canEdit && <button className="wb2-taak-del" onClick={() => onDelete(m)}>{I.trash}</button>}
           </div>
         ))}
         {meerwerk.length > 0 && (
@@ -663,23 +683,25 @@ function MeerwerkSection({ meerwerk, onAdd, onDelete }) {
             <span style={{ fontWeight: 700, fontSize: 16, fontVariantNumeric: 'tabular-nums' }}>{fmtEur(total)}</span>
           </div>
         )}
-        <div className="wb2-meerwerk-add">
-          <input
-            type="text" placeholder="Omschrijving meerwerk…"
-            value={form.omschrijving}
-            onChange={e => setForm(f => ({ ...f, omschrijving: e.target.value }))}
-            onKeyDown={e => e.key === 'Enter' && submit()}
-          />
-          <input
-            type="number" min="0" step="0.01" placeholder="€ 0,00"
-            value={form.prijs}
-            onChange={e => setForm(f => ({ ...f, prijs: e.target.value }))}
-            style={{ width: 110 }}
-          />
-          <button className="btn btn-s btn-sm" onClick={submit} disabled={adding || !form.omschrijving.trim()}>
-            {I.plus} Toevoegen
-          </button>
-        </div>
+        {canEdit && (
+          <div className="wb2-meerwerk-add">
+            <input
+              type="text" placeholder="Omschrijving meerwerk…"
+              value={form.omschrijving}
+              onChange={e => setForm(f => ({ ...f, omschrijving: e.target.value }))}
+              onKeyDown={e => e.key === 'Enter' && submit()}
+            />
+            <input
+              type="number" min="0" step="0.01" placeholder="€ 0,00"
+              value={form.prijs}
+              onChange={e => setForm(f => ({ ...f, prijs: e.target.value }))}
+              style={{ width: 110 }}
+            />
+            <button className="btn btn-s btn-sm" onClick={submit} disabled={adding || !form.omschrijving.trim()}>
+              {I.plus} Toevoegen
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -687,7 +709,7 @@ function MeerwerkSection({ meerwerk, onAdd, onDelete }) {
 
 // ─── NOTITIES SECTION ────────────────────────────────────────────────────────
 
-function NotitiesSection({ notities, onSave, teamMembers = [] }) {
+function NotitiesSection({ notities, onSave, teamMembers = [], canEdit = true }) {
   const [value, setValue] = useState(notities || '');
   const [saving, setSaving] = useState(false);
 
@@ -698,6 +720,20 @@ function NotitiesSection({ notities, onSave, teamMembers = [] }) {
     try { await onSave(value); }
     finally { setSaving(false); }
   };
+
+  // Alleen-inzage: toon de opgeslagen notitie read-only, zonder editor/knop.
+  if (!canEdit) {
+    return (
+      <div className="wb2-card">
+        <div className="wb2-card-hd"><div className="wb2-card-hd-title">Notities uitvoerder</div></div>
+        <div className="wb2-card-body">
+          {notities
+            ? <div style={{ fontSize: 13.5, color: 'var(--dmu)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{renderNote(notities)}</div>
+            : <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af' }}>Nog geen notities.</div>}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="wb2-card">
@@ -840,6 +876,11 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
     });
   }, [werkbonnen, statusFilter, search]);
 
+  // Werkbon-specifiek bewerk-recht op het geopende detail: beheer (admin/planner)
+  // óf verantwoordelijke van juist deze werkbon. Alleen dan zijn bewerk-acties
+  // actief in de UI; RLS dwingt hetzelfde server-side af.
+  const canEditDetail = canManage || (!!profile && !!detail && (detail.verantwoordelijkeIds || []).includes(profile.id));
+
   // ── DETAIL ACTIONS ──────────────────────────────────────────────────────
 
   const refreshTakenCountForCurrent = newTaken => {
@@ -937,7 +978,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
   };
 
   const handleCycleStatus = async () => {
-    if (!detail || !canManage || detail.status === 'afgerond') return;
+    if (!detail || !canEditDetail || detail.status === 'afgerond') return;
     const next = detail.status === 'gepland' ? 'in_uitvoering' : 'afgerond';
     if (next === 'afgerond' && !confirm('Weet je zeker dat je de klus wil afronden?')) return;
     try {
@@ -1047,6 +1088,10 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
 
   if (view === 'detail' && selectedId) {
     const totalArbeid = uren.filter(u => u.type === 'arbeid').reduce((s, u) => s + u.uren, 0);
+    // Bewerk-recht op dit detail (beheer óf verantwoordelijke van deze werkbon).
+    const canEdit = canEditDetail;
+    // Gekoppelde, maar niet-verantwoordelijke medewerker → alleen inzage.
+    const viewOnly = !!detail && !canEdit;
 
     return (
       <div className="wb2-page">
@@ -1082,6 +1127,12 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
                 )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                   <StatusBadge status={detail.status} />
+                  {viewOnly && (
+                    <span className="wb2-badge gray sm" title="Je bent gekoppeld aan deze werkbon maar niet verantwoordelijke; je kunt alleen inzien.">
+                      <span className="wb2-badge-dot" />
+                      Alleen inzage
+                    </span>
+                  )}
                   <div style={{ flex: 1 }} />
                   {canManage && (
                     <button className="btn btn-s btn-sm" onClick={() => setEditWerkbon(detail)} type="button">
@@ -1138,7 +1189,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
               <button
                 className="wb2-action-btn"
                 onClick={handleCycleStatus}
-                disabled={!canManage || detail.status === 'afgerond'}
+                disabled={!canEdit || detail.status === 'afgerond'}
                 type="button"
               >
                 <div className="wb2-action-btn-ic">{detail.status === 'gepland' ? I.flag : I.check}</div>
@@ -1167,7 +1218,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
             )}
 
             {/* Taken */}
-            <TakenSection taken={taken} onToggle={handleToggleTaak} onAdd={handleAddTaak} onDelete={handleDeleteTaak} />
+            <TakenSection taken={taken} onToggle={handleToggleTaak} onAdd={handleAddTaak} onDelete={handleDeleteTaak} canEdit={canEdit} />
 
             {/* Uren met toggle voor quick-add */}
             <div className="wb2-card">
@@ -1207,19 +1258,19 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
             </div>
 
             {/* Foto's */}
-            <FotoSection fotos={fotos} onUpload={handleUploadFoto} onDelete={handleDeleteFoto} />
+            <FotoSection fotos={fotos} onUpload={handleUploadFoto} onDelete={handleDeleteFoto} canEdit={canEdit} />
 
             {/* Materialen */}
-            <MaterialenSection materialen={materialen} onAdd={handleAddMaterial} onDelete={handleDeleteMaterial} />
+            <MaterialenSection materialen={materialen} onAdd={handleAddMaterial} onDelete={handleDeleteMaterial} canEdit={canEdit} />
 
             {/* Meerwerk */}
-            <MeerwerkSection meerwerk={meerwerk} onAdd={handleAddMeerwerk} onDelete={handleDeleteMeerwerk} />
+            <MeerwerkSection meerwerk={meerwerk} onAdd={handleAddMeerwerk} onDelete={handleDeleteMeerwerk} canEdit={canEdit} />
 
             {/* Notities */}
-            <NotitiesSection notities={detail.werkbonNotities} onSave={handleSaveNotities} teamMembers={teamMembers} />
+            <NotitiesSection notities={detail.werkbonNotities} onSave={handleSaveNotities} teamMembers={teamMembers} canEdit={canEdit} />
 
             {/* Afronden */}
-            {detail.status !== 'afgerond' && canManage && (
+            {detail.status !== 'afgerond' && canEdit && (
               <button className="wb2-complete-btn" onClick={handleComplete} type="button">
                 {I.check} Klus afronden
               </button>

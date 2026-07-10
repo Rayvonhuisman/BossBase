@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { I, ModalX, PIPELINE_STAGES, fmt } from '../bb-shared.jsx';
+import { I, ModalX, NotifyMailToggle, PIPELINE_STAGES, fmt } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { supabase } from '../lib/supabase';
 import { createCustomer } from '../services/customerService.js';
@@ -17,7 +17,7 @@ import { calcBtw } from '../utils/btw.js';
 import { updateProfile } from '../services/profileService.js';
 import { NoteEditor } from './NoteEditor.jsx';
 import { useUploads } from '../lib/uploadContext.jsx';
-import { getTeamMembers, createMentionNotifications, createAssignmentNotification } from '../services/notificatieService.js';
+import { getTeamMembers, createMentionNotifications, notifyNewAssignees } from '../services/notificatieService.js';
 import { MemberMultiSelect } from './MemberMultiSelect.jsx';
 
 const isEmail = v => !v || /^\S+@\S+\.\S+$/.test(v);
@@ -359,6 +359,7 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
   const [saving, setSaving] = useState(false);
   const [teamMembers, setTeamMembers] = useState([]);
   const [endTimeManual, setEndTimeManual] = useState(false);
+  const [notifyMail, setNotifyMail] = useState(true);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
@@ -398,10 +399,7 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
         createMentionNotifications({ text: form.notes, relatedType: 'activiteit', relatedId: created.id, link: 'activities', creatorId: profile.id, creatorName: profile.fullName, contextName: custName }).catch(() => {});
       }
       // Assignment notification naar elke toegewezen medewerker (behalve jezelf)
-      (form.assignedToIds || []).filter(uid => uid && uid !== profile?.id).forEach(uid => {
-        const assignedMember = teamMembers.find(m => m.id === uid);
-        createAssignmentNotification({ assignedToUserId: uid, assignedToName: assignedMember?.fullName, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${form.date}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: created.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
-      });
+      notifyNewAssignees({ userIds: form.assignedToIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${form.date}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: created.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
       if (form.type === 'visit' && form.custId) {
         const cust = customers?.find(c => c.id === form.custId);
         if (cust?.email) {
@@ -497,6 +495,7 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
             <div className="f">
               <label>Toegewezen aan <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(meerdere mogelijk)</span></label>
               <MemberMultiSelect members={teamMembers} value={form.assignedToIds} onChange={ids => set('assignedToIds', ids)} />
+              <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />
             </div>
           )}
           <div className="f s2">
@@ -1086,6 +1085,7 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [endTimeManual, setEndTimeManual] = useState(!!activity?.endTime);
+  const [notifyMail, setNotifyMail] = useState(true);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const isDone = form.status === 'completed' || form.status === 'done';
@@ -1120,10 +1120,7 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
       }
       // Notificatie naar nieuw toegevoegde toegewezen medewerkers (behalve jezelf).
       const prevIds = activity?.assignedToIds || (activity?.assignee ? [activity.assignee] : []);
-      (form.assignedToIds || []).filter(uid => uid && uid !== profile?.id && !prevIds.includes(uid)).forEach(uid => {
-        const assignedMember = teamMembers.find(m => m.id === uid);
-        createAssignmentNotification({ assignedToUserId: uid, assignedToName: assignedMember?.fullName, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${form.date}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: activity.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
-      });
+      notifyNewAssignees({ userIds: form.assignedToIds, prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${form.date}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: activity.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
       toast.success('Activiteit bijgewerkt');
       onSaved?.(updated);
       onClose();
@@ -1250,6 +1247,7 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
             <div className="f">
               <label>Toegewezen aan <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(meerdere mogelijk)</span></label>
               <MemberMultiSelect members={teamMembers} value={form.assignedToIds} onChange={ids => set('assignedToIds', ids)} disabled={!canEdit || busy} />
+              <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />
             </div>
           )}
           <div className="f">
@@ -1264,7 +1262,8 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
             <label>Notities</label>
             <NoteEditor mentions={true} value={form.notes} onChange={v => set('notes', v)} teamMembers={teamMembers} disabled={!canEdit || busy} />
           </div>
-          {activity?.dueAt && (
+          {/* Google Agenda-sync tijdelijk verborgen voor klanten (OAuth nog niet geconfigureerd). Zet {false} op {true} om terug te zetten. Logica hieronder blijft intact. */}
+          {false && activity?.dueAt && (
             <div className="f s2" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <span style={{ fontSize: '.78rem', color: 'var(--dmu)' }}>Google Agenda:</span>
               {gBusy

@@ -18,6 +18,9 @@ const toWerkbon = row => ({
   assignedToIds: Array.isArray(row.assigned_to_ids) && row.assigned_to_ids.length
     ? row.assigned_to_ids
     : (row.assigned_to ? [row.assigned_to] : []),
+  // Verantwoordelijken (subset van de gekoppelde medewerkers) die de werkbon
+  // mogen bewerken. Leeg = alleen admin/planner beheert de bon.
+  verantwoordelijkeIds: Array.isArray(row.verantwoordelijke_ids) ? row.verantwoordelijke_ids : [],
   voertuigId: row.voertuig_id || null,
   titel: row.titel || "",
   omschrijving: row.omschrijving || "",
@@ -112,8 +115,26 @@ function normalizeAssignees(input) {
   return { ids, primary: ids[0] || null }
 }
 
+// Bepaal de verantwoordelijken bij een gegeven set gekoppelde medewerkers.
+// - Expliciet meegegeven lijst wordt ontdaan van niet-gekoppelde ids (subset-
+//   invariant; sluit aan op de DB CHECK werkbonnen_verantwoordelijke_subset).
+// - Niet meegegeven → val terug op de primaire medewerker, zodat er altijd
+//   minimaal één verantwoordelijke is zolang er iemand gekoppeld is. Zo blijven
+//   flows die alleen de toewijzing zetten (bv. de Planning-pagina) geldig.
+function normalizeVerantwoordelijken(input, assigneeIds) {
+  let v = input.verantwoordelijke_ids ?? input.verantwoordelijkeIds
+  if (Array.isArray(v)) {
+    v = v.filter(Boolean).filter(id => assigneeIds.includes(id))
+  } else {
+    v = []
+  }
+  if (!v.length && assigneeIds.length) v = [assigneeIds[0]]
+  return v
+}
+
 export async function createWerkbon(input) {
   const { ids: assigneeIds, primary } = normalizeAssignees(input)
+  const verantwoordelijkeIds = normalizeVerantwoordelijken(input, assigneeIds)
   const base = {
     customer_id: input.customer_id || input.customerId || null,
     deal_id: input.deal_id || input.dealId || null,
@@ -121,6 +142,7 @@ export async function createWerkbon(input) {
     project_id: input.project_id || input.projectId || null,
     assigned_to: primary,
     assigned_to_ids: assigneeIds,
+    verantwoordelijke_ids: verantwoordelijkeIds,
     voertuig_id: input.voertuig_id || input.voertuigId || null,
     titel: input.titel,
     omschrijving: input.omschrijving || null,
@@ -146,14 +168,22 @@ export async function createWerkbon(input) {
 
 export async function updateWerkbon(id, input) {
   const updates = { ...input }
-  // Toewijzing: houd assigned_to_ids (lijst) en assigned_to (primair) in sync
-  // zodra één van beide wordt meegegeven.
+  // Toewijzing: houd assigned_to_ids (lijst), assigned_to (primair) en
+  // verantwoordelijke_ids (subset) in sync zodra de toewijzing wordt meegegeven.
   if ('assigned_to_ids' in input || 'assignedToIds' in input || 'assigned_to' in input || 'assignedTo' in input) {
     const { ids, primary } = normalizeAssignees(input)
     updates.assigned_to_ids = ids
     updates.assigned_to = primary
+    // Verantwoordelijken opnieuw bepalen o.b.v. de nieuwe koppeling (blijft
+    // subset; valt terug op de primaire zodat er minimaal één is).
+    updates.verantwoordelijke_ids = normalizeVerantwoordelijken(input, ids)
+  } else if ('verantwoordelijke_ids' in input || 'verantwoordelijkeIds' in input) {
+    // Alleen de verantwoordelijken wijzigen (koppeling blijft gelijk). De DB
+    // CHECK bewaakt dat het een subset van de gekoppelde medewerkers blijft.
+    updates.verantwoordelijke_ids = (input.verantwoordelijke_ids ?? input.verantwoordelijkeIds ?? []).filter(Boolean)
   }
   delete updates.assignedToIds
+  delete updates.verantwoordelijkeIds
   // Verwijder frontend-aliases
   delete updates.customerId
   delete updates.dealId

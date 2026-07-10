@@ -257,6 +257,22 @@ export function ModalX({ onClose }) {
   return <button className="modal-x" onClick={onClose}>{I.x}</button>;
 }
 
+// Vinkje "Stuur medewerker een e-mail" — consistent op álle inplan-/toewijs-
+// schermen (activiteit, planning, werkbon, project, deal). Standaard aangevinkt:
+// aan → mail wordt verstuurd, uit → géén mail maar de in-app melding blijft.
+export function NotifyMailToggle({ checked, onChange, label = 'Stuur medewerker een e-mail', style }) {
+  return (
+    <label style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      fontSize: 13, color: 'var(--dk)', cursor: 'pointer', userSelect: 'none',
+      ...style,
+    }}>
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} />
+      <span>{label}</span>
+    </label>
+  );
+}
+
 // Subtiele "Terug naar [klantnaam]" knop, getoond bovenaan een pagina wanneer
 // je vanuit een klantkaart naar een project/offerte/factuur bent genavigeerd.
 export function BackToKlant({ name, onClick }) {

@@ -1,6 +1,5 @@
 import { supabase } from '../lib/supabase.js';
 import { getCompanyId } from '../lib/currentCompany.js';
-import { sendEmail } from './emailService.js';
 import { mailTemplate } from '../utils/mailTemplate.js';
 
 const toNotification = row => ({
@@ -138,6 +137,20 @@ export async function createMentionNotifications({ text, relatedType, relatedId,
   const notifRows = [];
   for (const { name, userId } of mentions) {
     if (userId === creatorId) continue;
+    // De e-mail-HTML wordt hier gebouwd, maar het e-mailADRES wordt NIET hier
+    // opgehaald: dat gebeurt server-side in de create-notification edge function
+    // (auth.users → company_members), zodat adressen nooit naar de client lekken.
+    const html = mailTemplate({
+      title: `${creatorName || 'Collega'} heeft je getagd`,
+      preheader: contextName ? `Getagd bij ${contextName}` : 'Je bent getagd in een notitie',
+      body: `<p>Hoi ${name},</p>
+             <p><strong>${creatorName || 'Een collega'}</strong> heeft je getagd${contextName ? ` bij <strong>${contextName}</strong>` : ''} in een notitie:</p>
+             <blockquote style="margin:12px 0;padding:12px 16px;background:#f9fafb;border-left:3px solid #1DDB62;border-radius:4px;color:#374151;">
+               ${plain}
+             </blockquote>`,
+      buttonText: link ? 'Bekijk notitie' : undefined,
+      buttonUrl: toAbsoluteUrl(link),
+    });
     notifRows.push({
       user_id: userId,
       type: 'mention',
@@ -146,45 +159,26 @@ export async function createMentionNotifications({ text, relatedType, relatedId,
       link: link || null,
       related_type: relatedType || null,
       related_id: relatedId || null,
+      email: { subject: `${creatorName || 'Collega'} heeft je getagd in een notitie`, html },
     });
-
-    // Email notification (best-effort, non-blocking)
-    try {
-      const { data: member } = await supabase
-        .from('company_members')
-        .select('email')
-        .eq('profile_id', userId)
-        .eq('company_id', companyId)
-        .maybeSingle();
-      const toEmail = member?.email;
-      if (toEmail) {
-        const html = mailTemplate({
-          title: `${creatorName || 'Collega'} heeft je getagd`,
-          preheader: contextName ? `Getagd bij ${contextName}` : 'Je bent getagd in een notitie',
-          body: `<p>Hoi ${name},</p>
-                 <p><strong>${creatorName || 'Een collega'}</strong> heeft je getagd${contextName ? ` bij <strong>${contextName}</strong>` : ''} in een notitie:</p>
-                 <blockquote style="margin:12px 0;padding:12px 16px;background:#f9fafb;border-left:3px solid #1DDB62;border-radius:4px;color:#374151;">
-                   ${plain}
-                 </blockquote>`,
-          buttonText: link ? 'Bekijk notitie' : undefined,
-          buttonUrl: toAbsoluteUrl(link),
-        });
-        await sendEmail({ to: toEmail, subject: `${creatorName || 'Collega'} heeft je getagd in een notitie`, html }).catch(() => {});
-      }
-    } catch { /* email is non-blocking */ }
   }
 
   await pushNotifications(notifRows);
 }
 
-// Create an assignment notification + optional email
-export async function createAssignmentNotification({ assignedToUserId, assignedToName, type, title, body, link, relatedType, relatedId, creatorId, creatorName }) {
+// Create an assignment notification + optional email.
+// sendMail=false → alléén de in-app melding (het "Stuur medewerker een e-mail"
+// vinkje op de inplan-/toewijs-schermen stuurt dit aan). Het e-mailADRES wordt
+// nooit hier opgehaald: de create-notification edge function lost dat server-
+// side op (auth.users → company_members), zodat adressen niet naar de client
+// lekken.
+export async function createAssignmentNotification({ assignedToUserId, assignedToName, type, title, body, link, relatedType, relatedId, creatorId, creatorName, sendMail = true }) {
   if (!assignedToUserId || assignedToUserId === creatorId) return;
 
   const companyId = await getCompanyId();
   if (!companyId) return;
 
-  await pushNotifications([{
+  const notif = {
     user_id: assignedToUserId,
     type,
     title,
@@ -192,31 +186,40 @@ export async function createAssignmentNotification({ assignedToUserId, assignedT
     link: link || null,
     related_type: relatedType || null,
     related_id: relatedId || null,
-  }]);
+  };
 
-  // Email notification (best-effort)
-  try {
-    const { data: member } = await supabase
-      .from('company_members')
-      .select('email')
-      .eq('profile_id', assignedToUserId)
-      .eq('company_id', companyId)
-      .maybeSingle();
-    const toEmail = member?.email;
-    if (toEmail) {
-      const itemName = title.replace('Je bent toegewezen aan ', '')
-      const html = mailTemplate({
-        title: 'Nieuwe toewijzing',
-        preheader: `Je bent toegewezen aan ${itemName}`,
-        body: `<p>Hoi ${assignedToName || 'collega'},</p>
-               <p><strong>${creatorName || 'Een collega'}</strong> heeft je toegewezen aan: <strong>${itemName}</strong></p>
-               ${body ? `<p style="color:#555;">${body}</p>` : ''}`,
-        buttonText: link ? 'Bekijk details' : undefined,
-        buttonUrl: toAbsoluteUrl(link),
-      });
-      await sendEmail({ to: toEmail, subject: `Nieuwe toewijzing: ${itemName}`, html }).catch(() => {});
-    }
-  } catch { /* email is non-blocking */ }
+  if (sendMail) {
+    const itemName = title.replace('Je bent toegewezen aan ', '');
+    const html = mailTemplate({
+      title: 'Nieuwe toewijzing',
+      preheader: `Je bent toegewezen aan ${itemName}`,
+      body: `<p>Hoi ${assignedToName || 'collega'},</p>
+             <p><strong>${creatorName || 'Een collega'}</strong> heeft je toegewezen aan: <strong>${itemName}</strong></p>
+             ${body ? `<p style="color:#555;">${body}</p>` : ''}`,
+      buttonText: link ? 'Bekijk details' : undefined,
+      buttonUrl: toAbsoluteUrl(link),
+    });
+    notif.email = { subject: `Nieuwe toewijzing: ${itemName}`, html };
+  }
+
+  await pushNotifications([notif]);
+}
+
+// Notificeer alle NIEUW toegewezen medewerkers uit een assigned_to_ids-lijst:
+// alleen ids die niet in prevUserIds zaten, jezelf overgeslagen. Eén ingang voor
+// alle inplan-/toewijs-schermen die met een lijst werken (activiteit, werkbon,
+// planning). members = teamleden-lijst ({ id, fullName }) voor de mail-aanhef.
+export async function notifyNewAssignees({ userIds = [], prevUserIds = [], members = [], sendMail = true, type, title, body, link, relatedType, relatedId, creatorId, creatorName }) {
+  const prev = new Set((prevUserIds || []).filter(Boolean));
+  const fresh = [...new Set((userIds || []).filter(Boolean))].filter(id => !prev.has(id) && id !== creatorId);
+  if (!fresh.length) return;
+  await Promise.all(fresh.map(uid => {
+    const name = (members || []).find(m => m.id === uid)?.fullName;
+    return createAssignmentNotification({
+      assignedToUserId: uid, assignedToName: name, type, title, body, link,
+      relatedType, relatedId, creatorId, creatorName, sendMail,
+    }).catch(() => {});
+  }));
 }
 
 // ── TEAM MEMBERS HELPER ──────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { Star } from "lucide-react"
 import { Nav, Footer, ScrollLine, Reveal, Wordmark, I, initChoreo, useReducedMotion, useScrollY } from "./MktShared"
+import { tierLabel, tierPrice, tierPriceYearly, extraUserLabel, EXTRA_USER_PRICE } from "../../lib/tiers.js"
 
 /* ── Float cards (Variant D) ── */
 function CardOfferte() {
@@ -744,25 +745,27 @@ function VoorWie({ navigate }) {
 }
 
 /* ── Pricing ── */
+// Prijzen/tiernamen komen uit ../../lib/tiers.js (enige bron). Hier staat alleen
+// de presentatie per plan.
 const TIERS_HOME = [
   {
-    tier: "Starter", who: "De startende eenpitter",
-    price: 29, extra: "1 gebruiker inbegrepen",
+    id: "starter", who: "De startende eenpitter",
+    extra: "1 gebruiker inbegrepen",
     inherit: null,
     items: ["CRM-pipeline: leads & klanten", "Offertes maken & versturen als PDF", "Agenda & planning", "1 gebruiker"],
     hot: false, btn: "btn-s",
   },
   {
-    tier: "Vakman", who: "De ZZP'er of een bedrijf van 2",
-    price: 39, extra: "+ € 10 per extra gebruiker",
+    id: "groei", who: "De ZZP'er of een bedrijf van 2",
+    extra: extraUserLabel(),
     inherit: "Alles van Starter, plus:",
     items: ["Digitaal ondertekenen", "Calculatie: m² / uren / materiaal", "Urenregistratie", "Omzetdashboard", "Foto's bij de klus", "Automatische afspraakherinneringen"],
     hot: true, btn: "btn-p glow",
   },
   {
-    tier: "Onderneming", who: "Grotere bedrijven met meerdere bussen",
-    price: 59, extra: "+ € 10 per gebruiker (ook de eerste)",
-    inherit: "Alles van Vakman, plus:",
+    id: "team", who: "Grotere bedrijven met meerdere bussen",
+    extra: `+ € ${EXTRA_USER_PRICE} per gebruiker (ook de eerste)`,
+    inherit: "Alles van Groei, plus:",
     items: ["Team & rollen", "Meerdere teams / bussen plannen", "Beschikbaarheid & verlof", "Nacalculatie: begroot vs. werkelijk"],
     hot: false, btn: "btn-s",
   },
@@ -796,15 +799,15 @@ function Pricing({ navigate }) {
         <Reveal className="price-grid stagger">
           {TIERS_HOME.map(t => {
               const total = t.items.length + (t.inherit ? 1 : 0)
-              const expanded = !!showAll[t.tier]
+              const expanded = !!showAll[t.id]
               return (
-                <div key={t.tier} className={`price-card${t.hot ? " hot" : ""}${expanded ? " expanded" : ""}`}>
+                <div key={t.id} className={`price-card${t.hot ? " hot" : ""}${expanded ? " expanded" : ""}`}>
                   {t.hot && <span className="hot-badge" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Star size={12} fill="currentColor" /> Meest gekozen</span>}
-                  <div className="tier">{t.tier}</div>
+                  <div className="tier">{tierLabel(t.id)}</div>
                   <div className="who">{t.who}</div>
                   <div className="amount">
-                    <strong>€ {t.price}</strong>
-                    <span>/mnd</span>
+                    <strong>€ {yearly ? tierPriceYearly(t.id) : tierPrice(t.id)}</strong>
+                    <span>/mnd{yearly ? " (jaarlijks)" : ""}</span>
                   </div>
                   <div className="extra-user">{t.extra}</div>
                   <ul>
@@ -814,7 +817,7 @@ function Pricing({ navigate }) {
                   {total > 4 && (
                     <button
                       className="price-more"
-                      onClick={() => setShowAll({ ...showAll, [t.tier]: !expanded })}
+                      onClick={() => setShowAll({ ...showAll, [t.id]: !expanded })}
                       aria-expanded={expanded}
                     >
                       {expanded ? "Minder functies" : "Bekijk alle functies"}

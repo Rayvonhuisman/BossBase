@@ -18,6 +18,7 @@ import {
   updatePipelineStage,
   deletePipelineStage,
 } from '../services/instellingenService.js';
+import { getLostReasons, createLostReason, updateLostReason, deleteLostReason } from '../services/lostReasonService.js';
 import { getVoertuigen, createVoertuig, updateVoertuig, deleteVoertuig } from '../services/voertuigService.js';
 import { getEigenEenheden, createEigenEenheid, updateEigenEenheid, deleteEigenEenheid } from '../services/eigenEenheidService.js';
 import { updateCompany, updateProfile, deleteOwnAccount, cancelCompanyAccount } from '../services/profileService.js';
@@ -172,6 +173,14 @@ export function InstellingenPage() {
   const [editingStageValue, setEditingStageValue] = useState('');
   const [editingStageColor, setEditingStageColor] = useState(DEFAULT_STAGE_COLOR);
 
+  // Verloren-redenen (company-scoped instelbare lijst)
+  const [lostReasons, setLostReasons] = useState([]);
+  const [showNewReason, setShowNewReason] = useState(false);
+  const [newReasonValue, setNewReasonValue] = useState('');
+  const [savingReason, setSavingReason] = useState(false);
+  const [editingReasonId, setEditingReasonId] = useState(null);
+  const [editingReasonValue, setEditingReasonValue] = useState('');
+
   // Integraties
   // TODO: replace with real OAuth flow when Google API credentials are configured
   const [googleConnected, setGoogleConnected] = useState(false);
@@ -225,6 +234,7 @@ export function InstellingenPage() {
     if (!canCompanySettings) { setLoading(false); return; }
     setLoading(true);
     getEigenEenheden().then(setEenheden).catch(() => {});
+    getLostReasons().then(setLostReasons).catch(() => {});
     Promise.all([getBedrijfsinstellingen(), getEmailTemplates(), getPipelineStages(), getConnection(), getConnection('snelstart'), getConnection('afas')])
       .then(([instellingen, emailTemplates, pipelineStages, mbConn, ssConn, afasConn]) => {
         if (instellingen) {
@@ -500,6 +510,53 @@ export function InstellingenPage() {
       setEditingStageId(null);
       setEditingStageValue('');
       setEditingStageColor(DEFAULT_STAGE_COLOR);
+    }
+  };
+
+  // ── Verloren-redenen ──────────────────────────────────────────────────────
+  const handleCreateReason = async () => {
+    if (!newReasonValue.trim()) return;
+    setSavingReason(true);
+    try {
+      const created = await createLostReason({ label: newReasonValue });
+      setLostReasons(s => [...s, created]);
+      setNewReasonValue('');
+      setShowNewReason(false);
+      toast.success('Reden aangemaakt');
+    } catch (err) {
+      toast.error(err.message || 'Aanmaken mislukt');
+    } finally {
+      setSavingReason(false);
+    }
+  };
+
+  const handleDeleteReason = async (id) => {
+    if (!window.confirm('Verloren-reden verwijderen? Bestaande leads met deze reden behouden hun opgeslagen tekst.')) return;
+    try {
+      await deleteLostReason(id);
+      setLostReasons(s => s.filter(r => r.id !== id));
+      toast.success('Reden verwijderd');
+    } catch (err) {
+      toast.error(err.message || 'Verwijderen mislukt');
+    }
+  };
+
+  const startEditReason = (reason) => {
+    setEditingReasonId(reason.id);
+    setEditingReasonValue(reason.label);
+  };
+
+  const saveEditReason = async (id) => {
+    if (!editingReasonValue.trim()) { setEditingReasonId(null); return; }
+    try {
+      const updated = await updateLostReason(id, { label: editingReasonValue.trim() });
+      setLostReasons(s => s.map(r => r.id === id ? updated : r));
+      toast.success('Reden bijgewerkt');
+    } catch (err) {
+      toast.error(err.message || 'Bijwerken mislukt');
+    } finally {
+      setEditingReasonId(null);
+      setEditingReasonValue('');
     }
   };
 
@@ -1562,7 +1619,7 @@ export function InstellingenPage() {
       )}
 
       {!loading && tab === 'pipeline' && (
-        <div className="afu3">
+        <div className="afu3" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="tw">
             <div className="tw-hd">
               <div className="card-title">Pipelinefasen</div>
@@ -1668,6 +1725,105 @@ export function InstellingenPage() {
                                 {I.edit}
                               </button>
                               <button className="btn-icon" title="Verwijderen" onClick={() => handleDeleteStage(stage.id)}>
+                                {I.trash}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="tw">
+            <div className="tw-hd">
+              <div>
+                <div className="card-title">Verloren-redenen</div>
+                <div style={{ fontSize: '.82rem', color: 'var(--dmu)', marginTop: 2 }}>De keuzelijst die verschijnt wanneer een lead in de pipeline op "verloren" wordt gezet.</div>
+              </div>
+              {isAdmin && (
+                <button className="btn btn-p btn-sm" onClick={() => setShowNewReason(v => !v)}>
+                  {I.plus} Nieuwe reden
+                </button>
+              )}
+            </div>
+
+            {showNewReason && (
+              <div className="card card-p" style={{ margin: '12px 0', background: 'var(--bgs)' }}>
+                <div className="fg">
+                  <div className="f">
+                    <label>Reden</label>
+                    <input
+                      value={newReasonValue}
+                      onChange={e => setNewReasonValue(e.target.value)}
+                      placeholder="Bijv. Buiten werkgebied"
+                      onKeyDown={e => { if (e.key === 'Enter') handleCreateReason(); }}
+                      autoFocus
+                    />
+                  </div>
+                </div>
+                <div className="fa">
+                  <button className="btn btn-ghost" onClick={() => { setShowNewReason(false); setNewReasonValue(''); }}>
+                    Annuleren
+                  </button>
+                  <button className="btn btn-p" onClick={handleCreateReason} disabled={savingReason || !newReasonValue.trim()}>
+                    {savingReason ? 'Aanmaken...' : 'Aanmaken'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <table className="dt">
+              <thead>
+                <tr>
+                  <th>Reden</th>
+                  <th style={{ width: 100 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {lostReasons.length === 0 && (
+                  <tr>
+                    <td colSpan={2} style={{ textAlign: 'center', color: 'var(--dl)', padding: 20 }}>
+                      Nog geen verloren-redenen aangemaakt
+                    </td>
+                  </tr>
+                )}
+                {lostReasons.map(reason => (
+                  <tr key={reason.id}>
+                    <td>
+                      {editingReasonId === reason.id ? (
+                        <input
+                          value={editingReasonValue}
+                          onChange={e => setEditingReasonValue(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') saveEditReason(reason.id); if (e.key === 'Escape') setEditingReasonId(null); }}
+                          autoFocus
+                          style={{ width: '100%' }}
+                        />
+                      ) : (
+                        <span style={{ fontWeight: 500 }}>{reason.label}</span>
+                      )}
+                    </td>
+                    <td>
+                      {isAdmin && (
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {editingReasonId === reason.id ? (
+                            <>
+                              <button className="btn-icon" title="Opslaan" onClick={() => saveEditReason(reason.id)}>
+                                {I.check}
+                              </button>
+                              <button className="btn-icon" title="Annuleren" onClick={() => { setEditingReasonId(null); setEditingReasonValue(''); }}>
+                                {I.x}
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button className="btn-icon" title="Bewerken" onClick={() => startEditReason(reason)}>
+                                {I.edit}
+                              </button>
+                              <button className="btn-icon" title="Verwijderen" onClick={() => handleDeleteReason(reason.id)}>
                                 {I.trash}
                               </button>
                             </>

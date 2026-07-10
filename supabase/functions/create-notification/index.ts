@@ -3,6 +3,14 @@
 // HETZELFDE bedrijf zitten. Hierdoor kan de RLS INSERT-policy op notifications
 // streng zijn (alleen self-insert vanaf de client) en is collega-spoofing
 // uitgesloten. verify_jwt=true zorgt dat alleen ingelogde gebruikers aanroepen.
+//
+// Optioneel stuurt deze function ook een e-mail per notificatie (payload
+// `email: { subject, html }`). Het e-mailADRES wordt UITSLUITEND hier
+// server-side opgelost — primair uit auth.users (de canonieke login-email, met
+// dezelfde identiteit als profiles.id waaruit medewerkers geselecteerd worden),
+// met company_members.email als terugval. Adressen worden nooit naar de client
+// teruggegeven, zodat een gebruiker het mailadres van een collega niet kan
+// uitlezen. Verzenden gebeurt via de bestaande send-email edge function.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -13,6 +21,48 @@ const CORS = {
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
+
+// Los het ontvangeradres server-side op. Nooit terug naar de client sturen.
+async function resolveRecipientEmail(admin: any, userId: string, companyId: string): Promise<string | null> {
+  // Primair: canonieke login-email uit auth.users (zelfde identiteit als
+  // profiles.id — de bron waaruit medewerkers geselecteerd worden).
+  try {
+    const { data } = await admin.auth.admin.getUserById(userId)
+    const email = data?.user?.email
+    if (email) return email
+  } catch { /* val terug op company_members */ }
+  // Terugval: company_members.email binnen HETZELFDE bedrijf.
+  const { data: m } = await admin
+    .from('company_members')
+    .select('email')
+    .eq('profile_id', userId)
+    .eq('company_id', companyId)
+    .maybeSingle()
+  return m?.email || null
+}
+
+// Verstuur via de bestaande send-email edge function (service-role passeert
+// verify_jwt). Best-effort: retourneert of het gelukt is, gooit niet.
+async function sendViaEdge(
+  supabaseUrl: string,
+  serviceKey: string,
+  body: Record<string, unknown>,
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${serviceKey}`,
+        'apikey': serviceKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
@@ -44,8 +94,10 @@ serve(async (req) => {
     const list = Array.isArray(payload?.notifications) ? payload.notifications : []
     if (!list.length) return json({ success: true, inserted: 0 })
 
-    // Valideer per notificatie dat de doelgebruiker in hetzelfde bedrijf zit
+    // Valideer per notificatie dat de doelgebruiker in hetzelfde bedrijf zit.
+    // Verzamel tegelijk de e-mailopdrachten (alleen voor gevalideerde targets).
     const rows: Record<string, unknown>[] = []
+    const mailJobs: { userId: string; subject: string; html: string }[] = []
     for (const n of list.slice(0, 50)) {
       if (!n?.user_id || !n?.type || !n?.title) continue
       if (n.user_id === user.id) continue // self-notificatie niet nodig
@@ -67,6 +119,10 @@ serve(async (req) => {
         related_id:   n.related_id ?? null,
         created_by:   user.id,
       })
+      const email = n.email
+      if (email && typeof email.subject === 'string' && typeof email.html === 'string' && email.subject && email.html) {
+        mailJobs.push({ userId: n.user_id, subject: email.subject, html: email.html })
+      }
     }
 
     if (rows.length) {
@@ -74,7 +130,30 @@ serve(async (req) => {
       if (insErr) return json({ success: false, error: insErr.message }, 500)
     }
 
-    return json({ success: true, inserted: rows.length })
+    // E-mails versturen (best-effort, blokkeert de notificatie-insert niet).
+    let emailed = 0
+    if (mailJobs.length) {
+      const { data: co } = await admin
+        .from('companies')
+        .select('name, reply_to_email, email')
+        .eq('id', companyId)
+        .maybeSingle()
+      const fromName = co?.name || 'BossBase'
+      const replyTo  = co?.reply_to_email || co?.email || null
+
+      for (const job of mailJobs) {
+        try {
+          const to = await resolveRecipientEmail(admin, job.userId, companyId)
+          if (!to) continue // geen adres bekend → stil overslaan (in-app blijft staan)
+          const body: Record<string, unknown> = { to, subject: job.subject, html: job.html, from_name: fromName }
+          if (replyTo) body.reply_to = replyTo
+          const ok = await sendViaEdge(supabaseUrl, serviceKey, body)
+          if (ok) emailed++
+        } catch { /* best-effort per mail */ }
+      }
+    }
+
+    return json({ success: true, inserted: rows.length, emailed })
   } catch (err) {
     return json({ success: false, error: String(err) }, 500)
   }

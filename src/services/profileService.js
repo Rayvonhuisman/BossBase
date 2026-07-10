@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase"
+import { DEFAULT_TIER } from "../lib/tiers.js"
 
 // Real DB columns:
 // profiles: id, company_id, full_name, role, avatar_url, created_at
@@ -36,6 +37,8 @@ const toCompany = row => ({
   brandingColor: row.branding_color || '#1DDB62',
   replyToEmail: row.reply_to_email || "",
   status: row.status || 'actief',
+  // Abonnementstier — apart ingeladen via get_company_tier() (zie getCompany).
+  tier: DEFAULT_TIER,
   raw: row,
 })
 
@@ -82,7 +85,17 @@ export async function getCompany(companyId) {
     .eq("id", companyId)
     .maybeSingle()
   if (error) throw error
-  return data ? toCompany(data) : null
+  if (!data) return null
+  const company = toCompany(data)
+  // Tier komt uit subscriptions.plan via een veilige reader die niets anders
+  // lekt. Faalt de call, dan valt de app terug op DEFAULT_TIER.
+  try {
+    const { data: tier } = await supabase.rpc("get_company_tier")
+    company.tier = tier || DEFAULT_TIER
+  } catch (err) {
+    debug("tier query mislukt", err)
+  }
+  return company
 }
 
 export async function getCurrentCompany() {

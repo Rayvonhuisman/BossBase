@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react"
 import { Search } from "lucide-react"
 import { Nav, Footer, Reveal, I, ScrollLine, initChoreo } from "./MktShared"
+import { tierLabel, tierPrice, YEARLY_DISCOUNT } from "../../lib/tiers.js"
 
 const FAQ_DATA = [
   {
@@ -18,7 +19,7 @@ const FAQ_DATA = [
     cat: "Abonnement & betaling",
     icon: I.chart,
     items: [
-      { q: "Welke abonnementen zijn er?", a: "We hebben drie plannen: Starter (€ 19/maand, 1 gebruiker), Groei (€ 39/maand, tot 5 gebruikers) en Team (€ 79/maand, tot 15 gebruikers). Jaarlijks betalen geeft 25% korting." },
+      { q: "Welke abonnementen zijn er?", a: `We hebben drie plannen: ${tierLabel('starter')} (€ ${tierPrice('starter')}/maand, 1 gebruiker), ${tierLabel('groei')} (€ ${tierPrice('groei')}/maand, tot 5 gebruikers) en ${tierLabel('team')} (€ ${tierPrice('team')}/maand, tot 15 gebruikers). Jaarlijks betalen geeft meer dan ${Math.round(YEARLY_DISCOUNT * 100)}% korting.` },
       { q: "Kan ik op elk moment opzeggen?", a: "Ja. Er is geen minimale looptijd bij maandabonnement. Je kunt op elk moment opzeggen en je data meenemen." },
       { q: "Wat zijn de betaalmogelijkheden?", a: "We accepteren iDEAL, creditcard en SEPA-incasso. Jaarabonnementen kunnen ook per factuur worden betaald." },
       { q: "Is BTW inbegrepen in de prijs?", a: "Nee, de getoonde prijzen zijn exclusief BTW. Als ondernemer kun je de BTW aftrekken als zakelijke kosten." },

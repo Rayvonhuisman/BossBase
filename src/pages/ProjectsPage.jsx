@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { I, ModalX, fmt, fmt0, BackToKlant } from '../bb-shared.jsx';
+import { I, ModalX, NotifyMailToggle, fmt, fmt0, BackToKlant } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import {
@@ -13,7 +13,7 @@ import { listDeals } from '../services/dealService.js';
 import { getOffertes } from '../services/offerteService.js';
 import { ProjectDetailDrawer } from './projects/ProjectDetailDrawer.jsx';
 import { NoteEditor } from '../components/NoteEditor.jsx';
-import { getTeamMembers, createAssignmentNotification } from '../services/notificatieService.js';
+import { getTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
 import { statusInfo } from '../utils/statusColors.js';
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
@@ -60,6 +60,7 @@ export function NewProjectModal({ onClose, onSaved, customers, deals, offertes, 
   const { profile } = useProfile();
   const [saving, setSaving] = useState(false);
   const [teamMembers, setTeamMembers] = useState([]);
+  const [notifyMail, setNotifyMail] = useState(true);
   const [form, setForm] = useState({
     name: '',
     customer_id: prefillCustomerId || '',
@@ -114,10 +115,7 @@ export function NewProjectModal({ onClose, onSaved, customers, deals, offertes, 
         deadline: form.deadline || null,
         assigned_to: form.assigned_to || null,
       });
-      if (form.assigned_to && profile?.id) {
-        const m = teamMembers.find(x => x.id === form.assigned_to);
-        createAssignmentNotification({ assignedToUserId: form.assigned_to, assignedToName: m?.fullName, type: 'toewijzing_project', title: `Je bent toegewezen aan ${name}`, link: 'projecten', relatedType: 'project', relatedId: saved?.id, creatorId: profile.id, creatorName: profile.fullName }).catch(() => {});
-      }
+      notifyNewAssignees({ userIds: form.assigned_to ? [form.assigned_to] : [], members: teamMembers, sendMail: notifyMail, type: 'toewijzing_project', title: `Je bent toegewezen aan ${name}`, link: 'projecten', relatedType: 'project', relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
       toast.success('Project aangemaakt');
       onSaved?.(saved);
       onClose();
@@ -220,6 +218,7 @@ export function NewProjectModal({ onClose, onSaved, customers, deals, offertes, 
               <option value="">— Geen medewerker —</option>
               {teamMembers.map(m => <option key={m.id} value={m.id}>{m.fullName}</option>)}
             </select>
+            <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />
           </div>
           <div className="f s2" style={{ gridColumn: '1 / -1' }}>
             <label>Omschrijving</label>
@@ -387,7 +386,12 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
 
   // ── RENDER ────────────────────────────────────────────────────────────────
 
-  if (loading) {
+  // Alleen bij de eerste keer laden (nog geen data) de volledige pagina vervangen
+  // door een spinner. Bij een refresh (bv. na het aanmaken van een factuur vanuit
+  // de project-drawer) blijft de bestaande UI — inclusief de geopende drawer en
+  // diens modals — gemonteerd, zodat transient state zoals de "verstuur"-modal
+  // niet verloren gaat door een remount.
+  if (loading && projects.length === 0) {
     return <div className="card card-p" style={{ textAlign: 'center', color: 'var(--dl)' }}>Projecten laden…</div>;
   }
 

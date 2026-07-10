@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { I, PIPELINE_STAGES, fmt, Av, ModalX, stageBadgeStyle } from '../bb-shared.jsx';
-import { listDeals, listPipelineStages, updateDealStage } from '../services/dealService.js';
+import { listDeals, listPipelineStages, updateDealStage, markDealLost, updateDeal } from '../services/dealService.js';
+import { getLostReasons } from '../services/lostReasonService.js';
 import { listActivities } from '../services/activityService.js';
 import { listCustomers } from '../services/customerService.js';
 import { createProject } from '../services/projectsService.js';
@@ -8,6 +9,16 @@ import { listNotes, createNote } from '../services/noteService.js';
 import { useProfile, displayName } from '../lib/profileContext.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { ActivityEditModal, NewLeadModal } from '../components/SharedModals.jsx';
+import { statusInfo } from '../utils/statusColors.js';
+
+// Subtiele prioriteit-badge voor aanvragen/deals. Normaal (med) toont niets
+// om ruis in de lijst te voorkomen; Hoog = opvallend, Laag = rustig/neutraal.
+// Kleur via de centrale statusColors-mapping (geen hardcoded kleuren).
+function PriorityBadge({ priority, style }) {
+  if (priority !== 'high' && priority !== 'low') return null;
+  const s = statusInfo(priority, 'priority');
+  return <span className={s.className} style={{ fontSize: '.66rem', ...style }}>{s.label}</span>;
+}
 
 // DashboardHome is now at src/pages/dashboard/DashboardHome.jsx
 function _LegacyDashboardHome({ setPage, openCustomer }) {
@@ -224,7 +235,7 @@ function MoveStageSheet({ deal, stages, moveDeal, onClose, setActiveIdx }) {
 }
 
 // ── MOBILE PIPELINE (swipeable carousel) ─────────────────────
-function MobilePipeline({ stages, dealsInStage, openCustomer, moveDeal, markLost, setNewStage, setShowNew, customers }) {
+function MobilePipeline({ stages, dealsInStage, openCustomer, moveDeal, markLost, lostStageId, setNewStage, setShowNew, customers }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
@@ -312,8 +323,16 @@ function MobilePipeline({ stages, dealsInStage, openCustomer, moveDeal, markLost
           {stageDeals.map(deal => {
             const cust = customers?.find(c => c.id === deal.custId);
             return (
-              <div key={deal.id} className="pipe-mob-card" style={{ cursor: 'pointer' }} onClick={() => openCustomer(deal.custId)}>
-                <div style={{ fontWeight: 700, fontSize: '.85rem', color: 'var(--dk)', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div key={deal.id} className="pipe-mob-card" style={{ cursor: 'pointer', position: 'relative' }} onClick={() => openCustomer(deal.custId)}>
+                {stage.id !== lostStageId && markLost && (
+                  <button
+                    className="btn-icon pc-menu-btn"
+                    title="Markeer als verloren"
+                    aria-label="Markeer als verloren"
+                    onClick={e => { e.stopPropagation(); markLost(deal); }}
+                  >{I.flag}</button>
+                )}
+                <div style={{ fontWeight: 700, fontSize: '.85rem', color: 'var(--dk)', marginBottom: 3, paddingRight: 20, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {deal.customerName || 'Klant'}
                 </div>
                 {deal.title && (
@@ -421,9 +440,10 @@ function DealDetailModal({ deal, stages, customers, onClose, setPage }) {
         </div>
 
         <div style={{ padding: '0 24px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Stage + waarde */}
+          {/* Stage + waarde + prioriteit */}
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
             {stage && <span className="badge" style={stageBadgeStyle(stage.col)}>{stage.label}</span>}
+            <PriorityBadge priority={deal.priority} style={{ fontSize: '.72rem' }} />
             {deal.value > 0 && (
               <span style={{ fontSize: 15, fontWeight: 700, color: '#0F7A3F' }}>{fmt(deal.value)}</span>
             )}
@@ -595,6 +615,10 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
   const [showLostModal, setShowLostModal] = useState(false);
   const [lostDeal, setLostDeal] = useState(null);
   const [lostReason, setLostReason] = useState('');
+  const [lostNote, setLostNote] = useState('');
+  const [lostSaving, setLostSaving] = useState(false);
+  const [lostReasons, setLostReasons] = useState([]);
+  const [cardMenu, setCardMenu] = useState(null); // { dealId, x, y } — open kaart-menu
 
   const [showFilter, setShowFilter] = useState(false);
   const [filter, setFilter] = useState({ stage: 'all', status: 'open', priority: 'all', text: '' });
@@ -610,6 +634,16 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, []);
+
+  // Sluit het kaart-menu bij scrollen/resizen — de fixed positie zou anders
+  // los van de knop komen te zweven.
+  useEffect(() => {
+    if (!cardMenu) return;
+    const close = () => setCardMenu(null);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => { window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close); };
+  }, [cardMenu]);
 
   // "03 — Ghost" scroll control (from the Scrollbar Designs handoff): a thin
   // rail + proportional thumb that is dormant (track hidden, thumb ~35%) and
@@ -660,19 +694,20 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
   };
   const nudgePipe = dx => pipeWrapRef.current?.scrollBy({ left: dx, behavior: 'smooth' });
 
-  const LOST_REASONS = [
-    'Te duur','Geen reactie','Ander bedrijf gekozen','Datum niet mogelijk',
-    'Buiten werkgebied','Klus te klein','Klus te groot','Klant geannuleerd',
-    'Informatie ontbreekt','Anders',
-  ];
+  // Verloren-redenen komen uit de company-scoped lijst (Instellingen → Pipeline).
+  // Fallback als een bedrijf de lijst leeg heeft gemaakt, zodat de modal nooit
+  // zonder keuzes staat.
+  const LOST_REASONS_FALLBACK = ['Te duur', 'Gekozen voor concurrent', 'Geen reactie', 'Timing niet goed', 'Anders'];
+  const lostReasonOptions = lostReasons.length ? lostReasons.map(r => r.label) : LOST_REASONS_FALLBACK;
 
   const reload = () => {
     setLoading(true);
-    Promise.all([listDeals(), listPipelineStages(), listCustomers()])
-      .then(([dealData, stageData, customerData]) => {
+    Promise.all([listDeals(), listPipelineStages(), listCustomers(), getLostReasons().catch(() => [])])
+      .then(([dealData, stageData, customerData, reasonData]) => {
         setDeals(dealData);
         setStages(stageData.length ? stageData : PIPELINE_STAGES);
         setCustomers(customerData);
+        setLostReasons(reasonData);
         setError('');
       })
       .catch(err => setError(err.message || 'Pipeline laden is mislukt.'))
@@ -732,22 +767,47 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
   // for use in confirmLost (lostStageId is already derived above for filtering).
   const lostStage = stages.find(s => s.id === lostStageId);
 
-  const markLost = deal => { setLostDeal(deal); setShowLostModal(true); };
+  const closeLostModal = () => {
+    setShowLostModal(false); setLostDeal(null); setLostReason(''); setLostNote('');
+  };
+  // Open het kaart-menu (⋮). Positie wordt vast (fixed) berekend uit de knop,
+  // zodat het niet wordt afgekapt door de horizontale scroll van het bord.
+  const openCardMenu = (e, deal) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setCardMenu(cur => cur?.dealId === deal.id ? null : { dealId: deal.id, x: r.right, y: r.bottom + 4 });
+  };
+  const markLost = deal => { setCardMenu(null); setLostReason(''); setLostNote(''); setLostDeal(deal); setShowLostModal(true); };
+  const setDealPriority = async (deal, priority) => {
+    setCardMenu(null);
+    if ((deal.priority || 'med') === priority) return;
+    try {
+      const updated = await updateDeal(deal.id, { priority });
+      setDeals(ds => ds.map(d => d.id === deal.id ? updated : d));
+      toast.success('Prioriteit bijgewerkt');
+    } catch (err) {
+      console.error('[bb:pipeline] prioriteit wijzigen mislukt', err);
+      toast.error(err.message || 'Prioriteit bijwerken mislukt');
+    }
+  };
   const confirmLost = async () => {
     if (!lostStage) {
       toast.error('Geen "Verloren"-fase gevonden in de pipeline');
-      setShowLostModal(false); setLostDeal(null); setLostReason('');
+      closeLostModal();
       return;
     }
+    if (!lostReason) { toast.error('Kies een reden'); return; }
+    setLostSaving(true);
     try {
-      const updated = await updateDealStage(lostDeal.id, lostStage.id);
+      const updated = await markDealLost(lostDeal.id, lostStage.id, lostReason, lostNote);
       setDeals(ds => ds.map(d => d.id === lostDeal.id ? updated : d));
-      toast.success('Project gemarkeerd als verloren');
+      toast.success('Lead gemarkeerd als verloren');
+      closeLostModal();
     } catch (err) {
       console.error('[bb:pipeline] markeer verloren mislukt', err);
       toast.error(err.message || 'Status bijwerken mislukt');
+    } finally {
+      setLostSaving(false);
     }
-    setShowLostModal(false); setLostDeal(null); setLostReason('');
   };
   const moveDeal = async (deal, stageId) => {
     try {
@@ -802,6 +862,9 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
     setDragOverStage(null);
     if (!deal || !targetStageId) return;
     if (deal.stage === targetStageId) return; // dropped in same stage → no-op
+    // Naar de "Verloren"-fase slepen vraagt óók om een reden — open dezelfde
+    // modal i.p.v. de deal stil te verplaatsen.
+    if (targetStageId === lostStageId) { markLost(deal); return; }
     const prevStage = deal.stage;
     // Optimistic: move the card immediately, reconcile/rollback after the API.
     setDeals(ds => ds.map(d => d.id === deal.id ? { ...d, stage: targetStageId } : d));
@@ -905,6 +968,7 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
           openCustomer={openCustomer}
           moveDeal={moveDeal}
           markLost={markLost}
+          lostStageId={lostStageId}
           setNewStage={setNewStage}
           setShowNew={setShowNew}
           customers={customers}
@@ -995,12 +1059,20 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
                   return (
                     <div key={deal.id}
                       className={`pc${draggingId === deal.id ? ' pc-dragging' : ''}`}
-                      style={{ cursor: 'pointer' }}
+                      style={{ cursor: 'pointer', position: 'relative' }}
                       draggable
                       onDragStart={e => onCardDragStart(e, deal)}
                       onDragEnd={onCardDragEnd}
                       onClick={() => openCustomer(deal.custId)}>
-                      <div style={{ fontWeight: 700, fontSize: '.85rem', color: 'var(--dk)', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {deal.stage !== lostStageId && (
+                        <button
+                          className="btn-icon pc-menu-btn"
+                          title="Meer acties"
+                          aria-label="Meer acties"
+                          onClick={e => { e.stopPropagation(); openCardMenu(e, deal); }}
+                        >{I.meer}</button>
+                      )}
+                      <div style={{ fontWeight: 700, fontSize: '.85rem', color: 'var(--dk)', marginBottom: 3, paddingRight: 20, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {deal.customerName || 'Klant'}
                       </div>
                       {deal.title && (
@@ -1018,9 +1090,12 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
                           {cust.phone}
                         </div>
                       )}
-                      {deal.value > 0 && (
-                        <div style={{ marginTop: 6, fontSize: '.82rem', fontWeight: 700, color: '#0F7A3F' }}>
-                          {fmt(deal.value)}
+                      {(deal.value > 0 || deal.priority === 'high' || deal.priority === 'low') && (
+                        <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          {deal.value > 0 && (
+                            <span style={{ fontSize: '.82rem', fontWeight: 700, color: '#0F7A3F' }}>{fmt(deal.value)}</span>
+                          )}
+                          <PriorityBadge priority={deal.priority} />
                         </div>
                       )}
                     </div>
@@ -1039,34 +1114,76 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
         </div>
       )}
 
+      {cardMenu && (
+        <>
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 60 }}
+            onClick={() => setCardMenu(null)}
+          />
+          <div
+            className="card-menu"
+            style={{ position: 'fixed', top: cardMenu.y, left: cardMenu.x, transform: 'translateX(-100%)', zIndex: 61 }}
+          >
+            {(() => {
+              const menuDeal = deals.find(x => x.id === cardMenu.dealId);
+              const curPrio = menuDeal?.priority || 'med';
+              return (
+                <>
+                  <div className="card-menu-label">Prioriteit</div>
+                  {[['high', 'Hoog'], ['med', 'Normaal'], ['low', 'Laag']].map(([val, label]) => (
+                    <button
+                      key={val}
+                      className="card-menu-item"
+                      onClick={() => menuDeal && setDealPriority(menuDeal, val)}
+                    >
+                      {val === 'med'
+                        ? <span style={{ fontSize: '.72rem', color: 'var(--dl)' }}>Normaal</span>
+                        : <PriorityBadge priority={val} />}
+                      {curPrio === val && <span style={{ marginLeft: 'auto', display: 'flex', color: 'var(--p)' }}>{I.check}</span>}
+                    </button>
+                  ))}
+                  <div className="card-menu-sep" />
+                  <button
+                    className="card-menu-item card-menu-item-danger"
+                    onClick={() => menuDeal && markLost(menuDeal)}
+                  >
+                    {I.flag} Markeer als verloren
+                  </button>
+                </>
+              );
+            })()}
+          </div>
+        </>
+      )}
+
       {showLostModal && (
-        <div className="overlay" onClick={e => e.target === e.currentTarget && setShowLostModal(false)}>
+        <div className="overlay" onClick={e => e.target === e.currentTarget && closeLostModal()}>
           <div className="modal" style={{ maxWidth: 400 }}>
             <div className="modal-hd">
               <div>
                 <div className="modal-title">Markeer als verloren</div>
-                <div className="modal-sub">{lostDeal?.customerName || 'Klant'} — {lostDeal?.title}</div>
+                <div className="modal-sub">{lostDeal?.customerName || 'Klant'}{lostDeal?.title ? ` — ${lostDeal.title}` : ''}</div>
               </div>
-              <ModalX onClose={() => setShowLostModal(false)} />
+              <ModalX onClose={closeLostModal} />
             </div>
-            <div style={{ marginBottom: 14 }}>
-              <div className="f" style={{ marginBottom: 10 }}><label>Reden van verlies</label></div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                {LOST_REASONS.map(r => (
-                  <button key={r}
-                    className={`trade-option${lostReason === r ? ' selected' : ''}`}
-                    style={{ fontSize: '.78rem', padding: '8px 10px' }}
-                    onClick={() => setLostReason(r)}>{r}</button>
+            <div className="f" style={{ marginBottom: 14 }}>
+              <label>Reden van verlies</label>
+              <select value={lostReason} onChange={e => setLostReason(e.target.value)}>
+                <option value="">Kies een reden...</option>
+                {lostReasonOptions.map(r => (
+                  <option key={r} value={r}>{r}</option>
                 ))}
-              </div>
+              </select>
             </div>
             <div className="f">
               <label>Toelichting (optioneel)</label>
-              <textarea placeholder="Eventuele extra informatie..." style={{ height: 60 }} />
+              <textarea value={lostNote} onChange={e => setLostNote(e.target.value)} placeholder="Eventuele extra informatie..." style={{ height: 60 }} />
             </div>
             <div className="fa">
-              <button className="btn btn-s" onClick={() => setShowLostModal(false)}>Annuleren</button>
-              <button className="btn btn-danger" onClick={confirmLost}>Markeer verloren</button>
+              <button className="btn btn-s" onClick={closeLostModal}>Annuleren</button>
+              <button className="btn btn-danger" onClick={confirmLost} disabled={lostSaving || !lostReason}>
+                {lostSaving ? 'Bezig...' : 'Markeer verloren'}
+              </button>
             </div>
           </div>
         </div>

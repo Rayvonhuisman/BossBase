@@ -80,6 +80,13 @@ const DOMAINS = {
     done:      ['green', 'Gereed'],
     gereed:    ['green', 'Gereed'],
   },
+  // PRIORITEIT (aanvraag/deal) — Hoog = opvallend rood, Laag = rustig grijs.
+  // Normaal (med) heeft bewust geen badge in de lijst (voorkomt ruis).
+  priority: {
+    high: ['red',  'Hoog'],
+    med:  ['gray', 'Normaal'],
+    low:  ['gray', 'Laag'],
+  },
 };
 
 // Generieke fallback wanneer geen domein is meegegeven of de status onbekend is

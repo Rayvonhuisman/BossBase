@@ -1626,6 +1626,8 @@ export function SettingsPage() {
             <>
               <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: 20 }}>Integraties</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {/* Google Agenda tijdelijk verborgen voor klanten (OAuth nog niet geconfigureerd). Zet {false} op {true} om terug te zetten. */}
+                {false && (
                 <div style={{ display: 'flex', alignItems: 'center', padding: '16px', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 'var(--r10)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
                     {I.google}
@@ -1636,6 +1638,7 @@ export function SettingsPage() {
                   </div>
                   <button className="btn btn-p btn-sm">Verbinden</button>
                 </div>
+                )}
               </div>
             </>
           )}

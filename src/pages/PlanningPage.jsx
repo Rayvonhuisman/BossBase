@@ -5,18 +5,19 @@ import {
   useDraggable, useDroppable,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { I, ModalX } from '../bb-shared.jsx';
+import { I, ModalX, NotifyMailToggle } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { getWerkbonnen, createWerkbon, updateWerkbon } from '../services/werkbonService.js';
 import { getVoertuigen } from '../services/voertuigService.js';
-import { getActiveTeamMembers, createAssignmentNotification } from '../services/notificatieService.js';
+import { getActiveTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
 import { upsertWerkbonEvent, upsertActivityEvent, deleteWerkbonEvent, deleteActivityEvent } from '../services/calendarService.js';
 import { listActivities, createActivity, buildDueAt } from '../services/activityService.js';
 import { ActivityEditModal } from '../components/SharedModals.jsx';
 import { MemberMultiSelect } from '../components/MemberMultiSelect.jsx';
+import { AssigneeResponsibleSelect } from '../components/AssigneeResponsibleSelect.jsx';
 import { supabase } from '../lib/supabase.js';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 
@@ -340,11 +341,18 @@ function DayColumn({ date, werkbonnen, activities = [], colorMap, isToday, allow
 
 // ── SNEL INPLANNEN MODAL (na drop op tijdslot) ───────────────────────────────
 
-function QuickPlanModal({ werkbon, date, hour, teamMembers, onClose, onSaved }) {
+function QuickPlanModal({ werkbon, date, hour, teamMembers, profile, onClose, onSaved }) {
   const toast = useToast();
+  const prevIds = werkbon.assignedToIds || (werkbon.assignedTo ? [werkbon.assignedTo] : []);
   const [starttijd, setStarttijd] = useState(minsToTime(hour * 60));
   const [eindtijd,  setEindtijd]  = useState(minsToTime(hour * 60 + 60));
-  const [assignedToIds, setAssignedToIds] = useState(werkbon.assignedToIds || (werkbon.assignedTo ? [werkbon.assignedTo] : []));
+  const [assignedToIds, setAssignedToIds] = useState(prevIds);
+  const [verantwoordelijkeIds, setVerantwoordelijkeIds] = useState(
+    (werkbon.verantwoordelijkeIds && werkbon.verantwoordelijkeIds.length)
+      ? werkbon.verantwoordelijkeIds
+      : (prevIds[0] ? [prevIds[0]] : [])
+  );
+  const [notifyMail, setNotifyMail] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
@@ -355,7 +363,16 @@ function QuickPlanModal({ werkbon, date, hour, teamMembers, onClose, onSaved }) 
         starttijd: starttijd || null,
         eindtijd:  eindtijd  || null,
         assigned_to_ids: assignedToIds,
+        verantwoordelijke_ids: verantwoordelijkeIds,
       });
+      // Notificeer nieuw toegewezen medewerkers (in-app + optioneel e-mail).
+      notifyNewAssignees({
+        userIds: assignedToIds, prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail,
+        type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${werkbon.titel}`,
+        body: `Datum: ${date}${starttijd ? ` om ${starttijd}` : ''}`,
+        link: 'planning', relatedType: 'werkbon', relatedId: werkbon.id,
+        creatorId: profile?.id, creatorName: profile?.fullName,
+      }).catch(() => {});
       // Werk hét calendar_event van deze werkbon bij (upsert op werkbon_id) —
       // geen nieuw event bij herhaald inplannen.
       if (date && starttijd) {
@@ -402,10 +419,15 @@ function QuickPlanModal({ werkbon, date, hour, teamMembers, onClose, onSaved }) 
               <input type="time" value={eindtijd} onChange={e => setEindtijd(e.target.value)} />
             </div>
           </div>
-          <div className="f">
-            <label>Medewerkers <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(meerdere mogelijk)</span></label>
-            <MemberMultiSelect members={teamMembers} value={assignedToIds} onChange={setAssignedToIds} />
-          </div>
+          <AssigneeResponsibleSelect
+            members={teamMembers}
+            assignedIds={assignedToIds}
+            verantwoordelijkeIds={verantwoordelijkeIds}
+            assignedLabel="Medewerkers"
+            onChange={({ assignedIds, verantwoordelijkeIds: v }) => { setAssignedToIds(assignedIds); setVerantwoordelijkeIds(v); }}
+          >
+            <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />
+          </AssigneeResponsibleSelect>
         </div>
         <div className="fa" style={{ justifyContent: 'flex-end', gap: 8, paddingTop: 12 }}>
           <button className="btn btn-s" onClick={onClose} disabled={saving}>Annuleren</button>
@@ -436,6 +458,7 @@ function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, pro
   });
   const [eindtijdManual, setEindtijdManual] = useState(false);
   const [maakWerkbon, setMaakWerkbon] = useState(false);
+  const [notifyMail, setNotifyMail] = useState(true);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -475,22 +498,15 @@ function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, pro
         }).catch(() => {});
       }
 
-      // Notificatie naar elke toegewezen medewerker (behalve jezelf).
-      (form.assigned_to_ids || []).filter(uid => uid && uid !== profile?.id).forEach(uid => {
-        const member = teamMembers.find(m => m.id === uid);
-        createAssignmentNotification({
-          assignedToUserId: uid,
-          assignedToName: member?.fullName,
-          type: 'toewijzing_activiteit',
-          title: `Je bent toegewezen aan ${form.titel.trim()}`,
-          body: `Datum: ${form.datum}${form.starttijd ? ` om ${form.starttijd}` : ''}`,
-          link: 'planning',
-          relatedType: 'activiteit',
-          relatedId: created.id,
-          creatorId: profile?.id,
-          creatorName: profile?.fullName,
-        }).catch(() => {});
-      });
+      // Notificatie naar elke nieuw toegewezen medewerker (behalve jezelf).
+      notifyNewAssignees({
+        userIds: form.assigned_to_ids, members: teamMembers, sendMail: notifyMail,
+        type: 'toewijzing_activiteit',
+        title: `Je bent toegewezen aan ${form.titel.trim()}`,
+        body: `Datum: ${form.datum}${form.starttijd ? ` om ${form.starttijd}` : ''}`,
+        link: 'planning', relatedType: 'activiteit', relatedId: created.id,
+        creatorId: profile?.id, creatorName: profile?.fullName,
+      }).catch(() => {});
 
       // Bestaande werkbon koppelen
       if (form.werkbon_id) {
@@ -570,6 +586,7 @@ function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, pro
           <div className="f">
             <label>Medewerkers <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(meerdere mogelijk)</span></label>
             <MemberMultiSelect members={teamMembers} value={form.assigned_to_ids} onChange={ids => set('assigned_to_ids', ids)} />
+            <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />
           </div>
           <div className="f">
             <label>Voertuig <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(optioneel)</span></label>
@@ -620,12 +637,13 @@ function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, pro
 
 // ── WERKBON INPLANNEN MODAL ───────────────────────────────────────────────────
 
-function PlanModal({ teamMembers, voertuigen, customers, projects, onClose, onSaved }) {
+function PlanModal({ teamMembers, voertuigen, customers, projects, profile, onClose, onSaved }) {
   const toast = useToast();
   const [form, setForm] = useState({
     titel: '', customer_id: '', project_id: '', gepland_op: toISO(new Date()),
-    starttijd: '09:00', eindtijd: '11:00', assigned_to_ids: [], voertuig_id: '', locatie: '', omschrijving: '',
+    starttijd: '09:00', eindtijd: '11:00', assigned_to_ids: [], verantwoordelijke_ids: [], voertuig_id: '', locatie: '', omschrijving: '',
   });
+  const [notifyMail, setNotifyMail] = useState(true);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -645,11 +663,20 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, onClose, onSa
         starttijd: form.starttijd || null,
         eindtijd: form.eindtijd || null,
         assigned_to_ids: form.assigned_to_ids,
+        verantwoordelijke_ids: form.verantwoordelijke_ids,
         voertuig_id: form.voertuig_id || null,
         locatie: form.locatie || null,
         omschrijving: form.omschrijving || null,
         status: 'gepland',
       });
+      // Notificeer toegewezen medewerkers (in-app + optioneel e-mail).
+      notifyNewAssignees({
+        userIds: form.assigned_to_ids, members: teamMembers, sendMail: notifyMail,
+        type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`,
+        body: `Datum: ${form.gepland_op}${form.starttijd ? ` om ${form.starttijd}` : ''}`,
+        link: 'planning', relatedType: 'werkbon', relatedId: wb.id,
+        creatorId: profile?.id, creatorName: profile?.fullName,
+      }).catch(() => {});
       // Eén calendar_event per werkbon (upsert op werkbon_id)
       if (form.gepland_op && form.starttijd) {
         upsertWerkbonEvent({
@@ -710,10 +737,16 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, onClose, onSa
             <label>Eindtijd</label>
             <input type="time" value={form.eindtijd} onChange={e => set('eindtijd', e.target.value)} />
           </div>
-          <div className="f">
-            <label>Medewerkers <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(meerdere mogelijk)</span></label>
-            <MemberMultiSelect members={teamMembers} value={form.assigned_to_ids} onChange={ids => set('assigned_to_ids', ids)} />
-          </div>
+          <AssigneeResponsibleSelect
+            members={teamMembers}
+            assignedIds={form.assigned_to_ids}
+            verantwoordelijkeIds={form.verantwoordelijke_ids}
+            assignedLabel="Medewerkers"
+            fieldStyle={{ gridColumn: '1 / -1' }}
+            onChange={({ assignedIds, verantwoordelijkeIds }) => setForm(f => ({ ...f, assigned_to_ids: assignedIds, verantwoordelijke_ids: verantwoordelijkeIds }))}
+          >
+            <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />
+          </AssigneeResponsibleSelect>
           <div className="f">
             <label>Voertuig</label>
             <select value={form.voertuig_id} onChange={e => set('voertuig_id', e.target.value)}>
@@ -742,18 +775,23 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, onClose, onSa
 
 // ── WERKBON DETAIL MODAL ──────────────────────────────────────────────────────
 
-function DetailModal({ werkbon, teamMembers, voertuigen, onClose, onUpdated, openCustomer }) {
+function DetailModal({ werkbon, teamMembers, voertuigen, profile, onClose, onUpdated, openCustomer }) {
   const toast = useToast();
+  const prevIds = werkbon.assignedToIds || (werkbon.assignedTo ? [werkbon.assignedTo] : []);
   const [form, setForm] = useState({
     titel: werkbon.titel || '',
     gepland_op: werkbon.geplandOp || '',
     starttijd: werkbon.starttijd || '',
     eindtijd: werkbon.eindtijd || '',
-    assigned_to_ids: werkbon.assignedToIds || (werkbon.assignedTo ? [werkbon.assignedTo] : []),
+    assigned_to_ids: prevIds,
+    verantwoordelijke_ids: (werkbon.verantwoordelijkeIds && werkbon.verantwoordelijkeIds.length)
+      ? werkbon.verantwoordelijkeIds
+      : (prevIds[0] ? [prevIds[0]] : []),
     voertuig_id: werkbon.voertuigId || '',
     locatie: werkbon.locatie || '',
     status: werkbon.status || 'gepland',
   });
+  const [notifyMail, setNotifyMail] = useState(true);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -766,10 +804,19 @@ function DetailModal({ werkbon, teamMembers, voertuigen, onClose, onUpdated, ope
         starttijd: form.starttijd || null,
         eindtijd: form.eindtijd || null,
         assigned_to_ids: form.assigned_to_ids,
+        verantwoordelijke_ids: form.verantwoordelijke_ids,
         voertuig_id: form.voertuig_id || null,
         locatie: form.locatie || null,
         status: form.status,
       });
+      // Notificeer nieuw toegewezen medewerkers (in-app + optioneel e-mail).
+      notifyNewAssignees({
+        userIds: form.assigned_to_ids, prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail,
+        type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim() || werkbon.titel}`,
+        body: form.gepland_op ? `Datum: ${form.gepland_op}${form.starttijd ? ` om ${form.starttijd}` : ''}` : undefined,
+        link: 'planning', relatedType: 'werkbon', relatedId: werkbon.id,
+        creatorId: profile?.id, creatorName: profile?.fullName,
+      }).catch(() => {});
       // Sync agenda: ingepland → upsert event, uit-gepland → event verwijderen.
       if (form.gepland_op && form.starttijd) {
         upsertWerkbonEvent({
@@ -837,10 +884,16 @@ function DetailModal({ werkbon, teamMembers, voertuigen, onClose, onUpdated, ope
             <label>Eindtijd</label>
             <input type="time" value={form.eindtijd} onChange={e => set('eindtijd', e.target.value)} />
           </div>
-          <div className="f">
-            <label>Medewerkers <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(meerdere mogelijk)</span></label>
-            <MemberMultiSelect members={teamMembers} value={form.assigned_to_ids} onChange={ids => set('assigned_to_ids', ids)} />
-          </div>
+          <AssigneeResponsibleSelect
+            members={teamMembers}
+            assignedIds={form.assigned_to_ids}
+            verantwoordelijkeIds={form.verantwoordelijke_ids}
+            assignedLabel="Medewerkers"
+            fieldStyle={{ gridColumn: '1 / -1' }}
+            onChange={({ assignedIds, verantwoordelijkeIds }) => setForm(f => ({ ...f, assigned_to_ids: assignedIds, verantwoordelijke_ids: verantwoordelijkeIds }))}
+          >
+            <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />
+          </AssigneeResponsibleSelect>
           <div className="f">
             <label>Voertuig</label>
             <select value={form.voertuig_id} onChange={e => set('voertuig_id', e.target.value)}>
@@ -1210,7 +1263,7 @@ export function PlanningPage({ openCustomer } = {}) {
       {showPlanModal && (
         <PlanModal
           teamMembers={teamMembers} voertuigen={voertuigen}
-          customers={customers} projects={projects}
+          customers={customers} projects={projects} profile={profile}
           onClose={() => setShowPlanModal(false)}
           onSaved={wb => setWerkbonnen(prev => [wb, ...prev])}
         />
@@ -1264,6 +1317,7 @@ export function PlanningPage({ openCustomer } = {}) {
           date={quickDrop.date}
           hour={quickDrop.hour}
           teamMembers={teamMembers}
+          profile={profile}
           onClose={() => setQuickDrop(null)}
           onSaved={updated => {
             setWerkbonnen(prev => prev.map(w => w.id === updated.id ? updated : w));
@@ -1277,6 +1331,7 @@ export function PlanningPage({ openCustomer } = {}) {
           werkbon={detailWb}
           teamMembers={teamMembers}
           voertuigen={voertuigen}
+          profile={profile}
           onClose={() => setDetailWb(null)}
           onUpdated={updated => {
             setWerkbonnen(prev => prev.map(w => w.id === updated.id ? updated : w));
