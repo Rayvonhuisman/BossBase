@@ -436,7 +436,7 @@ export function Footer({ navigate }) {
         <div className="footer-grid">
           <div>
             <Wordmark onDark navigate={navigate} />
-            <p className="footer-tag">Jij de baas, wij de basis. Het complete systeem voor startende vakmensen in Nederland.</p>
+            <p className="footer-tag">Jij de baas, wij de basis. Het complete systeem voor vakmensen in Nederland.</p>
             <a href="mailto:hallo@bossbase.nl" className="footer-email">hallo@bossbase.nl</a>
           </div>
           {Object.entries(FOOTER_LINKS).map(([title, links]) => (

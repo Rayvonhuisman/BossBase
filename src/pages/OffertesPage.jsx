@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, MoreVertical, Send, CheckCircle2 } from 'lucide-react';
+import { Download, MoreVertical, Send, CheckCircle2, Copy } from 'lucide-react';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
@@ -7,6 +7,7 @@ import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import {
   getOffertes, createOfferte, updateOfferte, deleteOfferte, calculateOfferteTotals, createOfferteItem, getOfferteItems, deleteOfferteItemsByOfferteId,
+  copyOfferte, markOfferteVervangen, nextOfferteVersionNumber,
 } from '../services/offerteService.js';
 import { getBedrijfsinstellingen } from '../services/instellingenService.js';
 import { getEigenEenheden } from '../services/eigenEenheidService.js';
@@ -15,7 +16,7 @@ import { listCustomers } from '../services/customerService.js';
 import { listDeals } from '../services/dealService.js';
 import { NewFactuurModal, SendFactuurMailModal } from './FacturenPage.jsx';
 import { generateOffertePdf, previewOffertePdf, getOffertePdfBase64 } from '../utils/generatePdf.js';
-import { buildCompanySnapshot, companyForDocument, isOfferteLocked, isOfferteFullyLocked } from '../utils/documentSnapshot.js';
+import { buildCompanySnapshot, companyForDocument, isOfferteFullyLocked, isOfferteRevisable } from '../utils/documentSnapshot.js';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
 import { mailTemplate, mailButton } from '../utils/mailTemplate.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
@@ -310,9 +311,12 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
   const [instDefaults, setInstDefaults] = useState(null);
   const [eenheden, setEenheden] = useState([]);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  // Verstuurd/ondertekend = inhoud vast. Ondertekend/geaccepteerd = ook status vast.
-  const locked = isOfferteLocked(offerte);
+  // Concept = vrij bewerkbaar. Verstuurd + nog niet getekend = herzien via een
+  // NIEUWE VERSIE (revisable). Ondertekend/geaccepteerd = volledig vergrendeld.
+  const revisable = isOfferteRevisable(offerte);
   const fullyLocked = isOfferteFullyLocked(offerte);
+  const contentEditable = offerte.status === 'concept' || revisable;
+  const locked = !contentEditable;
 
   useEffect(() => {
     getEigenEenheden().then(setEenheden).catch(() => {});
@@ -350,25 +354,46 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
   const overlayStyle = isMobile ? { padding: 0, alignItems: 'flex-start' } : {};
   const COLS = '78px minmax(0,1fr) 68px 84px 110px 84px 28px';
 
+  const buildItems = async (offerteId) => {
+    for (let i = 0; i < regels.length; i++) {
+      const r = regels[i];
+      const omschrijving = r.omschrijving.trim() || omschrijvingFallback(r.type, eenheden);
+      await createOfferteItem({ offerte_id: offerteId, omschrijving, type: r.type, btw_pct: getEffBtw(r), aantal: Number(r.aantal || 1), prijs_per: Number(r.eenheidsprijs || 0), subtotaal: getRegelprijs(r), volgorde: i });
+    }
+  };
+
   const doSave = async () => {
-    // Verstuurde/ondertekende offerte: enkel status mag nog wijzigen, de inhoud
-    // (en regelitems) liggen vast. Geen wipe-and-recreate van items.
+    // Verstuurde, nog niet getekende offerte → herzien betekent: een NIEUWE
+    // VERSIE aanmaken (met de aangepaste regels) en de oude versie markeren als
+    // vervangen, zodat de oude ondertekenlink vervalt. De oude blijft bewaard.
+    if (revisable) {
+      const nummer = await nextOfferteVersionNumber(offerte.nummer);
+      const created = await createOfferte({
+        customer_id: form.customer_id, omschrijving: form.omschrijving,
+        geldig_tot: form.geldig_tot || null, notes: form.notes, status: 'concept',
+        marge_pct: 0, btw_pct: offerte.btwPct || 21,
+        totaal_excl: totaalExcl, totaal_incl: totaalIncl, nummer,
+      });
+      await buildItems(created.id);
+      await markOfferteVervangen(offerte.id, nummer);
+      onSaved?.(created);
+      return created;
+    }
+    // Vergrendeld (afgewezen/vervangen/ondertekend): enkel status mag nog
+    // wijzigen; de inhoud en regelitems liggen vast.
     if (locked) {
       const updated = await updateOfferte(offerte.id, fullyLocked ? {} : { status: form.status });
       onSaved?.(updated);
       return updated;
     }
+    // Concept: in-place bijwerken (wipe-and-recreate van de regelitems).
     const updated = await updateOfferte(offerte.id, {
       customer_id: form.customer_id, omschrijving: form.omschrijving,
       geldig_tot: form.geldig_tot || null,
       notes: form.notes, status: form.status, totaal_excl: totaalExcl, totaal_incl: totaalIncl,
     });
     await deleteOfferteItemsByOfferteId(offerte.id);
-    for (let i = 0; i < regels.length; i++) {
-      const r = regels[i];
-      const omschrijving = r.omschrijving.trim() || omschrijvingFallback(r.type, eenheden);
-      await createOfferteItem({ offerte_id: offerte.id, omschrijving, type: r.type, btw_pct: getEffBtw(r), aantal: Number(r.aantal || 1), prijs_per: Number(r.eenheidsprijs || 0), subtotaal: getRegelprijs(r), volgorde: i });
-    }
+    await buildItems(offerte.id);
     onSaved?.(updated);
     return updated;
   };
@@ -377,7 +402,7 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
     setSaving(true);
     try {
       await doSave();
-      toast.success('Offerte opgeslagen');
+      toast.success(revisable ? 'Nieuwe versie aangemaakt' : 'Offerte opgeslagen');
       onClose();
     } catch (err) { toast.error(err.message || 'Mislukt'); } finally { setSaving(false); }
   };
@@ -386,7 +411,7 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
     setSaving(true);
     try {
       const updated = await doSave();
-      toast.success('Offerte opgeslagen');
+      toast.success(revisable ? 'Nieuwe versie aangemaakt' : 'Offerte opgeslagen');
       onSaveAndSend?.(updated);
       onClose();
     } catch (err) { toast.error(err.message || 'Mislukt'); } finally { setSaving(false); }
@@ -406,6 +431,11 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
           <div style={{ padding: '32px', textAlign: 'center', color: 'var(--dl)' }}>Regelitems laden…</div>
         ) : (
           <div className="fg">
+            {revisable && (
+              <div className="f s2" style={{ background: 'var(--pll)', border: '1px solid var(--br)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--tx)' }}>
+                Deze offerte is al verstuurd. Bij opslaan maak je automatisch een <strong>nieuwe versie</strong> aan; de vorige versie blijft bewaard en de oude ondertekenlink vervalt.
+              </div>
+            )}
             <div className="f s2">
               <label>Klant</label>
               <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)} disabled={locked}>
@@ -489,7 +519,7 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
 
             <div className="f">
               <label>Status</label>
-              <select value={form.status} onChange={e => set('status', e.target.value)} disabled={fullyLocked}>
+              <select value={form.status} onChange={e => set('status', e.target.value)} disabled={fullyLocked || revisable}>
                 <option value="concept">Concept</option>
                 <option value="verzonden">Verzonden</option>
                 <option value="geaccepteerd">Geaccepteerd</option>
@@ -536,9 +566,83 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
   );
 }
 
+// ── KOPIEER OFFERTE MODAL ────────────────────────────────────────────────────
+
+function CopyOfferteModal({ offerte, customers, onClose, onCopied }) {
+  const toast = useToast();
+  const [mode, setMode] = useState('same'); // 'same' = nieuwe versie · 'other' = nieuwe offerte
+  const [customerId, setCustomerId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const sourceCustomerName = offerte.customerName || customers.find(c => c.id == offerte.customerId)?.name || 'deze klant';
+  const radioRow = { display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 14, cursor: 'pointer', lineHeight: 1.4 };
+
+  const submit = async () => {
+    if (mode === 'other' && !customerId) { toast.error('Kies een klant'); return; }
+    setBusy(true);
+    try {
+      const asVersion = mode === 'same';
+      const created = await copyOfferte(offerte.id, {
+        customerId: asVersion ? offerte.customerId : customerId,
+        asVersion,
+      });
+      toast.success(asVersion ? `Nieuwe versie ${created.nummer} aangemaakt` : `Offerte ${created.nummer} aangemaakt`);
+      onCopied?.(created);
+    } catch (err) {
+      toast.error(err.message || 'Kopiëren mislukt');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && !busy && onClose()}>
+      <div className="modal">
+        <div className="modal-hd">
+          <div>
+            <div className="modal-title">Offerte kopiëren</div>
+            <div className="modal-sub">{offerte.nummer}</div>
+          </div>
+          <ModalX onClose={onClose} />
+        </div>
+        <div className="fg">
+          <div className="f s2">
+            <label>Voor welke klant?</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <label style={radioRow}>
+                <input type="radio" name="copymode" checked={mode === 'same'} onChange={() => setMode('same')} style={{ marginTop: 3 }} />
+                <span>Zelfde klant — nieuwe <strong>versie</strong> van deze offerte ({sourceCustomerName})</span>
+              </label>
+              <label style={radioRow}>
+                <input type="radio" name="copymode" checked={mode === 'other'} onChange={() => setMode('other')} style={{ marginTop: 3 }} />
+                <span>Andere klant — <strong>nieuwe offerte</strong> met een nieuw offertenummer</span>
+              </label>
+            </div>
+          </div>
+          {mode === 'other' && (
+            <div className="f s2">
+              <label>Klant</label>
+              <select value={customerId} onChange={e => setCustomerId(e.target.value)}>
+                <option value="">— Selecteer klant —</option>
+                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
+          <div className="f s2" style={{ fontSize: 13, color: 'var(--dl)' }}>
+            De kopie is een bewerkbare conceptofferte met dezelfde regels. Je kunt deze daarna aanpassen en versturen.
+          </div>
+        </div>
+        <div className="fa">
+          <button className="btn btn-ghost" onClick={onClose} disabled={busy}>Annuleren</button>
+          <button className="btn btn-p" onClick={submit} disabled={busy} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Copy size={14} />{busy ? 'Kopiëren…' : 'Kopiëren'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── VIEW OFFERTE MODAL ───────────────────────────────────────────────────────
 
-function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMail, openCustomer }) {
+function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMail, onCopy, openCustomer }) {
   const { company } = useProfile();
   const toast = useToast();
   const customerName = offerte.customerName || customers.find(c => c.id == offerte.customerId)?.name || '—';
@@ -670,6 +774,11 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
                 <Download size={15} />{pdfLoading ? 'Genereren...' : 'Download PDF'}
               </button>
             </>
+          )}
+          {onCopy && (
+            <button className="btn btn-ghost" onClick={() => { onClose(); onCopy(offerte); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Copy size={14} /> Kopiëren
+            </button>
           )}
           <button className="btn btn-ghost" onClick={onClose}>Sluiten</button>
           {offerte.status === 'geaccepteerd' && onMaakFactuur && (
@@ -817,6 +926,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
   const [factuurPrefill, setFactuurPrefill] = useState(null);
   const [sendMailOfferte, setSendMailOfferte] = useState(null);
   const [sendMailFactuur, setSendMailFactuur] = useState(null);
+  const [copySource, setCopySource] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -898,6 +1008,23 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
       const idx = prev.findIndex(x => x.id === saved.id);
       if (idx >= 0) { const next = [...prev]; next[idx] = saved; return next; }
       return [saved, ...prev];
+    });
+  };
+
+  // Resultaat van bewerken/kopiëren in de lijst verwerken. Als er een nieuwe
+  // versie is ontstaan (saved.id ≠ bron), wordt de oude versie lokaal als
+  // vervangen gemarkeerd — zonder volledige reload.
+  const applyEdited = (saved, source) => {
+    setOffertes(prev => {
+      let next = [...prev];
+      if (source && saved.id !== source.id) {
+        next = next.map(x => x.id === source.id
+          ? { ...x, vervangenOp: new Date().toISOString(), vervangenDoorNummer: saved.nummer }
+          : x);
+      }
+      const idx = next.findIndex(x => x.id === saved.id);
+      if (idx >= 0) next[idx] = saved; else next.unshift(saved);
+      return next;
     });
   };
 
@@ -1029,6 +1156,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
                           <button className="btn btn-xs btn-ghost btn-icon" title="Bekijken" onClick={() => setViewOfferte(o)}><MoreVertical size={14} /></button>
                           {canManageOffertes && <button className="btn btn-xs btn-ghost btn-icon" title="Verstuur per mail" onClick={() => setSendMailOfferte(o)}><Send size={13} /></button>}
                           {canManageOffertes && <button className="btn btn-xs btn-ghost btn-icon" title="Bewerken" onClick={() => setEditOfferte(o)}>{I.edit}</button>}
+                          {canManageOffertes && <button className="btn btn-xs btn-ghost btn-icon" title="Kopiëren" onClick={() => setCopySource(o)}><Copy size={13} /></button>}
                           {canManageOffertes && <button className="btn btn-xs btn-danger btn-icon" title="Verwijderen" onClick={() => handleDelete(o)}>{I.trash}</button>}
                         </div>
                       </td>
@@ -1056,8 +1184,8 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
           offerte={editOfferte}
           customers={customers}
           onClose={() => setEditOfferte(null)}
-          onSaved={saved => { handleSaved(saved); setEditOfferte(null); }}
-          onSaveAndSend={saved => { handleSaved(saved); setEditOfferte(null); setSendMailOfferte(saved); }}
+          onSaved={saved => { applyEdited(saved, editOfferte); setEditOfferte(null); }}
+          onSaveAndSend={saved => { applyEdited(saved, editOfferte); setEditOfferte(null); setSendMailOfferte(saved); }}
         />
       )}
       {viewOfferte && (
@@ -1067,7 +1195,16 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
           onClose={() => setViewOfferte(null)}
           onMaakFactuur={handleMaakFactuur}
           onSendMail={o => setSendMailOfferte(o)}
+          onCopy={o => setCopySource(o)}
           openCustomer={openCustomer}
+        />
+      )}
+      {copySource && (
+        <CopyOfferteModal
+          offerte={copySource}
+          customers={customers}
+          onClose={() => setCopySource(null)}
+          onCopied={created => { setCopySource(null); applyEdited(created, null); setEditOfferte(created); }}
         />
       )}
       {factuurPrefill && (

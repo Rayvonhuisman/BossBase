@@ -8,6 +8,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { I, ModalX, NotifyMailToggle } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { usePermissions } from '../hooks/usePermissions.js';
 import { getWerkbonnen, createWerkbon, updateWerkbon } from '../services/werkbonService.js';
 import { getVoertuigen } from '../services/voertuigService.js';
 import { getActiveTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
@@ -939,6 +940,7 @@ function Legend({ items }) {
 export function PlanningPage({ openCustomer } = {}) {
   const toast = useToast();
   const { profile } = useProfile();
+  const { can } = usePermissions();
 
   const timelineScrollRef = useRef(null);
   const [weekStart,      setWeekStart]      = useState(() => getMonday());
@@ -1090,14 +1092,14 @@ export function PlanningPage({ openCustomer } = {}) {
     if (!loading && timelineScrollRef.current) timelineScrollRef.current.scrollTop = 0;
   }, [loading]);
 
-  // ── ADMIN GUARD ─────────────────────────────────────────────────────────────
+  // ── TOEGANG: planning-recht (admin/planner-rol óf granted 'planning') ────────
 
-  if (!profile || profile.role !== 'admin') {
+  if (!profile || !can('planning')) {
     return (
       <div style={{ padding: 48, textAlign: 'center', color: 'var(--dl)' }}>
         <div style={{ marginBottom: 12, color: 'var(--dl)' }}><Lock size={36} strokeWidth={1.75} /></div>
         <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--dk)', marginBottom: 6 }}>Geen toegang</div>
-        <div>De Planning pagina is alleen voor admins.</div>
+        <div>De Planning-pagina vereist het planning-recht.</div>
       </div>
     );
   }

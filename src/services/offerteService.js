@@ -35,6 +35,9 @@ const toOfferte = row => ({
   signedPdfUrl: row.signed_pdf_url || null,
   signatureUrl: row.signature_url || null,
   sentToEmail: row.sent_to_email || null,
+  // Versiebeheer: gezet zodra deze offerte door een nieuwere versie is vervangen.
+  vervangenOp: row.vervangen_op || null,
+  vervangenDoorNummer: row.vervangen_door_nummer || null,
   // Bevroren bedrijfs-branding op moment van versturen (zie documentSnapshot.js)
   snapshotLogoUrl: row.snapshot_logo_url || null,
   snapshotBrandingColor: row.snapshot_branding_color || null,
@@ -101,6 +104,97 @@ export async function generateOfferteNumber() {
   }
   const next = (count || 0) + 1
   return `BB-${String(next).padStart(3, "0")}`
+}
+
+/**
+ * Volgend versienummer voor een offerte. Het basisnummer is het nummer zonder
+ * eventuele "-vN"-suffix; de nieuwe versie is de hoogste bestaande versie + 1.
+ * Voorbeeld: BB-005 → BB-005-v2 → BB-005-v3 (het origineel telt als v1).
+ */
+export async function nextOfferteVersionNumber(nummer) {
+  const base = String(nummer || "").replace(/-v\d+$/i, "") || "BB"
+  const { data, error } = await supabase
+    .from("offertes")
+    .select("nummer")
+    .ilike("nummer", `${base}%`)
+  if (error) throw error
+  const esc = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const re = new RegExp(`^${esc}(?:-v(\\d+))?$`, "i")
+  let max = 1
+  for (const r of data || []) {
+    const m = re.exec(r.nummer || "")
+    if (!m) continue
+    const v = m[1] ? parseInt(m[1], 10) : 1
+    if (v > max) max = v
+  }
+  return `${base}-v${max + 1}`
+}
+
+/**
+ * Kopieert een offerte (incl. regelitems) naar een nieuwe, bewerkbare
+ * concept-offerte.
+ *  - asVersion=true  → nieuw versienummer van dezelfde offerte (BB-005-v2).
+ *  - asVersion=false → nieuw regulier offertenummer (andere klant).
+ * Verstuur-/onderteken-/snapshotgegevens worden NIET meegekopieerd.
+ */
+export async function copyOfferte(sourceId, { customerId, asVersion } = {}) {
+  const src = await getOfferteById(sourceId)
+  const items = await getOfferteItems(sourceId)
+  const nummer = asVersion ? await nextOfferteVersionNumber(src.nummer) : await generateOfferteNumber()
+  const created = await createOfferte({
+    customer_id: customerId || src.customerId,
+    deal_id: asVersion ? src.dealId || null : null,
+    nummer,
+    omschrijving: src.omschrijving,
+    status: "concept",
+    arbeidsuren: src.arbeidsuren,
+    uurtarief: src.uurtarief,
+    materiaalkosten: src.materiaalkosten,
+    reiskosten: src.reiskosten,
+    marge_pct: src.margePct,
+    btw_pct: src.btwPct,
+    totaal_excl: src.totaalExcl,
+    totaal_incl: src.totaalIncl,
+    geldig_tot: src.geldigTot,
+    notes: src.notes,
+  })
+  for (const it of items) {
+    await createOfferteItem({
+      offerte_id: created.id,
+      omschrijving: it.omschrijving,
+      eenheid: it.eenheid || null,
+      type: it.type,
+      btw_pct: it.btwPct,
+      aantal: it.aantal,
+      prijs_per: it.prijsPer,
+      subtotaal: it.subtotaal,
+      volgorde: it.volgorde,
+    })
+  }
+  return created
+}
+
+/**
+ * Markeert een offerte als vervangen door een nieuwere versie. Het sign_token
+ * blijft bestaan zodat de oude ondertekenlink een nette "niet meer geldig"-
+ * melding kan tonen (i.p.v. "niet gevonden"). vervangen_op is geen inhoudelijk
+ * veld, dus dit mag ook op een verstuurde offerte.
+ */
+export async function markOfferteVervangen(id, vervangenDoorNummer) {
+  const { data, error } = await supabase
+    .from("offertes")
+    .update({ vervangen_op: new Date().toISOString(), vervangen_door_nummer: vervangenDoorNummer || null })
+    .eq("id", id)
+    .select("*, customers(name)")
+    .single()
+  if (error) throw error
+  const offerte = toOfferte(data)
+  if (offerte.customerId) {
+    logTijdlijnSafe(offerte.customerId, "offerte_verzonden",
+      `Offerte ${offerte.nummer} vervangen door nieuwe versie ${vervangenDoorNummer || ""}`.trim(),
+      { nummer: offerte.nummer, vervangenDoor: vervangenDoorNummer })
+  }
+  return offerte
 }
 
 // ── OFFERTES ────────────────────────────────────────────────────────────────

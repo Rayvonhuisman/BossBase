@@ -3,7 +3,7 @@ import { Nav, Footer, Reveal, I, ScrollLine, initChoreo } from "./MktShared"
 
 const BRANCHES = [
   "Loodgieter", "Schilder", "Elektricien", "Aannemer", "Installateur",
-  "Transporteur", "Tuinman", "Schoonmaakbedrijf", "Anders",
+  "Tuinman", "Schoonmaakbedrijf", "Anders",
 ]
 const ONDERWERPEN = [
   "Algemene vraag", "Demo aanvragen", "Technisch probleem", "Factuur / abonnement", "Partnership", "Anders",

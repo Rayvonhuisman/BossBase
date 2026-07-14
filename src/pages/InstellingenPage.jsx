@@ -145,6 +145,7 @@ export function InstellingenPage() {
     reiskosten_per_km: 0.23,
     btw_pct: 21,
     offerte_geldig_dagen: 14,
+    uren_herinnering_interval_min: 60,
   });
   const [savingStandaard, setSavingStandaard] = useState(false);
 
@@ -243,6 +244,7 @@ export function InstellingenPage() {
             reiskosten_per_km: instellingen.reiskostenPerKm ?? 0.23,
             btw_pct: instellingen.btwPct ?? 21,
             offerte_geldig_dagen: instellingen.offerteGeldigDagen ?? 14,
+            uren_herinnering_interval_min: instellingen.urenHerinneringIntervalMin ?? 60,
           });
         }
         setTemplates(emailTemplates);
@@ -1270,6 +1272,38 @@ export function InstellingenPage() {
                 value={standaardForm.offerte_geldig_dagen}
                 onChange={e => setStandaard('offerte_geldig_dagen', e.target.value)}
               />
+            </div>
+          </div>
+          <div className="fa">
+            <button className="btn btn-p" onClick={saveStandaard} disabled={savingStandaard}>
+              {savingStandaard ? 'Opslaan...' : 'Opslaan'}
+            </button>
+          </div>
+        </div>
+
+        {/* ── Herinneringen ── */}
+        <div className="card card-p afu3" style={{ marginTop: 16 }}>
+          <div className="card-hd" style={{ marginBottom: 18 }}>
+            <div className="card-title">Herinneringen</div>
+            <div className="card-sub">Herinner medewerkers eraan hun uren in te vullen voor verstreken geplande dagen</div>
+          </div>
+          <div className="fg">
+            <div className="f">
+              <label>Uren-herinnering</label>
+              <select
+                value={standaardForm.uren_herinnering_interval_min}
+                onChange={e => setStandaard('uren_herinnering_interval_min', e.target.value)}
+              >
+                <option value={0}>Uit</option>
+                <option value={15}>Elke 15 minuten</option>
+                <option value={30}>Elke 30 minuten</option>
+                <option value={60}>Elk uur</option>
+                <option value={120}>Elke 2 uur</option>
+                <option value={240}>Elke 4 uur</option>
+              </select>
+              <div className="card-sub" style={{ marginTop: 6 }}>
+                De pop-up verschijnt alleen bij medewerkers met een verstreken geplande dag zonder geboekte uren, en keert op dit interval terug tot de uren zijn ingevuld.
+              </div>
             </div>
           </div>
           <div className="fa">

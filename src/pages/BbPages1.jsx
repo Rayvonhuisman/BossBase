@@ -442,8 +442,8 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
         </div>
       </div>
 
-      {/* Quick stats — alleen zichtbaar met financieel recht */}
-      {can('financieel') && (
+      {/* Quick stats (projectbedragen) — geoffreerd/betaald/kosten/winst per klant */}
+      {can('projectbedragen') && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
           {[
             { label: 'Totaal geoffreerd', val: fmt(totalGeoffreerd) },

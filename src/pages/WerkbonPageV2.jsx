@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { I, ModalX, NotifyMailToggle } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { usePermissions } from '../hooks/usePermissions.js';
 import { useUploads } from '../lib/uploadContext.jsx';
 import { NoteEditor, renderNote } from '../components/NoteEditor.jsx';
 import { AssigneeResponsibleSelect } from '../components/AssigneeResponsibleSelect.jsx';
@@ -12,7 +13,7 @@ import {
   getWerkbonMaterialen, createWerkbonMateriaal, deleteWerkbonMateriaal,
   getWerkbonFotos, uploadWerkbonFoto, deleteWerkbonFoto,
   getWerkbonMeerwerk, createWerkbonMeerwerk, deleteWerkbonMeerwerk,
-  updateWerkbonNotities, getAllWerkbonTakenCounts,
+  updateWerkbonNotities, getAllWerkbonTakenCounts, plannedStartIso,
 } from '../services/werkbonService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
@@ -272,18 +273,27 @@ function WerkbonListCard({ w, takenCount, onClick }) {
 function HoursQuickAdd({ werkbon, customers, onSaved }) {
   const toast = useToast();
   const { profile } = useProfile();
-  const [type, setType] = useState('arbeid');
+  const canBookForOthers = ['admin', 'planner'].includes(profile?.role);
   const [datum, setDatum] = useState(TODAY());
   const [start, setStart] = useState('');
   const [eind, setEind] = useState('');
   const [saving, setSaving] = useState(false);
+  // Admin-vangnet: uren namens een collega boeken. Alleen zichtbaar voor admin;
+  // de RLS op urenregistratie dwingt af dat enkel admin/planner dit mag.
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [bookForId, setBookForId] = useState(profile?.id || '');
+
+  useEffect(() => {
+    if (!canBookForOthers) return;
+    getTeamMembers().then(ms => setTeamMembers(ms.filter(m => m.profileId))).catch(() => {});
+  }, [canBookForOthers]);
 
   useEffect(() => {
     setStart('');
     setEind('');
-    setType('arbeid');
     setDatum(TODAY());
-  }, [werkbon?.id]);
+    setBookForId(profile?.id || '');
+  }, [werkbon?.id, profile?.id]);
 
   const computed = calculateHours(start, eind);
 
@@ -294,13 +304,12 @@ function HoursQuickAdd({ werkbon, customers, onSaved }) {
     setSaving(true);
     try {
       await createUrenregel({
-        profile_id: profile.id,
+        profile_id: canBookForOthers ? (bookForId || profile.id) : profile.id,
         werkbon_id: werkbon.id,
         customer_id: werkbon.customerId || null,
         datum,
         start_tijd: start,
         eind_tijd: eind,
-        type,
       });
       toast.success('Uren opgeslagen');
       setStart(''); setEind('');
@@ -323,19 +332,27 @@ function HoursQuickAdd({ werkbon, customers, onSaved }) {
         <span className="wb2-hours-tag">Snel boeken</span>
       </div>
 
-      <div className="wb2-hours-grid">
-        <div className="wb2-hours-field">
-          <div className="wb2-hours-field-lbl">Type</div>
-          <button
-            type="button"
-            className="wb2-hours-pick"
-            onClick={() => setType(t => t === 'arbeid' ? 'reiskosten' : 'arbeid')}
+      {canBookForOthers && (
+        <div className="wb2-hours-field" style={{ marginBottom: 10 }}>
+          <div className="wb2-hours-field-lbl">Medewerker</div>
+          <select
+            className="wb2-hours-input"
+            value={bookForId}
+            onChange={e => setBookForId(e.target.value)}
           >
-            <span className="wb2-hours-pick-dot" />
-            {type === 'arbeid' ? 'Arbeid' : 'Reiskosten'}
-            <span style={{ marginLeft: 'auto', opacity: .6 }}>{I.chev_d}</span>
-          </button>
+            {profile?.id && !teamMembers.some(m => m.profileId === profile.id) && (
+              <option value={profile.id}>{profile.fullName || 'Ikzelf'}</option>
+            )}
+            {teamMembers.map(m => (
+              <option key={m.profileId} value={m.profileId}>
+                {m.fullName || m.email || 'Medewerker'}{m.profileId === profile?.id ? ' (ikzelf)' : ''}
+              </option>
+            ))}
+          </select>
         </div>
+      )}
+
+      <div className="wb2-hours-grid">
         <div className="wb2-hours-field">
           <div className="wb2-hours-field-lbl">Start</div>
           <input
@@ -762,8 +779,11 @@ function NotitiesSection({ notities, onSave, teamMembers = [], canEdit = true })
 export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCustomer, backKlant, onBackKlant } = {}) {
   const toast = useToast();
   const { profile } = useProfile();
+  const { can } = usePermissions();
   const { startUpload } = useUploads();
-  const canManage = !profile || ['admin', 'planner'].includes(profile.role);
+  // Beheer/alle werkbonnen bewerken: admin/planner-rol óf het 'werkbonnen_bewerken'-
+  // recht. (Een verantwoordelijke mag z'n eigen bon sowieso al — zie canEditDetail.)
+  const canManage = !profile || ['admin', 'planner'].includes(profile.role) || can('werkbonnen_bewerken');
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
@@ -783,6 +803,12 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
   const [meerwerk, setMeerwerk] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [showHoursAdd, setShowHoursAdd] = useState(false);
+  // Afrond-flow: vraagt om een startmoment als de werkbon er geen heeft (geen
+  // werkelijke start én geen geplande start om op terug te vallen).
+  const [startPrompt, setStartPrompt] = useState(false);
+  const [promptDatum, setPromptDatum] = useState(TODAY());
+  const [promptTijd, setPromptTijd] = useState('');
+  const [completing, setCompleting] = useState(false);
   const [teamMembers, setTeamMembers] = useState([]);
 
   const [statusFilter, setStatusFilter] = useState('all');
@@ -961,34 +987,61 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
     }
   };
 
-  const handleComplete = async () => {
-    if (!detail || detail.status === 'afgerond') return;
-    if (!confirm('Weet je zeker dat je de klus wil afronden?')) return;
+  // Voert het daadwerkelijke afronden uit. Geef optioneel een handmatig
+  // startmoment (ISO) mee — dat wordt dan als gestart_op vastgelegd.
+  const finishComplete = async (gestartIso) => {
+    if (!detail) return;
+    setCompleting(true);
     try {
       const updated = await updateWerkbon(detail.id, {
         status: 'afgerond',
         afgerond_op: new Date().toISOString(),
+        ...(gestartIso ? { gestart_op: gestartIso } : {}),
       });
       setDetail(updated);
       setWerkbonnen(prev => prev.map(w => w.id === updated.id ? updated : w));
       toast.success('Klus afgerond!');
+      setStartPrompt(false);
     } catch (e) {
       toast.error(e.message || 'Afronden mislukt');
+    } finally {
+      setCompleting(false);
     }
+  };
+
+  // Startpunt van het afronden. Is er geen enkel startmoment bekend (geen
+  // werkelijke start én geen geplande start), dan eerst het startmoment opvragen;
+  // anders gewoon bevestigen en afronden.
+  const requestComplete = () => {
+    if (!detail || detail.status === 'afgerond') return;
+    if (!detail.effectiveStartOp) {
+      setPromptDatum(detail.geplandOp || TODAY());
+      setPromptTijd(detail.starttijd || '');
+      setStartPrompt(true);
+      return;
+    }
+    if (!confirm('Weet je zeker dat je de klus wil afronden?')) return;
+    finishComplete(null);
+  };
+
+  // Bevestigen vanuit de "Wanneer is de klus gestart?"-modal.
+  const submitStartPrompt = () => {
+    const iso = plannedStartIso(promptDatum, promptTijd);
+    if (!iso) { toast.error('Vul een geldige startdatum en -tijd in'); return; }
+    finishComplete(iso);
   };
 
   const handleCycleStatus = async () => {
     if (!detail || !canEditDetail || detail.status === 'afgerond') return;
-    const next = detail.status === 'gepland' ? 'in_uitvoering' : 'afgerond';
-    if (next === 'afgerond' && !confirm('Weet je zeker dat je de klus wil afronden?')) return;
+    // in_uitvoering → afronden verloopt via dezelfde start-check als de afrondknop.
+    if (detail.status !== 'gepland') { requestComplete(); return; }
+    // Start klus → in_uitvoering. updateWerkbon legt gestart_op = now() de eerste
+    // keer vast (en overschrijft een bestaand werkelijk startmoment niet).
     try {
-      const updated = await updateWerkbon(detail.id, {
-        status: next,
-        ...(next === 'afgerond' ? { afgerond_op: new Date().toISOString() } : {}),
-      });
+      const updated = await updateWerkbon(detail.id, { status: 'in_uitvoering' });
       setDetail(updated);
       setWerkbonnen(prev => prev.map(w => w.id === updated.id ? updated : w));
-      toast.success(next === 'afgerond' ? 'Klus afgerond!' : 'Status: In uitvoering');
+      toast.success('Status: In uitvoering');
     } catch (e) {
       toast.error(e.message || 'Status bijwerken mislukt');
     }
@@ -1087,7 +1140,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
   // ── DETAIL VIEW ─────────────────────────────────────────────────────────
 
   if (view === 'detail' && selectedId) {
-    const totalArbeid = uren.filter(u => u.type === 'arbeid').reduce((s, u) => s + u.uren, 0);
+    const totalUren = uren.reduce((s, u) => s + u.uren, 0);
     // Bewerk-recht op dit detail (beheer óf verantwoordelijke van deze werkbon).
     const canEdit = canEditDetail;
     // Gekoppelde, maar niet-verantwoordelijke medewerker → alleen inzage.
@@ -1224,7 +1277,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
             <div className="wb2-card">
               <div className="wb2-card-hd">
                 <div className="wb2-card-hd-title">
-                  Uren{totalArbeid > 0 ? ` · ${totalArbeid.toFixed(1).replace('.', ',')}u` : ''}
+                  Uren{totalUren > 0 ? ` · ${totalUren.toFixed(1).replace('.', ',')}u` : ''}
                 </div>
                 <div className="wb2-card-hd-spacer" />
                 <button className="wb2-card-action" type="button" onClick={() => setShowHoursAdd(v => !v)}>
@@ -1241,11 +1294,11 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
               )}
               {uren.map(u => (
                 <div key={u.id} className="wb2-uren-item" style={{ padding: '10px 16px' }}>
-                  <div className={`wb2-uren-ic${u.type === 'reiskosten' ? ' travel' : ''}`}>
-                    {u.type === 'reiskosten' ? I.map : I.clock}
+                  <div className="wb2-uren-ic">
+                    {I.clock}
                   </div>
                   <div className="wb2-uren-main">
-                    <div className="wb2-uren-title">{u.type === 'reiskosten' ? 'Reiskosten' : 'Arbeid'} · {shortDate(u.datum)}</div>
+                    <div className="wb2-uren-title">{shortDate(u.datum)}</div>
                     <div className="wb2-uren-sub">{u.notitie || u.medewerkerNaam || '—'}</div>
                   </div>
                   <div className="wb2-uren-time">
@@ -1271,7 +1324,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
 
             {/* Afronden */}
             {detail.status !== 'afgerond' && canEdit && (
-              <button className="wb2-complete-btn" onClick={handleComplete} type="button">
+              <button className="wb2-complete-btn" onClick={requestComplete} type="button">
                 {I.check} Klus afronden
               </button>
             )}
@@ -1294,6 +1347,35 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
           <WerkbonModal mode="edit" werkbon={editWerkbon} customers={customers} projects={projects}
             onClose={() => setEditWerkbon(null)}
             onSaved={saved => { onWerkbonSaved(saved); setDetail(saved); setEditWerkbon(null); }} />
+        )}
+        {startPrompt && (
+          <div className="overlay" onClick={e => e.target === e.currentTarget && !completing && setStartPrompt(false)}>
+            <div className="modal" style={{ maxWidth: 420 }}>
+              <div className="modal-hd">
+                <div>
+                  <div className="modal-title">Wanneer is de klus gestart?</div>
+                  <div className="modal-sub">Deze werkbon heeft geen startmoment en geen geplande start. Vul het startmoment in om te kunnen afronden.</div>
+                </div>
+                <ModalX onClose={() => !completing && setStartPrompt(false)} />
+              </div>
+              <div className="wb2-modal-fg">
+                <div className="f">
+                  <label>Startdatum</label>
+                  <input type="date" value={promptDatum} max={TODAY()} onChange={e => setPromptDatum(e.target.value)} autoFocus />
+                </div>
+                <div className="f">
+                  <label>Starttijd</label>
+                  <input type="time" value={promptTijd} onChange={e => setPromptTijd(e.target.value)} />
+                </div>
+              </div>
+              <div className="fa">
+                <button className="btn btn-ghost" onClick={() => setStartPrompt(false)} disabled={completing}>Annuleren</button>
+                <button className="btn btn-p" onClick={submitStartPrompt} disabled={completing || !promptDatum || !promptTijd}>
+                  {completing ? 'Afronden…' : 'Opslaan & afronden'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     );

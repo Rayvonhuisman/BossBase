@@ -25,8 +25,6 @@ const PLAN_CARDS = [
       "Tot 5 gebruikers",
       "Alles van Starter",
       "Omzetrapportages",
-      "SMS-herinneringen",
-      "Google Calendar sync",
       "Prioriteitsondersteuning",
       "Teamrollen & rechten",
     ],
@@ -80,8 +78,7 @@ const CMP_CATS = [
     cat: "Agenda & Planning",
     rows: [
       { label: "Agenda",            starter: true,         groei: true,          team: true },
-      { label: "SMS-herinneringen", starter: false,        groei: true,          team: true },
-      { label: "Google Calendar",   starter: false,        groei: true,          team: true },
+      { label: "E-mailherinneringen", starter: true,       groei: true,          team: true },
       { label: "Terugkerende afspraken", starter: true,    groei: true,          team: true },
     ],
   },

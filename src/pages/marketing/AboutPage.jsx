@@ -1,30 +1,23 @@
 import { useEffect } from "react"
 import { Nav, Footer, Reveal, I, ScrollLine, initChoreo } from "./MktShared"
 
-const STATS = [
-  { num: "2.400+", lbl: "Actieve gebruikers" },
-  { num: "€ 2,1M+", lbl: "Aan offertes verstuurd" },
-  { num: "98%", lbl: "Klanttevredenheid" },
-  { num: "2022", lbl: "Opgericht in" },
-]
-
 const WAARDEN = [
   { icon: I.heart,   title: "Eerlijkheid boven alles",         desc: "Geen verborgen kosten, geen misleidende beloften. We zeggen wat we doen en doen wat we zeggen." },
   { icon: I.bolt,    title: "Eenvoud als ontwerpregel",         desc: "Elke functie die we bouwen moet simpeler zijn dan de status quo. Als het ingewikkeld aanvoelt, is het niet klaar." },
-  { icon: I.shield,  title: "Jouw data is van jou",             desc: "We verkopen nooit data aan derden. Servers staan in Nederland. AVG-compliant by design." },
-  { icon: I.rocket,  title: "Bouwen voor de lange termijn",     desc: "We nemen geen risicokapitaal aan dat ons dwingt tot groeimanie. Winstgevendheid en klantgeluk gaan hand in hand." },
+  { icon: I.shield,  title: "Zorgvuldig met je data",           desc: "We gaan zorgvuldig en vertrouwelijk om met jouw gegevens." },
+  { icon: I.rocket,  title: "Bouwen voor de lange termijn",     desc: "We bouwen BossBase rustig en gestaag verder, op basis van wat onze klanten écht nodig hebben." },
 ]
 
 const OPRICHTERS = [
   {
-    naam: "Niels Grevink", rol: "CEO & Mede-oprichter",
-    bio: "Niels groeide op als zoon van een schilder en zag als kind hoe zijn vader worstelde met administratie. Na een carrière in software bouwde hij BossBase om dat probleem op te lossen.",
+    naam: "Niels Grevink", rol: "Mede-oprichter",
+    bio: "Niels werkte veel samen met (startende) vakmensen en zag telkens hetzelfde: veel te veel tijd kwijt aan overbodige administratie. Met BossBase brengt hij alles wat je nodig hebt samen op één plek.",
     initials: "NG",
   },
   {
-    naam: "Tim van der Berg", rol: "CTO & Mede-oprichter",
-    bio: "Tim bouwde eerder software voor de logistieke sector en snapt als geen ander hoe je complexe processen eenvoudig maakt. Hij schrijft de code die BossBase snel en betrouwbaar houdt.",
-    initials: "TB",
+    naam: "Rayvon Huisman", rol: "Mede-oprichter",
+    bio: "Rayvon gelooft dat goede software onzichtbaar hoort te zijn: je regelt je zaken en gaat weer aan het werk. Hij houdt BossBase simpel, duidelijk en betrouwbaar.",
+    initials: "RH",
   },
 ]
 
@@ -65,9 +58,9 @@ export default function AboutPage({ navigate }) {
             </div></Reveal>
             <Reveal>
               <div className="verhaal-body">
-                <p>Het begon met een belletje. Niels' vader — schilder van beroep — belde op een avond met de vraag: "Kun jij een spreadsheet voor me maken? Ik raak al mijn offertes kwijt." Drie weken later waren er acht. Allemaal vaklieden, allemaal met hetzelfde probleem: te veel losse tools, te weinig overzicht.</p>
-                <p>In 2022 richtten Niels en Tim BossBase op met één doel: de administratie van ZZP'ers en kleine bedrijven zo eenvoudig maken dat je er nooit meer wakker van ligt.</p>
-                <p>Vandaag gebruiken meer dan 2.400 vakmensen BossBase dagelijks. Van loodgieters in Rotterdam tot aannemers in Groningen. We groeien op basis van mond-tot-mondreclame, omdat onze klanten ons product écht aanbevelen.</p>
+                <p>We werkten veel samen met (startende) vakmensen en zagen telkens hetzelfde: bedrijven waren enorm veel tijd kwijt aan taken die eigenlijk overbodig zijn. Dat moet makkelijker kunnen.</p>
+                <p>Het probleem zit in de bestaande systemen. Die zijn gebouwd voor grote bedrijven en niet gericht op vakmanschap — log, ingewikkeld en vol met functies die je nooit gebruikt.</p>
+                <p>Daarom richtten wij BossBase op: alle functies die je écht nodig hebt, in een simpel en duidelijk jasje. Zodat je meer tijd overhoudt voor het werk waar je goed in bent.</p>
               </div>
             </Reveal>
           </div>
@@ -88,15 +81,9 @@ export default function AboutPage({ navigate }) {
                     <div className="founder-name">{o.naam}</div>
                     <div className="founder-role">{o.rol}</div>
                     <p className="founder-bio">{o.bio}</p>
-                    <a href="https://linkedin.com" className="founder-li" target="_blank" rel="noopener noreferrer">
-                      {I.linkedIn} LinkedIn
-                    </a>
                   </div>
                 ))}
               </div>
-              <p className="founder-tagline">
-                En verder een klein team van <span>developers, designers en support-helden</span> verspreid over Nederland.
-              </p>
             </Reveal>
           </div>
         </div>
@@ -120,26 +107,6 @@ export default function AboutPage({ navigate }) {
           </div>
         </div>
 
-        {/* Statistieken */}
-        <div className="section" style={{ background: "var(--bgs)" }}>
-          <div className="container">
-            <Reveal><div className="section-head choreo-head">
-              <span className="section-kicker">In cijfers</span>
-              <h2>BossBase in 2024</h2>
-            </div></Reveal>
-            <Reveal stagger>
-              <div className="stats-row choreo-body">
-                {STATS.map(s => (
-                  <div key={s.num} className="stat-block">
-                    <div className="num">{s.num}</div>
-                    <div className="lbl">{s.lbl}</div>
-                  </div>
-                ))}
-              </div>
-            </Reveal>
-          </div>
-        </div>
-
         {/* Waarden */}
         <div className="section">
           <div className="container">
@@ -156,23 +123,6 @@ export default function AboutPage({ navigate }) {
                     <p>{w.desc}</p>
                   </div>
                 ))}
-              </div>
-            </Reveal>
-          </div>
-        </div>
-
-        {/* Waarom niet VC */}
-        <div className="section" style={{ background: "var(--bgs)" }}>
-          <div className="container">
-            <Reveal><div className="section-head choreo-head">
-              <span className="section-kicker">Onze aanpak</span>
-              <h2>Waarom we geen durfkapitaal aannemen</h2>
-            </div></Reveal>
-            <Reveal>
-              <div className="waarom-body">
-                <p>Veel SaaS-bedrijven nemen tientallen miljoenen aan en groeien daarna ten koste van hun klanten: prijsverhogingen, verslechterende service, feature bloat. Dat willen we niet.</p>
-                <p>BossBase is winstgevend vanaf dag één. We groeien op eigen tempo, op basis van wat onze klanten willen betalen. Dat houdt ons scherp: elke euro die je betaalt, moet zijn waarde meerdere keren terugverdienen.</p>
-                <p>Dit betekent ook dat we je data nooit hoeven te verkopen. We hebben geen investeerder die dat eist.</p>
               </div>
             </Reveal>
           </div>

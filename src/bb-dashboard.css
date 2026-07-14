@@ -1167,8 +1167,29 @@ ul{list-style:none}
 .wb2-hours-pick{background:rgba(255,255,255,.08);border:0;border-radius:8px;padding:8px 10px;font-size:13px;font-weight:600;color:#fff;display:flex;align-items:center;gap:6px;font-family:inherit;cursor:pointer}
 .wb2-hours-pick:hover{background:rgba(255,255,255,.12)}
 .wb2-hours-pick-dot{width:6px;height:6px;border-radius:3px;background:#1DDB62}
-.wb2-hours-input{background:rgba(255,255,255,.08);border:0;border-radius:8px;padding:8px 10px;font-size:13.5px;font-weight:600;color:#fff;font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;width:100%;outline:none}
-.wb2-hours-input:focus{background:rgba(29,219,98,.15);box-shadow:0 0 0 2px rgba(29,219,98,.35)}
+/* Leesbaar invoerveld op de donkere uren-kaart: het native tijd/datum-control
+   rendert een licht veld, dus witte tekst was onzichtbaar. Lichte achtergrond +
+   var(--dk) tekst (zoals de standaard .f-invoervelden); color-scheme:light houdt
+   het native control-thema licht zodat de donkere waarde altijd leesbaar is. */
+.wb2-hours-input{background:var(--bg);border:1px solid var(--bstrong);border-radius:8px;padding:8px 10px;font-size:13.5px;font-weight:600;color:var(--dk);color-scheme:light;font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;width:100%;outline:none}
+.wb2-hours-input:focus{border-color:var(--p);box-shadow:0 0 0 3px rgba(29,219,98,.14)}
+/* De losse segmenten van het native tijdveld (uren/minuten/scheidingsteken) erven
+   color niet betrouwbaar van de input: de omliggende .wb2-hours-kaart heeft
+   color:#fff, waardoor een niet-gefocust, gevuld segment wit werd op de witte
+   veldachtergrond. Zet de kleur daarom expliciet op var(--dk) per segment. */
+.wb2-hours-input::-webkit-datetime-edit,
+.wb2-hours-input::-webkit-datetime-edit-fields-wrapper,
+.wb2-hours-input::-webkit-datetime-edit-hour-field,
+.wb2-hours-input::-webkit-datetime-edit-minute-field,
+.wb2-hours-input::-webkit-datetime-edit-second-field,
+.wb2-hours-input::-webkit-datetime-edit-ampm-field,
+.wb2-hours-input::-webkit-datetime-edit-text{color:var(--dk)}
+/* Gefocust/geselecteerd segment: donkere tekst op een lichte groene selectie —
+   overschrijft de systeem-selectie zodat het nooit wit-op-wit kan worden. */
+.wb2-hours-input::-webkit-datetime-edit-hour-field:focus,
+.wb2-hours-input::-webkit-datetime-edit-minute-field:focus,
+.wb2-hours-input::-webkit-datetime-edit-second-field:focus,
+.wb2-hours-input::-webkit-datetime-edit-ampm-field:focus{background:var(--pl);color:var(--dk);border-radius:3px;outline:none}
 .wb2-hours-live{background:rgba(29,219,98,.12);color:#1DDB62;border-radius:8px;padding:8px 10px;font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;display:flex;align-items:center;gap:6px}
 .wb2-hours-live-dot{width:6px;height:6px;border-radius:3px;background:#1DDB62;animation:wb2pulse 1.4s infinite}
 @keyframes wb2pulse{0%,100%{opacity:1}50%{opacity:.35}}
@@ -1668,6 +1689,18 @@ ul{list-style:none}
 }
 .uren2-count{
   font-size:12px; color:var(--uren2-muted);
+}
+
+/* Periode-blok: tabs + navigatie (zelfde patroon/stijl als de Agenda-header). */
+.uren2-period{
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap; min-width:0;
+}
+.uren2-periodnav{
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+}
+.uren2-periodnav-label{
+  font-size:13px; font-weight:600; color:var(--dk); white-space:nowrap;
+  text-align:center; min-width:150px;
 }
 
 /* Period tabs gebruiken de standaard .tabs/.tab classes (consistent met de

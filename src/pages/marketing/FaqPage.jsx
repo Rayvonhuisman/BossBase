@@ -8,8 +8,8 @@ const FAQ_DATA = [
     cat: "Algemeen",
     icon: I.sparkle,
     items: [
-      { q: "Wat is BossBase?", a: "BossBase is een alles-in-één administratietool voor ZZP'ers en kleine bedrijven. Je beheert klanten, offertes, facturen, agenda en omzet op één plek." },
-      { q: "Voor wie is BossBase geschikt?", a: "BossBase is speciaal gebouwd voor vakmannen en dienstverleners: loodgieters, schilders, elektriciens, aannemers, transporteurs en meer. Ook andere ZZP'ers en kleine bedrijven gebruiken BossBase." },
+      { q: "Wat is BossBase?", a: "BossBase is een alles-in-één administratietool voor zzp en bedrijven. Je beheert klanten, offertes, facturen, agenda en omzet op één plek." },
+      { q: "Voor wie is BossBase geschikt?", a: "BossBase is speciaal gebouwd voor vakmannen en dienstverleners: loodgieters, schilders, elektriciens, aannemers en meer. Ook andere ZZP'ers en bedrijven gebruiken BossBase." },
       { q: "Is BossBase gratis te proberen?", a: "Ja! Je kunt BossBase 14 dagen gratis uitproberen. Je hebt geen creditcard nodig en er zijn geen verborgen kosten." },
       { q: "Hoe snel kan ik aan de slag?", a: "De meeste gebruikers zijn in minder dan 10 minuten up-and-running. Je maakt een account aan, voegt je eerste klant toe en stuurt je eerste offerte. Geen technische kennis nodig." },
       { q: "Is er een mobiele app?", a: "BossBase werkt volledig in je browser, ook op mobiel. De interface is geoptimaliseerd voor telefoon en tablet, zodat je ook onderweg alles bij de hand hebt." },
@@ -32,7 +32,6 @@ const FAQ_DATA = [
     icon: I.bolt,
     items: [
       { q: "Kan ik offertes digitaal laten ondertekenen?", a: "Ja! Klanten ontvangen een link en kunnen de offerte direct digitaal ondertekenen. Jij ontvangt direct een bevestiging per e-mail." },
-      { q: "Werkt BossBase samen met Google Calendar?", a: "Ja, je kunt je agenda synchroniseren met Google Calendar. Afspraken die je in BossBase aanmaakt verschijnen automatisch in je Google Agenda en andersom." },
       { q: "Kan ik btw-aangifte exporteren?", a: "Ja. BossBase genereert een btw-overzicht dat je direct kunt gebruiken voor je belastingaangifte bij de Belastingdienst." },
       { q: "Kan ik meerdere gebruikers toevoegen?", a: "Ja, op het Groei-plan tot 5 gebruikers en op het Team-plan tot 15 gebruikers. Extra gebruikers zijn beschikbaar als add-on." },
       { q: "Kan ik klanten importeren vanuit Excel?", a: "Ja, je kunt klanten en contacten importeren via een CSV-bestand. Onze importwizard begeleidt je stap voor stap." },
@@ -47,18 +46,15 @@ const FAQ_DATA = [
       { q: "Werkt BossBase offline?", a: "BossBase is een cloud-applicatie en heeft internet nodig. Je kunt wel eerder geladen pagina's bekijken bij een korte verbindingsonderbreking." },
       { q: "Kan ik mijn data exporteren?", a: "Ja. Je kunt al je klanten, offertes, facturen en rapporten exporteren als CSV of PDF. Jouw data is altijd van jou." },
       { q: "Is er een API beschikbaar?", a: "Ja, op het Team-plan heb je toegang tot onze REST API. Neem contact op voor documentatie en toegang." },
-      { q: "Met welke systemen integreert BossBase?", a: "BossBase integreert momenteel met Google Calendar, Outlook, Exact Online en Mollie. Slack, Zapier, Moneybird en WhatsApp komen binnenkort." },
+      { q: "Met welke systemen integreert BossBase?", a: "BossBase integreert met Gmail, Outlook, Moneybird en SnelStart. Stripe komt binnenkort." },
     ],
   },
   {
     cat: "Privacy & veiligheid",
     icon: I.shield,
     items: [
-      { q: "Is BossBase AVG-compliant?", a: "Ja. BossBase is volledig AVG-compliant. We verwerken je data als verwerker en leggen dit vast in een verwerkersovereenkomst. Op verzoek beschikbaar." },
-      { q: "Waar staan de servers?", a: "Alle data wordt opgeslagen op servers in Nederland (EU). We gebruiken geen Amerikaanse clouddiensten voor opslag van klantdata." },
-      { q: "Hoe is mijn data beveiligd?", a: "We gebruiken AES-256 versleuteling voor data in rust en TLS 1.3 voor data in transit. Dagelijkse back-ups. Twee-factor authenticatie beschikbaar." },
-      { q: "Wordt mijn data verkocht aan derden?", a: "Nooit. Jouw data is van jou. We verkopen of delen geen klantdata met derden voor commerciële doeleinden." },
-      { q: "Kan ik mijn account verwijderen?", a: "Ja. Je kunt op elk moment je account verwijderen via Instellingen → Account → Verwijderen. Alle data wordt binnen 30 dagen permanent verwijderd." },
+      { q: "Hoe gaan jullie om met mijn gegevens?", a: "We gaan zorgvuldig en vertrouwelijk om met je gegevens en houden ons aan de AVG. Je data is en blijft van jou." },
+      { q: "Kan ik mijn account verwijderen?", a: "Ja. Je kunt op elk moment je account verwijderen via Instellingen → Account. Je gegevens worden dan verwijderd." },
     ],
   },
 ]

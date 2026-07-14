@@ -3,6 +3,7 @@ import { Maximize2, Minimize2, AlertTriangle, AlertOctagon } from 'lucide-react'
 import { I, ModalX, NotifyMailToggle, fmt, fmt0, CostCategoryBadge } from '../../bb-shared.jsx';
 import { useToast } from '../../lib/toast.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
+import { usePermissions } from '../../hooks/usePermissions.js';
 import {
   getProjectById,
   updateProject,
@@ -417,15 +418,26 @@ function OfferteTab({ project, offertes, customers, deals = [], company, setPage
 
 function UrenTab({ project, entries, onAdd, onDelete, canManage }) {
   const toast = useToast();
+  const { profile } = useProfile();
+  // Admin-vangnet: uren namens een collega boeken. Alleen zichtbaar voor
+  // admin/planner; de RLS op urenregistratie dwingt af dat enkel zij dit mogen.
+  const canBookForOthers = ['admin', 'planner'].includes(profile?.role);
+  const [teamMembers, setTeamMembers] = useState([]);
   const [form, setForm] = useState({
     entry_date: new Date().toISOString().slice(0, 10),
     description: '',
     hours: '',
     billable: true,
     hourly_rate: '',
+    profile_id: '',
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    if (!canBookForOthers) return;
+    getTeamMembers().then(ms => setTeamMembers(ms.filter(m => m.profileId))).catch(() => {});
+  }, [canBookForOthers]);
 
   const submit = async () => {
     const h = Number(form.hours);
@@ -438,6 +450,9 @@ function UrenTab({ project, entries, onAdd, onDelete, canManage }) {
         hours: h,
         billable: form.billable,
         hourly_rate: form.hourly_rate ? Number(form.hourly_rate) : null,
+        // Alleen admin/planner mag een andere medewerker kiezen; anders default
+        // (server) de ingelogde gebruiker.
+        ...(canBookForOthers ? { profile_id: form.profile_id || profile?.id } : {}),
       });
       setForm(f => ({ ...f, description: '', hours: '' }));
       toast.success('Uren toegevoegd');
@@ -499,6 +514,21 @@ function UrenTab({ project, entries, onAdd, onDelete, canManage }) {
         <div className="card card-p" style={{ padding: 12 }}>
           <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--dl)', marginBottom: 8 }}>Uren toevoegen</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {canBookForOthers && (
+              <div className="f" style={{ flex: '1 1 100%', minWidth: 0 }}>
+                <label>Medewerker</label>
+                <select style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.profile_id || profile?.id || ''} onChange={e => set('profile_id', e.target.value)}>
+                  {profile?.id && !teamMembers.some(m => m.profileId === profile.id) && (
+                    <option value={profile.id}>{profile.fullName || 'Ikzelf'}</option>
+                  )}
+                  {teamMembers.map(m => (
+                    <option key={m.profileId} value={m.profileId}>
+                      {m.fullName || m.email || 'Medewerker'}{m.profileId === profile?.id ? ' (ikzelf)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="f" style={{ flex: '1 1 120px', minWidth: 0 }}>
               <label>Datum</label>
               <input type="date" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.entry_date} onChange={e => set('entry_date', e.target.value)} />
@@ -1023,7 +1053,8 @@ export function ProjectDetailDrawer({
   setPage,
 }) {
   const toast = useToast();
-  const { company } = useProfile();
+  const { company, profile } = useProfile();
+  const { can } = usePermissions();
   const [tab, setTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [project, setProject] = useState(null);
@@ -1076,12 +1107,10 @@ export function ProjectDetailDrawer({
 
   useEffect(() => { if (projectId) loadAll(); }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // canManage: leiden af uit de profile context indirect via parent. De
-  // ProjectsPage wikkelt de drawer in een eigen check; hier laten we acties
-  // altijd toe en vangt RLS eventuele blokkades op. Voor UX schakelen we
-  // de form-velden in OverviewTab uit als er geen profile-info beschikbaar is
-  // — die check zit in de page, niet hier (props.canManage).
-  const canManage = true;
+  // Bewerken: admin/planner-rol óf het 'projecten_bewerken'-recht. Zien mag
+  // iedereen; de form-velden worden uitgeschakeld zonder bewerkrecht en RLS
+  // dwingt hetzelfde server-side af.
+  const canManage = ['admin', 'planner'].includes(profile?.role) || can('projecten_bewerken');
 
   const recompute = (nextEntries = entries, nextInvoices = invoices, nextProject = project) => {
     if (!nextProject) return;

@@ -428,7 +428,7 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
   // achtergrond-refreshes heen, terwijl profileLoading telkens toggelt — daarom
   // hier NIET op profileLoading gaten (dat veroorzaakte de flash van het
   // volledige dashboard bij elke token-refresh).
-  authLog('render-beslissing', { permissionsLoaded, isAdmin, financieel: can('financieel'), profileLoading });
+  authLog('render-beslissing', { permissionsLoaded, isAdmin, bedrijfsfinancien: can('bedrijfsfinancien'), profileLoading });
   // Iedereen (admin én medewerker) krijgt hetzelfde dashboard; widgets worden
   // per stuk gefilterd op rechten (zie DashboardWidgetGrid). De permissionsLoaded
   // gate voorkomt een flash van widgets die daarna verdwijnen.

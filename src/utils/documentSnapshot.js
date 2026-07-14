@@ -61,3 +61,10 @@ export function isOfferteLocked(offerte) {
 export function isOfferteFullyLocked(offerte) {
   return !!offerte && (!!offerte.signedAt || offerte.status === 'geaccepteerd')
 }
+
+// Een verstuurde, nog niet getekende offerte mag inhoudelijk worden aangepast —
+// maar dat gebeurt via een NIEUWE VERSIE (de oude blijft bewaard, link vervalt).
+// Een al vervangen versie is historisch en dus niet opnieuw te herzien.
+export function isOfferteRevisable(offerte) {
+  return !!offerte && !offerte.signedAt && !offerte.vervangenOp && offerte.status === 'verzonden'
+}

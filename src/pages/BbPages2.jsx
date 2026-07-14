@@ -19,8 +19,10 @@ import { getWerkbonnen } from '../services/werkbonService.js';
 import { getProjects } from '../services/projectsService.js';
 import { calcBtw, BTW_PCT_OPTIONS } from '../utils/btw.js';
 import { useToast } from '../lib/toast.jsx';
-import { useProfile } from '../lib/profileContext.jsx';
+import { useProfile, useTier } from '../lib/profileContext.jsx';
+import { usePermissions } from '../hooks/usePermissions.js';
 import { ActivityEditModal, NewCalendarEventModal, NewJobCostModal } from '../components/SharedModals.jsx';
+import { AgendaWerkbonPlanModal } from '../components/AgendaWerkbonPlanModal.jsx';
 
 // ── Local date helpers ───────────────────────────────────────
 // All comparisons use LOCAL date parts (never toISOString) so a day can't
@@ -102,6 +104,7 @@ function AgendaEventBlock({ ev, onClick }) {
   return (
     <div
       onClick={e => { e.stopPropagation(); onClick(ev); }}
+      data-herkomst={ev.herkomst || 'zelf'}
       title={`${ev.title}\n${agFmtTime(ev.time)}${ev.end ? `–${agFmtTime(ev.end)}` : ''}\n${ev.customerName || ''}`}
       style={{
         position: 'absolute', top, left: `${(lane / total) * 100}%`, width: `${100 / total}%`, height,
@@ -200,6 +203,19 @@ function AgendaTimeline({ dates, events, todayKey, onEventClick }) {
 export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpenActivityId, onNavConsumed }) {
   const toast = useToast();
   const { refreshKey, bumpRefresh, profile } = useProfile();
+  const { can } = usePermissions();
+  const tier = useTier();
+  // Groei is een gedeelde werkomgeving: beide teamleden zien elkaars agenda-items.
+  // Starter (solo) en Team (personal agenda; die plannen via de planning-pagina)
+  // blijven hun eigen items zien. RLS staat de gedeelde weergave bij Groei toe.
+  const shareAll = tier === 'groei';
+  // Werkbon inplannen vanuit de agenda is bedoeld voor wie geen planning-pagina
+  // heeft (Starter/Groei). Team plant in via de planning-pagina.
+  const canPlanFromAgenda = tier !== 'team';
+  // Bewerkrecht op een agenda-item (spiegelt de RLS): admin/planner mag alles;
+  // een 'planning'-item is voor gewone medewerkers alleen-lezen; een 'zelf'-item
+  // mag alleen de eigenaar bewerken.
+  const mayEditEvent = ev => can('planning') || (ev?.herkomst !== 'planning' && ev?.assignedTo === profile?.id);
   const [view, setView] = useState('week');
   // Monday of the visible week. Lazy initializer → on every fresh mount the
   // Agenda opens on the *current* week (no stale week is carried over).
@@ -219,6 +235,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
   const [editEvent, setEditEvent] = useState(null);
   const [editActivity, setEditActivity] = useState(null);
   const [showNew, setShowNew] = useState(false);
+  const [showPlanWerkbon, setShowPlanWerkbon] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -230,10 +247,11 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
         // alleen ZIJN EIGEN toegewezen items, niet die van collega's. Voor een
         // medewerker filtert RLS al server-side; voor admin/planner (die via RLS
         // alles mag zien voor Planning) doen we het hier app-side.
+        // Uitzondering: bij Groei is de agenda gedeeld → toon alles wat RLS teruggeeft.
         const uid = profile?.id;
-        const mine = owner => !uid || owner === uid;
-        const mineWerkbon = w => !uid || (w.assignedToIds && w.assignedToIds.includes(uid)) || w.assignedTo === uid;
-        const mineActivity = a => !uid || (a.assignedToIds && a.assignedToIds.includes(uid)) || a.assignee === uid;
+        const mine = owner => shareAll || !uid || owner === uid;
+        const mineWerkbon = w => shareAll || !uid || (w.assignedToIds && w.assignedToIds.includes(uid)) || w.assignedTo === uid;
+        const mineActivity = a => shareAll || !uid || (a.assignedToIds && a.assignedToIds.includes(uid)) || a.assignee === uid;
         // Werkbon-gekoppelde calendar_events verbergen: de werkbon zelf wordt
         // hieronder als (altijd actuele) synthetisch event getoond. Zo verschijnt
         // elk item exact één keer — gededupliceerd op werkbon_id.
@@ -260,7 +278,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
       })
       .catch(err => setError(err.message || 'Agenda laden is mislukt.'))
       .finally(() => setLoading(false));
-  }, [refreshKey]);
+  }, [refreshKey, shareAll]);
 
   // Deep-open a specific activity requested from the dashboard agenda widget
   React.useEffect(() => {
@@ -395,6 +413,9 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
               </button>
             ))}
           </div>
+          {canPlanFromAgenda && (
+            <button className="btn btn-s btn-sm" onClick={() => setShowPlanWerkbon(true)}>{I.plus} Werkbon inplannen</button>
+          )}
           <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>{I.plus} Toevoegen</button>
         </div>
       </div>
@@ -491,7 +512,9 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
               <button className="btn btn-s" onClick={() => setShowEvent(null)}>Sluiten</button>
               {showEvent.activityId && activities.find(a => a.id === showEvent.activityId)
                 ? <button className="btn btn-s" onClick={() => { setEditActivity(activities.find(a => a.id === showEvent.activityId)); setShowEvent(null); }}>Bewerken</button>
-                : <button className="btn btn-s" onClick={() => setEditEvent(showEvent)}>Bewerken</button>
+                : mayEditEvent(showEvent)
+                  ? <button className="btn btn-s" onClick={() => setEditEvent(showEvent)}>Bewerken</button>
+                  : null
               }
               <button className="btn btn-p" onClick={() => { openCustomer(showEvent.custId); setShowEvent(null); }}>Open klant</button>
             </div>
@@ -519,6 +542,15 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
           onClose={() => setShowNew(false)}
           customers={customers}
           onSaved={created => { setEvents(es => [created, ...es]); bumpRefresh?.(); }}
+        />
+      )}
+      {showPlanWerkbon && (
+        <AgendaWerkbonPlanModal
+          tier={tier}
+          currentUserId={profile?.id}
+          currentUserName={profile?.fullName}
+          onClose={() => setShowPlanWerkbon(false)}
+          onScheduled={() => { setShowPlanWerkbon(false); bumpRefresh?.(); }}
         />
       )}
       {showGoogle && (

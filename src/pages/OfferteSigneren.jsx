@@ -22,6 +22,7 @@ export default function OfferteSigneren({ token }) {
   const [form, setForm] = useState({ name: '', email: '' })
   const [signing, setSigning] = useState(false)
   const [done, setDone] = useState(false)
+  const [superseded, setSuperseded] = useState(false)
   const [hasSignature, setHasSignature] = useState(false)
   const [pdfLoading, setPdfLoading] = useState(false)
 
@@ -40,6 +41,8 @@ export default function OfferteSigneren({ token }) {
       if (!o.data?.[0]) { setError('Offerte niet gevonden of link is ongeldig.'); return }
       const off = o.data[0]
       if (off.signed_at) { setDone(true) }
+      // Vervangen door een nieuwere versie → deze link is niet meer geldig.
+      if (off.vervangen_op) { setSuperseded(true) }
       setOfferte(off)
       setItems(it.data || [])
       setCompany(co.data?.[0] || null)
@@ -369,6 +372,31 @@ export default function OfferteSigneren({ token }) {
             </div>
             <div style={{ color: '#6b7280', fontSize: '.95rem' }}>
               Offerte <strong>{offerte?.nummer}</strong> is ondertekend. U ontvangt een bevestiging per e-mail.
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (superseded) {
+    return (
+      <div style={styles.shell}>
+        <div style={styles.card}>
+          {company?.logo_url && (
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <img src={company.logo_url} alt={company.name} style={{ height: 48, objectFit: 'contain' }} />
+            </div>
+          )}
+          <div style={{ textAlign: 'center', padding: '32px 0' }}>
+            <div style={{ fontWeight: 800, fontSize: '1.25rem', marginBottom: 8 }}>
+              Deze offerte is niet meer geldig
+            </div>
+            <div style={{ color: '#6b7280', fontSize: '.95rem', lineHeight: 1.6 }}>
+              Offerte <strong>{offerte?.nummer}</strong> is vervangen door een nieuwere versie
+              {offerte?.vervangen_door_nummer ? <> (<strong>{offerte.vervangen_door_nummer}</strong>)</> : null}
+              {' '}en kan daarom niet meer worden ondertekend.
+              <br />Heeft u de nieuwe offerte niet ontvangen? Neem dan contact op met {company?.name || 'het bedrijf'}.
             </div>
           </div>
         </div>

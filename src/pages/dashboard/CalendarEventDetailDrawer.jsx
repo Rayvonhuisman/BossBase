@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { MapPin } from 'lucide-react';
 import { I, fmt } from '../../bb-shared.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
+import { usePermissions } from '../../hooks/usePermissions.js';
 import { useToast } from '../../lib/toast.jsx';
 import {
   listCalendarEvents, updateCalendarEvent, deleteCalendarEvent,
@@ -72,13 +73,23 @@ function initialsOf(name) {
 
 export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, openDeal }) {
   const { profile, bumpRefresh } = useProfile();
+  const { can } = usePermissions();
   const toast = useToast();
-  const canEdit = profile?.role === 'admin' || profile?.role === 'planner';
   const [deleting, setDeleting] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [ev, setEv] = useState(null);
+
+  // Bewerkrecht op basis van herkomst — spiegelt de RLS op calendar_events:
+  // - admin/planner (of iemand met het 'planning'-recht) mag alles;
+  // - een 'planning'-item (via de Planning ingepland) is voor gewone
+  //   medewerkers alleen-lezen;
+  // - een 'zelf'-item mag alleen de eigenaar (assigned_to) bewerken/verwijderen.
+  // Inzien blijft altijd werken.
+  const canEdit = !!ev && (
+    can('planning') || (ev.herkomst !== 'planning' && ev.assignedTo === profile?.id)
+  );
 
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -300,7 +311,7 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
         {HeadClose}
       </div>
 
-      {/* ── Gegevens: bewerkbaar voor admin/planner, anders alleen-lezen ── */}
+      {/* ── Gegevens: bewerkbaar volgens canEdit (herkomst + eigenaarschap), anders alleen-lezen ── */}
       {canEdit && form ? (
         <Section
           title="Gegevens"

@@ -191,15 +191,15 @@ export function layoutPermissions(layoutKey) {
 // recht heeft; admins zien alles. Widgets die hier niet in staan zijn voor
 // iedereen zichtbaar (eigen activiteiten, werkbonnen, agenda, nieuwe aanvragen, etc.).
 export const WIDGET_PERMISSION = {
-  // Financieel dashboard (omzet/winst/pipeline-waarde)
-  open_pipeline_value:   'financieel',
-  accepted_value:        'financieel',
-  revenue_month:         'financieel',
-  profit_month:          'financieel',
-  monthly_revenue_chart: 'financieel',
-  monthly_profit_chart:  'financieel',
-  pipeline_stage_chart:  'financieel',
-  top_customers_chart:   'financieel',
+  // Bedrijfsfinanciën (omzet/winst/pipeline-waarde)
+  open_pipeline_value:   'bedrijfsfinancien',
+  accepted_value:        'bedrijfsfinancien',
+  revenue_month:         'bedrijfsfinancien',
+  profit_month:          'bedrijfsfinancien',
+  monthly_revenue_chart: 'bedrijfsfinancien',
+  monthly_profit_chart:  'bedrijfsfinancien',
+  pipeline_stage_chart:  'bedrijfsfinancien',
+  top_customers_chart:   'bedrijfsfinancien',
   // Kosten
   costs_per_job:         'kosten',
   costs_month:           'kosten',
@@ -210,13 +210,13 @@ export const WIDGET_PERMISSION = {
   invoice_status_chart:  'facturen',
   // Offertes
   open_offertes:         'offertes',
-  // Pipeline / CRM (deals) — alleen zichtbaar met can('pipeline')
-  new_leads:             'pipeline',
-  active_deals:          'pipeline',
-  conversion_overview:   'pipeline',
-  conversion_funnel:     'pipeline',
-  lead_followup:         'pipeline',
-  lead_source_chart:     'pipeline',
+  // Verkooppijplijn / CRM (deals) — alleen zichtbaar met can('verkoop')
+  new_leads:             'verkoop',
+  active_deals:          'verkoop',
+  conversion_overview:   'verkoop',
+  conversion_funnel:     'verkoop',
+  lead_followup:         'verkoop',
+  lead_source_chart:     'verkoop',
 };
 
 // Het recht dat een widget vereist, of null als hij voor iedereen zichtbaar is.

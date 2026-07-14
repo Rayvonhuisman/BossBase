@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { Calendar, Mail, Briefcase, CreditCard, MessageSquare, MessageCircle, Zap, Bird } from "lucide-react"
+import { Mail, Briefcase, CreditCard, Bird } from "lucide-react"
 import { Nav, Footer, Reveal, I, initChoreo, ScrollLine } from "./MktShared"
 
 /* ── Feature visuals ── */
@@ -167,7 +167,7 @@ const BLOCKS = [
   {
     kicker: "Agenda", title: "Plan slim, werk slimmer",
     desc: "Koppel afspraken direct aan klanten en opdrachten. Stuur automatisch herinneringen en voorkom no-shows.",
-    points: ["Klantgekoppelde afspraken", "Automatische SMS/e-mail herinneringen", "Google Calendar synchronisatie", "Terugkerende afspraken"],
+    points: ["Klantgekoppelde afspraken", "Automatische e-mailherinneringen", "Terugkerende afspraken"],
     Visual: AgendaVisual, flip: false,
   },
   {
@@ -191,20 +191,17 @@ const BLOCKS = [
 ]
 
 const INTEGRATIONS = [
-  { name: "Google Calendar", icon: <Calendar size={20} />,      soon: false },
-  { name: "Outlook",         icon: <Mail size={20} />,          soon: false },
-  { name: "Exact Online",    icon: <Briefcase size={20} />,     soon: false },
-  { name: "Mollie",          icon: <CreditCard size={20} />,    soon: false },
-  { name: "Slack",           icon: <MessageSquare size={20} />, soon: true },
-  { name: "Zapier",          icon: <Zap size={20} />,           soon: true },
-  { name: "Moneybird",       icon: <Bird size={20} />,          soon: true },
-  { name: "WhatsApp",        icon: <MessageCircle size={20} />, soon: true },
+  { name: "Gmail",     icon: <Mail size={20} />,       soon: false },
+  { name: "Outlook",   icon: <Mail size={20} />,       soon: false },
+  { name: "Moneybird", icon: <Bird size={20} />,       soon: false },
+  { name: "SnelStart", icon: <Briefcase size={20} />,  soon: false },
+  { name: "Stripe",    icon: <CreditCard size={20} />, soon: true },
 ]
 
 const VROEGER = [
   "Offertes in losse Word-bestanden",
   "Klanten bijhouden in Excel",
-  "Agenda op papier of los in Google",
+  "Agenda op papier of los in je telefoon",
   "Omzet uitrekenen aan het einde van het kwartaal",
   "Herinneren via Post-it briefjes",
   "Facturen handmatig nummeren en versturen",
@@ -214,7 +211,7 @@ const NU = [
   "CRM met volledige klanthistorie op één plek",
   "Agenda gekoppeld aan klanten en opdrachten",
   "Realtime omzetdashboard, altijd inzicht",
-  "Automatische herinneringen per e-mail en SMS",
+  "Automatische herinneringen per e-mail",
   "Factuur met één klik vanuit geaccepteerde offerte",
 ]
 
@@ -240,7 +237,7 @@ export default function FeaturesPage({ navigate }) {
             <Reveal>
               <span className="section-kicker">Functies</span>
               <h1>Alles wat je nodig hebt.<br/>Niets wat je niet nodig hebt.</h1>
-              <p>BossBase combineert CRM, offertes, agenda en financieel in één eenvoudige tool — speciaal voor ZZP'ers en kleine bedrijven.</p>
+              <p>BossBase combineert CRM, offertes, agenda en financieel in één eenvoudige tool — speciaal voor zzp en bedrijven.</p>
               <div className="hero-ctas" style={{ marginTop: 28 }}>
                 <a href="/registreer" className="btn btn-p glow btn-lg" onClick={e => go(e, "/registreer")}>Gratis proberen {I.arrowRight}</a>
                 <a href="/prijzen" className="btn btn-s btn-lg" onClick={e => go(e, "/prijzen")}>Bekijk prijzen</a>

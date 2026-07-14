@@ -14,7 +14,7 @@ import {
 import { uploadTeamMemberAvatar, removeTeamMemberAvatar } from '../services/avatarService.js';
 import { AvatarUpload } from '../components/AvatarUpload.jsx';
 import { getUserPermissions, setUserPermissions } from '../services/permissionsService.js';
-import { AVAILABLE_PERMISSIONS } from '../config/permissions.js';
+import { AVAILABLE_PERMISSIONS, PERMISSION_GROUPS, WARN_ON_ENABLE } from '../config/permissions.js';
 
 function TeamAvatar({ member, idx, size = 'sm' }) {
   if (member.avatarUrl) {
@@ -107,7 +107,6 @@ function InviteModal({ onClose, onSaved }) {
               <option value="medewerker">Medewerker</option>
               <option value="admin">Admin</option>
             </select>
-            <span style={{ fontSize: '.75rem', color: 'var(--dl)', marginTop: 4 }}>Planning is een recht: kies medewerker en geef het planning-recht via Rechten.</span>
           </div>
           <div className="f">
             <label>Uren per week (optioneel)</label>
@@ -223,7 +222,6 @@ function EditModal({ member, onClose, onSaved }) {
               <option value="medewerker">Medewerker</option>
               <option value="admin">Admin</option>
             </select>
-            <span style={{ fontSize: '.75rem', color: 'var(--dl)', marginTop: 4 }}>Planning is een recht: kies medewerker en geef het planning-recht via Rechten.</span>
           </div>
           <div className="f">
             <label>Uren per week</label>
@@ -252,6 +250,7 @@ function PermissionsModal({ member, onClose, onSaved }) {
   const [perms, setPerms] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [openInfo, setOpenInfo] = useState(null); // key waarvan de uitleg openstaat
 
   useEffect(() => {
     if (!member.profileId) {
@@ -272,7 +271,28 @@ function PermissionsModal({ member, onClose, onSaved }) {
       .finally(() => setLoading(false));
   }, [member.profileId]);
 
-  const toggle = key => setPerms(p => ({ ...p, [key]: !p[key] }));
+  const WARN_TEXT = 'Let op: dit geeft brede inzage in projecten, werkbonnen of agenda van collega’s. Weet je zeker dat je dit wilt aanzetten?';
+
+  // Eén subrecht togglen; waarschuw bij het AANzetten van brede-inzage-rechten.
+  const toggleSub = key => {
+    const turningOn = !perms[key];
+    if (turningOn && WARN_ON_ENABLE.includes(key) && !window.confirm(WARN_TEXT)) return;
+    setPerms(p => ({ ...p, [key]: !p[key] }));
+  };
+
+  // Hoofdrecht togglen → cascadeert naar alle subrechten. Waarschuw als het
+  // aanzetten een brede-inzage-subrecht meeneemt.
+  const setGroup = (group, value) => {
+    if (value && group.subs.some(s => WARN_ON_ENABLE.includes(s.key) && !perms[s.key]) && !window.confirm(WARN_TEXT)) return;
+    setPerms(p => { const next = { ...p }; group.subs.forEach(s => { next[s.key] = value; }); return next; });
+  };
+
+  // Tri-state van een hoofdrecht: leeg / half (indeterminate) / vol.
+  const groupState = group => {
+    const on = group.subs.filter(s => perms[s.key]).length;
+    return { all: on === group.subs.length, some: on > 0 && on < group.subs.length };
+  };
+
   const allOn  = () => { const m = {}; AVAILABLE_PERMISSIONS.forEach(p => { m[p.key] = true;  }); setPerms(m); };
   const allOff = () => { const m = {}; AVAILABLE_PERMISSIONS.forEach(p => { m[p.key] = false; }); setPerms(m); };
 
@@ -294,8 +314,6 @@ function PermissionsModal({ member, onClose, onSaved }) {
       setSaving(false);
     }
   };
-
-  const categories = [...new Set(AVAILABLE_PERMISSIONS.map(p => p.categorie))];
 
   return (
     <div className="overlay" onClick={e => e.target === e.currentTarget && !saving && onClose()}>
@@ -323,32 +341,68 @@ function PermissionsModal({ member, onClose, onSaved }) {
               <button className="btn btn-ghost btn-sm" onClick={allOff}>Alles uit</button>
             </div>
 
-            {categories.map(cat => (
-              <div key={cat} style={{ marginBottom: 14 }}>
-                <div style={{ fontWeight: 700, fontSize: '.72rem', color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>{cat}</div>
-                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                  {AVAILABLE_PERMISSIONS.filter(p => p.categorie === cat).map((p, i, arr) => (
-                    <label
-                      key={p.key}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 12,
-                        padding: '11px 14px', cursor: 'pointer',
-                        borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
-                        userSelect: 'none',
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={perms[p.key] ?? false}
-                        onChange={() => toggle(p.key)}
-                        style={{ width: 16, height: 16, accentColor: 'var(--p)', flexShrink: 0 }}
-                      />
-                      <span style={{ fontSize: '.88rem', fontWeight: 500 }}>{p.label}</span>
-                    </label>
-                  ))}
+            {PERMISSION_GROUPS.map(group => {
+              const st = groupState(group);
+              return (
+                <div key={group.key} style={{ marginBottom: 14 }}>
+                  {/* Hoofdrecht: master-vinkje dat naar alle subrechten cascadeert */}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, cursor: 'pointer', userSelect: 'none' }}>
+                    <input
+                      type="checkbox"
+                      checked={st.all}
+                      ref={el => { if (el) el.indeterminate = st.some; }}
+                      onChange={() => setGroup(group, !st.all)}
+                      style={{ width: 16, height: 16, accentColor: 'var(--p)', flexShrink: 0 }}
+                    />
+                    <span style={{ fontWeight: 700, fontSize: '.74rem', color: 'var(--dk)', textTransform: 'uppercase', letterSpacing: '.06em' }}>{group.label}</span>
+                  </label>
+                  <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                    {group.subs.map((p, i, arr) => (
+                      <div
+                        key={p.key}
+                        style={{ borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none' }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', userSelect: 'none', flex: 1, minWidth: 0 }}>
+                            <input
+                              type="checkbox"
+                              checked={perms[p.key] ?? false}
+                              onChange={() => toggleSub(p.key)}
+                              style={{ width: 16, height: 16, accentColor: 'var(--p)', flexShrink: 0 }}
+                            />
+                            <span style={{ minWidth: 0 }}>
+                              <span style={{ display: 'block', fontSize: '.88rem', fontWeight: 500 }}>{p.label}</span>
+                              {p.kort && (
+                                <span style={{ display: 'block', fontSize: '.72rem', color: 'var(--dl)', marginTop: 1, lineHeight: 1.35 }}>{p.kort}</span>
+                              )}
+                            </span>
+                          </label>
+                          {p.uitleg && (
+                            <button
+                              type="button"
+                              className="btn-icon"
+                              aria-label={`Uitleg over ${p.label}`}
+                              aria-expanded={openInfo === p.key}
+                              onClick={() => setOpenInfo(k => (k === p.key ? null : p.key))}
+                              style={{ flexShrink: 0, color: openInfo === p.key ? 'var(--p)' : 'var(--dl)' }}
+                            >
+                              {I.info}
+                            </button>
+                          )}
+                        </div>
+                        {openInfo === p.key && p.uitleg && (
+                          <div style={{ padding: '0 14px 12px 42px' }}>
+                            <div style={{ background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', fontSize: '.78rem', color: 'var(--dm)', lineHeight: 1.5 }}>
+                              {p.uitleg}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </>
         )}
 

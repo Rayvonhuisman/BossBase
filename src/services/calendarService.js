@@ -97,6 +97,9 @@ export const toCalendarEvent = row => {
     activiteitId: row.activiteit_id || null,
     werkbonId: row.werkbon_id || null,
     assignedTo: row.assigned_to || null,
+    // Herkomst van het item: 'planning' (via de Planning-pagina) of 'zelf'
+    // (rechtstreeks in de agenda). Basis voor een later bewerkrecht.
+    herkomst: row.herkomst || 'zelf',
     comments: Array.isArray(row.comments) ? row.comments : [],
     location: row.location || "",
     description: row.notes || "",
@@ -120,6 +123,9 @@ export async function listCalendarEvents() {
 
 export async function createCalendarEvent(input) {
   const payload = await withCompanyId(mapCalendarEventFormToPayload(input))
+  // Rechtstreeks in de agenda aangemaakt → herkomst 'zelf'. De planning-sync
+  // (upsertWerkbonEvent/upsertActivityEvent) zet expliciet 'planning'.
+  if (payload.herkomst == null) payload.herkomst = 'zelf'
   // Persoonlijke agenda: een handmatig agenda-item hoort standaard bij de maker,
   // zodat het in zijn eigen agenda verschijnt (en niet in die van collega's).
   if (payload.assigned_to == null) {
@@ -195,7 +201,9 @@ export async function upsertWerkbonEvent({ werkbonId, title, date, time, end, cu
     return toCalendarEvent(data)
   }
 
-  const payload = await withCompanyId({ ...base, werkbon_id: werkbonId })
+  // Nieuw item ontstaat via de planning → herkomst 'planning'. Alleen bij INSERT
+  // gezet, zodat de oorspronkelijke herkomst bij een UPDATE behouden blijft.
+  const payload = await withCompanyId({ ...base, werkbon_id: werkbonId, herkomst: "planning" })
   const { data, error } = await supabase
     .from("calendar_events")
     .insert(payload)
@@ -238,7 +246,9 @@ export async function upsertActivityEvent({ activiteitId, title, date, time, end
     return toCalendarEvent(data)
   }
 
-  const payload = await withCompanyId({ ...base, activiteit_id: activiteitId })
+  // Nieuw item ontstaat via de planning → herkomst 'planning'. Alleen bij INSERT
+  // gezet, zodat de oorspronkelijke herkomst bij een UPDATE behouden blijft.
+  const payload = await withCompanyId({ ...base, activiteit_id: activiteitId, herkomst: "planning" })
   const { data, error } = await supabase
     .from("calendar_events")
     .insert(payload)

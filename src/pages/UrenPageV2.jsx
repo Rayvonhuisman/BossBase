@@ -7,6 +7,8 @@ import {
 import { listCustomers } from '../services/customerService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
 import { getProjects } from '../services/projectsService.js';
+import { getTeamMembers } from '../services/notificatieService.js';
+import { I } from '../bb-shared.jsx';
 
 // ── Date / time helpers ─────────────────────────────────────────────────────
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -43,25 +45,48 @@ const computeUren = (start, end) => {
 
 const fmtUren = n => (n == null || Number.isNaN(n)) ? '—' : Number(n).toFixed(2);
 
-// ── Period filter ───────────────────────────────────────────────────────────
-const periodRange = (period) => {
-  const now = new Date();
-  if (period === 'vandaag') return { van: toIso(now), tot: toIso(now) };
-  if (period === 'week') {
-    const wd = (now.getDay() + 6) % 7;
-    const mon = new Date(now); mon.setDate(now.getDate() - wd);
-    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-    return { van: toIso(mon), tot: toIso(sun) };
-  }
-  if (period === 'maand') {
-    const first = new Date(now.getFullYear(), now.getMonth(), 1);
-    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+// ── Period navigation (zelfde patroon/stijl als de Agenda) ──────────────────
+// Datumhelpers gelijk aan CalendarPage: maandag-start, ISO-weeknummer.
+const addDays = (date, days) => { const d = new Date(date.getFullYear(), date.getMonth(), date.getDate()); d.setDate(d.getDate() + days); return d; };
+const getStartOfWeek = date => { const d = new Date(date.getFullYear(), date.getMonth(), date.getDate()); const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dow); return d; };
+const getISOWeek = date => { const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())); const dayNum = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() + 4 - dayNum); const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1)); return Math.ceil((((d - yearStart) / 86400000) + 1) / 7); };
+const MONTHS_NL_FULL = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
+const cap = s => (s ? s[0].toUpperCase() + s.slice(1) : s);
+
+// Datumrange voor de gekozen periode rond een anker-datum.
+const periodRange = (type, anchor) => {
+  if (type === 'dag') return { van: toIso(anchor), tot: toIso(anchor) };
+  if (type === 'week') { const mon = getStartOfWeek(anchor); return { van: toIso(mon), tot: toIso(addDays(mon, 6)) }; }
+  if (type === 'maand') {
+    const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    const last = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
     return { van: toIso(first), tot: toIso(last) };
   }
-  return {};
+  return {}; // alles → geen begrenzing
 };
 
-const periodLabel = p => ({ alles: 'Alle tijd', vandaag: 'Vandaag', week: 'Deze week', maand: 'Deze maand' }[p] || 'periode');
+// Eén periode vooruit/terug schuiven, afhankelijk van het periode-type.
+const shiftAnchor = (anchor, type, dir) => {
+  if (type === 'dag') return addDays(anchor, dir);
+  if (type === 'week') return addDays(anchor, dir * 7);
+  if (type === 'maand') return new Date(anchor.getFullYear(), anchor.getMonth() + dir, 1);
+  return anchor;
+};
+
+// Zichtbaar label voor de huidige periode (mirror van de Agenda-header).
+const periodHeaderLabel = (type, anchor) => {
+  if (type === 'dag') { const iso = toIso(anchor); return `${dayLabel(iso)} · ${fmtNL(iso)}`; }
+  if (type === 'week') {
+    const mon = getStartOfWeek(anchor), sun = addDays(mon, 6);
+    const dm = d => `${d.getDate()} ${MONTHS_NL[d.getMonth()]}`;
+    return `Week ${getISOWeek(mon)} · ${dm(mon)} – ${dm(sun)}`;
+  }
+  if (type === 'maand') return `${cap(MONTHS_NL_FULL[anchor.getMonth()])} ${anchor.getFullYear()}`;
+  return 'Alle tijd';
+};
+
+// Zelfstandig naamwoord voor KPI-hints (klopt ongeacht welke week/maand).
+const periodNoun = type => ({ alles: 'alle tijd', dag: 'de dag', week: 'de week', maand: 'de maand' }[type] || 'de periode');
 
 // ── Avatar derivation (existing data has only medewerkerNaam string) ────────
 const initialsOf = name => (name || '').split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase();
@@ -95,13 +120,6 @@ const Ic = {
 };
 
 // ── Small reusable bits ─────────────────────────────────────────────────────
-function TypeBadge({ type }) {
-  const cls = type === 'arbeid' ? 'uren2-badge-arbeid'
-    : type === 'reiskosten' ? 'uren2-badge-reis'
-    : 'uren2-badge-overig';
-  const label = type === 'arbeid' ? 'Arbeid' : type === 'reiskosten' ? 'Reiskosten' : 'Overig';
-  return <span className={`uren2-badge ${cls}`}>{label}</span>;
-}
 
 function Avatar({ name, size = 26 }) {
   if (!name) {
@@ -129,9 +147,9 @@ function IconBtn({ icon, title, danger, onClick }) {
 function PeriodTabs({ value, onChange }) {
   const tabs = [
     { id: 'alles', label: 'Alles' },
-    { id: 'vandaag', label: 'Vandaag' },
-    { id: 'week', label: 'Deze week' },
-    { id: 'maand', label: 'Deze maand' },
+    { id: 'dag', label: 'Dag' },
+    { id: 'week', label: 'Week' },
+    { id: 'maand', label: 'Maand' },
   ];
   return (
     <div className="tabs" role="tablist">
@@ -229,7 +247,6 @@ function UrenTable({ rows, onEdit, onDelete }) {
           <tr>
             <th className="uren2-th uren2-th-date">Datum</th>
             <th className="uren2-th">Medewerker</th>
-            <th className="uren2-th uren2-th-type">Type</th>
             <th className="uren2-th uren2-th-time">Start–Eind</th>
             <th className="uren2-th uren2-th-hours">Uren</th>
             <th className="uren2-th">Klant</th>
@@ -249,7 +266,6 @@ function UrenTable({ rows, onEdit, onDelete }) {
                   </span>
                 ) : <span className="uren2-muted">—</span>}
               </td>
-              <td className="uren2-td"><TypeBadge type={r.type} /></td>
               <td className={`uren2-td uren2-td-time${r.startTijd ? '' : ' uren2-muted'}`}>
                 {fmtTimeRange(r.startTijd, r.eindTijd)}
               </td>
@@ -309,7 +325,6 @@ function MobileList({ rows, onEdit, onDelete }) {
                     <div className={`uren2-mcard-name${r.medewerkerNaam ? '' : ' uren2-muted'}`}>
                       {r.medewerkerNaam || '—'}
                     </div>
-                    <div className="uren2-mcard-badge"><TypeBadge type={r.type} /></div>
                   </div>
                 </div>
                 <div className="uren2-mcard-hrs">
@@ -361,17 +376,17 @@ function ModalShell({ open, onClose, busy, mobile, children, maxWidth = 640 }) {
 }
 
 // ── Register / Edit modal ───────────────────────────────────────────────────
-function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = [], profiles, onClose, onSave, mobile }) {
+function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = [], profiles = [], canBookForOthers = false, currentProfileId, onClose, onSave, mobile }) {
   const empty = useMemo(() => ({
     datum: todayIso(),
-    type: 'arbeid',
     start_tijd: '',
     eind_tijd: '',
     customer_id: '',
     werkbon_id: '',
     project_id: '',
     notitie: '',
-  }), []);
+    profile_id: currentProfileId || '',
+  }), [currentProfileId]);
   const [form, setForm] = useState(empty);
   const [touched, setTouched] = useState({});
   const [busy, setBusy] = useState(false);
@@ -381,13 +396,13 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
     if (initial) {
       setForm({
         datum: initial.datum || todayIso(),
-        type: initial.type || 'arbeid',
         start_tijd: trimTime(initial.startTijd) || '',
         eind_tijd: trimTime(initial.eindTijd) || '',
         customer_id: initial.customerId || '',
         werkbon_id: initial.werkbonId || '',
         project_id: initial.projectId || '',
         notitie: initial.notitie || '',
+        profile_id: initial.profileId || currentProfileId || '',
       });
     } else {
       setForm(empty);
@@ -473,11 +488,14 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
       .filter(p => !form.customer_id || p.customerId === form.customer_id)
       .map(p => ({ value: p.id, label: p.name || 'Project' })),
   ];
-  const typeOptions = [
-    { value: 'arbeid', label: 'Arbeid' },
-    { value: 'reiskosten', label: 'Reiskosten' },
-    { value: 'overig', label: 'Overig' },
-  ];
+  // Admin-vangnet: keuze voor wélke medewerker de uren zijn (default jezelf).
+  const medewerkerOptions = profiles.map(m => ({
+    value: m.profileId,
+    label: `${m.fullName || m.email || 'Medewerker'}${m.profileId === currentProfileId ? ' (ikzelf)' : ''}`,
+  }));
+  if (currentProfileId && !medewerkerOptions.some(o => o.value === currentProfileId)) {
+    medewerkerOptions.unshift({ value: currentProfileId, label: 'Ikzelf' });
+  }
 
   const editMedewerker = initial?.medewerkerNaam || '—';
 
@@ -508,11 +526,17 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
             />
             {datumInvalid && <div className="uren2-error">Datum is verplicht</div>}
           </div>
-          <div className="uren2-field">
-            <label className="uren2-label">Type</label>
-            <Dropdown value={form.type} options={typeOptions} onChange={v => set('type', v)} ariaLabel="Type" />
-          </div>
-
+          {canBookForOthers && (
+            <div className="uren2-field uren2-field-full">
+              <label className="uren2-label">Medewerker</label>
+              <Dropdown
+                value={form.profile_id}
+                options={medewerkerOptions}
+                onChange={v => set('profile_id', v)}
+                ariaLabel="Medewerker"
+              />
+            </div>
+          )}
           <div className="uren2-field">
             <label className="uren2-label" htmlFor="uren2-start">Starttijd</label>
             <input
@@ -585,15 +609,18 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
 // ── Page ────────────────────────────────────────────────────────────────────
 export function UrenPageV2() {
   const toast = useToast();
-  const { profile } = useProfile();
+  const { profile, bumpRefresh } = useProfile();
+  const canBookForOthers = ['admin', 'planner'].includes(profile?.role);
   const [allRows, setAllRows] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [werkbonnen, setWerkbonnen] = useState([]);
   const [projecten, setProjecten] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [period, setPeriod] = useState('alles');
+  const [periodType, setPeriodType] = useState('alles');
+  const [anchor, setAnchor] = useState(() => new Date());
   const [employee, setEmployee] = useState('all');
 
   const [modal, setModal] = useState(null);            // { mode: 'register'|'edit', initial }
@@ -625,15 +652,27 @@ export function UrenPageV2() {
     return () => { alive = false; };
   }, []);
 
-  // Period-filtered rows (client-side, on already-loaded data)
+  // Admin-vangnet: ledenlijst zodat een admin uren namens een collega kan boeken.
+  useEffect(() => {
+    if (!canBookForOthers) { setTeamMembers([]); return; }
+    let alive = true;
+    getTeamMembers()
+      .then(ms => { if (alive) setTeamMembers((ms || []).filter(m => m.profileId)); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [canBookForOthers]);
+
+  // Period-filtered rows (client-side, on already-loaded data). Alle rijen zijn
+  // al geladen, dus het navigeren naar vorige/volgende periodes verschuift enkel
+  // de datumrange — de getoonde uren bewegen mee met de gekozen periode.
   const rowsPeriod = useMemo(() => {
-    if (period === 'alles') return allRows;
-    const { van, tot } = periodRange(period);
+    if (periodType === 'alles') return allRows;
+    const { van, tot } = periodRange(periodType, anchor);
     return allRows.filter(r => {
       const d = r.datum;
       return d && d >= van && d <= tot;
     });
-  }, [allRows, period]);
+  }, [allRows, periodType, anchor]);
 
   // KPI: counts over period (NOT employee)
   const kpis = useMemo(() => {
@@ -668,13 +707,18 @@ export function UrenPageV2() {
     return [{ value: 'all', label: 'Alle medewerkers' }, ...opts];
   }, [allRows]);
 
+  // Periode-navigatie (vorige / volgende / vandaag) — alleen zinvol bij een
+  // begrensde periode (dag/week/maand), niet bij 'Alles'.
+  const goPrev = () => setAnchor(a => shiftAnchor(a, periodType, -1));
+  const goNext = () => setAnchor(a => shiftAnchor(a, periodType, +1));
+  const periodLabelText = periodHeaderLabel(periodType, anchor);
+
   // Save handler (works for both register + edit)
   const handleSave = async (form) => {
     const payload = {
       datum: form.datum,
       start_tijd: form.start_tijd || null,
       eind_tijd: form.eind_tijd || null,
-      type: form.type,
       customer_id: form.customer_id || null,
       werkbon_id: form.werkbon_id || null,
       project_id: form.project_id || null,
@@ -682,15 +726,24 @@ export function UrenPageV2() {
     };
     try {
       if (modal.mode === 'edit' && modal.initial) {
-        const saved = await updateUrenregel(modal.initial.id, payload);
+        // Admin mag de eigenaar corrigeren; een medewerker bewerkt alleen eigen
+        // regels en laat het eigenaarschap ongemoeid (RLS dwingt dit hoe dan ook af).
+        const editPayload = canBookForOthers && form.profile_id
+          ? { ...payload, profile_id: form.profile_id }
+          : payload;
+        const saved = await updateUrenregel(modal.initial.id, editPayload);
         setAllRows(rs => rs.map(r => r.id === saved.id ? saved : r));
         toast.success('Uren opgeslagen');
       } else {
-        const saved = await createUrenregel({ ...payload, profile_id: profile?.id });
+        // Admin kan namens een collega boeken; anders altijd op jezelf.
+        const bookForId = (canBookForOthers && form.profile_id) ? form.profile_id : profile?.id;
+        const saved = await createUrenregel({ ...payload, profile_id: bookForId });
         setAllRows(rs => [saved, ...rs]);
         toast.success('Uren geregistreerd');
       }
       setModal(null);
+      // Laat o.a. de uren-herinnering-pop-up herrekenen (dag nu geboekt → weg).
+      bumpRefresh?.();
     } catch (err) {
       toast.error(err.message || 'Opslaan mislukt');
     }
@@ -742,13 +795,13 @@ export function UrenPageV2() {
           label="Totaal uren"
           value={kpis.totaal.toFixed(2)}
           unit="uur"
-          hint={`Som over ${periodLabel(period).toLowerCase()}`}
+          hint={`Som over ${periodNoun(periodType)}`}
         />
         <KpiCard
           icon={Ic.Users}
           label="Medewerkers"
           value={String(kpis.medewerkers)}
-          hint={`Uniek binnen ${periodLabel(period).toLowerCase()}`}
+          hint={`Uniek binnen ${periodNoun(periodType)}`}
         />
         <KpiCard
           icon={Ic.Trend}
@@ -762,7 +815,16 @@ export function UrenPageV2() {
       {/* Filter + table/list */}
       <div className="uren2-card">
         <div className="uren2-filter-bar">
-          <PeriodTabs value={period} onChange={setPeriod} />
+          <div className="uren2-period">
+            <PeriodTabs value={periodType} onChange={setPeriodType} />
+            {periodType !== 'alles' && (
+              <div className="uren2-periodnav">
+                <button type="button" className="btn btn-s btn-sm" onClick={goPrev} aria-label="Vorige periode">{I.chev_l}</button>
+                <span className="uren2-periodnav-label">{periodLabelText}</span>
+                <button type="button" className="btn btn-s btn-sm" onClick={goNext} aria-label="Volgende periode">{I.chev_r}</button>
+              </div>
+            )}
+          </div>
           <div className="uren2-filter-right">
             {!loading && (
               <span className="uren2-count">
@@ -806,6 +868,9 @@ export function UrenPageV2() {
         klanten={customers}
         werkbonnen={werkbonnen}
         projecten={projecten}
+        profiles={teamMembers}
+        canBookForOthers={canBookForOthers}
+        currentProfileId={profile?.id}
         onClose={() => setModal(null)}
         onSave={handleSave}
         mobile={isMobile}

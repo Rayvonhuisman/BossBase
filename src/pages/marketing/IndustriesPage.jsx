@@ -7,7 +7,7 @@ const BRANCHES = [
     tag: "Sanitair & installaties",
     intro: "Als loodgieter werk je op afroep, vaak urgent. Offertes moeten snel de deur uit en klanten wil je goed bijhouden.",
     pains: ["Offertes maken duurt te lang", "Klanten vergeten wie je bent", "Agenda-chaos bij spoedklussen", "Facturen blijven liggen"],
-    solves: ["Offerte in 2 minuten via sjabloon", "CRM met volledige klanthistorie", "Agenda met SMS-herinneringen", "Automatische factuurherinneringen"],
+    solves: ["Offerte in 2 minuten via sjabloon", "CRM met volledige klanthistorie", "Agenda met herinneringen", "Automatische factuurherinneringen"],
     stats: [{ n: "42 min", lbl: "bespaard per dag" }, { n: "3×", lbl: "snellere offertes" }],
   },
   {
@@ -43,14 +43,6 @@ const BRANCHES = [
     stats: [{ n: "12×", lbl: "terugkerende klanten" }, { n: "0", lbl: "gemiste onderhoudsbeurten" }],
   },
   {
-    id: "transporteur", naam: "Transporteur", icon: I.truck,
-    tag: "Transport & logistiek",
-    intro: "Als transporteur werk je met vaste klanten en route-planning. Factureren per rit of per maand? BossBase past zich aan.",
-    pains: ["Rittenadministratie is tijdrovend", "Klanten betalen te laat", "Geen overzicht per chauffeur", "Offertes per traject opmaken"],
-    solves: ["Klanten per rit of maand factureren", "Automatische betalingsherinneringen", "Teamrollen per chauffeur", "Offerte-sjablonen per traject"],
-    stats: [{ n: "98%", lbl: "betaalt binnen 14 dagen" }, { n: "6 uur", lbl: "bespaard per week" }],
-  },
-  {
     id: "tuinman", naam: "Tuinman / Groenvoorziening", icon: I.sparkle,
     tag: "Tuin & groenonderhoud",
     intro: "Tuinaanleg, onderhoud en seizoenswerk: als tuinman heb je een gevarieerde klantenkring die je goed wil bijhouden.",
@@ -81,7 +73,7 @@ const PERSONAS = [
     cta: "Ga als ZZP'er aan de slag",
   },
   {
-    id: "bedrijf", label: "Klein bedrijf",
+    id: "bedrijf", label: "Bedrijf",
     desc: "Je hebt een team en meerdere projecten tegelijk. BossBase houdt iedereen op de hoogte en het overzicht compleet.",
     features: [
       { icon: I.users,     title: "Teamrollen & rechten", desc: "Iedereen heeft toegang tot wat hij nodig heeft." },
@@ -150,7 +142,7 @@ export default function IndustriesPage({ navigate }) {
             <Reveal>
               <span className="section-kicker">Voor wie</span>
               <h1>Gebouwd voor de handen<br/>die Nederland laten draaien</h1>
-              <p>Of je nu ZZP'er of klein bedrijf bent — BossBase past zich aan jouw branche en werkwijze aan.</p>
+              <p>Of je nu zzp of bedrijf bent — BossBase past zich aan jouw branche en werkwijze aan.</p>
               <div style={{ display: "inline-flex", gap: 4, background: "#fff", border: "1px solid var(--bstrong)", borderRadius: 999, padding: 4, marginTop: 28 }}>
                 {PERSONAS.map(p => (
                   <button key={p.id}
@@ -174,7 +166,7 @@ export default function IndustriesPage({ navigate }) {
           <div className="container">
             <Reveal>
               <div className="section-head choreo-head">
-                <h2>{type === "zzp" ? "BossBase voor ZZP'ers" : "BossBase voor kleine bedrijven"}</h2>
+                <h2>{type === "zzp" ? "BossBase voor ZZP'ers" : "BossBase voor bedrijven"}</h2>
                 <p>{persona.desc}</p>
               </div>
               <div className="opdracht-grid choreo-body">

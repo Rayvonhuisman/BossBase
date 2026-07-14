@@ -4,7 +4,18 @@ import { getCompanyId, withCompanyId } from "../lib/currentCompany"
 
 // DB columns werkbonnen: id, company_id, customer_id, deal_id, offerte_id,
 // assigned_to, titel, omschrijving, status, gepland_op, starttijd, eindtijd,
-// locatie, notes, created_at, updated_at
+// locatie, notes, gestart_op, afgerond_op, created_at, updated_at
+
+// Combineert een geplande datum (YYYY-MM-DD) + tijd (HH:MM) tot een ISO-moment.
+// Vereist BEIDE — een geplande datum zonder tijd telt niet als geplande start
+// (spiegelt de "niet ingepland"-definitie in de Planning: !gepland_op || !starttijd).
+// Spiegelt calendarService.buildEventTimes qua lokale-tijd-interpretatie.
+export function plannedStartIso(geplandOp, starttijd) {
+  if (!geplandOp || !starttijd) return null
+  const t = starttijd.length === 5 ? `${starttijd}:00` : starttijd // HH:MM → HH:MM:SS
+  const d = new Date(`${geplandOp}T${t}`)
+  return isNaN(d.getTime()) ? null : d.toISOString()
+}
 
 const toWerkbon = row => ({
   id: row.id,
@@ -31,6 +42,11 @@ const toWerkbon = row => ({
   locatie: row.locatie || "",
   notes: row.notes || "",
   werkbonNotities: row.werkbon_notities || "",
+  gestartOp: row.gestart_op || null,
+  // Effectief startmoment: het werkelijk vastgelegde start (gestart_op, gezet bij
+  // "Start klus") valt terug op de geplande start (gepland_op + starttijd) zolang
+  // de knop niet is gebruikt. Afgeleid (niet fysiek opgeslagen) — zie taakeisen.
+  effectiveStartOp: row.gestart_op || plannedStartIso(row.gepland_op, row.starttijd),
   afgerondOp: row.afgerond_op || null,
   createdAt: row.created_at,
   // Joined relaties (optioneel)
@@ -197,7 +213,14 @@ export async function updateWerkbon(id, input) {
   delete updates.projectName
   delete updates.voertuigNaam
   delete updates.voertuigKleur
+  delete updates.gestartOp
+  delete updates.afgerondOp
   delete updates.raw
+
+  // Legt het startmoment vast zodra de status naar 'in_uitvoering' gaat, tenzij
+  // de aanroeper zelf al een gestart_op meegeeft. De daadwerkelijke schrijf
+  // gebeurt hieronder pas ná de hoofdupdate, en alleen als gestart_op nog leeg is.
+  const wantsStartStamp = updates.status === "in_uitvoering" && updates.gestart_op === undefined
 
   const { data, error } = await supabase
     .from("werkbonnen")
@@ -206,6 +229,21 @@ export async function updateWerkbon(id, input) {
     .select(WERKBON_SELECT)
     .single()
   if (error) throw error
+
+  // Startmoment één keer registreren — spiegelt hoe afgerond_op werkt. De
+  // .is('gestart_op', null)-guard zorgt dat een bestaand startmoment nooit wordt
+  // overschreven (race-veilig). Bij direct afronden (in_uitvoering overgeslagen)
+  // draait dit niet, dus blijft gestart_op leeg.
+  if (wantsStartStamp && data && !data.gestart_op) {
+    const { data: stamped } = await supabase
+      .from("werkbonnen")
+      .update({ gestart_op: new Date().toISOString() })
+      .eq("id", id)
+      .is("gestart_op", null)
+      .select(WERKBON_SELECT)
+      .maybeSingle()
+    if (stamped) return toWerkbon(stamped)
+  }
   return toWerkbon(data)
 }
 

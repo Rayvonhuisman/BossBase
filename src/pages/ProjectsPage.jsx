@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { I, ModalX, NotifyMailToggle, fmt, fmt0, BackToKlant } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { usePermissions } from '../hooks/usePermissions.js';
 import {
   getEnrichedProjects,
   createProject,
@@ -294,7 +295,10 @@ function EmptyState({ icon, title, subtitle, action }) {
 export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjectId, onNavConsumed, backKlant, onBackKlant } = {}) {
   const toast = useToast();
   const { profile } = useProfile();
-  const canManage = !profile || ['admin', 'planner'].includes(profile.role);
+  const { can } = usePermissions();
+  // Projecten bewerken/aanmaken: admin/planner-rol óf het 'projecten_bewerken'-recht.
+  // Zien mag iedereen; RLS bepaalt welke projecten zichtbaar zijn.
+  const canManage = ['admin', 'planner'].includes(profile?.role) || can('projecten_bewerken');
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');

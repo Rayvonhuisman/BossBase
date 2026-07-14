@@ -43,6 +43,7 @@ import { clearCompanyId, setCompanyId } from './lib/currentCompany.js';
 import { ToastProvider, useToast } from './lib/toast.jsx';
 import { UploadProvider } from './lib/uploadContext.jsx';
 import { CookieBanner } from './components/CookieBanner.jsx';
+import { UrenHerinneringModal } from './components/UrenHerinneringModal.jsx';
 import { CookieverklaringPage } from './pages/CookieverklaringPage.jsx';
 import { ProfileContext, displayName, profileInitials } from './lib/profileContext.jsx';
 import { DataContext, useData } from './lib/dataContext.jsx';
@@ -75,7 +76,7 @@ const authLog = (...args) => {
 // permission: als gezet, verberg item als gebruiker dat recht niet heeft
 const NAV = [
   { id: 'dashboard',   label: 'Dashboard',    icon: 'dash',    section: 'main' },
-  { id: 'pipeline',    label: 'Pipeline',     icon: 'pipe',    section: 'main', permission: 'pipeline' },
+  { id: 'pipeline',    label: 'Pipeline',     icon: 'pipe',    section: 'main', permission: 'verkoop' },
   { id: 'customers',   label: 'Klanten',      icon: 'cust',    section: 'main' },
   { id: 'activities',  label: 'Activiteiten', icon: 'act',     section: 'main' },
   { id: 'calendar',    label: 'Agenda',        icon: 'cal',     section: 'work' },
@@ -86,7 +87,7 @@ const NAV = [
   { id: 'offertes',    label: 'Offertes',      icon: 'quotes',  section: 'finance', permission: 'offertes' },
   { id: 'facturen',    label: 'Facturen',      icon: 'brief',   section: 'finance', permission: 'facturen' },
   { id: 'costs',       label: 'Kosten',        icon: 'euro',    section: 'finance', permission: 'kosten' },
-  { id: 'revenue',     label: 'Financiën',     icon: 'chart',   section: 'finance', permission: 'financieel' },
+  { id: 'revenue',     label: 'Financiën',     icon: 'chart',   section: 'finance', permission: 'bedrijfsfinancien' },
   { id: 'database',    label: 'Database',      icon: 'db',      section: 'bedrijf', permission: 'database' },
   { id: 'team',        label: 'Team',          icon: 'team',    section: 'bedrijf', permission: 'team' },
   { id: 'instellingen',label: 'Instellingen',  icon: 'settings',section: 'bedrijf', permission: 'instellingen' },
@@ -94,11 +95,11 @@ const NAV = [
 
 // Pagina's die een bepaald recht vereisen voor toegang
 const PROTECTED_PAGES = {
-  pipeline:    'pipeline',
+  pipeline:    'verkoop',
   offertes:    'offertes',
   facturen:    'facturen',
   costs:       'kosten',
-  revenue:     'financieel',
+  revenue:     'bedrijfsfinancien',
   planning:    'planning',
   database:    'database',
   team:        'team',
@@ -646,7 +647,7 @@ function MeerMenu({ page, onNavigate, onClose, profile }) {
 
   const financeItems = [
     can('kosten')     && { id: 'costs',    label: 'Kosten',    icon: I.costs },
-    can('financieel') && { id: 'revenue',  label: 'Financiën', icon: I.chart },
+    can('bedrijfsfinancien') && { id: 'revenue',  label: 'Financiën', icon: I.chart },
     can('facturen')   && { id: 'facturen', label: 'Facturen',  icon: I.brief },
     can('offertes')   && { id: 'offertes', label: 'Offertes',  icon: I.quotes },
   ].filter(Boolean);
@@ -713,7 +714,7 @@ function MobileBottomNav({ page, setPage, badges = {}, profile, can }) {
 
   const items = [
     { id: 'dashboard',  label: 'Dashboard',    icon: I.dash },
-    { id: 'pipeline',   label: 'Pipeline',     icon: I.pipe,  badge: badges.pipeline, permission: 'pipeline' },
+    { id: 'pipeline',   label: 'Pipeline',     icon: I.pipe,  badge: badges.pipeline, permission: 'verkoop' },
     { id: 'customers',  label: 'Klanten',      icon: I.cust },
     { id: 'activities', label: 'Activiteiten', icon: I.act,   badge: badges.activities },
     { id: 'meer',       label: 'Meer',         icon: I.meer },
@@ -1348,10 +1349,13 @@ function AppInner() {
 
   const meta = PAGE_META[page] || PAGE_META.dashboard;
 
-  const today = new Date().toISOString().slice(0, 10);
   const sidebarBadges = {
     pipeline: globalDeals.filter(d => d.stage === 'new_lead').length,
-    activities: globalActivities.filter(a => a.status !== 'completed' && a.status !== 'done' && a.dueAt?.slice(0, 10) <= today).length,
+    // Openstaand = vandaag + te laat. Gebruik dezelfde, in de service (lokale
+    // tijdzone) berekende status als de Activiteiten-pagina — één bron. De oude
+    // eigen UTC-datumvergelijking (toISOString) miste op de dag-/tijdzonegrens
+    // een 'vandaag'-activiteit (badge telde 6 i.p.v. 7).
+    activities: globalActivities.filter(a => a.status === 'today' || a.status === 'overdue').length,
   };
 
   if (!permissionsLoaded) {
@@ -1547,6 +1551,7 @@ function AppInner() {
         )}
       </div>
       <CookieBanner navigate={navigate} />
+      <UrenHerinneringModal navigatePage={navigatePage} />
       </DataContext.Provider>
     </ProfileContext.Provider>
   );
