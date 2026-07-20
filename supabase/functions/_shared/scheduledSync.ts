@@ -1,13 +1,18 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 // Gedeelde helpers om edge functions zowel door een ingelogde gebruiker
-// (user-JWT) als door pg_cron (service-role key) te laten draaien.
+// (user-JWT) als door pg_cron te laten draaien — ZONDER een service-role key in
+// de cron-plumbing.
 //
-// - User-modus: de bestaande flow — één bedrijf, afgeleid uit de user.
-// - Scheduled-modus: herkend aan een service-role aanroep → loop over ALLE
-//   bedrijven met een actieve connectie. Alleen de service-role key (uit Vault,
-//   door de eigenaar gezet als `edge_cron_service_key`) kan dit triggeren, zodat
-//   een privileged all-company sync niet vanaf een gewone/anon-caller kan.
+// - User-modus: de bestaande flow — één bedrijf, afgeleid uit de user-JWT.
+// - Scheduled-modus: herkend aan een aparte, high-entropy `cron_secret` in de
+//   request-body (NIET de service-role key). Alleen die secret ontgrendelt de
+//   all-company loop; op zichzelf geeft hij geen enkele DB-toegang.
+//
+// De writes draaien met de eigen env-service-role van de functie — onvermijdelijk
+// voor een cross-company backend-job op RLS-tabellen, en hetzelfde patroon als
+// check-herinneringen. De gevoelige token-lees loopt via de afgebakende
+// SECURITY DEFINER-functie get_moneybird_sync_targets() (alleen service_role).
 
 export function makeAdminClient() {
   return createClient(
@@ -16,37 +21,46 @@ export function makeAdminClient() {
   )
 }
 
-// True wanneer de aanroep met de service-role key als bearer is gedaan (cron/
-// backend), niet met een gewone gebruikers-JWT. Alleen dan draait de loop.
-export function isServiceRoleCall(jwt: string): boolean {
-  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  return Boolean(jwt) && Boolean(key) && jwt === key
+// Constant-time string-vergelijking, zodat de cron_secret niet via response-
+// timing kan lekken.
+function timingSafeEqual(a: string, b: string): boolean {
+  if (typeof a !== 'string' || typeof b !== 'string') return false
+  const enc = new TextEncoder()
+  const ab = enc.encode(a)
+  const bb = enc.encode(b)
+  if (ab.length !== bb.length) return false
+  let diff = 0
+  for (let i = 0; i < ab.length; i++) diff |= ab[i] ^ bb[i]
+  return diff === 0
+}
+
+// True wanneer de request de juiste cron_secret meestuurt (pg_cron/backend). De
+// secret staat als function-env `CRON_SECRET` en wordt door de cron uit Vault
+// (`edge_cron_secret`) in de body meegegeven. Ontbreekt de env → nooit scheduled
+// (fail-safe: dan draait alleen de user-modus).
+export function isScheduledCall(body: any): boolean {
+  const expected = Deno.env.get('CRON_SECRET') ?? ''
+  const provided = (body && typeof body.cron_secret === 'string') ? body.cron_secret : ''
+  return Boolean(expected) && timingSafeEqual(provided, expected)
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 // Loopt over alle bedrijven met een ACTIEVE Moneybird-connectie en draait
-// `perCompany` per bedrijf. Vereist is_connected=true: een cron mag niet
-// automatisch syncen voor een bedrijf dat de koppeling heeft losgekoppeld
-// (fout gedrag + onnodige API-calls). De user-flow houdt parity — handmatig
-// syncen is een expliciete actie en checkt is_connected niet.
-// Eén kapotte connectie blokkeert de rest niet; er zit een kleine pauze tussen
-// bedrijven i.v.m. de Moneybird rate-limits.
+// `perCompany` per bedrijf. De bedrijvenlijst + tokens komen UITSLUITEND uit de
+// afgebakende SECURITY DEFINER-functie get_moneybird_sync_targets() (alleen
+// service_role mag die aanroepen; is_connected=true wordt daar afgedwongen).
+// Eén kapotte connectie blokkeert de rest niet; kleine pauze tussen bedrijven
+// i.v.m. de Moneybird rate-limits.
 export async function forEachMoneybirdCompany(
   admin: any,
   perCompany: (companyId: string, token: string, adminId: string) => Promise<Record<string, unknown>>,
   betweenMs = 500,
 ) {
-  const { data: conns, error } = await admin
-    .from('accounting_connections')
-    .select('company_id, api_token, administration_id')
-    .eq('provider', 'moneybird')
-    .eq('is_connected', true)
-    .not('api_token', 'is', null)
-    .not('administration_id', 'is', null)
+  const { data: targets, error } = await admin.rpc('get_moneybird_sync_targets')
   if (error) throw error
 
-  const list = conns ?? []
+  const list = targets ?? []
   const results: Record<string, unknown>[] = []
   const errors: { company_id: string; error: string }[] = []
 

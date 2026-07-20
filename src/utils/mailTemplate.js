@@ -6,8 +6,9 @@
 //
 // Het BossBase-logo moet via een geldige publieke https-URL geladen worden
 // (e-mailclients laden geen lokale assets en blokkeren data-URI's). icon-512.png
-// staat in public/brand en wordt op het app-domein geserveerd.
-const BOSSBASE_LOGO_URL = 'https://app.bossbase.nl/brand/icon-512.png';
+// staat in public/brand en wordt op www.bossbase.nl geserveerd (het app.-subdomein
+// serveert dit asset NIET → kapot logo in e-mails).
+const BOSSBASE_LOGO_URL = 'https://www.bossbase.nl/brand/icon-512.png';
 const BOSSBASE_GREEN = '#1DDB62';
 
 // Leesbare tekstkleur op een achtergrondkleur: donkere tekst op lichte kleuren

@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { makeAdminClient, isServiceRoleCall, forEachMoneybirdCompany } from "../_shared/scheduledSync.ts"
+import { makeAdminClient, isScheduledCall, forEachMoneybirdCompany } from "../_shared/scheduledSync.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -144,8 +144,8 @@ serve(async (req) => {
   const periodeType: string = body.periode_type ?? 'kwartaal'
 
   try {
-    // ── Scheduled-modus (pg_cron met service-role key): alle bedrijven ──────────
-    if (isServiceRoleCall(jwt)) {
+    // ── Scheduled-modus (pg_cron met cron_secret in de body): alle bedrijven ────
+    if (isScheduledCall(body)) {
       const summary = await forEachMoneybirdCompany(supabase, (companyId, token, adminId) =>
         syncCompany(supabase, companyId, token, adminId, periodeType))
       return json(summary)

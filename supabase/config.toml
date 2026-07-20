@@ -13,3 +13,13 @@
 # gebruikers mogen het testendpoint aanroepen.
 [functions.afas-test]
 verify_jwt = true
+
+# Stripe roept de webhook publiek aan (geen Supabase-JWT). De echtheid wordt
+# geverifieerd via de Stripe-signature (STRIPE_WEBHOOK_SECRET) in de functie zelf.
+[functions.stripe-webhook]
+verify_jwt = false
+
+# Publieke betaal-tussenpagina (/betaal/<token>): de klant is niet ingelogd. De
+# autorisatie zit in het onraadbare token; de functie leest server-side.
+[functions.stripe-pay-link]
+verify_jwt = false

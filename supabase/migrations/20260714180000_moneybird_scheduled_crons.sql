@@ -1,7 +1,29 @@
 -- =============================================================================
+-- ⚠️ ACHTERHAALD / SUPERSEDED — NIET MEER GEBRUIKEN
+-- Vervangen door: 20260718094500_moneybird_crons_scoped.sql
+--
+-- Deze migratie zette de service-role key (uit Vault: edge_cron_service_key) als
+-- bearer in de cron-plumbing. Die aanpak is bewust verlaten: een brede service-
+-- role sleutel die langs alle RLS kan, hoort niet in de cron-plumbing.
+--
+-- De opvolger (20260718094500) herschrijft dezelfde 3 cron-jobs naar:
+--   * anon-JWT (edge_cron_key) als bearer — passeert enkel de gateway;
+--   * een smalle cron_secret (edge_cron_secret) in de body die alleen de
+--     scheduled-modus ontgrendelt (geen DB-toegang, geen service-role);
+--   * token-lees via de afgebakende SECURITY DEFINER-functie
+--     get_moneybird_sync_targets() (alleen service_role).
+--
+-- Bij een db reset/replay draait deze migratie eerst, maar 20260718094500 (die
+-- later loopt) overschrijft de 3 cron-jobs meteen — de eindtoestand is dus de
+-- least-privilege variant. De secret edge_cron_service_key is niet nodig en
+-- wordt (in de opvolger) niet aangemaakt. Laat dit bestand ongewijzigd staan als
+-- historische migratie; pas de opvolger aan, niet dit bestand.
+-- =============================================================================
+
+-- =============================================================================
 -- BossBase: Moneybird cron-jobs herschikken naar het scheduled/service-role pad
 -- Bestand : supabase/migrations/20260714180000_moneybird_scheduled_crons.sql
--- Status  : TER REVIEW — nog NIET toepassen.
+-- Status  : ACHTERHAALD (zie banner hierboven).
 --
 -- Achtergrond:
 --   De moneybird-functies (btw, import-kosten, sync-contacten) valideerden een

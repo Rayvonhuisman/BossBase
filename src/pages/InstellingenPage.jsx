@@ -2,8 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { I, ModalX, STAGE_COLOR_OPTIONS, stageColToHex, stageColorLabel, stageBadgeStyle } from '../bb-shared.jsx';
 import { supabase } from '../lib/supabase.js';
 import { useToast } from '../lib/toast.jsx';
-import { useProfile } from '../lib/profileContext.jsx';
+import { useProfile, useTier } from '../lib/profileContext.jsx';
+import { getStripeConnection, startStripeOnboarding, refreshStripeStatus, disconnectStripe } from '../services/stripeService.js';
 import { usePermissions } from '../hooks/usePermissions.js';
+import { useUrlTab } from '../hooks/useUrlTab.js';
 import { useUploads } from '../lib/uploadContext.jsx';
 import { openCookieBanner } from '../components/CookieBanner.jsx';
 import {
@@ -48,7 +50,7 @@ import {
 const ALL_TEMPLATE_CONFIGS = [
   { type: 'offerte', label: 'Offerte', vars: ['klant_naam','bedrijfsnaam','offerte_nummer','totaal_bedrag','vervaldatum','link'], showAutoToggle: false, showAutoDagen: false },
   { type: 'offerte_geaccepteerd', label: 'Offerte geaccepteerd', vars: ['klant_naam','bedrijfsnaam','offerte_nummer'], showAutoToggle: true, showAutoDagen: false },
-  { type: 'factuur', label: 'Factuur', vars: ['klant_naam','bedrijfsnaam','factuur_nummer','totaal_bedrag','vervaldatum'], showAutoToggle: false, showAutoDagen: false },
+  { type: 'factuur', label: 'Factuur', vars: ['klant_naam','bedrijfsnaam','factuur_nummer','totaal_bedrag','vervaldatum','betaalinstructie'], showAutoToggle: false, showAutoDagen: false },
   { type: 'herinnering_1', label: 'Herinnering 1', vars: ['klant_naam','bedrijfsnaam','factuur_nummer','totaal_bedrag','vervaldatum'], showAutoToggle: true, showAutoDagen: true, dagenLabel: 'dagen na vervaldatum' },
   { type: 'herinnering_2', label: 'Herinnering 2', vars: ['klant_naam','bedrijfsnaam','factuur_nummer','totaal_bedrag','vervaldatum'], showAutoToggle: true, showAutoDagen: true, dagenLabel: 'dagen na vervaldatum' },
   { type: 'aanvraag_ontvangen', label: 'Aanvraag ontvangen', vars: ['klant_naam','bedrijfsnaam'], showAutoToggle: true, showAutoDagen: false },
@@ -63,7 +65,7 @@ const NEW_TEMPLATE_VARS = ['klant_naam','bedrijfsnaam','factuur_nummer','offerte
 const DEFAULT_BODY = {
   offerte: 'Beste {{klant_naam}},\n\nHierbij sturen wij u offerte {{offerte_nummer}} toe.\n\nTotaalbedrag: {{totaal_bedrag}}\nGeldig tot: {{vervaldatum}}\n\nVia onderstaande link kunt u de offerte bekijken en digitaal ondertekenen:\n{{link}}\n\nHeeft u vragen? Neem gerust contact met ons op.\n\nMet vriendelijke groet,\n{{bedrijfsnaam}}',
   offerte_geaccepteerd: 'Beste {{klant_naam}},\n\nHartelijk dank! Uw offerte {{offerte_nummer}} is succesvol ondertekend.\n\nWij gaan zo snel mogelijk voor u aan de slag. U ontvangt binnenkort meer informatie over de planning.\n\nMet vriendelijke groet,\n{{bedrijfsnaam}}',
-  factuur: 'Beste {{klant_naam}},\n\nHierbij ontvangt u factuur {{factuur_nummer}} van {{bedrijfsnaam}}.\n\nTotaalbedrag: {{totaal_bedrag}}\nBetaaltermijn: {{vervaldatum}}\n\nGelieve het totaalbedrag voor de betaaltermijn over te maken onder vermelding van {{factuur_nummer}}.\n\nMet vriendelijke groet,\n{{bedrijfsnaam}}',
+  factuur: 'Beste {{klant_naam}},\n\nHierbij ontvangt u factuur {{factuur_nummer}} van {{bedrijfsnaam}}.\n\nTotaalbedrag: {{totaal_bedrag}}\nBetaaltermijn: {{vervaldatum}}\n\n{{betaalinstructie}}\n\nMet vriendelijke groet,\n{{bedrijfsnaam}}',
   herinnering_1: 'Beste {{klant_naam}},\n\nWij willen u vriendelijk herinneren dat factuur {{factuur_nummer}} nog openstaat.\n\nTotaalbedrag: {{totaal_bedrag}}\nVervaldatum was: {{vervaldatum}}\n\nMocht u dit bedrag reeds hebben overgemaakt, dan kunt u deze herinnering als niet verzonden beschouwen.\n\nMet vriendelijke groet,\n{{bedrijfsnaam}}',
   herinnering_2: 'Beste {{klant_naam}},\n\nDit is een tweede herinnering voor factuur {{factuur_nummer}}, welke reeds is vervallen.\n\nTotaalbedrag: {{totaal_bedrag}}\nVervaldatum was: {{vervaldatum}}\n\nWij verzoeken u dringend dit bedrag zo spoedig mogelijk te voldoen.\n\nMet vriendelijke groet,\n{{bedrijfsnaam}}',
   aanvraag_ontvangen: 'Beste {{klant_naam}},\n\nBedankt voor uw aanvraag! Wij hebben uw bericht ontvangen en nemen zo spoedig mogelijk contact met u op.\n\nMet vriendelijke groet,\n{{bedrijfsnaam}}',
@@ -105,9 +107,13 @@ function ColorSwatchPicker({ value, onChange }) {
   );
 }
 
+// Alle mogelijke tab-ids (permissie-onafhankelijk) — weert onbekende ?tab=-waarden.
+const SETTINGS_TAB_IDS = ['profiel', 'bedrijf', 'standaard', 'templates', 'pipeline', 'voertuigen', 'integraties'];
+
 export function InstellingenPage() {
   const toast = useToast();
   const { company, refresh, profile } = useProfile();
+  const tier = useTier();
   const { can } = usePermissions();
   const { startUpload } = useUploads();
   const isAdmin = profile?.role === 'admin';
@@ -115,7 +121,11 @@ export function InstellingenPage() {
   // iedereen kan z'n eigen "Mijn profiel" beheren (incl. account verwijderen).
   const canCompanySettings = can('instellingen');
 
-  const [tab, setTab] = useState('profiel');
+  // Actieve tab in de URL (?tab=…) zodat een refresh/terugkeer op dezelfde tab
+  // landt. Bij terugkeer uit de Stripe-onboarding zet de return-URL een
+  // De actieve tab staat in de URL (?tab=<id>). Zo landt de Stripe-return
+  // (…/dashboard/instellingen?tab=integraties) meteen op de Integraties-tab.
+  const [tab, setTab] = useUrlTab('profiel', { validIds: SETTINGS_TAB_IDS });
   const [loading, setLoading] = useState(true);
 
   // Eigen profiel — naam bewerken
@@ -158,7 +168,9 @@ export function InstellingenPage() {
   const [templates, setTemplates] = useState([]);
   const [templateForms, setTemplateForms] = useState({});
   const [savingTemplate, setSavingTemplate] = useState({});
-  const [activeTemplateType, setActiveTemplateType] = useState('offerte');
+  // Sub-tab binnen E-mailtemplates — ook in de URL (?sub=…) zodat een refresh
+  // op hetzelfde template-type blijft.
+  const [activeTemplateType, setActiveTemplateType] = useUrlTab('offerte', { param: 'sub' });
   const bodyRef = useRef(null);
   const newBodyRef = useRef(null);
   const [showNewTemplate, setShowNewTemplate] = useState(false);
@@ -224,10 +236,72 @@ export function InstellingenPage() {
   const [afasTested, setAfasTested] = useState(false);
   const [afasShowToken, setAfasShowToken] = useState(false);
 
+  // Stripe Connect (tier-gated: alleen Groei/Team)
+  const [stripeConn, setStripeConn] = useState(null);
+  const [stripeBusy, setStripeBusy] = useState(false);
+  const stripeAllowed = tier === 'groei' || tier === 'team';
+
   useEffect(() => {
     if (!canCompanySettings) return;
     getVoertuigen({ inclusiefInactief: true }).then(setVoertuigen).catch(() => {});
   }, [canCompanySettings]);
+
+  // Stripe-koppeling laden. Zolang de koppeling nog niet actief is (bv. net terug
+  // uit de onboarding) halen we de status live bij Stripe op, zodat de kaart direct
+  // klopt en nooit blijft hangen op een verouderde status.
+  useEffect(() => {
+    if (!canCompanySettings || !stripeAllowed) return;
+    let alive = true;
+    getStripeConnection()
+      .then(async conn => {
+        if (!alive) return;
+        setStripeConn(conn);
+        if (conn?.accountId && !conn.chargesEnabled) {
+          try { await refreshStripeStatus(); } catch { /* stil; kaart toont laatst bekende status */ }
+          const fresh = await getStripeConnection().catch(() => conn);
+          if (alive) setStripeConn(fresh);
+        }
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [canCompanySettings, stripeAllowed]);
+
+  const handleStripeConnect = async () => {
+    setStripeBusy(true);
+    try {
+      const url = await startStripeOnboarding();
+      window.location.href = url; // redirect naar Stripe onboarding
+    } catch (e) {
+      toast.error(e.message || 'Koppelen mislukt');
+      setStripeBusy(false);
+    }
+  };
+
+  const handleStripeRefresh = async () => {
+    setStripeBusy(true);
+    try {
+      await refreshStripeStatus();
+      setStripeConn(await getStripeConnection());
+    } catch (e) {
+      toast.error(e.message || 'Status vernieuwen mislukt');
+    } finally {
+      setStripeBusy(false);
+    }
+  };
+
+  const handleStripeDisconnect = async () => {
+    if (!window.confirm('Stripe-koppeling ontkoppelen? Je account bij Stripe blijft bestaan.')) return;
+    setStripeBusy(true);
+    try {
+      await disconnectStripe();
+      setStripeConn(null);
+      toast.success('Stripe ontkoppeld');
+    } catch (e) {
+      toast.error(e.message || 'Ontkoppelen mislukt');
+    } finally {
+      setStripeBusy(false);
+    }
+  };
 
   useEffect(() => {
     // Medewerkers zonder instellingen-recht zien alleen "Mijn profiel" — geen
@@ -1550,6 +1624,14 @@ export function InstellingenPage() {
                   )}
                 </div>
 
+                {cfg.vars.includes('betaalinstructie') && (
+                  <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 'var(--r8)', fontSize: '.8rem', color: 'var(--dmu)', lineHeight: 1.55 }}>
+                    <div style={{ marginBottom: 4 }}><strong style={{ color: 'var(--dm)', fontFamily: 'monospace' }}>{'{{betaalinstructie}}'}</strong> past zich aan bij het versturen:</div>
+                    <div><strong style={{ color: 'var(--dm)' }}>Met Stripe-koppeling:</strong> "U kunt de factuur eenvoudig online betalen via de knop hieronder, of het bedrag overmaken onder vermelding van het factuurnummer."</div>
+                    <div><strong style={{ color: 'var(--dm)' }}>Standaard:</strong> "Gelieve het totaalbedrag voor de betaaltermijn over te maken onder vermelding van het factuurnummer."</div>
+                  </div>
+                )}
+
                 <div className="fa" style={{ flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
                   {stdCfg && DEFAULT_BODY[activeTemplateType] && (
                     <button className="btn btn-ghost btn-sm" onClick={() => {
@@ -2021,6 +2103,71 @@ export function InstellingenPage() {
             </div>
           </div>
           )}
+
+          {/* Stripe Connect — tier-gated (Groei/Team). Eigen, eenvoudiger opzet dan
+              Moneybird: geen sleutel-invoer, alleen een koppel-actie. Frontend leest
+              alleen statusvelden; de platform secret key blijft in de edge functions. */}
+          <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
+            <div className="integ-card-hd" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+              {/* Logo-plek */}
+              <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bgs)', borderRadius: 'var(--r8)', border: '1px solid var(--border)', color: 'var(--dm)', flexShrink: 0 }}>
+                {I.euro}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: '.95rem', marginBottom: 2 }}>Stripe</div>
+                <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>
+                  Laat klanten je facturen online betalen.
+                </div>
+              </div>
+              {/* Status-pill */}
+              <div style={{ flexShrink: 0 }}>
+                {!stripeAllowed ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: '.72rem', fontWeight: 600, color: 'var(--dmu)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 999, padding: '3px 10px' }}>
+                    Vanaf Groei
+                  </span>
+                ) : stripeConn?.chargesEnabled ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '.72rem', fontWeight: 600, color: 'var(--pd)', background: 'var(--pll)', border: '1px solid var(--pl)', borderRadius: 999, padding: '3px 10px' }}>
+                    <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--pd)' }} /> Actief
+                  </span>
+                ) : stripeConn?.accountId ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: '.72rem', fontWeight: 600, color: 'var(--dmu)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 999, padding: '3px 10px' }}>
+                    In verificatie
+                  </span>
+                ) : (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: '.72rem', fontWeight: 600, color: 'var(--dmu)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 999, padding: '3px 10px' }}>
+                    Niet gekoppeld
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {!stripeAllowed ? (
+              <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>
+                Stripe-betalingen zijn beschikbaar vanaf het <strong>Groei</strong>-abonnement.
+              </div>
+            ) : stripeConn?.chargesEnabled ? (
+              <div className="fa" style={{ gap: 8 }}>
+                <span style={{ fontSize: '.82rem', color: 'var(--dm)', alignSelf: 'center', marginRight: 'auto' }}>
+                  Klanten kunnen je facturen nu online betalen.
+                </span>
+                <button className="btn btn-ghost btn-sm" onClick={handleStripeDisconnect} disabled={stripeBusy}>Ontkoppelen</button>
+              </div>
+            ) : stripeConn?.accountId ? (
+              <div className="fa" style={{ gap: 8 }}>
+                <span style={{ fontSize: '.82rem', color: 'var(--dm)', alignSelf: 'center', marginRight: 'auto' }}>
+                  Stripe verifieert je gegevens… Dit kan even duren.
+                </span>
+                <button className="btn btn-s btn-sm" onClick={handleStripeRefresh} disabled={stripeBusy}>
+                  {stripeBusy ? 'Vernieuwen…' : 'Status vernieuwen'}
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={handleStripeDisconnect} disabled={stripeBusy}>Ontkoppelen</button>
+              </div>
+            ) : (
+              <button className="btn btn-p" onClick={handleStripeConnect} disabled={stripeBusy}>
+                {stripeBusy ? 'Bezig…' : 'Stripe koppelen'}
+              </button>
+            )}
+          </div>
 
           {/* Moneybird */}
           <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>

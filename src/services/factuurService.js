@@ -3,6 +3,27 @@ import { withCompanyId } from '../lib/currentCompany'
 import { syncFactuurNaarMoneybird } from './accountingService'
 import { logTijdlijnSafe } from './klantTijdlijnService'
 
+// Slaat de bij verzending gegenereerde factuur-PDF op in de private bucket
+// 'factuur-pdfs' (pad {company_id}/{factuur_id}.pdf, upsert). Server-side flows
+// zonder browser (de Stripe-webhook) halen deze exacte kopie later op als bijlage
+// bij de betaalbevestigingsmails. Best-effort: faalt stil, mag de mailverzending
+// nooit blokkeren.
+export async function uploadFactuurPdf(factuurId, companyId, pdfBase64) {
+  if (!factuurId || !companyId || !pdfBase64) return false
+  try {
+    const bin = atob(pdfBase64)
+    const bytes = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+    const path = `${companyId}/${factuurId}.pdf`
+    const { error } = await supabase.storage
+      .from('factuur-pdfs')
+      .upload(path, bytes, { contentType: 'application/pdf', upsert: true })
+    return !error
+  } catch {
+    return false
+  }
+}
+
 const toFactuur = row => ({
   id: row.id,
   companyId: row.company_id,
@@ -121,6 +142,26 @@ export async function createFactuur(input) {
 const FACTUUR_CONTENT_FIELDS = ['vervaldatum', 'betalingskenmerk', 'notities', 'totaal_excl', 'totaal_incl']
 
 export async function updateFactuur(id, input) {
+  // Betaald-transitie loopt via de gedeelde, idempotente guard (mark_factuur_betaald)
+  // — exact dezelfde route als de Stripe-webhook. Atomair: zet alleen op betaald als
+  // dat nog niet zo is; alleen dan volgt de Moneybird-sync + tijdlijn-log (één keer).
+  if (input.status === 'betaald') {
+    const { data: res, error: rpcErr } = await supabase.rpc('mark_factuur_betaald', {
+      p_factuur_id: id,
+      p_betaald_op: input.betaald_op || null,
+    })
+    if (rpcErr) throw rpcErr
+    const { data: cur, error } = await supabase.from('facturen').select('*, customers(name)').eq('id', id).single()
+    if (error) throw error
+    const result = toFactuur(cur)
+    if (res?.changed) {
+      syncFactuurNaarMoneybird(id).catch(() => {})
+      const bedrag = result.totaalIncl.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      logTijdlijnSafe(result.customerId, 'factuur_betaald', `Factuur ${result.nummer} betaald (€${bedrag})`, { nummer: result.nummer })
+    }
+    return result
+  }
+
   // Een verstuurde/betaalde factuur is alleen-lezen: inhoud kan niet meer
   // wijzigen. Status (betaald markeren), herinneringen en de branding-snapshot
   // mogen nog wel. We controleren server-side voor de zekerheid.
@@ -144,9 +185,7 @@ export async function updateFactuur(id, input) {
   for (const k of ['snapshot_logo_url', 'snapshot_branding_color', 'snapshot_bedrijfsnaam', 'snapshot_adres', 'snapshot_postcode', 'snapshot_plaats', 'snapshot_email', 'snapshot_kvk', 'snapshot_btw']) {
     if (k in input) updates[k] = input[k]
   }
-  if (input.status === 'betaald' && !input.betaald_op) {
-    updates.betaald_op = new Date().toISOString().slice(0, 10)
-  }
+  // (betaald wordt hierboven al via mark_factuur_betaald afgehandeld)
   updates.updated_at = new Date().toISOString()
   const { data, error } = await supabase
     .from('facturen')
@@ -156,17 +195,8 @@ export async function updateFactuur(id, input) {
     .single()
   if (error) throw error
   const result = toFactuur(data)
-  if (input.status === 'betaald') {
-    syncFactuurNaarMoneybird(id).catch(() => {})
-  }
-  if (result.customerId && input.status) {
-    const bedrag = result.totaalIncl.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    const statusMap = {
-      verzonden: ['factuur_verzonden', `Factuur ${result.nummer} verzonden naar klant`],
-      betaald:   ['factuur_betaald',   `Factuur ${result.nummer} betaald (€${bedrag})`],
-    }
-    const entry = statusMap[input.status]
-    if (entry) logTijdlijnSafe(result.customerId, entry[0], entry[1], { nummer: result.nummer })
+  if (result.customerId && input.status === 'verzonden') {
+    logTijdlijnSafe(result.customerId, 'factuur_verzonden', `Factuur ${result.nummer} verzonden naar klant`, { nummer: result.nummer })
   }
   return result
 }

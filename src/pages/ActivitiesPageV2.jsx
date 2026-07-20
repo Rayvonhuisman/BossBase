@@ -5,6 +5,7 @@ import { listDeals } from '../services/dealService.js';
 import { ActivityEditModal, NewActivityModal } from '../components/SharedModals.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { useUrlTab } from '../hooks/useUrlTab.js';
 import { getTeamMembers } from '../services/notificatieService.js';
 
 // ─── Inline SVG icons (stroke-based, currentColor) ──────────────────────────
@@ -142,7 +143,8 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
   const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filter, setFilter] = useState('all');
+  // Actieve filter-tab in de URL (?tab=…) — blijft behouden bij refresh/terugkeer.
+  const [filter, setFilter] = useUrlTab('all', { validIds: ['all', 'open', 'today', 'overdue', 'done'] });
   const [dateFilter, setDateFilter] = useState('');
   const [memberFilter, setMemberFilter] = useState('all');
   const [search, setSearch] = useState('');

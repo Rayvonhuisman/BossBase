@@ -21,6 +21,7 @@ import { calcBtw, BTW_PCT_OPTIONS } from '../utils/btw.js';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile, useTier } from '../lib/profileContext.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
+import { useUrlTab } from '../hooks/useUrlTab.js';
 import { ActivityEditModal, NewCalendarEventModal, NewJobCostModal } from '../components/SharedModals.jsx';
 import { AgendaWerkbonPlanModal } from '../components/AgendaWerkbonPlanModal.jsx';
 
@@ -216,7 +217,8 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
   // een 'planning'-item is voor gewone medewerkers alleen-lezen; een 'zelf'-item
   // mag alleen de eigenaar bewerken.
   const mayEditEvent = ev => can('planning') || (ev?.herkomst !== 'planning' && ev?.assignedTo === profile?.id);
-  const [view, setView] = useState('week');
+  // Agenda-weergave (Dag/Week/Maand) in de URL (?tab=…) — blijft behouden bij refresh.
+  const [view, setView] = useUrlTab('week', { validIds: ['day', 'week', 'month'] });
   // Monday of the visible week. Lazy initializer → on every fresh mount the
   // Agenda opens on the *current* week (no stale week is carried over).
   const [weekStart, setWeekStart] = useState(() => getStartOfWeek(new Date()));

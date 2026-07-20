@@ -45,6 +45,8 @@ import { UploadProvider } from './lib/uploadContext.jsx';
 import { CookieBanner } from './components/CookieBanner.jsx';
 import { UrenHerinneringModal } from './components/UrenHerinneringModal.jsx';
 import { CookieverklaringPage } from './pages/CookieverklaringPage.jsx';
+import { BetaalStatusPage } from './pages/BetaalStatusPage.jsx';
+import { BetaalPage } from './pages/BetaalPage.jsx';
 import { ProfileContext, displayName, profileInitials } from './lib/profileContext.jsx';
 import { DataContext, useData } from './lib/dataContext.jsx';
 import MobileBlock from './components/MobileBlock.jsx';
@@ -1045,7 +1047,7 @@ function AppInner() {
     setRoute(nextPath);
     // Reset scroll when entering a public marketing page so each route
     // starts at the top, mirroring real multi-page navigation.
-    const PUBLIC = ['/', '/functies', '/prijzen', '/voor-wie', '/over-ons', '/over', '/contact', '/faq', '/demo', '/login', '/register'];
+    const PUBLIC = ['/', '/functies', '/prijzen', '/voor-wie', '/over-ons', '/over', '/contact', '/faq', '/demo', '/login', '/register', '/betaald', '/betaling-geannuleerd'];
     if (changed && PUBLIC.includes(nextPath)) {
       window.scrollTo({ top: 0, left: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
     }
@@ -1270,6 +1272,20 @@ function AppInner() {
 
   if (route === '/cookieverklaring') {
     return <CookieverklaringPage navigate={navigate} />;
+  }
+
+  // Publieke, permanente betaallink → tussenpagina die de verse sessie regelt.
+  if (route.startsWith('/betaal/')) {
+    const token = route.replace('/betaal/', '').split('?')[0].split('/')[0];
+    return <BetaalPage token={token} />;
+  }
+
+  // Publieke bedankpagina's ná een Stripe-betaling (klanten van onze gebruikers).
+  if (route === '/betaald') {
+    return <BetaalStatusPage status="success" />;
+  }
+  if (route === '/betaling-geannuleerd') {
+    return <BetaalStatusPage status="cancelled" />;
   }
 
   if (route === '/login') {

@@ -15,7 +15,7 @@ interface MailTemplateOptions {
 // via de BOSSBASE_LOGO_URL secret; valt anders terug op het app-domein.
 const BOSSBASE_LOGO_URL =
   (typeof Deno !== 'undefined' && Deno.env.get('BOSSBASE_LOGO_URL')) ||
-  'https://app.bossbase.nl/brand/icon-512.png'
+  'https://www.bossbase.nl/brand/icon-512.png'
 const BOSSBASE_GREEN = '#1DDB62'
 
 // Leesbare tekstkleur op een achtergrondkleur: donkere tekst op lichte kleuren

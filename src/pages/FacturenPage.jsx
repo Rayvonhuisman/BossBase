@@ -4,11 +4,12 @@ import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
-import { useProfile } from '../lib/profileContext.jsx';
+import { useProfile, useTier } from '../lib/profileContext.jsx';
+import { createFactuurPaymentLink, getStripeConnection } from '../services/stripeService.js';
 import {
   getFacturen, createFactuur, updateFactuur, deleteFactuur,
   generateFactuurNummer, getFactuurRegels, createFactuurRegel,
-  generateCreditFactuurNummer, createCreditFactuur,
+  generateCreditFactuurNummer, createCreditFactuur, uploadFactuurPdf,
 } from '../services/factuurService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
@@ -18,7 +19,7 @@ import { typeCfg, typeOptionsWith, applyTypeChange, omschrijvingFallback } from 
 import { generateFactuurPdf, previewFactuurPdf, getFactuurPdfBase64 } from '../utils/generatePdf.js';
 import { buildCompanySnapshot, companyForDocument, isFactuurLocked } from '../utils/documentSnapshot.js';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
-import { mailTemplate } from '../utils/mailTemplate.js';
+import { mailTemplate, mailButton } from '../utils/mailTemplate.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { statusInfo } from '../utils/statusColors.js';
 
@@ -46,6 +47,20 @@ const fmtDate = d => {
 };
 
 const DL_STYLE = { fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 };
+
+// Zet de "Factuur betalen"-knop in de mailbody: direct vóór de afsluiting
+// ("Met vriendelijke groet"), dus meteen na de betaalinstructie. Wordt de
+// afsluiting niet gevonden (aangepaste template), dan komt de knop achteraan de
+// body — nooit ná de groet. Geen knop-HTML → body onveranderd.
+function insertPayButtonBeforeClosing(bodyHtml, buttonHtml) {
+  if (!buttonHtml) return bodyHtml;
+  const idx = bodyHtml.search(/met vriendelijke groet/i);
+  if (idx === -1) return bodyHtml + buttonHtml;
+  const before = bodyHtml.slice(0, idx);
+  const tagStart = Math.max(before.lastIndexOf('<div'), before.lastIndexOf('<p'));
+  const at = tagStart === -1 ? idx : tagStart;
+  return bodyHtml.slice(0, at) + buttonHtml + bodyHtml.slice(at);
+}
 
 // ── REGEL HELPERS (gedeeld tussen nieuw en bewerk) ───────────────────────────
 
@@ -323,7 +338,7 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
                 {openCustomer && selectedCustomer && (
                   <button
                     type="button"
-                    onClick={() => { onClose(); openCustomer(selectedCustomer.id); }}
+                    onClick={() => { onClose(); openCustomer(selectedCustomer.id, 'klantgegevens'); }}
                     style={{ marginLeft: 8, background: 'none', border: 'none', padding: 0, color: '#b45309', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline', fontSize: 'inherit' }}
                   >
                     Ga naar klant
@@ -756,6 +771,7 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }
 
 export function SendFactuurMailModal({ factuur, customers, company, templateType = 'factuur', onClose, onSent }) {
   const toast = useToast();
+  const tier = useTier();
   const [form, setForm] = useState({ to: '', subject: '', body: '' });
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -767,21 +783,39 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
   const TITLE_MAP = { factuur: 'Factuur versturen per e-mail', herinnering_1: 'Betaalherinnering 1 versturen', herinnering_2: 'Betaalherinnering 2 versturen' };
 
   useEffect(() => {
-    const vars = {
-      klant_naam: customer?.name || factuur.customerName || 'klant',
-      bedrijfsnaam: company?.name || 'ons bedrijf',
-      factuur_nummer: factuur.nummer,
-      totaal_bedrag: fmt2(factuur.totaalIncl),
-      vervaldatum: fmtD(factuur.vervaldatum),
-    };
-    getMailTemplate(templateType)
-      .then(tpl => {
+    let alive = true;
+    (async () => {
+      // Stripe actief? (koppeling live + Groei/Team) → bepaalt de {{betaalinstructie}}-
+      // variant. De overmaak-optie blijft altijd genoemd; bij Stripe komt online
+      // betalen als hoofdroute erbij.
+      let stripeActive = false;
+      if (tier === 'groei' || tier === 'team') {
+        try { const conn = await getStripeConnection(); stripeActive = !!conn?.chargesEnabled; } catch { /* geen koppeling */ }
+      }
+      const vars = {
+        klant_naam: customer?.name || factuur.customerName || 'klant',
+        bedrijfsnaam: company?.name || 'ons bedrijf',
+        factuur_nummer: factuur.nummer,
+        totaal_bedrag: fmt2(factuur.totaalIncl),
+        vervaldatum: fmtD(factuur.vervaldatum),
+        betaalinstructie: stripeActive
+          ? `U kunt de factuur eenvoudig online betalen via de knop hieronder, of het bedrag overmaken onder vermelding van ${factuur.nummer}.`
+          : `Gelieve het totaalbedrag voor de betaaltermijn over te maken onder vermelding van ${factuur.nummer}.`,
+      };
+      try {
+        const tpl = await getMailTemplate(templateType);
         const sub = tpl ? substituteVars(tpl.onderwerp || '', vars) : `Factuur ${factuur.nummer} van ${company?.name || ''}`;
-        const rawBody = tpl ? substituteVars(tpl.body || '', vars) : `Beste ${vars.klant_naam},\n\nHierbij uw factuur ${factuur.nummer}.\n\nMet vriendelijke groet,\n${company?.name || ''}`;
-        setForm({ to: customer?.email || '', subject: sub, body: plainToEditorHtml(rawBody) });
-      })
-      .catch(() => setForm({ to: customer?.email || '', subject: `Factuur ${factuur.nummer}`, body: '' }))
-      .finally(() => setLoading(false));
+        const rawBody = tpl
+          ? substituteVars(tpl.body || '', vars)
+          : `Beste ${vars.klant_naam},\n\nHierbij uw factuur ${factuur.nummer}.\n\n${vars.betaalinstructie}\n\nMet vriendelijke groet,\n${company?.name || ''}`;
+        if (alive) setForm({ to: customer?.email || '', subject: sub, body: plainToEditorHtml(rawBody) });
+      } catch {
+        if (alive) setForm({ to: customer?.email || '', subject: `Factuur ${factuur.nummer}`, body: '' });
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
   }, []);
 
   const handleSend = async () => {
@@ -794,14 +828,30 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
         const factuurForPdf = factuur.isCredit ? { ...factuur, creditNote: factuur.notities } : factuur;
         const pdfBase64 = await getFactuurPdfBase64(factuurForPdf, regels, customer, companyForDocument(factuur, company));
         attachments = [{ filename: `Factuur-${factuur.nummer}.pdf`, content: pdfBase64 }];
+        // Dezelfde PDF opslaan zodat de Stripe-webhook (geen browser) 'm later als
+        // bijlage kan meesturen bij de betaalbevestiging. Best-effort, blokkeert niet.
+        uploadFactuurPdf(factuur.id, factuur.companyId, pdfBase64).catch(() => {});
       } catch (pdfErr) {
         console.warn('PDF bijlage genereren mislukt:', pdfErr.message);
       }
+      // Stripe iDEAL-betaallink ophalen — alleen bij Groei/Team. De edge function
+      // checkt zelf of de koppeling actief is en of er een bedrag is; bij twijfel
+      // (of een fout) krijgen we geen URL en versturen we gewoon zonder knop. De
+      // verzending mag NOOIT klappen door een Stripe-fout.
+      let payUrl = null;
+      if (tier === 'groei' || tier === 'team') {
+        try { payUrl = await createFactuurPaymentLink(factuur.id); }
+        catch (e) { console.warn('Betaallink aanmaken mislukt:', e.message); }
+      }
+      // Knop in de BODY, direct vóór de afsluiting (na de betaalinstructie) i.p.v.
+      // ná de groet. In de bedrijfskleur; alleen als er een betaallink is.
+      const buttonHtml = payUrl ? mailButton('Factuur betalen', payUrl, company?.brandingColor) : '';
+      const bodyWithButton = insertPayButtonBeforeClosing(form.body, buttonHtml);
       // Zakelijke mail: wikkel de body in de centrale template met bedrijfslogo
       // + bedrijfskleur (variant 1).
       const wrappedHtml = mailTemplate({
         title: form.subject,
-        body: form.body,
+        body: bodyWithButton,
         companyName: company?.name || 'Ons bedrijf',
         logoUrl: company?.logoUrl,
         brandColor: company?.brandingColor,

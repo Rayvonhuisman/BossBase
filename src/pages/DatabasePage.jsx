@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase.js';
 import { I, fmt, Av } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { useUrlTab } from '../hooks/useUrlTab.js';
 import { listCustomers, deleteCustomer } from '../services/customerService.js';
 import { getFacturen, getFactuurRegels } from '../services/factuurService.js';
 import { getOffertes, getOfferteItems } from '../services/offerteService.js';
@@ -468,7 +469,8 @@ export function DatabasePage({ openCustomer }) {
   const [loading, setLoading]         = useState(true);
 
   const [filters, setFilters]             = useState(EMPTY_FILTERS);
-  const [quickTab, setQuickTab]           = useState('alle');
+  // Status-tab in de URL (?tab=…) — blijft behouden bij refresh/terugkeer.
+  const [quickTab, setQuickTab]           = useUrlTab('alle', { validIds: ['alle', 'lopend_project'] });
   const [searchQuery, setSearchQuery]     = useState('');
   const [segments, setSegments]           = useState(() => {
     try { return JSON.parse(localStorage.getItem('bb_db_segments') || '[]'); } catch { return []; }

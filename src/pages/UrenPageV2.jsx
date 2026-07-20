@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { useUrlTab } from '../hooks/useUrlTab.js';
 import {
   getUrenregistratie, createUrenregel, updateUrenregel, deleteUrenregel,
 } from '../services/urenService.js';
@@ -619,7 +620,8 @@ export function UrenPageV2() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [periodType, setPeriodType] = useState('alles');
+  // Periode-tab in de URL (?tab=…) — blijft behouden bij refresh/terugkeer.
+  const [periodType, setPeriodType] = useUrlTab('alles', { validIds: ['alles', 'dag', 'week', 'maand'] });
   const [anchor, setAnchor] = useState(() => new Date());
   const [employee, setEmployee] = useState('all');
 
