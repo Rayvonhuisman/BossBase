@@ -551,7 +551,8 @@ export function DatabasePage({ openCustomer }) {
       (async () => {
         const companyId = await getCompanyId();
         if (!companyId) return [];
-        const { data } = await supabase.from('accounting_connections').select('provider,api_token,subscription_key,is_connected').eq('company_id', companyId);
+        // Status via de RPC — nooit tokens; `connected` komt server-side.
+        const { data } = await supabase.rpc('get_accounting_status');
         return data || [];
       })(),
     ]).then(([c, p, f, o, d, a, tpl, st, lr, se, ur, tm, ac]) => {
@@ -560,9 +561,7 @@ export function DatabasePage({ openCustomer }) {
       setLostReasons(lr); setSentEmails(se); setUrenData(ur); setTeamMembers(tm);
       const connected = new Set();
       (ac || []).forEach(row => {
-        if (row.provider === 'moneybird' && row.api_token) connected.add('moneybird');
-        if (row.provider === 'snelstart' && row.subscription_key) connected.add('snelstart');
-        if (row.provider === 'afas' && row.is_connected) connected.add('afas');
+        if (row.connected) connected.add(row.provider);
       });
       setConnectedIntegrations(connected);
     }).catch(err => toast.error(err.message || 'Laden mislukt'))

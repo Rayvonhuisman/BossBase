@@ -31,12 +31,29 @@ export function readableTextColor(hex?: string): string {
   return lum > 0.6 ? '#0a0a0a' : '#ffffff'
 }
 
+// HTML-escape voor door gebruikers/bedrijven ingevoerde tekst die als PLATTE
+// tekst in de mail-HTML terechtkomt (titel, preheader, bedrijfsnaam, knoptekst).
+// `body` en `footerText` blijven bewust rauwe HTML (developer-gecontroleerd).
+function esc(s?: string): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+
+// Alleen http(s)-URL's toestaan in href/src (blokkeert javascript:/data:), en
+// daarna attribuut-escapen. Ongeldige URL → lege string (geen XSS-vector).
+function safeUrl(u?: string): string {
+  const s = String(u ?? '').trim()
+  if (!/^https?:\/\//i.test(s)) return ''
+  return esc(s)
+}
+
 // Eén bron voor een mail-knop: achtergrond = bedrijfskleur (val terug op
 // BossBase-groen, nooit een vaste oranje), tekstkleur o.b.v. leesbaarheid.
 export function mailButton(text: string, url: string, brandColor?: string): string {
   const bg = brandColor || BOSSBASE_GREEN
   const fg = readableTextColor(bg)
-  return `<table cellpadding="0" cellspacing="0" role="presentation" style="margin:10px 0;"><tr><td style="border-radius:8px;background:${bg};"><a href="${url}" style="display:inline-block;padding:13px 26px;font-size:15px;font-weight:600;color:${fg};text-decoration:none;border-radius:8px;">${text}</a></td></tr></table>`
+  return `<table cellpadding="0" cellspacing="0" role="presentation" style="margin:10px 0;"><tr><td style="border-radius:8px;background:${bg};"><a href="${safeUrl(url)}" style="display:inline-block;padding:13px 26px;font-size:15px;font-weight:600;color:${fg};text-decoration:none;border-radius:8px;">${esc(text)}</a></td></tr></table>`
 }
 
 export function mailTemplate({
@@ -58,11 +75,11 @@ export function mailTemplate({
   // als dat ontbreekt, de bedrijfsnaam als tekst.
   let headerHtml: string
   if (isSystem) {
-    headerHtml = `<img src="${logoUrl || BOSSBASE_LOGO_URL}" alt="BossBase" width="32" height="32" style="display:inline-block;vertical-align:middle;border-radius:8px;border:0;outline:none;text-decoration:none;"><span style="vertical-align:middle;margin-left:9px;font-size:20px;font-weight:700;color:#0a0a0a;letter-spacing:-0.5px;">BossBase</span>`
+    headerHtml = `<img src="${safeUrl(logoUrl) || BOSSBASE_LOGO_URL}" alt="BossBase" width="32" height="32" style="display:inline-block;vertical-align:middle;border-radius:8px;border:0;outline:none;text-decoration:none;"><span style="vertical-align:middle;margin-left:9px;font-size:20px;font-weight:700;color:#0a0a0a;letter-spacing:-0.5px;">BossBase</span>`
   } else if (logoUrl) {
-    headerHtml = `<img src="${logoUrl}" alt="${companyName}" height="40" style="max-height:48px;max-width:220px;display:inline-block;border:0;outline:none;text-decoration:none;">`
+    headerHtml = `<img src="${safeUrl(logoUrl)}" alt="${esc(companyName)}" height="40" style="max-height:48px;max-width:220px;display:inline-block;border:0;outline:none;text-decoration:none;">`
   } else {
-    headerHtml = `<span style="font-size:20px;font-weight:700;color:#0a0a0a;letter-spacing:-0.5px;">${companyName}</span>`
+    headerHtml = `<span style="font-size:20px;font-weight:700;color:#0a0a0a;letter-spacing:-0.5px;">${esc(companyName)}</span>`
   }
 
   const footerLine = isSystem
@@ -74,9 +91,9 @@ export function mailTemplate({
               <table cellpadding="0" cellspacing="0" role="presentation" style="margin:28px 0 0;">
                 <tr>
                   <td style="border-radius:8px;background:${accent};">
-                    <a href="${buttonUrl}"
+                    <a href="${safeUrl(buttonUrl)}"
                        style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;color:${accentText};text-decoration:none;border-radius:8px;">
-                      ${buttonText}
+                      ${esc(buttonText)}
                     </a>
                   </td>
                 </tr>
@@ -91,10 +108,10 @@ export function mailTemplate({
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title}</title>
+  <title>${esc(title)}</title>
 </head>
 <body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <div style="display:none;max-height:0;overflow:hidden;">${preheader || title}</div>
+  <div style="display:none;max-height:0;overflow:hidden;">${esc(preheader || title)}</div>
   <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
     <tr>
       <td align="center" style="padding:40px 16px;">
@@ -107,7 +124,7 @@ export function mailTemplate({
           </tr>
           <tr>
             <td style="padding:32px 40px;">
-              <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0a0a0a;line-height:1.3;">${title}</h1>
+              <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0a0a0a;line-height:1.3;">${esc(title)}</h1>
               <div style="font-size:15px;color:#374151;line-height:1.6;">
                 ${body}
               </div>

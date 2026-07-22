@@ -113,7 +113,9 @@ serve(async (req) => {
       throw new Error(resendData.message || 'Mail versturen mislukt')
     }
 
-    console.log('[request-password-reset] Mail verstuurd ✓', { to: email, message_id: resendData.id, resetUrl })
+    // Bewust GEEN resetUrl/token loggen: wie logtoegang heeft kon anders binnen
+    // het geldigheidsvenster een reset-token buitmaken en accounts overnemen.
+    console.log('[request-password-reset] Mail verstuurd ✓', { to: email, message_id: resendData.id })
     return json({ success: true })
   } catch (err) {
     console.error('[request-password-reset] Fout:', err)

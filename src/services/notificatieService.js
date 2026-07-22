@@ -2,6 +2,14 @@ import { supabase } from '../lib/supabase.js';
 import { getCompanyId } from '../lib/currentCompany.js';
 import { mailTemplate } from '../utils/mailTemplate.js';
 
+// HTML-escape voor door gebruikers ingevoerde waarden die in de rauwe `body`-HTML
+// van collega-mails terechtkomen (naam, notitietekst, deal-/werkbon-titel). De
+// mailTemplate escapet zelf al title/preheader/knop; `body` is rauwe HTML en
+// moet dus hier ge-escaped worden.
+const esc = (s) => String(s ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
 const toNotification = row => ({
   id: row.id,
   userId: row.user_id,
@@ -136,17 +144,17 @@ export async function createMentionNotifications({ text, relatedType, relatedId,
 
   const notifRows = [];
   for (const { name, userId } of mentions) {
-    if (userId === creatorId) continue;
+    // Bewust GEEN self-skip: wie zichzelf tagt krijgt óók een melding + mail.
     // De e-mail-HTML wordt hier gebouwd, maar het e-mailADRES wordt NIET hier
     // opgehaald: dat gebeurt server-side in de create-notification edge function
     // (auth.users → company_members), zodat adressen nooit naar de client lekken.
     const html = mailTemplate({
       title: `${creatorName || 'Collega'} heeft je getagd`,
       preheader: contextName ? `Getagd bij ${contextName}` : 'Je bent getagd in een notitie',
-      body: `<p>Hoi ${name},</p>
-             <p><strong>${creatorName || 'Een collega'}</strong> heeft je getagd${contextName ? ` bij <strong>${contextName}</strong>` : ''} in een notitie:</p>
+      body: `<p>Hoi ${esc(name)},</p>
+             <p><strong>${esc(creatorName || 'Een collega')}</strong> heeft je getagd${contextName ? ` bij <strong>${esc(contextName)}</strong>` : ''} in een notitie:</p>
              <blockquote style="margin:12px 0;padding:12px 16px;background:#f9fafb;border-left:3px solid #1DDB62;border-radius:4px;color:#374151;">
-               ${plain}
+               ${esc(plain)}
              </blockquote>`,
       buttonText: link ? 'Bekijk notitie' : undefined,
       buttonUrl: toAbsoluteUrl(link),
@@ -193,9 +201,9 @@ export async function createAssignmentNotification({ assignedToUserId, assignedT
     const html = mailTemplate({
       title: 'Nieuwe toewijzing',
       preheader: `Je bent toegewezen aan ${itemName}`,
-      body: `<p>Hoi ${assignedToName || 'collega'},</p>
-             <p><strong>${creatorName || 'Een collega'}</strong> heeft je toegewezen aan: <strong>${itemName}</strong></p>
-             ${body ? `<p style="color:#555;">${body}</p>` : ''}`,
+      body: `<p>Hoi ${esc(assignedToName || 'collega')},</p>
+             <p><strong>${esc(creatorName || 'Een collega')}</strong> heeft je toegewezen aan: <strong>${esc(itemName)}</strong></p>
+             ${body ? `<p style="color:#555;">${esc(body)}</p>` : ''}`,
       buttonText: link ? 'Bekijk details' : undefined,
       buttonUrl: toAbsoluteUrl(link),
     });

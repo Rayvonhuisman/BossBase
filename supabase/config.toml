@@ -23,3 +23,9 @@ verify_jwt = false
 # autorisatie zit in het onraadbare token; de functie leest server-side.
 [functions.stripe-pay-link]
 verify_jwt = false
+
+# Google redirect de browser terug zonder Supabase-JWT, dus deze callback moet
+# publiek zijn. De echtheid wordt geverifieerd via een HMAC-ondertekend `state`-
+# token (10 min geldig) in de functie zelf.
+[functions.google-calendar-callback]
+verify_jwt = false

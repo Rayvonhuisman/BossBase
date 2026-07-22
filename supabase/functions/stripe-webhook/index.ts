@@ -49,12 +49,76 @@ serve(async (req) => {
         ? (typeof obj.payment_intent === 'string' ? obj.payment_intent : null)
         : (obj.id ?? null)
 
+      // Het connected account dat dit event produceerde (direct charges op het
+      // gekoppelde account). Staat top-level op het event, niet in data.object.
+      const eventAccount: string | null = event.account ?? null
+
+      // Het DAADWERKELIJK betaalde bedrag in centen, uit het Stripe-event zelf
+      // (nooit uit de client/metadata).
+      const paidCents: number | null =
+        type === 'checkout.session.completed'
+          ? (Number.isInteger(obj?.amount_total) ? obj.amount_total : null)
+          : (Number.isInteger(obj?.amount_received) ? obj.amount_received
+             : (Number.isInteger(obj?.amount) ? obj.amount : null))
+      const paidCurrency: string = String(obj?.currency ?? '').toLowerCase()
+      // Bij Checkout kan een sessie "completed" zijn zonder dat er betaald is
+      // (async/uitgestelde methodes). Alleen echt betaalde sessies tellen.
+      const sessionPaid = type !== 'checkout.session.completed'
+        || obj?.payment_status === undefined
+        || obj?.payment_status === 'paid'
+
       if (factuurId) {
+        // ── Server-side verificatie vóór de status-wijziging ───────────────────
+        // Haal de factuur (bedrijf + totaal) met de service-role op en verifieer
+        // dat deze betaling ÉCHT bij deze factuur en dit bedrijf hoort. Faalt een
+        // check → NIET op betaald zetten, netjes loggen, en tóch HTTP 200 zodat
+        // Stripe niet blijft retryen.
+        const { data: fac } = await admin
+          .from('facturen')
+          .select('company_id, totaal_incl')
+          .eq('id', factuurId)
+          .maybeSingle()
+
+        if (!fac) {
+          console.error(`[stripe-webhook] onbekende factuur in metadata: ${factuurId}`)
+          return json({ received: true, ignored: 'unknown_invoice' })
+        }
+
+        const expectedCents = Math.round(Number(fac.totaal_incl || 0) * 100)
+
+        // 1) Account-binding: het bedrijf van de factuur moet een stripe_connections-
+        //    rij hebben met stripe_account_id == event.account.
+        const { data: conn } = await admin
+          .from('stripe_connections')
+          .select('stripe_account_id')
+          .eq('company_id', fac.company_id)
+          .maybeSingle()
+
+        if (!eventAccount || !conn?.stripe_account_id || conn.stripe_account_id !== eventAccount) {
+          console.error(`[stripe-webhook] account mismatch — factuur=${factuurId} event.account=${eventAccount ?? 'null'} verwacht=${conn?.stripe_account_id ?? 'geen koppeling'}`)
+          return json({ received: true, ignored: 'account_mismatch' })
+        }
+
+        // 2) Bedrag-binding: betaald bedrag (centen, EUR) moet gelijk zijn aan het
+        //    factuurtotaal. En de sessie/betaling moet daadwerkelijk betaald zijn.
+        if (!sessionPaid) {
+          console.error(`[stripe-webhook] sessie nog niet betaald — factuur=${factuurId} payment_status=${obj?.payment_status}`)
+          return json({ received: true, ignored: 'not_paid' })
+        }
+        if (paidCents === null || paidCents !== expectedCents || paidCurrency !== 'eur') {
+          console.error(`[stripe-webhook] bedrag mismatch — factuur=${factuurId} betaald=${paidCents}${paidCurrency ? ' ' + paidCurrency : ''} verwacht=${expectedCents} eur`)
+          return json({ received: true, ignored: 'amount_mismatch' })
+        }
+
+        // Checks OK → markeer betaald. De verwachte waarden gaan óók mee naar de
+        // RPC (data-laag-backstop: die weigert eveneens bij mismatch).
         const { data: res } = await admin.rpc('mark_factuur_betaald', {
           p_factuur_id: factuurId,
           p_betaald_op: null,
           p_stripe_status: 'paid',
           p_stripe_intent: paymentIntent,
+          p_expected_company_id: fac.company_id,
+          p_expected_amount_cents: expectedCents,
         })
         // Alleen als DEZE aanroep de factuur op betaald zette (idempotent): log +
         // sync + bevestigingsmails. Een tweede event voor dezelfde betaling levert
@@ -151,7 +215,7 @@ async function sendViaEdge(supabaseUrl: string, serviceKey: string, body: Record
   try {
     const res = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${serviceKey}`, 'apikey': serviceKey, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `Bearer ${serviceKey}`, 'apikey': serviceKey, 'Content-Type': 'application/json', 'x-internal-secret': Deno.env.get('SEND_EMAIL_SECRET') ?? '' },
       body: JSON.stringify(body),
     })
     return res.ok

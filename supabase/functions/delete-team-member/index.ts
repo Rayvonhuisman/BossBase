@@ -97,6 +97,25 @@ serve(async (req) => {
       return json({ success: false, error: 'Je kunt je eigen account hier niet wijzigen' }, 400)
     }
 
+    // Bescherm de laatste actieve beheerder: een bedrijf mag niet zonder admin
+    // komen te zitten (anders is niemand meer in staat het team te beheren).
+    if (pid && (action === 'deactivate' || action === 'delete')) {
+      const { data: targetProfile } = await admin
+        .from('profiles').select('role, company_id').eq('id', pid).maybeSingle()
+      if (targetProfile?.role === 'admin' && targetProfile.company_id) {
+        const { count } = await admin
+          .from('profiles')
+          .select('id', { count: 'exact', head: true })
+          .eq('company_id', targetProfile.company_id)
+          .eq('role', 'admin')
+          .eq('actief', true)
+          .neq('id', pid)
+        if ((count ?? 0) === 0) {
+          return json({ success: false, error: 'Dit is de laatste actieve beheerder — wijs eerst een andere beheerder aan.' }, 409)
+        }
+      }
+    }
+
     if (action === 'deactivate') {
       if (pid) {
         await admin.from('profiles').update({ actief: false, deactivated_at: new Date().toISOString() }).eq('id', pid)

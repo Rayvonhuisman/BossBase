@@ -43,10 +43,11 @@ serve(async (req) => {
     })
 
     let userId: string
+    let isExistingUser = false
 
     if (authErr) {
       if (authErr.message?.toLowerCase().includes('already')) {
-        // Gebruiker bestaat al — zoek bestaande userId op en koppel die aan het bedrijf.
+        // Gebruiker bestaat al — zoek bestaande userId op.
         // Gebruik dezelfde SECURITY DEFINER RPC als de wachtwoord-reset flow.
         const { data: existingId } = await supabase.rpc('get_auth_user_id_by_email', {
           p_email: invite.email.toLowerCase(),
@@ -55,11 +56,48 @@ serve(async (req) => {
           return json({ error: 'Dit e-mailadres is al geregistreerd. Probeer in te loggen.' }, 409)
         }
         userId = existingId
+        isExistingUser = true
       } else {
         return json({ error: authErr.message }, 400)
       }
     } else {
       userId = authData.user.id
+    }
+
+    // 2b. Anti-tenant-hijack: een BESTAAND account wordt nooit stil verplaatst.
+    // Zonder deze guard kon een aanvaller een bestaande gebruiker naar zijn eigen
+    // bedrijf trekken, puur door een invite met dat e-mailadres aan te maken en te
+    // accepteren (de service-role omzeilt de profiel-trigger). Nieuwe accounts
+    // (createUser slaagde) doorlopen dit niet en volgen de normale invite-flow.
+    if (isExistingUser) {
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('id', userId)
+        .maybeSingle()
+      const currentCompany = existingProfile?.company_id ?? null
+
+      // (1) Hoort al bij een ANDER bedrijf → koppelen/overschrijven mag nooit.
+      if (currentCompany && currentCompany !== invite.company_id) {
+        return json({
+          error: 'Dit e-mailadres hoort al bij een ander bedrijf. Log in met dat account om verder te gaan.',
+        }, 409)
+      }
+
+      // (2) Bewijs van bezit: alleen de rechtmatige eigenaar (geldige JWT van
+      // diezelfde gebruiker) mag een bestaand account aan de invite koppelen —
+      // niet puur op basis van het e-mailadres in de invite.
+      const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
+      let owns = false
+      if (jwt) {
+        const { data: { user } } = await supabase.auth.getUser(jwt)
+        owns = !!user && user.id === userId
+      }
+      if (!owns) {
+        return json({
+          error: 'Dit e-mailadres is al geregistreerd. Log in met dit account om de uitnodiging te accepteren.',
+        }, 401)
+      }
     }
 
     // 3. Maak profiel aan of update als trigger het al aangemaakt heeft.

@@ -1,30 +1,38 @@
 import { supabase } from '../lib/supabase'
 import { withCompanyId, getCompanyId } from '../lib/currentCompany'
 
-const toConnection = row => row ? ({
-  id: row.id,
+// Status-object voor de UI. Bevat NOOIT de tokenwaarde zelf — die is server-side
+// afgeschermd (RLS/kolomrechten) en alleen leesbaar voor de edge functions.
+// `connected` komt server-side uit get_accounting_status(). De lege token-velden
+// blijven bestaan zodat oudere consumers die er (per ongeluk) naar kijken een
+// falsy waarde zien i.p.v. een crash — nooit een echt token.
+const toStatus = (row, { connected } = {}) => row ? ({
   provider: row.provider,
-  apiToken: row.api_token || '',
   administrationId: row.administration_id || '',
-  subscriptionKey: row.subscription_key || '',
-  secondaryKey: row.secondary_key || '',
   afasEnvironmentId: row.afas_environment_id || '',
-  afasToken: row.afas_token || '',
-  afasIsConnected: row.is_connected || false,
+  afasIsConnected: connected ?? (row.is_connected || false),
+  connected: connected ?? (row.is_connected || false),
   lastSyncedAt: row.last_synced_at || null,
+  apiToken: '', subscriptionKey: '', secondaryKey: '', afasToken: '',
 }) : null
 
 export async function getConnection(provider = 'moneybird') {
   const companyId = await getCompanyId()
   if (!companyId) return null
-  const { data, error } = await supabase
-    .from('accounting_connections')
-    .select('*')
-    .eq('company_id', companyId)
-    .eq('provider', provider)
-    .maybeSingle()
+  // Status via de SECURITY DEFINER-RPC: nooit tokens, alleen een `connected`-vlag.
+  const { data, error } = await supabase.rpc('get_accounting_status')
   if (error) throw error
-  return toConnection(data)
+  const row = (data || []).find(r => r.provider === provider)
+  if (!row) return null
+  return {
+    provider: row.provider,
+    administrationId: row.administration_id || '',
+    afasEnvironmentId: row.afas_environment_id || '',
+    afasIsConnected: !!row.connected,
+    connected: !!row.connected,
+    lastSyncedAt: row.last_synced_at || null,
+    apiToken: '', subscriptionKey: '', secondaryKey: '', afasToken: '',
+  }
 }
 
 export async function saveConnection({ apiToken, administrationId, provider = 'moneybird' }) {
@@ -37,10 +45,11 @@ export async function saveConnection({ apiToken, administrationId, provider = 'm
   const { data, error } = await supabase
     .from('accounting_connections')
     .upsert(payload, { onConflict: 'company_id,provider' })
-    .select()
+    .select('provider, administration_id, afas_environment_id, is_connected, last_synced_at')
     .maybeSingle()
   if (error) throw error
-  return toConnection(data)
+  // Net een geldig token geschreven → moneybird is verbonden.
+  return toStatus(data, { connected: true })
 }
 
 export async function testMoneybirdConnection(apiToken, administrationId) {
@@ -91,10 +100,11 @@ export async function saveSnelStartConnection({ subscriptionKey, secondaryKey, a
   const { data, error } = await supabase
     .from('accounting_connections')
     .upsert(payload, { onConflict: 'company_id,provider' })
-    .select()
+    .select('provider, administration_id, afas_environment_id, is_connected, last_synced_at')
     .maybeSingle()
   if (error) throw error
-  return toConnection(data)
+  // Net geldige sleutels geschreven → snelstart is verbonden.
+  return toStatus(data, { connected: true })
 }
 
 export async function testSnelStartConnection(subscriptionKey, secondaryKey) {
@@ -132,10 +142,11 @@ export async function saveAfasConnection({ environmentId, token }) {
   const { data, error } = await supabase
     .from('accounting_connections')
     .upsert(payload, { onConflict: 'company_id,provider' })
-    .select()
+    .select('provider, administration_id, afas_environment_id, is_connected, last_synced_at')
     .maybeSingle()
   if (error) throw error
-  return toConnection(data)
+  // AFAS is pas "connected" na een geslaagde test (setAfasConnected) → volg is_connected.
+  return toStatus(data)
 }
 
 export async function testAfasConnection(environmentId, token) {

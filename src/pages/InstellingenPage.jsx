@@ -328,18 +328,21 @@ export function InstellingenPage() {
         });
         setTemplateForms(forms);
         setStages(pipelineStages);
+        // Tokens worden NOOIT geprefill: ze zijn server-side afgeschermd en niet
+        // meer leesbaar. We tonen alleen de status; niet-geheime velden
+        // (administratie/omgeving) mogen wel voor het gemak vooringevuld worden.
         if (mbConn) {
           setMbConnection(mbConn);
-          setMbForm({ apiToken: mbConn.apiToken, administrationId: mbConn.administrationId });
+          setMbForm({ apiToken: '', administrationId: mbConn.administrationId });
         }
         if (ssConn) {
           setSsConnection(ssConn);
-          setSsForm({ subscriptionKey: ssConn.subscriptionKey, secondaryKey: ssConn.secondaryKey, administrationId: ssConn.administrationId });
+          setSsForm({ subscriptionKey: '', secondaryKey: '', administrationId: ssConn.administrationId });
         }
         if (afasConn) {
           setAfasConnection(afasConn);
-          setAfasForm({ environmentId: afasConn.afasEnvironmentId, token: afasConn.afasToken });
-          if (afasConn.afasIsConnected) setAfasTested(true);
+          setAfasForm({ environmentId: afasConn.afasEnvironmentId, token: '' });
+          if (afasConn.connected) setAfasTested(true);
         }
       })
       .catch(err => toast.error(err.message || 'Laden mislukt'))
@@ -374,8 +377,10 @@ export function InstellingenPage() {
     if (!file) return;
     input.value = '';
     if (file.size > 10 * 1024 * 1024) { toast.error('Maximum is 10MB'); return; }
-    const allowed = ['image/jpeg', 'image/png', 'image/svg+xml'];
-    if (!allowed.includes(file.type)) { toast.error('Alleen JPG, PNG en SVG zijn toegestaan'); return; }
+    // SVG bewust NIET toegestaan: kan <script>/onload bevatten en zou als
+    // actieve inhoud op een publieke storage-URL kunnen worden geopend.
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowed.includes(file.type)) { toast.error('Alleen JPG, PNG en WebP zijn toegestaan'); return; }
     // Niet-blokkerend: upload + koppelen op de achtergrond via de upload-indicator.
     startUpload(file.name, async () => {
       const ext = file.name.split('.').pop().toLowerCase() || 'jpg';
@@ -1206,7 +1211,7 @@ export function InstellingenPage() {
               )}
               <div>
                 <label style={{ cursor: logoUploading ? 'default' : 'pointer' }}>
-                  <input type="file" accept="image/jpeg,image/png,image/svg+xml" style={{ display: 'none' }} onChange={uploadLogo} disabled={logoUploading} />
+                  <input type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={uploadLogo} disabled={logoUploading} />
                   <span className="btn btn-ghost" style={{ pointerEvents: logoUploading ? 'none' : 'auto', opacity: logoUploading ? 0.6 : 1 }}>
                     {logoUploading ? 'Uploaden...' : 'Logo uploaden'}
                   </span>
@@ -2179,7 +2184,7 @@ export function InstellingenPage() {
                 </div>
               </div>
               <div style={{ flexShrink: 0 }}>
-                {mbConnection?.apiToken ? (
+                {mbConnection?.connected ? (
                   <span style={{ fontSize: '.75rem', color: '#15A34A', fontWeight: 600 }}>Verbonden</span>
                 ) : (
                   <span style={{ fontSize: '.75rem', color: 'var(--dmu)' }}>Niet verbonden</span>
@@ -2196,10 +2201,10 @@ export function InstellingenPage() {
                     value={mbForm.apiToken}
                     onChange={e => setMbForm(f => ({ ...f, apiToken: e.target.value }))}
                     placeholder="Moneybird API token..."
-                    disabled={!!(mbConnection?.apiToken && !mbEditing)}
-                    style={{ paddingRight: mbConnection?.apiToken && !mbEditing ? 0 : 40, opacity: mbConnection?.apiToken && !mbEditing ? 0.6 : 1 }}
+                    disabled={!!(mbConnection?.connected && !mbEditing)}
+                    style={{ paddingRight: mbConnection?.connected && !mbEditing ? 0 : 40, opacity: mbConnection?.connected && !mbEditing ? 0.6 : 1 }}
                   />
-                  {!(mbConnection?.apiToken && !mbEditing) && (
+                  {!(mbConnection?.connected && !mbEditing) && (
                     <button
                       type="button"
                       onClick={() => setMbShowToken(v => !v)}
@@ -2223,14 +2228,14 @@ export function InstellingenPage() {
                   value={mbForm.administrationId}
                   onChange={e => setMbForm(f => ({ ...f, administrationId: e.target.value }))}
                   placeholder="bijv. 123456789"
-                  disabled={!!(mbConnection?.apiToken && !mbEditing)}
-                  style={{ opacity: mbConnection?.apiToken && !mbEditing ? 0.6 : 1 }}
+                  disabled={!!(mbConnection?.connected && !mbEditing)}
+                  style={{ opacity: mbConnection?.connected && !mbEditing ? 0.6 : 1 }}
                 />
               </div>
             </div>
 
             <div className="fa" style={{ flexWrap: 'wrap', gap: 8 }}>
-              {mbConnection?.apiToken && (
+              {mbConnection?.connected && (
                 <>
                   <button
                     className="btn btn-ghost btn-sm"
@@ -2253,7 +2258,7 @@ export function InstellingenPage() {
                   Laatste sync: {new Date(mbConnection.lastSyncedAt).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </span>
               )}
-              {mbConnection?.apiToken && !mbEditing ? (
+              {mbConnection?.connected && !mbEditing ? (
                 <button
                   className="btn btn-ghost btn-sm"
                   onClick={() => setMbEditing(true)}
@@ -2301,7 +2306,7 @@ export function InstellingenPage() {
               <div style={{ flexShrink: 0 }}>
                 {afasTested ? (
                   <span style={{ fontSize: '.75rem', color: '#15A34A', fontWeight: 600 }}>Verbonden</span>
-                ) : afasConnection?.afasToken ? (
+                ) : afasConnection?.connected ? (
                   <span style={{ fontSize: '.75rem', color: 'var(--dl)', fontWeight: 600 }}>Niet getest</span>
                 ) : (
                   <span style={{ fontSize: '.75rem', color: 'var(--dmu)' }}>Niet verbonden</span>
@@ -2355,7 +2360,7 @@ export function InstellingenPage() {
             </div>
 
             <div className="fa" style={{ flexWrap: 'wrap', gap: 8 }}>
-              {afasConnection?.afasToken && (
+              {afasConnection?.connected && (
                 <>
                   <button
                     className="btn btn-ghost btn-sm"

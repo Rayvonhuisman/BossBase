@@ -35,7 +35,15 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'customer_id is verplicht' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    const { data: customer } = await supabase.from('customers').select('*').eq('id', customer_id).single()
+    // Bedrijf van de aanroeper — de klant MOET bij dat bedrijf horen (anti-IDOR).
+    const { data: me } = await supabase.from('profiles').select('company_id').eq('id', user.id).maybeSingle()
+    if (!me?.company_id) {
+      return new Response(JSON.stringify({ error: 'Geen bedrijf gekoppeld' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    // Klant gescoped op het bedrijf van de aanroeper: zo kan een gebruiker geen
+    // klant (of Moneybird-administratie) van een ander bedrijf raken via de id.
+    const { data: customer } = await supabase.from('customers').select('*').eq('id', customer_id).eq('company_id', me.company_id).single()
     if (!customer) {
       return new Response(JSON.stringify({ error: 'Klant niet gevonden' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }

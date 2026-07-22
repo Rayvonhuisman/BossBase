@@ -399,6 +399,16 @@ const toWerkbonFoto = row => ({
   createdAt: row.created_at,
 })
 
+// Pad uit de opgeslagen waarde halen — accepteert zowel een oude, volledige
+// public-URL als een kaal opslagpad (nieuwe uploads slaan het pad op).
+const storagePathFromStored = (val) => {
+  // Strip een eventuele query string (signed-URL token) vóór de padextractie.
+  const s = String(val || "").split("?")[0]
+  const marker = "/werkbon-fotos/"
+  const i = s.indexOf(marker)
+  return i !== -1 ? s.slice(i + marker.length) : s
+}
+
 export async function getWerkbonFotos(werkbonId) {
   const { data, error } = await supabase
     .from("werkbon_fotos")
@@ -406,7 +416,15 @@ export async function getWerkbonFotos(werkbonId) {
     .eq("werkbon_id", werkbonId)
     .order("created_at", { ascending: true })
   if (error) throw error
-  return (data || []).map(toWerkbonFoto)
+  const rows = data || []
+  // Bucket is privé → toon foto's via tijdelijke signed URLs (1 uur).
+  const paths = rows.map(r => storagePathFromStored(r.url))
+  let signed = []
+  if (paths.length) {
+    const res = await supabase.storage.from("werkbon-fotos").createSignedUrls(paths, 3600)
+    signed = res.data || []
+  }
+  return rows.map((r, i) => toWerkbonFoto({ ...r, url: signed[i]?.signedUrl || r.url }))
 }
 
 export async function uploadWerkbonFoto(werkbonId, file, categorie) {
@@ -419,18 +437,16 @@ export async function uploadWerkbonFoto(werkbonId, file, categorie) {
     .upload(path, file, { contentType: file.type || "image/jpeg" })
   if (uploadError) throw uploadError
 
-  const { data: urlData } = supabase.storage.from("werkbon-fotos").getPublicUrl(path)
-
-  const payload = await withCompanyId({ werkbon_id: werkbonId, url: urlData.publicUrl, categorie })
+  // Sla het opslagpad op (bucket is privé; weergave loopt via signed URLs).
+  const payload = await withCompanyId({ werkbon_id: werkbonId, url: path, categorie })
   const { data, error } = await supabase.from("werkbon_fotos").insert(payload).select().single()
   if (error) throw error
   return toWerkbonFoto(data)
 }
 
 export async function deleteWerkbonFoto(id, url) {
-  const idx = (url || "").indexOf("/werkbon-fotos/")
-  if (idx !== -1) {
-    const storagePath = url.slice(idx + "/werkbon-fotos/".length)
+  const storagePath = storagePathFromStored(url)
+  if (storagePath) {
     await supabase.storage.from("werkbon-fotos").remove([storagePath]).catch(() => {})
   }
   const { error } = await supabase.from("werkbon_fotos").delete().eq("id", id)

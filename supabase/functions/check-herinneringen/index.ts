@@ -11,6 +11,17 @@ function substituteVars(template: string, vars: Record<string, string>): string 
   return template.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? `{{${k}}}`)
 }
 
+// Zoals substituteVars, maar escapet elke ingevulde waarde — voor HTML-context
+// (body_html) zodat een klantnaam met markup geen HTML/script in de mail injecteert.
+function escapeHtml(s: string): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+function substituteVarsHtml(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, k) => k in vars ? escapeHtml(vars[k]) : `{{${k}}}`)
+}
+
 function plainTextToHtml(text: string): string {
   return text
     .split('\n')
@@ -93,7 +104,7 @@ serve(async (req) => {
       if (tpl1 && !f.herinnering_1_verstuurd_at && daysPast >= (tpl1.auto_dagen || 7)) {
         const subject = substituteVars(tpl1.onderwerp, vars)
         const innerBody = tpl1.body_html
-          ? substituteVars(tpl1.body_html, vars)
+          ? substituteVarsHtml(tpl1.body_html, vars)
           : plainTextToHtml(substituteVars(tpl1.body, vars))
         const html = mailTemplate({ title: subject, body: innerBody, companyName: company.name, logoUrl: company.logo_url || undefined, brandColor: company.branding_color || undefined })
         const msgId = await sendMail(f.customers.email, subject, html, company.name)
@@ -108,7 +119,7 @@ serve(async (req) => {
       if (tpl2 && !f.herinnering_2_verstuurd_at && daysPast >= (tpl2.auto_dagen || 14)) {
         const subject = substituteVars(tpl2.onderwerp, vars)
         const innerBody = tpl2.body_html
-          ? substituteVars(tpl2.body_html, vars)
+          ? substituteVarsHtml(tpl2.body_html, vars)
           : plainTextToHtml(substituteVars(tpl2.body, vars))
         const html = mailTemplate({ title: subject, body: innerBody, companyName: company.name, logoUrl: company.logo_url || undefined, brandColor: company.branding_color || undefined })
         const msgId = await sendMail(f.customers.email, subject, html, company.name)
@@ -168,7 +179,7 @@ serve(async (req) => {
 
       const subject = substituteVars(tpl.onderwerp, vars)
       const innerBody = tpl.body_html
-        ? substituteVars(tpl.body_html, vars)
+        ? substituteVarsHtml(tpl.body_html, vars)
         : plainTextToHtml(substituteVars(tpl.body, vars))
       const html = mailTemplate({ title: subject, body: innerBody, companyName: company.name, logoUrl: company.logo_url || undefined, brandColor: company.branding_color || undefined })
       const msgId = await sendMail(act.customers.email, subject, html, company.name)

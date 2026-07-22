@@ -55,6 +55,7 @@ async function sendViaEdge(
         'Authorization': `Bearer ${serviceKey}`,
         'apikey': serviceKey,
         'Content-Type': 'application/json',
+        'x-internal-secret': Deno.env.get('SEND_EMAIL_SECRET') ?? '',
       },
       body: JSON.stringify(body),
     })
@@ -100,7 +101,7 @@ serve(async (req) => {
     const mailJobs: { userId: string; subject: string; html: string }[] = []
     for (const n of list.slice(0, 50)) {
       if (!n?.user_id || !n?.type || !n?.title) continue
-      if (n.user_id === user.id) continue // self-notificatie niet nodig
+      // Bewust GEEN self-skip: een self-tag levert óók een melding + mail op.
       const { data: target } = await admin
         .from('profiles')
         .select('id')

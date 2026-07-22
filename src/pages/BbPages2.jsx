@@ -1182,7 +1182,7 @@ export function RevenuePage() {
   }, [btwPeriodeType]);
 
   React.useEffect(() => {
-    if (!mbConnection?.apiToken) return;
+    if (!mbConnection?.connected) return;
     setBtwLoading(true);
     getBtwPeriodes(btwPeriodeType)
       .then(setBtwPerioden)
@@ -1417,7 +1417,7 @@ export function RevenuePage() {
       </div>
 
       {/* ── BTW-overzicht — alleen tonen bij een actieve boekhoudkoppeling (Moneybird) ── */}
-      {mbConnection?.apiToken && (
+      {mbConnection?.connected && (
       <div className="tw afu3" style={{ marginBottom: 20 }}>
         <div className="tw-hd" style={{ flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
           <div>
