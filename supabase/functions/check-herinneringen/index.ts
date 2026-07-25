@@ -131,61 +131,90 @@ serve(async (req) => {
       }
     }
 
-    // ── Afspraakherinneringen (activiteiten van morgen) ───────────────────────
-    const tomorrow = new Date(today)
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    const tomorrowStart = tomorrow.toISOString().slice(0, 10) + 'T00:00:00'
-    const tomorrowEnd = tomorrow.toISOString().slice(0, 10) + 'T23:59:59'
+    // ── Afspraakherinneringen ─────────────────────────────────────────────────
+    // Lead-tijd is per bedrijf instelbaar via email_templates.auto_dagen (default
+    // 1) en gerespecteerd t.o.v. de `auto_versturen`-toggle. We halen eerst de
+    // actieve + auto_versturen afspraak-templates op (map per bedrijf), bepalen
+    // het min/max aantal dagen vooruit voor het db-venster, en matchen per
+    // afspraak op EXACT de dag (vandaag + auto_dagen) — zodat elke afspraak
+    // precies één keer matcht en de idempotentie (sent_emails per appointment_id)
+    // intact blijft.
+    const { data: afsprTpls } = await db
+      .from('email_templates')
+      .select('company_id, onderwerp, body, body_html, auto_dagen')
+      .eq('type', 'afspraak_herinnering')
+      .eq('actief', true)
+      .eq('auto_versturen', true)
 
-    const { data: activiteiten } = await db
-      .from('activities')
-      .select('*, customers(name, email), companies:company_id(name, email, logo_url, branding_color)')
-      .eq('type', 'visit')
-      .gte('due_at', tomorrowStart)
-      .lte('due_at', tomorrowEnd)
-      .eq('completed', false)
+    const tplByCompany = new Map<string, any>()
+    let minDagen = Infinity
+    let maxDagen = 0
+    for (const t of (afsprTpls || [])) {
+      const d = (t.auto_dagen ?? 1)
+      tplByCompany.set(t.company_id, t)
+      if (d < minDagen) minDagen = d
+      if (d > maxDagen) maxDagen = d
+    }
 
-    for (const act of (activiteiten || [])) {
-      if (!act.customers?.email) continue
-      const company = act.companies
-      if (!company) continue
-
-      const { data: tpls } = await db
-        .from('email_templates')
-        .select('*')
-        .eq('company_id', act.company_id)
-        .eq('type', 'afspraak_herinnering')
-        .eq('actief', true)
-        .limit(1)
-      const tpl = tpls?.[0]
-      if (!tpl) continue
-
-      // Check al verstuurd
-      const { count } = await db
-        .from('sent_emails')
-        .select('id', { count: 'exact', head: true })
-        .eq('appointment_id', act.id)
-        .eq('company_id', act.company_id)
-
-      if (count && count > 0) continue
-
-      const dueDate = new Date(act.due_at)
-      const vars = {
-        klant_naam: act.customers.name || 'klant',
-        bedrijfsnaam: company.name || 'ons bedrijf',
-        afspraak_datum: dueDate.toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
-        afspraak_tijd: dueDate.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }),
+    // Alleen zoeken als er minstens één bedrijf een actieve+auto_versturen template heeft.
+    if (tplByCompany.size > 0) {
+      const addDaysUTC = (base: Date, n: number) => {
+        const d = new Date(base)
+        d.setUTCDate(d.getUTCDate() + n)
+        return d.toISOString().slice(0, 10)
       }
+      const windowStart = addDaysUTC(today, minDagen) + 'T00:00:00'
+      const windowEnd = addDaysUTC(today, maxDagen) + 'T23:59:59'
 
-      const subject = substituteVars(tpl.onderwerp, vars)
-      const innerBody = tpl.body_html
-        ? substituteVarsHtml(tpl.body_html, vars)
-        : plainTextToHtml(substituteVars(tpl.body, vars))
-      const html = mailTemplate({ title: subject, body: innerBody, companyName: company.name, logoUrl: company.logo_url || undefined, brandColor: company.branding_color || undefined })
-      const msgId = await sendMail(act.customers.email, subject, html, company.name)
-      if (msgId !== null) {
-        await db.from('sent_emails').insert({ company_id: act.company_id, to_email: act.customers.email, subject, related_type: 'activity', related_id: act.id, customer_id: act.customer_id, appointment_id: act.id, status: 'sent' })
-        results.afspraken++
+      const { data: activiteiten } = await db
+        .from('activities')
+        .select('*, customers(name, email), companies:company_id(name, email, logo_url, branding_color)')
+        .eq('type', 'visit')
+        .gte('due_at', windowStart)
+        .lte('due_at', windowEnd)
+        .eq('completed', false)
+
+      for (const act of (activiteiten || [])) {
+        if (!act.customers?.email) continue
+        const company = act.companies
+        if (!company) continue
+
+        const tpl = tplByCompany.get(act.company_id)
+        if (!tpl) continue // geen actieve + auto_versturen afspraak-template voor dit bedrijf
+
+        // EXACT-dag match: de afspraak moet precies over auto_dagen dagen plaatsvinden.
+        const autoDagen = (tpl.auto_dagen ?? 1)
+        const targetDayStr = addDaysUTC(today, autoDagen)
+        const actDayStr = new Date(act.due_at).toISOString().slice(0, 10)
+        if (actDayStr !== targetDayStr) continue
+
+        // Idempotentie (ongewijzigd): één rij in sent_emails per appointment_id.
+        const { count } = await db
+          .from('sent_emails')
+          .select('id', { count: 'exact', head: true })
+          .eq('appointment_id', act.id)
+          .eq('company_id', act.company_id)
+
+        if (count && count > 0) continue
+
+        const dueDate = new Date(act.due_at)
+        const vars = {
+          klant_naam: act.customers.name || 'klant',
+          bedrijfsnaam: company.name || 'ons bedrijf',
+          afspraak_datum: dueDate.toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+          afspraak_tijd: dueDate.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }),
+        }
+
+        const subject = substituteVars(tpl.onderwerp, vars)
+        const innerBody = tpl.body_html
+          ? substituteVarsHtml(tpl.body_html, vars)
+          : plainTextToHtml(substituteVars(tpl.body, vars))
+        const html = mailTemplate({ title: subject, body: innerBody, companyName: company.name, logoUrl: company.logo_url || undefined, brandColor: company.branding_color || undefined })
+        const msgId = await sendMail(act.customers.email, subject, html, company.name)
+        if (msgId !== null) {
+          await db.from('sent_emails').insert({ company_id: act.company_id, to_email: act.customers.email, subject, related_type: 'activity', related_id: act.id, customer_id: act.customer_id, appointment_id: act.id, status: 'sent' })
+          results.afspraken++
+        }
       }
     }
   } catch (err) {

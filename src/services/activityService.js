@@ -251,3 +251,58 @@ export async function reopenActivity(id) {
   if (error) throw error
   return toActivity(data)
 }
+
+// =============================================================================
+// ACTIVITEIT NOTITIES (log) — losse rijen, zelfde patroon als project_notes.
+// De oude tekstkolom activities.notes blijft voorlopig staan; de inhoud daarvan
+// is bij de migratie als eerste logregel overgenomen.
+// =============================================================================
+
+const toActiviteitNotitie = row => ({
+  id: row.id,
+  companyId: row.company_id,
+  activityId: row.activity_id,
+  createdBy: row.created_by,
+  note: row.note || '',
+  createdAt: row.created_at,
+  authorName: row.profiles?.full_name || '',
+  raw: row,
+})
+
+export async function getActiviteitNotities(activityId) {
+  if (!activityId) return []
+  const { data, error } = await supabase
+    .from('activiteit_notities')
+    .select('*, profiles(full_name)')
+    .eq('activity_id', activityId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data || []).map(toActiviteitNotitie)
+}
+
+export async function addActiviteitNotitie(activityId, note) {
+  if (!activityId) throw new Error('activityId is verplicht')
+  const text = (typeof note === 'string' ? note : note?.note || '').trim()
+  if (!text) throw new Error('Notitie mag niet leeg zijn')
+
+  const base = { activity_id: activityId, note: text }
+  try {
+    const { data: u } = await supabase.auth.getUser()
+    if (u?.user?.id) base.created_by = u.user.id
+  } catch { /* ignore */ }
+
+  const payload = await withCompanyId(base)
+  const { data, error } = await supabase
+    .from('activiteit_notities')
+    .insert(payload)
+    .select('*, profiles(full_name)')
+    .single()
+  if (error) throw error
+  return toActiviteitNotitie(data)
+}
+
+export async function deleteActiviteitNotitie(notitieId) {
+  if (!notitieId) throw new Error('notitieId is verplicht')
+  const { error } = await supabase.from('activiteit_notities').delete().eq('id', notitieId)
+  if (error) throw error
+}

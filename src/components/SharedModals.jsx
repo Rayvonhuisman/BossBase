@@ -4,7 +4,7 @@ import { useToast } from '../lib/toast.jsx';
 import { supabase } from '../lib/supabase';
 import { createCustomer } from '../services/customerService.js';
 import { createDeal } from '../services/dealService.js';
-import { createActivity, updateActivity, deleteActivity, buildDueAt } from '../services/activityService.js';
+import { createActivity, updateActivity, deleteActivity, buildDueAt, getActiviteitNotities, addActiviteitNotitie } from '../services/activityService.js';
 import { syncActivity } from '../services/googleCalendarService.js';
 import { useProfile } from '../lib/profileContext.jsx';
 import { triggerAutoEmail } from '../services/emailService.js';
@@ -15,7 +15,9 @@ import { getWerkbonnen } from '../services/werkbonService.js';
 import { getProjects } from '../services/projectsService.js';
 import { calcBtw } from '../utils/btw.js';
 import { updateProfile } from '../services/profileService.js';
-import { NoteEditor } from './NoteEditor.jsx';
+import { NoteEditor, renderNote } from './NoteEditor.jsx';
+import NotitieLog, { toLogItem, fmtNotitieDatum } from './NotitieLog.jsx';
+import AdresZoeker from './AdresZoeker.jsx';
 import { useUploads } from '../lib/uploadContext.jsx';
 import { getTeamMembers, createMentionNotifications, notifyNewAssignees } from '../services/notificatieService.js';
 import { MemberMultiSelect } from './MemberMultiSelect.jsx';
@@ -126,6 +128,11 @@ export function NewCustomerModal({ onClose, onSaved }) {
             <label>Telefoon</label>
             <input value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="06-..." />
           </div>
+          <AdresZoeker
+            className="s2"
+            disabled={saving}
+            onSelect={({ address, postcode, city }) => setForm(f => ({ ...f, address, postcode, city }))}
+          />
           <div className="f">
             <label>Adres</label>
             <input value={form.address} onChange={e => set('address', e.target.value)} />
@@ -931,19 +938,8 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
                   >
                     <option value={21}>21%</option>
                     <option value={9}>9%</option>
-                    <option value={0}>0%</option>
-                    <option value="anders">Anders</option>
+                    <option value={0}>Geen btw (0%)</option>
                   </select>
-
-                  {r.btw_pct === 'anders' && (
-                    <input
-                      type="number"
-                      value={r.btw_custom}
-                      onChange={e => setRegel(r.id, 'btw_custom', e.target.value)}
-                      placeholder="%"
-                      style={{ width: 54, fontSize: '.78rem', padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 6, background: 'white', outline: 'none', flexShrink: 0 }}
-                    />
-                  )}
 
                   {hasVal && (
                     <div style={{ marginLeft: 'auto', fontSize: '.74rem', color: 'var(--dmu)', display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -1053,6 +1049,24 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
   const canEdit = role === 'admin' || role === 'planner';
   const [teamMembers, setTeamMembers] = useState([]);
   useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
+
+  // Notitielogboek van deze activiteit (losse rijen in activiteit_notities).
+  const [activiteitNotities, setActiviteitNotities] = useState([]);
+  useEffect(() => {
+    if (!activity?.id) { setActiviteitNotities([]); return; }
+    let alive = true;
+    getActiviteitNotities(activity.id)
+      .then(rows => { if (alive) setActiviteitNotities(rows); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [activity?.id]);
+
+  // NotitieLog beheert veld + opslaan-status en toont de foutmelding.
+  const handleAddNotitie = async text => {
+    const created = await addActiviteitNotitie(activity.id, text);
+    setActiviteitNotities(list => [created, ...list]);
+    toast.success('Notitie opgeslagen');
+  };
 
   // Google Calendar per-activity sync state (read-only display + manual retry).
   const [gStatus, setGStatus] = useState(activity?.googleSyncStatus || 'not_synced');
@@ -1258,10 +1272,6 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
               <option value="low">Laag</option>
             </select>
           </div>
-          <div className="f s2">
-            <label>Notities</label>
-            <NoteEditor mentions={true} value={form.notes} onChange={v => set('notes', v)} teamMembers={teamMembers} disabled={!canEdit || busy} />
-          </div>
           {/* Google Agenda-sync tijdelijk verborgen voor klanten (OAuth nog niet geconfigureerd). Zet {false} op {true} om terug te zetten. Logica hieronder blijft intact. */}
           {false && activity?.dueAt && (
             <div className="f s2" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -1282,6 +1292,36 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
             </div>
           )}
         </div>
+
+        {/* Notities als eigen logboek — zelfde gedrag als de klantkaart, niet
+            langer één veld in het formulier dat overschreven wordt. */}
+        <div style={{ marginTop: 18 }}>
+          <div style={{ fontWeight: 700, fontSize: '.9rem', marginBottom: 10 }}>Notities</div>
+          {canEdit ? (
+            <NotitieLog
+              items={activiteitNotities.map(n => toLogItem({
+                id: n.id, body: n.note, authorName: n.authorName || 'Onbekend', createdAt: n.createdAt,
+              }))}
+              onAdd={handleAddNotitie}
+              teamMembers={teamMembers}
+              disabled={busy}
+            />
+          ) : activiteitNotities.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '24px 0', color: '#9ca3af', fontSize: '.84rem' }}>Nog geen notities</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {activiteitNotities.map(n => (
+                <div key={n.id} className="card card-p" style={{ padding: '12px 16px' }}>
+                  <div className="bb-notitie-content" style={{ fontSize: '.85rem', color: 'var(--dk)', lineHeight: 1.6, wordBreak: 'break-word' }}>{renderNote(n.note)}</div>
+                  <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginTop: 6, fontWeight: 600 }}>
+                    {(n.authorName || 'Onbekend')} · {fmtNotitieDatum(n.createdAt)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="fa">
           {canEdit && <button className="btn btn-ghost" onClick={handleDelete} disabled={busy}>{I.trash} Verwijderen</button>}
           <button className="btn btn-s" onClick={onClose} disabled={busy}>Annuleren</button>

@@ -524,3 +524,58 @@ export async function getAllWerkbonTakenCounts() {
   }
   return counts
 }
+
+// =============================================================================
+// WERKBON NOTITIES (log) — losse rijen, zelfde patroon als project_notes.
+// De oude tekstkolom werkbonnen.werkbon_notities blijft voorlopig staan; de
+// inhoud daarvan is bij de migratie als eerste logregel overgenomen.
+// =============================================================================
+
+const toWerkbonNotitie = row => ({
+  id: row.id,
+  companyId: row.company_id,
+  werkbonId: row.werkbon_id,
+  createdBy: row.created_by,
+  note: row.note || '',
+  createdAt: row.created_at,
+  authorName: row.profiles?.full_name || '',
+  raw: row,
+})
+
+export async function getWerkbonNotities(werkbonId) {
+  if (!werkbonId) return []
+  const { data, error } = await supabase
+    .from('werkbon_notities')
+    .select('*, profiles(full_name)')
+    .eq('werkbon_id', werkbonId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data || []).map(toWerkbonNotitie)
+}
+
+export async function addWerkbonNotitie(werkbonId, note) {
+  if (!werkbonId) throw new Error('werkbonId is verplicht')
+  const text = (typeof note === 'string' ? note : note?.note || '').trim()
+  if (!text) throw new Error('Notitie mag niet leeg zijn')
+
+  const base = { werkbon_id: werkbonId, note: text }
+  try {
+    const { data: u } = await supabase.auth.getUser()
+    if (u?.user?.id) base.created_by = u.user.id
+  } catch { /* ignore */ }
+
+  const payload = await withCompanyId(base)
+  const { data, error } = await supabase
+    .from('werkbon_notities')
+    .insert(payload)
+    .select('*, profiles(full_name)')
+    .single()
+  if (error) throw error
+  return toWerkbonNotitie(data)
+}
+
+export async function deleteWerkbonNotitie(notitieId) {
+  if (!notitieId) throw new Error('notitieId is verplicht')
+  const { error } = await supabase.from('werkbon_notities').delete().eq('id', notitieId)
+  if (error) throw error
+}

@@ -12,9 +12,18 @@ export async function getBtwPeriodes(periodeType = 'kwartaal') {
 }
 
 export async function syncBtwData(periodeType = 'kwartaal') {
-  const { data, error } = await supabase.functions.invoke('moneybird-sync-btw', {
-    body: { periode_type: periodeType },
-  })
-  if (error) throw error
-  return data
+  // Beide boekhoudkoppelingen best-effort: de niet-gekoppelde provider
+  // antwoordt "niet geconfigureerd" en doet niets. SnelStart negeert
+  // periode_type — de periode zit in de aangifte zelf.
+  const [mb, ss] = await Promise.allSettled([
+    supabase.functions.invoke('moneybird-sync-btw', { body: { periode_type: periodeType } }),
+    supabase.functions.invoke('snelstart-sync-btw', { body: {} }),
+  ])
+  const results = [mb, ss]
+    .filter(r => r.status === 'fulfilled' && !r.value.error)
+    .map(r => r.value.data)
+  const ok = results.find(d => d?.success)
+  if (ok) return ok
+  if (results.length) return results[0]
+  throw new Error('BTW-synchronisatie mislukt')
 }

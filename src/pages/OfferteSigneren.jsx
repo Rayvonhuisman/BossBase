@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
-import { signOfferte, sendEmail } from '../services/emailService.js'
+import { signOfferte } from '../services/emailService.js'
 import { getOffertePdfUrl, getOffertePdfBase64 } from '../utils/generatePdf.js'
 
 const fmt = n =>
@@ -11,6 +11,30 @@ const fmtDate = d => {
   const dt = new Date(d)
   return dt.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
 }
+
+// De sign-token RPC's leveren ruwe snake_case rijen; generatePdf verwacht de
+// camelCase vorm. Eén plek voor beide PDF-momenten (downloaden en ondertekenen),
+// zodat ze niet uit elkaar kunnen lopen.
+// Let op: companies heeft `postal_code`, customers heeft `postcode`.
+const mapCompanyForPdf = company => ({
+  name: company?.name,
+  address: company?.address,
+  postalCode: company?.postal_code,
+  city: company?.city,
+  email: company?.email,
+  kvk: company?.kvk,
+  btwNumber: company?.btw_number,
+  brandingColor: company?.branding_color,
+  logoUrl: company?.logo_url,
+})
+
+const mapKlantForPdf = klant => ({
+  name: klant?.name,
+  address: klant?.address,
+  postcode: klant?.postcode,
+  city: klant?.city,
+  email: klant?.email,
+})
 
 export default function OfferteSigneren({ token }) {
   const [offerte, setOfferte] = useState(null)
@@ -175,25 +199,8 @@ export default function OfferteSigneren({ token }) {
           subtotaal: item.subtotaal,
           type: item.type,
         }))
-        const mappedCompany = {
-          name: company?.name,
-          address: company?.address,
-          postalCode: company?.postal_code,
-          city: company?.city,
-          email: company?.email,
-          kvk: company?.kvk,
-          btwNumber: company?.btw_number,
-          brandingColor: company?.branding_color,
-          logoUrl: company?.logo_url,
-        }
-        const mappedKlant = {
-          name: klant?.name,
-          address: klant?.address,
-          postalCode: klant?.postal_code,
-          city: klant?.city,
-          email: klant?.email,
-        }
-        signedPdfBase64 = await getOffertePdfBase64(mappedOfferte, mappedItems, mappedKlant, mappedCompany)
+        signedPdfBase64 = await getOffertePdfBase64(
+          mappedOfferte, mappedItems, mapKlantForPdf(klant), mapCompanyForPdf(company))
       } catch (pdfErr) {
         console.warn('Ondertekend PDF genereren mislukt:', pdfErr.message)
       }
@@ -219,60 +226,13 @@ export default function OfferteSigneren({ token }) {
         }).then(() => {}).catch(() => {})
       }
 
-      // Bevestigingsmails versturen (best-effort — blokkeert success niet)
-      verstuurBevestigingsmails(result, signedPdfBase64).catch(e =>
-        console.warn('Bevestigingsmail mislukt:', e.message)
-      )
+      // Bevestigingsmails worden server-side verstuurd door de sign-offerte edge
+      // function (via de send-email relay met intern secret) — niet meer vanaf
+      // deze publieke pagina, die geen ingelogde sessie heeft.
     } catch (err) {
       alert('Er is iets misgegaan: ' + err.message)
     } finally {
       setSigning(false)
-    }
-  }
-
-  const verstuurBevestigingsmails = async (result, pdfBase64) => {
-    const signerName = result.signed_by_name || ''
-    const signerEmail = result.signed_by_email || ''
-    const pdfFilename = `Offerte-${result.offerte_nummer || ''}-ondertekend.pdf`
-    const attachment = pdfBase64
-      ? [{ filename: pdfFilename, content: pdfBase64 }]
-      : result.signed_pdf_base64
-        ? [{ filename: result.signed_pdf_filename || pdfFilename, content: result.signed_pdf_base64 }]
-        : []
-
-    const fromName = result.company_name || 'BossBase'
-    const nummer = result.offerte_nummer || ''
-    const totaal = result.totaal || ''
-    const omschrijving = result.offerte_omschrijving || ''
-
-    // Mail 1 → signed_by_email (adres ingevuld bij ondertekening)
-    await sendEmail({
-      to: signerEmail,
-      subject: `Bevestiging: offerte ${nummer} ondertekend`,
-      html: `<p>Beste ${signerName},</p>
-             <p>Bedankt voor het ondertekenen van offerte <strong>${nummer}</strong>.</p>
-             ${omschrijving ? `<p>Omschrijving: ${omschrijving}</p>` : ''}
-             <p>Totaal: <strong>${totaal}</strong></p>
-             ${attachment.length ? '<p>In de bijlage vindt u de ondertekende offerte.</p>' : ''}
-             <p>We nemen zo snel mogelijk contact met u op.</p>
-             <p>Met vriendelijke groet,<br>${fromName}</p>`,
-      fromName,
-      attachments: attachment,
-    })
-
-    // Mail 2 → bedrijfsemailadres (eigenaar notificatie)
-    if (result.company_email) {
-      await sendEmail({
-        to: result.company_email,
-        subject: `Offerte ${nummer} ondertekend door ${signerName}`,
-        html: `<p>Goed nieuws! Offerte <strong>${nummer}</strong> is zojuist ondertekend.</p>
-               <p>Ondertekend door: <strong>${signerName}</strong> (${signerEmail})<br>
-                  Datum en tijd: ${new Date(result.signed_at).toLocaleString('nl-NL')}<br>
-                  Totaal: <strong>${totaal}</strong></p>
-               ${attachment.length ? '<p>De ondertekende offerte is als bijlage toegevoegd.</p>' : ''}`,
-        fromName,
-        attachments: attachment,
-      })
     }
   }
 
@@ -297,25 +257,8 @@ export default function OfferteSigneren({ token }) {
         subtotaal: item.subtotaal,
         type: item.type,
       }))
-      const mappedCompany = {
-        name: company?.name,
-        address: company?.address,
-        postalCode: company?.postal_code,
-        city: company?.city,
-        email: company?.email,
-        kvk: company?.kvk,
-        btwNumber: company?.btw_number,
-        brandingColor: company?.branding_color,
-        logoUrl: company?.logo_url,
-      }
-      const mappedKlant = {
-        name: klant?.name,
-        address: klant?.address,
-        postalCode: klant?.postal_code,
-        city: klant?.city,
-        email: klant?.email,
-      }
-      const pdfUrl = await getOffertePdfUrl(mappedOfferte, mappedItems, mappedKlant, mappedCompany)
+      const pdfUrl = await getOffertePdfUrl(
+        mappedOfferte, mappedItems, mapKlantForPdf(klant), mapCompanyForPdf(company))
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
       if (isMobile) {
         const link = document.createElement('a')

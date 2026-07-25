@@ -40,6 +40,8 @@ import {
   testSnelStartConnection,
   importKostenVanuitSnelStart,
   syncContactenMetSnelStart,
+  setSnelStartImportCosts,
+  setSyncPaidOnly,
   saveAfasConnection,
   testAfasConnection,
   setAfasConnected,
@@ -109,6 +111,50 @@ function ColorSwatchPicker({ value, onChange }) {
 
 // Alle mogelijke tab-ids (permissie-onafhankelijk) — weert onbekende ?tab=-waarden.
 const SETTINGS_TAB_IDS = ['profiel', 'bedrijf', 'standaard', 'templates', 'pipeline', 'voertuigen', 'integraties'];
+
+// Logo's van de integratiepartners staan in public/brand en worden vanaf de root
+// geserveerd. De merken hebben sterk verschillende verhoudingen (Stripe ~2,4:1,
+// Moneybird en SnelStart ~6:1), dus schalen we op vaste hoogte met vrije breedte:
+// zo ogen ze even groot zonder uit te rekken. objectFit vangt de maxWidth-clamp op
+// smalle schermen op, zodat de verhouding ook daar klopt.
+// De drie logo's zijn woordmerken die de naam al tonen; een zichtbare titel eronder
+// zou die dubbelen. De alt-tekst op de <img> levert daarom de toegankelijke naam.
+const INTEG_LOGO_STYLE = {
+  height: 22,
+  width: 'auto',
+  maxWidth: '100%',
+  objectFit: 'contain',
+  objectPosition: 'left center',
+  display: 'block',
+  marginBottom: 8,
+};
+
+// Statuspill rechtsboven op een integratiekaart. Eén vorm voor alle koppelingen:
+// actief is een groene pill met stip, al het overige een neutrale pill. Eerder
+// gebruikte alleen Stripe deze vorm en toonden Moneybird/SnelStart/AFAS kale
+// gekleurde tekst.
+const INTEG_PILL_BASE = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  fontSize: '.72rem',
+  fontWeight: 600,
+  borderRadius: 999,
+  padding: '3px 10px',
+  whiteSpace: 'nowrap',
+};
+
+function IntegStatusPill({ actief = false, children }) {
+  const tone = actief
+    ? { color: 'var(--pd)', background: 'var(--pll)', border: '1px solid var(--pl)' }
+    : { color: 'var(--dmu)', background: 'var(--bgs)', border: '1px solid var(--border)' };
+  return (
+    <span style={{ ...INTEG_PILL_BASE, ...tone }}>
+      {actief && <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--pd)' }} />}
+      {children}
+    </span>
+  );
+}
 
 export function InstellingenPage() {
   const toast = useToast();
@@ -208,14 +254,17 @@ export function InstellingenPage() {
   const [mbImporting, setMbImporting] = useState(false);
   const [mbSyncingContacten, setMbSyncingContacten] = useState(false);
 
-  // SnelStart
+  // SnelStart — testfase: klant voert handmatig zijn koppelsleutel in; na
+  // certificering vervangt de oAuth-activatielink + webhook deze invoer.
   const [ssConnection, setSsConnection] = useState(null);
-  const [ssForm, setSsForm] = useState({ subscriptionKey: '', secondaryKey: '', administrationId: '' });
+  const [ssForm, setSsForm] = useState({ clientKey: '' });
+  const [ssShowKey, setSsShowKey] = useState(false);
   const [ssEditing, setSsEditing] = useState(false);
   const [ssTesting, setSsTesting] = useState(false);
   const [ssSaving, setSsSaving] = useState(false);
   const [ssImporting, setSsImporting] = useState(false);
   const [ssSyncingContacten, setSsSyncingContacten] = useState(false);
+  const [ssTogglingImport, setSsTogglingImport] = useState(false);
 
   // Voertuigen
   const [voertuigen, setVoertuigen] = useState([]);
@@ -337,7 +386,7 @@ export function InstellingenPage() {
         }
         if (ssConn) {
           setSsConnection(ssConn);
-          setSsForm({ subscriptionKey: '', secondaryKey: '', administrationId: ssConn.administrationId });
+          setSsForm({ clientKey: '' });
         }
         if (afasConn) {
           setAfasConnection(afasConn);
@@ -720,13 +769,15 @@ export function InstellingenPage() {
   };
 
   const handleSsTest = async () => {
-    if (!ssForm.subscriptionKey || !ssForm.secondaryKey) {
-      toast.error('Vul abonnementssleutel en maatwerksleutel in');
+    // Testfase: sleutel uit het formulier, of (indien al gekoppeld) de
+    // server-side opgeslagen sleutel — die is niet leesbaar voor de frontend.
+    if (!ssForm.clientKey && !ssConnection?.connected) {
+      toast.error('Vul de koppelsleutel in');
       return;
     }
     setSsTesting(true);
     try {
-      const result = await testSnelStartConnection(ssForm.subscriptionKey, ssForm.secondaryKey);
+      const result = await testSnelStartConnection(ssForm.clientKey || undefined);
       if (result?.success) {
         toast.success('Verbinding met SnelStart gelukt');
       } else {
@@ -740,14 +791,15 @@ export function InstellingenPage() {
   };
 
   const handleSsSave = async () => {
-    if (!ssForm.subscriptionKey || !ssForm.secondaryKey) {
-      toast.error('Vul abonnementssleutel en maatwerksleutel in');
+    if (!ssForm.clientKey) {
+      toast.error('Vul de koppelsleutel in');
       return;
     }
     setSsSaving(true);
     try {
-      const saved = await saveSnelStartConnection(ssForm);
+      const saved = await saveSnelStartConnection({ clientKey: ssForm.clientKey });
       setSsConnection(saved);
+      setSsForm({ clientKey: '' });
       setSsEditing(false);
       toast.success('SnelStart-koppeling opgeslagen');
     } catch (err) {
@@ -762,18 +814,46 @@ export function InstellingenPage() {
     try {
       const result = await importKostenVanuitSnelStart();
       if (result?.success) {
-        const imp = result.imported;
-        const total = typeof imp === 'object' ? (imp.inkoopboekingen || 0) : (imp ?? 0);
-        toast.success(`${total} inkoopboekingen geïmporteerd`);
+        const delen = [`${result.exported?.verkoopboekingen ?? 0} facturen naar SnelStart geboekt`];
+        if (ssConnection?.importCosts) {
+          delen.push(`${result.imported?.inkoopfacturen ?? 0} inkoopfacturen geïmporteerd`);
+          delen.push(`${result.exported?.inkoopboekingen ?? 0} kosten als vraagpost geboekt`);
+        }
+        toast.success(delen.join(', '));
         const refreshed = await getConnection('snelstart');
         if (refreshed) setSsConnection(refreshed);
       } else {
-        toast.error(result?.error || 'Importeren mislukt');
+        toast.error(result?.error || 'Synchroniseren mislukt');
       }
     } catch (err) {
-      toast.error(err.message || 'Importeren mislukt');
+      toast.error(err.message || 'Synchroniseren mislukt');
     } finally {
       setSsImporting(false);
+    }
+  };
+
+  const handleSsToggleImportCosts = async (enabled) => {
+    setSsTogglingImport(true);
+    try {
+      await setSnelStartImportCosts(enabled);
+      setSsConnection(c => (c ? { ...c, importCosts: enabled } : c));
+      toast.success(enabled ? 'Kosten importeren staat aan' : 'Kosten importeren staat uit');
+    } catch (err) {
+      toast.error(err.message || 'Instelling opslaan mislukt');
+    } finally {
+      setSsTogglingImport(false);
+    }
+  };
+
+  // "Alleen betaalde facturen synchroniseren" — per provider (moneybird/snelstart)
+  const handleTogglePaidOnly = async (provider, enabled) => {
+    const setConn = provider === 'moneybird' ? setMbConnection : setSsConnection;
+    try {
+      await setSyncPaidOnly(provider, enabled);
+      setConn(c => (c ? { ...c, syncPaidOnly: enabled } : c));
+      toast.success(enabled ? 'Alleen betaalde facturen worden gesynchroniseerd' : 'Verzonden én betaalde facturen worden gesynchroniseerd');
+    } catch (err) {
+      toast.error(err.message || 'Instelling opslaan mislukt');
     }
   };
 
@@ -782,7 +862,7 @@ export function InstellingenPage() {
     try {
       const result = await syncContactenMetSnelStart();
       if (result?.success) {
-        toast.success(`${result.imported ?? 0} contacten gesynchroniseerd`);
+        toast.success(`${result.imported ?? 0} klanten geïmporteerd, ${result.exported ?? 0} geëxporteerd`);
       } else {
         toast.error(result?.error || 'Synchroniseren mislukt');
       }
@@ -2082,7 +2162,7 @@ export function InstellingenPage() {
               <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                 {googleConnected ? (
                   <>
-                    <span style={{ fontSize: '.75rem', color: '#15A34A', fontWeight: 600 }}>Verbonden (demo)</span>
+                    <IntegStatusPill actief>Actief (demo)</IntegStatusPill>
                     <button
                       className="btn btn-danger btn-sm"
                       onClick={() => { setGoogleConnected(false); toast.info('Google Agenda losgekoppeld'); }}
@@ -2092,7 +2172,7 @@ export function InstellingenPage() {
                   </>
                 ) : (
                   <>
-                    <span style={{ fontSize: '.75rem', color: 'var(--dmu)' }}>Niet verbonden</span>
+                    <IntegStatusPill>Niet gekoppeld</IntegStatusPill>
                     <button
                       className="btn btn-s btn-sm"
                       onClick={() => {
@@ -2114,12 +2194,8 @@ export function InstellingenPage() {
               alleen statusvelden; de platform secret key blijft in de edge functions. */}
           <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
             <div className="integ-card-hd" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-              {/* Logo-plek */}
-              <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bgs)', borderRadius: 'var(--r8)', border: '1px solid var(--border)', color: 'var(--dm)', flexShrink: 0 }}>
-                {I.euro}
-              </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: '.95rem', marginBottom: 2 }}>Stripe</div>
+                <img src="/brand/stripe.svg" alt="Stripe" style={INTEG_LOGO_STYLE} />
                 <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>
                   Laat klanten je facturen online betalen.
                 </div>
@@ -2127,21 +2203,13 @@ export function InstellingenPage() {
               {/* Status-pill */}
               <div style={{ flexShrink: 0 }}>
                 {!stripeAllowed ? (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: '.72rem', fontWeight: 600, color: 'var(--dmu)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 999, padding: '3px 10px' }}>
-                    Vanaf Groei
-                  </span>
+                  <IntegStatusPill>Vanaf Groei</IntegStatusPill>
                 ) : stripeConn?.chargesEnabled ? (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '.72rem', fontWeight: 600, color: 'var(--pd)', background: 'var(--pll)', border: '1px solid var(--pl)', borderRadius: 999, padding: '3px 10px' }}>
-                    <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--pd)' }} /> Actief
-                  </span>
+                  <IntegStatusPill actief>Actief</IntegStatusPill>
                 ) : stripeConn?.accountId ? (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: '.72rem', fontWeight: 600, color: 'var(--dmu)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 999, padding: '3px 10px' }}>
-                    In verificatie
-                  </span>
+                  <IntegStatusPill>In verificatie</IntegStatusPill>
                 ) : (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', fontSize: '.72rem', fontWeight: 600, color: 'var(--dmu)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 999, padding: '3px 10px' }}>
-                    Niet gekoppeld
-                  </span>
+                  <IntegStatusPill>Niet gekoppeld</IntegStatusPill>
                 )}
               </div>
             </div>
@@ -2177,17 +2245,17 @@ export function InstellingenPage() {
           {/* Moneybird */}
           <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
             <div className="integ-card-hd" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: '.95rem', marginBottom: 2 }}>Moneybird</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <img src="/brand/moneybird.svg" alt="Moneybird" style={INTEG_LOGO_STYLE} />
                 <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>
                   Synchroniseer facturen automatisch naar Moneybird en importeer inkoopfacturen als kostenregels.
                 </div>
               </div>
               <div style={{ flexShrink: 0 }}>
                 {mbConnection?.connected ? (
-                  <span style={{ fontSize: '.75rem', color: '#15A34A', fontWeight: 600 }}>Verbonden</span>
+                  <IntegStatusPill actief>Actief</IntegStatusPill>
                 ) : (
-                  <span style={{ fontSize: '.75rem', color: 'var(--dmu)' }}>Niet verbonden</span>
+                  <IntegStatusPill>Niet gekoppeld</IntegStatusPill>
                 )}
               </div>
             </div>
@@ -2233,6 +2301,18 @@ export function InstellingenPage() {
                 />
               </div>
             </div>
+
+            {mbConnection?.connected && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '.82rem', color: 'var(--dm)', marginBottom: 14, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={!!mbConnection?.syncPaidOnly}
+                  onChange={e => handleTogglePaidOnly('moneybird', e.target.checked)}
+                  style={{ width: 'auto' }}
+                />
+                Alleen betaalde facturen synchroniseren
+              </label>
+            )}
 
             <div className="fa" style={{ flexWrap: 'wrap', gap: 8 }}>
               {mbConnection?.connected && (
@@ -2286,6 +2366,133 @@ export function InstellingenPage() {
             </div>
           </div>
 
+          {/* SnelStart — testfase: handmatige koppelsleutel-invoer. Eén platform-
+              subscriptionkey leeft als edge-function secret; de klant heeft alleen
+              zijn koppelsleutel (aan te maken op web.snelstart.nl). Na certificering
+              vervangt de oAuth-activatielink + webhook deze invoer. */}
+          <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
+            <div className="integ-card-hd" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <img src="/brand/snelstart.svg" alt="SnelStart" style={INTEG_LOGO_STYLE} />
+                <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>
+                  Boek facturen automatisch als verkoopboeking in SnelStart en synchroniseer klanten.
+                </div>
+              </div>
+              <div style={{ flexShrink: 0 }}>
+                {ssConnection?.connected ? (
+                  <IntegStatusPill actief>Actief</IntegStatusPill>
+                ) : (
+                  <IntegStatusPill>Niet gekoppeld</IntegStatusPill>
+                )}
+              </div>
+            </div>
+
+            <div className="fg" style={{ marginBottom: 14 }}>
+              <div className="f s2">
+                <label>
+                  Koppelsleutel
+                  <span style={{ fontSize: '.73rem', color: 'var(--dl)', fontWeight: 400, marginLeft: 6 }}>
+                    Aan te maken in SnelStart Web (web.snelstart.nl) bij je administratie
+                  </span>
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={ssShowKey ? 'text' : 'password'}
+                    value={ssForm.clientKey}
+                    onChange={e => setSsForm({ clientKey: e.target.value })}
+                    placeholder="SnelStart koppelsleutel..."
+                    disabled={!!(ssConnection?.connected && !ssEditing)}
+                    style={{ paddingRight: ssConnection?.connected && !ssEditing ? 0 : 40, opacity: ssConnection?.connected && !ssEditing ? 0.6 : 1 }}
+                  />
+                  {!(ssConnection?.connected && !ssEditing) && (
+                    <button
+                      type="button"
+                      onClick={() => setSsShowKey(v => !v)}
+                      style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dmu)', fontSize: '.8rem', padding: 0 }}
+                    >
+                      {ssShowKey ? 'Verberg' : 'Toon'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {ssConnection?.connected && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '.82rem', color: 'var(--dm)', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!ssConnection?.importCosts}
+                    onChange={e => handleSsToggleImportCosts(e.target.checked)}
+                    disabled={ssTogglingImport}
+                    style={{ width: 'auto' }}
+                  />
+                  Kosten synchroniseren (inkoopfacturen importeren én handmatige kosten als vraagpost naar SnelStart)
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '.82rem', color: 'var(--dm)', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!ssConnection?.syncPaidOnly}
+                    onChange={e => handleTogglePaidOnly('snelstart', e.target.checked)}
+                    style={{ width: 'auto' }}
+                  />
+                  Alleen betaalde facturen synchroniseren
+                </label>
+              </div>
+            )}
+
+            <div className="fa" style={{ flexWrap: 'wrap', gap: 8 }}>
+              {ssConnection?.connected && (
+                <>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleSsImport}
+                    disabled={ssImporting}
+                  >
+                    {ssImporting ? 'Synchroniseren...' : 'Kosten/facturen synchroniseren'}
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleSsSyncContacten}
+                    disabled={ssSyncingContacten}
+                  >
+                    {ssSyncingContacten ? 'Synchroniseren...' : 'Contacten synchroniseren'}
+                  </button>
+                </>
+              )}
+              {ssConnection?.lastSyncedAt && (
+                <span style={{ fontSize: '.75rem', color: 'var(--dl)', alignSelf: 'center', marginRight: 'auto' }}>
+                  Laatste sync: {new Date(ssConnection.lastSyncedAt).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+              {ssConnection?.connected && !ssEditing ? (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setSsEditing(true)}
+                >
+                  Wijzigen
+                </button>
+              ) : (
+                <>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleSsTest}
+                    disabled={ssTesting || (!ssForm.clientKey && !ssConnection?.connected)}
+                  >
+                    {ssTesting ? 'Testen...' : 'Verbinding testen'}
+                  </button>
+                  <button
+                    className="btn btn-p btn-sm"
+                    onClick={handleSsSave}
+                    disabled={ssSaving || !ssForm.clientKey}
+                  >
+                    {ssSaving ? 'Opslaan...' : 'Opslaan'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
 
           {/* AFAS — tijdelijk verborgen voor klanten, nog niet actief. Zet {false} op {true} om terug te zetten. */}
           {false && (
@@ -2305,11 +2512,11 @@ export function InstellingenPage() {
               </div>
               <div style={{ flexShrink: 0 }}>
                 {afasTested ? (
-                  <span style={{ fontSize: '.75rem', color: '#15A34A', fontWeight: 600 }}>Verbonden</span>
+                  <IntegStatusPill actief>Actief</IntegStatusPill>
                 ) : afasConnection?.connected ? (
-                  <span style={{ fontSize: '.75rem', color: 'var(--dl)', fontWeight: 600 }}>Niet getest</span>
+                  <IntegStatusPill>Niet getest</IntegStatusPill>
                 ) : (
-                  <span style={{ fontSize: '.75rem', color: 'var(--dmu)' }}>Niet verbonden</span>
+                  <IntegStatusPill>Niet gekoppeld</IntegStatusPill>
                 )}
               </div>
             </div>

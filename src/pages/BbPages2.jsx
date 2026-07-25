@@ -801,8 +801,12 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
   const filteredProjecten = custId ? projecten.filter(p => p.customerId === custId) : projecten;
   const filteredWerkbonnen = custId ? werkbonnen.filter(w => w.customerId === custId) : werkbonnen;
 
-  const isMoneybird = !!cost.externeRef;
-  const mbUrl = (isMoneybird && mbAdminId && cost.moneybirdDocumentId)
+  // Bron van een geïmporteerde kostenregel: SnelStart-refs zijn 'snelstart_…',
+  // al het overige externe komt uit Moneybird ('purchase_'/'receipt_'/'mutation_').
+  const kostenBron = cost.externeRef
+    ? (cost.externeRef.startsWith('snelstart_') ? 'SnelStart' : 'Moneybird')
+    : null;
+  const mbUrl = (kostenBron === 'Moneybird' && mbAdminId && cost.moneybirdDocumentId)
     ? `https://moneybird.com/${mbAdminId}/documents/${cost.moneybirdDocumentId}`
     : null;
 
@@ -855,8 +859,8 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
   };
 
   const handleDelete = async () => {
-    const msg = cost.externeRef
-      ? 'Weet je zeker dat je deze kostenregel wilt verwijderen? Dit verwijdert alleen de regel in BossBase, niet in Moneybird.'
+    const msg = kostenBron
+      ? `Weet je zeker dat je deze kostenregel wilt verwijderen? Dit verwijdert alleen de regel in BossBase, niet in ${kostenBron}.`
       : 'Weet je zeker dat je deze kostenregel wilt verwijderen?';
     if (!window.confirm(msg)) return;
     setDeleting(true);
@@ -873,8 +877,8 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
         <div className="modal-hd">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontWeight: 700, fontSize: '1rem' }}>Kostendetail</span>
-            {isMoneybird
-              ? <span style={{ fontSize: '.72rem', fontWeight: 700, color: '#fff', background: '#2563EB', borderRadius: 5, padding: '2px 7px' }}>Moneybird</span>
+            {kostenBron
+              ? <span style={{ fontSize: '.72rem', fontWeight: 700, color: '#fff', background: kostenBron === 'SnelStart' ? '#0A5BC4' : '#2563EB', borderRadius: 5, padding: '2px 7px' }}>{kostenBron}</span>
               : <span style={{ fontSize: '.72rem', fontWeight: 600, color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 5, padding: '2px 7px' }}>Handmatig</span>
             }
           </div>
@@ -1070,7 +1074,9 @@ export function CostsPage() {
                   <td style={{ color: 'var(--dl)', fontSize: '.8rem' }}>{r.date}</td>
                   <td>
                     {r.externeRef
-                      ? <span style={{ fontSize: '.7rem', fontWeight: 700, color: '#fff', background: '#2563EB', borderRadius: 4, padding: '2px 6px' }}>MB</span>
+                      ? (r.externeRef.startsWith('snelstart_')
+                        ? <span style={{ fontSize: '.7rem', fontWeight: 700, color: '#fff', background: '#0A5BC4', borderRadius: 4, padding: '2px 6px' }}>SS</span>
+                        : <span style={{ fontSize: '.7rem', fontWeight: 700, color: '#fff', background: '#2563EB', borderRadius: 4, padding: '2px 6px' }}>MB</span>)
                       : <span style={{ fontSize: '.7rem', color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 6px' }}>—</span>
                     }
                   </td>
@@ -1166,14 +1172,16 @@ export function RevenuePage() {
 
   React.useEffect(() => {
     setLoading(true);
-    Promise.all([listCustomers(), listJobCosts(), getFacturen(), getOffertes(), getAllFactuurRegels(), getConnection()])
-      .then(([custData, costData, facturenData, offertesData, regelsData, mbConn]) => {
+    Promise.all([listCustomers(), listJobCosts(), getFacturen(), getOffertes(), getAllFactuurRegels(), getConnection(), getConnection('snelstart')])
+      .then(([custData, costData, facturenData, offertesData, regelsData, mbConn, ssConn]) => {
         setCustomers(custData);
         setCostsData(costData);
         setFacturen(facturenData);
         setOffertes(offertesData);
         setAllRegels(regelsData);
-        setMbConnection(mbConn);
+        // Boekhoudkoppeling voor de BTW-widget: Moneybird óf SnelStart — beide
+        // voeden btw_periodes, de widget is provider-onafhankelijk.
+        setMbConnection(mbConn?.connected ? mbConn : (ssConn?.connected ? ssConn : mbConn));
       }).catch(() => {}).finally(() => setLoading(false));
   }, [refreshKey]);
 
@@ -1416,7 +1424,7 @@ export function RevenuePage() {
         </div>
       </div>
 
-      {/* ── BTW-overzicht — alleen tonen bij een actieve boekhoudkoppeling (Moneybird) ── */}
+      {/* ── BTW-overzicht — alleen tonen bij een actieve boekhoudkoppeling (Moneybird of SnelStart) ── */}
       {mbConnection?.connected && (
       <div className="tw afu3" style={{ marginBottom: 20 }}>
         <div className="tw-hd" style={{ flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>

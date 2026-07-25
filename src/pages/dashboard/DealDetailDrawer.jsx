@@ -8,7 +8,7 @@ import { getOffertes } from '../../services/offerteService.js';
 import { listNotes, createNote } from '../../services/noteService.js';
 import { listJobCosts } from '../../services/jobCostService.js';
 import { getWerkbonnen } from '../../services/werkbonService.js';
-import { NoteEditor, renderNote } from '../../components/NoteEditor.jsx';
+import NotitieLog, { toLogItem } from '../../components/NotitieLog.jsx';
 import { getTeamMembers, createMentionNotifications, notifyNewAssignees } from '../../services/notificatieService.js';
 
 const GREEN = '#1DDB62';
@@ -63,8 +63,6 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
   const [form, setForm] = useState({ title: '', value: '', stageId: '', nextAct: '', assignedTo: '', priority: 'med' });
   const [saving, setSaving] = useState(false);
   const [notifyMail, setNotifyMail] = useState(true);
-  const [noteText, setNoteText] = useState('');
-  const [addingNote, setAddingNote] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -137,21 +135,14 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
     }
   };
 
-  const addNote = async () => {
-    const body = noteText.trim();
-    if (!body || !deal) return;
-    setAddingNote(true);
-    try {
-      const created = await createNote({ customer_id: deal.custId || null, deal_id: deal.id, body });
-      setNotes(ns => [created, ...ns]);
-      if (profile?.id) {
-        createMentionNotifications({ text: body, relatedType: 'deal', relatedId: deal.id, link: 'pipeline', creatorId: profile.id, creatorName: profile.fullName, contextName: deal.title }).catch(() => {});
-      }
-      setNoteText('');
-    } catch (e) {
-      toast.error(e.message || 'Notitie opslaan mislukt');
-    } finally {
-      setAddingNote(false);
+  // NotitieLog beheert tekst + opslaan-status en toont de foutmelding; hier
+  // alleen de insert, fouten gooien we door.
+  const addNote = async body => {
+    if (!deal) return;
+    const created = await createNote({ customer_id: deal.custId || null, deal_id: deal.id, body });
+    setNotes(ns => [created, ...ns]);
+    if (profile?.id) {
+      createMentionNotifications({ text: body, relatedType: 'deal', relatedId: deal.id, link: 'pipeline', creatorId: profile.id, creatorName: profile.fullName, contextName: deal.title }).catch(() => {});
     }
   };
 
@@ -304,17 +295,12 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
 
       {/* Notities */}
       <Section title={`Notities (${notes.length})`}>
-        <div style={{ marginBottom: 10 }}>
-          <NoteEditor mentions={true} value={noteText} onChange={setNoteText} placeholder="Nieuwe notitie… Typ @ om iemand te taggen" rows={3} disabled={addingNote} teamMembers={teamMembers} />
-          <button className="btn btn-s btn-sm" disabled={addingNote || !noteText.trim()} onClick={addNote} style={{ marginTop: 8 }}>Toevoegen</button>
-        </div>
-        {notes.length === 0 && <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Nog geen notities</div>}
-        {notes.map(n => (
-          <div key={n.id} style={{ padding: '10px 12px', border: '1px solid #eef0f2', borderRadius: 9, background: '#f7f8f7', marginBottom: 6 }}>
-            <div className="bb-notitie-content" style={{ fontSize: 13, color: '#0a0a0a', whiteSpace: 'pre-wrap' }}>{renderNote(n.body)}</div>
-            <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>{(n.createdAt || '').slice(0, 10)}{n.author ? ` · ${n.author}` : ''}</div>
-          </div>
-        ))}
+        <NotitieLog
+          items={notes.map(n => toLogItem({ id: n.id, body: n.body, authorName: n.author, createdAt: n.createdAt }))}
+          onAdd={addNote}
+          teamMembers={teamMembers}
+          placeholder="Nieuwe notitie… Typ @ om iemand te taggen"
+        />
       </Section>
 
       {/* Kosten / werkbonnen */}

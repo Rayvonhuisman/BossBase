@@ -31,6 +31,7 @@ const toCustomer = (row, index = 0) => ({
   companyId: row.company_id || null,
   createdAt: row.created_at || null,
   moneybirdId: row.moneybird_id || null,
+  snelstartId: row.snelstart_id || null,
   // UI helpers — synthesized, not stored:
   av: index,
   stage: "new_lead",

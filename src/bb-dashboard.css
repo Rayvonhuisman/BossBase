@@ -366,6 +366,18 @@ ul{list-style:none}
 .kk-tabs .tab.active{background:var(--p) !important;color:var(--dk) !important;border-color:var(--p) !important;box-shadow:none !important}
 .kk-tabs .tab:focus,.kk-tabs .tab:focus-visible{outline:none;box-shadow:none}
 
+/* Klantgegevens-tab: label alleen tonen als de balk het aankan, anders alleen het
+   icoon. Bewust een container query en geen media query: de klantkaart staat in
+   twee contexten met heel andere breedte — het split-panel (max(680px,50%), groeit
+   mee met het scherm) en de klantdrawer (vast 680px, ongeacht schermbreedte). Een
+   viewport-breakpoint zou het label in die drawer op een groot scherm tonen terwijl
+   de ruimte daar niet meegroeit. De container query meet de werkelijke ruimte.
+   Drempel 690px: alle 9 tabs (max. aantal, afhankelijk van rechten) zijn samen
+   675px breed mét label, dus dat past met wat marge. Zonder label is 611px genoeg. */
+.kk-tabs-wrap{container-type:inline-size}
+.kk-tabs .kk-tab-label{display:none;margin-left:5px}
+@container (min-width:690px){.kk-tabs .kk-tab-label{display:inline}}
+
 /* Klantkaart-lijsten: flexbox-rijen i.p.v. tabellen. Passen altijd binnen
    zowel full-screen als de smalle half-scherm drawer — geen scroll nodig. */
 .kk-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;border-bottom:1px solid var(--br);cursor:pointer;transition:background .12s ease}
@@ -2792,4 +2804,39 @@ ul{list-style:none}
   .cookie-banner-inner{flex-direction:column;align-items:stretch;gap:12px;padding:14px 16px}
   .cookie-banner-actions{flex-direction:column-reverse}
   .cookie-banner-actions .btn{width:100%;justify-content:center;padding:11px 16px}
+}
+
+/* ── ADRES-ZOEKER (PDOK) ─────────────────────────────────────
+   Invulhulp boven de losse adresvelden. Mobile-first: ruime
+   raakvlakken, lijst scrollt binnen zichzelf i.p.v. de modal. */
+.adres-zoeker{display:flex;flex-direction:column;gap:5px;position:relative}
+.adres-zoeker label{font-weight:600;font-size:.78rem;color:var(--dm)}
+.adres-zoeker-input{position:relative;display:flex;align-items:center}
+.adres-zoeker-input input{width:100%;border:1px solid var(--bstrong);border-radius:var(--r8);padding:11px 34px 11px 32px;font-size:16px;color:var(--dk);background:white;outline:none;font-family:inherit;transition:all .15s ease;-webkit-appearance:none;appearance:none}
+.adres-zoeker-input input:focus{border-color:var(--p);box-shadow:0 0 0 3px rgba(29,219,98,.14)}
+.adres-zoeker-input input::-webkit-search-cancel-button{-webkit-appearance:none}
+.adres-zoeker-icon{position:absolute;left:10px;color:var(--dl);pointer-events:none}
+.adres-zoeker-spin{position:absolute;right:10px;color:var(--dmu);animation:adres-spin .8s linear infinite}
+@keyframes adres-spin{to{transform:rotate(360deg)}}
+.adres-zoeker-list{position:absolute;top:100%;left:0;right:0;z-index:60;margin:4px 0 0;padding:4px;list-style:none;background:white;border:1px solid var(--bstrong);border-radius:var(--r12);box-shadow:0 12px 32px rgba(0,0,0,.14);max-height:min(50vh,280px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.adres-zoeker-list li{padding:12px 12px;min-height:44px;display:flex;align-items:center;font-size:.85rem;color:var(--dk);border-radius:var(--r8);cursor:pointer;line-height:1.35}
+.adres-zoeker-list li.is-active{background:var(--bgs)}
+.adres-zoeker-list .adres-zoeker-empty{color:var(--dmu);cursor:default;font-style:italic}
+.adres-zoeker-error{font-size:.75rem;color:#b45309}
+.adres-zoeker-hint{font-size:.72rem;color:var(--dl)}
+@media (max-width:767px){
+  .adres-zoeker-list{max-height:min(45vh,260px)}
+  .adres-zoeker-list li{padding:13px 12px;min-height:48px;font-size:.88rem}
+}
+
+/* Inline-variant: het bewerkveld van één regel is zelf de zoeker. */
+.adres-zoeker-inline{flex:1;min-width:0;gap:0}
+.adres-zoeker-inline .adres-zoeker-input input{padding:2px 6px;font-size:.82rem;border-radius:var(--r6)}
+.adres-zoeker-inline .adres-zoeker-list{max-height:min(40vh,240px)}
+.adres-zoeker-inline .adres-zoeker-list li{padding:9px 10px;min-height:38px;font-size:.82rem}
+.adres-zoeker-inline .adres-zoeker-error{position:absolute;top:100%;left:0;margin-top:3px;white-space:nowrap}
+@media (max-width:767px){
+  /* Op telefoon voorkomt 16px dat iOS inzoomt bij focus. */
+  .adres-zoeker-inline .adres-zoeker-input input{font-size:16px;padding:5px 8px}
+  .adres-zoeker-inline .adres-zoeker-list li{min-height:46px;padding:12px 10px;font-size:.88rem}
 }

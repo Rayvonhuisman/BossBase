@@ -15,7 +15,7 @@ import {
 import { listCustomers } from '../../services/customerService.js';
 import { listDeals } from '../../services/dealService.js';
 import { getTeamMembers, createMentionNotifications } from '../../services/notificatieService.js';
-import { NoteEditor, renderNote } from '../../components/NoteEditor.jsx';
+import NotitieLog, { toLogItem } from '../../components/NotitieLog.jsx';
 
 const TYPE_LABEL = { job: 'Klus', visit: 'Opname', activity: 'Activiteit', event: 'Afspraak' };
 const TYPE_TONE = { job: 'b-orange', visit: 'b-new', activity: 'b-blue', event: 'b-green' };
@@ -57,20 +57,6 @@ function Field({ label, children }) {
   );
 }
 
-function fmtWhen(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })
-    + ' · ' + d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
-}
-
-function initialsOf(name) {
-  const parts = (name || '').trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return '?';
-}
-
 export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, openDeal }) {
   const { profile, bumpRefresh } = useProfile();
   const { can } = usePermissions();
@@ -105,8 +91,6 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
   const [creatingWb, setCreatingWb] = useState(false);
 
   const [comments, setComments] = useState([]);
-  const [draft, setDraft] = useState('');
-  const [posting, setPosting] = useState(false);
 
   // ── Laad het agenda-item ──────────────────────────────────────
   useEffect(() => {
@@ -234,36 +218,28 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
     }
   };
 
-  const handlePostComment = async () => {
-    const text = draft.trim();
+  // NotitieLog levert de tekst aan en beheert zelf veld + opslaan-status.
+  const handlePostComment = async text => {
     if (!text || !ev) return;
-    setPosting(true);
-    try {
-      const entry = {
-        id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `c-${Date.now()}`,
-        userId: profile?.id || null,
-        name: profile?.fullName || 'Onbekend',
-        text,
-        at: new Date().toISOString(),
-      };
-      const next = [...comments, entry];
-      await updateCalendarEventComments(ev.id, next);
-      setComments(next);
-      setDraft('');
-      createMentionNotifications({
-        text,
-        relatedType: 'calendar_event',
-        relatedId: ev.id,
-        link: 'calendar',
-        creatorId: profile?.id,
-        creatorName: profile?.fullName,
-        contextName: ev.title,
-      }).catch(() => {});
-    } catch (e) {
-      toast.error(e.message || 'Plaatsen mislukt');
-    } finally {
-      setPosting(false);
-    }
+    const entry = {
+      id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `c-${Date.now()}`,
+      userId: profile?.id || null,
+      name: profile?.fullName || 'Onbekend',
+      text,
+      at: new Date().toISOString(),
+    };
+    const next = [...comments, entry];
+    await updateCalendarEventComments(ev.id, next);
+    setComments(next);
+    createMentionNotifications({
+      text,
+      relatedType: 'calendar_event',
+      relatedId: ev.id,
+      link: 'calendar',
+      creatorId: profile?.id,
+      creatorName: profile?.fullName,
+      contextName: ev.title,
+    }).catch(() => {});
   };
 
   const HeadClose = (
@@ -462,37 +438,14 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
 
       {/* ── Notities / communicatie ─────────────────────────────── */}
       <Section title="Notities">
-        {comments.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-            {comments.map(cm => (
-              <div key={cm.id} style={{ display: 'flex', gap: 10 }}>
-                <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#eef0f2', color: '#374151', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  {initialsOf(cm.name)}
-                </div>
-                <div style={{ flex: 1, minWidth: 0, background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 'var(--r8)', padding: '8px 10px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 2 }}>
-                    <span style={{ fontSize: 12.5, fontWeight: 700, color: '#0a0a0a' }}>{cm.name}</span>
-                    <span style={{ fontSize: 11, color: '#9ca3af', flexShrink: 0 }}>{fmtWhen(cm.at)}</span>
-                  </div>
-                  <div className="bb-notitie-content" style={{ fontSize: 13, color: '#0a0a0a', lineHeight: 1.5, wordBreak: 'break-word' }}>{renderNote(cm.text)}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <NoteEditor mentions={true}
-          value={draft}
-          onChange={setDraft}
-          rows={3}
-          placeholder="Schrijf een notitie… Typ @ om iemand te taggen"
+        {/* Opslag blijft de comments-jsonb (oplopend); de log toont nieuwste
+            bovenaan, net als de klantkaart. */}
+        <NotitieLog
+          items={[...comments].reverse().map(cm => toLogItem({ id: cm.id, body: cm.text, authorName: cm.name, createdAt: cm.at }))}
+          onAdd={handlePostComment}
           teamMembers={teamMembers}
+          saveLabel="Plaatsen"
         />
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
-          <button className="btn btn-p btn-xs" disabled={posting || !draft.trim()} onClick={handlePostComment}>
-            {posting ? 'Plaatsen…' : 'Plaatsen'}
-          </button>
-        </div>
       </Section>
 
       <div style={{ flex: 1 }} />

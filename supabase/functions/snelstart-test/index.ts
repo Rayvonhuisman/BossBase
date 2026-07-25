@@ -1,76 +1,55 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { makeAdminClient } from "../_shared/scheduledSync.ts"
+import { ssFetch } from "../_shared/snelstart.ts"
+
+// Verbindingstest voor de SnelStart-koppeling. Test de opgegeven koppelsleutel
+// (body.client_key, vóór het opslaan) of anders de opgeslagen sleutel van het
+// bedrijf. Check = GET /v2/relaties?$top=1 (scope relaties:read) — het lichtste
+// endpoint dat auth + subscription key + scope in één keer bewijst.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
-
-async function getSnelStartToken(subscriptionKey: string, secondaryKey: string): Promise<string> {
-  const res = await fetch('https://auth.snelstart.nl/b2b/token', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Ocp-Apim-Subscription-Key': subscriptionKey,
-    },
-    body: `grant_type=maatwerk_token&maatwerk_token=${encodeURIComponent(secondaryKey)}`,
-  })
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw new Error(`SnelStart auth mislukt (${res.status}): ${body}`)
-  }
-  const json = await res.json()
-  if (!json.access_token) throw new Error('Geen access_token in SnelStart response')
-  return json.access_token
-}
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   console.log('Function started: snelstart-test')
+  const supabase = makeAdminClient()
 
   try {
-    const { subscription_key, secondary_key } = await req.json()
+    const jwt = (req.headers.get('authorization') ?? '').replace('Bearer ', '')
+    const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt)
+    if (authErr || !user) return json({ error: 'Niet ingelogd' }, 401)
 
-    if (!subscription_key || !secondary_key) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Abonnementssleutel en maatwerksleutel zijn verplicht' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-      )
+    const body = await req.json().catch(() => ({}))
+    let clientKey: string = typeof body.client_key === 'string' ? body.client_key.trim() : ''
+
+    if (!clientKey) {
+      const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single()
+      if (!profile?.company_id) return json({ error: 'Geen bedrijf gevonden' }, 400)
+      const { data: conn } = await supabase
+        .from('accounting_connections')
+        .select('client_key')
+        .eq('company_id', profile.company_id)
+        .eq('provider', 'snelstart')
+        .maybeSingle()
+      clientKey = conn?.client_key ?? ''
     }
+    if (!clientKey) return json({ success: false, error: 'Geen koppelsleutel opgegeven of opgeslagen' }, 400)
 
-    const token = await getSnelStartToken(subscription_key, secondary_key)
+    const relaties = await ssFetch(clientKey, '/relaties?$top=1')
 
-    const res = await fetch('https://b2bapi.snelstart.nl/v2/administraties', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Ocp-Apim-Subscription-Key': subscription_key,
-      },
+    return json({
+      success: true,
+      message: 'Verbinding met SnelStart geslaagd',
+      relaties_bereikbaar: Array.isArray(relaties),
     })
-
-    if (!res.ok) {
-      const body = await res.text().catch(() => '')
-      console.error(`SnelStart administraties ${res.status}: ${body}`)
-      return new Response(
-        JSON.stringify({ success: false, error: `SnelStart fout: ${res.status}`, detail: body }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: res.status }
-      )
-    }
-
-    const administraties = await res.json()
-    console.log('SnelStart administraties:', JSON.stringify(administraties))
-
-    return new Response(
-      JSON.stringify({ success: true, message: 'Verbinding geslaagd', administraties: Array.isArray(administraties) ? administraties : [] }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-  } catch (err) {
-    console.error('Error:', err.message, err.stack)
-    return new Response(
-      JSON.stringify({ success: false, error: err.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-    )
+  } catch (err: any) {
+    console.error('Error:', err.message)
+    return json({ success: false, error: err.message }, 500)
   }
 })

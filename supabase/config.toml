@@ -29,3 +29,10 @@ verify_jwt = false
 # token (10 min geldig) in de functie zelf.
 [functions.google-calendar-callback]
 verify_jwt = false
+
+# SnelStart POST de koppelsleutel-webhook publiek aan (geen Supabase-JWT, geen
+# signature). De echtheid wordt geverifieerd via het geheime ?key=-token
+# (SNELSTART_WEBHOOK_SECRET) in de functie zelf; zonder die secret weigert de
+# functie alles (503) — pas actief na certificering.
+[functions.snelstart-webhook]
+verify_jwt = false

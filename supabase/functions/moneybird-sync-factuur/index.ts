@@ -121,7 +121,7 @@ serve(async (req) => {
 
     const { data: conn } = await admin
       .from('accounting_connections')
-      .select('api_token, administration_id')
+      .select('api_token, administration_id, sync_paid_only')
       .eq('company_id', companyId)
       .eq('provider', 'moneybird')
       .maybeSingle()
@@ -135,6 +135,11 @@ serve(async (req) => {
       .eq('company_id', companyId)
       .single()
     if (!factuur) return json({ error: 'Factuur niet gevonden' }, 404)
+
+    // Instelling "alleen betaalde facturen synchroniseren"
+    if (conn.sync_paid_only && factuur.status !== 'betaald') {
+      return json({ success: true, skipped: 'alleen betaalde facturen worden gesynchroniseerd' })
+    }
 
     const { data: regels } = await admin
       .from('factuur_regels').select('*').eq('factuur_id', factuurId).order('volgorde', { ascending: true })

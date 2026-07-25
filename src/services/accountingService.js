@@ -1,20 +1,5 @@
 import { supabase } from '../lib/supabase'
-import { withCompanyId, getCompanyId } from '../lib/currentCompany'
-
-// Status-object voor de UI. Bevat NOOIT de tokenwaarde zelf — die is server-side
-// afgeschermd (RLS/kolomrechten) en alleen leesbaar voor de edge functions.
-// `connected` komt server-side uit get_accounting_status(). De lege token-velden
-// blijven bestaan zodat oudere consumers die er (per ongeluk) naar kijken een
-// falsy waarde zien i.p.v. een crash — nooit een echt token.
-const toStatus = (row, { connected } = {}) => row ? ({
-  provider: row.provider,
-  administrationId: row.administration_id || '',
-  afasEnvironmentId: row.afas_environment_id || '',
-  afasIsConnected: connected ?? (row.is_connected || false),
-  connected: connected ?? (row.is_connected || false),
-  lastSyncedAt: row.last_synced_at || null,
-  apiToken: '', subscriptionKey: '', secondaryKey: '', afasToken: '',
-}) : null
+import { getCompanyId } from '../lib/currentCompany'
 
 export async function getConnection(provider = 'moneybird') {
   const companyId = await getCompanyId()
@@ -30,26 +15,40 @@ export async function getConnection(provider = 'moneybird') {
     afasEnvironmentId: row.afas_environment_id || '',
     afasIsConnected: !!row.connected,
     connected: !!row.connected,
+    importCosts: !!row.import_costs,
+    syncPaidOnly: !!row.sync_paid_only,
+    lastSyncedAt: row.last_synced_at || null,
+    apiToken: '', subscriptionKey: '', secondaryKey: '', afasToken: '',
+  }
+}
+
+// Opslaan loopt via de SECURITY DEFINER-RPC: een directe upsert faalt sinds de
+// token-afscherming (EXCLUDED.<geheime kolom> vereist SELECT-recht). De RPC
+// geeft dezelfde niet-geheime statusrij terug als get_accounting_status.
+const rpcRowToStatus = (data) => {
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row) return null
+  return {
+    provider: row.provider,
+    administrationId: row.administration_id || '',
+    afasEnvironmentId: row.afas_environment_id || '',
+    afasIsConnected: !!row.connected,
+    connected: !!row.connected,
+    importCosts: !!row.import_costs,
+    syncPaidOnly: !!row.sync_paid_only,
     lastSyncedAt: row.last_synced_at || null,
     apiToken: '', subscriptionKey: '', secondaryKey: '', afasToken: '',
   }
 }
 
 export async function saveConnection({ apiToken, administrationId, provider = 'moneybird' }) {
-  const payload = await withCompanyId({
-    provider,
-    api_token: apiToken,
-    administration_id: administrationId,
-    updated_at: new Date().toISOString(),
+  const { data, error } = await supabase.rpc('save_accounting_connection', {
+    p_provider: provider,
+    p_secret: apiToken,
+    p_administration_id: administrationId,
   })
-  const { data, error } = await supabase
-    .from('accounting_connections')
-    .upsert(payload, { onConflict: 'company_id,provider' })
-    .select('provider, administration_id, afas_environment_id, is_connected, last_synced_at')
-    .maybeSingle()
   if (error) throw error
-  // Net een geldig token geschreven → moneybird is verbonden.
-  return toStatus(data, { connected: true })
+  return rpcRowToStatus(data)
 }
 
 export async function testMoneybirdConnection(apiToken, administrationId) {
@@ -89,30 +88,52 @@ export async function syncContactenMetMoneybird() {
   return data
 }
 
-export async function saveSnelStartConnection({ subscriptionKey, secondaryKey, administrationId }) {
-  const payload = await withCompanyId({
-    provider: 'snelstart',
-    subscription_key: subscriptionKey,
-    secondary_key: secondaryKey,
-    administration_id: administrationId || null,
-    updated_at: new Date().toISOString(),
+// Testfase: de klant voert zijn koppelsleutel handmatig in. Na certificering
+// komt de sleutel binnen via de oAuth-activatielink + snelstart-webhook en
+// vervalt deze handmatige invoer. De subscription key is een platform-secret
+// van BossBase (edge functions) en hoort hier dus nooit thuis.
+export async function saveSnelStartConnection({ clientKey }) {
+  const { data, error } = await supabase.rpc('save_accounting_connection', {
+    p_provider: 'snelstart',
+    p_secret: clientKey,
   })
-  const { data, error } = await supabase
-    .from('accounting_connections')
-    .upsert(payload, { onConflict: 'company_id,provider' })
-    .select('provider, administration_id, afas_environment_id, is_connected, last_synced_at')
-    .maybeSingle()
   if (error) throw error
-  // Net geldige sleutels geschreven → snelstart is verbonden.
-  return toStatus(data, { connected: true })
+  return rpcRowToStatus(data)
 }
 
-export async function testSnelStartConnection(subscriptionKey, secondaryKey) {
+export async function testSnelStartConnection(clientKey) {
   const { data, error } = await supabase.functions.invoke('snelstart-test', {
-    body: { subscription_key: subscriptionKey, secondary_key: secondaryKey },
+    body: clientKey ? { client_key: clientKey } : {},
   })
   if (error) throw error
   return data
+}
+
+// Kosten-import aan/uit (standaard uit). Alleen het vinkje — de import zelf
+// draait via importKostenVanuitSnelStart of de scheduled-modus.
+export async function setSnelStartImportCosts(enabled) {
+  const companyId = await getCompanyId()
+  if (!companyId) return
+  const { error } = await supabase
+    .from('accounting_connections')
+    .update({ import_costs: !!enabled, updated_at: new Date().toISOString() })
+    .eq('company_id', companyId)
+    .eq('provider', 'snelstart')
+  if (error) throw error
+}
+
+// "Alleen betaalde facturen synchroniseren" aan/uit (standaard uit); geldt per
+// provider (moneybird/snelstart) en wordt server-side gelezen door de
+// sync-functies.
+export async function setSyncPaidOnly(provider, enabled) {
+  const companyId = await getCompanyId()
+  if (!companyId) return
+  const { error } = await supabase
+    .from('accounting_connections')
+    .update({ sync_paid_only: !!enabled, updated_at: new Date().toISOString() })
+    .eq('company_id', companyId)
+    .eq('provider', provider)
+  if (error) throw error
 }
 
 export async function importKostenVanuitSnelStart() {
@@ -120,6 +141,9 @@ export async function importKostenVanuitSnelStart() {
     body: {},
   })
   if (error) throw error
+  // Btw-overzicht bijwerken vanuit de echte SnelStart-aangiftes (faalt stil,
+  // bijv. zolang de btwaangiftes:read-scope ontbreekt op de sleutel).
+  await supabase.functions.invoke('snelstart-sync-btw', { body: {} }).catch(() => {})
   return data
 }
 
@@ -131,22 +155,24 @@ export async function syncContactenMetSnelStart() {
   return data
 }
 
-export async function saveAfasConnection({ environmentId, token }) {
-  const payload = await withCompanyId({
-    provider: 'afas',
-    afas_environment_id: environmentId,
-    afas_token: token,
-    is_connected: false,
-    updated_at: new Date().toISOString(),
+export async function syncFactuurNaarSnelStart(factuurId) {
+  const { data, error } = await supabase.functions.invoke('snelstart-sync-factuur', {
+    body: { factuur_id: factuurId },
   })
-  const { data, error } = await supabase
-    .from('accounting_connections')
-    .upsert(payload, { onConflict: 'company_id,provider' })
-    .select('provider, administration_id, afas_environment_id, is_connected, last_synced_at')
-    .maybeSingle()
   if (error) throw error
-  // AFAS is pas "connected" na een geslaagde test (setAfasConnected) → volg is_connected.
-  return toStatus(data)
+  return data
+}
+
+export async function saveAfasConnection({ environmentId, token }) {
+  // AFAS is pas "connected" na een geslaagde test (setAfasConnected); de RPC
+  // zet is_connected zelf op false bij het opslaan van een nieuw token.
+  const { data, error } = await supabase.rpc('save_accounting_connection', {
+    p_provider: 'afas',
+    p_secret: token,
+    p_afas_environment_id: environmentId,
+  })
+  if (error) throw error
+  return rpcRowToStatus(data)
 }
 
 export async function testAfasConnection(environmentId, token) {

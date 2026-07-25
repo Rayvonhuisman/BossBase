@@ -76,13 +76,8 @@ function BtwSelect({ r, setRegel }) {
       <select value={r.btw} onChange={e => setRegel(r.id, 'btw', e.target.value)} style={{ flex: 1, minWidth: 0 }}>
         <option value="21">21%</option>
         <option value="9">9%</option>
-        <option value="anders">Anders</option>
+        <option value="0">Geen btw (0%)</option>
       </select>
-      {r.btw === 'anders' && (
-        <input type="number" min="0" max="100" step="1" placeholder="0" value={r.btwAnders}
-          onChange={e => setRegel(r.id, 'btwAnders', e.target.value)}
-          style={{ minWidth: 60, flexShrink: 0 }} />
-      )}
     </div>
   );
 }

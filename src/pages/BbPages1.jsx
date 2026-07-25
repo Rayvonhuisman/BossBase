@@ -8,6 +8,7 @@ import {
 import { createCustomer, deleteCustomer, getCustomer, listCustomers, updateCustomer } from '../services/customerService.js';
 import { getKlantNotities, addKlantNotitie, getTijdlijnByCustomer, logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { NoteEditor, renderNote } from '../components/NoteEditor.jsx';
+import NotitieLog, { toLogItem } from '../components/NotitieLog.jsx';
 import { getTeamMembers, createMentionNotifications } from '../services/notificatieService.js';
 import { updateContactInMoneybird } from '../services/accountingService.js';
 import { buildDueAt, createActivity, listActivities, updateActivity } from '../services/activityService.js';
@@ -24,6 +25,7 @@ import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
 import { ActivityEditModal, NewActivityModal, NewCustomerModal, NewJobCostModal } from '../components/SharedModals.jsx';
+import AdresZoeker from '../components/AdresZoeker.jsx';
 import { ChevronDown, Download, Mail, Send } from 'lucide-react';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail, getSentEmailsByCustomer } from '../services/emailService.js';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
@@ -72,12 +74,9 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   const [showNewProject, setShowNewProject] = useState(false);
   const [klantNotities, setKlantNotities] = useState([]);
   const [tijdlijn, setTijdlijn] = useState([]);
-  const [newNotitiesText, setNewNotitiesText] = useState('');
   const [newOverzichtText, setNewOverzichtText] = useState('');
   const [teamMembers, setTeamMembers] = useState([]);
-  const [savingNotitie, setSavingNotitie] = useState(false);
   const [savingOverzicht, setSavingOverzicht] = useState(false);
-  const [notitiesVisible, setNotitiesVisible] = useState(10);
   const [fullscreen, setFullscreen] = useState(() => localStorage.getItem('customer_fullscreen') === 'true');
   const [sbWidth, setSbWidth] = useState(232);
   const [sentEmails, setSentEmails] = useState([]);
@@ -160,7 +159,6 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
       setOffertes(offertes);
       setFacturen(facturen);
       setProjecten(projecten);
-      setNotitiesVisible(10);
       setError('');
     })
     .catch(err => alive && setError(err.message || 'Klant laden is mislukt.'))
@@ -208,6 +206,22 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
       setSavingField(false);
     }
   };
+  // Adres-zoeker vult address/postcode/city in één keer — die drie horen bij
+  // elkaar, dus ook één update i.p.v. drie losse saveField-rondjes.
+  const saveAdres = async ({ address, postcode, city }) => {
+    setSavingField(true);
+    try {
+      const saved = await updateCustomer(c.id, { ...c, address, postcode, city });
+      setCustomer(saved);
+      setEditingField(null);
+      setFieldDraft('');
+      toast.success('Adres, postcode en plaats bijgewerkt');
+    } catch (err) {
+      toast.error(err.message || 'Opslaan mislukt');
+    } finally {
+      setSavingField(false);
+    }
+  };
   const addActivity = async () => {
     if (!activityTitle.trim()) return;
     setSavingActivity(true);
@@ -249,7 +263,9 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
     } catch { /* ignore */ }
   };
 
-  const TAB_LABELS = { overview: 'Overzicht', notities: 'Notities', quotes: 'Offertes', facturen: 'Facturen', costs: 'Kosten', projecten: 'Projecten', timeline: 'Tijdlijn', emails: 'E-mails', klantgegevens: <User size={13} title="Klantgegevens" /> };
+  // De klantgegevens-tab toont het label alleen als de tabbalk de ruimte heeft;
+  // anders valt hij terug op alleen het icoon. Zie .kk-tab-label in bb-dashboard.css.
+  const TAB_LABELS = { overview: 'Overzicht', notities: 'Notities', quotes: 'Offertes', facturen: 'Facturen', costs: 'Kosten', projecten: 'Projecten', timeline: 'Tijdlijn', emails: 'E-mails', klantgegevens: <><User size={13} /><span className="kk-tab-label">Gegevens</span></> };
   const TABS = [
     'overview',
     'notities',
@@ -299,6 +315,27 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
     }
   };
 
+
+  // Variant voor NotitieLog: dat component beheert zelf de tekst en de
+  // opslaan-status, dus hier alleen de insert. Fouten gooien we door zodat
+  // NotitieLog ze toont.
+  const addNotitieLog = async text => {
+    const created = await addKlantNotitie(c.id, text);
+    setKlantNotities(list => [created, ...list]);
+    setTijdlijn(list => [created, ...list]);
+    if (profile?.id) {
+      createMentionNotifications({
+        text,
+        relatedType: 'klant',
+        relatedId: c.id,
+        link: 'customers',
+        creatorId: profile.id,
+        creatorName: profile.fullName,
+        contextName: c.name,
+      }).catch(() => {});
+    }
+    toast.success('Notitie opgeslagen');
+  };
 
   const fmtTijdlijnDate = iso => {
     if (!iso) return '';
@@ -460,10 +497,22 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
       )}
 
       {/* Tabs */}
-      <div className="tabs kk-tabs" ref={tabsRef} style={{ marginBottom: 16 }}>
-        {TABS.map(t => (
-          <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>{TAB_LABELS[t]}</button>
-        ))}
+      <div className="kk-tabs-wrap">
+        <div className="tabs kk-tabs" ref={tabsRef} style={{ marginBottom: 16 }}>
+          {TABS.map(t => (
+            <button
+              key={t}
+              className={`tab${tab === t ? ' active' : ''}`}
+              onClick={() => setTab(t)}
+              // Alleen de klantgegevens-tab kan tot alleen-icoon terugvallen; die
+              // heeft dus een vaste naam nodig los van de zichtbare tekst.
+              aria-label={t === 'klantgegevens' ? 'Klantgegevens' : undefined}
+              title={t === 'klantgegevens' ? 'Klantgegevens' : undefined}
+            >
+              {TAB_LABELS[t]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Overview */}
@@ -596,65 +645,15 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
 
       {/* Notities tab */}
       {tab === 'notities' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div className="card card-p">
-            <div style={{ fontWeight: 700, fontSize: '.9rem', marginBottom: 12 }}>Notities</div>
-            <div>
-              <NoteEditor
-                value={newNotitiesText}
-                onChange={setNewNotitiesText}
-                mentions={true}
-                minHeight={96}
-                placeholder="Schrijf een notitie… Typ @ om iemand te taggen"
-                teamMembers={teamMembers}
-              />
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 10, paddingBottom: 2 }}>
-                <button
-                  className="btn btn-s btn-sm"
-                  disabled={!newNotitiesText.trim()}
-                  onClick={() => setNewNotitiesText('')}
-                >
-                  Wissen
-                </button>
-                <button
-                  className="btn btn-p btn-sm"
-                  disabled={savingNotitie || !newNotitiesText.trim()}
-                  onClick={() => addNotitie(newNotitiesText, setNewNotitiesText, setSavingNotitie)}
-                >
-                  {savingNotitie ? 'Opslaan...' : 'Opslaan'}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {klantNotities.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {klantNotities.slice(0, notitiesVisible).map(n => (
-                <div key={n.id} className="card card-p" style={{ padding: '12px 16px' }}>
-                  <div className="bb-notitie-content" style={{ fontSize: '.85rem', color: 'var(--dk)', lineHeight: 1.6 }}>{renderNote(n.omschrijving)}</div>
-                  <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginTop: 6, fontWeight: 600 }}>
-                    {fmtNotitieDate(n.aangemaaktop)}
-                  </div>
-                </div>
-              ))}
-              {klantNotities.length > notitiesVisible && (
-                <button
-                  className="btn btn-s btn-sm"
-                  style={{ alignSelf: 'center' }}
-                  onClick={() => setNotitiesVisible(v => v + 10)}
-                >
-                  Laad {Math.min(10, klantNotities.length - notitiesVisible)} meer
-                </button>
-              )}
-            </div>
-          )}
-
-          {klantNotities.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '24px 0', color: '#9ca3af', fontSize: '.84rem' }}>
-              Nog geen notities
-            </div>
-          )}
-        </div>
+        // key op custId: CustomerPage blijft gemount als je naar een andere klant
+        // springt, dus zonder remount houdt NotitieLog zijn eigen "laad meer"-stand
+        // en concepttekst van de vorige klant vast.
+        <NotitieLog
+          key={custId}
+          items={klantNotities.map(n => toLogItem({ id: n.id, body: n.omschrijving, createdAt: n.aangemaaktop }))}
+          onAdd={addNotitieLog}
+          teamMembers={teamMembers}
+        />
       )}
 
       {/* Timeline */}
@@ -994,6 +993,20 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
                       <select value={fieldDraft} onChange={e => setFieldDraft(e.target.value)} style={{ flex: 1, fontSize: '.82rem', padding: '2px 4px' }}>
                         {field.options.map(o => <option key={o} value={o}>{o}</option>)}
                       </select>
+                    ) : field.key === 'address' ? (
+                      // Adres bewerken = adres zoeken: typen geeft PDOK-suggesties,
+                      // een keuze vult meteen ook postcode en plaats.
+                      <AdresZoeker
+                        inline
+                        autoFocus
+                        value={fieldDraft}
+                        onChange={setFieldDraft}
+                        onSelect={saveAdres}
+                        onEnter={() => saveField('address')}
+                        onEscape={cancelEdit}
+                        disabled={savingField}
+                        placeholder="Typ straat + huisnummer + plaats"
+                      />
                     ) : (
                       <input
                         autoFocus

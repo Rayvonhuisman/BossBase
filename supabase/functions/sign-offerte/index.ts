@@ -1,9 +1,36 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { mailTemplate } from '../_shared/mailTemplate.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+// HTML-escape voor door de ondertekenaar ingevoerde waarden die in de rauwe
+// mailbody terechtkomen (naam). Zelfde escape als de andere mails.
+function esc(s: unknown): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+
+// Verstuur via de bestaande send-email edge function met het interne secret —
+// exact hetzelfde relay-patroon als de stripe-webhook. Best-effort, gooit niet.
+async function sendViaEdge(supabaseUrl: string, serviceKey: string, body: Record<string, unknown>): Promise<boolean> {
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${serviceKey}`,
+        'apikey': serviceKey,
+        'Content-Type': 'application/json',
+        'x-internal-secret': Deno.env.get('SEND_EMAIL_SECRET') ?? '',
+      },
+      body: JSON.stringify(body),
+    })
+    return res.ok
+  } catch { return false }
 }
 
 function dataUrlToBytes(dataUrl: string): Uint8Array {
@@ -167,6 +194,70 @@ serve(async (req) => {
       } catch (pdfErr) {
         warnings.push(`PDF verwerken mislukt: ${pdfErr}`)
       }
+    }
+
+    // ── STAP 5b: Bevestigingsmails server-side versturen ─────────────────────
+    // Verstuurd VANUIT de edge function (niet meer vanaf de publieke browser-
+    // pagina) via de send-email relay met het interne secret. Best-effort: een
+    // mailfout mag het ondertekenen niet laten falen.
+    try {
+      const bedrijfsnaam = (company?.name as string) || offerte.snapshot_bedrijfsnaam || 'BossBase'
+      const logoUrl      = (company?.logo_url as string) || undefined
+      const brandColor   = (company?.branding_color as string) || undefined
+      const bedrijfEmail = (company?.email as string) || null
+      const totaalFmt    = new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(offerte.totaal_incl || 0)
+      const signedAtFmt  = new Date(now).toLocaleString('nl-NL')
+      const omschrijving = (offerte.omschrijving as string) || ''
+      const hasPdf       = !!signed_pdf_base64
+      const attachments  = hasPdf
+        ? [{ filename: `Offerte-${offerte.nummer}-ondertekend.pdf`, content: signed_pdf_base64 }]
+        : undefined
+
+      // 1) KLANT-bevestiging — bedrijfsbranding, reply-to naar het bedrijf.
+      const klantHtml = mailTemplate({
+        title: `Offerte ${offerte.nummer} ondertekend`,
+        preheader: `Bedankt voor het ondertekenen van offerte ${offerte.nummer}`,
+        body: `<p>Beste ${esc(name)},</p>
+<p>Bedankt voor het ondertekenen van offerte <strong>${esc(offerte.nummer)}</strong>.</p>
+${omschrijving ? `<p>Omschrijving: ${esc(omschrijving)}</p>` : ''}
+<p>Totaal: <strong>${esc(totaalFmt)}</strong></p>
+${hasPdf ? '<p>In de bijlage vindt u de ondertekende offerte.</p>' : ''}
+<p>We nemen zo snel mogelijk contact met u op.</p>
+<p>Met vriendelijke groet,<br>${esc(bedrijfsnaam)}</p>`,
+        companyName: bedrijfsnaam,
+        logoUrl,
+        brandColor,
+      })
+      const klantBody: Record<string, unknown> = {
+        to: email, subject: `Bevestiging: offerte ${offerte.nummer} ondertekend`, html: klantHtml, from_name: bedrijfsnaam,
+      }
+      if (bedrijfEmail) klantBody.reply_to = bedrijfEmail
+      if (attachments) klantBody.attachments = attachments
+      if (!(await sendViaEdge(supabaseUrl, serviceKey, klantBody))) warnings.push('Bevestigingsmail naar klant mislukt')
+
+      // 2) BEDRIJF-notificatie — óók bedrijfsbranding (interne melding naar het
+      //    bedrijf zelf, in hun eigen huisstijl).
+      if (bedrijfEmail) {
+        const bedrijfHtml = mailTemplate({
+          title: `Offerte ${offerte.nummer} ondertekend`,
+          preheader: `${name} heeft offerte ${offerte.nummer} ondertekend`,
+          body: `<p>Goed nieuws! Offerte <strong>${esc(offerte.nummer)}</strong> is zojuist ondertekend.</p>
+<p>Ondertekend door: <strong>${esc(name)}</strong> (${esc(email)})<br>
+Datum en tijd: ${esc(signedAtFmt)}<br>
+Totaal: <strong>${esc(totaalFmt)}</strong></p>
+${hasPdf ? '<p>De ondertekende offerte is als bijlage toegevoegd.</p>' : ''}`,
+          companyName: bedrijfsnaam,
+          logoUrl,
+          brandColor,
+        })
+        const bedrijfBody: Record<string, unknown> = {
+          to: bedrijfEmail, subject: `Offerte ${offerte.nummer} ondertekend door ${name}`, html: bedrijfHtml, from_name: bedrijfsnaam,
+        }
+        if (attachments) bedrijfBody.attachments = attachments
+        if (!(await sendViaEdge(supabaseUrl, serviceKey, bedrijfBody))) warnings.push('Notificatiemail naar bedrijf mislukt')
+      }
+    } catch (mailErr) {
+      warnings.push(`Bevestigingsmails mislukt: ${mailErr}`)
     }
 
     // ── STAP 6: Response samenstellen ────────────────────────────────────────

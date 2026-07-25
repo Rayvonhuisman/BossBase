@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase'
 import { withCompanyId } from '../lib/currentCompany'
-import { syncFactuurNaarMoneybird } from './accountingService'
+import { syncFactuurNaarMoneybird, syncFactuurNaarSnelStart } from './accountingService'
 import { logTijdlijnSafe } from './klantTijdlijnService'
 
 // Slaat de bij verzending gegenereerde factuur-PDF op in de private bucket
@@ -155,7 +155,10 @@ export async function updateFactuur(id, input) {
     if (error) throw error
     const result = toFactuur(cur)
     if (res?.changed) {
+      // Best-effort push naar de gekoppelde boekhouding; de niet-gekoppelde
+      // provider antwoordt "niet geconfigureerd" en doet niets.
       syncFactuurNaarMoneybird(id).catch(() => {})
+      syncFactuurNaarSnelStart(id).catch(() => {})
       const bedrag = result.totaalIncl.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       logTijdlijnSafe(result.customerId, 'factuur_betaald', `Factuur ${result.nummer} betaald (€${bedrag})`, { nummer: result.nummer })
     }

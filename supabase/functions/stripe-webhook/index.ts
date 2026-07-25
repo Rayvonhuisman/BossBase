@@ -136,7 +136,14 @@ serve(async (req) => {
             }).then(() => {}, () => {})
           }
           // Boekhoud-sync server-to-server (service-modus via cron_secret).
+          // Beide providers best-effort; de niet-gekoppelde antwoordt
+          // "niet geconfigureerd" en doet niets.
           await fetch(`${supabaseUrl}/functions/v1/moneybird-sync-factuur`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${anonKey}`, 'apikey': anonKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ factuur_id: factuurId, cron_secret: cronSecret }),
+          }).catch(() => {})
+          await fetch(`${supabaseUrl}/functions/v1/snelstart-sync-factuur`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${anonKey}`, 'apikey': anonKey, 'Content-Type': 'application/json' },
             body: JSON.stringify({ factuur_id: factuurId, cron_secret: cronSecret }),

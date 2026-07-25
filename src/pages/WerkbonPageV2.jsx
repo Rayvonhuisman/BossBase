@@ -5,6 +5,7 @@ import { useProfile } from '../lib/profileContext.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
 import { useUploads } from '../lib/uploadContext.jsx';
 import { NoteEditor, renderNote } from '../components/NoteEditor.jsx';
+import NotitieLog, { toLogItem, fmtNotitieDatum } from '../components/NotitieLog.jsx';
 import { AssigneeResponsibleSelect } from '../components/AssigneeResponsibleSelect.jsx';
 import { getTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
 import {
@@ -13,7 +14,7 @@ import {
   getWerkbonMaterialen, createWerkbonMateriaal, deleteWerkbonMateriaal,
   getWerkbonFotos, uploadWerkbonFoto, deleteWerkbonFoto,
   getWerkbonMeerwerk, createWerkbonMeerwerk, deleteWerkbonMeerwerk,
-  updateWerkbonNotities, getAllWerkbonTakenCounts, plannedStartIso,
+  getWerkbonNotities, addWerkbonNotitie, getAllWerkbonTakenCounts, plannedStartIso,
 } from '../services/werkbonService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
@@ -726,49 +727,39 @@ function MeerwerkSection({ meerwerk, onAdd, onDelete, canEdit = true }) {
 
 // ─── NOTITIES SECTION ────────────────────────────────────────────────────────
 
-function NotitiesSection({ notities, onSave, teamMembers = [], canEdit = true }) {
-  const [value, setValue] = useState(notities || '');
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => { setValue(notities || ''); }, [notities]);
-
-  const save = async () => {
-    setSaving(true);
-    try { await onSave(value); }
-    finally { setSaving(false); }
-  };
-
-  // Alleen-inzage: toon de opgeslagen notitie read-only, zonder editor/knop.
-  if (!canEdit) {
-    return (
-      <div className="wb2-card">
-        <div className="wb2-card-hd"><div className="wb2-card-hd-title">Notities uitvoerder</div></div>
-        <div className="wb2-card-body">
-          {notities
-            ? <div style={{ fontSize: 13.5, color: 'var(--dmu)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{renderNote(notities)}</div>
-            : <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af' }}>Nog geen notities.</div>}
-        </div>
-      </div>
-    );
-  }
+// Notitielogboek op de werkbon — zelfde component en gedrag als de klantkaart.
+// Alleen-inzage (geen bewerkrecht): wel de log, geen invoerveld.
+function NotitiesSection({ notities = [], onAdd, teamMembers = [], canEdit = true }) {
+  const items = notities.map(n => toLogItem({
+    id: n.id, body: n.note, authorName: n.authorName || 'Onbekend', createdAt: n.createdAt,
+  }));
 
   return (
     <div className="wb2-card">
       <div className="wb2-card-hd"><div className="wb2-card-hd-title">Notities uitvoerder</div></div>
       <div className="wb2-card-body">
-        <NoteEditor mentions={true}
-          value={value}
-          onChange={setValue}
-          placeholder="Bijzonderheden, bevindingen, aandachtspunten voor de baas… Typ @ om iemand te taggen"
-          rows={4}
-          disabled={saving}
-          teamMembers={teamMembers}
-        />
-        <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
-          <button className="btn btn-s btn-sm" onClick={save} disabled={saving}>
-            {saving ? 'Opslaan…' : 'Notities opslaan'}
-          </button>
-        </div>
+        {canEdit ? (
+          <NotitieLog
+            items={items}
+            onAdd={onAdd}
+            teamMembers={teamMembers}
+            placeholder="Bijzonderheden, bevindingen, aandachtspunten voor de baas… Typ @ om iemand te taggen"
+            emptyText="Nog geen notities."
+          />
+        ) : items.length === 0 ? (
+          <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af' }}>Nog geen notities.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {items.map(n => (
+              <div key={n.id} className="card card-p" style={{ padding: '12px 16px' }}>
+                <div className="bb-notitie-content" style={{ fontSize: '.85rem', color: 'var(--dk)', lineHeight: 1.6, wordBreak: 'break-word' }}>{renderNote(n.body)}</div>
+                <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginTop: 6, fontWeight: 600 }}>
+                  {n.authorName ? `${n.authorName} · ` : ''}{fmtNotitieDatum(n.createdAt)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -796,6 +787,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
   const [view, setView] = useState('list');
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
+  const [werkbonNotities, setWerkbonNotities] = useState([]);
   const [taken, setTaken] = useState([]);
   const [materialen, setMaterialen] = useState([]);
   const [uren, setUren] = useState([]);
@@ -854,7 +846,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
   }, [preOpenWerkbonId, loading, werkbonnen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!selectedId) { setDetail(null); return; }
+    if (!selectedId) { setDetail(null); setWerkbonNotities([]); return; }
     let alive = true;
     setDetailLoading(true);
     setShowHoursAdd(false);
@@ -865,9 +857,11 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
       getUrenregistratie({ werkbonId: selectedId }).catch(() => []),
       getWerkbonFotos(selectedId).catch(() => []),
       getWerkbonMeerwerk(selectedId).catch(() => []),
-    ]).then(([w, t, m, u, f, mw]) => {
+      getWerkbonNotities(selectedId).catch(() => []),
+    ]).then(([w, t, m, u, f, mw, nt]) => {
       if (!alive) return;
       setDetail(w);
+      setWerkbonNotities(nt);
       setTaken(t);
       setMaterialen(m);
       setUren(u);
@@ -1091,14 +1085,12 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
     }
   };
 
-  const handleSaveNotities = async notities => {
-    try {
-      const updated = await updateWerkbonNotities(detail.id, notities);
-      setDetail(updated);
-      toast.success('Notities opgeslagen');
-    } catch (e) {
-      toast.error(e.message || 'Opslaan mislukt');
-    }
+  // NotitieLog beheert veld + opslaan-status en toont de foutmelding; hier
+  // alleen de insert, fouten gooien we door.
+  const handleAddNotitie = async text => {
+    const created = await addWerkbonNotitie(detail.id, text);
+    setWerkbonNotities(list => [created, ...list]);
+    toast.success('Notitie opgeslagen');
   };
 
   const handlePhonePick = () => {
@@ -1320,7 +1312,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
             <MeerwerkSection meerwerk={meerwerk} onAdd={handleAddMeerwerk} onDelete={handleDeleteMeerwerk} canEdit={canEdit} />
 
             {/* Notities */}
-            <NotitiesSection notities={detail.werkbonNotities} onSave={handleSaveNotities} teamMembers={teamMembers} canEdit={canEdit} />
+            <NotitiesSection notities={werkbonNotities} onAdd={handleAddNotitie} teamMembers={teamMembers} canEdit={canEdit} />
 
             {/* Afronden */}
             {detail.status !== 'afgerond' && canEdit && (

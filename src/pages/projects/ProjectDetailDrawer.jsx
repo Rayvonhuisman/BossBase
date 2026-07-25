@@ -24,7 +24,7 @@ import { getProjectCosts, createJobCost, deleteJobCost } from '../../services/jo
 import { calcBtw, BTW_PCT_OPTIONS } from '../../utils/btw.js';
 import { NewFactuurModal, SendFactuurMailModal } from '../FacturenPage.jsx';
 import { NewOfferteModal, SendOfferteMailModal } from '../OffertesPage.jsx';
-import { NoteEditor, renderNote } from '../../components/NoteEditor.jsx';
+import NotitieLog, { toLogItem } from '../../components/NotitieLog.jsx';
 import { getTeamMembers, notifyNewAssignees } from '../../services/notificatieService.js';
 import { statusInfo } from '../../utils/statusColors.js';
 
@@ -852,63 +852,16 @@ function FacturenTab({ project, invoices, openInvoice, setPage, customers, compa
 // ── NOTES TAB ────────────────────────────────────────────────────────────────
 
 function NotesTab({ notes, onAdd, onDelete }) {
-  const toast = useToast();
-  const [text, setText] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [teamMembers, setTeamMembers] = useState([]);
-
-  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
-
-  const submit = async () => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    setSaving(true);
-    try {
-      await onAdd(trimmed);
-      setText('');
-    } catch (e) {
-      toast.error(e.message || 'Notitie opslaan mislukt');
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
-    <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
-      <div className="card card-p" style={{ padding: 10 }}>
-        <NoteEditor mentions={true}
-          value={text}
-          onChange={setText}
-          rows={3}
-          placeholder="Schrijf een notitie over dit project… Typ @ om iemand te taggen"
-          teamMembers={teamMembers}
-        />
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-          <button className="btn btn-p btn-sm" onClick={submit} disabled={saving || !text.trim()}>
-            {saving ? 'Opslaan…' : 'Notitie toevoegen'}
-          </button>
-        </div>
-      </div>
-
-      {notes.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--dl)', fontSize: 13 }}>
-          Nog geen notities. Voeg de eerste notitie toe.
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {notes.map(n => (
-            <div key={n.id} style={{ padding: 10, border: '1px solid var(--br)', borderRadius: 8, background: '#fff', overflow: 'hidden' }}>
-              <div style={{ fontSize: 13, color: 'var(--dk)', lineHeight: 1.5, wordBreak: 'break-word', overflowWrap: 'break-word' }}>{renderNote(n.note)}</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
-                <div style={{ fontSize: 11, color: 'var(--dl)' }}>
-                  {n.authorName || 'Onbekend'} · {fmtDate(String(n.createdAt || '').slice(0, 10))}
-                </div>
-                <button className="btn btn-xs btn-ghost btn-icon" title="Verwijderen" onClick={() => onDelete(n.id)}>{I.trash}</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+    <div style={{ padding: '16px 20px', overflow: 'hidden' }}>
+      <NotitieLog
+        items={notes.map(n => toLogItem({ id: n.id, body: n.note, authorName: n.authorName || 'Onbekend', createdAt: n.createdAt }))}
+        onAdd={onAdd}
+        onDelete={onDelete}
+        placeholder="Schrijf een notitie over dit project… Typ @ om iemand te taggen"
+        saveLabel="Notitie toevoegen"
+        emptyText="Nog geen notities. Voeg de eerste notitie toe."
+      />
     </div>
   );
 }

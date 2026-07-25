@@ -47,11 +47,8 @@ function BtwSelect({ r, setRegel }) {
       <select value={r.btw} onChange={e => setRegel(r.id, 'btw', e.target.value)} style={{ flex: 1, minWidth: 0 }}>
         <option value="21">21%</option>
         <option value="9">9%</option>
-        <option value="anders">Anders</option>
+        <option value="0">Geen btw (0%)</option>
       </select>
-      {r.btw === 'anders' && (
-        <input type="number" min="0" max="100" step="1" placeholder="0" value={r.btwAnders} onChange={e => setRegel(r.id, 'btwAnders', e.target.value)} style={{ minWidth: 60, flexShrink: 0 }} />
-      )}
     </div>
   );
 }
@@ -842,7 +839,7 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
       // Pas bij verzenden wordt de {{link}}/{{knop}} placeholder een nette knop
       // (in de bedrijfskleur). In de composer blijft het dus pure tekst.
       const knop = offerte.sign_token
-        ? mailButton('Offerte bekijken &amp; ondertekenen', signLink, company?.brandingColor)
+        ? mailButton('Offerte bekijken & ondertekenen', signLink, company?.brandingColor)
         : signLink;
       const bodyForSend = form.body.replace(/\{\{\s*(?:link|knop)\s*\}\}/gi, knop);
       // Zakelijke mail: wikkel de body in de centrale template met bedrijfslogo
