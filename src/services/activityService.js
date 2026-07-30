@@ -2,6 +2,7 @@ import { supabase } from "../lib/supabase"
 import { withCompanyId } from "../lib/currentCompany"
 import { safeInsert } from "../lib/safeInsert"
 import { sanitizeName } from "./customerService"
+import { lokaalNaarUtc, splitsLokaal, lokaleDatum, vandaagIso } from "../lib/datumTijd"
 import { autoSyncActivitySafe, autoSyncDeleteSafe } from "./googleCalendarService"
 import { upsertActivityEvent } from "./calendarService"
 
@@ -11,24 +12,15 @@ import { upsertActivityEvent } from "./calendarService"
 // UI uses a richer "status" string ('open' | 'today' | 'overdue' | 'completed' | 'done').
 // We translate UI status ↔ DB completed inside this service.
 
+// Heen en terug via lib/datumTijd, net als calendarService — de ingevoerde tijd
+// is Nederlandse wandkloektijd, de kolom is timestamptz.
 export function buildDueAt(date, time = "") {
   if (!date) return null
-  const safeTime = time || "09:00"
-  return new Date(`${date}T${safeTime}:00`).toISOString()
+  const d = lokaalNaarUtc(date, time || "09:00")
+  return d ? d.toISOString() : null
 }
 
-const pad = n => String(n).padStart(2, '0')
-
-function splitDueAt(dueAt) {
-  if (!dueAt) return { date: "", time: "" }
-  const d = new Date(dueAt)
-  if (Number.isNaN(d.getTime())) return { date: "", time: "" }
-  // Use local timezone so 07:00 UTC (= 09:00 CEST) displays as 09:00 for the user.
-  return {
-    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
-    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
-  }
-}
+const splitDueAt = splitsLokaal
 
 // Join klant + de toegewezen medewerker (voor de naam), zodat we nooit een
 // ruw assigned_to-id hoeven te tonen. De embed gebruikt de FK-naam expliciet.
@@ -144,10 +136,9 @@ function computeOpenStatus(dueAt) {
   if (!dueAt) return "open"
   const due = new Date(dueAt)
   if (Number.isNaN(due.getTime())) return "open"
-  // Compare in local timezone to avoid UTC midnight causing wrong day.
-  const now = new Date()
-  const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
-  const dueDay = `${due.getFullYear()}-${pad(due.getMonth() + 1)}-${pad(due.getDate())}`
+  // Vergelijken op de Nederlandse kalenderdag, niet op de UTC-dag.
+  const today = vandaagIso()
+  const dueDay = lokaleDatum(due)
   if (dueDay < today) return "overdue"
   if (dueDay === today) return "today"
   return "open"

@@ -1,103 +1,163 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, Fragment } from "react"
 import { Star } from "lucide-react"
 import { Nav, Footer, Reveal, I, ScrollLine, initChoreo } from "./MktShared"
 import { tierLabel, tierPrice, tierPriceYearly, extraUserLabel, YEARLY_DISCOUNT_LABEL } from "../../lib/tiers.js"
+import {
+  TIER_FEATURES, TIER_LIMITS, ZICHTBARE_FEATURES, MODULES,
+  featureLabel, getLimitDef, moduleLabel, modulePrice,
+} from "../../lib/features.js"
 
-// Prijzen/tiernamen komen uit ../../lib/tiers.js (enige bron). Hier staat alleen
-// de presentatie per plan: doelgroep, features en of het het "hot" plan is.
+// Prijzen/tiernamen komen uit ../../lib/tiers.js; welke FEATURES en LIMIETEN bij
+// een plan horen komt uit ../../lib/features.js — dezelfde matrix die de app
+// gebruikt en die de database server-side afdwingt. Hier staat dus alleen nog de
+// presentatie: doelgroep, volgorde en of het het "hot" plan is. Zo kan de
+// prijspagina niet meer iets beloven wat de server niet levert.
+
+// Limietregel als losse tekst, bv. "1 gebruiker" of "Onbeperkt klanten".
+const limietRegel = (tier, key) => {
+  const def = getLimitDef(key)
+  const max = TIER_LIMITS[tier]?.[key]
+  const naam = def.label.toLowerCase()
+  if (max == null) return `Onbeperkt ${naam}`
+  if (max === 1) return `1 ${def.enkelvoud}`
+  return `Tot ${max} ${naam}${def.telwijze === 'periode' ? ' per maand' : ''}`
+}
+
+// De featureregels van een plan: alles wat dit plan heeft en het vorige niet.
+const nieuweFeatures = (tier, vorigeTier) =>
+  TIER_FEATURES[tier]
+    .filter(f => !vorigeTier || !TIER_FEATURES[vorigeTier].includes(f))
+    .filter(f => ZICHTBARE_FEATURES.some(z => z.key === f))
+    .map(featureLabel)
+
 const PLAN_CARDS = [
   {
-    id: "starter", who: "Perfect voor ZZP'ers", hasExtra: false,
+    id: "starter", who: "Perfect voor ZZP'ers", hasExtra: false, hot: false,
     features: [
-      "1 gebruiker",
-      "Onbeperkt klanten",
-      "Offertes & facturen",
-      "Agenda",
-      "Pipeline CRM",
-      "BTW-aangifte export",
+      limietRegel('starter', 'gebruikers'),
+      limietRegel('starter', 'klanten'),
+      limietRegel('starter', 'offertes'),
+      limietRegel('starter', 'facturen'),
+      // Klanten/offertes/facturen staan hierboven al als limietregel — die niet
+      // nog eens als losse functie herhalen.
+      ...nieuweFeatures('starter', null).filter(l =>
+        !['Klanten', 'Offertes', 'Facturen'].includes(l)),
       "E-mailondersteuning",
     ],
-    hot: false,
   },
   {
-    id: "groei", who: "Voor groeiende bedrijven", hasExtra: true,
+    id: "groei", who: "Voor groeiende bedrijven", hasExtra: true, hot: true,
     features: [
-      "Tot 5 gebruikers",
-      "Alles van Starter",
-      "Omzetrapportages",
+      limietRegel('groei', 'gebruikers'),
+      "Onbeperkt klanten, offertes en facturen",
+      "Alles van Starter, plus:",
+      ...nieuweFeatures('groei', 'starter'),
       "Prioriteitsondersteuning",
-      "Teamrollen & rechten",
     ],
-    hot: true,
   },
   {
-    id: "team", who: "Grotere teams & bedrijven", hasExtra: true,
+    id: "team", who: "Grotere teams & bedrijven", hasExtra: true, hot: false,
     features: [
-      "Tot 15 gebruikers",
-      "Alles van Groei",
-      "Meerdere vestigingen",
-      "API-toegang",
-      "Maatwerk rapportages",
-      "Persoonlijke onboarding",
+      limietRegel('team', 'gebruikers'),
+      "Alles van Groei, plus:",
+      ...nieuweFeatures('team', 'groei'),
       "Telefonische ondersteuning",
     ],
-    hot: false,
   },
 ]
+
+// Losse modules — alleen bij te kopen bij Groei; bij Team inbegrepen.
+const MODULE_REGELS = MODULES.map(m => ({
+  label: moduleLabel(m.key),
+  prijs: modulePrice(m.key),
+  vereist: m.vereist ? moduleLabel(m.vereist) : null,
+}))
+
+// Vergelijkingstabel. Een rij met `feature` of `limiet` komt uit de matrix; een
+// rij met expliciete waarden is puur commercieel (opslag, ondersteuning) en
+// staat los van wat de software afdwingt.
+const uitMatrix = feature => ({
+  starter: TIER_FEATURES.starter.includes(feature),
+  groei:   TIER_FEATURES.groei.includes(feature),
+  team:    TIER_FEATURES.team.includes(feature),
+})
+const uitLimiet = key => ({
+  starter: limietWaarde('starter', key),
+  groei:   limietWaarde('groei', key),
+  team:    limietWaarde('team', key),
+})
+function limietWaarde(tier, key) {
+  const max = TIER_LIMITS[tier]?.[key]
+  return max == null ? 'Onbeperkt' : String(max)
+}
+const matrixRij = (label, feature) => ({ label, ...uitMatrix(feature) })
+const limietRij = (label, key)     => ({ label, ...uitLimiet(key) })
 
 const CMP_CATS = [
   {
     cat: "Algemeen",
     rows: [
-      { label: "Gebruikers",        starter: "1",          groei: "Tot 5",       team: "Tot 15" },
-      { label: "Klanten",           starter: true,         groei: true,          team: true },
-      { label: "Opslag",            starter: "5 GB",       groei: "20 GB",       team: "100 GB" },
-      { label: "Mobiele app",       starter: true,         groei: true,          team: true },
+      limietRij("Gebruikers", 'gebruikers'),
+      limietRij("Klanten", 'klanten'),
+      limietRij("Offertes per maand", 'offertes'),
+      limietRij("Facturen per maand", 'facturen'),
+      { label: "Opslag",      starter: "5 GB", groei: "20 GB", team: "100 GB" },
+      { label: "Mobiele app", starter: true,   groei: true,    team: true },
     ],
   },
   {
     cat: "CRM & Pipeline",
     rows: [
-      { label: "Klantenkaarten",    starter: true,         groei: true,          team: true },
-      { label: "Pipeline",          starter: true,         groei: true,          team: true },
-      { label: "Notities & bijlagen", starter: true,       groei: true,          team: true },
-      { label: "Segmentatie",       starter: false,        groei: true,          team: true },
+      matrixRij("Klantenkaarten", 'klanten'),
+      matrixRij("Pipeline", 'crm_pipeline'),
+      matrixRij("Leads", 'leads'),
+      matrixRij("Adres-autocomplete", 'adres_autocomplete'),
     ],
   },
   {
     cat: "Offertes & Facturen",
     rows: [
-      { label: "Offertes",          starter: true,         groei: true,          team: true },
-      { label: "Facturen",          starter: true,         groei: true,          team: true },
-      { label: "Digitale handtekening", starter: true,     groei: true,          team: true },
-      { label: "BTW-aangifte export", starter: true,       groei: true,          team: true },
-      { label: "Maatwerk sjablonen", starter: false,       groei: true,          team: true },
+      matrixRij("Offertes", 'offertes'),
+      matrixRij("Facturen", 'facturen'),
+      matrixRij("Digitale handtekening", 'digitale_handtekening'),
+      matrixRij("Automatische betaalherinneringen", 'betaalherinneringen'),
+      matrixRij("Stripe betaallink", 'stripe_betaallink'),
     ],
   },
   {
-    cat: "Agenda & Planning",
+    cat: "Uitvoering",
     rows: [
-      { label: "Agenda",            starter: true,         groei: true,          team: true },
-      { label: "E-mailherinneringen", starter: true,       groei: true,          team: true },
-      { label: "Terugkerende afspraken", starter: true,    groei: true,          team: true },
+      matrixRij("Werkbonnen", 'werkbonnen'),
+      matrixRij("Urenregistratie", 'uren'),
+      matrixRij("Agenda", 'agenda'),
+      matrixRij("Afspraakherinnering", 'afspraakherinnering'),
+      matrixRij("Planningsmodule", 'planning'),
+      matrixRij("Voertuigen", 'voertuigen'),
     ],
   },
   {
-    cat: "Rapportages",
+    cat: "Administratie",
     rows: [
-      { label: "Omzetdashboard",    starter: "Basis",      groei: "Uitgebreid",  team: "Maatwerk" },
-      { label: "Klantrapportage",   starter: false,        groei: true,          team: true },
-      { label: "Export naar accountant", starter: true,    groei: true,          team: true },
-      { label: "API-toegang",       starter: false,        groei: false,         team: true },
+      matrixRij("Boekhoudkoppeling", 'boekhoudkoppeling'),
+      matrixRij("BTW-overzicht", 'btw_overzicht'),
+      matrixRij("Kosten & nacalculatie", 'kosten_nacalculatie'),
+    ],
+  },
+  {
+    cat: "Team & e-mail",
+    rows: [
+      matrixRij("Rollen & rechten", 'rollen_rechten'),
+      matrixRij("E-mailtemplates bewerken", 'email_templates_bewerken'),
+      matrixRij("Eigen e-mailtemplates aanmaken", 'eigen_email_templates'),
     ],
   },
   {
     cat: "Ondersteuning",
     rows: [
-      { label: "E-mailondersteuning",       starter: true, groei: true,          team: true },
-      { label: "Prioriteitsondersteuning",  starter: false, groei: true,         team: true },
-      { label: "Telefonische ondersteuning",starter: false, groei: false,        team: true },
-      { label: "Persoonlijke onboarding",   starter: false, groei: false,        team: true },
+      { label: "E-mailondersteuning",        starter: true,  groei: true,  team: true },
+      { label: "Prioriteitsondersteuning",   starter: false, groei: true,  team: true },
+      { label: "Telefonische ondersteuning", starter: false, groei: false, team: true },
+      { label: "Persoonlijke onboarding",    starter: false, groei: false, team: true },
     ],
   },
 ]
@@ -179,6 +239,25 @@ export default function PricingPage({ navigate }) {
                 ))}
               </div>
             </Reveal>
+            <Reveal>
+              <div style={{ maxWidth: 620, margin: "28px auto 0", textAlign: "center" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--dmu)", marginBottom: 8 }}>
+                  Losse modules bij {tierLabel('groei')}
+                </div>
+                <p style={{ fontSize: 14, color: "var(--dmu)", margin: 0 }}>
+                  {MODULE_REGELS.map((m, i) => (
+                    <Fragment key={m.label}>
+                      {i > 0 && " · "}
+                      {m.label} <strong>€ {m.prijs}</strong> p/mnd
+                      {m.vereist && <span> (alleen samen met {m.vereist})</span>}
+                    </Fragment>
+                  ))}
+                </p>
+                <p style={{ fontSize: 14, color: "var(--dmu)", marginTop: 6 }}>
+                  Bij {tierLabel('team')} zijn alle modules inbegrepen.
+                </p>
+              </div>
+            </Reveal>
             <p style={{ textAlign: "center", marginTop: 20, fontSize: 14, color: "var(--dmu)" }}>
               Alle prijzen excl. BTW · Geen creditcard nodig · Altijd opzegbaar
             </p>
@@ -203,9 +282,11 @@ export default function PricingPage({ navigate }) {
                   </tr>
                 </thead>
                 <tbody>
+                  {/* Fragment met key: de <>-shorthand kan er geen dragen, waardoor
+                      React klaagde over ontbrekende keys in deze lijst. */}
                   {CMP_CATS.map(cat => (
-                    <>
-                      <tr key={`cat-${cat.cat}`} className="compare-cat">
+                    <Fragment key={`cat-${cat.cat}`}>
+                      <tr className="compare-cat">
                         <td colSpan={4}>{cat.cat}</td>
                       </tr>
                       {cat.rows.map(row => (
@@ -216,7 +297,7 @@ export default function PricingPage({ navigate }) {
                           <td><CmpCell val={row.team} /></td>
                         </tr>
                       ))}
-                    </>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>

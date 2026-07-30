@@ -89,6 +89,20 @@ serve(async (req) => {
       })
     }
 
+    // ── Feature-check (server-side, centrale matrix) ──────────────────────────
+    // Deze functie draait met service_role en omzeilt RLS, dus de check moet hier
+    // expliciet. Zonder 'digitale_handtekening' in het abonnement kan een offerte
+    // niet online ondertekend worden — ook niet met een geldig sign_token.
+    const { data: heeftFeature } = await admin.rpc('bb_has_feature', {
+      p_company_id: offerte.company_id,
+      p_feature: 'digitale_handtekening',
+    })
+    if (heeftFeature !== true) {
+      return new Response(JSON.stringify({ success: false, error: 'Digitaal ondertekenen is voor deze offerte niet beschikbaar.' }), {
+        status: 403, headers: { ...CORS, 'Content-Type': 'application/json' },
+      })
+    }
+
     // ── STAP 2: Handtekening uploaden naar storage ────────────────────────────
     const sigFilename = `${offerte.id}.png`
     let sigBytes: Uint8Array

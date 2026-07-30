@@ -21,6 +21,7 @@ import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../ser
 import { mailTemplate, mailButton } from '../utils/mailTemplate.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { statusInfo } from '../utils/statusColors.js';
+import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
 
 const offerteBadge = status => {
   const s = statusInfo(status, 'offerte');
@@ -570,11 +571,18 @@ function CopyOfferteModal({ offerte, customers, onClose, onCopied }) {
   const [mode, setMode] = useState('same'); // 'same' = nieuwe versie · 'other' = nieuwe offerte
   const [customerId, setCustomerId] = useState('');
   const [busy, setBusy] = useState(false);
+  // Een nieuwe versie voor dezelfde klant telt niet mee voor de limiet en mag
+  // dus ook boven de cap. Een kopie naar een ANDERE klant krijgt een nieuw
+  // nummer en telt wél — die valt onder de limiet. Zelfde regel als server-side
+  // (bb_offerte_telt_mee).
+  const { plan, planModal, toonBlokkade } = usePlanGuard();
+  const kopieGeblokkeerd = mode === 'other' && !plan.within('offertes');
   const sourceCustomerName = offerte.customerName || customers.find(c => c.id == offerte.customerId)?.name || 'deze klant';
   const radioRow = { display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 14, cursor: 'pointer', lineHeight: 1.4 };
 
   const submit = async () => {
     if (mode === 'other' && !customerId) { toast.error('Kies een klant'); return; }
+    if (kopieGeblokkeerd) { toonBlokkade({ limiet: 'offertes' }); return; }
     setBusy(true);
     try {
       const asVersion = mode === 'same';
@@ -625,6 +633,12 @@ function CopyOfferteModal({ offerte, customers, onClose, onCopied }) {
           <div className="f s2" style={{ fontSize: 13, color: 'var(--dl)' }}>
             De kopie is een bewerkbare conceptofferte met dezelfde regels. Je kunt deze daarna aanpassen en versturen.
           </div>
+          {kopieGeblokkeerd && (
+            <div className="f s2" style={{ fontSize: 13, color: '#b45309' }}>
+              Je offertelimiet voor deze periode is bereikt. Een nieuwe <strong>versie</strong> voor
+              dezelfde klant kan nog wel — die telt niet opnieuw mee.
+            </div>
+          )}
         </div>
         <div className="fa">
           <button className="btn btn-ghost" onClick={onClose} disabled={busy}>Annuleren</button>
@@ -633,6 +647,7 @@ function CopyOfferteModal({ offerte, customers, onClose, onCopied }) {
           </button>
         </div>
       </div>
+      {planModal}
     </div>
   );
 }
@@ -645,6 +660,17 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
   const customerName = offerte.customerName || customers.find(c => c.id == offerte.customerId)?.name || '—';
   const [pdfLoading, setPdfLoading] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
+  // De echte offerteregels. Hier stond een samenvatting op basis van de oude
+  // kolommen (arbeidsuren/materiaalkosten/reiskosten/marge); die zijn bij
+  // offertes met regelitems leeg, waardoor er "0u × €55 / €0 / 25%" stond.
+  const [items, setItems] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    getOfferteItems(offerte.id)
+      .then(r => { if (alive) setItems(r || []); })
+      .catch(() => { if (alive) setItems([]); });
+    return () => { alive = false; };
+  }, [offerte.id]);
 
   const handleDownloadPdf = async () => {
     setPdfLoading(true);
@@ -706,23 +732,39 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
             </div>
           </div>
           <hr style={{ border: 'none', borderTop: '1px solid var(--br)', margin: 0 }} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>Arbeidsuren</div>
-              <div>{offerte.arbeidsuren} uur × {fmt(offerte.uurtarief)}/u</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>Materiaalkosten</div>
-              <div>{fmt(offerte.materiaalkosten)}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>Reiskosten</div>
-              <div>{fmt(offerte.reiskosten)}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>Marge / BTW</div>
-              <div>{offerte.margePct}% / {offerte.btwPct}%</div>
-            </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>Regels</div>
+            {items === null ? (
+              <div style={{ fontSize: '.84rem', color: 'var(--dl)' }}>Regels laden…</div>
+            ) : items.length === 0 ? (
+              <div style={{ fontSize: '.84rem', color: 'var(--dl)' }}>Deze offerte heeft geen regels.</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table className="dt" style={{ width: '100%', minWidth: 420 }}>
+                  <thead>
+                    <tr>
+                      <th>Omschrijving</th>
+                      <th style={{ textAlign: 'right' }}>Aantal</th>
+                      <th style={{ textAlign: 'right' }}>Prijs</th>
+                      <th style={{ textAlign: 'right' }}>Subtotaal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map(it => (
+                      <tr key={it.id}>
+                        <td>
+                          {it.omschrijving || '—'}
+                          {it.eenheid ? <span style={{ color: 'var(--dl)', fontSize: '.76rem' }}> · {it.eenheid}</span> : null}
+                        </td>
+                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{it.aantal}</td>
+                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(it.prijsPer)}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(it.subtotaal)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
           <div style={{ background: 'var(--pll)', borderRadius: 10, padding: '14px 16px', display: 'flex', gap: 24 }}>
             <div>
@@ -791,6 +833,11 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
 
 export function SendOfferteMailModal({ offerte, customers, company, onClose, onSent }) {
   const toast = useToast();
+  // Digitale handtekening is een feature (Groei+). Zonder die feature gaat de
+  // offerte gewoon als PDF mee, maar zonder ondertekenlink — en de edge function
+  // sign-offerte weigert het ondertekenen sowieso.
+  const { plan } = usePlanGuard();
+  const kanOndertekenen = plan.has('digitale_handtekening');
   const [form, setForm] = useState({ to: '', subject: '', body: '' });
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -817,7 +864,9 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
         const sub = tpl ? substituteVars(tpl.onderwerp || '', vars) : `Offerte ${offerte.nummer} van ${company?.name || ''}`;
         const rawBody = tpl
           ? substituteVars(tpl.body || '', vars)
-          : `Beste ${vars.klant_naam},\n\nHierbij sturen wij u offerte ${offerte.nummer} toe.\n\nVia onderstaande knop kunt u de offerte bekijken en digitaal ondertekenen:\n{{link}}\n\nHeeft u vragen? Neem gerust contact met ons op.\n\nMet vriendelijke groet,\n${company?.name || ''}`;
+          : kanOndertekenen
+            ? `Beste ${vars.klant_naam},\n\nHierbij sturen wij u offerte ${offerte.nummer} toe.\n\nVia onderstaande knop kunt u de offerte bekijken en digitaal ondertekenen:\n{{link}}\n\nHeeft u vragen? Neem gerust contact met ons op.\n\nMet vriendelijke groet,\n${company?.name || ''}`
+            : `Beste ${vars.klant_naam},\n\nHierbij sturen wij u offerte ${offerte.nummer} toe als bijlage.\n\nHeeft u vragen? Neem gerust contact met ons op.\n\nMet vriendelijke groet,\n${company?.name || ''}`;
         setForm({ to: customer?.email || '', subject: sub, body: plainToEditorHtml(rawBody) });
       })
       .catch(() => setForm({ to: customer?.email || '', subject: `Offerte ${offerte.nummer}`, body: '' }))
@@ -838,9 +887,11 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
       }
       // Pas bij verzenden wordt de {{link}}/{{knop}} placeholder een nette knop
       // (in de bedrijfskleur). In de composer blijft het dus pure tekst.
-      const knop = offerte.sign_token
-        ? mailButton('Offerte bekijken & ondertekenen', signLink, company?.brandingColor)
-        : signLink;
+      const knop = !kanOndertekenen
+        ? ''
+        : offerte.sign_token
+          ? mailButton('Offerte bekijken & ondertekenen', signLink, company?.brandingColor)
+          : signLink;
       const bodyForSend = form.body.replace(/\{\{\s*(?:link|knop)\s*\}\}/gi, knop);
       // Zakelijke mail: wikkel de body in de centrale template met bedrijfslogo
       // + bedrijfskleur (variant 1), consistent met alle mails.
@@ -924,6 +975,9 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
   const [sendMailOfferte, setSendMailOfferte] = useState(null);
   const [sendMailFactuur, setSendMailFactuur] = useState(null);
   const [copySource, setCopySource] = useState(null);
+  // Offertelimiet per facturatieperiode. Een nieuwe VERSIE van een bestaande
+  // offerte telt niet mee — die gate zit in copyOfferte, niet hier.
+  const { guardLimiet, planModal } = usePlanGuard();
 
   const load = () => {
     setLoading(true);
@@ -1046,11 +1100,14 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
       <div className="page-hd afu">
         <div>
           <h1>Offertes</h1>
+          <p style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <PlanStand limiet="offertes" />
+          </p>
           {error && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 4 }}>{error}</div>}
         </div>
         <div className="page-hd-actions">
           {canManageOffertes && (
-            <button className="btn btn-p" onClick={() => setShowNew(true)}>
+            <button className="btn btn-p" onClick={guardLimiet('offertes', () => setShowNew(true))}>
               {I.plus} Nieuwe offerte
             </button>
           )}
@@ -1204,6 +1261,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
           onCopied={created => { setCopySource(null); applyEdited(created, null); setEditOfferte(created); }}
         />
       )}
+      {planModal}
       {factuurPrefill && (
         <NewFactuurModal
           customers={customers}

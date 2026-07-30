@@ -1,7 +1,17 @@
 import { supabase } from '../lib/supabase'
 import { withCompanyId } from '../lib/currentCompany'
-import { syncFactuurNaarMoneybird, syncFactuurNaarSnelStart } from './accountingService'
+import { syncFactuurNaarBoekhouding } from './accountingService'
 import { logTijdlijnSafe } from './klantTijdlijnService'
+
+// Canonieke factuurstatussen. 'aangemaakt' bestond alleen als oude alias en komt
+// in de database niet voor — de beginstatus is 'concept'.
+export const FACTUUR_STATUS = {
+  concept:   'Concept',
+  verzonden: 'Verzonden',
+  betaald:   'Betaald',
+}
+export const FACTUUR_STATUS_OPTIONS = Object.entries(FACTUUR_STATUS).map(([id, label]) => ({ id, label }))
+
 
 // Slaat de bij verzending gegenereerde factuur-PDF op in de private bucket
 // 'factuur-pdfs' (pad {company_id}/{factuur_id}.pdf, upsert). Server-side flows
@@ -155,10 +165,10 @@ export async function updateFactuur(id, input) {
     if (error) throw error
     const result = toFactuur(cur)
     if (res?.changed) {
-      // Best-effort push naar de gekoppelde boekhouding; de niet-gekoppelde
-      // provider antwoordt "niet geconfigureerd" en doet niets.
-      syncFactuurNaarMoneybird(id).catch(() => {})
-      syncFactuurNaarSnelStart(id).catch(() => {})
+      // Best-effort push naar de gekoppelde boekhouding. syncFactuurNaarBoekhouding
+      // checkt eerst welke providers gekoppeld zijn en slaat de rest over — dat
+      // scheelt een 400 per niet-gekoppelde provider.
+      syncFactuurNaarBoekhouding(id).catch(() => {})
       const bedrag = result.totaalIncl.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
       logTijdlijnSafe(result.customerId, 'factuur_betaald', `Factuur ${result.nummer} betaald (€${bedrag})`, { nummer: result.nummer })
     }
@@ -206,7 +216,19 @@ export async function updateFactuur(id, input) {
 
 export async function deleteFactuur(id) {
   const { error } = await supabase.from('facturen').delete().eq('id', id)
-  if (error) throw error
+  if (error) {
+    // Een gecrediteerde factuur kan niet weg zolang de creditnota ernaar
+    // verwijst (foreign key facturen_credit_van_factuur_id_fkey). Dat is
+    // bedoeld: een creditnota die naar een verdwenen factuur wijst, breekt de
+    // audittrail. De rauwe databasefout zegt dat niet, dus vertalen we hem.
+    if (error.code === '23503') {
+      throw new Error(
+        'Deze factuur is gecrediteerd en kan niet verwijderd worden. ' +
+        'Verwijder eerst de bijbehorende creditfactuur.'
+      )
+    }
+    throw error
+  }
 }
 
 export async function getFactuurRegels(factuurId) {
@@ -272,7 +294,10 @@ export async function createCreditFactuur(origineleFactuurId, regels, origineleF
       factuur_id: creditFactuur.id,
       type: r.type,
       omschrijving: r.omschrijving,
-      aantal: r.type === 'vast' ? 1 : Number(r.aantal || 1),
+      // Aantal ongewijzigd overnemen; alleen de prijs wordt negatief. Ook hier
+      // gold de 'vast'-uitzondering, waardoor een creditregel van 2 × €120 maar
+      // €120 crediteerde.
+      aantal: Number(r.aantal || 1),
       eenheidsprijs: -Math.abs(Number(r.eenheidsprijs || 0)),
       btw_pct: Number(r.btwPct || 21),
       volgorde: i,
@@ -286,15 +311,24 @@ export async function createCreditFactuur(origineleFactuurId, regels, origineleF
 }
 
 export async function createFactuurRegel(input) {
-  const regelprijs = input.type === 'vast'
-    ? Math.round(Number(input.eenheidsprijs || 0) * 100) / 100
-    : Math.round(Number(input.aantal || 1) * Number(input.eenheidsprijs || 0) * 100) / 100
+  // Elke regel is aantal × eenheidsprijs — óók type 'vast'. Die typewaarde heette
+  // vroeger "Vast bedrag" (één bedrag, aantal betekenisloos) en werd hier daarom
+  // afgedwongen op aantal 1. Sinds regelTypes.js heet hetzelfde type "Overig" met
+  // de semantiek prijs × aantal, en toont de editor gewoon een aantalveld. Deze
+  // uitzondering gooide dat ingevoerde aantal weg: 2 × €120 werd 1 × €120, terwijl
+  // de kop wél 240 kreeg. Zie useRegelTotals in FacturenPage, dat altijd al
+  // vermenigvuldigde — dit brengt de opslag daarmee in lijn.
+  //
+  // Oude 'vast'-regels hebben aantal 1, dus 1 × prijs = prijs: die blijven gelijk.
+  const aantal = Number(input.aantal || 1)
+  const eenheidsprijs = Number(input.eenheidsprijs || 0)
+  const regelprijs = Math.round(aantal * eenheidsprijs * 100) / 100
   const base = {
     factuur_id: input.factuur_id,
     type: input.type || 'stuks',
     omschrijving: input.omschrijving,
-    aantal: input.type === 'vast' ? 1 : Number(input.aantal || 1),
-    eenheidsprijs: Number(input.eenheidsprijs || 0),
+    aantal,
+    eenheidsprijs,
     btw_pct: Number(input.btw_pct || 21),
     regelprijs,
     volgorde: Number(input.volgorde || 0),

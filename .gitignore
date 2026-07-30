@@ -9,3 +9,6 @@ supabase/.temp/
 # Local tool / agent caches — not part of the app
 .impeccable/
 .playwright-mcp/
+
+# Gegenereerd door scripts/build-dry-run.mjs — niet in git
+supabase/tests/_dryrun_plan_matrix.sql

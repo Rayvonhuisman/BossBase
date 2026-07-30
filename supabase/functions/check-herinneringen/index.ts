@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
+import { lokaleDatum, lokaleTijd, langeDatumNl, lokaalNaarUtc, voegDagenToe } from '../_shared/datumTijd.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -59,7 +60,9 @@ serve(async (req) => {
   const db = createClient(supabaseUrl, serviceKey)
 
   const today = new Date()
-  const todayStr = today.toISOString().slice(0, 10)
+  // Nederlandse dag, niet de UTC-dag — anders draait de cron tussen
+  // middernacht en 02:00 op de verkeerde datum.
+  const todayStr = lokaleDatum(today)
   const results = { herinneringen: 0, afspraken: 0, errors: [] as string[] }
 
   try {
@@ -77,6 +80,17 @@ serve(async (req) => {
       if (!company) continue
 
       const companyId = f.company_id
+
+      // Automatische betaalherinneringen zijn een feature (Groei+). Deze cron
+      // draait met service_role en omzeilt RLS, dus de check moet hier expliciet.
+      // De trigger op facturen zou het zetten van herinnering_*_verstuurd_at
+      // alsnog blokkeren — hier slaan we de mail al over.
+      const { data: heeftHerinneringen } = await db.rpc('bb_has_feature', {
+        p_company_id: companyId,
+        p_feature: 'betaalherinneringen',
+      })
+      if (heeftHerinneringen !== true) continue
+
       const vervalDate = new Date(f.vervaldatum)
       const daysPast = Math.floor((today.getTime() - vervalDate.getTime()) / 86400000)
 
@@ -158,13 +172,12 @@ serve(async (req) => {
 
     // Alleen zoeken als er minstens één bedrijf een actieve+auto_versturen template heeft.
     if (tplByCompany.size > 0) {
-      const addDaysUTC = (base: Date, n: number) => {
-        const d = new Date(base)
-        d.setUTCDate(d.getUTCDate() + n)
-        return d.toISOString().slice(0, 10)
-      }
-      const windowStart = addDaysUTC(today, minDagen) + 'T00:00:00'
-      const windowEnd = addDaysUTC(today, maxDagen) + 'T23:59:59'
+      // Dagen tellen op de Nederlandse kalender; de grenzen daarna omrekenen
+      // naar echte UTC-momenten. Voorheen gingen hier naive strings naar een
+      // timestamptz-kolom, wat het venster een tijdzone-offset verschoof.
+      const addDagen = (n: number) => voegDagenToe(todayStr, n)
+      const windowStart = lokaalNaarUtc(addDagen(minDagen), '00:00')!.toISOString()
+      const windowEnd = new Date(lokaalNaarUtc(addDagen(maxDagen + 1), '00:00')!.getTime() - 1).toISOString()
 
       const { data: activiteiten } = await db
         .from('activities')
@@ -184,8 +197,8 @@ serve(async (req) => {
 
         // EXACT-dag match: de afspraak moet precies over auto_dagen dagen plaatsvinden.
         const autoDagen = (tpl.auto_dagen ?? 1)
-        const targetDayStr = addDaysUTC(today, autoDagen)
-        const actDayStr = new Date(act.due_at).toISOString().slice(0, 10)
+        const targetDayStr = addDagen(autoDagen)
+        const actDayStr = lokaleDatum(act.due_at)
         if (actDayStr !== targetDayStr) continue
 
         // Idempotentie (ongewijzigd): één rij in sent_emails per appointment_id.
@@ -201,8 +214,8 @@ serve(async (req) => {
         const vars = {
           klant_naam: act.customers.name || 'klant',
           bedrijfsnaam: company.name || 'ons bedrijf',
-          afspraak_datum: dueDate.toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
-          afspraak_tijd: dueDate.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' }),
+          afspraak_datum: langeDatumNl(dueDate),
+          afspraak_tijd: lokaleTijd(dueDate),
         }
 
         const subject = substituteVars(tpl.onderwerp, vars)

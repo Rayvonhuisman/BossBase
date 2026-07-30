@@ -2,33 +2,30 @@ import { supabase } from "../lib/supabase"
 import { withCompanyId } from "../lib/currentCompany"
 import { safeInsert } from "../lib/safeInsert"
 import { logTijdlijnSafe } from "./klantTijdlijnService"
+import { lokaalNaarUtc, splitsLokaal } from "../lib/datumTijd"
 
 // Real DB columns: id, company_id, customer_id, deal_id, activity_id, title,
 // start_at, end_at, location, description, created_at, updated_at.
 // The UI carries a `type` field for color-coding events (job/visit/activity/event)
 // — that's local UI state only; the DB has no type column.
 
+// De ingevoerde tijd is Nederlandse wandkloektijd; de kolommen zijn timestamptz.
+// Heen en terug loopt daarom altijd via lib/datumTijd, zodat 09:00 ook echt als
+// 09:00 terugkomt. Eerder werd hier bij het teruglezen `.toISOString()` gebruikt,
+// wat de UTC-wijzerplaat gaf (09:00 → 07:00).
 export function buildEventTimes(date, time = "", end = "") {
   if (!date) return { start_at: null, end_at: null }
-  const safeTime = time || "09:00"
-  const start = new Date(`${date}T${safeTime}:00`)
-  const endDate = end ? new Date(`${date}T${end}:00`) : new Date(start.getTime() + 60 * 60 * 1000)
+  const start = lokaalNaarUtc(date, time || "09:00")
+  if (!start) return { start_at: null, end_at: null }
+  const endDate = end ? lokaalNaarUtc(date, end) : new Date(start.getTime() + 60 * 60 * 1000)
 
   return {
     start_at: start.toISOString(),
-    end_at: endDate.toISOString(),
+    end_at: (endDate || new Date(start.getTime() + 60 * 60 * 1000)).toISOString(),
   }
 }
 
-function splitEventTime(value) {
-  if (!value) return { date: "", time: "" }
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return { date: "", time: "" }
-  return {
-    date: parsed.toISOString().slice(0, 10),
-    time: parsed.toISOString().slice(11, 16),
-  }
-}
+const splitEventTime = splitsLokaal
 
 export function mapCalendarEventFormToPayload(input = {}) {
   const times = (input.start_at && input.end_at)

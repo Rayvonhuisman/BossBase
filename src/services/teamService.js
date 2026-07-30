@@ -18,6 +18,8 @@ const toTeamMember = row => ({
   hoursPerWeek: Number(row.hours_per_week || 0),
   avatarUrl: row.avatar_url || "",
   invitedAt: row.invited_at,
+  inviteEmailFailedAt: row.invite_email_failed_at || null,
+  inviteEmailError: row.invite_email_error || null,
   acceptedAt: row.accepted_at || null,
   createdAt: row.created_at,
   raw: row,
@@ -184,7 +186,20 @@ export async function inviteTeamMember(input) {
   })
 
   if (emailErr) {
-    return { ...member, emailSent: false, emailError: emailErr.message }
+    // Leg de mislukking vast op de rij zelf, zodat de teamlijst niet ten onrechte
+    // "Uitgenodigd" toont. De uitnodiging blijft geldig (token + verloopdatum),
+    // alleen het versturen is niet gelukt — opnieuw versturen kan dus gewoon.
+    await supabase
+      .from('company_members')
+      .update({ invite_email_failed_at: new Date().toISOString(), invite_email_error: emailErr.message })
+      .eq('id', data.id)
+    return {
+      ...member,
+      inviteEmailFailedAt: new Date().toISOString(),
+      inviteEmailError: emailErr.message,
+      emailSent: false,
+      emailError: emailErr.message,
+    }
   }
   return { ...member, emailSent: true }
 }

@@ -5,7 +5,7 @@ import {
   fmt, custById, Av, StatusBadge, ModalX, Logo, CostCategoryBadge,
 } from '../bb-shared.jsx';
 import { createCalendarEvent, listCalendarEvents, updateCalendarEvent } from '../services/calendarService.js';
-import { createJobCost, deleteJobCost, listJobCosts, updateJobCost, getKostenBijlageUrl } from '../services/jobCostService.js';
+import { createJobCost, deleteJobCost, listJobCosts, updateJobCost, getKostenBijlageUrl, kostenPerGroep } from '../services/jobCostService.js';
 import { getFacturen, getAllFactuurRegels } from '../services/factuurService.js';
 import { getConnection } from '../services/accountingService.js';
 import { getBtwPeriodes, syncBtwData } from '../services/btwService.js';
@@ -19,7 +19,9 @@ import { getWerkbonnen } from '../services/werkbonService.js';
 import { getProjects } from '../services/projectsService.js';
 import { calcBtw, BTW_PCT_OPTIONS } from '../utils/btw.js';
 import { useToast } from '../lib/toast.jsx';
-import { useProfile, useTier } from '../lib/profileContext.jsx';
+import { useProfile } from '../lib/profileContext.jsx';
+import { usePlan } from '../hooks/usePlan.js';
+import { getBedrijfsinstellingen } from '../services/instellingenService.js';
 import { usePermissions } from '../hooks/usePermissions.js';
 import { useUrlTab } from '../hooks/useUrlTab.js';
 import { ActivityEditModal, NewCalendarEventModal, NewJobCostModal } from '../components/SharedModals.jsx';
@@ -65,17 +67,26 @@ function getISOWeek(date) {
 }
 
 // ── AGENDA TIJDLIJN (zelfde look als de Planning-pagina) ─────────────────────
-const AG_HOUR_START  = 7;
-const AG_HOUR_END    = 20;
-const AG_TOTAL_HOURS = AG_HOUR_END - AG_HOUR_START; // 13
+// De agenda beslaat altijd 24 uur; welk deel zichtbaar is komt uit de
+// bedrijfsinstelling (bedrijfsinstellingen.agenda_start_uur / _eind_uur).
+// Deze waarden zijn alleen de terugval als die instelling nog niet geladen is.
+const AG_HOUR_START_DEFAULT = 7;
+const AG_HOUR_END_DEFAULT   = 20;
 const AG_PX_PER_HOUR = 64;
-const AG_TIMELINE_H  = AG_TOTAL_HOURS * AG_PX_PER_HOUR;
+
+// Klemt het ingestelde venster op iets dat altijd tekenbaar is.
+function agUurBereik(startUur, eindUur) {
+  const start = Math.min(23, Math.max(0, Number.isFinite(startUur) ? startUur : AG_HOUR_START_DEFAULT));
+  const eindRuw = Number.isFinite(eindUur) ? eindUur : AG_HOUR_END_DEFAULT;
+  const eind = Math.min(24, Math.max(start + 1, eindRuw));
+  return { start, eind, totaal: eind - start, hoogte: (eind - start) * AG_PX_PER_HOUR };
+}
 const AG_TIME_COL_W  = 52;
 const AG_DAYS_SHORT  = ['Ma','Di','Wo','Do','Vr','Za','Zo'];
 
 function agTimeToMins(t) { if (!t) return 0; const [h, m] = String(t).split(':').map(Number); return h * 60 + (m || 0); }
 function agMinsToTime(mins) { return `${pad2(Math.floor(mins / 60))}:${pad2(mins % 60)}`; }
-function agTopPx(t) { const mins = agTimeToMins(t || `${AG_HOUR_START}:00`); return Math.max(0, (mins - AG_HOUR_START * 60) * AG_PX_PER_HOUR / 60); }
+function agTopPx(t, startUur = AG_HOUR_START_DEFAULT) { const mins = agTimeToMins(t || `${startUur}:00`); return Math.max(0, (mins - startUur * 60) * AG_PX_PER_HOUR / 60); }
 function agHeightPx(start, end) { if (!start || !end) return AG_PX_PER_HOUR; const dur = agTimeToMins(end) - agTimeToMins(start); return Math.max(22, dur * AG_PX_PER_HOUR / 60); }
 function agFmtTime(t) { return t ? String(t).slice(0, 5) : ''; }
 
@@ -95,8 +106,8 @@ function agAssignLanes(blocks) {
   return withLane.map(b => ({ ...b, _totalLanes: total }));
 }
 
-function AgendaEventBlock({ ev, onClick }) {
-  const top = agTopPx(ev.time);
+function AgendaEventBlock({ ev, onClick, startUur = AG_HOUR_START_DEFAULT }) {
+  const top = agTopPx(ev.time, startUur);
   const height = agHeightPx(ev.time, ev.end);
   const lane = ev._lane || 0;
   const total = ev._totalLanes || 1;
@@ -129,31 +140,33 @@ function AgendaEventBlock({ ev, onClick }) {
   );
 }
 
-function AgendaDayColumn({ dayEvents, isToday, onEventClick }) {
-  const hours = Array.from({ length: AG_TOTAL_HOURS }, (_, i) => AG_HOUR_START + i);
+function AgendaDayColumn({ dayEvents, isToday, onEventClick, bereik }) {
+  const { start, totaal, hoogte } = bereik;
+  const hours = Array.from({ length: totaal }, (_, i) => start + i);
   const withLanes = agAssignLanes(dayEvents);
   return (
-    <div style={{ position: 'relative', height: AG_TIMELINE_H, borderLeft: '1px solid var(--border)', background: isToday ? 'rgba(29,219,98,.03)' : '#fff' }}>
+    <div style={{ position: 'relative', height: hoogte, borderLeft: '1px solid var(--border)', background: isToday ? 'rgba(29,219,98,.03)' : '#fff' }}>
       {hours.map(h => (
-        <div key={h} style={{ position: 'absolute', top: (h - AG_HOUR_START) * AG_PX_PER_HOUR, left: 0, right: 0, borderTop: '1px solid var(--border)', zIndex: 0 }} />
+        <div key={h} style={{ position: 'absolute', top: (h - start) * AG_PX_PER_HOUR, left: 0, right: 0, borderTop: '1px solid var(--border)', zIndex: 0 }} />
       ))}
       {hours.map(h => (
-        <div key={`h-${h}`} style={{ position: 'absolute', top: (h - AG_HOUR_START) * AG_PX_PER_HOUR + AG_PX_PER_HOUR / 2, left: 0, right: 0, borderTop: '1px dashed #f0ede9', zIndex: 0 }} />
+        <div key={`h-${h}`} style={{ position: 'absolute', top: (h - start) * AG_PX_PER_HOUR + AG_PX_PER_HOUR / 2, left: 0, right: 0, borderTop: '1px dashed #f0ede9', zIndex: 0 }} />
       ))}
-      {withLanes.map(ev => <AgendaEventBlock key={ev.id} ev={ev} onClick={onEventClick} />)}
+      {withLanes.map(ev => <AgendaEventBlock key={ev.id} ev={ev} onClick={onEventClick} startUur={start} />)}
     </div>
   );
 }
 
 // Gedeelde tijdlijn voor de week- en dagweergave van de agenda.
-function AgendaTimeline({ dates, events, todayKey, onEventClick }) {
+function AgendaTimeline({ dates, events, todayKey, onEventClick, startUur, eindUur }) {
   const scrollRef = useRef(null);
-  // Scroll bij laden naar 07:00 (= bovenkant van de tijdlijn).
+  const bereik = agUurBereik(startUur, eindUur);
+  // Scroll bij laden naar het eerste zichtbare uur (= bovenkant van de tijdlijn).
   useEffect(() => {
     const c = scrollRef.current;
     if (c) c.scrollTop = 0;
   }, []);
-  const hours = Array.from({ length: AG_TOTAL_HOURS }, (_, i) => AG_HOUR_START + i);
+  const hours = Array.from({ length: bereik.totaal }, (_, i) => bereik.start + i);
   const cols = `${AG_TIME_COL_W}px repeat(${dates.length}, minmax(110px, 1fr))`;
   return (
     <div className="card" style={{ padding: 0, overflow: 'hidden', minWidth: 0 }}>
@@ -181,9 +194,9 @@ function AgendaTimeline({ dates, events, todayKey, onEventClick }) {
       <div ref={scrollRef} style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 300px)', paddingTop: 10 }}>
         <div style={{ display: 'grid', gridTemplateColumns: cols }}>
           {/* Tijdlabels */}
-          <div style={{ position: 'relative', height: AG_TIMELINE_H, borderRight: '1px solid var(--border)' }}>
+          <div style={{ position: 'relative', height: bereik.hoogte, borderRight: '1px solid var(--border)' }}>
             {hours.map(h => (
-              <div key={h} style={{ position: 'absolute', top: (h - AG_HOUR_START) * AG_PX_PER_HOUR - 7, right: 8, fontSize: 9, fontWeight: 600, color: 'var(--dl)', letterSpacing: '.02em' }}>
+              <div key={h} style={{ position: 'absolute', top: (h - bereik.start) * AG_PX_PER_HOUR - 7, right: 8, fontSize: 9, fontWeight: 600, color: 'var(--dl)', letterSpacing: '.02em' }}>
                 {pad2(h)}:00
               </div>
             ))}
@@ -192,7 +205,7 @@ function AgendaTimeline({ dates, events, todayKey, onEventClick }) {
           {dates.map(dt => {
             const dk = dateKey(dt);
             const dayEvents = events.filter(e => toDayKey(e.date) === dk && e.time);
-            return <AgendaDayColumn key={dk} dayEvents={dayEvents} isToday={dk === todayKey} onEventClick={onEventClick} />;
+            return <AgendaDayColumn key={dk} dayEvents={dayEvents} isToday={dk === todayKey} onEventClick={onEventClick} bereik={bereik} />;
           })}
         </div>
       </div>
@@ -205,14 +218,14 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
   const toast = useToast();
   const { refreshKey, bumpRefresh, profile } = useProfile();
   const { can } = usePermissions();
-  const tier = useTier();
-  // Groei is een gedeelde werkomgeving: beide teamleden zien elkaars agenda-items.
-  // Starter (solo) en Team (personal agenda; die plannen via de planning-pagina)
-  // blijven hun eigen items zien. RLS staat de gedeelde weergave bij Groei toe.
-  const shareAll = tier === 'groei';
-  // Werkbon inplannen vanuit de agenda is bedoeld voor wie geen planning-pagina
-  // heeft (Starter/Groei). Team plant in via de planning-pagina.
-  const canPlanFromAgenda = tier !== 'team';
+  const plan = usePlan();
+  // Gedeelde werkruimte: beide teamleden zien elkaars agenda-items. Solo en
+  // rollen-en-rechten-bedrijven zien hun eigen items. Dezelfde matrix bepaalt
+  // server-side de RLS (bb_gedeelde_werkruimte), dus UI en server lopen gelijk.
+  const shareAll = plan.has('gedeelde_werkruimte');
+  // Werkbon inplannen vanuit de agenda is bedoeld voor wie géén planningsmodule
+  // heeft. Met de planningsmodule plan je daar in.
+  const canPlanFromAgenda = !plan.has('planning');
   // Bewerkrecht op een agenda-item (spiegelt de RLS): admin/planner mag alles;
   // een 'planning'-item is voor gewone medewerkers alleen-lezen; een 'zelf'-item
   // mag alleen de eigenaar bewerken.
@@ -229,6 +242,16 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
     return new Date(n.getFullYear(), n.getMonth(), 1);
   });
   const [showEvent, setShowEvent] = useState(null);
+  // Zichtbaar uurvenster uit de bedrijfsinstelling; tot die geladen is tonen we
+  // het oude standaardvenster, zodat er niets springt.
+  const [agendaUren, setAgendaUren] = useState({ start: AG_HOUR_START_DEFAULT, eind: AG_HOUR_END_DEFAULT });
+  useEffect(() => {
+    let alive = true;
+    getBedrijfsinstellingen()
+      .then(b => { if (alive && b) setAgendaUren({ start: b.agendaStartUur, eind: b.agendaEindUur }); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [refreshKey]);
   const [events, setEvents] = useState([]);
   const [activities, setActivities] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -472,7 +495,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
 
       {!loading && !error && view === 'week' && (
         <div className="afu3" style={{ overflowX: 'auto' }}>
-          <AgendaTimeline dates={weekDates} events={events} todayKey={todayKey} onEventClick={handleEventClick} />
+          <AgendaTimeline dates={weekDates} events={events} todayKey={todayKey} onEventClick={handleEventClick} startUur={agendaUren.start} eindUur={agendaUren.eind} />
         </div>
       )}
 
@@ -482,7 +505,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
         return (
           <div className="afu3">
             <div style={{ fontSize: '.9rem', fontWeight: 700, marginBottom: 12, color: 'var(--dk)' }}>{dayLabel}</div>
-            <AgendaTimeline dates={[today]} events={events} todayKey={todayKey} onEventClick={handleEventClick} />
+            <AgendaTimeline dates={[today]} events={events} todayKey={todayKey} onEventClick={handleEventClick} startUur={agendaUren.start} eindUur={agendaUren.eind} />
           </div>
         );
       })()}
@@ -548,7 +571,6 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
       )}
       {showPlanWerkbon && (
         <AgendaWerkbonPlanModal
-          tier={tier}
           currentUserId={profile?.id}
           currentUserName={profile?.fullName}
           onClose={() => setShowPlanWerkbon(false)}
@@ -1019,6 +1041,7 @@ export function CostsPage() {
     return true;
   });
   const total = filtered.reduce((s, c) => s + c.amt, 0);
+  const groepTotalen = kostenPerGroep(filtered);
   const cats = [...new Set(costs.map(c => c.cat))];
   return (
     <div>
@@ -1030,12 +1053,15 @@ export function CostsPage() {
       </div>
       {loading && <div className="card card-p">Kosten laden...</div>}
       {error && <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>}
-      <div className="stats-row afu2" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
+      {/* Groepering via kostenPerGroep — hoofdletterongevoelig en met een
+          vangnet-groep, zodat de tegels altijd optellen tot het totaal. */}
+      <div className="stats-row afu2" style={{ gridTemplateColumns: 'repeat(5,1fr)' }}>
         {[
-          { label: 'Totale kosten',    val: fmt(total),                                                                             icon: I.costs  },
-          { label: 'Materiaalkosten',  val: fmt(filtered.filter(c => c.cat === 'materiaal').reduce((s, c) => s + c.amt, 0)),        icon: I.brief  },
-          { label: 'Arbeidskosten',    val: fmt(filtered.filter(c => c.cat === 'arbeid').reduce((s, c) => s + c.amt, 0)),           icon: I.hours  },
-          { label: 'Reiskosten',       val: fmt(filtered.filter(c => c.cat === 'reiskosten').reduce((s, c) => s + c.amt, 0)),       icon: I.map    },
+          { label: 'Totale kosten',    val: fmt(total),                    icon: I.costs },
+          { label: 'Materiaalkosten',  val: fmt(groepTotalen.materiaal),   icon: I.brief },
+          { label: 'Arbeidskosten',    val: fmt(groepTotalen.arbeid),      icon: I.hours },
+          { label: 'Reiskosten',       val: fmt(groepTotalen.reiskosten),  icon: I.map   },
+          { label: 'Overige kosten',   val: fmt(groepTotalen.overig),      icon: I.costs },
         ].map((s, i) => (
           <div key={i} className="sc">
             <div className="sc-top"><div className="sc-icon">{s.icon}</div></div>
@@ -1150,6 +1176,8 @@ function generatePeriodeOpties(type) {
 export function RevenuePage() {
   const toast = useToast();
   const { refreshKey } = useProfile();
+  // BTW-overzicht is een feature uit de centrale matrix (Groei+).
+  const btwPlan = usePlan();
   const [customers, setCustomers] = useState([]);
   const [costsData, setCostsData] = useState([]);
   const [facturen, setFacturen] = useState([]);
@@ -1295,11 +1323,21 @@ export function RevenuePage() {
   }, [facturen, costsData, chartPeriod]);
 
   // ── PER KLANT ─────────────────────────────────────────────────
+  // `total` en `paid` komen NIET uit customerService — die zet ze daar bewust op
+  // 0 ("UI helpers — synthesized, not stored"). De hele tabel toonde daardoor €0
+  // en 0% marge, ook in de CSV-export. We tellen ze hier op uit de offertes en
+  // facturen die deze pagina toch al inleest.
   const rows = customers.map(c => {
+    const geoffreerd = offertes
+      .filter(o => o.customerId === c.id && o.status !== 'concept')
+      .reduce((s, o) => s + (o.totaalIncl || 0), 0);
+    const betaald = facturen
+      .filter(f => f.customerId === c.id && isRealFactuur(f) && f.status === 'betaald')
+      .reduce((s, f) => s + (f.totaalIncl || 0), 0);
     const costs  = costsData.filter(x => x.custId === c.id).reduce((s, x) => s + x.amt, 0);
-    const profit = c.paid - costs;
-    const margin = c.paid > 0 ? Math.round((profit / c.paid) * 100) : 0;
-    return { ...c, costs, profit, margin };
+    const profit = betaald - costs;
+    const margin = betaald > 0 ? Math.round((profit / betaald) * 100) : 0;
+    return { ...c, total: geoffreerd, paid: betaald, costs, profit, margin };
   });
 
   const handleSyncBtw = async () => {
@@ -1424,8 +1462,9 @@ export function RevenuePage() {
         </div>
       </div>
 
-      {/* ── BTW-overzicht — alleen tonen bij een actieve boekhoudkoppeling (Moneybird of SnelStart) ── */}
-      {mbConnection?.connected && (
+      {/* ── BTW-overzicht — feature uit de matrix (Groei+) én een actieve
+           boekhoudkoppeling. Server-side is de SELECT op btw_periodes gated. ── */}
+      {btwPlan.has('btw_overzicht') && mbConnection?.connected && (
       <div className="tw afu3" style={{ marginBottom: 20 }}>
         <div className="tw-hd" style={{ flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
           <div>

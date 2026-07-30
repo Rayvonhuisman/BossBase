@@ -219,7 +219,19 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
   const { customers, deals, stages, activities, offertes, werkbonnen, calendarEvents, facturen, jobCosts, loading: sharedLoading } = useData();
 
   // Demo mode: IS_DEV-only toggle that substitutes real data with static demo data
-  const [demoMode, setDemoMode] = useState(IS_DEV);
+  // Persistent: stond eerder op useState(IS_DEV) en sprong daardoor bij elke
+  // harde reload terug naar AAN. De keuze van de gebruiker wint nu; IS_DEV is
+  // alleen nog de startwaarde als er nog nooit iets is gekozen.
+  const [demoMode, setDemoMode] = useState(() => {
+    try {
+      const opgeslagen = localStorage.getItem('bb_demo_mode');
+      if (opgeslagen !== null) return opgeslagen === 'true';
+    } catch { /* private mode e.d. — val terug op de standaard */ }
+    return IS_DEV;
+  });
+  useEffect(() => {
+    try { localStorage.setItem('bb_demo_mode', String(demoMode)); } catch { /* niet blokkerend */ }
+  }, [demoMode]);
   const demoData = useMemo(() => getDemoDashboardData(), []);
 
   // Widget layout state

@@ -2,7 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { I, ModalX, STAGE_COLOR_OPTIONS, stageColToHex, stageColorLabel, stageBadgeStyle } from '../bb-shared.jsx';
 import { supabase } from '../lib/supabase.js';
 import { useToast } from '../lib/toast.jsx';
-import { useProfile, useTier } from '../lib/profileContext.jsx';
+import { useProfile } from '../lib/profileContext.jsx';
+import { usePlan } from '../hooks/usePlan.js';
+import { PlanUpgradeModal } from '../components/PlanUpgradeModal.jsx';
+import { tierLabel } from '../lib/tiers.js';
 import { getStripeConnection, startStripeOnboarding, refreshStripeStatus, disconnectStripe } from '../services/stripeService.js';
 import { usePermissions } from '../hooks/usePermissions.js';
 import { useUrlTab } from '../hooks/useUrlTab.js';
@@ -159,7 +162,9 @@ function IntegStatusPill({ actief = false, children }) {
 export function InstellingenPage() {
   const toast = useToast();
   const { company, refresh, profile } = useProfile();
-  const tier = useTier();
+  const plan = usePlan();
+  // Feature waarvoor de upgrade-modal openstaat (null = dicht).
+  const [upgradeFeature, setUpgradeFeature] = useState(null);
   const { can } = usePermissions();
   const { startUpload } = useUploads();
   const isAdmin = profile?.role === 'admin';
@@ -201,6 +206,8 @@ export function InstellingenPage() {
     reiskosten_per_km: 0.23,
     btw_pct: 21,
     offerte_geldig_dagen: 14,
+    agenda_start_uur: 7,
+    agenda_eind_uur: 20,
     uren_herinnering_interval_min: 60,
   });
   const [savingStandaard, setSavingStandaard] = useState(false);
@@ -285,10 +292,12 @@ export function InstellingenPage() {
   const [afasTested, setAfasTested] = useState(false);
   const [afasShowToken, setAfasShowToken] = useState(false);
 
-  // Stripe Connect (tier-gated: alleen Groei/Team)
+  // Stripe Connect — feature uit de centrale matrix (Team, of als module bij
+  // Groei). Ook server-side afgedwongen in stripe-connect-start.
   const [stripeConn, setStripeConn] = useState(null);
   const [stripeBusy, setStripeBusy] = useState(false);
-  const stripeAllowed = tier === 'groei' || tier === 'team';
+  const [stripeError, setStripeError] = useState('');
+  const stripeAllowed = plan.has('stripe_betaallink');
 
   useEffect(() => {
     if (!canCompanySettings) return;
@@ -317,11 +326,16 @@ export function InstellingenPage() {
 
   const handleStripeConnect = async () => {
     setStripeBusy(true);
+    setStripeError('');
     try {
       const url = await startStripeOnboarding();
       window.location.href = url; // redirect naar Stripe onboarding
     } catch (e) {
-      toast.error(e.message || 'Koppelen mislukt');
+      // Naast de toast ook een blijvende melding op de kaart: de toast verdwijnt
+      // en dan lijkt de knop niets te doen.
+      const melding = e.message || 'Koppelen mislukt';
+      setStripeError(melding);
+      toast.error(melding);
       setStripeBusy(false);
     }
   };
@@ -368,6 +382,8 @@ export function InstellingenPage() {
             btw_pct: instellingen.btwPct ?? 21,
             offerte_geldig_dagen: instellingen.offerteGeldigDagen ?? 14,
             uren_herinnering_interval_min: instellingen.urenHerinneringIntervalMin ?? 60,
+            agenda_start_uur: instellingen.agendaStartUur ?? 7,
+            agenda_eind_uur: instellingen.agendaEindUur ?? 20,
           });
         }
         setTemplates(emailTemplates);
@@ -425,11 +441,22 @@ export function InstellingenPage() {
     const input = e.target;
     if (!file) return;
     input.value = '';
-    if (file.size > 10 * 1024 * 1024) { toast.error('Maximum is 10MB'); return; }
-    // SVG bewust NIET toegestaan: kan <script>/onload bevatten en zou als
-    // actieve inhoud op een publieke storage-URL kunnen worden geopend.
-    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowed.includes(file.type)) { toast.error('Alleen JPG, PNG en WebP zijn toegestaan'); return; }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error(`"${file.name}" is ${(file.size / 1024 / 1024).toFixed(1)}MB — het maximum is 10MB.`);
+      return;
+    }
+    // Alleen JPG en PNG. SVG is bewust geweigerd (kan <script>/onload bevatten en
+    // zou als actieve inhoud op een publieke storage-URL geopend kunnen worden).
+    // WebP is eruit omdat dit logo in e-mails en PDF's terechtkomt, en die
+    // ondersteunen WebP niet betrouwbaar.
+    const allowed = { 'image/jpeg': 'JPG', 'image/png': 'PNG' };
+    if (!allowed[file.type]) {
+      const gekozen = file.type
+        ? file.type.replace('image/', '').replace('svg+xml', 'SVG').toUpperCase()
+        : (file.name.split('.').pop() || 'onbekend').toUpperCase();
+      toast.error(`${gekozen}-bestanden worden niet ondersteund. Het logo komt ook in e-mails en PDF's terecht — gebruik JPG of PNG.`);
+      return;
+    }
     // Niet-blokkerend: upload + koppelen op de achtergrond via de upload-indicator.
     startUpload(file.name, async () => {
       const ext = file.name.split('.').pop().toLowerCase() || 'jpg';
@@ -959,7 +986,8 @@ export function InstellingenPage() {
       { id: 'standaard', label: 'Standaardwaarden' },
       { id: 'templates', label: 'E-mailtemplates' },
       { id: 'pipeline', label: 'Pipeline' },
-      ...(isAdmin ? [{ id: 'voertuigen', label: 'Voertuigen' }] : []),
+      // Voertuigen is een feature uit de matrix (Team, of module bij Groei).
+      ...(isAdmin && plan.has('voertuigen') ? [{ id: 'voertuigen', label: 'Voertuigen' }] : []),
       { id: 'integraties', label: 'Integraties' },
     ] : []),
   ];
@@ -1291,12 +1319,12 @@ export function InstellingenPage() {
               )}
               <div>
                 <label style={{ cursor: logoUploading ? 'default' : 'pointer' }}>
-                  <input type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={uploadLogo} disabled={logoUploading} />
+                  <input type="file" accept="image/jpeg,image/png" style={{ display: 'none' }} onChange={uploadLogo} disabled={logoUploading} />
                   <span className="btn btn-ghost" style={{ pointerEvents: logoUploading ? 'none' : 'auto', opacity: logoUploading ? 0.6 : 1 }}>
                     {logoUploading ? 'Uploaden...' : 'Logo uploaden'}
                   </span>
                 </label>
-                <div style={{ fontSize: 11, color: 'var(--dl)', marginTop: 4 }}>Max 10MB · JPG, PNG, SVG</div>
+                <div style={{ fontSize: 11, color: 'var(--dl)', marginTop: 4 }}>Max 10MB · JPG of PNG</div>
               </div>
             </div>
           </div>
@@ -1472,6 +1500,37 @@ export function InstellingenPage() {
           </div>
         </div>
 
+        {/* ── Agenda ── */}
+        <div className="card card-p afu3" style={{ marginTop: 16 }}>
+          <div className="card-hd" style={{ marginBottom: 18 }}>
+            <div className="card-title">Agenda</div>
+            <div className="card-sub">Welk deel van de dag standaard in beeld staat. De agenda beslaat altijd 24 uur — dit bepaalt alleen het zichtbare venster.</div>
+          </div>
+          <div className="fg">
+            <div className="f">
+              <label>Eerste zichtbare uur</label>
+              <select value={standaardForm.agenda_start_uur} onChange={e => setStandaard('agenda_start_uur', e.target.value)}>
+                {Array.from({ length: 24 }, (_, u) => (
+                  <option key={u} value={u}>{String(u).padStart(2, '0')}:00</option>
+                ))}
+              </select>
+            </div>
+            <div className="f">
+              <label>Laatste zichtbare uur</label>
+              <select value={standaardForm.agenda_eind_uur} onChange={e => setStandaard('agenda_eind_uur', e.target.value)}>
+                {Array.from({ length: 24 }, (_, i) => i + 1)
+                  .filter(u => u > Number(standaardForm.agenda_start_uur))
+                  .map(u => <option key={u} value={u}>{String(u).padStart(2, '0')}:00</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="fa">
+            <button className="btn btn-p" onClick={saveStandaard} disabled={savingStandaard}>
+              {savingStandaard ? 'Opslaan...' : 'Opslaan'}
+            </button>
+          </div>
+        </div>
+
         {/* ── Eigen prijzen / eenheden ── */}
         <div className="card card-p afu3" style={{ marginTop: 16 }}>
           <div className="card-hd" style={{ marginBottom: 14 }}>
@@ -1561,9 +1620,16 @@ export function InstellingenPage() {
                       </button>
                     );
                   })}
+                  {/* Eigen templates AANMAKEN is een feature (Groei+); de
+                      standaardtemplates bewerken mag iedereen. Ook server-side
+                      afgedwongen via een restrictive policy op email_templates. */}
                   <button
-                    onClick={() => setShowNewTemplate(true)}
-                    title="Nieuw template aanmaken"
+                    onClick={() => plan.has('eigen_email_templates')
+                      ? setShowNewTemplate(true)
+                      : setUpgradeFeature('eigen_email_templates')}
+                    title={plan.has('eigen_email_templates')
+                      ? 'Nieuw template aanmaken'
+                      : `Eigen templates aanmaken hoort bij ${tierLabel(plan.needsFor('eigen_email_templates'))}`}
                     className="btn-plus"
                     style={{ marginLeft: 'auto' }}
                   >
@@ -2040,7 +2106,7 @@ export function InstellingenPage() {
         </div>
       )}
 
-      {!loading && tab === 'voertuigen' && isAdmin && (
+      {!loading && tab === 'voertuigen' && isAdmin && plan.has('voertuigen') && (
         <div className="afu3" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -2203,7 +2269,7 @@ export function InstellingenPage() {
               {/* Status-pill */}
               <div style={{ flexShrink: 0 }}>
                 {!stripeAllowed ? (
-                  <IntegStatusPill>Vanaf Groei</IntegStatusPill>
+                  <IntegStatusPill>Vanaf {tierLabel(plan.needsFor('stripe_betaallink'))}</IntegStatusPill>
                 ) : stripeConn?.chargesEnabled ? (
                   <IntegStatusPill actief>Actief</IntegStatusPill>
                 ) : stripeConn?.accountId ? (
@@ -2215,8 +2281,11 @@ export function InstellingenPage() {
             </div>
 
             {!stripeAllowed ? (
-              <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>
-                Stripe-betalingen zijn beschikbaar vanaf het <strong>Groei</strong>-abonnement.
+              <div className="fa" style={{ gap: 8 }}>
+                <span style={{ fontSize: '.82rem', color: 'var(--dmu)', alignSelf: 'center', marginRight: 'auto' }}>
+                  Stripe-betalingen horen bij <strong>{tierLabel(plan.needsFor('stripe_betaallink'))}</strong>, of als losse module bij Groei.
+                </span>
+                <button className="btn btn-s btn-sm" onClick={() => setUpgradeFeature('stripe_betaallink')}>Bekijk opties</button>
               </div>
             ) : stripeConn?.chargesEnabled ? (
               <div className="fa" style={{ gap: 8 }}>
@@ -2236,12 +2305,38 @@ export function InstellingenPage() {
                 <button className="btn btn-ghost btn-sm" onClick={handleStripeDisconnect} disabled={stripeBusy}>Ontkoppelen</button>
               </div>
             ) : (
-              <button className="btn btn-p" onClick={handleStripeConnect} disabled={stripeBusy}>
-                {stripeBusy ? 'Bezig…' : 'Stripe koppelen'}
-              </button>
+              <>
+                <button className="btn btn-p" onClick={handleStripeConnect} disabled={stripeBusy}>
+                  {stripeBusy ? 'Bezig…' : 'Stripe koppelen'}
+                </button>
+                {stripeError && (
+                  <div style={{ marginTop: 10, padding: '9px 12px', borderRadius: 'var(--r8)', background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: '.8rem', lineHeight: 1.5 }}>
+                    <strong>Koppelen met Stripe is mislukt.</strong> {stripeError}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
+          {/* Boekhoudkoppelingen — feature uit de centrale matrix (Groei+). Ook
+              server-side afgedwongen: RLS + trigger op accounting_connections. */}
+          {!plan.has('boekhoudkoppeling') ? (
+            <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
+              <div className="integ-card-hd" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: '.95rem', marginBottom: 2 }}>Boekhoudkoppeling</div>
+                  <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>
+                    Facturen automatisch naar Moneybird of SnelStart, inkoopfacturen als kostenregels terug.
+                  </div>
+                </div>
+                <div style={{ flexShrink: 0 }}>
+                  <IntegStatusPill>Vanaf {tierLabel(plan.needsFor('boekhoudkoppeling'))}</IntegStatusPill>
+                </div>
+              </div>
+              <button className="btn btn-s btn-sm" onClick={() => setUpgradeFeature('boekhoudkoppeling')}>Bekijk opties</button>
+            </div>
+          ) : (
+          <>
           {/* Moneybird */}
           <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
             <div className="integ-card-hd" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
@@ -2266,6 +2361,12 @@ export function InstellingenPage() {
                 <div style={{ position: 'relative' }}>
                   <input
                     type="password"
+                    // Zonder deze hints vult Chrome hier het wachtwoord van de
+                    // gebruiker in — dit is een API-token, geen wachtwoord.
+                    name="moneybird-api-token"
+                    autoComplete="off"
+                    data-1p-ignore
+                    data-lpignore="true"
                     value={mbForm.apiToken}
                     onChange={e => setMbForm(f => ({ ...f, apiToken: e.target.value }))}
                     placeholder="Moneybird API token..."
@@ -2398,6 +2499,10 @@ export function InstellingenPage() {
                 <div style={{ position: 'relative' }}>
                   <input
                     type={ssShowKey ? 'text' : 'password'}
+                    name="snelstart-koppelsleutel"
+                    autoComplete="off"
+                    data-1p-ignore
+                    data-lpignore="true"
                     value={ssForm.clientKey}
                     onChange={e => setSsForm({ clientKey: e.target.value })}
                     placeholder="SnelStart koppelsleutel..."
@@ -2619,8 +2724,14 @@ export function InstellingenPage() {
             </div>
           </div>
           )}
+          </>
+          )}
 
         </div>
+      )}
+
+      {upgradeFeature && (
+        <PlanUpgradeModal feature={upgradeFeature} onClose={() => setUpgradeFeature(null)} />
       )}
     </div>
   );

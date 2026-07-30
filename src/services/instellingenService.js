@@ -13,6 +13,10 @@ const toBedrijfsinstellingen = row => ({
   offerteGeldigDagen: Number(row.offerte_geldig_dagen || 14),
   // Interval (min) waarmee de uren-herinnering-pop-up terugkeert. 0 = uit.
   urenHerinneringIntervalMin: Number(row.uren_herinnering_interval_min ?? 60),
+  // Zichtbaar uurvenster in de agenda. De agenda beslaat altijd 24 uur; dit
+  // bepaalt welk deel standaard in beeld staat.
+  agendaStartUur: Number(row.agenda_start_uur ?? 7),
+  agendaEindUur: Number(row.agenda_eind_uur ?? 20),
   createdAt: row.created_at,
   updatedAt: row.updated_at,
   raw: row,
@@ -76,6 +80,8 @@ export async function upsertBedrijfsinstellingen(input) {
   const btw = input.btw_pct ?? input.btwPct
   const geldig = input.offerte_geldig_dagen ?? input.offerteGeldigDagen
   const herinnering = input.uren_herinnering_interval_min ?? input.urenHerinneringIntervalMin
+  const agStart = input.agenda_start_uur ?? input.agendaStartUur
+  const agEind = input.agenda_eind_uur ?? input.agendaEindUur
   const updates = {
     uurtarief: input.uurtarief != null ? Number(input.uurtarief) : undefined,
     reiskosten_per_km: reiskosten != null ? Number(reiskosten) : undefined,
@@ -83,6 +89,8 @@ export async function upsertBedrijfsinstellingen(input) {
     btw_pct: btw != null ? Number(btw) : undefined,
     offerte_geldig_dagen: geldig != null ? Number(geldig) : undefined,
     uren_herinnering_interval_min: herinnering != null ? Number(herinnering) : undefined,
+    agenda_start_uur: agStart != null ? Number(agStart) : undefined,
+    agenda_eind_uur: agEind != null ? Number(agEind) : undefined,
     updated_at: new Date().toISOString(),
   }
   // Verwijder undefined waarden zodat bestaande DB-waarden niet worden overschreven

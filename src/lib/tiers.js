@@ -1,8 +1,12 @@
 // ── Abonnementstiers ──────────────────────────────────────────────────────────
-// Eén bron voor de tiernamen én prijzen. Wordt gebruikt door de app (feature-
-// gating via `useTier`), het super-admin portaal en de marketingpagina's.
+// Eén bron voor de tiernamen én prijzen. Wordt gebruikt door de app, het
+// super-admin portaal en de marketingpagina's.
 // Wijzig namen/prijzen ALLEEN hier — nergens anders hardcoden, geen parallelle
 // waarden.
+//
+// WELKE FEATURES EN LIMIETEN bij een tier horen staat NIET hier maar in
+// features.js — dat is de matrix die zowel de UI (usePlan) als de database
+// (plan_features / plan_limits, via scripts/gen-plan-matrix.mjs) voedt.
 //
 // De tier zelf wordt per bedrijf opgeslagen in `subscriptions.plan`
 // (één rij per company). Voor de frontend leest `get_company_tier()` alleen de

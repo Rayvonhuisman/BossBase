@@ -59,6 +59,45 @@ export async function testMoneybirdConnection(apiToken, administrationId) {
   return data
 }
 
+// Koppelstatus kort cachen, zodat de guards hieronder geen extra verkeer geven.
+const koppelCache = new Map() // provider → { waarde, tot }
+const KOPPEL_TTL_MS = 60_000
+
+async function isGekoppeld(provider) {
+  const nu = Date.now()
+  const c = koppelCache.get(provider)
+  if (c && c.tot > nu) return c.waarde
+  try {
+    const conn = await getConnection(provider)
+    const waarde = Boolean(conn?.connected)
+    koppelCache.set(provider, { waarde, tot: nu + KOPPEL_TTL_MS })
+    return waarde
+  } catch {
+    koppelCache.set(provider, { waarde: false, tot: nu + KOPPEL_TTL_MS })
+    return false
+  }
+}
+
+/** Wist de cache — aanroepen na (ont)koppelen. */
+export function vergeetKoppelStatus(provider) {
+  if (provider) koppelCache.delete(provider); else koppelCache.clear()
+}
+
+/**
+ * Stuurt een factuur naar de gekoppelde boekhouding. Doet niets — en maakt geen
+ * netwerkaanroep — als de provider niet gekoppeld is. Zonder deze guard gaf elke
+ * "factuur op betaald"-actie een 400 in de console voor de provider die de klant
+ * niet gebruikt.
+ */
+export async function syncFactuurNaarBoekhouding(factuurId) {
+  const [mb, ss] = await Promise.all([isGekoppeld('moneybird'), isGekoppeld('snelstart')])
+  const taken = []
+  if (mb) taken.push(syncFactuurNaarMoneybird(factuurId))
+  if (ss) taken.push(syncFactuurNaarSnelStart(factuurId))
+  if (!taken.length) return { skipped: true }
+  return Promise.allSettled(taken)
+}
+
 export async function syncFactuurNaarMoneybird(factuurId) {
   const { data, error } = await supabase.functions.invoke('moneybird-sync-factuur', {
     body: { factuur_id: factuurId },

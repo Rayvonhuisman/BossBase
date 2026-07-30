@@ -37,8 +37,11 @@ import DemoPage from './pages/DemoPage.jsx';
 import { SuperAdminPage } from './pages/SuperAdminPage.jsx';
 import { createMissingProfile, getSession, logout, onAuthStateChange } from './services/authService.js';
 import { getCurrentUserContext } from './services/profileService.js';
+import { getPlanStatus, fallbackPlanStatus } from './services/planService.js';
 import { getUserPermissions } from './services/permissionsService.js';
 import { usePermissions } from './hooks/usePermissions.js';
+import { usePlan } from './hooks/usePlan.js';
+import { featureLabel } from './lib/features.js';
 import { clearCompanyId, setCompanyId } from './lib/currentCompany.js';
 import { ToastProvider, useToast } from './lib/toast.jsx';
 import { UploadProvider } from './lib/uploadContext.jsx';
@@ -82,18 +85,26 @@ const NAV = [
   { id: 'customers',   label: 'Klanten',      icon: 'cust',    section: 'main' },
   { id: 'activities',  label: 'Activiteiten', icon: 'act',     section: 'main' },
   { id: 'calendar',    label: 'Agenda',        icon: 'cal',     section: 'work' },
-  { id: 'planning',    label: 'Planning',      icon: 'planning',section: 'work', permission: 'planning' },
+  { id: 'planning',    label: 'Planning',      icon: 'planning',section: 'work', permission: 'planning', feature: 'planning' },
   { id: 'projecten',   label: 'Projecten',     icon: 'projects',section: 'work' },
   { id: 'werkbonnen',  label: 'Werkbonnen',    icon: 'wo',      section: 'work' },
   { id: 'uren',        label: 'Uren',          icon: 'hours',   section: 'work' },
   { id: 'offertes',    label: 'Offertes',      icon: 'quotes',  section: 'finance', permission: 'offertes' },
   { id: 'facturen',    label: 'Facturen',      icon: 'brief',   section: 'finance', permission: 'facturen' },
-  { id: 'costs',       label: 'Kosten',        icon: 'euro',    section: 'finance', permission: 'kosten' },
+  { id: 'costs',       label: 'Kosten',        icon: 'euro',    section: 'finance', permission: 'kosten', feature: 'kosten_nacalculatie' },
   { id: 'revenue',     label: 'Financiën',     icon: 'chart',   section: 'finance', permission: 'bedrijfsfinancien' },
   { id: 'database',    label: 'Database',      icon: 'db',      section: 'bedrijf', permission: 'database' },
   { id: 'team',        label: 'Team',          icon: 'team',    section: 'bedrijf', permission: 'team' },
   { id: 'instellingen',label: 'Instellingen',  icon: 'settings',section: 'bedrijf', permission: 'instellingen' },
 ];
+
+// Pagina's die een feature uit de abonnementsmatrix vereisen. Los van de
+// rechten: een recht zegt "mag deze gebruiker het", een feature zegt "zit het in
+// dit abonnement". Beide moeten kloppen.
+const PLAN_GATED_PAGES = {
+  planning: 'planning',
+  costs:    'kosten_nacalculatie',
+};
 
 // Pagina's die een bepaald recht vereisen voor toegang
 const PROTECTED_PAGES = {
@@ -120,6 +131,7 @@ const SECTIONS = [
 // ── SIDEBAR ──────────────────────────────────────────────────
 function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loading, onOpenProfile, badges = {}, collapsed, onToggleCollapsed }) {
   const { can } = usePermissions();
+  const plan = usePlan();
   const go = id => { setPage(id); onClose(); };
   const initials = profileInitials(profile, user);
   const name = displayName(profile, user);
@@ -192,6 +204,8 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loadin
             const items = NAV.filter(n => {
               if (n.section !== sec.id) return false;
               if (n.permission && !can(n.permission)) return false;
+              // Zit de pagina niet in dit abonnement, dan tonen we hem niet.
+              if (n.feature && !plan.has(n.feature)) return false;
               return true;
             });
             if (items.length === 0) return null;
@@ -356,6 +370,13 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
           <div className="search">
             {I.search}
             <input
+              // Chrome vulde hier het e-mailadres in omdat het veld op een
+              // ingelogde pagina staat zonder autocomplete-hint.
+              type="search"
+              name="bb-zoeken"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck="false"
               placeholder="Zoeken op klant, deal of activiteit…"
               value={search}
               onFocus={() => { if (!searchData.customers.length) loadSearchData(); setOpenMenu('search'); }}
@@ -646,9 +667,10 @@ function CalEventDrawer({ eventId, onClose, setPage, openCustomer, openDeal }) {
 // ── MOBILE MEER MENU ─────────────────────────────────────────
 function MeerMenu({ page, onNavigate, onClose, profile }) {
   const { can } = usePermissions();
+  const plan = usePlan();
 
   const financeItems = [
-    can('kosten')     && { id: 'costs',    label: 'Kosten',    icon: I.costs },
+    can('kosten') && plan.has('kosten_nacalculatie') && { id: 'costs', label: 'Kosten', icon: I.costs },
     can('bedrijfsfinancien') && { id: 'revenue',  label: 'Financiën', icon: I.chart },
     can('facturen')   && { id: 'facturen', label: 'Facturen',  icon: I.brief },
     can('offertes')   && { id: 'offertes', label: 'Offertes',  icon: I.quotes },
@@ -812,6 +834,9 @@ function AppInner() {
   const [profileError,   setProfileError]   = useState(null);
   const [userPermissions, setUserPermissions] = useState([]);
   const [permissionsLoaded, setPermissionsLoaded] = useState(false);
+  // Abonnementsstand (features, modules, limieten + huidige stand). Komt uit
+  // get_plan_status() — dezelfde bron die de server-side RLS gebruikt.
+  const [planStatus, setPlanStatus] = useState(null);
   const [repairing,  setRepairing]  = useState(false);
   const [openProfile, setOpenProfile] = useState(false);
   const [globalLeadModal, setGlobalLeadModal] = useState(false);
@@ -910,6 +935,18 @@ function AppInner() {
       setPermissionsLoaded(true);
       authLog('permissionsLoaded = true');
 
+      // Abonnementsstand. Lukt de RPC niet, dan valt de UI terug op de lokale
+      // matrix voor het bekende tier — de server blijft hoe dan ook de waarheid.
+      if (ctx.profile?.companyId) {
+        try {
+          setPlanStatus(await getPlanStatus());
+        } catch {
+          setPlanStatus(fallbackPlanStatus(ctx.company?.tier));
+        }
+      } else {
+        setPlanStatus(null);
+      }
+
       if (ctx.profileError) {
         if (import.meta?.env?.DEV) console.warn('[bb:profile] error:', ctx.profileError);
         setProfileError(ctx.profileError);
@@ -954,6 +991,7 @@ function AppInner() {
       setUser(null); setProfile(null); setCompany(null); setProfileError(null);
       setUserPermissions([]);
       setPermissionsLoaded(false);
+      setPlanStatus(null);
       clearCompanyId();
     }
   }, [session, refreshProfile]);
@@ -1149,6 +1187,17 @@ function AppInner() {
     return () => { alive = false; };
   }, [session, refreshKey]);
 
+  // Limietstanden meeverversen. Na elke bumpRefresh (nieuwe offerte, factuur,
+  // klant…) klopt "offerte 7 van 20" weer met de werkelijkheid.
+  useEffect(() => {
+    if (!session || !profile?.companyId) return;
+    let alive = true;
+    getPlanStatus()
+      .then(st => { if (alive && st) setPlanStatus(st); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [session, refreshKey, profile?.companyId]);
+
   const dataApi = useMemo(() => ({
     customers: globalCustomers,
     deals: globalDeals,
@@ -1180,7 +1229,7 @@ function AppInner() {
   }, [showProfileFetchError, profileError, toast]);
 
   const profileApi = useMemo(() => ({
-    user, profile, company, userPermissions, permissionsLoaded,
+    user, profile, company, userPermissions, permissionsLoaded, planStatus,
     loading: profileLoading,
     error: profileError,
     refresh: refreshProfile,
@@ -1188,9 +1237,11 @@ function AppInner() {
     repairProfile,
     requestNewLead, requestNewActivity, bumpRefresh,
     refreshKey,
-  }), [user, profile, company, userPermissions, permissionsLoaded, profileLoading, profileError, refreshProfile, repairProfile, requestNewLead, requestNewActivity, bumpRefresh, refreshKey]);
+  }), [user, profile, company, userPermissions, permissionsLoaded, planStatus, profileLoading, profileError, refreshProfile, repairProfile, requestNewLead, requestNewActivity, bumpRefresh, refreshKey]);
 
-  // Route-beveiliging: redirect naar dashboard als gebruiker geen toegang heeft
+  // Route-beveiliging: redirect naar dashboard als gebruiker geen toegang heeft.
+  // Twee onafhankelijke gates: het rechtensysteem (mag deze gebruiker het?) en
+  // de abonnementsmatrix (zit het in dit pakket?).
   useEffect(() => {
     if (!profile || !permissionsLoaded) return;
     const isAdmin = profile.role === 'admin';
@@ -1198,8 +1249,14 @@ function AppInner() {
     if (requiredPerm && !isAdmin && !userPermissions.includes(requiredPerm)) {
       toast.error('Je hebt geen toegang tot deze pagina');
       navigatePage('dashboard');
+      return;
     }
-  }, [page, profile, userPermissions, permissionsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+    const requiredFeature = PLAN_GATED_PAGES[page];
+    if (requiredFeature && planStatus && !planStatus.features.includes(requiredFeature)) {
+      toast.error(`${featureLabel(requiredFeature)} zit niet in je abonnement`);
+      navigatePage('dashboard');
+    }
+  }, [page, profile, userPermissions, permissionsLoaded, planStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const renderPage = () => {
     const props = { setPage: navigatePage, openCustomer, openDeal, openInvoice, openCalendarEvent };

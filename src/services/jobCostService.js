@@ -91,6 +91,35 @@ export function mapJobCostFormToPayload(input = {}) {
 
 const isMateriaal = cat => (cat || '').trim().toLowerCase() === 'materiaal'
 
+// Kostencategorieën worden met hoofdletter opgeslagen ('Materiaal', 'Inkoopfactuur',
+// 'Gereedschap', …). De KPI-tegels vergeleken op kleine letters en matchten dus
+// nooit — vandaar €0 terwijl het totaal wél klopte.
+//
+// Deze indeling is de enige bron voor het groeperen van kosten. Alles wat niet in
+// een genoemde groep valt komt in 'overig', zodat de groepen altijd optellen tot
+// het totaal — ook als er later een nieuwe categorie bijkomt.
+export const KOSTEN_GROEPEN = [
+  { id: 'materiaal',  label: 'Materiaalkosten', categorieen: ['materiaal'] },
+  { id: 'arbeid',     label: 'Arbeidskosten',   categorieen: ['arbeid', 'arbeidskosten', 'uren'] },
+  { id: 'reiskosten', label: 'Reiskosten',      categorieen: ['reiskosten', 'reis', 'brandstof', 'km'] },
+  { id: 'overig',     label: 'Overige kosten',  categorieen: [] }, // vangnet
+]
+
+const GROEP_PER_CATEGORIE = KOSTEN_GROEPEN.reduce((acc, g) => {
+  g.categorieen.forEach(c => { acc[c] = g.id })
+  return acc
+}, {})
+
+/** Naar welke KPI-groep hoort deze kostencategorie? Onbekend → 'overig'. */
+export const kostenGroepVan = cat => GROEP_PER_CATEGORIE[(cat || '').trim().toLowerCase()] || 'overig'
+
+/** Telt een lijst kosten op per groep. Geeft { materiaal, arbeid, reiskosten, overig }. */
+export function kostenPerGroep(kosten = []) {
+  const totalen = Object.fromEntries(KOSTEN_GROEPEN.map(g => [g.id, 0]))
+  for (const k of kosten) totalen[kostenGroepVan(k.cat ?? k.category)] += Number(k.amt ?? k.amount) || 0
+  return totalen
+}
+
 export const toJobCost = row => ({
   id: row.id,
   dealId: row.deal_id,
@@ -104,8 +133,12 @@ export const toJobCost = row => ({
   // amount is exclusief BTW; btw-bedrag en incl. worden hieruit afgeleid.
   btwPercentage: row.btw_percentage != null ? Number(row.btw_percentage) : 21,
   date: row.cost_date || row.created_at?.slice(0, 10) || "",
-  // Best-effort linkage to a customer via the deal — populated by joins where needed.
-  custId: row.deals?.customer_id ?? null,
+  // Klantkoppeling: de eigen customer_id-kolom is leidend; de deal-join is de
+  // terugval voor oudere rijen die alleen via een deal aan een klant hangen.
+  // Stond hier eerder alleen de deal-join, waardoor kosten die rechtstreeks aan
+  // een klant hangen (zonder deal) nergens meetelden — vandaar €0 in de
+  // Financiën-tabel per klant en in het klantfilter op de Kosten-pagina.
+  custId: row.customer_id ?? row.deals?.customer_id ?? null,
   customerId: row.customer_id || null,
   bijlageUrl: row.bijlage_url || null,
   klantType: row.klant_type || 'klant',

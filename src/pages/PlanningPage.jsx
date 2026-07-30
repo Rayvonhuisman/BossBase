@@ -21,6 +21,7 @@ import { MemberMultiSelect } from '../components/MemberMultiSelect.jsx';
 import { AssigneeResponsibleSelect } from '../components/AssigneeResponsibleSelect.jsx';
 import { supabase } from '../lib/supabase.js';
 import { NoteEditor } from '../components/NoteEditor.jsx';
+import { lokaleDatum } from '../lib/datumTijd.js';
 
 // ── TIJDLIJN CONSTANTEN ───────────────────────────────────────────────────────
 
@@ -46,7 +47,10 @@ function getMonday(date = new Date()) {
   return d;
 }
 function addDays(date, n) { const d = new Date(date); d.setDate(d.getDate() + n); return d; }
-function toISO(d) { return d.toISOString().slice(0, 10); }
+// Was `d.toISOString().slice(0,10)`: dat gaf de UTC-dag, en omdat getMonday op
+// lokale middernacht staat (22:00 UTC de dag ervoor) schoof het weekbereik een
+// dag terug. lokaleDatum rekent wel naar de Nederlandse dag.
+function toISO(d) { return lokaleDatum(d); }
 
 function fmtWeekRange(monday) {
   const sunday = addDays(monday, 6);

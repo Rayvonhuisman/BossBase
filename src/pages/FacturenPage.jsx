@@ -4,7 +4,8 @@ import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
-import { useProfile, useTier } from '../lib/profileContext.jsx';
+import { useProfile } from '../lib/profileContext.jsx';
+import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
 import { createFactuurPaymentLink, getStripeConnection } from '../services/stripeService.js';
 import {
   getFacturen, createFactuur, updateFactuur, deleteFactuur,
@@ -482,9 +483,10 @@ function CrediteerModal({ factuur, regels, onClose, onSuccess }) {
       ...r,
       aantal: Number(r.aantalCredit),
       eenheidsprijs: Math.abs(Number(r.prijsCredit)),
-      regelprijs: r.type === 'vast'
-        ? Math.abs(Number(r.prijsCredit))
-        : Number(r.aantalCredit) * Math.abs(Number(r.prijsCredit)),
+      // Ook hier geldt: aantal × prijs, voor élk type. Type 'vast' ("Overig")
+      // heeft sinds regelTypes.js een echt aantal — de oude uitzondering
+      // crediteerde daardoor te weinig.
+      regelprijs: Number(r.aantalCredit) * Math.abs(Number(r.prijsCredit)),
     }));
     if (!teCrediteren.length) { toast.error('Selecteer minimaal één regel'); return; }
     setSaving(true);
@@ -576,14 +578,16 @@ function CrediteerModal({ factuur, regels, onClose, onSuccess }) {
                     <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.omschrijving}</div>
                     <div style={{ fontSize: 11, color: 'var(--dl)' }}>{typeCfg(r.type).label}</div>
                   </div>
-                  {r.type !== 'vast' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end' }}>
-                      <label style={{ fontSize: 10, color: 'var(--dl)' }}>Aantal</label>
-                      <input type="number" min="0" step="0.01" value={r.aantalCredit} disabled={!r.selected}
-                        onChange={e => setSelectedRegels(prev => prev.map((sr, si) => si === i ? { ...sr, aantalCredit: e.target.value } : sr))}
-                        style={{ width: 72 }} />
-                    </div>
-                  )}
+                  {/* Aantal voor élk type tonen: "Overig" (type 'vast') heeft een
+                      echt aantal, net als in de regel-editor. Stond het veld
+                      verborgen, dan kon je bij deels crediteren het aantal niet
+                      aanpassen. */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end' }}>
+                    <label style={{ fontSize: 10, color: 'var(--dl)' }}>Aantal</label>
+                    <input type="number" min="0" step="0.01" value={r.aantalCredit} disabled={!r.selected}
+                      onChange={e => setSelectedRegels(prev => prev.map((sr, si) => si === i ? { ...sr, aantalCredit: e.target.value } : sr))}
+                      style={{ width: 72 }} />
+                  </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end' }}>
                     <label style={{ fontSize: 10, color: 'var(--dl)' }}>Prijs</label>
                     <input type="number" min="0" step="0.01" value={r.prijsCredit} disabled={!r.selected}
@@ -610,6 +614,11 @@ function CrediteerModal({ factuur, regels, onClose, onSuccess }) {
 
 function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }) {
   const { company, profile } = useProfile();
+  // Betaalherinneringen zijn een feature (Groei+). Zonder die feature tonen we
+  // de knoppen niet; server-side blokkeert een trigger op facturen het zetten
+  // van herinnering_*_verstuurd_at alsnog.
+  const { plan, guardFeature, planModal } = usePlanGuard();
+  const kanHerinneren = plan.has('betaalherinneringen');
   const canManage = profile?.role === 'admin' || profile?.role === 'planner';
   const canCrediteer = canManage && (factuur.status === 'verzonden' || factuur.status === 'betaald') && !factuur.gecrediteerd && !factuur.isCredit;
   const customerName = factuur.customerName || customers.find(c => c.id == factuur.customerId)?.name || '—';
@@ -727,11 +736,11 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }
             <button className="btn btn-s" onClick={() => { onClose(); onSendMail(factuur, 'factuur'); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={14} /> Verstuur per mail</button>
           )}
           {onSendMail && canManage && isOverdue && !factuur.herinnering1VerstuurdAt && (
-            <button className="btn btn-ghost btn-sm" onClick={() => { onClose(); onSendMail(factuur, 'herinnering_1'); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <button className="btn btn-ghost btn-sm" onClick={guardFeature('betaalherinneringen', () => { onClose(); onSendMail(factuur, 'herinnering_1'); })} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, opacity: kanHerinneren ? 1 : .6 }}>
               <Send size={13} /> Herinnering 1 sturen
             </button>
           )}
-          {onSendMail && canManage && isOverdue && factuur.herinnering1VerstuurdAt && !factuur.herinnering2VerstuurdAt && (
+          {onSendMail && canManage && isOverdue && kanHerinneren && factuur.herinnering1VerstuurdAt && !factuur.herinnering2VerstuurdAt && (
             <button className="btn btn-ghost btn-sm" onClick={() => { onClose(); onSendMail(factuur, 'herinnering_2'); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
               <Send size={13} /> Herinnering 2 sturen
             </button>
@@ -758,6 +767,7 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }
           onSuccess={() => { onRefresh?.(); onClose(); }}
         />
       )}
+      {planModal}
     </div>
   );
 }
@@ -766,7 +776,10 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }
 
 export function SendFactuurMailModal({ factuur, customers, company, templateType = 'factuur', onClose, onSent }) {
   const toast = useToast();
-  const tier = useTier();
+  // Stripe-betaallink is een feature uit de centrale matrix (Team, of module bij
+  // Groei). De edge functions checken hem óók server-side.
+  const { plan } = usePlanGuard();
+  const stripeAllowed = plan.has('stripe_betaallink');
   const [form, setForm] = useState({ to: '', subject: '', body: '' });
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -780,11 +793,11 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
   useEffect(() => {
     let alive = true;
     (async () => {
-      // Stripe actief? (koppeling live + Groei/Team) → bepaalt de {{betaalinstructie}}-
+      // Stripe actief? (koppeling live + feature) → bepaalt de {{betaalinstructie}}-
       // variant. De overmaak-optie blijft altijd genoemd; bij Stripe komt online
       // betalen als hoofdroute erbij.
       let stripeActive = false;
-      if (tier === 'groei' || tier === 'team') {
+      if (stripeAllowed) {
         try { const conn = await getStripeConnection(); stripeActive = !!conn?.chargesEnabled; } catch { /* geen koppeling */ }
       }
       const vars = {
@@ -829,12 +842,12 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
       } catch (pdfErr) {
         console.warn('PDF bijlage genereren mislukt:', pdfErr.message);
       }
-      // Stripe iDEAL-betaallink ophalen — alleen bij Groei/Team. De edge function
+      // Stripe iDEAL-betaallink ophalen — alleen met de feature. De edge function
       // checkt zelf of de koppeling actief is en of er een bedrag is; bij twijfel
       // (of een fout) krijgen we geen URL en versturen we gewoon zonder knop. De
       // verzending mag NOOIT klappen door een Stripe-fout.
       let payUrl = null;
-      if (tier === 'groei' || tier === 'team') {
+      if (stripeAllowed) {
         try { payUrl = await createFactuurPaymentLink(factuur.id); }
         catch (e) { console.warn('Betaallink aanmaken mislukt:', e.message); }
       }
@@ -931,6 +944,9 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
   const [viewFactuur, setViewFactuur] = useState(null);
   const [crediteerData, setCrediteerData] = useState(null);
   const [sendMailFactuur, setSendMailFactuur] = useState(null);
+  // Factuurlimiet per facturatieperiode. Creditfacturen tellen niet mee en
+  // lopen dus niet door deze gate (zie CrediteerModal).
+  const { guardLimiet, planModal } = usePlanGuard();
 
   const load = () => {
     setLoading(true);
@@ -1021,11 +1037,14 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
       <div className="page-hd afu">
         <div>
           <h1>Facturen</h1>
+          <p style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <PlanStand limiet="facturen" />
+          </p>
           {error && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 4 }}>{error}</div>}
         </div>
         <div className="page-hd-actions">
           {canManage && (
-            <button className="btn btn-p" onClick={() => setShowNew(true)}>
+            <button className="btn btn-p" onClick={guardLimiet('facturen', () => setShowNew(true))}>
               {I.plus} Nieuwe factuur
             </button>
           )}
@@ -1160,6 +1179,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
           onSendMail={(f, type) => { setSendMailFactuur({ factuur: f, templateType: type || 'factuur' }); setViewFactuur(null); }}
         />
       )}
+      {planModal}
       {crediteerData && (
         <CrediteerModal
           factuur={crediteerData.factuur}

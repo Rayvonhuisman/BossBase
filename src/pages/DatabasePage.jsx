@@ -8,14 +8,17 @@ import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { useUrlTab } from '../hooks/useUrlTab.js';
 import { listCustomers, deleteCustomer } from '../services/customerService.js';
-import { getFacturen, getFactuurRegels } from '../services/factuurService.js';
-import { getOffertes, getOfferteItems } from '../services/offerteService.js';
+import { getFacturen, getFactuurRegels, FACTUUR_STATUS_OPTIONS } from '../services/factuurService.js';
+import { getOffertes, getOfferteItems, OFFERTE_STATUS_OPTIONS } from '../services/offerteService.js';
 import { getOffertePdfBase64, getFactuurPdfBase64 } from '../utils/generatePdf.js';
-import { getProjects, PROJECT_STATUS } from '../services/projectsService.js';
+import { getProjects, PROJECT_STATUS, PROJECT_STATUS_OPTIONS } from '../services/projectsService.js';
 import { statusInfo } from '../utils/statusColors.js';
 import { listDeals, listPipelineStages } from '../services/dealService.js';
 import { getLostReasons } from '../services/lostReasonService.js';
-import { listActivities } from '../services/activityService.js';
+import { listActivities, ACTIVITEIT_TYPE_LABELS } from '../services/activityService.js';
+// De typen die de app daadwerkelijk kan wegschrijven (ALLOWED_TYPES in activityService);
+// de labelmap bevat daarnaast varianten die alleen voor weergave van oude data bestaan.
+const ACTIVITEIT_FILTER_TYPEN = ['call', 'email', 'visit', 'task', 'follow'];
 import { getEmailTemplates } from '../services/instellingenService.js';
 import { sendEmail, logSentEmail, substituteVars } from '../services/emailService.js';
 import { NoteEditor } from '../components/NoteEditor.jsx';
@@ -247,13 +250,13 @@ function FilterBar({ quickTab, setQuickTab, searchQuery, setSearchQuery, filters
     { id: 'lopend_project', label: 'Lopend project' },
   ];
   const stadOptions = [{ value: '', label: 'Alle steden' }, ...stadsUniek.map(s => ({ value: s, label: s }))];
+  // Uit PROJECT_STATUS_OPTIONS — dezelfde bron als de projectenpagina. Stond hier
+  // eerder handmatig, met 'in_uitvoering' (bestaat niet; heet 'lopend') en twee
+  // statussen die de app nooit wegschrijft. Een klant met een lopend project gaf
+  // daardoor 0 resultaten.
   const projectStatusOptions = [
     { value: '', label: 'Alle statussen' },
-    { value: 'in_uitvoering', label: 'In uitvoering' },
-    { value: 'afgerond', label: 'Afgerond' },
-    { value: 'concept', label: 'Concept' },
-    { value: 'gepauzeerd', label: 'Gepauzeerd' },
-    { value: 'geannuleerd', label: 'Geannuleerd' },
+    ...PROJECT_STATUS_OPTIONS.map(s => ({ value: s.id, label: s.label })),
   ];
   const contactOptions = [
     { value: '', label: 'Alle periodes' },
@@ -1066,9 +1069,15 @@ export function DatabasePage({ openCustomer }) {
   const active       = hasActiveFilters(filters) || quickTab !== 'alle' || Boolean(searchQuery);
   const stadsUniek   = useMemo(() => [...new Set(customers.map(c => c.city).filter(Boolean))].sort(), [customers]);
   const templateTypes = [...new Set(templates.map(t => t.type))];
-  const OFFERTE_STATUSSEN  = [{ id: 'concept', label: 'Concept' }, { id: 'verzonden', label: 'Verzonden' }, { id: 'geaccepteerd', label: 'Geaccepteerd' }, { id: 'afgewezen', label: 'Afgewezen' }];
-  const FACTUUR_STATUSSEN  = [{ id: 'aangemaakt', label: 'Aangemaakt' }, { id: 'verzonden', label: 'Verzonden' }, { id: 'betaald', label: 'Betaald' }];
-  const ACTIVITEIT_TYPEN   = [{ id: 'call', label: 'Bellen' }, { id: 'email', label: 'E-mail' }, { id: 'visit', label: 'Bezoek' }, { id: 'task', label: 'Taak' }, { id: 'follow', label: 'Follow-up' }];
+  // Alle drie uit de servicelaag, niet meer handmatig herhaald.
+  // Factuur had hier 'aangemaakt' (komt in de database niet voor) en miste
+  // 'concept'; activiteit gebruikte het label 'Follow-up' waar de rest van de
+  // app 'Opvolgen' toont.
+  const OFFERTE_STATUSSEN  = OFFERTE_STATUS_OPTIONS;
+  const FACTUUR_STATUSSEN  = FACTUUR_STATUS_OPTIONS;
+  const ACTIVITEIT_TYPEN   = Object.entries(ACTIVITEIT_TYPE_LABELS)
+    .filter(([id]) => ACTIVITEIT_FILTER_TYPEN.includes(id))
+    .map(([id, label]) => ({ id, label }));
   const PROJECT_STATUSSEN  = Object.entries(PROJECT_STATUS).map(([id, v]) => ({ id, label: v.label }));
   const teamOpties         = teamMembers.map(m => ({ id: m.id, label: m.full_name }));
   // Opties = de instelbare lijst + eventuele reeds opgeslagen redenen die niet

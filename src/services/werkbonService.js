@@ -441,7 +441,14 @@ export async function uploadWerkbonFoto(werkbonId, file, categorie) {
   const payload = await withCompanyId({ werkbon_id: werkbonId, url: path, categorie })
   const { data, error } = await supabase.from("werkbon_fotos").insert(payload).select().single()
   if (error) throw error
-  return toWerkbonFoto(data)
+
+  // Meteen een signed URL teruggeven, net als getWerkbonFotos doet. Zonder dit
+  // kreeg de UI het rauwe opslagpad terug en bleef de thumbnail stuk tot de
+  // pagina werd herladen.
+  const { data: signed } = await supabase.storage
+    .from("werkbon-fotos")
+    .createSignedUrl(path, 3600)
+  return toWerkbonFoto({ ...data, url: signed?.signedUrl || data.url })
 }
 
 export async function deleteWerkbonFoto(id, url) {

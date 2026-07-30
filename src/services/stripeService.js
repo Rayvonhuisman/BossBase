@@ -18,8 +18,22 @@ const toStripeConnection = row => row ? ({
 // Haalt de werkelijke foutmelding uit een edge-function respons (bv. de 403
 // tier-melding) i.p.v. de generieke "non-2xx"-fout van supabase-js.
 async function invokeError(error) {
+  // Edge functions geven bij een fout niet altijd JSON terug. Zonder body bleef
+  // alleen "Edge Function returned a non-2xx status code" over — daar kan een
+  // gebruiker niets mee. We nemen de statuscode mee zodat de melding tenminste
+  // aanwijst wat er misging.
   let msg = error.message
-  try { const b = await error.context?.json(); if (b?.error) msg = b.error } catch { /* geen json body */ }
+  const status = error.context?.status
+  try {
+    const b = await error.context?.json()
+    if (b?.error) msg = b.error
+  } catch {
+    try {
+      const tekst = await error.context?.text?.()
+      if (tekst && tekst.length < 300) msg = tekst
+    } catch { /* geen leesbare body */ }
+  }
+  if (status && !String(msg).includes(String(status))) msg = `${msg} (status ${status})`
   return new Error(msg)
 }
 

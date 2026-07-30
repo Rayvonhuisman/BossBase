@@ -21,6 +21,7 @@ import { getProjectsByCustomer } from '../services/projectsService.js';
 import { NewOfferteModal, OfferteBadge } from './OffertesPage.jsx';
 import { NewFactuurModal, FactuurBadge } from './FacturenPage.jsx';
 import { NewProjectModal, ProjectBadge } from './ProjectsPage.jsx';
+import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
@@ -72,6 +73,9 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   const [showNewOfferte, setShowNewOfferte] = useState(false);
   const [showNewFactuur, setShowNewFactuur] = useState(false);
   const [showNewProject, setShowNewProject] = useState(false);
+  // Offerte-/factuurlimiet: aanmaken vanaf de klantkaart loopt door dezelfde
+  // gate als de overzichtspagina's.
+  const { guardLimiet, planModal } = usePlanGuard();
   const [klantNotities, setKlantNotities] = useState([]);
   const [tijdlijn, setTijdlijn] = useState([]);
   const [newOverzichtText, setNewOverzichtText] = useState('');
@@ -583,7 +587,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Offertes</div>
-              <button onClick={() => setShowNewOfferte(true)} className="btn-plus">{I.plus}</button>
+              <button onClick={guardLimiet('offertes', () => setShowNewOfferte(true))} className="btn-plus">{I.plus}</button>
             </div>
             {cOffertes.length === 0 && <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Geen offertes</div>}
             {cOffertes.map(o => (
@@ -604,7 +608,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Facturen</div>
-              <button onClick={() => setShowNewFactuur(true)} className="btn-plus">{I.plus}</button>
+              <button onClick={guardLimiet('facturen', () => setShowNewFactuur(true))} className="btn-plus">{I.plus}</button>
             </div>
             {cFacturen.length === 0 && <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Geen facturen</div>}
             {cFacturen.map(f => (
@@ -710,7 +714,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
         <div>
           <div className="lsec-hd">
             <div className="lsec-title">Offertes ({cOffertes.length})</div>
-            <button className="btn btn-s btn-sm" onClick={() => setShowNewOfferte(true)}>{I.plus} Nieuwe offerte</button>
+            <button className="btn btn-s btn-sm" onClick={guardLimiet('offertes', () => setShowNewOfferte(true))}>{I.plus} Nieuwe offerte</button>
           </div>
           {cOffertes.length === 0
             ? <div className="lsec-empty">Geen offertes</div>
@@ -736,7 +740,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
         <div>
           <div className="lsec-hd">
             <div className="lsec-title">Facturen ({cFacturen.length})</div>
-            <button className="btn btn-s btn-sm" onClick={() => setShowNewFactuur(true)}>{I.plus} Nieuwe factuur</button>
+            <button className="btn btn-s btn-sm" onClick={guardLimiet('facturen', () => setShowNewFactuur(true))}>{I.plus} Nieuwe factuur</button>
           </div>
           {cFacturen.length === 0
             ? <div className="lsec-empty">Geen facturen</div>
@@ -1089,6 +1093,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
           onSaved={saved => { setFacturen(fs => [saved, ...fs]); setShowNewFactuur(false); }}
         />
       )}
+      {planModal}
       {showNewProject && (
         <NewProjectModal
           customers={[c]}
@@ -1114,6 +1119,10 @@ export function CustomersPage({ openCustomer }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showNew, setShowNew] = useState(false);
+  // Klantlimiet: handmatig aanmaken wordt geblokkeerd bij een bereikte cap.
+  // Inkomende leads (websiteformulier/mail) lopen via de server en komen altijd
+  // binnen — die raakt deze gate niet.
+  const { guardLimiet, planModal } = usePlanGuard();
 
   const reload = () => {
     setLoading(true);
@@ -1142,13 +1151,19 @@ export function CustomersPage({ openCustomer }) {
   return (
     <div>
       <div className="page-hd afu">
-        <div><h1>Klanten</h1><p>{customers.length} klanten in je CRM</p></div>
+        <div>
+          <h1>Klanten</h1>
+          <p style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            {customers.length} klanten in je CRM
+            <PlanStand limiet="klanten" />
+          </p>
+        </div>
         <div className="page-hd-actions">
           <div className="tabs">
             <button className={`tab${view === 'grid' ? ' active' : ''}`} onClick={() => { setView('grid'); localStorage.setItem('customers_view', 'grid'); }}>Kaarten</button>
             <button className={`tab${view === 'table' ? ' active' : ''}`} onClick={() => { setView('table'); localStorage.setItem('customers_view', 'table'); }}>Tabel</button>
           </div>
-          <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>{I.plus} Nieuwe klant</button>
+          <button className="btn btn-p btn-sm" onClick={guardLimiet('klanten', () => setShowNew(true))}>{I.plus} Nieuwe klant</button>
         </div>
       </div>
       {error && <div className="card card-p" style={{ color: '#dc2626', marginBottom: 14 }}>{error}</div>}
@@ -1224,6 +1239,7 @@ export function CustomersPage({ openCustomer }) {
           }}
         />
       )}
+      {planModal}
     </div>
   );
 }

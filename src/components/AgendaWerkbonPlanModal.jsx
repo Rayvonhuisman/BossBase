@@ -5,25 +5,29 @@ import { getWerkbonnen, updateWerkbon } from '../services/werkbonService.js';
 import { upsertWerkbonEvent } from '../services/calendarService.js';
 import { getActiveTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
 import { useToast } from '../lib/toast.jsx';
+import { usePlan } from '../hooks/usePlan.js';
 
-// Werkbon inplannen vanuit de agenda — voor Starter/Groei (die geen planning-
-// pagina hebben). Hergebruikt EXACT dezelfde inplanlogica als de planning-modals
+// Werkbon inplannen vanuit de agenda — voor wie geen planningsmodule heeft.
+// Hergebruikt EXACT dezelfde inplanlogica als de planning-modals
 // (QuickPlanModal): updateWerkbon zet gepland_op/starttijd/eindtijd + toewijzing,
 // upsertWerkbonEvent maakt/werkt het gekoppelde agenda-item (herkomst 'planning').
 // Geen nieuw/parallel systeem — dezelfde service-aanroepen.
 //
-// - Starter: solo → geen persoon-keuze, alles op de ingelogde gebruiker.
-// - Groei: persoon-keuze (zichzelf / de ander / beiden) + verantwoordelijke via
-//   de bestaande AssigneeResponsibleSelect.
+// - Solo (geen gedeelde werkruimte): geen persoon-keuze, alles op de ingelogde
+//   gebruiker.
+// - Gedeelde werkruimte: persoon-keuze (zichzelf / de ander / beiden) +
+//   verantwoordelijke via de bestaande AssigneeResponsibleSelect.
 
 const todayISO = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-export function AgendaWerkbonPlanModal({ tier, currentUserId, currentUserName, defaultDate, onClose, onScheduled }) {
+export function AgendaWerkbonPlanModal({ currentUserId, currentUserName, defaultDate, onClose, onScheduled }) {
   const toast = useToast();
-  const isGroei = tier === 'groei';
+  const plan = usePlan();
+  // Gedeelde werkruimte → je kunt op naam van de ander (of samen) inplannen.
+  const gedeeld = plan.has('gedeelde_werkruimte');
   const selfIds = currentUserId ? [currentUserId] : [];
 
   const [werkbonnen, setWerkbonnen] = useState([]);
@@ -34,9 +38,9 @@ export function AgendaWerkbonPlanModal({ tier, currentUserId, currentUserName, d
   const [date, setDate] = useState(defaultDate || todayISO());
   const [starttijd, setStarttijd] = useState('09:00');
   const [eindtijd, setEindtijd] = useState('11:00');
-  // Groei start leeg (gebruiker kiest); Starter staat vast op zichzelf.
-  const [assignedToIds, setAssignedToIds] = useState(isGroei ? [] : selfIds);
-  const [verantwoordelijkeIds, setVerantwoordelijkeIds] = useState(isGroei ? [] : selfIds);
+  // Gedeelde werkruimte start leeg (gebruiker kiest); solo staat vast op zichzelf.
+  const [assignedToIds, setAssignedToIds] = useState(gedeeld ? [] : selfIds);
+  const [verantwoordelijkeIds, setVerantwoordelijkeIds] = useState(gedeeld ? [] : selfIds);
   const [notifyMail, setNotifyMail] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -45,7 +49,7 @@ export function AgendaWerkbonPlanModal({ tier, currentUserId, currentUserName, d
     setLoading(true);
     Promise.all([
       getWerkbonnen().catch(() => []),
-      isGroei ? getActiveTeamMembers({ includeSelf: true }).catch(() => []) : Promise.resolve([]),
+      gedeeld ? getActiveTeamMembers({ includeSelf: true }).catch(() => []) : Promise.resolve([]),
     ]).then(([wbs, members]) => {
       if (!alive) return;
       // Alleen nog niet ingeplande werkbonnen — zelfde definitie als de Planning:
@@ -55,16 +59,16 @@ export function AgendaWerkbonPlanModal({ tier, currentUserId, currentUserName, d
       setTeamMembers(members || []);
     }).finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [isGroei]);
+  }, [gedeeld]);
 
   const selected = werkbonnen.find(w => w.id === werkbonId) || null;
 
   const submit = async () => {
     if (!werkbonId) { toast.error('Kies een werkbon'); return; }
-    // Starter = solo: alles op de ingelogde gebruiker. Groei: keuze uit de select
+    // Solo: alles op de ingelogde gebruiker. Gedeeld: keuze uit de select
     // (val terug op zichzelf als er niets gekozen is).
-    const assignIds = isGroei ? (assignedToIds.length ? assignedToIds : selfIds) : selfIds;
-    const respIds = isGroei ? (verantwoordelijkeIds.length ? verantwoordelijkeIds : assignIds) : assignIds;
+    const assignIds = gedeeld ? (assignedToIds.length ? assignedToIds : selfIds) : selfIds;
+    const respIds = gedeeld ? (verantwoordelijkeIds.length ? verantwoordelijkeIds : assignIds) : assignIds;
     setSaving(true);
     try {
       const prevIds = (selected?.assignedToIds && selected.assignedToIds.length)
@@ -78,8 +82,8 @@ export function AgendaWerkbonPlanModal({ tier, currentUserId, currentUserName, d
         assigned_to_ids: assignIds,
         verantwoordelijke_ids: respIds,
       });
-      // 2) Notificeer nieuw toegewezen collega's (alleen zinvol bij Groei).
-      if (isGroei) {
+      // 2) Notificeer nieuw toegewezen collega's (alleen zinvol bij een gedeelde werkruimte).
+      if (gedeeld) {
         notifyNewAssignees({
           userIds: assignIds, prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail,
           type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${selected?.titel || 'een werkbon'}`,
@@ -150,7 +154,7 @@ export function AgendaWerkbonPlanModal({ tier, currentUserId, currentUserName, d
               <input type="time" value={eindtijd} onChange={e => setEindtijd(e.target.value)} />
             </div>
           </div>
-          {isGroei && (
+          {gedeeld && (
             <AssigneeResponsibleSelect
               members={teamMembers}
               assignedIds={assignedToIds}

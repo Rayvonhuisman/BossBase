@@ -2,6 +2,18 @@ import { supabase } from "../lib/supabase"
 import { withCompanyId } from "../lib/currentCompany"
 import { logTijdlijnSafe } from "./klantTijdlijnService"
 
+// Canonieke offerte-statussen. Enige bron voor filter- en keuzelijsten, zodat
+// die niet uit elkaar lopen met wat er daadwerkelijk wordt weggeschreven.
+// Weergavekleur/-label komt uit utils/statusColors.js (domein 'offerte').
+export const OFFERTE_STATUS = {
+  concept:      'Concept',
+  verzonden:    'Verzonden',
+  geaccepteerd: 'Geaccepteerd',
+  afgewezen:    'Afgewezen',
+}
+export const OFFERTE_STATUS_OPTIONS = Object.entries(OFFERTE_STATUS).map(([id, label]) => ({ id, label }))
+
+
 // DB columns: id, company_id, customer_id, deal_id, nummer, omschrijving, status,
 // arbeidsuren, uurtarief, materiaalkosten, reiskosten, marge_pct, btw_pct,
 // totaal_excl, totaal_incl, geldig_tot, verzonden_op, geaccepteerd_op, notes,
@@ -370,10 +382,18 @@ export async function createOfferteItem(input) {
 
 export async function updateOfferteItem(id, input) {
   const updates = { ...input }
-  // Herbereken subtotaal indien aantal of prijs gewijzigd
+  // Herbereken subtotaal indien aantal of prijs gewijzigd. Beide waarden komen
+  // uit de HUIDIGE rij als ze niet worden meegestuurd — anders zou een update van
+  // alleen de prijs het aantal stilzwijgend als 1 rekenen (en andersom).
   if ("aantal" in updates || "prijs_per" in updates || "prijsPer" in updates) {
-    const aantal = Number(updates.aantal || 1)
-    const prijsPer = Number(updates.prijs_per || updates.prijsPer || 0)
+    const { data: huidig } = await supabase
+      .from("offerte_items").select("aantal, prijs_per").eq("id", id).maybeSingle()
+    const aantal = "aantal" in updates
+      ? Number(updates.aantal || 0)
+      : Number(huidig?.aantal ?? 1)
+    const prijsPer = ("prijs_per" in updates || "prijsPer" in updates)
+      ? Number(updates.prijs_per ?? updates.prijsPer ?? 0)
+      : Number(huidig?.prijs_per ?? 0)
     updates.subtotaal = Math.round(aantal * prijsPer * 100) / 100
     delete updates.prijsPer
     delete updates.offerteId

@@ -15,6 +15,7 @@ import { uploadTeamMemberAvatar, removeTeamMemberAvatar } from '../services/avat
 import { AvatarUpload } from '../components/AvatarUpload.jsx';
 import { getUserPermissions, setUserPermissions } from '../services/permissionsService.js';
 import { AVAILABLE_PERMISSIONS, PERMISSION_GROUPS, WARN_ON_ENABLE } from '../config/permissions.js';
+import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
 
 function TeamAvatar({ member, idx, size = 'sm' }) {
   if (member.avatarUrl) {
@@ -426,6 +427,10 @@ export function TeamPage() {
   const [showInvite, setShowInvite] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
   const [permsMember, setPermsMember] = useState(null);
+  // Gebruikerslimiet + rollen&rechten uit de centrale matrix. Server-side dwingt
+  // een restrictive policy op company_members (limiet) en user_permissions
+  // (feature) hetzelfde af.
+  const { plan, guardLimiet, guardFeature, planModal } = usePlanGuard();
 
   useEffect(() => {
     setLoading(true);
@@ -476,8 +481,16 @@ export function TeamPage() {
     return <span className="badge b-gray">Medewerker</span>;
   };
 
-  const statusBadge = status => {
+  const statusBadge = (status, member) => {
     if (status === 'actief') return <span className="badge b-accepted">Actief</span>;
+    // Mail mislukt? Dan is er niets aangekomen — "Uitgenodigd" zou misleiden.
+    if (status === 'uitgenodigd' && member?.inviteEmailFailedAt) {
+      return (
+        <span className="badge b-red" title={member.inviteEmailError || 'De uitnodigingsmail kon niet worden verstuurd'}>
+          Mail mislukt
+        </span>
+      );
+    }
     if (status === 'uitgenodigd') return <span className="badge b-sent">Uitgenodigd</span>;
     return <span className="badge b-gray">Inactief</span>;
   };
@@ -487,11 +500,14 @@ export function TeamPage() {
       <div className="page-hd afu">
         <div>
           <h1>Team</h1>
-          <p>Teamleden en uitnodigingen</p>
+          <p style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            Teamleden en uitnodigingen
+            <PlanStand limiet="gebruikers" />
+          </p>
         </div>
         <div className="page-hd-actions">
           {isAdmin && (
-            <button className="btn btn-p" onClick={() => setShowInvite(true)}>
+            <button className="btn btn-p" onClick={guardLimiet('gebruikers', () => setShowInvite(true))}>
               {I.plus} Teamlid uitnodigen
             </button>
           )}
@@ -561,7 +577,7 @@ export function TeamPage() {
                     </div>
                   </td>
                   <td>{roleBadge(member.role)}</td>
-                  <td>{statusBadge(member.status)}</td>
+                  <td>{statusBadge(member.status, member)}</td>
                   <td style={{ color: 'var(--dmu)', fontSize: '.83rem' }}>{member.email}</td>
                   <td style={{ color: 'var(--dm)' }}>{member.hoursPerWeek > 0 ? `${member.hoursPerWeek}u` : '—'}</td>
                   <td>
@@ -577,9 +593,9 @@ export function TeamPage() {
                         {member.role !== 'admin' && (
                           <button
                             className="btn btn-ghost btn-sm"
-                            title="Rechten instellen"
-                            onClick={() => setPermsMember(member)}
-                            style={{ fontSize: '.78rem' }}
+                            title={plan.has('rollen_rechten') ? 'Rechten instellen' : 'Rollen & rechten zit niet in je abonnement'}
+                            onClick={guardFeature('rollen_rechten', () => setPermsMember(member))}
+                            style={{ fontSize: '.78rem', opacity: plan.has('rollen_rechten') ? 1 : .6 }}
                           >
                             Rechten
                           </button>
@@ -643,6 +659,7 @@ export function TeamPage() {
           onSaved={() => setPermsMember(null)}
         />
       )}
+      {planModal}
     </div>
   );
 }

@@ -37,6 +37,7 @@ export async function startGoogleCalendarConnect() {
 }
 
 export async function disconnectGoogleCalendar() {
+  vergeetGoogleKoppelingStatus()
   const { error } = await supabase.rpc("google_calendar_disconnect")
   if (error) throw error
   return true
@@ -61,19 +62,49 @@ export async function syncActivityDelete(activityId, googleEventId) {
   return data
 }
 
+// Is Google Agenda gekoppeld? Kort gecachet, zodat de guard hieronder geen
+// extra verkeer oplevert bij elke activiteit-actie.
+let koppelingCache = null // { waarde: boolean, tot: number }
+const KOPPELING_TTL_MS = 60_000
+
+async function isGoogleGekoppeld() {
+  const nu = Date.now()
+  if (koppelingCache && koppelingCache.tot > nu) return koppelingCache.waarde
+  try {
+    const { connected } = await getConnectionStatus()
+    koppelingCache = { waarde: Boolean(connected), tot: nu + KOPPELING_TTL_MS }
+    return koppelingCache.waarde
+  } catch {
+    // Status onbekend → niet syncen. Beter een gemiste sync dan een 401 bij
+    // elke actie.
+    koppelingCache = { waarde: false, tot: nu + KOPPELING_TTL_MS }
+    return false
+  }
+}
+
+/** Wist de cache — aanroepen na (ont)koppelen, zodat de guard direct meebeweegt. */
+export function vergeetGoogleKoppelingStatus() { koppelingCache = null }
+
 // Best-effort auto-sync used by activityService after a successful DB write.
 // Never throws and never blocks the caller: Google being down must not stop
 // the user from creating/updating activities.
+//
+// Eerst een koppelcheck: zonder koppeling gaf elke activiteit-actie een 401 in
+// de console. Niet gekoppeld = niets te syncen, dus niet aanroepen.
 export function autoSyncActivitySafe(activity) {
   try {
     if (!activity?.id || !activity?.dueAt) return // untimed → not synced
-    syncActivity(activity.id, { auto: true }).catch(() => {})
+    isGoogleGekoppeld().then(gekoppeld => {
+      if (gekoppeld) syncActivity(activity.id, { auto: true }).catch(() => {})
+    })
   } catch { /* swallow — non-blocking */ }
 }
 
 export function autoSyncDeleteSafe(activityId, googleEventId) {
   try {
     if (!activityId || !googleEventId) return
-    syncActivityDelete(activityId, googleEventId).catch(() => {})
+    isGoogleGekoppeld().then(gekoppeld => {
+      if (gekoppeld) syncActivityDelete(activityId, googleEventId).catch(() => {})
+    })
   } catch { /* swallow — non-blocking */ }
 }

@@ -6,6 +6,9 @@ export const ProfileContext = createContext({
   profile: null,
   company: null,
   userPermissions: [],
+  // Abonnementsstand uit get_plan_status(): tier, trial, modules, features en
+  // per limiet de stand. Zie usePlan().
+  planStatus: null,
   loading: false,
   error: null,
   refresh: () => {},
@@ -15,11 +18,14 @@ export const ProfileContext = createContext({
 export const useProfile = () => useContext(ProfileContext);
 
 // Abonnementstier van het huidige bedrijf ('starter' | 'groei' | 'team').
-// Nog geen functie-/rechtenverschillen — puur uitleesbaar zodat we straks
-// conditioneel functionaliteit kunnen tonen/verbergen (bv. solo vs team).
+//
+// Let op: gebruik dit NIET om functionaliteit aan of uit te zetten. Daarvoor is
+// usePlan() er — die leest de centrale feature-/limietmatrix (src/lib/features.js)
+// en spiegelt exact wat de server afdwingt. Losse tier-vergelijkingen zoals
+// `tier === 'team'` horen nergens meer in de code te staan.
 export const useTier = () => {
-  const { company } = useProfile();
-  return company?.tier || DEFAULT_TIER;
+  const { company, planStatus } = useProfile();
+  return planStatus?.tier || company?.tier || DEFAULT_TIER;
 };
 
 // Derives the display name in priority order: profile.full_name → user.email

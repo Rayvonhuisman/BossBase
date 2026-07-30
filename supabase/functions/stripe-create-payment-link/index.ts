@@ -2,14 +2,14 @@
 // Levert de PERMANENTE betaallink voor in de factuurmail: https://<app>/betaal/<token>.
 // De link maakt zelf geen (tijdelijke) Checkout Session meer — dat doet de
 // tussenpagina (stripe-pay-link) bij elke klik. Deze functie bepaalt alleen of er
-// een betaalknop mag komen (tier + actieve koppeling + bedrag) en zorgt voor het
+// een betaalknop mag komen (feature + actieve koppeling + bedrag) en zorgt voor het
 // onraadbare betaaltoken op de factuur.
 //
 // Contract (de mail-verzending mag NOOIT klappen door Stripe):
 //   • { url }                       → link naar de betaalpagina → knop in de mail.
 //   • { url: null, reason: '...' }  → geen link (geen/geen actieve koppeling,
 //                                     bedrag 0/onbekend) → mail zonder knop.
-//   • 403                           → verkeerde tier → mail zonder knop.
+//   • 403                           → feature niet in abonnement → mail zonder knop.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { appOrigin } from '../_shared/stripe.ts'
@@ -21,7 +21,8 @@ const CORS = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
 
-const ALLOWED_TIERS = ['groei', 'team']
+// Feature uit de centrale matrix (src/lib/features.js → plan_features).
+const VEREISTE_FEATURE = 'stripe_betaallink'
 
 function genToken(): string {
   const bytes = new Uint8Array(24)
@@ -53,10 +54,10 @@ serve(async (req) => {
     const companyId = profile?.company_id
     if (!companyId) return json({ error: 'Geen bedrijf gekoppeld' }, 400)
 
-    // ── HARDE tier-check ────────────────────────────────────────────────────────
-    const { data: tier } = await userClient.rpc('get_company_tier')
-    if (!ALLOWED_TIERS.includes(String(tier || '').toLowerCase())) {
-      return json({ error: 'Online betalen is beschikbaar vanaf het Groei-abonnement.' }, 403)
+    // ── HARDE feature-check (server-side, centrale matrix) ──────────────────────
+    const { data: heeftFeature } = await userClient.rpc('bb_has_feature', { p_feature: VEREISTE_FEATURE })
+    if (heeftFeature !== true) {
+      return json({ url: null, reason: 'feature_niet_in_abonnement' }, 403)
     }
 
     const body = await req.json().catch(() => ({}))

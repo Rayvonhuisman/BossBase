@@ -1,7 +1,7 @@
 // stripe-connect-start (verify_jwt=true)
 // Start de Stripe Connect onboarding voor het bedrijf van de ingelogde gebruiker:
 //   1. user uit JWT → company_id uit profiles.
-//   2. HARDE tier-check server-side: alleen Groei/Team (via get_company_tier).
+//   2. HARDE feature-check server-side via de centrale matrix (bb_has_feature).
 //   3. Maak (indien nog niet aanwezig) een Standard connected account (v1) en bewaar
 //      het stripe_account_id (acct_…) in stripe_connections.
 //   4. Genereer een Account Link (account_onboarding) en geef de onboarding-URL
@@ -18,8 +18,10 @@ const CORS = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
 
-// Alleen deze tiers mogen een eigen Stripe-account koppelen.
-const ALLOWED_TIERS = ['groei', 'team']
+// Feature uit de centrale matrix (src/lib/features.js → plan_features).
+// Geen tierlijst meer hier: wie de feature heeft — via het pakket of als
+// bijgekochte module — mag koppelen.
+const VEREISTE_FEATURE = 'stripe_betaallink'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
@@ -32,7 +34,7 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization') || ''
     if (!authHeader) return json({ error: 'Niet ingelogd' }, 401)
 
-    // User-context client: bepaalt de aanroeper én laat get_company_tier() met de
+    // User-context client: bepaalt de aanroeper én laat bb_has_feature() met de
     // juiste auth.uid() draaien.
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -47,10 +49,10 @@ serve(async (req) => {
     const companyId = profile?.company_id
     if (!companyId) return json({ error: 'Geen bedrijf gekoppeld' }, 400)
 
-    // ── HARDE tier-check (server-side) ──────────────────────────────────────────
-    const { data: tier } = await userClient.rpc('get_company_tier')
-    if (!ALLOWED_TIERS.includes(String(tier || '').toLowerCase())) {
-      return json({ error: 'Stripe-koppeling is beschikbaar vanaf het Groei-abonnement.' }, 403)
+    // ── HARDE feature-check (server-side, centrale matrix) ──────────────────────
+    const { data: heeftFeature } = await userClient.rpc('bb_has_feature', { p_feature: VEREISTE_FEATURE })
+    if (heeftFeature !== true) {
+      return json({ error: 'Stripe-betalingen horen niet bij je abonnement.' }, 403)
     }
 
     // ── Connected account (Standard) — hergebruik of aanmaken ───────────────────
