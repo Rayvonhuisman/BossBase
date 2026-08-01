@@ -1,7 +1,7 @@
 import { useState, useEffect, Fragment } from "react"
 import { Star } from "lucide-react"
 import { Nav, Footer, Reveal, I, ScrollLine, initChoreo } from "./MktShared"
-import { tierLabel, tierPrice, tierPriceYearly, extraUserLabel, YEARLY_DISCOUNT_LABEL } from "../../lib/tiers.js"
+import { tierLabel, tierPrice, extraUserLabel, YEARLY_FREE_MONTHS, WELKOMSTACTIES, welkomstactiesVoor } from "../../lib/tiers.js"
 import {
   TIER_FEATURES, TIER_LIMITS, ZICHTBARE_FEATURES, MODULES,
   featureLabel, getLimitDef, moduleLabel, modulePrice,
@@ -163,7 +163,7 @@ const CMP_CATS = [
 ]
 
 const FAQ_P = [
-  { q: "Kan ik op elk moment opzeggen?", a: "Ja. Er is geen minimale looptijd. Je kunt maandelijks of jaarlijks betalen. Bij jaarabonnement ontvang je een terugbetaling naar rato bij opzegging." },
+  { q: "Hoe zit het met opzeggen?", a: "Een maandabonnement is per maand opzegbaar. Een jaarabonnement loopt 12 maanden: je betaalt maandelijks en kunt tussentijds niet opzeggen, wel tegen het einde van die 12 maanden. Daarna loopt het maandelijks door en is het per maand opzegbaar." },
   { q: "Wat gebeurt er na de proefperiode?", a: "Na 14 dagen word je gevraagd een abonnement te kiezen. Je data blijft behouden. Je kiest pas dan welk plan het beste bij je past." },
   { q: "Kan ik van plan wisselen?", a: "Ja, upgraden kan direct. Downgraden gaat in aan het begin van je volgende factuurperiode. Er zijn geen extra kosten voor het wisselen van plan." },
   { q: "Is BTW inbegrepen in de prijs?", a: "Nee, de getoonde prijzen zijn exclusief BTW. Als ondernemer kun je de BTW aftrekken als zakelijke kosten." },
@@ -215,7 +215,7 @@ export default function PricingPage({ navigate }) {
                 <button className={!yearly ? "on" : ""} onClick={() => setYearly(false)}>Maandelijks</button>
                 <button className={yearly ? "on" : ""} onClick={() => setYearly(true)}>Jaarlijks</button>
               </div>
-              {yearly && <div className="bill-hook pop">{I.bolt} {YEARLY_DISCOUNT_LABEL}</div>}
+              {yearly && <div className="bill-hook pop">{I.bolt} Kies je welkomstactie</div>}
             </div>
             <Reveal stagger>
               <div className="price-grid-full choreo-body">
@@ -225,8 +225,8 @@ export default function PricingPage({ navigate }) {
                     <div className="tier">{tierLabel(t.id)}</div>
                     <div className="who">{t.who}</div>
                     <div className="amount">
-                      <strong>€ {yearly ? tierPriceYearly(t.id) : tierPrice(t.id)}</strong>
-                      <span>/ maand{yearly ? " (jaarlijks)" : ""}</span>
+                      <strong>€ {tierPrice(t.id)}</strong>
+                      <span>/ maand{yearly ? " · 12 maanden" : ""}</span>
                     </div>
                     <div className="extra-user">{t.hasExtra ? extraUserLabel() : " "}</div>
                     <ul>{t.features.map(f => <li key={f}>{I.check} {f}</li>)}</ul>
@@ -239,6 +239,50 @@ export default function PricingPage({ navigate }) {
                 ))}
               </div>
             </Reveal>
+            {/* Welkomstactie — alleen bij een jaarabonnement, en het is er ÉÉN
+                van de twee. De hostingkosten staan er bewust bij: die horen niet
+                pas bij de mail achteraf te blijken. */}
+            {yearly && (
+              <Reveal>
+                <div style={{ maxWidth: 720, margin: "28px auto 0" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--dmu)", marginBottom: 10, textAlign: "center" }}>
+                    Kies bij een jaarabonnement één welkomstactie
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+                    {WELKOMSTACTIES.map(a => (
+                      <div key={a.key} style={{ border: "1px solid var(--br)", borderRadius: 14, padding: "16px 18px", background: "var(--bg)" }}>
+                        <div style={{ fontWeight: 800, marginBottom: 4 }}>{a.label}</div>
+                        <p style={{ fontSize: 14, color: "var(--dmu)", margin: "0 0 8px" }}>{a.kort}</p>
+                        {a.kortingMaanden > 0 && (
+                          <p style={{ fontSize: 13, color: "var(--dmu)", margin: 0 }}>
+                            Je abonnement start direct — de korting staat op je eerste twee facturen.
+                          </p>
+                        )}
+                        {a.key === 'gratis_website' && (
+                          <p style={{ fontSize: 13, color: "var(--dmu)", margin: 0 }}>
+                            Beschikbaar bij {welkomstactiesVoor('groei').length ? `${tierLabel('groei')} en ${tierLabel('team')}` : ''}.
+                            De website blijft beschikbaar zolang je abonnement loopt.
+                            <strong> Hosting € 5 per maand.*</strong>
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <p style={{ fontSize: 13, color: "var(--dmu)", margin: "12px 0 0", textAlign: "center" }}>
+                    Je kiest er één, niet allebei. Bij een maandabonnement geldt er geen welkomstactie.
+                  </p>
+                  <p style={{ fontSize: 13, color: "var(--dmu)", margin: "6px 0 0", textAlign: "center" }}>
+                    Een jaarabonnement loopt <strong>12 maanden vast</strong> en wordt maandelijks
+                    geïncasseerd. Daarna loopt het maandelijks door en is het per maand opzegbaar.
+                  </p>
+                  <p style={{ fontSize: 12.5, color: "var(--dmu)", margin: "6px 0 0", textAlign: "center" }}>
+                    * De website zelf is gratis; het draaien en onderhouden ervan kost € 5 per maand.
+                    Logo-ontwerp en domeinregistratie zijn optioneel tegen meerprijs.
+                  </p>
+                </div>
+              </Reveal>
+            )}
+
             <Reveal>
               <div style={{ maxWidth: 620, margin: "28px auto 0", textAlign: "center" }}>
                 <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--dmu)", marginBottom: 8 }}>
@@ -259,7 +303,7 @@ export default function PricingPage({ navigate }) {
               </div>
             </Reveal>
             <p style={{ textAlign: "center", marginTop: 20, fontSize: 14, color: "var(--dmu)" }}>
-              Alle prijzen excl. BTW · Geen creditcard nodig · Altijd opzegbaar
+              Alle prijzen excl. BTW · Geen creditcard nodig
             </p>
           </div>
         </div>

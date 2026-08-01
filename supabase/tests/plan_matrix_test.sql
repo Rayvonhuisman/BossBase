@@ -141,9 +141,20 @@ BEGIN
     'Groei hoort 18 features te hebben (Starter + 6 + gedeelde werkruimte)';
   ASSERT (SELECT count(*) FROM public.plan_features WHERE plan = 'team') = 21,
     'Team hoort 21 features te hebben';
-  ASSERT (SELECT count(*) FROM public.plan_modules) = 3, 'Er horen 3 modules te zijn';
+  -- Modules: op naam controleren, niet op aantal — dan breekt de test niet bij
+  -- elke nieuwe module, maar wel als er eentje verdwijnt.
+  ASSERT (SELECT count(*) FROM public.plan_modules
+           WHERE module_key IN ('stripe_betaallink','planning','voertuigen','hosting')) = 4,
+    'De vier bekende modules horen te bestaan';
   ASSERT (SELECT vereist FROM public.plan_modules WHERE module_key = 'voertuigen') = 'planning',
     'Voertuigen kan alleen samen met planning';
+  -- Hosting is een dienst, geen feature-gate: bij Groei én Team te koop.
+  ASSERT (SELECT count(*) FROM public.plan_module_tiers WHERE module_key = 'hosting') = 2,
+    'Hosting is bij twee pakketten bij te kopen';
+  ASSERT EXISTS (SELECT 1 FROM public.plan_module_tiers WHERE module_key = 'hosting' AND plan = 'team'),
+    'Hosting is ook bij Team bij te kopen';
+  ASSERT NOT EXISTS (SELECT 1 FROM public.plan_module_tiers WHERE module_key = 'planning' AND plan = 'team'),
+    'Planning is bij Team inbegrepen en dus niet bij te kopen';
   RAISE NOTICE '  ok  1. matrix geseed';
 END $$;
 
@@ -483,6 +494,10 @@ DECLARE
   c uuid := current_setting('test.company')::uuid;
 BEGIN
   -- 10c. Seed ontbreekt volledig (migratie half gedraaid / tabellen leeg).
+  -- Eerst een kopie bewaren: deze test sloopt gedeelde staat en moet die aan het
+  -- eind terugzetten, anders werkt alles dat hierna draait met een halve matrix.
+  CREATE TEMP TABLE _bewaar_limits  AS SELECT * FROM public.plan_limits;
+  CREATE TEMP TABLE _bewaar_features AS SELECT * FROM public.plan_features;
   DELETE FROM public.plan_limits;
   DELETE FROM public.plan_features;
 
@@ -532,12 +547,12 @@ DECLARE
   v_user uuid := current_setting('test.user')::uuid;
   k      uuid;
 BEGIN
-  -- Matrix herstellen naar de echte waarden voor een eerlijke test.
-  INSERT INTO public.plan_limits (plan, limit_key, limit_value, telwijze) VALUES
-    ('groei', 'gebruikers', 2, 'voorraad'), ('groei', 'klanten', NULL, 'voorraad'),
-    ('groei', 'offertes', NULL, 'periode'), ('groei', 'facturen', NULL, 'periode');
-  INSERT INTO public.plan_features (plan, feature)
-  SELECT 'groei', unnest(ARRAY['klanten','offertes','facturen','crm_pipeline','digitale_handtekening']);
+  -- Matrix VOLLEDIG herstellen uit de kopie van 10c — niet een handvol rijen
+  -- opnieuw invoeren, want dan draait alles hierna met een halve matrix.
+  INSERT INTO public.plan_limits   SELECT * FROM _bewaar_limits;
+  INSERT INTO public.plan_features SELECT * FROM _bewaar_features;
+  DROP TABLE _bewaar_limits;
+  DROP TABLE _bewaar_features;
   UPDATE public.subscriptions SET plan = 'groei', status = 'actief' WHERE company_id = c;
 
   ASSERT public.bb_plan_geconfigureerd(c), 'Configuratie is hersteld';
@@ -567,6 +582,8 @@ DO $$ BEGIN RAISE NOTICE ' '; RAISE NOTICE 'ALLE TESTS GESLAAGD'; END $$;
 -- bereikt.
 SELECT
   'ALLE TESTS GESLAAGD'                                                     AS resultaat,
+  (SELECT count(*) FROM public.plan_features)                               AS matrix_features,
+  (SELECT count(*) FROM public.plan_limits)                                 AS matrix_limieten,
   (SELECT count(*) FROM public.companies)                                   AS bedrijven,
   (SELECT count(*) FROM public.companies c WHERE NOT EXISTS
      (SELECT 1 FROM public.subscriptions s WHERE s.company_id = c.id))      AS zonder_abonnement,

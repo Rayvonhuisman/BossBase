@@ -18,7 +18,11 @@ const MIGRATIE = 'supabase/migrations/20260728120000_plan_matrix.sql'
 const UPGRADE  = 'supabase/migrations/20260728121000_upgrade_requests.sql'
 const FALLBACK = 'supabase/migrations/20260728150000_plan_matrix_fallback.sql'
 const PROVISION= 'supabase/migrations/20260728160000_provision_account_subscription.sql'
+const BILLING  = 'supabase/migrations/20260730120000_stripe_billing.sql'
+const HOSTING  = 'supabase/migrations/20260730121000_plan_matrix_hosting.sql'
+const WELKOM   = 'supabase/migrations/20260730130000_welkomstactie.sql'
 const TEST     = 'supabase/tests/plan_matrix_test.sql'
+const TEST_BIL = 'supabase/tests/billing_test.sql'
 const UIT      = 'supabase/tests/_dryrun_plan_matrix.sql'
 
 // Haalt transactiegrenzen weg die op een eigen regel staan. Alleen regels die
@@ -72,7 +76,9 @@ DO $droogloop$ BEGIN RAISE NOTICE '=== DROOGLOOP GESTART (eindigt op ROLLBACK) =
 ]
 
 console.error('Droogloop bouwen:')
-for (const [pad, naam] of [[MIGRATIE, 'migratie'], [UPGRADE, 'upgrade_requests'], [FALLBACK, 'fallback'], [PROVISION, 'provision_account'], [TEST, 'tests']]) {
+for (const [pad, naam] of [[MIGRATIE, 'migratie'], [UPGRADE, 'upgrade_requests'], [FALLBACK, 'fallback'], [PROVISION, 'provision_account'],
+                            [BILLING, 'stripe_billing'], [HOSTING, 'plan_matrix_hosting'], [WELKOM, 'welkomstactie'],
+                            [TEST, 'tests'], [TEST_BIL, 'billing_tests']]) {
   delen.push(`\n-- ======================= ${naam} (${pad}) =======================\n`)
   delen.push(stripTransacties(readFileSync(pad, 'utf8'), naam))
 }

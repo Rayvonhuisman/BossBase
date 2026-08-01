@@ -12,7 +12,7 @@
 import { writeFileSync } from 'node:fs'
 import { TIER_IDS } from '../src/lib/tiers.js'
 import {
-  FEATURES, TIER_FEATURES, MODULES, MODULE_TIERS, LIMIT_DEFS, TIER_LIMITS,
+  FEATURES, TIER_FEATURES, MODULES, LIMIT_DEFS, TIER_LIMITS,
 } from '../src/lib/features.js'
 
 const q = s => `'${String(s).replace(/'/g, "''")}'`
@@ -57,7 +57,7 @@ w('')
 w('DELETE FROM public.plan_module_tiers;')
 w('INSERT INTO public.plan_module_tiers (plan, module_key) VALUES')
 w(
-  MODULE_TIERS.flatMap(t => MODULES.map(m => `  (${q(t)}, ${q(m.key)})`)).join(',\n') + ';'
+  MODULES.flatMap(m => m.beschikbaarBij.map(t => `  (${q(t)}, ${q(m.key)})`)).join(',\n') + ';'
 )
 w('')
 w('COMMIT;')

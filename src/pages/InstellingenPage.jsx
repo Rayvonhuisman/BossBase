@@ -6,6 +6,7 @@ import { useProfile } from '../lib/profileContext.jsx';
 import { usePlan } from '../hooks/usePlan.js';
 import { PlanUpgradeModal } from '../components/PlanUpgradeModal.jsx';
 import { tierLabel } from '../lib/tiers.js';
+import { AbonnementSectie } from '../components/AbonnementSectie.jsx';
 import { getStripeConnection, startStripeOnboarding, refreshStripeStatus, disconnectStripe } from '../services/stripeService.js';
 import { usePermissions } from '../hooks/usePermissions.js';
 import { useUrlTab } from '../hooks/useUrlTab.js';
@@ -113,7 +114,7 @@ function ColorSwatchPicker({ value, onChange }) {
 }
 
 // Alle mogelijke tab-ids (permissie-onafhankelijk) — weert onbekende ?tab=-waarden.
-const SETTINGS_TAB_IDS = ['profiel', 'bedrijf', 'standaard', 'templates', 'pipeline', 'voertuigen', 'integraties'];
+const SETTINGS_TAB_IDS = ['profiel', 'bedrijf', 'standaard', 'templates', 'pipeline', 'voertuigen', 'abonnement', 'integraties'];
 
 // Logo's van de integratiepartners staan in public/brand en worden vanaf de root
 // geserveerd. De merken hebben sterk verschillende verhoudingen (Stripe ~2,4:1,
@@ -988,6 +989,9 @@ export function InstellingenPage() {
       { id: 'pipeline', label: 'Pipeline' },
       // Voertuigen is een feature uit de matrix (Team, of module bij Groei).
       ...(isAdmin && plan.has('voertuigen') ? [{ id: 'voertuigen', label: 'Voertuigen' }] : []),
+      // Abonnement is voorbehouden aan de eigenaar/admin — een aparte gate
+      // naast het rechtensysteem, want dit gaat over geld en niet over werk.
+      ...(isAdmin ? [{ id: 'abonnement', label: 'Abonnement' }] : []),
       { id: 'integraties', label: 'Integraties' },
     ] : []),
   ];
@@ -2208,6 +2212,8 @@ export function InstellingenPage() {
           </div>
         </div>
       )}
+
+      {!loading && tab === 'abonnement' && isAdmin && <AbonnementSectie />}
 
       {!loading && tab === 'integraties' && (
         <div className="afu3" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

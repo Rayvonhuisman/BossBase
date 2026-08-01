@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { Star } from "lucide-react"
 import { Nav, Footer, ScrollLine, Reveal, Wordmark, I, initChoreo, useReducedMotion, useScrollY } from "./MktShared"
-import { tierLabel, tierPrice, tierPriceYearly, extraUserLabel, EXTRA_USER_PRICE } from "../../lib/tiers.js"
+import { tierLabel, tierPrice, extraUserLabel, EXTRA_USER_PRICE } from "../../lib/tiers.js"
 
 /* ── Float cards (Variant D) ── */
 function CardOfferte() {
@@ -805,9 +805,11 @@ function Pricing({ navigate }) {
                   {t.hot && <span className="hot-badge" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Star size={12} fill="currentColor" /> Meest gekozen</span>}
                   <div className="tier">{tierLabel(t.id)}</div>
                   <div className="who">{t.who}</div>
+                  {/* Jaarabonnement is geen andere prijs: dezelfde maandprijs,
+                      met de eerste twee maanden gratis. */}
                   <div className="amount">
-                    <strong>€ {yearly ? tierPriceYearly(t.id) : tierPrice(t.id)}</strong>
-                    <span>/mnd{yearly ? " (jaarlijks)" : ""}</span>
+                    <strong>€ {tierPrice(t.id)}</strong>
+                    <span>/mnd{yearly ? " · 12 mnd, mét welkomstactie" : ""}</span>
                   </div>
                   <div className="extra-user">{t.extra}</div>
                   <ul>
@@ -838,7 +840,7 @@ function Pricing({ navigate }) {
         </Reveal>
         <Reveal>
           <p className="price-foot">
-            Alle abonnementen 14 dagen gratis te proberen, geen creditcard nodig. Maandelijks opzegbaar.
+            Alle abonnementen 14 dagen gratis te proberen, geen creditcard nodig. Maandabonnement per maand opzegbaar; een jaarabonnement loopt 12 maanden.
           </p>
         </Reveal>
       </div>
@@ -885,7 +887,7 @@ const FAQ_HOME = [
   ["Heb ik technische kennis nodig?",       "Nee. BossBase is gemaakt voor vakmensen, niet voor IT'ers. Als je WhatsApp kunt gebruiken, kun je BossBase gebruiken. Je bent binnen 5 minuten klaar voor je eerste offerte."],
   ["Kan ik mijn eigen logo op offertes zetten?", "Ja. Je uploadt één keer je logo en bedrijfsgegevens, en elke offerte en factuur gaat automatisch in jouw huisstijl de deur uit."],
   ["Werkt het op mijn telefoon?",           "Ja, BossBase werkt op telefoon, tablet en computer. Je medewerkers zien hun werkbonnen gewoon op hun telefoon — niks installeren."],
-  ["Kan ik maandelijks opzeggen?",          "Ja. Geen jaarcontract, geen kleine lettertjes. Je kunt elke maand opzeggen en je gegevens altijd meenemen."],
+  ["Hoe zit het met opzeggen?",             "Een maandabonnement is per maand opzegbaar. Een jaarabonnement loopt 12 maanden en is daarna per maand opzegbaar. Je gegevens kun je meenemen."],
   ["Wat krijg ik bij een jaarabonnement?",  "Bij een jaarabonnement bouwen we gratis een professionele website voor je bedrijf, met een offerteformulier dat direct in je BossBase-pipeline binnenkomt."],
 ]
 
@@ -990,7 +992,7 @@ export default function HomePage({ navigate }) {
               </div>
               <div className="hero-trust">
                 {I.checkCircle}
-                <span>Geen creditcard nodig · binnen 5 minuten klaar · maandelijks opzegbaar</span>
+                <span>Geen creditcard nodig · binnen 5 minuten klaar · maandabonnement per maand opzegbaar</span>
               </div>
               <div className="hero-stats">
                 <div className="hero-stat">

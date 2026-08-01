@@ -1,7 +1,15 @@
 import { useState, useMemo, useEffect } from "react"
 import { Search } from "lucide-react"
 import { Nav, Footer, Reveal, I, ScrollLine, initChoreo } from "./MktShared"
-import { tierLabel, tierPrice, YEARLY_DISCOUNT } from "../../lib/tiers.js"
+import { tierLabel, tierPrice, tierPriceFirstYear, YEARLY_FREE_MONTHS, yearlySavingPct } from "../../lib/tiers.js"
+import { TIER_LIMITS } from "../../lib/features.js"
+
+// "1 gebruiker" / "tot 2 gebruikers" / "onbeperkt gebruikers" uit de matrix.
+const gebruikersTekst = tier => {
+  const max = TIER_LIMITS[tier]?.gebruikers
+  if (max == null) return 'onbeperkt gebruikers'
+  return max === 1 ? '1 gebruiker' : `tot ${max} gebruikers`
+}
 
 const FAQ_DATA = [
   {
@@ -19,8 +27,11 @@ const FAQ_DATA = [
     cat: "Abonnement & betaling",
     icon: I.chart,
     items: [
-      { q: "Welke abonnementen zijn er?", a: `We hebben drie plannen: ${tierLabel('starter')} (€ ${tierPrice('starter')}/maand, 1 gebruiker), ${tierLabel('groei')} (€ ${tierPrice('groei')}/maand, tot 5 gebruikers) en ${tierLabel('team')} (€ ${tierPrice('team')}/maand, tot 15 gebruikers). Jaarlijks betalen geeft meer dan ${Math.round(YEARLY_DISCOUNT * 100)}% korting.` },
-      { q: "Kan ik op elk moment opzeggen?", a: "Ja. Er is geen minimale looptijd bij maandabonnement. Je kunt op elk moment opzeggen en je data meenemen." },
+      // Gebruikersaantallen komen uit de matrix (features.js), niet uit los
+      // opgeschreven tekst — stond hier eerder op "tot 5" en "tot 15" terwijl de
+      // software Groei op 2 zet en Team onbeperkt laat.
+      { q: "Welke abonnementen zijn er?", a: `We hebben drie plannen: ${tierLabel('starter')} (€ ${tierPrice('starter')}/maand, ${gebruikersTekst('starter')}), ${tierLabel('groei')} (€ ${tierPrice('groei')}/maand, ${gebruikersTekst('groei')}) en ${tierLabel('team')} (€ ${tierPrice('team')}/maand, ${gebruikersTekst('team')}). Bij een jaarabonnement zijn de eerste ${YEARLY_FREE_MONTHS} maanden gratis — zo'n ${yearlySavingPct()}% voordeel.` },
+      { q: "Hoe zit het met opzeggen?", a: "Een maandabonnement is per maand opzegbaar. Een jaarabonnement loopt 12 maanden; opzeggen kan tegen het einde daarvan, en daarna loopt het maandelijks door. Je data kun je in beide gevallen meenemen." },
       { q: "Wat zijn de betaalmogelijkheden?", a: "We accepteren iDEAL, creditcard en SEPA-incasso. Jaarabonnementen kunnen ook per factuur worden betaald." },
       { q: "Is BTW inbegrepen in de prijs?", a: "Nee, de getoonde prijzen zijn exclusief BTW. Als ondernemer kun je de BTW aftrekken als zakelijke kosten." },
       { q: "Kan ik van plan wisselen?", a: "Ja, upgraden kan direct. Downgraden gaat in aan het begin van je volgende factuurperiode. Er zijn geen extra kosten voor het wisselen van plan." },

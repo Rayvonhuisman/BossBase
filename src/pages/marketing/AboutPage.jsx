@@ -134,7 +134,7 @@ export default function AboutPage({ navigate }) {
             <Reveal>
               <div className="final-cta">
                 <h2>Klaar om kennis te maken? <span className="green">Begin vandaag.</span></h2>
-                <p>14 dagen gratis. Geen creditcard. Annuleer wanneer je wilt.</p>
+                <p>14 dagen gratis. Geen creditcard nodig.</p>
                 <div className="hero-ctas" style={{ justifyContent: "center" }}>
                   <a href="/registreer" className="btn btn-p glow btn-lg" onClick={e => go(e, "/registreer")}>
                     Gratis proberen {I.arrowRight}

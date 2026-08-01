@@ -46,6 +46,9 @@ export const FEATURES = [
   { key: 'stripe_betaallink',       label: 'Stripe betaallink',           uitleg: 'iDEAL-betaalknop op je facturen via Stripe.' },
   { key: 'voertuigen',              label: 'Voertuigen',                  uitleg: 'Voertuigen beheren en inplannen in de planning.' },
 
+  // Losse dienst, geen onderdeel van een pakket — alleen als bijgekochte module.
+  { key: 'hosting',                 label: 'Website-hosting',             uitleg: 'Wij draaien en onderhouden je bedrijfswebsite.' },
+
   // Intern gedrag — geen verkoopbare functie, wel tier-afhankelijk. Staat hier
   // zodat er nergens meer een losse `tier === '…'`-vergelijking nodig is.
   // `intern: true` houdt het uit prijskaarten en upgrade-meldingen.
@@ -89,26 +92,32 @@ export const TIER_FEATURES = {
 }
 
 // ── MODULES ───────────────────────────────────────────────────────────────────
-// Los bij te kopen — ALLEEN bij Groei. Bij Team zitten ze inbegrepen (staan daar
-// al in TIER_FEATURES); bij Starter zijn ze niet te koop.
+// Los bij te kopen naast het pakket.
 // `vereist` = module die eerst aan moet staan (voertuigen kan alleen mét planning).
+// `beschikbaarBij` = tiers waar de module BIJGEKOCHT kan worden. Staat de feature
+// al in het pakket (Team heeft stripe/planning/voertuigen inbegrepen), dan hoort
+// het tier hier niet in — anders zou je iets kunnen kopen dat je al hebt.
+// Hosting is geen feature-gate maar een dienst (we draaien de website), en is
+// daarom óók bij Team bij te kopen.
 export const MODULES = [
-  { key: 'stripe_betaallink', label: 'Stripe betaallink', price: 10, feature: 'stripe_betaallink', vereist: null },
-  { key: 'planning',          label: 'Planningsmodule',   price: 10, feature: 'planning',          vereist: null },
-  { key: 'voertuigen',        label: 'Voertuigen',        price: 5,  feature: 'voertuigen',        vereist: 'planning' },
+  { key: 'stripe_betaallink', label: 'Stripe betaallink', price: 10, feature: 'stripe_betaallink', vereist: null,       beschikbaarBij: ['groei'] },
+  { key: 'planning',          label: 'Planningsmodule',   price: 10, feature: 'planning',          vereist: null,       beschikbaarBij: ['groei'] },
+  { key: 'voertuigen',        label: 'Voertuigen',        price: 5,  feature: 'voertuigen',        vereist: 'planning', beschikbaarBij: ['groei'] },
+  { key: 'hosting',           label: 'Website-hosting',   price: 5,  feature: 'hosting',           vereist: null,       beschikbaarBij: ['groei', 'team'] },
 ]
 
 export const MODULE_KEYS = MODULES.map(m => m.key)
 
-// Tiers waarbij modules los bijgekocht kunnen worden.
-export const MODULE_TIERS = ['groei']
+// Tiers die überhaupt modules kunnen bijkopen — afgeleid, niet apart onderhouden.
+export const MODULE_TIERS = [...new Set(MODULES.flatMap(m => m.beschikbaarBij))]
 
 export const getModule   = key => MODULES.find(m => m.key === key) || null
 export const modulePrice = key => getModule(key)?.price ?? 0
 export const moduleLabel = key => getModule(key)?.label || key
 
-// Kan dit tier deze module bijkopen?
-export const canBuyModule = (tier, key) => MODULE_TIERS.includes(tier) && MODULE_KEYS.includes(key)
+// Kan dit tier deze module bijkopen? Per module bepaald (zie beschikbaarBij).
+export const canBuyModule = (tier, key) =>
+  (getModule(key)?.beschikbaarBij || []).includes(effectiveTier(tier))
 
 // ── LIMIETEN ──────────────────────────────────────────────────────────────────
 // value: null = onbeperkt.

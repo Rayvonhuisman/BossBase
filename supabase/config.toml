@@ -36,3 +36,11 @@ verify_jwt = false
 # functie alles (503) — pas actief na certificering.
 [functions.snelstart-webhook]
 verify_jwt = false
+
+# Stripe Billing (abonnementen aan BossBase, op ons eigen platform-account).
+# Stripe roept dit publiek aan zonder Supabase-JWT; de echtheid komt uit de
+# signature met STRIPE_BILLING_WEBHOOK_SECRET — een ANDERE secret dan die van
+# de Connect-webhook hierboven, zodat de twee integraties elkaar niet kunnen
+# beïnvloeden.
+[functions.billing-webhook]
+verify_jwt = false

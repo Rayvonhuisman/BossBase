@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { WebsiteAanvragen } from '../components/WebsiteAanvragen.jsx'
 import { X } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 import { TIERS, tierLabel, tierPrice } from '../lib/tiers.js'
@@ -233,6 +234,9 @@ export function SuperAdminPage({ navigate, profile }) {
             </div>
           ))}
         </div>
+
+        {/* Openstaande website-aanvragen uit de welkomstactie */}
+        <WebsiteAanvragen />
 
         {/* Bedrijven tabel */}
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
