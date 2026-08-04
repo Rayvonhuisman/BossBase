@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { nettePlanFout } from './readonly.js';
 
 const ToastContext = createContext({ push: () => {} });
 
@@ -31,7 +32,11 @@ export function ToastProvider({ children }) {
     push,
     dismiss,
     success: (m, opts) => push({ ...(opts || {}), message: m, type: 'success' }),
-    error:   (m, opts) => push({ ...(opts || {}), message: m, type: 'error' }),
+    // Foutmeldingen gaan door één vertaalslag: een geweigerde abonnements- of
+    // read-only-gate komt uit Postgres als "new row violates row-level security
+    // policy for table …". Dat is bruikbaar voor ons en onleesbaar voor de klant.
+    // Hier vangen we het één keer af, in plaats van in elke catch in de app.
+    error:   (m, opts) => push({ ...(opts || {}), message: nettePlanFout(m), type: 'error' }),
     info:    (m, opts) => push({ ...(opts || {}), message: m, type: 'info' }),
   }), [push, dismiss]);
 

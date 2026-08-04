@@ -9,6 +9,7 @@ import { listNotes, createNote } from '../services/noteService.js';
 import { useProfile, displayName } from '../lib/profileContext.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { ActivityEditModal, NewLeadModal } from '../components/SharedModals.jsx';
+import { usePlanGuard } from '../components/PlanUpgradeModal.jsx';
 import { statusInfo } from '../utils/statusColors.js';
 
 // Subtiele prioriteit-badge voor aanvragen/deals. Normaal (med) toont niets
@@ -606,6 +607,7 @@ function MaakProjectModal({ deal, customers, onClose, setPage }) {
 export function Pipeline({ openCustomer, openDeal, setPage }) {
   const toast = useToast();
   const { refreshKey, bumpRefresh } = useProfile();
+  const { guardSchrijven, planModal } = usePlanGuard();
   const [deals, setDeals] = useState([]);
   const [stages, setStages] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -904,7 +906,7 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
           <button className={`btn btn-s btn-sm${showFilter ? ' active' : ''}`} onClick={() => setShowFilter(s => !s)}>
             {I.flag} Filter{filterActive ? ' (actief)' : ''}
           </button>
-          <button className="btn btn-p btn-sm" onClick={() => { setNewStage(null); setShowNew(true); }}>{I.plus} Nieuwe aanvraag</button>
+          <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een aanvraag toevoegen', () => { setNewStage(null); setShowNew(true); })}>{I.plus} Nieuwe aanvraag</button>
         </div>
       </div>
 
@@ -956,7 +958,7 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
             {filterActive && <button className="btn btn-s btn-sm" onClick={resetFilter}>Reset filter</button>}
-            <button className="btn btn-p btn-sm" onClick={() => { setNewStage(null); setShowNew(true); }}>{I.plus} Nieuwe aanvraag</button>
+            <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een aanvraag toevoegen', () => { setNewStage(null); setShowNew(true); })}>{I.plus} Nieuwe aanvraag</button>
           </div>
         </div>
       )}
@@ -970,7 +972,7 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
           markLost={markLost}
           lostStageId={lostStageId}
           setNewStage={setNewStage}
-          setShowNew={setShowNew}
+          setShowNew={guardSchrijven('Een lead toevoegen', setShowNew)}
           customers={customers}
         />
       )}
@@ -1105,7 +1107,7 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
                   <div style={{ fontSize: '.74rem', color: 'var(--dl)', textAlign: 'center', padding: '12px 6px' }}>Geen items</div>
                 )}
               </div>
-              <button className="pipe-add" onClick={() => { setNewStage(stageId); setShowNew(true); }}>{I.plus} Lead toevoegen</button>
+              <button className="pipe-add" onClick={guardSchrijven('Een lead toevoegen', () => { setNewStage(stageId); setShowNew(true); })}>{I.plus} Lead toevoegen</button>
             </div>
           );
         })}
@@ -1206,6 +1208,8 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
           setPage={setPage}
         />
       )}
+
+      {planModal}
     </div>
   );
 }

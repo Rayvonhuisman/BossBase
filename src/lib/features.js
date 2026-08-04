@@ -188,6 +188,27 @@ export function tierForFeature(feature) {
   return TIER_IDS.find(t => (TIER_FEATURES[t] || []).includes(feature)) || null
 }
 
+/**
+ * De module die deze feature levert, als het huidige pakket hem mag bijkopen.
+ * Levert het goedkope antwoord op "ik mis planning": € 10 module in plaats van
+ * € 20 pakketsprong. Geeft null als er geen module voor is, of als dit pakket
+ * hem niet kan kopen (dan is upgraden het enige antwoord).
+ */
+export function moduleForFeature(tier, feature) {
+  return MODULES.find(m => m.feature === feature && canBuyModule(tier, m.key)) || null
+}
+
+/**
+ * Alles wat er meekomt met deze module: hijzelf plus wat hij nodig heeft.
+ * Voertuigen zonder planning bestaat niet, dus wie voertuigen kiest krijgt de
+ * planningsmodule er automatisch bij — inclusief de prijs daarvan.
+ */
+export function moduleMetVereisten(key) {
+  const m = getModule(key)
+  if (!m) return []
+  return m.vereist ? [...moduleMetVereisten(m.vereist), m.key] : [m.key]
+}
+
 /** Het laagste tier waar deze limiet ruimer is dan bij `tier`. */
 export function tierForLimit(tier, key) {
   const huidig = TIER_LIMITS[effectiveTier(tier)]?.[key]

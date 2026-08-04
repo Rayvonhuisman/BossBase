@@ -4,6 +4,7 @@ import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
 import { useUploads } from '../lib/uploadContext.jsx';
+import { usePlanGuard } from '../components/PlanUpgradeModal.jsx';
 import { NoteEditor, renderNote } from '../components/NoteEditor.jsx';
 import NotitieLog, { toLogItem, fmtNotitieDatum } from '../components/NotitieLog.jsx';
 import { AssigneeResponsibleSelect } from '../components/AssigneeResponsibleSelect.jsx';
@@ -772,6 +773,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
   const { profile } = useProfile();
   const { can } = usePermissions();
   const { startUpload } = useUploads();
+  const { guardSchrijven, planModal } = usePlanGuard();
   // Beheer/alle werkbonnen bewerken: admin/planner-rol óf het 'werkbonnen_bewerken'-
   // recht. (Een verantwoordelijke mag z'n eigen bon sowieso al — zie canEditDetail.)
   const canManage = !profile || ['admin', 'planner'].includes(profile.role) || can('werkbonnen_bewerken');
@@ -1146,7 +1148,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
           </button>
           <div className="wb2-head-spacer" />
           {canManage && (
-            <button className="btn btn-p" onClick={() => setShowNew(true)} type="button">
+            <button className="btn btn-p" onClick={guardSchrijven('Een werkbon aanmaken', () => setShowNew(true))} type="button">
               {I.plus} Nieuwe werkbon
             </button>
           )}
@@ -1369,6 +1371,8 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
             </div>
           </div>
         )}
+
+        {planModal}
       </div>
     );
   }
@@ -1384,7 +1388,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
         </div>
         <div className="wb2-head-spacer" />
         {canManage && (
-          <button className="btn btn-p" onClick={() => setShowNew(true)} type="button">
+          <button className="btn btn-p" onClick={guardSchrijven('Een werkbon aanmaken', () => setShowNew(true))} type="button">
             {I.plus} Nieuwe werkbon
           </button>
         )}
@@ -1429,7 +1433,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
               {I.x} Filters wissen
             </button>
             {canManage && (
-              <button className="btn btn-p" onClick={() => setShowNew(true)} type="button">
+              <button className="btn btn-p" onClick={guardSchrijven('Een werkbon aanmaken', () => setShowNew(true))} type="button">
                 {I.plus} Nieuwe werkbon
               </button>
             )}
@@ -1452,6 +1456,8 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
         <WerkbonModal mode="new" customers={customers} projects={projects} onClose={() => setShowNew(false)}
           onSaved={saved => { onWerkbonSaved(saved); loadList(); }} />
       )}
+
+      {planModal}
     </div>
   );
 }

@@ -21,6 +21,7 @@ import { calcBtw, BTW_PCT_OPTIONS } from '../utils/btw.js';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { usePlan } from '../hooks/usePlan.js';
+import { usePlanGuard } from '../components/PlanUpgradeModal.jsx';
 import { getBedrijfsinstellingen } from '../services/instellingenService.js';
 import { usePermissions } from '../hooks/usePermissions.js';
 import { useUrlTab } from '../hooks/useUrlTab.js';
@@ -219,6 +220,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
   const { refreshKey, bumpRefresh, profile } = useProfile();
   const { can } = usePermissions();
   const plan = usePlan();
+  const { guardSchrijven, planModal } = usePlanGuard();
   // Gedeelde werkruimte: beide teamleden zien elkaars agenda-items. Solo en
   // rollen-en-rechten-bedrijven zien hun eigen items. Dezelfde matrix bepaalt
   // server-side de RLS (bb_gedeelde_werkruimte), dus UI en server lopen gelijk.
@@ -439,9 +441,9 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
             ))}
           </div>
           {canPlanFromAgenda && (
-            <button className="btn btn-s btn-sm" onClick={() => setShowPlanWerkbon(true)}>{I.plus} Werkbon inplannen</button>
+            <button className="btn btn-s btn-sm" onClick={guardSchrijven('Een werkbon inplannen', () => setShowPlanWerkbon(true))}>{I.plus} Werkbon inplannen</button>
           )}
-          <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>{I.plus} Toevoegen</button>
+          <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een afspraak inplannen', () => setShowNew(true))}>{I.plus} Toevoegen</button>
         </div>
       </div>
 
@@ -589,6 +591,8 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
           </div>
         </div>
       )}
+
+      {planModal}
     </div>
   );
 }
@@ -1012,6 +1016,7 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
 // ── COSTS ────────────────────────────────────────────────────
 export function CostsPage() {
   const { refreshKey, bumpRefresh } = useProfile();
+  const { guardSchrijven, planModal } = usePlanGuard();
   const [costs, setCosts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [deals, setDeals] = useState([]);
@@ -1048,7 +1053,7 @@ export function CostsPage() {
       <div className="page-hd afu">
         <div><h1>Kosten</h1><p>Kosten bijhouden per klant en opdracht</p></div>
         <div className="page-hd-actions">
-          <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>{I.plus} Kosten toevoegen</button>
+          <button className="btn btn-p btn-sm" onClick={guardSchrijven('Kosten toevoegen', () => setShowNew(true))}>{I.plus} Kosten toevoegen</button>
         </div>
       </div>
       {loading && <div className="card card-p">Kosten laden...</div>}
@@ -1146,6 +1151,8 @@ export function CostsPage() {
           onClose={() => setSelectedCost(null)}
         />
       )}
+
+      {planModal}
     </div>
   );
 }

@@ -96,6 +96,29 @@ serve(async (req) => {
       if (await isRateLimited(admin, user.id)) {
         return json({ success: false, error: 'Te veel e-mails verstuurd, probeer het later opnieuw' }, 429)
       }
+
+      // ── Read-only ─────────────────────────────────────────────────────────
+      // Zonder geldig abonnement gaat uitgaande post dicht: offertes en facturen
+      // versturen, klantmailings, teamuitnodigingen. Dit moet hier en niet in de
+      // RLS, want send-email verstuurt via de service-role en zou een policy dus
+      // niet tegenkomen.
+      //
+      // Alleen voor een echte gebruiker. INTERNE aanroepen blijven lopen —
+      // betalingsherinneringen, wachtwoord vergeten, verificatiecodes en onze
+      // eigen meldingen. Een herinnering op een openstaande factuur is juist
+      // geld dat binnenkomt; die tegenhouden zou nergens op slaan.
+      //
+      // Faalt de aanroep zelf, dan sturen we gewoon: dat is dezelfde
+      // veiligheidsklep als in de database. Een storing hier mag nooit de post
+      // van een betalende klant tegenhouden.
+      const { data: readonly, error: readonlyErr } = await userClient.rpc('bb_is_readonly')
+      if (!readonlyErr && readonly === true) {
+        return json({
+          success: false,
+          code: 'readonly',
+          error: 'Je account is beperkt tot lezen. Sluit een abonnement af om weer te kunnen versturen.',
+        }, 403)
+      }
     }
 
     // ── Verzenden ─────────────────────────────────────────────────────────────

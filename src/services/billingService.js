@@ -32,6 +32,10 @@ export async function getBillingStatus() {
     welkomstactieGekozenOp: data.welkomstactieGekozenOp || null,
     websiteAanvraag: data.websiteAanvraag || null,
     magBeheren: !!data.magBeheren,
+    // Alleen een expliciete true telt: een ontbrekend veld mag nooit tot een
+    // beperking leiden. Zelfde veiligheidsklep als in de database.
+    readonly: data.readonly === true,
+    readonlyReden: data.readonlyReden || null,
     modules: Array.isArray(data.modules) ? data.modules : [],
     limieten: data.limieten || {},
   }
@@ -71,6 +75,38 @@ export async function startCheckout({ tier, interval = 'maand', extraGebruikers 
   if (error) throw await edgeFout(error)
   if (!data?.url) throw new Error(data?.error || 'Geen checkout-URL ontvangen')
   return data.url
+}
+
+// Wijzigt een LOPEND abonnement: ander pakket, meer/minder gebruikers, modules
+// erbij of eraf. Gaat bewust NIET via het Customer Portal — dat kan het niet
+// voor jaarklanten (die configuratie heeft wijzigen uit, om de looptijd te
+// beschermen) en hangt voor maandklanten aan een dashboardvinkje.
+//
+// De edge function synchroniseert de nieuwe stand meteen naar onze database, dus
+// het antwoord is al de waarheid: geen wachten op de webhook.
+export async function wijzigAbonnement({ tier, extraGebruikers = 0, modules = [] }) {
+  const { data, error } = await supabase.functions.invoke('billing-wijzig', {
+    body: { tier, extra_gebruikers: extraGebruikers, modules },
+  })
+  if (error) throw await edgeFout(error)
+  if (data?.error) throw new Error(data.error)
+  return data
+}
+
+// Mag dit bedrijf naar dit pakket, en zo nee waarom niet? Dezelfde functie die
+// billing-wijzig server-side gebruikt, zodat het scherm vóór de klik hetzelfde
+// zegt als de server erna.
+export async function magWisselen(doelTier) {
+  const { data, error } = await supabase.rpc('bb_mag_wisselen', { p_doel_tier: doelTier })
+  if (error) throw error
+  return {
+    mag: data?.mag !== false,
+    richting: data?.richting || null,
+    code: data?.code || null,
+    reden: data?.reden || null,
+    verplichtingTot: data?.verplichtingTot || null,
+    blokkades: Array.isArray(data?.blokkades) ? data.blokkades : [],
+  }
 }
 
 // Open het Stripe Customer Portal (opzeggen, betaalmethode, facturen, wisselen).

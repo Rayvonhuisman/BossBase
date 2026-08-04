@@ -15,12 +15,19 @@ import {
 //   plan.within('offertes')            → is er nog ruimte?
 //   plan.stand('offertes')             → "offerte 7 van 20"
 //   plan.needsFor('planning')          → tier dat je nodig hebt voor deze feature
+//   plan.readonly                      → account zonder geldig abonnement
 export function usePlan() {
   const { company, planStatus } = useProfile()
 
   const tier    = effectiveTier(planStatus?.tier || company?.tier || DEFAULT_TIER)
   const modules = planStatus?.modules || []
   const trial   = !!planStatus?.trial
+
+  // Read-only komt UITSLUITEND van de server. Geen lokale afleiding uit tier of
+  // status: zolang de stand er niet is (eerste render, RPC nog onderweg) staat
+  // alles gewoon open. Dezelfde keuze als bij de veiligheidsklep in de database —
+  // bij twijfel niet blokkeren. De policies vangen het echte geval af.
+  const readonly = planStatus?.readonly === true
 
   // Feature-check. Server is leidend; zonder serverantwoord de lokale matrix.
   const has = key =>
@@ -51,6 +58,10 @@ export function usePlan() {
 
   return {
     tier, trial, modules, planStatus,
+    readonly,
+    readonlyReden: readonly ? (planStatus?.readonlyReden || null) : null,
+    // Alleen de eigenaar/admin kan betalen — bepaalt of iemand de betaalknop ziet.
+    magBeheren: planStatus?.magBeheren === true,
     periodeStart: planStatus?.periodeStart || null,
     periodeEind:  planStatus?.periodeEind || null,
     trialEndsAt:  planStatus?.trialEndsAt || null,

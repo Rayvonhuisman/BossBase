@@ -164,6 +164,7 @@ const CMP_CATS = [
 
 const FAQ_P = [
   { q: "Hoe zit het met opzeggen?", a: "Een maandabonnement is per maand opzegbaar. Een jaarabonnement loopt 12 maanden: je betaalt maandelijks en kunt tussentijds niet opzeggen, wel tegen het einde van die 12 maanden. Daarna loopt het maandelijks door en is het per maand opzegbaar." },
+  { q: "Wat gebeurt er met mijn looptijd als ik overstap naar een groter pakket?", a: "Bij een jaarabonnement begint de looptijd van 12 maanden dan opnieuw, gerekend vanaf de overstap. Je ziet de nieuwe einddatum in het scherm voordat je bevestigt en gaat er expliciet mee akkoord. Modules bijkopen en teamleden toevoegen raken je looptijd niet — dat zijn bijbestellingen. Bij een maandabonnement verandert er niets: dat blijft per maand opzegbaar, ook na een upgrade." },
   { q: "Wat gebeurt er na de proefperiode?", a: "Na 14 dagen word je gevraagd een abonnement te kiezen. Je data blijft behouden. Je kiest pas dan welk plan het beste bij je past." },
   { q: "Kan ik van plan wisselen?", a: "Ja, upgraden kan direct. Downgraden gaat in aan het begin van je volgende factuurperiode. Er zijn geen extra kosten voor het wisselen van plan." },
   { q: "Is BTW inbegrepen in de prijs?", a: "Nee, de getoonde prijzen zijn exclusief BTW. Als ondernemer kun je de BTW aftrekken als zakelijke kosten." },
@@ -274,6 +275,8 @@ export default function PricingPage({ navigate }) {
                   <p style={{ fontSize: 13, color: "var(--dmu)", margin: "6px 0 0", textAlign: "center" }}>
                     Een jaarabonnement loopt <strong>12 maanden vast</strong> en wordt maandelijks
                     geïncasseerd. Daarna loopt het maandelijks door en is het per maand opzegbaar.
+                    Stap je tussentijds over naar een groter pakket, dan begint de looptijd van
+                    12 maanden opnieuw vanaf dat moment.
                   </p>
                   <p style={{ fontSize: 12.5, color: "var(--dmu)", margin: "6px 0 0", textAlign: "center" }}>
                     * De website zelf is gratis; het draaien en onderhouden ervan kost € 5 per maand.

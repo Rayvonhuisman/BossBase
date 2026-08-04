@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
-import { TIERS, tierLabel, tierPrice, tierPriceFirstYear, YEARLY_FREE_MONTHS, yearlySavingPct, EXTRA_USER_PRICE, kortingMaandenVoorActie,
-         welkomstactiesVoor, welkomstactieLabel, getWelkomstactie } from '../lib/tiers.js';
-import { MODULES, moduleLabel, modulePrice, canBuyModule, getLimitDef } from '../lib/features.js';
-import { getBillingStatus, getDowngradeBlokkades, startCheckout, openPortal, zegOp } from '../services/billingService.js';
+import { tierLabel, tierPrice, EXTRA_USER_PRICE, welkomstactieLabel, getWelkomstactie } from '../lib/tiers.js';
+import { moduleLabel, modulePrice, getLimitDef } from '../lib/features.js';
+import { getBillingStatus, openPortal, zegOp } from '../services/billingService.js';
+import { readonlyTekst, READONLY_BEWAARD } from '../lib/readonly.js';
+import { UpgradeFlow } from './UpgradeFlow.jsx';
 
 // Abonnementssectie in Instellingen: huidig pakket, status, verlengdatum,
 // verbruik tegen de limieten, modules en de knoppen om te wijzigen.
@@ -64,55 +65,23 @@ export function AbonnementSectie() {
   const [laden, setLaden] = useState(true);
   const [bezig, setBezig] = useState(false);
   const [wijzigen, setWijzigen] = useState(false);
-  const [doelTier, setDoelTier] = useState(null);
-  const [interval, setInterval] = useState('maand');
-  const [extra, setExtra] = useState(0);
-  const [modules, setModules] = useState([]);
-  const [actie, setActie] = useState(null);
-  const [blokkades, setBlokkades] = useState([]);
 
   const isAdmin = profile?.role === 'admin';
 
   const laad = () => {
     setLaden(true);
     getBillingStatus()
-      .then(s => {
-        setStand(s);
-        if (s) { setDoelTier(s.tier); setInterval(s.billingInterval); setExtra(s.extraGebruikers); setModules(s.modules); setActie(s.welkomstactie); }
-      })
+      .then(setStand)
       .catch(e => toast.error(e.message || 'Abonnement laden mislukt'))
       .finally(() => setLaden(false));
   };
   useEffect(laad, []);
-
-  // Bij elke pakketkeuze meteen ophalen wat een overstap zou blokkeren, zodat de
-  // klant het vóór het afrekenen ziet in plaats van erna.
-  useEffect(() => {
-    if (!doelTier) { setBlokkades([]); return; }
-    let alive = true;
-    getDowngradeBlokkades(doelTier)
-      .then(b => { if (alive) setBlokkades(b); })
-      .catch(() => { if (alive) setBlokkades([]); });
-    return () => { alive = false; };
-  }, [doelTier]);
 
   if (!isAdmin) return null;
   if (laden) return <div className="card card-p">Abonnement laden…</div>;
   if (!stand) return <div className="card card-p">Geen abonnementsgegevens gevonden.</div>;
 
   const geblokkeerd = blokkades.length > 0;
-
-  const naarCheckout = async () => {
-    setBezig(true);
-    try {
-      const url = await startCheckout({ tier: doelTier, interval, extraGebruikers: extra, modules, welkomstactie: interval === 'jaar' ? actie : null });
-      window.location.href = url;
-    } catch (e) {
-      if (e.code === 'downgrade_geblokkeerd' && Array.isArray(e.blokkades)) setBlokkades(e.blokkades);
-      if (e.code === 'gebruik_portal') { toast.info(e.message); naarPortal(); return; }
-      toast.error(e.message || 'Afrekenen mislukt');
-    } finally { setBezig(false); }
-  };
 
   // Opzeggen loopt bewust via ons eigen scherm en niet via het Customer Portal:
   // het portal kan alleen "direct" of "per einde factuurperiode" (= één maand)
@@ -141,18 +110,23 @@ export function AbonnementSectie() {
     finally { setBezig(false); }
   };
 
-  const toggleModule = key => setModules(prev => {
-    if (prev.includes(key)) return prev.filter(k => k !== key && MODULES.find(m => m.key === k)?.vereist !== key);
-    const vereist = MODULES.find(m => m.key === key)?.vereist;
-    return vereist && !prev.includes(vereist) ? [...prev, vereist, key] : [...prev, key];
-  });
 
-  const kosten = tierPrice(doelTier || stand.tier)
-    + extra * EXTRA_USER_PRICE
-    + modules.reduce((s, k) => s + modulePrice(k), 0);
 
   return (
     <div className="afu3" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+      {/* Read-only. De banner staat al boven elke pagina; hier herhalen we de
+          reden omdat dít het scherm is waar het opgelost wordt — de klant moet
+          niet hoeven terugbladeren om te lezen waarom hij hier is. */}
+      {stand.readonly && (
+        <div className="card card-p" style={{ borderColor: '#fcd9a4', background: '#fffbf3' }}>
+          <div style={{ fontWeight: 700, color: '#8a5a00' }}>{readonlyTekst(stand.readonlyReden).titel}</div>
+          <div style={{ fontSize: '.86rem', color: 'var(--dmu)', marginTop: 4 }}>
+            {readonlyTekst(stand.readonlyReden).uitleg}
+          </div>
+          <div style={{ fontSize: '.82rem', color: 'var(--dmu)', marginTop: 6 }}>{READONLY_BEWAARD}</div>
+        </div>
+      )}
 
       {/* ── Huidig abonnement ─────────────────────────────────────────────── */}
       <div className="card card-p">
@@ -230,7 +204,7 @@ export function AbonnementSectie() {
             <div style={{ fontSize: '.78rem', color: 'var(--dmu)', marginTop: 2 }}>
               {stand.stoptNaLooptijd
                 ? `Je hebt opgezegd. Het abonnement stopt op ${fmtDatum(stand.verplichtingTot)}; tot dan loopt de incasso van € ${tierPrice(stand.tier)} per maand door.`
-                : `Tussentijds opzeggen kan niet. Je kunt opzeggen tegen ${fmtDatum(stand.verplichtingTot)}; daarna loopt het maandelijks door en is het per maand opzegbaar.`}
+                : `Tussentijds opzeggen kan niet. Je kunt opzeggen tegen ${fmtDatum(stand.verplichtingTot)}; daarna loopt het maandelijks door en is het per maand opzegbaar. Stap je over naar een groter pakket, dan begint de looptijd opnieuw — je ziet de nieuwe einddatum voordat je bevestigt.`}
             </div>
           </div>
         )}
@@ -269,160 +243,18 @@ export function AbonnementSectie() {
       </div>
 
       {/* ── Pakket kiezen ─────────────────────────────────────────────────── */}
+      {/* Dezelfde flow als bij een bereikte limiet, een ontbrekende feature of
+          een read-only account. Voorheen stond hier een tweede, eigen versie van
+          hetzelfde scherm — twee plekken om te onderhouden en twee ervaringen
+          voor de klant. */}
       {wijzigen && (
-        <div className="card card-p">
-          <div style={{ fontWeight: 700, marginBottom: 12 }}>Kies je pakket</div>
-
-          <div style={{ display: 'grid', gap: 8, marginBottom: 14 }}>
-            {TIERS.map(t => {
-              const actief = doelTier === t.id;
-              return (
-                <button key={t.id} onClick={() => setDoelTier(t.id)}
-                  style={{
-                    textAlign: 'left', padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
-                    border: actief ? '2px solid #1DDB62' : '1px solid var(--br)',
-                    background: actief ? '#f0fdf4' : 'var(--bg)',
-                  }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
-                    <span style={{ fontWeight: 700 }}>{t.label}</span>
-                    <span style={{ fontSize: '.88rem', color: 'var(--dmu)' }}>€ {tierPrice(t.id)} p/mnd</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Betaaltermijn. Het jaarabonnement is geen andere prijs maar dezelfde
-              maandprijs met de eerste twee maanden gratis. */}
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--dmu)', marginBottom: 6 }}>BETAALTERMIJN</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {[['maand', 'Per maand'], ['jaar', 'Jaarabonnement (12 maanden)']].map(([w, label]) => (
-                <button key={w} onClick={() => setInterval(w)}
-                  style={{
-                    flex: 1, padding: '9px 12px', borderRadius: 10, cursor: 'pointer', fontSize: 13,
-                    border: interval === w ? '2px solid #1DDB62' : '1px solid var(--br)',
-                    background: interval === w ? '#f0fdf4' : 'var(--bg)',
-                  }}>
-                  {label}
-                </button>
-              ))}
-            </div>
-            {interval === 'jaar' && (
-              <p style={{ fontSize: '.78rem', color: 'var(--dmu)', margin: '6px 0 0' }}>
-                Je betaalt € {tierPrice(doelTier || stand.tier)} per maand, <strong>12 maanden vast</strong> —
-                tussentijds opzeggen kan niet. Daarna loopt het maandelijks door en is het
-                per maand opzegbaar. Bij een jaarabonnement kies je één welkomstactie.
-              </p>
-            )}
-          </div>
-
-          {/* ── Welkomstactie: alleen bij een jaarabonnement, en precies één ── */}
-          {interval === 'jaar' && (
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--dmu)', marginBottom: 6 }}>
-                KIES JE WELKOMSTACTIE
-              </div>
-              {stand.welkomstactie ? (
-                <div style={{ background: 'var(--bgs)', borderRadius: 10, padding: '10px 12px', fontSize: 13 }}>
-                  Je hebt al gekozen voor <strong>{welkomstactieLabel(stand.welkomstactie)}</strong>.
-                  Een welkomstactie is eenmalig en kan niet worden gewisseld.
-                </div>
-              ) : (
-                <>
-                  <div style={{ display: 'grid', gap: 8 }}>
-                    {welkomstactiesVoor(doelTier || stand.tier).map(a => (
-                      <button key={a.key} onClick={() => setActie(a.key)}
-                        style={{
-                          textAlign: 'left', padding: '11px 13px', borderRadius: 10, cursor: 'pointer',
-                          border: actie === a.key ? '2px solid #1DDB62' : '1px solid var(--br)',
-                          background: actie === a.key ? '#f0fdf4' : 'var(--bg)',
-                        }}>
-                        <div style={{ fontWeight: 700, fontSize: 14 }}>{a.label}</div>
-                        <div style={{ fontSize: '.78rem', color: 'var(--dmu)', marginTop: 2 }}>
-                          {a.kort}
-                          {a.kortingMaanden > 0 && ' Je abonnement start meteen; de korting staat op je eerste facturen.'}
-                          {a.key === 'gratis_website' && ' Hosting kost € 5 per maand; de website blijft beschikbaar zolang je abonnement loopt.'}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                  {/* Starter kent alleen de gratis maanden — dat is geen weglating
-                      maar een bewuste beperking, dus benoemen we het. */}
-                  {welkomstactiesVoor(doelTier || stand.tier).length === 1 && (
-                    <p style={{ fontSize: '.76rem', color: 'var(--dmu)', margin: '6px 0 0' }}>
-                      De gratis website hoort bij {tierLabel('groei')} en {tierLabel('team')}.
-                    </p>
-                  )}
-                  {!actie && (
-                    <p style={{ fontSize: '.76rem', color: '#b45309', margin: '6px 0 0' }}>
-                      Kies een welkomstactie om verder te gaan.
-                    </p>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Extra gebruikers */}
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--dmu)', marginBottom: 6 }}>
-              EXTRA GEBRUIKERS (€ {EXTRA_USER_PRICE} p/st per maand)
-            </div>
-            <input type="number" min="0" step="1" value={extra}
-              onChange={e => setExtra(Math.max(0, Math.trunc(Number(e.target.value) || 0)))}
-              style={{ width: 90 }} />
-            <span style={{ fontSize: '.8rem', color: 'var(--dmu)', marginLeft: 8 }}>
-              bovenop de inbegrepen gebruiker
-            </span>
-          </div>
-
-          {/* Modules die dit pakket mag bijkopen */}
-          {MODULES.some(m => canBuyModule(doelTier, m.key)) && (
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--dmu)', marginBottom: 6 }}>MODULES</div>
-              {MODULES.filter(m => canBuyModule(doelTier, m.key)).map(m => (
-                <label key={m.key} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 0', cursor: 'pointer', fontSize: 14 }}>
-                  <input type="checkbox" checked={modules.includes(m.key)} onChange={() => toggleModule(m.key)} />
-                  <span>{m.label}</span>
-                  <span style={{ marginLeft: 'auto', color: 'var(--dmu)', fontSize: '.85rem' }}>+ € {m.price} p/mnd</span>
-                </label>
-              ))}
-            </div>
-          )}
-
-          {/* Wat een overstap in de weg staat — concreet, met aantallen. */}
-          {geblokkeerd && (
-            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '11px 13px', marginBottom: 14 }}>
-              <div style={{ fontWeight: 700, color: '#b91c1c', fontSize: 13, marginBottom: 5 }}>
-                Dit pakket is te klein voor wat je nu gebruikt
-              </div>
-              <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#7f1d1d' }}>
-                {blokkades.map(b => (
-                  <li key={b.limiet}>
-                    {b.gebruikt} {b.label} — dit pakket gaat tot {b.maximum}.
-                    Er {b.teveel === 1 ? 'moet er 1' : `moeten er ${b.teveel}`} weg.
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <div style={{ fontWeight: 700 }}>
-              Totaal € {kosten} p/mnd
-              <span style={{ fontWeight: 400, fontSize: '.8rem', color: 'var(--dmu)' }}> excl. BTW</span>
-            </div>
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-              <button className="btn btn-ghost" onClick={() => setWijzigen(false)} disabled={bezig}>Annuleren</button>
-              <button className="btn btn-p" onClick={naarCheckout}
-                disabled={bezig || geblokkeerd || (interval === 'jaar' && !stand.welkomstactie && !actie)}>
-                {bezig ? 'Bezig…' : stand.heeftStripe ? 'Wijzigen' : 'Afrekenen'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <UpgradeFlow
+          aanleiding={{ soort: 'abonnement' }}
+          onClose={() => setWijzigen(false)}
+          onKlaar={() => { setWijzigen(false); laad(); }}
+        />
       )}
+
     </div>
   );
 }

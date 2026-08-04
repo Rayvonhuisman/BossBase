@@ -6,6 +6,7 @@ import { ActivityEditModal, NewActivityModal } from '../components/SharedModals.
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { useUrlTab } from '../hooks/useUrlTab.js';
+import { usePlanGuard } from '../components/PlanUpgradeModal.jsx';
 import { getTeamMembers } from '../services/notificatieService.js';
 
 // ─── Inline SVG icons (stroke-based, currentColor) ──────────────────────────
@@ -137,6 +138,7 @@ function getMemberName(userId, teamMembers, fallbackName = '') {
 export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsumed }) {
   const toast = useToast();
   const { refreshKey, bumpRefresh } = useProfile();
+  const { guardSchrijven, planModal } = usePlanGuard();
   const [acts, setActs] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [deals, setDeals] = useState([]);
@@ -273,7 +275,7 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
             <span className="act2-chip-sep" />
             <span className="act2-chip-stat"><b className="act2-chip-warn">{counts.overdue}</b><span>te laat</span></span>
           </div>
-          <button className="act2-btn act2-btn-primary" onClick={() => setShowNew(true)}>
+          <button className="act2-btn act2-btn-primary" onClick={guardSchrijven('Een activiteit inplannen', () => setShowNew(true))}>
             {ICO_PLUS} Nieuwe activiteit
           </button>
         </div>
@@ -362,7 +364,7 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
       ) : !hasResults ? (
         <EmptyState
           filtered={hasAnyActs}
-          onNew={() => setShowNew(true)}
+          onNew={guardSchrijven('Een activiteit inplannen', () => setShowNew(true))}
           onReset={resetFilters}
         />
       ) : view === 'flat' ? (
@@ -424,6 +426,8 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
           }}
         />
       )}
+
+      {planModal}
     </div>
   );
 }

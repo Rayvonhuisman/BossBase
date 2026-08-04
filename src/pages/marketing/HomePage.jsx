@@ -840,7 +840,7 @@ function Pricing({ navigate }) {
         </Reveal>
         <Reveal>
           <p className="price-foot">
-            Alle abonnementen 14 dagen gratis te proberen, geen creditcard nodig. Maandabonnement per maand opzegbaar; een jaarabonnement loopt 12 maanden.
+            Alle abonnementen 14 dagen gratis te proberen, geen creditcard nodig. Maandabonnement per maand opzegbaar; een jaarabonnement loopt 12 maanden, en bij een overstap naar een groter pakket begint die looptijd opnieuw.
           </p>
         </Reveal>
       </div>
@@ -888,6 +888,7 @@ const FAQ_HOME = [
   ["Kan ik mijn eigen logo op offertes zetten?", "Ja. Je uploadt één keer je logo en bedrijfsgegevens, en elke offerte en factuur gaat automatisch in jouw huisstijl de deur uit."],
   ["Werkt het op mijn telefoon?",           "Ja, BossBase werkt op telefoon, tablet en computer. Je medewerkers zien hun werkbonnen gewoon op hun telefoon — niks installeren."],
   ["Hoe zit het met opzeggen?",             "Een maandabonnement is per maand opzegbaar. Een jaarabonnement loopt 12 maanden en is daarna per maand opzegbaar. Je gegevens kun je meenemen."],
+  ["Wat als ik overstap naar een groter pakket?", "Bij een jaarabonnement begint de looptijd van 12 maanden opnieuw vanaf de overstap; je ziet de nieuwe einddatum voordat je bevestigt. Modules of teamleden bijkopen raakt je looptijd niet, en een maandabonnement blijft gewoon per maand opzegbaar."],
   ["Wat krijg ik bij een jaarabonnement?",  "Bij een jaarabonnement bouwen we gratis een professionele website voor je bedrijf, met een offerteformulier dat direct in je BossBase-pipeline binnenkomt."],
 ]
 

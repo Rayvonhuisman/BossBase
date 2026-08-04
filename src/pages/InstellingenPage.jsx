@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase.js';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { usePlan } from '../hooks/usePlan.js';
-import { PlanUpgradeModal } from '../components/PlanUpgradeModal.jsx';
+import { UpgradeFlow } from '../components/UpgradeFlow.jsx';
 import { tierLabel } from '../lib/tiers.js';
 import { AbonnementSectie } from '../components/AbonnementSectie.jsx';
 import { getStripeConnection, startStripeOnboarding, refreshStripeStatus, disconnectStripe } from '../services/stripeService.js';
@@ -2737,7 +2737,7 @@ export function InstellingenPage() {
       )}
 
       {upgradeFeature && (
-        <PlanUpgradeModal feature={upgradeFeature} onClose={() => setUpgradeFeature(null)} />
+        <UpgradeFlow aanleiding={{ soort: 'feature', key: upgradeFeature }} onClose={() => setUpgradeFeature(null)} />
       )}
     </div>
   );

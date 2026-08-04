@@ -10,6 +10,7 @@ import { getWerkbonnen } from '../services/werkbonService.js';
 import { getProjects } from '../services/projectsService.js';
 import { getTeamMembers } from '../services/notificatieService.js';
 import { I } from '../bb-shared.jsx';
+import { usePlanGuard } from '../components/PlanUpgradeModal.jsx';
 
 // ── Date / time helpers ─────────────────────────────────────────────────────
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -611,6 +612,7 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
 export function UrenPageV2() {
   const toast = useToast();
   const { profile, bumpRefresh } = useProfile();
+  const { guardSchrijven, planModal } = usePlanGuard();
   const canBookForOthers = ['admin', 'planner'].includes(profile?.role);
   const [allRows, setAllRows] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -776,7 +778,7 @@ export function UrenPageV2() {
         <button
           type="button"
           className="uren2-btn uren2-btn-primary uren2-hd-cta"
-          onClick={() => setModal({ mode: 'register', initial: null })}
+          onClick={guardSchrijven('Uren boeken', () => setModal({ mode: 'register', initial: null }))}
         >
           <span className="uren2-btn-ic">{Ic.Plus}</span>
           Uren registreren
@@ -858,7 +860,7 @@ export function UrenPageV2() {
           type="button"
           className="uren2-fab"
           aria-label="Uren registreren"
-          onClick={() => setModal({ mode: 'register', initial: null })}
+          onClick={guardSchrijven('Uren boeken', () => setModal({ mode: 'register', initial: null }))}
         >{Ic.Plus}</button>
       )}
 
@@ -900,6 +902,8 @@ export function UrenPageV2() {
           <button type="button" className="uren2-btn uren2-btn-danger" onClick={() => handleDelete(confirmRow)}>Verwijderen</button>
         </div>
       </ModalShell>
+
+      {planModal}
     </div>
   );
 }

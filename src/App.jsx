@@ -41,6 +41,8 @@ import { getPlanStatus, fallbackPlanStatus } from './services/planService.js';
 import { getUserPermissions } from './services/permissionsService.js';
 import { usePermissions } from './hooks/usePermissions.js';
 import { usePlan } from './hooks/usePlan.js';
+import { ReadOnlyBanner } from './components/ReadOnly.jsx';
+import { CheckoutTerugkeer } from './components/CheckoutTerugkeer.jsx';
 import { featureLabel } from './lib/features.js';
 import { clearCompanyId, setCompanyId } from './lib/currentCompany.js';
 import { ToastProvider, useToast } from './lib/toast.jsx';
@@ -1544,6 +1546,12 @@ function AppInner() {
               </div>
             ) : (
               <PageErrorBoundary resetKey={page}>
+                {/* Boven élke pagina, niet alleen het dashboard: read-only raakt
+                    alles wat je doet, dus je moet het overal kunnen zien én
+                    overal in één klik kunnen oplossen. Rendert zichzelf als niets
+                    wanneer het abonnement gewoon loopt. */}
+                <CheckoutTerugkeer />
+                <ReadOnlyBanner />
                 <Suspense fallback={<div style={{ padding: 24, color: 'var(--dl)' }}>Laden…</div>}>
                   {renderPage()}
                 </Suspense>

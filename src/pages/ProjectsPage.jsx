@@ -3,6 +3,7 @@ import { I, ModalX, NotifyMailToggle, fmt, fmt0, BackToKlant } from '../bb-share
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
+import { usePlanGuard } from '../components/PlanUpgradeModal.jsx';
 import {
   getEnrichedProjects,
   createProject,
@@ -296,6 +297,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
   const toast = useToast();
   const { profile } = useProfile();
   const { can } = usePermissions();
+  const { guardSchrijven, planModal } = usePlanGuard();
   // Projecten bewerken/aanmaken: admin/planner-rol óf het 'projecten_bewerken'-recht.
   // Zien mag iedereen; RLS bepaalt welke projecten zichtbaar zijn.
   const canManage = ['admin', 'planner'].includes(profile?.role) || can('projecten_bewerken');
@@ -410,7 +412,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
         </div>
         <div className="page-hd-actions">
           {canManage && (
-            <button className="btn btn-p" onClick={() => setShowNew(true)}>
+            <button className="btn btn-p" onClick={guardSchrijven('Een project aanmaken', () => setShowNew(true))}>
               {I.plus} Nieuw project
             </button>
           )}
@@ -477,7 +479,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
                 ? 'Maak je eerste project aan zodra een deal of offerte is gewonnen.'
                 : 'Pas de filters of zoekterm aan om meer projecten te zien.'}
               action={projects.length === 0 && canManage && (
-                <button className="btn btn-p" onClick={() => setShowNew(true)}>{I.plus} Eerste project</button>
+                <button className="btn btn-p" onClick={guardSchrijven('Een project aanmaken', () => setShowNew(true))}>{I.plus} Eerste project</button>
               )}
             />
           )}
@@ -588,6 +590,8 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
           setPage={setPage}
         />
       )}
+
+      {planModal}
     </div>
   );
 }

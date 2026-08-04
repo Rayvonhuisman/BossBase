@@ -22,14 +22,92 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
   verifyStripeSignature, stripeFetch, duidItems, naarISO, CORS,
   stuurBossBaseMail, INTERN_ADRES, isJaar, JAAR_TERMIJNEN, SCHEDULE_DOORLOPEN,
+  appOrigin, EXTRA_GEBRUIKER_PRIJS, zetJaarverplichting,
 } from '../_shared/billing.ts'
 import { klantMail, internMail } from '../_shared/websiteMail.ts'
+import { welkomMail } from '../_shared/welkomMail.ts'
 
 // Maandprijs van de hostingmodule — noemen we in de klantmail zodat die kosten
 // niet als verrassing komen. Uit de matrix (plan_modules), niet hardcoded.
 async function hostingPrijs(admin: any): Promise<number> {
   const { data } = await admin.from('plan_modules').select('price').eq('module_key', 'hosting').maybeSingle()
   return Number(data?.price ?? 5)
+}
+
+// Bevestigingsmail "je abonnement is actief", precies één keer per abonnement.
+//
+// Waarom niet gewoon bij checkout.session.completed: dat event vertelt alleen
+// dát er is afgerekend, niet wat het uiteindelijk is geworden. De prijsregels,
+// de looptijd en de welkomstactie staan pas compleet in de subscription. En bij
+// een klant die vanaf een read-only account upgradet, komt de bevestiging soms
+// via customer.subscription.updated binnen in plaats van via de sessie.
+//
+// Daarom hangen we hem aan "abonnement staat op actief" en bewaakt de database
+// dat het bij één mail blijft (bb_claim_welkomstmail claimt atomair).
+async function stuurWelkomstmail(
+  admin: any, companyId: string, subscriptionId: string,
+  tier: string | null, extraGebruikers: number,
+  modules: { module_key: string }[], interval: string | null,
+  verlengtOp: string | null, appUrl: string,
+): Promise<string> {
+  const { data: geclaimd } = await admin.rpc('bb_claim_welkomstmail', {
+    p_subscription_id: subscriptionId,
+  })
+  if (geclaimd !== true) return 'welkomstmail: al verstuurd'
+
+  try {
+    const { data: bedrijf } = await admin
+      .from('companies').select('name, email').eq('id', companyId).maybeSingle()
+    if (!bedrijf?.email) return 'welkomstmail: geen e-mailadres bekend'
+
+    // Prijzen en labels uit de matrix in de database — dezelfde bron als de app.
+    // Nooit hardcoden: dan zou een prijswijziging in features.js hier stilletjes
+    // een verkeerd bedrag opleveren.
+    const { data: tierRij } = await admin
+      .from('plan_limits').select('plan').eq('plan', tier ?? 'groei').limit(1).maybeSingle()
+    const { data: moduleRijen } = await admin
+      .from('plan_modules').select('module_key, label, price')
+    const { data: sub } = await admin
+      .from('subscriptions')
+      .select('welkomstactie, verplichting_tot, price_per_month')
+      .eq('company_id', companyId).maybeSingle()
+
+    const moduleInfo = (modules || []).map(m => {
+      const rij = (moduleRijen || []).find((r: any) => r.module_key === m.module_key)
+      return { label: rij?.label ?? m.module_key, prijs: Number(rij?.price ?? 0) }
+    })
+
+    const actie = sub?.welkomstactie ?? null
+    const actieLabels: Record<string, { label: string; korting: number }> = {
+      gratis_maanden: { label: 'Eerste 2 maanden gratis', korting: 2 },
+      gratis_website: { label: 'Gratis website', korting: 0 },
+    }
+
+    const m = welkomMail({
+      bedrijfsnaam: bedrijf.name,
+      tierLabel: (tier ?? 'groei').charAt(0).toUpperCase() + (tier ?? 'groei').slice(1),
+      tierPrijs: Number(sub?.price_per_month ?? 0),
+      extraGebruikers,
+      extraGebruikerPrijs: EXTRA_GEBRUIKER_PRIJS,
+      modules: moduleInfo,
+      interval,
+      verlengtOp,
+      verplichtingTot: sub?.verplichting_tot ?? null,
+      welkomstactieLabel: actie ? actieLabels[actie]?.label ?? actie : null,
+      kortingMaanden: actie ? actieLabels[actie]?.korting ?? 0 : 0,
+      appUrl,
+    })
+    const id = await stuurBossBaseMail(bedrijf.email, m.subject, m.html, INTERN_ADRES())
+    return id ? 'welkomstmail: verstuurd' : 'welkomstmail: verzenden mislukt'
+  } catch (e) {
+    // Mislukt de mail, dan geven we de claim terug zodat een volgend event het
+    // opnieuw probeert. Een klant zonder bevestiging is vervelend; twee
+    // bevestigingen zijn dat ook, maar géén is erger.
+    await admin.from('subscriptions')
+      .update({ welkomstmail_op: null })
+      .eq('stripe_subscription_id', subscriptionId)
+    return `welkomstmail mislukt: ${(e as Error).message}`
+  }
 }
 
 // Website-aanvraag afhandelen: rij aanmaken (idempotent) en, alleen als hij
@@ -75,66 +153,6 @@ async function verwerkWebsiteAanvraag(admin: any, companyId: string, plan: strin
 //
 // end_behavior 'release': na de 12 termijnen laat de schedule het abonnement los
 // en loopt het maandelijks door. Zo zit niemand vast aan een tweede jaar.
-async function zetJaarverplichting(admin: any, subscriptionId: string) {
-  // Al een schedule? Dan niets doen — deze functie moet idempotent zijn, want
-  // Stripe kan checkout.session.completed opnieuw aanbieden.
-  const bestaand = await admin.from('subscriptions')
-    .select('stripe_schedule_id').eq('stripe_subscription_id', subscriptionId).maybeSingle()
-  if (bestaand.data?.stripe_schedule_id) return 'schedule bestond al'
-
-  const schedule = await stripeFetch('/subscription_schedules', 'POST', {
-    from_subscription: subscriptionId,
-  })
-
-  // from_subscription levert één fase die de huidige periode weerspiegelt. Die
-  // fase krijgt nu 12 iteraties. start_date moet mee, anders verschuift Stripe
-  // het beginpunt naar nu en zou de looptijd langer worden dan 12 maanden.
-  const fase = schedule?.phases?.[0] ?? {}
-  const basis: Record<string, string> = {
-    'end_behavior': SCHEDULE_DOORLOPEN,
-    'phases[0][start_date]': String(fase.start_date ?? schedule.current_phase?.start_date ?? ''),
-    'phases[0][proration_behavior]': 'none',
-  }
-  ;(fase.items ?? []).forEach((it: any, i: number) => {
-    basis[`phases[0][items][${i}][price]`] = it.price
-    basis[`phases[0][items][${i}][quantity]`] = String(it.quantity ?? 1)
-  })
-  // De welkomstkorting hangt aan het abonnement; die moet op de fase herhaald
-  // worden, anders gooit het bijwerken van de phases hem eraf. De coupon loopt
-  // 2 van de 12 termijnen — hij verlengt de looptijd dus niet.
-  ;(fase.discounts ?? []).forEach((d: any, i: number) => {
-    const coupon = typeof d === 'string' ? d : (d.coupon?.id ?? d.coupon ?? d.discount?.coupon?.id)
-    if (coupon) basis[`phases[0][discounts][${i}][coupon]`] = coupon
-  })
-
-  // Lengte van de fase. Recente API-versies gebruiken `duration`; oudere
-  // `iterations`. Beide leveren 12 maandelijkse termijnen vanaf de startdatum op.
-  // We proberen de nieuwe vorm en vallen terug, zodat een versiebump aan
-  // Stripe's kant dit niet stilzwijgend breekt.
-  let bijgewerkt
-  try {
-    bijgewerkt = await stripeFetch(`/subscription_schedules/${schedule.id}`, 'POST', {
-      ...basis,
-      'phases[0][duration][interval]': 'month',
-      'phases[0][duration][interval_count]': String(JAAR_TERMIJNEN),
-    })
-  } catch (e) {
-    if (!/unknown parameter/i.test((e as Error).message)) throw e
-    bijgewerkt = await stripeFetch(`/subscription_schedules/${schedule.id}`, 'POST', {
-      ...basis,
-      'phases[0][iterations]': String(JAAR_TERMIJNEN),
-    })
-  }
-  const eindeFase = bijgewerkt?.phases?.[0]?.end_date ?? null
-
-  await admin.rpc('bb_stripe_sync_schedule', {
-    p_subscription_id: subscriptionId,
-    p_schedule_id: bijgewerkt.id,
-    p_verplichting_tot: naarISO(eindeFase),
-    p_stopt_na: false,
-  })
-  return `schedule ${bijgewerkt.id} · ${JAAR_TERMIJNEN} termijnen t/m ${naarISO(eindeFase)}`
-}
 
 // Stripe blijft retryen bij een niet-2xx. Bij een event dat we bewust NIET
 // verwerken willen we juist géén retry — daarom 200 met een uitleg.
@@ -419,7 +437,17 @@ serve(async (req) => {
       }
     }
 
-    return await rond(`${resultaat} (${type} → ${stripeStatus})${verplichting}${grendel}${actieResultaat}`, companyId)
+    // ── Bevestigingsmail ─────────────────────────────────────────────────────
+    // Pas als het abonnement echt loopt. Bij 'incomplete' (eerste betaling nog
+    // onderweg) of 'past_due' is "je abonnement is actief" simpelweg onwaar.
+    let mailResultaat = ''
+    if (stripeStatus === 'active' || stripeStatus === 'trialing') {
+      mailResultaat = ` · ${await stuurWelkomstmail(
+        admin, companyId, subscriptionId, tier, extraGebruikers, modules,
+        interval, periodEnd, appOrigin(''))}`
+    }
+
+    return await rond(`${resultaat} (${type} → ${stripeStatus})${verplichting}${grendel}${actieResultaat}${mailResultaat}`, companyId)
   } catch (e) {
     // Fout in onze verwerking: laat het event los zodat Stripe opnieuw aanbiedt.
     await admin.from('stripe_billing_events').delete().eq('event_id', eventId)

@@ -122,6 +122,13 @@ export const MODULE_VEREIST: Record<string, string | null> = {
 // Hoeveel gebruikers zitten er in het pakket zelf (de rest is een extra item).
 export const INBEGREPEN_GEBRUIKERS = 1
 
+// Prijs per extra gebruiker. Spiegelt src/lib/tiers.js → EXTRA_USER_PRICE; een
+// edge function kan die module niet laden. Alleen voor wat we in mails en
+// meldingen NOEMEN — wat er daadwerkelijk wordt geïncasseerd bepaalt de Stripe
+// price achter STRIPE_PRICE_EXTRA_GEBRUIKER, en die komt uit hetzelfde bestand
+// via scripts/stripe-setup-prices.mjs.
+export const EXTRA_GEBRUIKER_PRIJS = 10
+
 // ── GEDEELDE HTTP-BOUWSTENEN ─────────────────────────────────────────────────
 export const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -190,12 +197,189 @@ export function duidItems(items: any[]): {
   return { tier, priceId, extraGebruikers, modules }
 }
 
+// ── ITEMMUTATIES BEREKENEN ───────────────────────────────────────────────────
+// Van "wat heeft de klant nu" naar "wat wil hij" — als een reeks mutaties op de
+// bestaande subscription-items. Stripe verwacht per item óf een `id` (bestaand
+// item bijwerken of verwijderen) óf een `price` (nieuw item).
+//
+// Apart van billing-wijzig omdat dit de plek is waar een fout geld kost: een
+// gemiste `deleted` betekent dat de klant blijft betalen voor een module die hij
+// heeft opgezegd, en een dubbel toegevoegde regel dat hij dubbel betaalt. Los
+// testbaar is hier meer waard dan compact.
+export type ItemMutaties = { params: Record<string, string>; wijzigingen: string[] }
+
+export function bouwItemMutaties(opts: {
+  huidigeItems: any[]
+  doelTier: string
+  doelExtra: number
+  doelModules: string[]
+  prijsVoorTier: (tier: string) => string
+  prijsVoorModule: (key: string) => string
+  prijsExtraGebruiker: () => string
+}): ItemMutaties {
+  const {
+    huidigeItems, doelTier, doelExtra, doelModules,
+    prijsVoorTier, prijsVoorModule, prijsExtraGebruiker,
+  } = opts
+
+  const params: Record<string, string> = {}
+  const wijzigingen: string[] = []
+  let i = 0
+
+  const huidig = duidItems(huidigeItems)
+
+  // Pakketregel.
+  const tierItem = huidigeItems.find(it => duidPrijs(it?.price?.id ?? '').soort === 'tier')
+  const nieuwTierPrice = prijsVoorTier(doelTier)
+  if (!tierItem) {
+    params[`items[${i}][price]`] = nieuwTierPrice
+    params[`items[${i}][quantity]`] = '1'
+    i++
+    wijzigingen.push(`pakket ${doelTier}`)
+  } else if (tierItem.price?.id !== nieuwTierPrice) {
+    params[`items[${i}][id]`] = tierItem.id
+    params[`items[${i}][price]`] = nieuwTierPrice
+    params[`items[${i}][quantity]`] = '1'
+    i++
+    wijzigingen.push(`${huidig.tier ?? 'pakket'} → ${doelTier}`)
+  }
+
+  // Extra gebruikers: één regel met een aantal. Op nul betekent de regel weg —
+  // een quantity van 0 accepteert Stripe niet als "gratis", dat is een fout.
+  const extraItem = huidigeItems.find(it => duidPrijs(it?.price?.id ?? '').soort === 'extra_gebruiker')
+  if (doelExtra > 0 && !extraItem) {
+    params[`items[${i}][price]`] = prijsExtraGebruiker()
+    params[`items[${i}][quantity]`] = String(doelExtra)
+    i++
+    wijzigingen.push(`${doelExtra} extra gebruiker(s)`)
+  } else if (doelExtra > 0 && extraItem && Number(extraItem.quantity ?? 0) !== doelExtra) {
+    params[`items[${i}][id]`] = extraItem.id
+    params[`items[${i}][quantity]`] = String(doelExtra)
+    i++
+    wijzigingen.push(`extra gebruikers ${extraItem.quantity} → ${doelExtra}`)
+  } else if (doelExtra === 0 && extraItem) {
+    params[`items[${i}][id]`] = extraItem.id
+    params[`items[${i}][deleted]`] = 'true'
+    i++
+    wijzigingen.push('extra gebruikers eraf')
+  }
+
+  // Modules: erbij wat ontbreekt, eraf wat niet meer gewenst is.
+  const huidigeModules = new Set(huidig.modules.map(m => m.module_key))
+  for (const key of doelModules) {
+    if (huidigeModules.has(key)) continue
+    params[`items[${i}][price]`] = prijsVoorModule(key)
+    params[`items[${i}][quantity]`] = '1'
+    i++
+    wijzigingen.push(`module ${key} erbij`)
+  }
+  for (const m of huidig.modules) {
+    if (doelModules.includes(m.module_key)) continue
+    params[`items[${i}][id]`] = m.item_id
+    params[`items[${i}][deleted]`] = 'true'
+    i++
+    wijzigingen.push(`module ${m.module_key} eraf`)
+  }
+
+  return { params, wijzigingen }
+}
+
 // Stripe levert tijdstippen als unix-seconden.
 export const naarISO = (sec: unknown): string | null =>
   Number.isFinite(Number(sec)) && Number(sec) > 0
     ? new Date(Number(sec) * 1000).toISOString()
     : null
 
+
+// ── JAARVERPLICHTING ─────────────────────────────────────────────────────────
+// Zet (of hérzet) de subscription_schedule die de 12 maanden vastlegt.
+//
+// Gedeeld tussen de webhook (bij het afsluiten) en billing-wijzig (bij een
+// pakketupgrade, waarbij de looptijd opnieuw begint). Eén implementatie, want
+// twee versies van "wat is de looptijd" is precies het soort verschil dat je pas
+// merkt als een klant zegt dat hij eerder wilde kunnen opzeggen.
+//
+// `opnieuw: true` reset: bestaande schedule vrijgeven en een verse aanmaken
+// vanaf de lopende factuurperiode. Zonder die vlag is de functie idempotent en
+// doet hij niets als er al een schedule staat — Stripe kan
+// checkout.session.completed immers opnieuw aanbieden.
+export async function zetJaarverplichting(
+  admin: any,
+  subscriptionId: string,
+  opts: { opnieuw?: boolean } = {},
+): Promise<string> {
+  const opnieuw = opts.opnieuw === true
+
+  const bestaand = await admin.from('subscriptions')
+    .select('stripe_schedule_id').eq('stripe_subscription_id', subscriptionId).maybeSingle()
+  const oudeSchedule = bestaand.data?.stripe_schedule_id ?? null
+
+  if (oudeSchedule && !opnieuw) return 'schedule bestond al'
+
+  // Bij een reset moet de oude eerst weg. Is hij al released (bv. doordat
+  // billing-wijzig hem moest vrijgeven om de items te kunnen wijzigen), dan is
+  // dat geen fout maar precies de situatie waar we in willen zijn.
+  if (oudeSchedule && opnieuw) {
+    try {
+      await stripeFetch(`/subscription_schedules/${oudeSchedule}/release`, 'POST', {})
+    } catch (e) {
+      if (!/released|completed|canceled|not found/i.test((e as Error).message)) throw e
+    }
+  }
+
+  const schedule = await stripeFetch('/subscription_schedules', 'POST', {
+    from_subscription: subscriptionId,
+  })
+
+  // from_subscription levert één fase die de huidige periode weerspiegelt. Die
+  // fase krijgt nu 12 iteraties. start_date moet mee, anders verschuift Stripe
+  // het beginpunt naar nu en zou de looptijd langer worden dan 12 maanden.
+  const fase = schedule?.phases?.[0] ?? {}
+  const basis: Record<string, string> = {
+    'end_behavior': SCHEDULE_DOORLOPEN,
+    'phases[0][start_date]': String(fase.start_date ?? schedule.current_phase?.start_date ?? ''),
+    'phases[0][proration_behavior]': 'none',
+  }
+  ;(fase.items ?? []).forEach((it: any, i: number) => {
+    basis[`phases[0][items][${i}][price]`] = typeof it.price === 'string' ? it.price : it.price?.id
+    basis[`phases[0][items][${i}][quantity]`] = String(it.quantity ?? 1)
+  })
+  // De welkomstkorting hangt aan het abonnement; die moet op de fase herhaald
+  // worden, anders gooit het bijwerken van de phases hem eraf. De coupon loopt
+  // 2 van de 12 termijnen — hij verlengt de looptijd dus niet.
+  ;(fase.discounts ?? []).forEach((d: any, i: number) => {
+    const coupon = typeof d === 'string' ? d : (d.coupon?.id ?? d.coupon ?? d.discount?.coupon?.id)
+    if (coupon) basis[`phases[0][discounts][${i}][coupon]`] = coupon
+  })
+
+  // Lengte van de fase. Recente API-versies gebruiken `duration`; oudere
+  // `iterations`. Beide leveren 12 maandelijkse termijnen vanaf de startdatum op.
+  // We proberen de nieuwe vorm en vallen terug, zodat een versiebump aan
+  // Stripe's kant dit niet stilzwijgend breekt.
+  let bijgewerkt
+  try {
+    bijgewerkt = await stripeFetch(`/subscription_schedules/${schedule.id}`, 'POST', {
+      ...basis,
+      'phases[0][duration][interval]': 'month',
+      'phases[0][duration][interval_count]': String(JAAR_TERMIJNEN),
+    })
+  } catch (e) {
+    if (!/unknown parameter/i.test((e as Error).message)) throw e
+    bijgewerkt = await stripeFetch(`/subscription_schedules/${schedule.id}`, 'POST', {
+      ...basis,
+      'phases[0][iterations]': String(JAAR_TERMIJNEN),
+    })
+  }
+  const eindeFase = bijgewerkt?.phases?.[0]?.end_date ?? null
+
+  await admin.rpc('bb_stripe_sync_schedule', {
+    p_subscription_id: subscriptionId,
+    p_schedule_id: bijgewerkt.id,
+    p_verplichting_tot: naarISO(eindeFase),
+    p_stopt_na: false,
+  })
+  return `${opnieuw ? 'looptijd opnieuw gezet' : 'schedule'} ${bijgewerkt.id} · ${JAAR_TERMIJNEN} termijnen t/m ${naarISO(eindeFase)}`
+}
 
 // ── MAIL ─────────────────────────────────────────────────────────────────────
 // Zelfde route als check-herinneringen: rechtstreeks naar Resend. Dit zijn mails

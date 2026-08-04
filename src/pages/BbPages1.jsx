@@ -75,7 +75,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   const [showNewProject, setShowNewProject] = useState(false);
   // Offerte-/factuurlimiet: aanmaken vanaf de klantkaart loopt door dezelfde
   // gate als de overzichtspagina's.
-  const { guardLimiet, planModal } = usePlanGuard();
+  const { guardLimiet, guardSchrijven, planModal } = usePlanGuard();
   const [klantNotities, setKlantNotities] = useState([]);
   const [tijdlijn, setTijdlijn] = useState([]);
   const [newOverzichtText, setNewOverzichtText] = useState('');
@@ -629,7 +629,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Projecten</div>
-              <button onClick={() => setShowNewProject(true)} className="btn-plus">{I.plus}</button>
+              <button onClick={guardSchrijven('Een project aanmaken', () => setShowNewProject(true))} className="btn-plus">{I.plus}</button>
             </div>
             {cProjecten.length === 0 && <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Geen projecten</div>}
             {cProjecten.map(p => (
@@ -810,7 +810,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
         <div>
           <div className="lsec-hd">
             <div className="lsec-title">Projecten ({cProjecten.length})</div>
-            <button className="btn btn-s btn-sm" onClick={() => setShowNewProject(true)}>{I.plus} Nieuw project</button>
+            <button className="btn btn-s btn-sm" onClick={guardSchrijven('Een project aanmaken', () => setShowNewProject(true))}>{I.plus} Nieuw project</button>
           </div>
           {cProjecten.length === 0
             ? <div className="lsec-empty">Geen projecten</div>

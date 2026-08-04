@@ -19,6 +19,12 @@ export async function getPlanStatus() {
     trialEndsAt:  data.trialEndsAt || null,
     periodeStart: data.periodeStart || null,
     periodeEind:  data.periodeEind || null,
+    // Read-only en de reden erachter. Alleen een expliciete `true` telt: een
+    // ontbrekend veld (oudere database, RPC die nog niet is bijgewerkt) mag het
+    // account nooit op alleen-lezen zetten.
+    readonly:      data.readonly === true,
+    readonlyReden: data.readonlyReden || null,
+    magBeheren:    data.magBeheren === true,
     modules:      Array.isArray(data.modules) ? data.modules : [],
     features:     Array.isArray(data.features) ? data.features : [],
     limits:       data.limits || {},
@@ -37,6 +43,9 @@ export function fallbackPlanStatus(tier = DEFAULT_TIER) {
   return {
     tier: t, plan: t, status: null, trial: false, trialEndsAt: null,
     periodeStart: null, periodeEind: null,
+    // Zonder serverantwoord nooit read-only — zie de veiligheidsklep in de
+    // database. Een storing in het ophalen van de stand mag geen account sluiten.
+    readonly: false, readonlyReden: null, magBeheren: false,
     modules: [], features: TIER_FEATURES[t] || [], limits,
   }
 }
