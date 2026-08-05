@@ -44,3 +44,7 @@ verify_jwt = false
 # beïnvloeden.
 [functions.billing-webhook]
 verify_jwt = false
+
+# Draait op de cron, niet vanuit de browser: geen gebruikers-JWT.
+[functions.trial-mails]
+verify_jwt = false
