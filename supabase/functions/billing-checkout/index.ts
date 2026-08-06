@@ -163,11 +163,17 @@ serve(async (req) => {
     }
 
     // ── 5. Loopt er al een abonnement? Dan is dit een wijziging ────────────────
-    // Wijzigen hoort in het Customer Portal thuis (daar zit ook proratie en de
-    // betaalmethode). Een tweede Checkout zou een tweede abonnement maken.
+    // Een tweede Checkout zou een tweede abonnement naast het bestaande maken.
+    // Wijzigen loopt via billing-wijzig, dat de items van het lopende abonnement
+    // bijwerkt. NIET via het Customer Portal: dat kan van pakket wisselen niet
+    // voor jaarklanten binnen hun looptijd, en het kent geen van onze regels
+    // (downgradegrendel, looptijd, looptijdreset).
+    //
+    // De code heet nog `gebruik_portal` omdat oudere cliëntversies daarop
+    // reageren; de melding wijst naar de juiste plek.
     if (sub?.stripe_subscription_id) {
       return json({
-        error: 'Je hebt al een lopend abonnement. Wijzigen gaat via het abonnementsbeheer.',
+        error: 'Je hebt al een lopend abonnement. Gebruik "Abonnement wijzigen" in plaats van opnieuw afsluiten.',
         code: 'gebruik_portal',
       }, 409)
     }

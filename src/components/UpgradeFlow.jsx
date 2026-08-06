@@ -14,7 +14,7 @@ import {
 } from '../lib/features.js';
 import { readonlyTekst } from '../lib/readonly.js';
 import {
-  getBillingStatus, startCheckout, wijzigAbonnement, openPortal, magWisselen,
+  getBillingStatus, startCheckout, wijzigAbonnement, magWisselen,
 } from '../services/billingService.js';
 import { requestUpgrade } from '../services/planService.js';
 
@@ -367,8 +367,20 @@ export function UpgradeFlow({ aanleiding = null, onClose, onKlaar = null }) {
       if (e.code === 'downgrade_geblokkeerd' || e.code === 'boven_limiet') {
         setFout({ bericht: e.message, blokkades: e.blokkades || [] });
       } else if (e.code === 'gebruik_portal') {
-        // Kan alleen nog voorkomen bij een oude cliëntversie; dan het portal.
-        try { window.location.href = await openPortal(); } catch { setFout({ bericht: e.message }); }
+        // Er blijkt tóch al een abonnement te lopen: dit scherm was geopend
+        // toen dat er nog niet was. Dan is wijzigen de juiste weg, niet
+        // afrekenen — en zeker niet het Stripe-portal, dat van pakket wisselen
+        // niet (meer) aanbiedt.
+        try {
+          const r = await wijzigAbonnement({ tier, extraGebruikers: extra, modules });
+          toast.success(r?.bericht || 'Je abonnement is bijgewerkt.');
+          bumpRefresh?.();
+          onKlaar?.(r);
+          onClose?.();
+          return;
+        } catch (e2) {
+          setFout({ bericht: e2.message || 'Wijzigen mislukt', blokkades: e2.blokkades || [] });
+        }
       } else {
         setFout({ bericht: e.message || 'Er ging iets mis' });
       }

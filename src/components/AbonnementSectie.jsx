@@ -81,8 +81,6 @@ export function AbonnementSectie() {
   if (laden) return <div className="card card-p">Abonnement laden…</div>;
   if (!stand) return <div className="card card-p">Geen abonnementsgegevens gevonden.</div>;
 
-  const geblokkeerd = blokkades.length > 0;
-
   // Opzeggen loopt bewust via ons eigen scherm en niet via het Customer Portal:
   // het portal kan alleen "direct" of "per einde factuurperiode" (= één maand)
   // en zou de jaarlooptijd dus omzeilen. billing-cancel houdt de einddatum aan.
@@ -209,14 +207,20 @@ export function AbonnementSectie() {
           </div>
         )}
 
+        {/* Wijzigen staat vooraan en is de primaire knop. Voorheen was dat
+            "Abonnement beheren" (het Stripe-portal), en dat trok precies de
+            mensen aan die een groter pakket zochten — terwijl het portal daar
+            niet over gaat. Alle abonnementswijzigingen lopen via ons eigen
+            scherm, met onze regels erop: de downgradegrendel boven de limiet,
+            de jaarlooptijd en de looptijdreset bij een upgrade. */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {stand.heeftStripe ? (
             <>
-              <button className="btn btn-p" onClick={naarPortal} disabled={bezig}>
-                {bezig ? 'Bezig…' : 'Abonnement beheren'}
+              <button className="btn btn-p" onClick={() => setWijzigen(w => !w)} disabled={bezig}>
+                Abonnement wijzigen
               </button>
-              <button className="btn btn-s" onClick={() => setWijzigen(w => !w)} disabled={bezig}>
-                Ander pakket
+              <button className="btn btn-s" onClick={naarPortal} disabled={bezig}>
+                {bezig ? 'Bezig…' : 'Facturen en betaalmethode'}
               </button>
               {stand.stoptNaLooptijd || stand.opzeggenPerEindePeriode ? (
                 <button className="btn btn-ghost" onClick={() => opzeggen(true)} disabled={bezig}>
@@ -234,6 +238,16 @@ export function AbonnementSectie() {
             </button>
           )}
         </div>
+
+        {/* Zeggen wat achter welke knop zit, zodat niemand het portal in gaat
+            om iets te doen wat daar niet kan. */}
+        {stand.heeftStripe && (
+          <p style={{ fontSize: '.8rem', color: 'var(--dmu)', marginTop: 10, marginBottom: 0 }}>
+            Van pakket wisselen, modules bij- of afkopen en teamleden toevoegen doe je onder
+            <strong> Abonnement wijzigen</strong>. Onder <strong>Facturen en betaalmethode</strong>
+            {' '}vind je je facturen, wijzig je je betaalmethode en pas je je factuurgegevens aan.
+          </p>
+        )}
 
         {!stand.heeftStripe && (
           <p style={{ fontSize: '.8rem', color: 'var(--dmu)', marginTop: 10, marginBottom: 0 }}>
