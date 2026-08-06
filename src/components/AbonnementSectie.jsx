@@ -60,7 +60,7 @@ function LimietRegel({ sleutel, stand }) {
 
 export function AbonnementSectie() {
   const toast = useToast();
-  const { profile, bumpRefresh } = useProfile();
+  const { profile } = useProfile();
   const [stand, setStand] = useState(null);
   const [laden, setLaden] = useState(true);
   const [bezig, setBezig] = useState(false);

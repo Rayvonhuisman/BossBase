@@ -293,7 +293,6 @@ export function UpgradeFlow({ aanleiding = null, onClose, onKlaar = null }) {
   const magBetalen = stand?.magBeheren === true;
 
   const heeftStripe = stand?.heeftStripe === true;
-  const jaarklant = stand?.billingInterval === 'jaar';
   const inLooptijd = stand?.heeftVerplichting === true;
 
   // Betaaltermijn kiezen kan alleen bij een NIEUW abonnement. Van maandelijks

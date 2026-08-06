@@ -292,7 +292,10 @@ function UrenTable({ rows, onEdit, onDelete }) {
 
 // ── Mobile stacked cards (grouped by date) ──────────────────────────────────
 function MobileList({ rows, onEdit, onDelete }) {
-  if (!rows.length) return <EmptyState />;
+  // useMemo staat bewust vóór de lege-lijst-afhandeling. Stond de early return
+  // erboven, dan roept deze component bij een lege lijst één hook minder aan dan
+  // bij een gevulde — en React klapt eruit met "Rendered more hooks than during
+  // the previous render" zodra er een uur bij komt of het laatste verdwijnt.
   const groups = useMemo(() => {
     const map = new Map();
     for (const r of rows) {
@@ -307,6 +310,8 @@ function MobileList({ rows, onEdit, onDelete }) {
         totalUren: items.reduce((s, r) => s + (Number(r.uren) || 0), 0),
       }));
   }, [rows]);
+
+  if (!rows.length) return <EmptyState />;
 
   return (
     <div className="uren2-mlist">
