@@ -30,7 +30,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
-  stripeFetch, json, CORS, eisAbonnementsbeheerder, weigerLiveVanafLokaal,
+  stripeFetch, json, CORS, eisAbonnementsbeheerder,
   tierPriceId, modulePriceId, extraUserPriceId, duidItems, naarISO, bouwItemMutaties,
   zetJaarverplichting, isJaar,
   MODULE_BESCHIKBAAR, MODULE_VEREIST, inbegrepenGebruikers,
@@ -62,10 +62,6 @@ serve(async (req) => {
     const auth = await eisAbonnementsbeheerder(admin, userClient)
     if (auth instanceof Response) return auth
     const { companyId } = auth
-
-    // Geen live Stripe vanaf localhost — zie weigerLiveVanafLokaal.
-    const grendel = weigerLiveVanafLokaal(req.headers.get('origin'))
-    if (grendel) return grendel
 
     const body = await req.json().catch(() => ({}))
     const doelTier: string = String(body?.tier || '').toLowerCase()

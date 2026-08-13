@@ -44,6 +44,7 @@ import { usePermissions } from './hooks/usePermissions.js';
 import { usePlan } from './hooks/usePlan.js';
 import { ReadOnlyBanner } from './components/ReadOnly.jsx';
 import { CheckoutTerugkeer } from './components/CheckoutTerugkeer.jsx';
+import { BossChat, BOSS_BEGROETING } from './components/BossChat.jsx';
 import { featureLabel } from './lib/features.js';
 import { clearCompanyId, setCompanyId } from './lib/currentCompany.js';
 import { ToastProvider, useToast } from './lib/toast.jsx';
@@ -261,16 +262,60 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loadin
 }
 
 // ── TOPBAR ───────────────────────────────────────────────────
-function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, onLogout, openCustomer, navigatePage, refreshKey }) {
+// De Boss-knop. Laadt de avatar niet, dan tonen we een groene B in plaats van
+// het gebroken-afbeeldingicoon van de browser — dat oogt als een defect
+// portaal terwijl er alleen een plaatje mist.
+function BossKnop({ onClick }) {
+  const [mislukt, setMislukt] = useState(false);
+  return (
+    <button className="tb-boss" title="Vraag het Boss" aria-label="Vraag het Boss" onClick={onClick}>
+      {mislukt
+        ? <span className="tb-boss-val" aria-hidden="true">B</span>
+        : <img src="/boss-avatar.png" alt="" onError={() => setMislukt(true)} />}
+    </button>
+  );
+}
+
+function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, onLogout, openCustomer, navigatePage, refreshKey, onOpenBoss }) {
   const { customers: dCustomers, deals: dDeals, activities: dActivities, offertes: dOffertes, werkbonnen: dWerkbonnen, refresh: refreshData } = useData();
   const [openMenu, setOpenMenu] = useState(null);
   const [search, setSearch] = useState('');
+  // Zoekbalk staat ingeklapt tot je op het icoon klikt. Escape of een klik
+  // ernaast klapt hem weer in; een lopende zoekterm blijft dan wel staan.
+  const [zoekOpen, setZoekOpen] = useState(false);
+  const zoekInput = useRef(null);
+  const zoekWrap = useRef(null);
   const [notifActivity, setNotifActivity] = useState(null);
   const [dbNotifs, setDbNotifs] = useState([]);
   const [markingAll, setMarkingAll] = useState(false);
   const wrapRef = useRef(null);
 
   const close = () => setOpenMenu(null);
+
+  // Zoekbalk inklappen bij een klik ernaast of Escape. Apart van de
+  // menu-afhandeling hierboven: die luistert alleen zolang er een popover open
+  // staat, en de zoekbalk kan ook uitgeklapt zijn zonder resultatenlijst.
+  useEffect(() => {
+    if (!zoekOpen) return;
+    const buiten = e => {
+      if (zoekWrap.current && !zoekWrap.current.contains(e.target)) {
+        setZoekOpen(false);
+        setOpenMenu(m => (m === 'search' ? null : m));
+      }
+    };
+    const esc = e => {
+      if (e.key === 'Escape') {
+        setZoekOpen(false);
+        setOpenMenu(m => (m === 'search' ? null : m));
+      }
+    };
+    document.addEventListener('mousedown', buiten);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', buiten);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [zoekOpen]);
 
   useEffect(() => {
     const onClick = e => {
@@ -369,10 +414,23 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
         </div>
       </div>
       <div className="tb-right">
-        <div className="tb-search-wrap">
+        <div className={`tb-search-wrap${zoekOpen ? ' open' : ''}`} ref={zoekWrap}>
+          <button
+            className="tb-search-btn"
+            title="Zoeken"
+            aria-label="Zoeken"
+            onClick={() => {
+              setZoekOpen(true);
+              // Focus pas nadat het veld daadwerkelijk breedte heeft.
+              requestAnimationFrame(() => zoekInput.current?.focus());
+            }}
+          >
+            {I.search}
+          </button>
           <div className="search">
             {I.search}
             <input
+              ref={zoekInput}
               // Chrome vulde hier het e-mailadres in omdat het veld op een
               // ingelogde pagina staat zonder autocomplete-hint.
               type="search"
@@ -384,6 +442,9 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
               value={search}
               onFocus={() => { if (!searchData.customers.length) loadSearchData(); setOpenMenu('search'); }}
               onChange={e => onSearchChange(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Escape') { setZoekOpen(false); setOpenMenu(null); e.currentTarget.blur(); }
+              }}
             />
           </div>
           {openMenu === 'search' && (
@@ -447,6 +508,11 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
             </div>
           )}
         </div>
+        {/* Boss staat als directe flex-kind in .tb-right, náást de ankerdoos van
+            de meldingen. Stond hij eerst binnen .tb-anchor, en die is alleen
+            position:relative zonder flex — daar stapelen de knoppen verticaal,
+            waardoor Boss bóven de bel belandde in plaats van ernaast. */}
+        <BossKnop onClick={onOpenBoss} />
         <div className="tb-anchor">
           <button className="ib" title="Meldingen" onClick={() => setOpenMenu(m => m === 'notif' ? null : 'notif')}>
             {I.bell}
@@ -855,6 +921,15 @@ function AppInner() {
   const [globalJobCosts, setGlobalJobCosts] = useState([]);
   const [globalDataLoading, setGlobalDataLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  // Boss. De geschiedenis staat hier en niet in het chatvenster zelf: sluit je
+  // het paneel, dan is je gesprek er bij het openen gewoon nog. Bewust in
+  // React-state en niet in de browseropslag — het gesprek leeft zolang je
+  // ingelogd bent en verdwijnt daarna vanzelf.
+  const [bossOpen, setBossOpen] = useState(false);
+  const [bossBerichten, setBossBerichten] = useState([
+    { rol: 'boss', tekst: BOSS_BEGROETING, begroeting: true },
+  ]);
+  const [bossGesprekId, setBossGesprekId] = useState(null);
 
   const PAGE_META = useMemo(() => {
     const name = displayName(profile, user);
@@ -1498,6 +1573,7 @@ function AppInner() {
             openCustomer={openCustomer}
             navigatePage={navigatePage}
             refreshKey={refreshKey}
+            onOpenBoss={() => setBossOpen(true)}
           />
           <div className={`content${page === 'customers' && drawerCust !== null ? ' content-split' : ''}`}>
             {showProfileMissing ? (
@@ -1561,6 +1637,15 @@ function AppInner() {
             )}
           </div>
         </div>
+
+        <BossChat
+          open={bossOpen}
+          onClose={() => setBossOpen(false)}
+          berichten={bossBerichten}
+          setBerichten={setBossBerichten}
+          gesprekId={bossGesprekId}
+          setGesprekId={setBossGesprekId}
+        />
 
         <MobileBottomNav
           page={page}

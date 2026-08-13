@@ -143,29 +143,6 @@ export const inbegrepenGebruikers = (tier: string): number =>
 // via scripts/stripe-setup-prices.mjs.
 export const EXTRA_GEBRUIKER_PRIJS = 10
 
-// ── GRENDEL: GEEN LIVE STRIPE VANAF EEN LOKALE OMGEVING ──────────────────────
-// De frontend praat lokaal met hetzelfde Supabase-project als productie, dus een
-// testklik in `npm run dev` belandde met een live sleutel in het echte
-// Stripe-account. Dat is één keer gebeurd; deze grendel voorkomt het voortaan.
-//
-// De check is bewust op de COMBINATIE: een live sleutel én een lokale herkomst.
-// Productie draait op bossbase.nl en wordt dus nooit geraakt; test-sleutels
-// (sk_test_) mogen lokaal gewoon.
-const LOKALE_HERKOMST = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i
-
-export function weigerLiveVanafLokaal(reqOrigin: string | null): Response | null {
-  const key = Deno.env.get('STRIPE_SECRET_KEY') || ''
-  const live = key.startsWith('sk_live_') || key.startsWith('rk_live_')
-  if (!live) return null
-  if (!LOKALE_HERKOMST.test(String(reqOrigin || ''))) return null
-  return json({
-    error: 'Dit project draait met een LIVE Stripe-sleutel. Vanaf een lokale omgeving '
-      + 'wordt er niets naar Stripe gestuurd, zodat een test nooit in het echte account belandt. '
-      + 'Gebruik een staging-project met sk_test_ om de betaalflow te testen.',
-    code: 'live_stripe_vanaf_lokaal',
-  }, 403)
-}
-
 // ── GEDEELDE HTTP-BOUWSTENEN ─────────────────────────────────────────────────
 export const CORS = {
   'Access-Control-Allow-Origin': '*',

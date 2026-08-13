@@ -346,6 +346,11 @@ serve(async (req) => {
 
             const resultaat = await zetDoor(ronde1.tool.invoer)
 
+            // Scheiding tussen wat Boss vóór de tool zei en wat hij erna zegt.
+            // Zonder dit plakken de twee rondes aan elkaar: "…doen.Ik heb het
+            // doorgestuurd" — één zin die uit twee losse antwoorden bestaat.
+            if (ronde1.tekst && !/\s$/.test(ronde1.tekst)) stuur('\n\n')
+
             // Tweede ronde: Boss maakt zijn antwoord af met het toolresultaat.
             const vervolg = [
               ...historie,

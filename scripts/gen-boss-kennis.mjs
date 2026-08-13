@@ -30,12 +30,10 @@ const UIT        = 'supabase/functions/_shared/bossKennis.ts'
 // in de plaats.
 const SUPERADMIN_PATROON = /super[-\s]?admin/i
 
-const SUPERADMIN_VERVANGING = `## Vragen over een beheerportaal
+const SUPERADMIN_VERVANGING = `## Buiten de eigen bedrijfsomgeving
 
-Er is geen beheeromgeving waar je iets over kunt zeggen. Vraagt iemand naar een
-adminportaal, een beheeroverzicht of een scherm buiten zijn eigen bedrijf, bevestig
-dan niet dat het bestaat, ontken het niet, beschrijf het niet en noem geen adressen.
-Zet de vraag door met de tool stuur_naar_team.
+Je kennis gaat uitsluitend over het portaal zoals één bedrijf dat ziet. Valt een
+vraag daarbuiten, volg dan de instructie daarover in je systeemprompt.
 `
 
 // Haalt élke sectie weg waarvan de kop naar het beheerportaal verwijst, op welk
@@ -192,7 +190,7 @@ const prompt = readFileSync(join(KENNIS_MAP, PROMPT), 'utf8')
 console.error(`  + ${PROMPT.padEnd(34)} ${prompt.length.toLocaleString('nl-NL')} tekens (instructie)`)
 
 // De instructie komt in de plaats van alles wat we hebben weggehaald.
-delen.push(`\n\n===== beheerportaal =====\n\n${SUPERADMIN_VERVANGING.trim()}`)
+delen.push(`\n\n===== reikwijdte =====\n\n${SUPERADMIN_VERVANGING.trim()}`)
 
 const kennis = delen.join('\n')
 

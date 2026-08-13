@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Minus, Star, ChevronDown, Info, X } from 'lucide-react';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -41,12 +41,29 @@ const VOOR_WIE = {
 
 const AANBEVOLEN = 'groei';
 
-// Wat een pakket TOEVOEGT ten opzichte van het vorige. Alle features van Team
-// opsommen levert zeventien regels op en dan past de kaart niet meer in beeld;
-// het verschil is bovendien wat de klant wil weten. De volledige lijst staat
-// onder "Alles vergelijken".
+// Wat elk pakket ONDERSCHEIDT — niet de volledige lijst. Die staat compleet in
+// de vergelijkingstabel onderaan; de kaart hoort in één oogopslag te vertellen
+// waaróm je dit pakket kiest. Bewust drie regels per kaart: meer wordt een lijst
+// die je scant in plaats van leest.
 const VORIGE_TIER = { starter: null, groei: 'starter', team: 'groei' };
-const MAX_FEATURES_OP_KAART = 7;
+
+const USPS = {
+  starter: [
+    'Klanten, leads en pipeline',
+    'Offertes en facturen als PDF',
+    'Agenda, werkbonnen en uren',
+  ],
+  groei: [
+    'Klant tekent digitaal akkoord',
+    'Boekhoudkoppeling en BTW-overzicht',
+    'Kosten en nacalculatie per klus',
+  ],
+  team: [
+    'Rollen en rechten per medewerker',
+    'Teamplanning en voertuigen',
+    'Stripe betaallink inbegrepen',
+  ],
+};
 
 // Limieten die we per kaart tonen. Bewust concreet: "10 klanten" zegt meer dan
 // "basisfunctionaliteit".
@@ -77,6 +94,20 @@ export default function AbonnementPage({ setPage }) {
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState(null);
   const [toonVergelijking, setToonVergelijking] = useState(false);
+  const vergelijkRef = useRef(null);
+
+  // Uitklappen en er meteen naartoe scrollen. Zonder dat scrollen leek de knop
+  // niets te doen: de tabel opent buiten beeld, onder de vouw.
+  const wisselVergelijking = () => {
+    setToonVergelijking(v => {
+      const open = !v;
+      if (open) {
+        requestAnimationFrame(() =>
+          vergelijkRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      }
+      return open;
+    });
+  };
   const [gemeld, setGemeld] = useState(false);
   // Welke module-uitleg staat open? Bewust op klik en niet op hover: op een
   // tablet bestaat hover niet, en dan zou de uitleg onbereikbaar zijn.
@@ -94,7 +125,10 @@ export default function AbonnementPage({ setPage }) {
   };
 
   const [tier, setTier] = useState(null);
-  const [interval, setInterval] = useState('maand');
+  // Nieuw abonnement staat standaard op jaarlijks: daar hoort de welkomstactie
+  // bij en dat is voor de meeste klanten de betere keuze. Een lopend abonnement
+  // houdt gewoon zijn eigen termijn (zie hieronder).
+  const [interval, setInterval] = useState('jaar');
   const [actie, setActie] = useState(null);
   const [modules, setModules] = useState([]);
   // Totaal aantal gebruikers, niet "extra bovenop de eerste". Hoeveel er apart
@@ -124,7 +158,10 @@ export default function AbonnementPage({ setPage }) {
         // Minstens 1: bij Team zit er geen gebruiker in de pakketprijs, dus
         // zonder ondergrens zou de teller op 0 beginnen.
         setGebruikers(Math.max(1, inbegrepenGebruikers(start) + (v.extra || 0)));
-        setInterval(s?.billingInterval || 'maand');
+        // Alleen een LOPEND abonnement houdt zijn eigen termijn. Zonder Stripe
+        // staat er weliswaar een billing_interval in de proefrij, maar die zegt
+        // niets over wat de klant straks kiest — daar is jaarlijks de standaard.
+        setInterval(s?.heeftStripe ? (s.billingInterval || 'maand') : 'jaar');
         setActie(s?.welkomstactie || null);
       })
       .catch(e => leeft && setFout({ bericht: e.message || 'Abonnementsgegevens laden mislukt' }))
@@ -368,10 +405,7 @@ export default function AbonnementPage({ setPage }) {
               const huidig = heeftStripe && t.id === stand?.tier;
               const isVoorstel = voorstel?.tier === t.id && !huidig;
               const vorige = VORIGE_TIER[t.id];
-              const vanVorige = new Set(vorige ? (TIER_FEATURES[vorige] || []) : []);
-              const alle = (TIER_FEATURES[t.id] || []).filter(f => zichtbaar.has(f));
-              const nieuw = alle.filter(f => !vanVorige.has(f));
-              const rest = Math.max(0, nieuw.length - MAX_FEATURES_OP_KAART);
+              const usps = USPS[t.id] || [];
               return (
                 <div key={t.id} className={`ab-kaart${gekozen ? ' on' : ''}${t.id === AANBEVOLEN ? ' hot' : ''}`}>
                   {t.id === AANBEVOLEN && (
@@ -399,16 +433,9 @@ export default function AbonnementPage({ setPage }) {
                     {vorige && (
                       <li className="ab-erft">Alles van {tierLabel(vorige)}, plus:</li>
                     )}
-                    {nieuw.slice(0, MAX_FEATURES_OP_KAART).map(f => (
-                      <li key={f}><Check size={13} strokeWidth={2.4} /> {featureLabel(f)}</li>
+                    {usps.map(u => (
+                      <li key={u}><Check size={13} strokeWidth={2.4} /> {u}</li>
                     ))}
-                    {rest > 0 && (
-                      <li className="ab-meer">
-                        <button type="button" onClick={() => setToonVergelijking(true)}>
-                          + {rest} meer — alles vergelijken
-                        </button>
-                      </li>
-                    )}
                   </ul>
 
                   <button className={`btn ${gekozen ? 'btn-s' : 'btn-p'} ab-kies`}
@@ -485,8 +512,8 @@ export default function AbonnementPage({ setPage }) {
           </div>
 
           {/* ── Volledige vergelijking ────────────────────────────────────── */}
-          <div className="ab-vergelijk afu3">
-            <button className="ab-vergelijk-knop" onClick={() => setToonVergelijking(v => !v)}
+          <div className="ab-vergelijk afu3" ref={vergelijkRef}>
+            <button className="ab-vergelijk-knop" onClick={wisselVergelijking}
               aria-expanded={toonVergelijking}>
               <ChevronDown size={16} className={toonVergelijking ? 'open' : ''} />
               Alles vergelijken
