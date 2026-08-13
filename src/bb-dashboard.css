@@ -247,9 +247,13 @@ ul{list-style:none}
 .ndot{position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:var(--p);border:1.5px solid white}
 .tb-av{width:30px;height:30px;border-radius:50%;background:var(--pl);color:var(--pd);font-weight:700;font-size:.72rem;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid transparent;transition:all .15s ease}
 .tb-av:hover{border-color:var(--p)}
-.tb-boss{width:34px;height:34px;border-radius:50%;padding:0;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .15s ease}
-.tb-boss img{width:30px;height:30px;border-radius:50%;object-fit:cover;display:block;border:2px solid transparent;transition:border-color .15s ease}
-.tb-boss:hover img{border-color:var(--p)}
+.tb-boss{width:34px;height:34px;padding:0;border:none;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .15s ease}
+/* Geen ronde uitsnede en geen rand. De avatar is een staande figuur (2:3) op een
+   witte achtergrond zónder transparantie; rond bijsnijden liet vooral dat witte
+   vlak zien, wat als een cirkel om het figuurtje heen oogde. Nu contain op volle
+   hoogte: de bovenbalk is ook wit, dus de achtergrond valt weg en je ziet alleen
+   het mannetje. */
+.tb-boss img{height:32px;width:auto;max-width:34px;object-fit:contain;display:block}
 .tb-boss:hover{transform:translateY(-1px)}
 /* Terugval zolang de avatar er niet is: zelfde maat en vorm als het plaatje. */
 .tb-boss-val{width:30px;height:30px;border-radius:50%;background:var(--pl);color:var(--pd);font-weight:800;font-size:.82rem;display:flex;align-items:center;justify-content:center;border:2px solid transparent;transition:border-color .15s ease}

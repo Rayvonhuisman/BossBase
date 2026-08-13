@@ -50,9 +50,12 @@ function Bericht({ rol, tekst, bezig }) {
       display: 'flex', gap: 10, marginBottom: 14,
       flexDirection: vanBoss ? 'row' : 'row-reverse',
     }}>
+      {/* Geen ronde uitsnede: de avatar is een staande figuur op een witte
+          achtergrond, en rond bijsnijden toont vooral het bovenlijf in een witte
+          cirkel. Contain laat het hele mannetje zien. */}
       {vanBoss && (
-        <img src={AVATAR} alt="" width={28} height={28}
-          style={{ borderRadius: '50%', flexShrink: 0, objectFit: 'cover', marginTop: 2 }} />
+        <img src={AVATAR} alt="" height={30}
+          style={{ width: 'auto', maxWidth: 26, flexShrink: 0, objectFit: 'contain', marginTop: 2 }} />
       )}
       <div style={{
         maxWidth: '78%',
@@ -209,8 +212,8 @@ export function BossChat({ open, onClose, berichten, setBerichten, gesprekId, se
           display: 'flex', alignItems: 'center', gap: 11,
           padding: '16px 20px', borderBottom: '1px solid var(--border)', flexShrink: 0,
         }}>
-          <img src={AVATAR} alt="" width={36} height={36}
-            style={{ borderRadius: '50%', objectFit: 'cover' }} />
+          <img src={AVATAR} alt="" height={38}
+            style={{ width: 'auto', maxWidth: 32, objectFit: 'contain', flexShrink: 0 }} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 15 }}>Boss</div>
             <div style={{ fontSize: '.78rem', color: 'var(--dmu)' }}>Helpt je met BossBase</div>
