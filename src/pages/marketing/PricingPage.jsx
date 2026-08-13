@@ -229,7 +229,7 @@ export default function PricingPage({ navigate }) {
                       <strong>€ {tierPrice(t.id)}</strong>
                       <span>/ maand{yearly ? " · 12 maanden" : ""}</span>
                     </div>
-                    <div className="extra-user">{t.hasExtra ? extraUserLabel() : " "}</div>
+                    <div className="extra-user">{t.hasExtra ? extraUserLabel(t.id) : " "}</div>
                     <ul>{t.features.map(f => <li key={f}>{I.check} {f}</li>)}</ul>
                     <a href="/registreer" className={`btn ${t.hot ? "btn-p glow" : "btn-s"}`}
                       style={{ width: "100%", justifyContent: "center" }}

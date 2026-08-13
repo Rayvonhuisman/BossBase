@@ -9,6 +9,7 @@ import OfferteSigneren from './pages/OfferteSigneren.jsx';
 import { DashboardHome } from './pages/dashboard/DashboardHome.jsx';
 import { Pipeline } from './pages/BbDashboard.jsx';
 import { DealDetailDrawer } from './pages/dashboard/DealDetailDrawer.jsx';
+import AbonnementPage from './pages/AbonnementPage.jsx';
 import { CalendarEventDetailDrawer } from './pages/dashboard/CalendarEventDetailDrawer.jsx';
 import { PageErrorBoundary } from './components/PageErrorBoundary.jsx';
 import { CustomerPage, CustomersPage, ActivitiesPage } from './pages/BbPages1.jsx';
@@ -811,7 +812,7 @@ function AppInner() {
     const path = window.location.pathname;
     if (path.startsWith('/dashboard/')) {
       const sub = path.slice('/dashboard/'.length).split('/')[0];
-      const VALID = ['pipeline','customers','activities','calendar','planning','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','database','team','instellingen'];
+      const VALID = ['pipeline','customers','activities','calendar','planning','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','database','team','instellingen','abonnement'];
       if (VALID.includes(sub)) return sub;
     }
     return 'dashboard';
@@ -883,7 +884,7 @@ function AppInner() {
       setRoute(path || '/');
       if (path.startsWith('/dashboard/')) {
         const sub = path.slice('/dashboard/'.length).split('/')[0];
-        const VALID = ['pipeline','customers','activities','calendar','planning','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','database','team','instellingen'];
+        const VALID = ['pipeline','customers','activities','calendar','planning','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','database','team','instellingen','abonnement'];
         setPage(VALID.includes(sub) ? sub : 'dashboard');
       } else if (path === '/dashboard') {
         setPage('dashboard');
@@ -1264,6 +1265,7 @@ function AppInner() {
     const props = { setPage: navigatePage, openCustomer, openDeal, openInvoice, openCalendarEvent };
     switch (page) {
       case 'dashboard':  return <DashboardHome {...props} />;
+      case 'abonnement': return <AbonnementPage {...props} />;
       case 'pipeline':   return <Pipeline openCustomer={openCustomer} openDeal={openDeal} setPage={navigatePage} />;
       case 'customers':
         return drawerCust !== null ? (

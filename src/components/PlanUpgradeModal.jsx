@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePlan } from '../hooks/usePlan.js';
 import { getLimitDef } from '../lib/features.js';
-import { UpgradeFlow } from './UpgradeFlow.jsx';
+import { gaNaarAbonnement } from '../lib/abonnementNav.js';
 
 // Dit bestand hield vroeger een eigen upgrade-modal. Die is vervangen door
 // UpgradeFlow: één scherm voor élke aanleiding (limiet, feature, read-only,
@@ -23,7 +23,7 @@ import { UpgradeFlow } from './UpgradeFlow.jsx';
 //
 // De server blokkeert hoe dan ook (RLS). Dit is er om het vóór de klik duidelijk
 // te maken in plaats van erna met een databasefout.
-export function usePlanGuard() {
+export function usePlanGuard(setPage = null) {
   const plan = usePlan();
   // Eén blokkade-object voor alle drie de gevallen: {limiet}, {feature} of
   // {readonly, actie}. Zo kan er nooit meer dan één melding tegelijk openstaan.
@@ -52,20 +52,26 @@ export function usePlanGuard() {
     setBlokkade({ feature: key });
   };
 
-  // Alle drie de gevallen komen uit bij hetzelfde scherm; alleen de aanleiding
+  // Alle drie de gevallen komen uit bij dezelfde pagina; alleen de aanleiding
   // verschilt. Die bepaalt wat er bovenaan staat en welke oplossing wordt
   // voorgesteld — de flow eronder is overal identiek.
-  const planModal = !blokkade
-    ? null
-    : <UpgradeFlow
-        aanleiding={
-          blokkade.readonly ? { soort: 'readonly', actie: blokkade.actie }
-          : blokkade.limiet === 'gebruikers' ? { soort: 'gebruikers' }
-          : blokkade.limiet ? { soort: 'limiet', key: blokkade.limiet }
-          : { soort: 'feature', key: blokkade.feature }
-        }
-        onClose={sluit}
-      />;
+  //
+  // Was een modal. Die moest te veel tonen in te weinig ruimte; het is nu een
+  // volwaardige pagina waar de aanleiding via de URL mee reist.
+  useEffect(() => {
+    if (!blokkade) return;
+    const aanleiding =
+      blokkade.readonly ? { soort: 'readonly', actie: blokkade.actie }
+      : blokkade.limiet === 'gebruikers' ? { soort: 'gebruikers' }
+      : blokkade.limiet ? { soort: 'limiet', key: blokkade.limiet }
+      : { soort: 'feature', key: blokkade.feature };
+    setBlokkade(null);
+    gaNaarAbonnement(setPage, aanleiding);
+  }, [blokkade]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // planModal blijft bestaan als naam: hij zit door de hele app heen als
+  // {planModal} in de JSX. Er valt nu alleen niets meer te renderen.
+  const planModal = null;
 
   return { plan, guardLimiet, guardFeature, guardSchrijven, planModal, toonBlokkade: setBlokkade };
 }

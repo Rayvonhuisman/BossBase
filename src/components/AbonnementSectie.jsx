@@ -5,7 +5,7 @@ import { tierLabel, tierPrice, EXTRA_USER_PRICE, welkomstactieLabel, getWelkomst
 import { moduleLabel, modulePrice, getLimitDef } from '../lib/features.js';
 import { getBillingStatus, openPortal, zegOp } from '../services/billingService.js';
 import { readonlyTekst, READONLY_BEWAARD } from '../lib/readonly.js';
-import { UpgradeFlow } from './UpgradeFlow.jsx';
+import { gaNaarAbonnement } from '../lib/abonnementNav.js';
 
 // Abonnementssectie in Instellingen: huidig pakket, status, verlengdatum,
 // verbruik tegen de limieten, modules en de knoppen om te wijzigen.
@@ -135,8 +135,11 @@ export function AbonnementSectie() {
             <span style={{ fontSize: '.76rem', color: 'var(--dmu)' }}>jaarabonnement</span>
           )}
           <div style={{ marginLeft: 'auto', fontSize: '.9rem', color: 'var(--dmu)' }}>
-            € {tierPrice(stand.tier)} p/mnd
-            {stand.extraGebruikers > 0 && ` + ${stand.extraGebruikers} × € ${EXTRA_USER_PRICE}`}
+            {/* extraGebruikers is wat er APART gefactureerd wordt; bij Team is dat
+                ook de eerste gebruiker. Het totaal aantal gebruikers is dus dit
+                plus wat er in het pakket zit. */}
+            € {tierPrice(stand.tier) + (stand.extraGebruikers || 0) * EXTRA_USER_PRICE} p/mnd
+            {stand.extraGebruikers > 0 && ` (${tierLabel(stand.tier)} + ${stand.extraGebruikers} × € ${EXTRA_USER_PRICE})`}
           </div>
         </div>
 
@@ -216,7 +219,7 @@ export function AbonnementSectie() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {stand.heeftStripe ? (
             <>
-              <button className="btn btn-p" onClick={() => setWijzigen(w => !w)} disabled={bezig}>
+              <button className="btn btn-p" onClick={() => gaNaarAbonnement(null, { soort: 'abonnement' })} disabled={bezig}>
                 Abonnement wijzigen
               </button>
               <button className="btn btn-s" onClick={naarPortal} disabled={bezig}>
@@ -233,7 +236,7 @@ export function AbonnementSectie() {
               )}
             </>
           ) : (
-            <button className="btn btn-p" onClick={() => setWijzigen(w => !w)} disabled={bezig}>
+            <button className="btn btn-p" onClick={() => gaNaarAbonnement(null, { soort: 'abonnement' })} disabled={bezig}>
               Abonnement afsluiten
             </button>
           )}
@@ -261,13 +264,7 @@ export function AbonnementSectie() {
           een read-only account. Voorheen stond hier een tweede, eigen versie van
           hetzelfde scherm — twee plekken om te onderhouden en twee ervaringen
           voor de klant. */}
-      {wijzigen && (
-        <UpgradeFlow
-          aanleiding={{ soort: 'abonnement' }}
-          onClose={() => setWijzigen(false)}
-          onKlaar={() => { setWijzigen(false); laad(); }}
-        />
-      )}
+
 
     </div>
   );

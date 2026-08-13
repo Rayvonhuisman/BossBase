@@ -23,6 +23,9 @@
   --dl: #9ca3af;
   --border: #f0ede9;
   --bstrong: #e5e7eb;
+  /* Hoogte van de vaste header + de ruimte die modals daaronder vrijhouden. */
+  --bb-header-h: 72px;
+  --bb-modal-gap: 16px;
   --r4: 4px; --r6: 6px; --r8: 8px; --r10: 10px; --r12: 12px; --r14: 14px; --r16: 16px; --r20: 20px; --r999: 999px;
   --br: #e5e7eb;
   --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
@@ -120,7 +123,16 @@ ul{list-style:none}
 .setup-option{border:1.5px solid var(--bstrong);border-radius:var(--r12);padding:16px 18px;text-align:left;display:flex;align-items:flex-start;gap:14px;transition:all .15s ease}
 .setup-option:hover{border-color:var(--p);background:var(--pll)}
 .setup-option.selected{border-color:var(--p);background:var(--pll)}
-.setup-option-icon{width:36px;height:36px;border-radius:var(--r8);background:linear-gradient(135deg,#1DDB62,#15A34A);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:1.1rem;color:#0D0D0D}
+/* Iconen in de app-huisstijl: zacht groen vlak met het merkgroen als lijnkleur,
+   zoals de icoontegels elders in het dashboard. Hier stond een vol groen verloop
+   met bijna-zwarte icoon — dat kwam uit een oudere stijl en matchte nergens mee. */
+.setup-option-icon{width:38px;height:38px;border-radius:var(--r10);background:var(--pll);border:1px solid var(--pl);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--pd)}
+.setup-option.selected .setup-option-icon{background:#fff;border-color:var(--p)}
+
+/* Proefperiode-uitleg onder de pakketkeuze bij aanmelden. */
+.trial-note{background:var(--pll);border:1px solid var(--pl);border-radius:var(--r12);padding:13px 15px;margin-bottom:18px}
+.trial-note-title{display:flex;align-items:center;gap:7px;font-weight:700;font-size:.85rem;color:var(--pd);margin-bottom:5px}
+.trial-note p{margin:0;font-size:.79rem;line-height:1.6;color:var(--dm)}
 .setup-option-label{font-weight:700;font-size:.9rem;color:var(--dk);margin-bottom:3px}
 .setup-option-sub{font-size:.78rem;color:var(--dmu)}
 
@@ -414,8 +426,12 @@ ul{list-style:none}
 .cust-split-list .cust-card-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))!important;gap:10px!important}
 
 /* FORMS / MODALS */
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.38);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px;animation:fadeIn .2s ease both;backdrop-filter:blur(4px)}
-.modal{background:white;border-radius:var(--r20);padding:28px 32px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.18);animation:fadeUp .25s cubic-bezier(.22,1,.36,1) both}
+/* Geen backdrop-blur: dat stond op sommige overlays wel en op andere niet, wat
+   inconsistent oogde. Een gewone donkere overlay is genoeg.
+   De bovenmarge houdt de modal vrij van de vaste header — zonder die padding
+   kwam een hoge modal er strak tegenaan of eroverheen. */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.38);z-index:100;display:flex;align-items:center;justify-content:center;padding:calc(var(--bb-header-h) + var(--bb-modal-gap)) 16px var(--bb-modal-gap);animation:fadeIn .2s ease both}
+.modal{background:white;border-radius:var(--r20);padding:28px 32px;width:100%;max-width:520px;max-height:calc(100vh - var(--bb-header-h) - (var(--bb-modal-gap) * 2));overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.18);animation:fadeUp .25s cubic-bezier(.22,1,.36,1) both}
 .modal-wide{max-width:780px}
 .modal-hd{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px}
 .modal-title{font-size:1.1rem;font-weight:800;letter-spacing:-.02em}
@@ -758,9 +774,7 @@ ul{list-style:none}
 .dw-controls{
   position:absolute;top:8px;right:8px;z-index:10;
   display:flex;align-items:center;gap:4px;
-  background:rgba(255,255,255,.85);
-  backdrop-filter:blur(6px);
-  -webkit-backdrop-filter:blur(6px);
+  background:#fff;
   border:1px solid var(--border);
   border-radius:var(--r10);
   padding:4px;
@@ -2840,3 +2854,150 @@ ul{list-style:none}
   .adres-zoeker-inline .adres-zoeker-input input{font-size:16px;padding:5px 8px}
   .adres-zoeker-inline .adres-zoeker-list li{min-height:46px;padding:12px 10px;font-size:.88rem}
 }
+
+/* ── ABONNEMENTSPAGINA ────────────────────────────────────────────────────────
+   Vervangt de UpgradeFlow-modal. Opzet volgt de prijzenpagina op de
+   marketingsite; de opmaak is hier opnieuw opgeschreven met dashboardtokens in
+   plaats van bossbase-mkt.css te importeren — dat bestand stijlt ook nav, body
+   en de hele marketingshell en zou hier botsen. */
+.ab-page{padding-bottom:104px}
+.ab-laden{padding:60px 0;text-align:center;color:var(--dl)}
+
+.ab-aanleiding{background:var(--pll);border:1px solid var(--pl);border-radius:var(--r12);padding:12px 15px;margin-bottom:14px}
+.ab-aanleiding-kop{font-weight:800;font-size:1rem;color:var(--dk)}
+.ab-aanleiding-uitleg{font-size:.86rem;color:var(--dm);margin-top:4px;line-height:1.6}
+.ab-aanleiding-wat{font-size:.86rem;color:var(--pd);font-weight:600;margin-top:8px}
+
+.ab-kop{font-size:.72rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--dmu);margin-bottom:10px}
+.ab-hint{font-size:.78rem;color:var(--dmu);margin:6px 0 0;line-height:1.55}
+
+/* Betaaltermijn */
+.ab-termijn{margin-bottom:12px}
+.ab-termijn-schakel{display:inline-flex;background:var(--bgs);border:1px solid var(--border);border-radius:var(--r999);padding:3px;gap:2px}
+.ab-termijn-schakel button{padding:7px 20px;border:none;background:none;border-radius:var(--r999);font-size:.84rem;font-weight:600;color:var(--dmu);cursor:pointer;transition:all .15s ease}
+.ab-termijn-schakel button.on{background:#fff;color:var(--dk);box-shadow:var(--shadow-sm)}
+.ab-termijn-uitleg{font-size:.8rem;color:var(--dmu);margin-top:8px;line-height:1.6;max-width:640px}
+
+/* Welkomstactie */
+.ab-actie{margin-bottom:14px}
+.ab-actie-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.ab-actie-kaart{text-align:left;padding:13px 15px;border-radius:var(--r12);border:1.5px solid var(--bstrong);background:#fff;cursor:pointer;transition:all .15s ease}
+.ab-actie-kaart:hover{border-color:var(--p)}
+.ab-actie-kaart.on{border-color:var(--p);background:var(--pll)}
+.ab-actie-label{font-weight:700;font-size:.9rem;color:var(--dk)}
+.ab-actie-kort{font-size:.79rem;color:var(--dmu);margin-top:3px;line-height:1.5}
+.ab-actie-vast{background:var(--bgs);border-radius:var(--r10);padding:11px 13px;font-size:.85rem;color:var(--dm)}
+
+/* De drie pakketten */
+.ab-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;align-items:stretch}
+.ab-kaart{position:relative;background:#fff;border:1.5px solid var(--bstrong);border-radius:var(--r14);padding:14px 15px;display:flex;flex-direction:column;transition:border-color .15s ease,box-shadow .15s ease}
+.ab-kaart.hot{border-color:var(--p)}
+.ab-kaart.on{border-color:var(--p);border-width:2px;box-shadow:0 8px 28px rgba(29,219,98,.14)}
+.ab-badge{position:absolute;top:-11px;left:18px;display:inline-flex;align-items:center;gap:4px;background:var(--p);color:#0D0D0D;font-size:.68rem;font-weight:800;padding:4px 10px;border-radius:var(--r999)}
+.ab-kaart-kop{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ab-tier{font-size:.98rem;font-weight:800;letter-spacing:-.02em;color:var(--dk)}
+.ab-merk{font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:var(--r999)}
+.ab-merk.huidig{background:var(--bgs);color:var(--dmu);border:1px solid var(--border)}
+.ab-merk.advies{background:var(--pll);color:var(--pd);border:1px solid var(--pl)}
+.ab-wie{font-size:.77rem;color:var(--dmu);margin-top:2px}
+.ab-prijs{margin:9px 0 1px;display:flex;align-items:baseline;gap:5px}
+.ab-prijs strong{font-size:1.6rem;font-weight:800;letter-spacing:-.03em;color:var(--dk);line-height:1.1}
+.ab-prijs span{font-size:.76rem;color:var(--dmu)}
+.ab-extra-user{font-size:.73rem;color:var(--dl);line-height:1.35}
+.ab-limieten,.ab-features{list-style:none;padding:0;margin:10px 0 0;display:grid;gap:3px}
+.ab-limieten li,.ab-features li{display:flex;align-items:flex-start;gap:6px;font-size:.79rem;color:var(--dm);line-height:1.3}
+.ab-limieten li{font-weight:600;color:var(--dk)}
+.ab-limieten svg,.ab-features svg{color:var(--pd);flex-shrink:0;margin-top:1px}
+.ab-features{padding-top:8px;margin-top:8px;border-top:1px solid var(--border);margin-bottom:10px}
+.ab-kies{margin-top:auto;padding-top:10px;width:100%;justify-content:center}
+
+/* Modules + teamleden */
+.ab-opties{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:14px}
+.ab-module{display:flex;align-items:center;gap:9px;padding:6px 0;cursor:pointer;font-size:.87rem;color:var(--dk)}
+.ab-module-prijs{margin-left:auto;color:var(--dmu);font-size:.83rem}
+.ab-teller{display:flex;align-items:center;gap:10px}
+.ab-teller-waarde{font-weight:700;min-width:104px;text-align:center;font-size:.9rem}
+
+/* Vergelijking */
+.ab-vergelijk{margin-bottom:18px}
+.ab-vergelijk-knop{display:inline-flex;align-items:center;gap:7px;background:none;border:none;cursor:pointer;font-size:.85rem;font-weight:700;color:var(--pd);padding:6px 0}
+.ab-vergelijk-knop svg{transition:transform .18s ease}
+.ab-vergelijk-knop svg.open{transform:rotate(180deg)}
+.ab-tabel-wrap{overflow-x:auto;margin-top:10px;border:1px solid var(--border);border-radius:var(--r12);background:#fff}
+.ab-tabel{width:100%;border-collapse:collapse;min-width:520px}
+.ab-tabel th,.ab-tabel td{padding:10px 14px;text-align:left;font-size:.83rem;border-bottom:1px solid var(--border)}
+.ab-tabel th{background:var(--bgs);font-weight:700;color:var(--dk);font-size:.78rem}
+.ab-tabel th:not(:first-child),.ab-cel{text-align:center;width:110px}
+.ab-ja{color:var(--pd)}
+.ab-nee{color:var(--dl)}
+
+/* Blokkades en looptijd */
+.ab-fout{background:#fef2f2;border:1px solid #fecaca;border-radius:var(--r12);padding:13px 15px;margin-bottom:16px}
+.ab-fout-kop{font-weight:700;color:#b91c1c;font-size:.88rem}
+.ab-fout ul{margin:6px 0 0;padding-left:18px;font-size:.83rem;color:#7f1d1d;line-height:1.6}
+.ab-looptijd{background:#fffbf3;border:1px solid #fcd9a4;border-radius:var(--r12);padding:14px 16px;margin-bottom:16px}
+.ab-looptijd-kop{font-weight:700;font-size:.92rem;color:#8a5a00}
+.ab-looptijd p{font-size:.85rem;color:var(--dm);margin:5px 0 0;line-height:1.6}
+.ab-akkoord{display:flex;align-items:flex-start;gap:9px;margin-top:12px;font-size:.86rem;font-weight:600;cursor:pointer;color:var(--dk)}
+.ab-akkoord input{margin-top:3px;flex-shrink:0}
+
+/* Vaste afrekenbalk — blijft in beeld terwijl je scrollt */
+.ab-balk{position:sticky;bottom:0;z-index:20;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  background:#fff;border:1px solid var(--border);border-radius:var(--r14);
+  padding:13px 18px;box-shadow:0 -6px 24px rgba(0,0,0,.07);margin-top:6px}
+.ab-balk-som{min-width:0}
+.ab-balk-tier{font-size:.76rem;color:var(--dmu);font-weight:600}
+.ab-balk-totaal{font-weight:800;font-size:1.15rem;letter-spacing:-.02em}
+.ab-balk-totaal span{font-weight:400;font-size:.78rem;color:var(--dmu)}
+.ab-balk-verschil{font-size:.78rem;color:var(--dmu);margin-top:1px}
+.ab-balk-acties{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ab-balk-let{font-size:.78rem;color:#b45309;font-weight:600}
+.ab-balk-rust{font-size:.78rem;color:var(--dmu)}
+
+@media(max-width:1023px){
+  .ab-grid{grid-template-columns:repeat(2,1fr)}
+  .ab-kaart.hot{order:-1}
+}
+@media(max-width:767px){
+  .ab-page{padding-bottom:128px}
+  .ab-grid{grid-template-columns:1fr}
+  .ab-balk{padding:12px 14px;gap:10px}
+  .ab-balk-acties{margin-left:0;width:100%}
+  .ab-balk-acties .btn{flex:1;justify-content:center}
+  .ab-prijs strong{font-size:1.7rem}
+}
+
+/* Module-uitleg achter een info-icoontje. Op klik, niet op hover: op tablet
+   bestaat hover niet en zou de uitleg onbereikbaar zijn. */
+.ab-module-rij{display:flex;align-items:center;gap:7px;padding:5px 0}
+.ab-module-rij .ab-module{padding:0;flex:0 1 auto;min-width:0}
+.ab-module-rij .ab-module-prijs{margin-left:auto;white-space:nowrap}
+.ab-module-info{position:relative;display:inline-flex;flex-shrink:0}
+.ab-info-knop{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;border:none;background:none;border-radius:var(--r999);color:var(--dl);cursor:pointer;transition:color .15s ease,background .15s ease}
+.ab-info-knop:hover,.ab-info-knop[aria-expanded="true"]{color:var(--pd);background:var(--pll)}
+.ab-uitleg{position:absolute;top:calc(100% + 7px);left:50%;transform:translateX(-50%);z-index:40;
+  width:max(240px,min(290px,80vw));background:var(--dk);color:#fff;border-radius:var(--r10);
+  padding:10px 12px;font-size:.78rem;line-height:1.5;font-weight:400;
+  box-shadow:0 12px 30px rgba(0,0,0,.22);display:block;text-align:left}
+.ab-uitleg::before{content:'';position:absolute;bottom:100%;left:50%;transform:translateX(-50%);
+  border:6px solid transparent;border-bottom-color:var(--dk)}
+.ab-uitleg-kop{display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:700;margin-bottom:4px}
+.ab-uitleg-x{background:none;border:none;color:#fff;opacity:.6;cursor:pointer;padding:0;display:inline-flex}
+.ab-uitleg-x:hover{opacity:1}
+/* Bij de laatste module zou de popover buiten de kaart vallen; hem links
+   uitlijnen houdt hem binnen beeld. */
+.ab-module-rij:last-child .ab-uitleg{left:auto;right:-8px;transform:none}
+.ab-module-rij:last-child .ab-uitleg::before{left:auto;right:16px;transform:none}
+.ab-features .ab-erft{font-size:.75rem;font-weight:700;color:var(--dmu);margin-bottom:2px}
+.ab-features .ab-meer{margin-top:3px}
+.ab-features .ab-meer button{background:none;border:none;padding:0;font-size:.76rem;font-weight:600;color:var(--pd);cursor:pointer;text-align:left}
+.ab-features .ab-meer button:hover{text-decoration:underline}
+.ab-uitleg.boven{top:auto;bottom:calc(100% + 7px)}
+.ab-uitleg.boven::before{bottom:auto;top:100%;border-bottom-color:transparent;border-top-color:var(--dk)}
+
+/* De .afu*-blokken draaien een fadeUp met transform en zijn daardoor elk een
+   eigen stacking-context. Een popover binnen zo'n blok kan er dus nooit
+   bovenuit komen — de blokken die later in de DOM staan tekenen eroverheen,
+   ongeacht z-index. Zolang er een module-uitleg openstaat tillen we het hele
+   blok op, zodat de tekst leesbaar boven de rest ligt. */
+.ab-opties.uitleg-open{position:relative;z-index:60}

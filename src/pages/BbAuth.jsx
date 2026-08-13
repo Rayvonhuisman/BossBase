@@ -292,7 +292,13 @@ export function EmailVerificationScreen({ email, onVerified, onBack }) {
 export function RegisterFlow({ onDone, onBack }) {
   const [step, setStep] = useState(0);
   const [trade, setTrade] = useState('');
+  // De keuze uit stap 2 (groei/team) is het pakket dat de klant wil proberen.
+  // We onthouden 'm zodat de abonnementspagina hem straks kan voorselecteren.
   const [setup, setSetup] = useState('');
+  useEffect(() => {
+    if (!setup) return;
+    try { sessionStorage.setItem('bb.aanmeld.tier', setup); } catch { /* privacymodus */ }
+  }, [setup]);
   const [form, setForm] = useState({ fullName: '', email: '', password: '', password2: '', companyName: '', phone: '', kvk: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -363,11 +369,11 @@ export function RegisterFlow({ onDone, onBack }) {
     finally { setResendLoading(false); }
   };
 
-  const stepTitles = ['Maak je account aan', 'Vertel over je bedrijf', 'Hoe werk je?', 'Nodig je team uit'];
+  const stepTitles = ['Maak je account aan', 'Vertel over je bedrijf', 'Welk pakket past bij je?', 'Nodig je team uit'];
   const stepSubs = [
     'Naam, e-mail en wachtwoord — klaar.',
     'We passen BossBase aan op jouw branche.',
-    'Solo of met een team? We zetten alles goed.',
+    'Kies waar je nu staat — 14 dagen gratis proberen, zonder creditcard.',
     'Optioneel — je kunt dit later ook doen.',
   ];
 
@@ -458,22 +464,36 @@ export function RegisterFlow({ onDone, onBack }) {
           </>
         )}
         {step === 2 && (
-          <div className="setup-options">
-            <button className={`setup-option${setup === 'solo' ? ' selected' : ''}`} onClick={() => setSetup('solo')}>
-              <div className="setup-option-icon"><User size={20} strokeWidth={2} /></div>
-              <div>
-                <div className="setup-option-label">Ik werk alleen (zzp)</div>
-                <div className="setup-option-sub">Je doet alles zelf — offertes, planning, uitvoering en administratie.</div>
+          <>
+            <div className="setup-options">
+              {/* Starter staat hier bewust NIET tussen: dat is alleen een
+                  downgrade-optie ná de proefperiode, geen aanmeldkeuze. */}
+              <button className={`setup-option${setup === 'groei' ? ' selected' : ''}`} onClick={() => setSetup('groei')}>
+                <div className="setup-option-icon"><User size={20} strokeWidth={1.9} /></div>
+                <div>
+                  <div className="setup-option-label">Groei — voor 1-2 personen</div>
+                  <div className="setup-option-sub">Je werkt alleen of met z'n tweeën. Offertes, facturen, planning en uren, alles in één.</div>
+                </div>
+              </button>
+              <button className={`setup-option${setup === 'team' ? ' selected' : ''}`} onClick={() => setSetup('team')}>
+                <div className="setup-option-icon"><Users size={20} strokeWidth={1.9} /></div>
+                <div>
+                  <div className="setup-option-label">Team — voor 2+ personen</div>
+                  <div className="setup-option-sub">Meerdere medewerkers of bussen. Met rollen en rechten, teamplanning en voertuigen.</div>
+                </div>
+              </button>
+            </div>
+            <div className="trial-note">
+              <div className="trial-note-title">
+                <Sparkles size={15} strokeWidth={1.9} /> 14 dagen gratis proberen
               </div>
-            </button>
-            <button className={`setup-option${setup === 'team' ? ' selected' : ''}`} onClick={() => setSetup('team')}>
-              <div className="setup-option-icon"><Users size={20} strokeWidth={2} /></div>
-              <div>
-                <div className="setup-option-label">Ik werk met een team</div>
-                <div className="setup-option-sub">Je hebt medewerkers of onderaannemers aan wie je werk toewijst.</div>
-              </div>
-            </button>
-          </div>
+              <p>
+                Je probeert je keuze 14 dagen gratis en volledig — <strong>geen creditcard nodig</strong>.
+                Daarna stopt het vanzelf, tenzij je een abonnement afsluit. Je gegevens blijven bewaard
+                en je kunt altijd nog wisselen van pakket.
+              </p>
+            </div>
+          </>
         )}
         {step === 3 && (
           <>

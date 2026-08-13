@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { usePlan } from '../hooks/usePlan.js';
-import { UpgradeFlow } from './UpgradeFlow.jsx';
+import { gaNaarAbonnement } from '../lib/abonnementNav.js';
 import {
   readonlyTekst, READONLY_BLIJFT_WERKEN, READONLY_BEWAARD,
 } from '../lib/readonly.js';
@@ -47,7 +47,7 @@ export function ReadOnlyBanner() {
         <button
           className="btn btn-p"
           style={{ flexShrink: 0, alignSelf: 'center' }}
-          onClick={() => setOpen(true)}
+          onClick={() => gaNaarAbonnement(null, { soort: 'readonly' })}
         >
           {t.knop}
         </button>
@@ -57,10 +57,9 @@ export function ReadOnlyBanner() {
         </div>
       )}
 
-      {/* Dezelfde flow als overal. Niet doorsturen naar Instellingen: dat is een
-          extra stap tussen "ik wil dit oplossen" en betalen, en precies daar
-          haakt iemand af. */}
-      {open && <UpgradeFlow aanleiding={{ soort: 'readonly' }} onClose={() => setOpen(false)} />}
+      {/* Dezelfde weg als overal: rechtstreeks naar de abonnementspagina, met de
+          reden mee. Niet via Instellingen — dat is een extra stap tussen "ik wil
+          dit oplossen" en betalen, en precies daar haakt iemand af. */}
     </div>
   );
 }

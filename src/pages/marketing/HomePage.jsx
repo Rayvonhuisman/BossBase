@@ -757,14 +757,14 @@ const TIERS_HOME = [
   },
   {
     id: "groei", who: "De ZZP'er of een bedrijf van 2",
-    extra: extraUserLabel(),
+    extra: extraUserLabel("groei"),
     inherit: "Alles van Starter, plus:",
     items: ["Digitaal ondertekenen", "Calculatie: m² / uren / materiaal", "Urenregistratie", "Omzetdashboard", "Foto's bij de klus", "Automatische afspraakherinneringen"],
     hot: true, btn: "btn-p glow",
   },
   {
     id: "team", who: "Grotere bedrijven met meerdere bussen",
-    extra: `+ € ${EXTRA_USER_PRICE} per gebruiker (ook de eerste)`,
+    extra: extraUserLabel("team"),
     inherit: "Alles van Groei, plus:",
     items: ["Team & rollen", "Meerdere teams / bussen plannen", "Beschikbaarheid & verlof", "Nacalculatie: begroot vs. werkelijk"],
     hot: false, btn: "btn-s",

@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase.js';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { usePlan } from '../hooks/usePlan.js';
-import { UpgradeFlow } from '../components/UpgradeFlow.jsx';
+import { gaNaarAbonnement } from '../lib/abonnementNav.js';
 import { tierLabel } from '../lib/tiers.js';
 import { AbonnementSectie } from '../components/AbonnementSectie.jsx';
 import { getStripeConnection, startStripeOnboarding, refreshStripeStatus, disconnectStripe } from '../services/stripeService.js';
@@ -165,7 +165,6 @@ export function InstellingenPage() {
   const { company, refresh, profile } = useProfile();
   const plan = usePlan();
   // Feature waarvoor de upgrade-modal openstaat (null = dicht).
-  const [upgradeFeature, setUpgradeFeature] = useState(null);
   const { can } = usePermissions();
   const { startUpload } = useUploads();
   const isAdmin = profile?.role === 'admin';
@@ -1630,7 +1629,7 @@ export function InstellingenPage() {
                   <button
                     onClick={() => plan.has('eigen_email_templates')
                       ? setShowNewTemplate(true)
-                      : setUpgradeFeature('eigen_email_templates')}
+                      : gaNaarAbonnement(null, { soort: 'feature', key: 'eigen_email_templates' })}
                     title={plan.has('eigen_email_templates')
                       ? 'Nieuw template aanmaken'
                       : `Eigen templates aanmaken hoort bij ${tierLabel(plan.needsFor('eigen_email_templates'))}`}
@@ -2291,7 +2290,7 @@ export function InstellingenPage() {
                 <span style={{ fontSize: '.82rem', color: 'var(--dmu)', alignSelf: 'center', marginRight: 'auto' }}>
                   Stripe-betalingen horen bij <strong>{tierLabel(plan.needsFor('stripe_betaallink'))}</strong>, of als losse module bij Groei.
                 </span>
-                <button className="btn btn-s btn-sm" onClick={() => setUpgradeFeature('stripe_betaallink')}>Bekijk opties</button>
+                <button className="btn btn-s btn-sm" onClick={() => gaNaarAbonnement(null, { soort: 'feature', key: 'stripe_betaallink' })}>Bekijk opties</button>
               </div>
             ) : stripeConn?.chargesEnabled ? (
               <div className="fa" style={{ gap: 8 }}>
@@ -2339,7 +2338,7 @@ export function InstellingenPage() {
                   <IntegStatusPill>Vanaf {tierLabel(plan.needsFor('boekhoudkoppeling'))}</IntegStatusPill>
                 </div>
               </div>
-              <button className="btn btn-s btn-sm" onClick={() => setUpgradeFeature('boekhoudkoppeling')}>Bekijk opties</button>
+              <button className="btn btn-s btn-sm" onClick={() => gaNaarAbonnement(null, { soort: 'feature', key: 'boekhoudkoppeling' })}>Bekijk opties</button>
             </div>
           ) : (
           <>
@@ -2736,9 +2735,7 @@ export function InstellingenPage() {
         </div>
       )}
 
-      {upgradeFeature && (
-        <UpgradeFlow aanleiding={{ soort: 'feature', key: upgradeFeature }} onClose={() => setUpgradeFeature(null)} />
-      )}
+
     </div>
   );
 }

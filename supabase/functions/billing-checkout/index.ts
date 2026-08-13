@@ -19,9 +19,9 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
-  stripeFetch, appOrigin, json, CORS, eisAbonnementsbeheerder,
+  stripeFetch, appOrigin, json, CORS, eisAbonnementsbeheerder, weigerLiveVanafLokaal,
   tierPriceId, modulePriceId, extraUserPriceId,
-  MODULE_BESCHIKBAAR, MODULE_VEREIST, INBEGREPEN_GEBRUIKERS,
+  MODULE_BESCHIKBAAR, MODULE_VEREIST, inbegrepenGebruikers,
   WELKOMSTACTIES, heeftWelkomstkorting, welkomCouponId, isJaar,
 } from '../_shared/billing.ts'
 
@@ -50,6 +50,10 @@ serve(async (req) => {
     const auth = await eisAbonnementsbeheerder(admin, userClient)
     if (auth instanceof Response) return auth
     const { companyId } = auth
+
+    // Geen live Stripe vanaf localhost — zie weigerLiveVanafLokaal.
+    const grendel = weigerLiveVanafLokaal(req.headers.get('origin'))
+    if (grendel) return grendel
 
     const body = await req.json().catch(() => ({}))
     const tier: string = String(body?.tier || '').toLowerCase()
@@ -120,7 +124,7 @@ serve(async (req) => {
       .from('plan_limits').select('limit_value')
       .eq('plan', tier).eq('limit_key', 'gebruikers').maybeSingle()
     const plafond = hardeLimiet?.limit_value ?? null
-    if (plafond !== null && INBEGREPEN_GEBRUIKERS + extra > plafond) {
+    if (plafond !== null && inbegrepenGebruikers(tier) + extra > plafond) {
       return json({
         error: `Dit pakket gaat tot ${plafond} gebruikers.`,
         code: 'te_veel_gebruikers',
