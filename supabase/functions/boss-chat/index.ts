@@ -60,6 +60,18 @@ const json = (body: unknown, status = 200) =>
 const sse = (soort: string, data: unknown) =>
   `event: ${soort}\ndata: ${JSON.stringify(data)}\n\n`
 
+// Boss is gevraagd geen gedachtestreepjes te gebruiken, en de kennisbank bevat er
+// geen meer. Toch glipt er in vrij geformuleerde antwoorden nog weleens een door.
+// Een taalregel is een verzoek, geen garantie; deze vervanging wel.
+//
+// Losstaand tussen spaties wordt het een komma, want daar onderbrak het de zin.
+// Plakt het aan een woord vast, dan is een koppelteken de bedoeling.
+function zonderStreepjes(t: string): string {
+  return t
+    .replace(/ [\u2014\u2013]+ /g, ', ')
+    .replace(/[\u2014\u2013]/g, '-')
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
@@ -228,8 +240,9 @@ serve(async (req) => {
               toolRuw = ''
             } else if (ev.type === 'content_block_delta') {
               if (ev.delta?.type === 'text_delta' && ev.delta.text) {
-                tekst += ev.delta.text
-                stuurTekst(ev.delta.text)
+                const schoon = zonderStreepjes(ev.delta.text)
+                tekst += schoon
+                stuurTekst(schoon)
               } else if (ev.delta?.type === 'input_json_delta' && ev.delta.partial_json) {
                 toolRuw += ev.delta.partial_json
               }

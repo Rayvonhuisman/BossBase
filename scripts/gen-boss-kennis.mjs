@@ -175,6 +175,28 @@ function scrubNietBeschikbaar(tekst) {
   return { tekst: uit.join('\n'), weg }
 }
 
+// De interne routes (/dashboard/revenue en zo) eruit. Boss gaf ze door aan de
+// gebruiker: "onder Financien (of Revenue)". Dat is de technische naam, geen
+// menu-item, en dus precies wat hij niet hoort te zeggen. Wat in het menu staat
+// staat gewoon in de kennis; de route voegt daar niets aan toe.
+function scrubRoutes(tekst) {
+  let weg = 0
+  const regels = tekst.split('\n')
+  const uit = []
+  for (const regel of regels) {
+    // Regels die niets anders zijn dan een route met zijn label.
+    if (/^\s*[-*]\s*`?\/dashboard\/[a-z-]*`?\s*[-:]/i.test(regel)) { weg++; continue }
+    const voor = regel
+    let r = regel
+      .replace(/\s*\((?:route|url|pad):\s*`?\/dashboard[^)]*`?\)/gi, '')
+      .replace(/`\/dashboard\/[a-z-]*`/gi, 'het portaal')
+      .replace(/\/dashboard(?:\/[a-z.-]*)?/gi, 'het portaal')
+    if (r !== voor) weg++
+    uit.push(r)
+  }
+  return { tekst: uit.join('\n'), weg }
+}
+
 function scrubStreepjes(tekst) {
   return tekst.replace(/[—–]/g, '-')
 }
@@ -236,6 +258,10 @@ for (const naam of bestanden) {
   const nb = scrubNietBeschikbaar(inhoud)
   inhoud = nb.tekst
   if (nb.weg > 0) console.error(`  ! ${naam}: ${nb.weg} regel(s) over niet-beschikbare koppelingen verwijderd`)
+
+  const rt = scrubRoutes(inhoud)
+  inhoud = rt.tekst
+  if (rt.weg > 0) console.error(`  ! ${naam}: ${rt.weg} interne route(s) verwijderd`)
 
   inhoud = scrubStreepjes(inhoud)
 
@@ -305,7 +331,13 @@ if (nietBeschikbaar > 0) {
   process.exit(1)
 }
 console.error('  = gedachtestreepjes: geen in de kennis')
+const routes = (kennis.match(/\/dashboard\//g) || []).length
+if (routes > 0) {
+  console.error(`\nAFGEBROKEN - er staan nog ${routes} interne routes in de kennis.`)
+  process.exit(1)
+}
 console.error('  = koppelingen: AFAS en Google Agenda niet in de kennis')
+console.error('  = routes: geen interne paden in de kennis')
 console.error('  = prijzen: geen achterhaalde bedragen of pakketnamen gevonden')
 const geschat = Math.round((prompt.length + kennis.length) / 3.6)
 
