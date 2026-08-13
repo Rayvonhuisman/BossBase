@@ -128,6 +128,57 @@ function verwijderVragenblokken(regels) {
   return { regels: uit, weg }
 }
 
+// Gedachtestreepjes eruit. De systeemprompt verbiedt ze in Boss' antwoorden,
+// maar de kennisbank staat er vol mee (ruim honderd stuks, uit de schrijfstijl
+// van wie hem heeft opgesteld). Een model neemt de opmaak over die het ziet, dus
+// één regel in de prompt legt het af tegen honderd voorbeelden. We vervangen ze
+// door een gewoon koppelteken; dat leest hetzelfde en is wél toegestaan.
+//
+// Alleen in de KENNIS. In de instructie blijft het teken staan, want daar wordt
+// het letterlijk benoemd als iets wat niet mag.
+// AFAS en Google Agenda eruit. De systeemprompt verbiedt Boss ze te noemen als
+// beschikbare koppeling, maar de kennisbank beschrijft ze uitgebreid - inclusief
+// de zin "Koppeling met Moneybird, SnelStart of AFAS" die letterlijk uit de
+// functiebeschrijving in de database komt. Bij een vraag over de abonnementen
+// somde hij AFAS dan gewoon op.
+//
+// Zelfde les als bij het beheerportaal: een verbod in de prompt legt het af tegen
+// een kennisbank die het tegendeel voorschotelt. Wat hij niet heeft, kan hij niet
+// noemen.
+function scrubNietBeschikbaar(tekst) {
+  const regels = tekst.split('\n')
+  const uit = []
+  let overslaan = false
+  let niveau = 0
+  let weg = 0
+
+  for (const regel of regels) {
+    const kop = regel.match(/^(#+)\s/)
+    if (kop) {
+      const dit = kop[1].length
+      if (overslaan && dit <= niveau) overslaan = false
+      if (!overslaan && /\bAFAS\b|Google Agenda|Google Calendar/i.test(regel)) {
+        overslaan = true; niveau = dit; weg++; continue
+      }
+    }
+    if (overslaan) { weg++; continue }
+
+    // De opsomming van boekhoudpakketten komt uit de database en noemt AFAS
+    // met naam; die ene naam eruit halen laat de zin verder intact.
+    let r = regel
+      .replace(/Moneybird, SnelStart of AFAS/gi, 'Moneybird of SnelStart')
+      .replace(/Moneybird, SnelStart en AFAS/gi, 'Moneybird en SnelStart')
+
+    if (/\bAFAS\b|Google Agenda|Google Calendar/i.test(r)) { weg++; continue }
+    uit.push(r)
+  }
+  return { tekst: uit.join('\n'), weg }
+}
+
+function scrubStreepjes(tekst) {
+  return tekst.replace(/[—–]/g, '-')
+}
+
 function scrubInventarisatie(tekst) {
   let regels = tekst.split('\n')
   let weg = 0
@@ -182,6 +233,12 @@ for (const naam of bestanden) {
     console.error(`  ! ${naam}: ${v.weg} regel(s) openstaande vragen en tegenstrijdigheden verwijderd`)
   }
 
+  const nb = scrubNietBeschikbaar(inhoud)
+  inhoud = nb.tekst
+  if (nb.weg > 0) console.error(`  ! ${naam}: ${nb.weg} regel(s) over niet-beschikbare koppelingen verwijderd`)
+
+  inhoud = scrubStreepjes(inhoud)
+
   delen.push(`\n\n===== ${naam} =====\n\n${inhoud.trim()}`)
   console.error(`  + ${naam.padEnd(34)} ${inhoud.length.toLocaleString('nl-NL')} tekens`)
 }
@@ -191,6 +248,7 @@ console.error(`  + ${PROMPT.padEnd(34)} ${prompt.length.toLocaleString('nl-NL')}
 
 // De instructie komt in de plaats van alles wat we hebben weggehaald.
 delen.push(`\n\n===== reikwijdte =====\n\n${SUPERADMIN_VERVANGING.trim()}`)
+delen.push(`\n\n===== koppelingen =====\n\nDe beschikbare koppelingen zijn Moneybird, SnelStart en de Stripe betaallink.\nVraagt iemand naar een andere koppeling, dan is die er op dit moment niet.`)
 
 const kennis = delen.join('\n')
 
@@ -235,7 +293,19 @@ if (prijslek.length > 0) {
   console.error('\nDe geldende prijzen staan in abonnementen.md; er is niets weggeschreven.')
   process.exit(1)
 }
+const streepjes = (kennis.match(/[—–]/g) || []).length
+if (streepjes > 0) {
+  console.error(`\nAFGEBROKEN - er staan nog ${streepjes} gedachtestreepjes in de kennis.`)
+  process.exit(1)
+}
 console.error(`  = beheerportaal: ${totaalGeknipt} regel(s) weg, controle schoon`)
+const nietBeschikbaar = (kennis.match(/\bAFAS\b|Google Agenda|Google Calendar/gi) || []).length
+if (nietBeschikbaar > 0) {
+  console.error(`\nAFGEBROKEN - er staan nog ${nietBeschikbaar} verwijzingen naar niet-beschikbare koppelingen in de kennis.`)
+  process.exit(1)
+}
+console.error('  = gedachtestreepjes: geen in de kennis')
+console.error('  = koppelingen: AFAS en Google Agenda niet in de kennis')
 console.error('  = prijzen: geen achterhaalde bedragen of pakketnamen gevonden')
 const geschat = Math.round((prompt.length + kennis.length) / 3.6)
 
