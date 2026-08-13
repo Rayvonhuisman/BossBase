@@ -16,9 +16,7 @@ import { supabase } from '../lib/supabase.js';
 //   bezig    Boss zet de vraag door naar het team
 //   fout     er ging iets mis; dan tonen we dat en geen stilstaande cursor
 
-export const BOSS_BEGROETING =
-  'Hoi! Ik ben Boss. Vraag me hoe iets in BossBase werkt — waar je iets vindt, ' +
-  'hoe je iets aanmaakt of instelt. Waar loop je tegenaan?';
+export const BOSS_BEGROETING = 'Hoi! Ik ben Boss. Waar kan ik je mee helpen?';
 
 const AVATAR = '/boss-avatar.png';
 
