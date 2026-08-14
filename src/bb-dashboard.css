@@ -147,7 +147,6 @@ ul{list-style:none}
 .logo-b{color:var(--dk)}.logo-a{color:var(--p)}
 .logo--dark .logo-b{color:#fff}
 .logo--dark .logo-a{color:var(--p)}
-.logo-mark{flex-shrink:0;align-self:center;margin-right:9px;border-radius:7px;display:block}
 .logo-bar{display:none}
 .sb-nav{flex:1;padding:10px 10px 0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:transparent transparent}
 .sb-nav.hov{scrollbar-color:rgba(255,255,255,0.2) transparent}
@@ -178,9 +177,11 @@ ul{list-style:none}
 .sb{transition:width .28s cubic-bezier(.22,1,.36,1),transform .28s cubic-bezier(.22,1,.36,1)}
 .sb.collapsed{width:var(--swc, 68px)}
 .sb.collapsed .sb-logo{padding:14px 0;flex-direction:column;justify-content:center;gap:10px}
-.sb.collapsed .sb-logo .logo-b,
+/* Ingeklapt paste het volledige woordmerk niet; dan tonen we alleen "Boss".
+   Hier stond eerder dat de tekst verdween en het icoon overbleef — nu dat icoon
+   weg is, zou er anders helemaal niets meer staan. */
 .sb.collapsed .sb-logo .logo-a{display:none}
-.sb.collapsed .sb-logo .logo-mark{margin:0}
+.sb.collapsed .sb-logo .logo{font-size:1.05rem}
 .sb.collapsed .sb-nav{padding:10px 8px 0}
 .sb.collapsed .sb-section{opacity:0;height:0;padding:0;margin:0;overflow:hidden;pointer-events:none}
 .sb.collapsed .sbi{justify-content:center;padding:10px 0;gap:0;position:relative}
