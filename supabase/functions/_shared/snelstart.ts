@@ -110,6 +110,17 @@ export const odataQuote = (s: string) => `'${String(s).replace(/'/g, "''")}'`
 // (400 "Could not find a property named 'naam'"), dus het matchen gebeurt
 // client-side. Geef bij bulk-gebruik `bekendeRelaties` mee (één keer opgehaald)
 // om niet per klant de hele relatielijst te hoeven laden.
+// Welke adresvelden ontbreken er bij een klant? SnelStart accepteert relaties
+// zonder adres zonder te klagen, dus zonder deze controle sijpelt onvolledige
+// data ongemerkt de boekhouding in.
+export function ontbrekendeAdresvelden(customer: any): string[] {
+  const mist: string[] = []
+  if (!String(customer?.address || '').trim()) mist.push('adres')
+  if (!String(customer?.postcode || '').trim()) mist.push('postcode')
+  if (!String(customer?.city || '').trim()) mist.push('plaats')
+  return mist
+}
+
 export async function ensureRelatie(
   supabase: any, clientKey: string, customer: any, bekendeRelaties?: any[],
 ): Promise<string | null> {
@@ -130,9 +141,10 @@ export async function ensureRelatie(
       email: customer.email || undefined,
       telefoon: customer.phone || undefined,
     }
-    if (customer.address || customer.city) {
+    if (customer.address || customer.city || customer.postcode) {
       body.vestigingsAdres = {
         straat: customer.address || undefined,
+        postcode: customer.postcode || undefined,
         plaats: customer.city || undefined,
       }
     }
@@ -148,27 +160,66 @@ export async function ensureRelatie(
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
-// btw_pct → btwSoort op de boekingsregel (enum: Geen|Laag|Hoog|Overig)
-function regelBtwSoort(pct: number): string {
+// ── BTW-regime ───────────────────────────────────────────────────────────────
+// factuur_regels.btw_regime: 'normaal' | 'verlaagd' | 'verlegd' (migratie
+// 20260821120000_btw_regime.sql). Vóór die migratie bestond alleen btw_pct en
+// moest hier geraden worden wat 0% betekende — dat ging mis. Regels zonder
+// regime (oude data, andere schrijvers) vallen terug op het percentage.
+export type BtwRegime = 'normaal' | 'verlaagd' | 'verlegd'
+
+export function regimeVanRegel(r: any): BtwRegime {
+  const opgeslagen = String(r?.btw_regime || '')
+  if (opgeslagen === 'normaal' || opgeslagen === 'verlaagd' || opgeslagen === 'verlegd') {
+    return opgeslagen
+  }
+  const pct = Number(r?.btw_pct ?? 21)
+  if (pct === 9) return 'verlaagd'
+  if (pct === 0) return 'verlegd'
+  return 'normaal'
+}
+
+// Regime → btwSoort op de boekingsregel (enum: Geen|Laag|Hoog|Overig).
+// Verlegd staat op de regel als 'Geen' — de verlegging zelf wordt vastgelegd in
+// de btw-collectie met VerkopenVerlegd.
+function regelBtwSoort(regime: BtwRegime, pct: number): string {
+  if (regime === 'verlaagd') return 'Laag'
+  if (regime === 'verlegd') return 'Geen'
   if (pct === 21) return 'Hoog'
-  if (pct === 9) return 'Laag'
   if (pct === 0) return 'Geen'
   return 'Overig'
 }
 
-// btw_pct → btwSoort in de btw-collectie (af te dragen btw per tarief)
-function afdrachtBtwSoort(pct: number): string {
+// Regime → btwSoort in de btw-collectie (VerkoopBoekingBtwRegelModel).
+function afdrachtBtwSoort(regime: BtwRegime, pct: number): string {
+  if (regime === 'verlegd') return 'VerkopenVerlegd'
+  if (regime === 'verlaagd') return 'VerkopenLaag'
   if (pct === 21) return 'VerkopenHoog'
-  if (pct === 9) return 'VerkopenLaag'
   return 'VerkopenOverig'
 }
 
-// btw_pct → gewenste grootboekfunctie voor de omzetregel
-function omzetGrootboekfunctie(pct: number): string {
+// Regime → gewenste grootboekfunctie voor de omzetregel.
+function omzetGrootboekfunctie(regime: BtwRegime, pct: number): string {
+  if (regime === 'verlaagd') return 'VerkopenOmzetLaag'
+  if (regime === 'verlegd') return 'VerkopenOmzetOnbelastVerlegd'
   if (pct === 21) return 'VerkopenOmzetHoog'
-  if (pct === 9) return 'VerkopenOmzetLaag'
-  if (pct === 0) return 'VerkopenBtwVrij'
   return 'VerkopenOmzetOverig'
+}
+
+// Toegestane terugvallen per regime, in volgorde van voorkeur. Bewust een
+// expliciete lijst en NIET meer "het eerste beste Verkopen*-grootboek dat deze
+// btw-soort accepteert": die brede terugval boekte 0%-omzet stilzwijgend op
+// "Omzet verlegd". Staat er niets uit deze lijst in de administratie, dan
+// stoppen we met een duidelijke fout in plaats van iets fout weg te boeken.
+const OMZET_TERUGVAL: Record<BtwRegime, string[]> = {
+  normaal:  ['VerkopenOmzetHoog', 'VerkopenOmzetOverig'],
+  verlaagd: ['VerkopenOmzetLaag', 'VerkopenOmzetOverig'],
+  verlegd:  ['VerkopenOmzetOnbelastVerlegd'],
+}
+
+const REGIME_LABEL: Record<BtwRegime, string> = {
+  normaal: 'normaal (21%)',
+  verlaagd: 'verlaagd (9%)',
+  verlegd: 'btw verlegd (0%)',
 }
 
 export async function getActieveGrootboeken(clientKey: string): Promise<any[]> {
@@ -200,25 +251,19 @@ export async function pushVerkoopboeking(
   if (!relatieId) throw new Error('Kon geen SnelStart-relatie bepalen voor de klant')
 
   const gbs = grootboeken ?? await getActieveGrootboeken(clientKey)
-  const grootboekVoorPct = (pct: number): string => {
-    const functie = omzetGrootboekfunctie(pct)
-    // Voorkeur: het grootboek met de exacte omzetfunctie voor dit tarief.
-    let gb = gbs.find((g: any) => g.grootboekfunctie === functie)
-    // Fallback: niet elke administratie heeft alle omzet-grootboeken (bijv.
-    // geen VerkopenBtwVrij). Het GrootboekModel geeft per grootboek de
-    // toegestane btw-soorten (btwSoort-lijst); pak dan een ander
-    // Verkopen-omzetgrootboek dat deze btw-soort accepteert.
-    if (!gb) {
-      const soort = regelBtwSoort(pct)
-      gb = gbs.find((g: any) =>
-        String(g.grootboekfunctie || '').startsWith('Verkopen')
-        && Array.isArray(g.btwSoort) && g.btwSoort.includes(soort))
+  const grootboekVoorRegime = (regime: BtwRegime, pct: number): string => {
+    // Alleen expliciet toegestane functies, in volgorde van voorkeur.
+    const kandidaten = [omzetGrootboekfunctie(regime, pct), ...OMZET_TERUGVAL[regime]]
+    for (const functie of kandidaten) {
+      const gb = gbs.find((g: any) => g.grootboekfunctie === functie)
+      if (gb?.id) return gb.id
     }
-    if (!gb?.id) {
-      const beschikbaar = [...new Set(gbs.map((g: any) => g.grootboekfunctie).filter((f: any) => String(f || '').startsWith('Verkopen')))].join(', ')
-      throw new Error(`Geen actief omzet-grootboek voor ${pct}% btw (functie ${functie}) in de administratie; beschikbare verkoopfuncties: ${beschikbaar || 'geen'}`)
-    }
-    return gb.id
+    const beschikbaar = [...new Set(gbs.map((g: any) => g.grootboekfunctie).filter((f: any) => String(f || '').startsWith('Verkopen')))].join(', ')
+    throw new Error(
+      `Geen passend omzet-grootboek voor ${REGIME_LABEL[regime]} in de administratie. `
+      + `Gezocht op: ${kandidaten.join(', ')}. Beschikbare verkoopfuncties: ${beschikbaar || 'geen'}. `
+      + `Maak in SnelStart een omzetgrootboek met de juiste functie aan; wij boeken bewust niet op een ander grootboek.`,
+    )
   }
 
   const regelExcl = (r: any) =>
@@ -226,20 +271,26 @@ export async function pushVerkoopboeking(
 
   const boekingsregels = regels.map((r: any) => {
     const pct = Number(r.btw_pct ?? 21)
+    const regime = regimeVanRegel(r)
     return {
       omschrijving: r.omschrijving || factuur.nummer,
-      grootboek: { id: grootboekVoorPct(pct) },
+      grootboek: { id: grootboekVoorRegime(regime, pct) },
       bedrag: round2(regelExcl(r)),
-      btwSoort: regelBtwSoort(pct),
+      btwSoort: regelBtwSoort(regime, pct),
     }
   })
 
+  // BTW-collectie. Verlegde regels hebben géén btw-bedrag maar moeten wél
+  // gemeld worden, anders blijft rubriek 2a leeg: daarom een VerkopenVerlegd-
+  // regel met btwBedrag 0 zodra er verlegde omzet op de factuur staat.
   const btwPerSoort = new Map<string, number>()
   for (const r of regels) {
     const pct = Number(r.btw_pct ?? 21)
-    if (pct === 0) continue
-    const soort = afdrachtBtwSoort(pct)
-    btwPerSoort.set(soort, (btwPerSoort.get(soort) || 0) + regelExcl(r) * pct / 100)
+    const regime = regimeVanRegel(r)
+    const soort = afdrachtBtwSoort(regime, pct)
+    const bedrag = regime === 'verlegd' ? 0 : regelExcl(r) * pct / 100
+    if (regime !== 'verlegd' && pct === 0) continue
+    btwPerSoort.set(soort, (btwPerSoort.get(soort) || 0) + bedrag)
   }
   const btw = [...btwPerSoort.entries()].map(([btwSoort, bedrag]) => ({ btwSoort, btwBedrag: round2(bedrag) }))
 
@@ -283,55 +334,90 @@ export async function ensureDiversenLeverancier(clientKey: string, relaties?: an
   return created.id
 }
 
-// Grootboek voor een kosten-export: bij voorkeur het vraagposten-grootboek
-// ("nog uit te zoeken" — precies de bedoeling: de boekhouder verdeelt het zelf),
-// anders een inkoop/kosten-grootboek dat de btw-soort accepteert.
-function inkoopGrootboekVoorPct(gbs: any[], pct: number): string {
-  const soort = regelBtwSoort(pct)
-  const kandidaten = [
-    gbs.find((g: any) => g.grootboekfunctie === 'InkopenVraagPosten'),
-    gbs.find((g: any) => g.grootboekfunctie === 'InkopenKostenAlleBtwTarieven'),
-    gbs.find((g: any) => String(g.grootboekfunctie || '').startsWith('Inkopen')
-      && Array.isArray(g.btwSoort) && g.btwSoort.includes(soort)),
-  ]
-  const gb = kandidaten.find(Boolean)
-  if (!gb?.id) {
-    const beschikbaar = [...new Set(gbs.map((g: any) => g.grootboekfunctie).filter((f: any) => String(f || '').startsWith('Inkopen')))].join(', ')
-    throw new Error(`Geen actief inkoop-grootboek voor ${pct}% btw in de administratie; beschikbare inkoopfuncties: ${beschikbaar || 'geen'}`)
+// ── Kostencategorie → grootboek ─────────────────────────────────────────────
+// job_costs.category werd eerder genegeerd: álle kosten belandden op de
+// vraagpost, terwijl BossBase wél weet waar het om gaat. Per categorie een
+// voorkeursvolgorde van grootboekfuncties; {tarief} wordt Hoog/Laag/Overig op
+// basis van het btw-percentage. Vraagposten blijft de laatste terugval, zodat
+// een administratie zonder het gewenste grootboek nog steeds doorboekt (en de
+// boekhouder het daar zelf herverdeelt).
+//
+// Materiaal telt als inkoop van goederen; arbeid, reiskosten en gereedschap als
+// kosten. Inkoopfactuur is een verzamelcategorie zonder duidelijke kostensoort
+// en gaat daarom rechtstreeks naar de brede kostenrekening.
+const KOSTEN_GROOTBOEK: Record<string, string[]> = {
+  'Materiaal':     ['Inkopen{tarief}', 'InkopenKosten{tarief}', 'InkopenKostenAlleBtwTarieven'],
+  'Arbeid':        ['InkopenKosten{tarief}', 'InkopenKostenAlleBtwTarieven'],
+  'Reiskosten':    ['InkopenKosten{tarief}', 'InkopenKostenAlleBtwTarieven'],
+  'Gereedschap':   ['InkopenKosten{tarief}', 'InkopenKostenAlleBtwTarieven'],
+  'Inkoopfactuur': ['InkopenKostenAlleBtwTarieven', 'InkopenKosten{tarief}', 'Inkopen{tarief}'],
+}
+
+const TARIEF_SUFFIX = (pct: number) => (pct === 21 ? 'Hoog' : pct === 9 ? 'Laag' : 'Overig')
+
+// Grootboek voor een kosten-export: eerst de categorie-specifieke functies,
+// daarna altijd de vraagpost als vangnet.
+function inkoopGrootboekVoorKost(gbs: any[], categorie: string, pct: number): { id: string; viaVraagpost: boolean } {
+  const suffix = TARIEF_SUFFIX(pct)
+  const kandidaten = (KOSTEN_GROOTBOEK[categorie] || [])
+    .map(f => f.replace('{tarief}', suffix))
+
+  for (const functie of kandidaten) {
+    const gb = gbs.find((g: any) => g.grootboekfunctie === functie)
+    if (gb?.id) return { id: gb.id, viaVraagpost: false }
   }
-  return gb.id
+
+  const vraagpost = gbs.find((g: any) => g.grootboekfunctie === 'InkopenVraagPosten')
+  if (vraagpost?.id) return { id: vraagpost.id, viaVraagpost: true }
+
+  const beschikbaar = [...new Set(gbs.map((g: any) => g.grootboekfunctie).filter((f: any) => String(f || '').startsWith('Inkopen')))].join(', ')
+  throw new Error(
+    `Geen inkoop-grootboek voor categorie "${categorie}" (${pct}% btw) en geen vraagpostenrekening in de administratie; `
+    + `beschikbare inkoopfuncties: ${beschikbaar || 'geen'}`,
+  )
 }
 
 // Boekt ÉÉN handmatige BossBase-kostenregel als inkoopboeking in SnelStart
-// (POST /v2/inkoopboekingen, scope boekhouden:write). Bewust als "open"
-// mutatie: vraagposten-grootboek + markering=true, zodat de gebruiker/boekhouder
-// hem in SnelStart nog controleert en definitief wegboekt. Idempotent via
-// job_costs.snelstart_id.
+// (POST /v2/inkoopboekingen, scope boekhouden:write). De kostencategorie
+// bepaalt het grootboek; belandt de boeking alsnog op de vraagpost (categorie
+// onbekend of grootboek ontbreekt), dan blijft de markering + "controleren"
+// staan zodat de boekhouder hem herverdeelt. Idempotent via job_costs.snelstart_id.
 export async function pushInkoopboeking(
   admin: any, clientKey: string, cost: any, leverancierId: string, grootboeken: any[],
 ) {
   if (cost.snelstart_id) return { snelstart_id: cost.snelstart_id, already_synced: true }
 
   const pct = Number(cost.btw_percentage ?? 21)
+  const categorie = String(cost.category || '').trim()
   const bedrag = Math.abs(Number(cost.amount || 0))
   // job_costs.amount is excl. of incl. btw afhankelijk van btw_inclusief.
   const excl = round2(cost.btw_inclusief ? bedrag / (1 + pct / 100) : bedrag)
   const btwBedrag = round2(excl * pct / 100)
 
+  const { id: grootboekId, viaVraagpost } = inkoopGrootboekVoorKost(grootboeken, categorie, pct)
+  const basisOmschrijving = cost.description || categorie || 'Kostenregel'
+  // Alleen nog "controleren" als de boeking daadwerkelijk op de vraagpost
+  // eindigt; een correct ingedeelde kostenpost hoeft niet nagelopen te worden.
+  const omschrijving = viaVraagpost
+    ? `${basisOmschrijving} (via BossBase — controleren)`
+    : `${basisOmschrijving} (via BossBase)`
+
+  const inkoopBtwSoort = pct === 9 ? 'InkopenLaag' : pct === 21 ? 'InkopenHoog' : 'InkopenOverig'
+
   const body: Record<string, unknown> = {
     factuurnummer: `BB-KST-${String(cost.id).slice(0, 8)}`,
     factuurdatum: cost.cost_date || new Date().toISOString().slice(0, 10),
     leverancier: { id: leverancierId },
-    omschrijving: `${cost.description || 'Kostenregel'} (via BossBase — controleren)`,
+    omschrijving,
     factuurbedrag: round2(excl + btwBedrag),
-    markering: true,
+    markering: viaVraagpost,
     boekingsregels: [{
-      omschrijving: cost.description || 'Kostenregel',
-      grootboek: { id: inkoopGrootboekVoorPct(grootboeken, pct) },
+      omschrijving: basisOmschrijving,
+      grootboek: { id: grootboekId },
       bedrag: excl,
-      btwSoort: regelBtwSoort(pct),
+      btwSoort: pct === 21 ? 'Hoog' : pct === 9 ? 'Laag' : pct === 0 ? 'Geen' : 'Overig',
     }],
-    btw: pct > 0 ? [{ btwSoort: pct === 9 ? 'InkopenLaag' : 'InkopenHoog', btwBedrag }] : [],
+    btw: pct > 0 ? [{ btwSoort: inkoopBtwSoort, btwBedrag }] : [],
   }
 
   const created = await ssFetch(clientKey, '/inkoopboekingen', { method: 'POST', body: JSON.stringify(body) })

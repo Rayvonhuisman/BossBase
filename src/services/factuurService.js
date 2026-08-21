@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase'
 import { withCompanyId } from '../lib/currentCompany'
 import { syncFactuurNaarBoekhouding } from './accountingService'
 import { logTijdlijnSafe } from './klantTijdlijnService'
+import { regimeVanPct, regimeVoorOpslag } from '../lib/btwRegime'
 
 // Canonieke factuurstatussen. 'aangemaakt' bestond alleen als oude alias en komt
 // in de database niet voor — de beginstatus is 'concept'.
@@ -76,6 +77,9 @@ const toRegel = row => ({
   aantal: Number(row.aantal || 1),
   eenheidsprijs: Number(row.eenheidsprijs || 0),
   btwPct: Number(row.btw_pct || 21),
+  // Regels van vóór de btw_regime-migratie hebben nog geen regime: afleiden uit
+  // het percentage, zodat de rest van de app altijd een regime ziet.
+  btwRegime: row.btw_regime || regimeVanPct(row.btw_pct),
   regelprijs: Number(row.regelprijs || 0),
   volgorde: Number(row.volgorde || 0),
 })
@@ -300,6 +304,7 @@ export async function createCreditFactuur(origineleFactuurId, regels, origineleF
       aantal: Number(r.aantal || 1),
       eenheidsprijs: -Math.abs(Number(r.eenheidsprijs || 0)),
       btw_pct: Number(r.btwPct || 21),
+      btw_regime: r.btwRegime || regimeVanPct(r.btwPct),
       volgorde: i,
     })
   }
@@ -330,6 +335,7 @@ export async function createFactuurRegel(input) {
     aantal,
     eenheidsprijs,
     btw_pct: Number(input.btw_pct || 21),
+    btw_regime: regimeVoorOpslag(input.btw_regime || input.btwRegime || regimeVanPct(input.btw_pct)),
     regelprijs,
     volgorde: Number(input.volgorde || 0),
   }

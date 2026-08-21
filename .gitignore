@@ -13,3 +13,6 @@ supabase/.temp/
 # Gegenereerd door scripts/build-dry-run.mjs — niet in git
 supabase/tests/_dryrun_plan_matrix.sql
 supabase/tests/_dryrun_readonly.sql
+
+# Seedscript met testaccount-wachtwoord — repo is publiek
+scripts/seed-snelstart-test.sql

@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase"
 import { withCompanyId } from "../lib/currentCompany"
 import { logTijdlijnSafe } from "./klantTijdlijnService"
+import { regimeVanPct, regimeVoorOpslag } from "../lib/btwRegime"
 
 // Canonieke offerte-statussen. Enige bron voor filter- en keuzelijsten, zodat
 // die niet uit elkaar lopen met wat er daadwerkelijk wordt weggeschreven.
@@ -74,6 +75,8 @@ const toOfferteItem = row => ({
   // type + btwPct zijn null voor regels van vóór de migratie (oude data).
   type: row.type || null,
   btwPct: row.btw_pct != null ? Number(row.btw_pct) : null,
+  // Regels van vóór de btw_regime-migratie: afleiden uit het percentage.
+  btwRegime: row.btw_regime || regimeVanPct(row.btw_pct),
   aantal: Number(row.aantal || 1),
   prijsPer: Number(row.prijs_per || 0),
   subtotaal: Number(row.subtotaal || 0),
@@ -177,6 +180,7 @@ export async function copyOfferte(sourceId, { customerId, asVersion } = {}) {
       eenheid: it.eenheid || null,
       type: it.type,
       btw_pct: it.btwPct,
+      btw_regime: it.btwRegime,
       aantal: it.aantal,
       prijs_per: it.prijsPer,
       subtotaal: it.subtotaal,
@@ -362,6 +366,7 @@ export async function createOfferteItem(input) {
     eenheid: input.eenheid || null,
     type: input.type || null,
     btw_pct: btwPct != null ? Number(btwPct) : null,
+    btw_regime: regimeVoorOpslag(input.btw_regime || input.btwRegime || regimeVanPct(btwPct)),
     aantal: Number(input.aantal || 1),
     prijs_per: Number(input.prijs_per || input.prijsPer || 0),
     subtotaal,

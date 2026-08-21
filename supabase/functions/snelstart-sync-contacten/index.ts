@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient, isScheduledCall } from "../_shared/scheduledSync.ts"
-import { ssFetchAll, ensureRelatie, forEachSnelStartCompany } from "../_shared/snelstart.ts"
+import { ssFetchAll, ensureRelatie, forEachSnelStartCompany, ontbrekendeAdresvelden } from "../_shared/snelstart.ts"
 
 // Contacten twee-richtingen sync met SnelStart (spiegel van moneybird-sync-
 // contacten). Scopes: relaties:read + relaties:write.
@@ -17,11 +17,14 @@ const corsHeaders = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
+type AdresWaarschuwing = { klant: string; mist: string[] }
+
 async function syncCompany(
   supabase: any, companyId: string, clientKey: string,
-): Promise<{ imported: number; exported: number }> {
+): Promise<{ imported: number; exported: number; adresWaarschuwingen: AdresWaarschuwing[] }> {
   let imported = 0
   let exported = 0
+  const adresWaarschuwingen: AdresWaarschuwing[] = []
 
   // ── A: SNELSTART → BOSSBASE ──────────────────────────────────────────────
   // Alleen klanten (geen pure leveranciers); filter-casing conform het
@@ -91,6 +94,12 @@ async function syncCompany(
 
   for (const customer of (unsynced || [])) {
     try {
+      // Onvolledig adres blokkeert niet — SnelStart accepteert de relatie — maar
+      // we melden wél welke klanten het betreft, zodat de gebruiker het kan
+      // aanvullen in plaats van het pas in de boekhouding te ontdekken.
+      const mist = ontbrekendeAdresvelden(customer)
+      if (mist.length) adresWaarschuwingen.push({ klant: customer.name || 'Naamloze klant', mist })
+
       const relatieId = await ensureRelatie(supabase, clientKey, customer, relaties)
       if (relatieId) exported++
     } catch (err: any) {
@@ -98,6 +107,9 @@ async function syncCompany(
     }
   }
   console.log('Geëxporteerd naar SnelStart:', exported)
+  if (adresWaarschuwingen.length) {
+    console.warn('Klanten zonder compleet adres:', adresWaarschuwingen.map(w => `${w.klant} (mist ${w.mist.join(', ')})`).join('; '))
+  }
 
   await supabase
     .from('accounting_connections')
@@ -105,7 +117,7 @@ async function syncCompany(
     .eq('company_id', companyId)
     .eq('provider', 'snelstart')
 
-  return { imported, exported }
+  return { imported, exported, adresWaarschuwingen }
 }
 
 serve(async (req) => {

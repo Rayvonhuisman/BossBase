@@ -17,6 +17,8 @@ import { getProjects } from '../services/projectsService.js';
 import { getBedrijfsinstellingen } from '../services/instellingenService.js';
 import { getEigenEenheden } from '../services/eigenEenheidService.js';
 import { typeCfg, typeOptionsWith, applyTypeChange, omschrijvingFallback } from '../lib/regelTypes.js';
+import BtwRegimeSelect, { VerlegdUitleg } from '../components/BtwRegimeSelect.jsx';
+import { regimeVanPct, regimeVanRegel, regimeVoorOpslag } from '../lib/btwRegime.js';
 import { generateFactuurPdf, previewFactuurPdf, getFactuurPdfBase64 } from '../utils/generatePdf.js';
 import { buildCompanySnapshot, companyForDocument, isFactuurLocked } from '../utils/documentSnapshot.js';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
@@ -69,19 +71,8 @@ function insertPayButtonBeforeClosing(bodyHtml, buttonHtml) {
 const emptyRegel = (defaults) => ({
   id: crypto.randomUUID(), omschrijving: '', type: 'uren', aantal: 1,
   eenheidsprijs: defaults?.uurtarief ?? 0, btw: String(defaults?.btwPct ?? 21), btwAnders: '',
+  btwRegime: regimeVanPct(defaults?.btwPct ?? 21),
 });
-
-function BtwSelect({ r, setRegel }) {
-  return (
-    <div style={{ display: 'flex', gap: 3, alignItems: 'center', minWidth: 0, overflow: 'hidden' }}>
-      <select value={r.btw} onChange={e => setRegel(r.id, 'btw', e.target.value)} style={{ flex: 1, minWidth: 0 }}>
-        <option value="21">21%</option>
-        <option value="9">9%</option>
-        <option value="0">Geen btw (0%)</option>
-      </select>
-    </div>
-  );
-}
 
 function useRegelTotals(regels) {
   const getRegelprijs = r => Math.round(Number(r.aantal || 0) * Number(r.eenheidsprijs || 0) * 100) / 100;
@@ -131,7 +122,7 @@ function RegelItemsForm({ regels, setRegels, defaults, eenheden = [] }) {
                   <input type="number" min="0" step="0.01" placeholder={cfg.v2Ph} value={r.eenheidsprijs} onChange={e => setRegel(r.id, 'eenheidsprijs', e.target.value)} />
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between' }}>
-                  <BtwSelect r={r} setRegel={setRegel} />
+                  <BtwRegimeSelect r={r} setRegel={setRegel} />
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{fmt(getRegelprijs(r))}</div>
                     {cfg.regelLabel && Number(r.aantal) > 0 && Number(r.eenheidsprijs) > 0 && (
@@ -160,7 +151,7 @@ function RegelItemsForm({ regels, setRegels, defaults, eenheden = [] }) {
                   onChange={e => setRegel(r.id, 'aantal', e.target.value)}
                   style={{ minWidth: 0, visibility: cfg.hasV1 ? 'visible' : 'hidden' }} />
                 <input type="number" min="0" step="0.01" placeholder={cfg.v2Ph} value={r.eenheidsprijs} onChange={e => setRegel(r.id, 'eenheidsprijs', e.target.value)} style={{ minWidth: 0 }} />
-                <BtwSelect r={r} setRegel={setRegel} />
+                <BtwRegimeSelect r={r} setRegel={setRegel} />
                 <div style={{ textAlign: 'right', overflow: 'hidden' }}>
                   <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--tx)', whiteSpace: 'nowrap' }}>{fmt(getRegelprijs(r))}</div>
                   {cfg.regelLabel && Number(r.aantal) > 0 && Number(r.eenheidsprijs) > 0 && (
@@ -173,6 +164,8 @@ function RegelItemsForm({ regels, setRegels, defaults, eenheden = [] }) {
           })}
         </div>
       )}
+
+      <VerlegdUitleg regels={regels} />
 
       <div>
         <button className="btn btn-ghost" style={{ fontSize: 13, padding: '4px 10px' }} onClick={addRegel}>{I.plus} Regel toevoegen</button>
@@ -234,7 +227,7 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
       set('vervaldatum', verval);
       if (!prefill?.regels?.length) {
         setRegels(rs => rs.map((r, i) => i === 0 ? {
-          ...r, btw: String(s.btwPct),
+          ...r, btw: String(s.btwPct), btwRegime: regimeVanPct(s.btwPct),
           eenheidsprijs: r.type === 'uren' ? s.uurtarief : r.type === 'km' ? s.reiskostenPerKm : r.eenheidsprijs,
         } : r));
       }
@@ -269,7 +262,7 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
       const r = regels[i];
       const omschrijving = r.omschrijving.trim() || omschrijvingFallback(r.type, eenheden);
       const btwPct = r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw);
-      await createFactuurRegel({ factuur_id: created.id, type: r.type, omschrijving, aantal: Number(r.aantal || 1), eenheidsprijs: Number(r.eenheidsprijs || 0), btw_pct: btwPct, volgorde: i });
+      await createFactuurRegel({ factuur_id: created.id, type: r.type, omschrijving, aantal: Number(r.aantal || 1), eenheidsprijs: Number(r.eenheidsprijs || 0), btw_pct: btwPct, btw_regime: regimeVoorOpslag(regimeVanRegel(r)), volgorde: i });
     }
     return created;
   };

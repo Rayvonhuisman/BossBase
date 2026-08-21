@@ -16,6 +16,8 @@
 // render: { label, omschrPh, hasV1, v1Step, v1Ph, v2Ph, unit, regelLabel(r) }.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { regimeVanPct } from './btwRegime';
+
 const mkCfg = (value, label, omschrPh, { step = '1', unit = '' } = {}) => ({
   value, label, omschrPh,
   hasV1: true, v1Step: step, v1Ph: '0', v2Ph: '0,00', unit,
@@ -123,6 +125,9 @@ export function reconstructRegel(item, doc, eenheden = []) {
     type,
     aantal: item.aantal ?? 1,
     eenheidsprijs: item.prijsPer ?? item.eenheidsprijs ?? 0,
+    // Opgeslagen regime wint; ontbreekt het (regels van vóór de migratie), dan
+    // leidt btwRegime.js het af uit het percentage.
+    btwRegime: item.btwRegime || regimeVanPct(pct),
     ...btwToSelect(pct),
   };
 }

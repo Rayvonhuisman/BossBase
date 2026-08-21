@@ -272,6 +272,8 @@ export function InstellingenPage() {
   const [ssImporting, setSsImporting] = useState(false);
   const [ssSyncingContacten, setSsSyncingContacten] = useState(false);
   const [ssTogglingImport, setSsTogglingImport] = useState(false);
+  // Klanten die zonder compleet adres naar SnelStart zijn gegaan (laatste sync).
+  const [ssAdresWaarschuwingen, setSsAdresWaarschuwingen] = useState([]);
 
   // Voertuigen
   const [voertuigen, setVoertuigen] = useState([]);
@@ -890,6 +892,9 @@ export function InstellingenPage() {
       const result = await syncContactenMetSnelStart();
       if (result?.success) {
         toast.success(`${result.imported ?? 0} klanten geïmporteerd, ${result.exported ?? 0} geëxporteerd`);
+        // SnelStart accepteert klanten zonder adres, dus die komen er stilletjes
+        // in. Melden welke het betreft, zonder de sync te blokkeren.
+        setSsAdresWaarschuwingen(result.adresWaarschuwingen || []);
       } else {
         toast.error(result?.error || 'Synchroniseren mislukt');
       }
@@ -2548,6 +2553,25 @@ export function InstellingenPage() {
                   />
                   Alleen betaalde facturen synchroniseren
                 </label>
+              </div>
+            )}
+
+            {ssAdresWaarschuwingen.length > 0 && (
+              <div style={{
+                border: '1px solid var(--warn-bd, #e0b050)', background: 'var(--warn-bg, rgba(224,176,80,.10))',
+                borderRadius: 8, padding: '10px 12px', marginBottom: 14, fontSize: '.82rem', color: 'var(--dm)',
+              }}>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                  {ssAdresWaarschuwingen.length} {ssAdresWaarschuwingen.length === 1 ? 'klant is' : 'klanten zijn'} zonder compleet adres doorgezet
+                </div>
+                <div style={{ marginBottom: 6 }}>
+                  SnelStart accepteert ze wel, maar in je boekhouding staat dan een relatie zonder adresgegevens. Vul ze aan bij de klant en synchroniseer opnieuw.
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                  {ssAdresWaarschuwingen.map((w, i) => (
+                    <li key={i}>{w.klant} — mist {w.mist.join(', ')}</li>
+                  ))}
+                </ul>
               </div>
             )}
 
