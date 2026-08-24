@@ -322,6 +322,55 @@ export async function pushVerkoopboeking(
 // boekhouder herverdeelt ze in SnelStart naar de echte leverancier/kostenpost.
 const DIVERSEN_LEVERANCIER = 'BossBase kosten (controleren)'
 
+// Zoekt of maakt de SnelStart-relatie voor een BossBase-leverancier.
+// Spiegel van ensureRelatie, maar met relatiesoort ['Leverancier'] en met
+// terugschrijven naar leveranciers.snelstart_id, zodat een volgende sync hem
+// hergebruikt in plaats van een duplicaat aan te maken.
+export async function ensureLeverancier(
+  admin: any, clientKey: string, leverancier: any, bekendeRelaties?: any[],
+): Promise<string | null> {
+  if (leverancier?.snelstart_id) return String(leverancier.snelstart_id)
+  const naam = String(leverancier?.naam || '').trim()
+  if (!naam) return null
+
+  const relaties = bekendeRelaties ?? await ssFetchAll(clientKey, '/relaties')
+  const match = relaties.find((r: any) => (r?.naam || '').trim().toLowerCase() === naam.toLowerCase())
+  let relatieId: string | null = match?.id ? String(match.id) : null
+
+  if (!relatieId) {
+    const body: Record<string, unknown> = {
+      relatiesoort: ['Leverancier'],
+      naam,
+      email: leverancier.email || undefined,
+      telefoon: leverancier.telefoon || undefined,
+      mobieleTelefoon: leverancier.mobiel || undefined,
+      kvkNummer: leverancier.kvk_number || undefined,
+      btwNummer: leverancier.btw_number || undefined,
+      iban: leverancier.iban || undefined,
+      websiteUrl: leverancier.website || undefined,
+      memo: leverancier.notities || undefined,
+      krediettermijn: leverancier.betaaltermijn_dagen ?? undefined,
+      nonactief: leverancier.actief === false ? true : undefined,
+    }
+    if (leverancier.address || leverancier.city || leverancier.postcode || leverancier.contactpersoon) {
+      body.vestigingsAdres = {
+        contactpersoon: leverancier.contactpersoon || undefined,
+        straat: leverancier.address || undefined,
+        postcode: leverancier.postcode || undefined,
+        plaats: leverancier.city || undefined,
+      }
+    }
+    const created = await ssFetch(clientKey, '/relaties', { method: 'POST', body: JSON.stringify(body) })
+    relatieId = created?.id ? String(created.id) : null
+    if (relatieId && bekendeRelaties) bekendeRelaties.push({ id: relatieId, naam })
+  }
+
+  if (relatieId && leverancier.id) {
+    await admin.from('leveranciers').update({ snelstart_id: relatieId }).eq('id', leverancier.id)
+  }
+  return relatieId
+}
+
 export async function ensureDiversenLeverancier(clientKey: string, relaties?: any[]): Promise<string> {
   const lijst = relaties ?? await ssFetchAll(clientKey, '/relaties')
   const match = lijst.find((r: any) => (r?.naam || '').trim().toLowerCase() === DIVERSEN_LEVERANCIER.toLowerCase())
@@ -332,6 +381,80 @@ export async function ensureDiversenLeverancier(clientKey: string, relaties?: an
   })
   if (!created?.id) throw new Error('Kon verzamelleverancier voor kosten niet aanmaken')
   return created.id
+}
+
+// ── Bijlagen ────────────────────────────────────────────────────────────────
+// Een boeking zonder bon is voor de boekhouding weinig waard. job_costs.bijlage_url
+// bevat een JSON-array met paden in de PRIVÉ bucket kosten-bijlagen; die halen we
+// met de service-role op en hangen we als document aan de inkoopboeking.
+//
+// POST /documenten/Inkoopboekingen met DocumentContentModel
+// { parentIdentifier, fileName, content(base64) }. Scopes: boekhouden:write
+// én documenten:write — die tweede zit mogelijk niet in oudere koppelsleutels.
+//
+// De spec noemt alleen bij CreateFromAttachment een harde grens van 5 MB; voor
+// /documenten staat er niets. We houden dezelfde grens aan: liever overslaan met
+// een melding dan een onbegrijpelijke fout.
+const MAX_BIJLAGE_BYTES = 5 * 1024 * 1024
+
+function naarBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf)
+  let bin = ''
+  // In blokken, anders knalt String.fromCharCode op grote bestanden.
+  for (let i = 0; i < bytes.length; i += 8192) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + 8192))
+  }
+  return btoa(bin)
+}
+
+// Hangt de bijlage(n) van een kostenpost als document aan een bestaande
+// inkoopboeking. Geeft terug hoeveel er gelukt zijn; gooit niet — een mislukte
+// bijlage mag de boeking niet ongedaan maken.
+export async function pushKostenBijlagen(
+  admin: any, clientKey: string, cost: any, inkoopboekingId: string,
+): Promise<{ gelukt: number; overgeslagen: string[] }> {
+  const overgeslagen: string[] = []
+  let gelukt = 0
+  if (!cost?.bijlage_url || !inkoopboekingId) return { gelukt, overgeslagen }
+
+  let paden: string[]
+  try {
+    const parsed = JSON.parse(cost.bijlage_url)
+    paden = Array.isArray(parsed) ? parsed : [parsed]
+  } catch {
+    paden = [cost.bijlage_url]
+  }
+
+  for (const pad of paden) {
+    const naam = String(pad || '').split('/').pop() || 'bon'
+    try {
+      // Legacy: een enkele rij bewaarde een publieke http-URL i.p.v. een pad.
+      if (String(pad).startsWith('http')) { overgeslagen.push(`${naam} (externe URL)`); continue }
+
+      const { data: blob, error } = await admin.storage.from('kosten-bijlagen').download(pad)
+      if (error || !blob) { overgeslagen.push(`${naam} (niet gevonden)`); continue }
+
+      const buf = await blob.arrayBuffer()
+      if (buf.byteLength > MAX_BIJLAGE_BYTES) {
+        overgeslagen.push(`${naam} (groter dan 5 MB)`)
+        continue
+      }
+
+      await ssFetch(clientKey, '/documenten/Inkoopboekingen', {
+        method: 'POST',
+        body: JSON.stringify({
+          parentIdentifier: inkoopboekingId,
+          fileName: naam,
+          content: naarBase64(buf),
+        }),
+      })
+      gelukt++
+    } catch (err: any) {
+      console.error(`Bijlage ${naam} naar SnelStart mislukt:`, err?.message)
+      overgeslagen.push(`${naam} (${err?.message ?? 'fout'})`)
+    }
+  }
+  return { gelukt, overgeslagen }
 }
 
 // ── Kostencategorie → grootboek ─────────────────────────────────────────────
@@ -382,10 +505,23 @@ function inkoopGrootboekVoorKost(gbs: any[], categorie: string, pct: number): { 
 // bepaalt het grootboek; belandt de boeking alsnog op de vraagpost (categorie
 // onbekend of grootboek ontbreekt), dan blijft de markering + "controleren"
 // staan zodat de boekhouder hem herverdeelt. Idempotent via job_costs.snelstart_id.
+//
+// `leverancierId` is de verzamelrelatie: die wordt alleen gebruikt als de
+// kostenpost zelf geen leverancier heeft ingevuld.
 export async function pushInkoopboeking(
   admin: any, clientKey: string, cost: any, leverancierId: string, grootboeken: any[],
+  bekendeRelaties?: any[],
 ) {
   if (cost.snelstart_id) return { snelstart_id: cost.snelstart_id, already_synced: true }
+
+  // Echte leverancier als die bekend is; anders de verzamelrelatie. Zo staat er
+  // geen fictieve relatie in de boekhouding voor kosten waarvan we de
+  // leverancier wél weten. cost.leveranciers komt uit de join op de export-query.
+  let relatieId = leverancierId
+  if (cost.leveranciers?.naam) {
+    const eigen = await ensureLeverancier(admin, clientKey, cost.leveranciers, bekendeRelaties)
+    if (eigen) relatieId = eigen
+  }
 
   const pct = Number(cost.btw_percentage ?? 21)
   const categorie = String(cost.category || '').trim()
@@ -407,7 +543,7 @@ export async function pushInkoopboeking(
   const body: Record<string, unknown> = {
     factuurnummer: `BB-KST-${String(cost.id).slice(0, 8)}`,
     factuurdatum: cost.cost_date || new Date().toISOString().slice(0, 10),
-    leverancier: { id: leverancierId },
+    leverancier: { id: relatieId },
     omschrijving,
     factuurbedrag: round2(excl + btwBedrag),
     markering: viaVraagpost,
@@ -423,7 +559,20 @@ export async function pushInkoopboeking(
   const created = await ssFetch(clientKey, '/inkoopboekingen', { method: 'POST', body: JSON.stringify(body) })
   const snelstartId = created?.id ? String(created.id) : null
   if (snelstartId) {
-    await admin.from('job_costs').update({ snelstart_id: snelstartId }).eq('id', cost.id)
+    const patch: Record<string, unknown> = { snelstart_id: snelstartId }
+    // Bon meesturen. Zonder bijlage is er niets na te sturen, dus meteen op
+    // gesynct; met bijlage alleen als het gelukt is — anders pikt de volgende
+    // run hem op.
+    if (cost.bijlage_url) {
+      const r = await pushKostenBijlagen(admin, clientKey, cost, snelstartId)
+      if (r.overgeslagen.length) {
+        console.warn(`Kostenregel ${cost.id}: bijlagen overgeslagen — ${r.overgeslagen.join(', ')}`)
+      }
+      if (r.gelukt > 0 || r.overgeslagen.length === 0) patch.snelstart_bijlage_gesynct = true
+    } else {
+      patch.snelstart_bijlage_gesynct = true
+    }
+    await admin.from('job_costs').update(patch).eq('id', cost.id)
   }
   return { snelstart_id: snelstartId, already_synced: false }
 }

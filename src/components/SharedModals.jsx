@@ -10,7 +10,9 @@ import { useProfile } from '../lib/profileContext.jsx';
 import { triggerAutoEmail } from '../services/emailService.js';
 import { getCompanyId } from '../lib/currentCompany.js';
 import { createCalendarEvent } from '../services/calendarService.js';
-import { createJobCost, updateJobCost } from '../services/jobCostService.js';
+import { createJobCost, updateJobCost } from '../services/jobCostService.js'
+import { listLeveranciers } from '../services/leverancierService.js'
+import { categorieOptiesMet, STANDAARD_CATEGORIE } from '../lib/kostenCategorieen.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
 import { getProjects } from '../services/projectsService.js';
 import { calcBtw } from '../utils/btw.js';
@@ -657,16 +659,20 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
   const { startUpload } = useUploads();
   const [form, setForm] = useState({
     customer_id: defaultCustId,
-    category: 'Materiaal',
+    category: STANDAARD_CATEGORIE,
     cost_date: new Date().toISOString().slice(0, 10),
     project_id: '',
     werkbon_id: '',
+    leverancier_id: '',
   });
+  // Leveranciers om uit te kiezen; lege keuze = boeken op de verzamelrelatie.
+  const [leverancierOpties, setLeverancierOpties] = useState([]);
   const [werkbonnen, setWerkbonnen] = useState([]);
   const [projecten, setProjecten] = useState([]);
   useEffect(() => {
     getWerkbonnen().then(setWerkbonnen).catch(() => {});
     getProjects().then(setProjecten).catch(() => {});
+    listLeveranciers({ inclusiefInactief: false }).then(setLeverancierOpties).catch(() => {});
   }, []);
   const [regels, setRegels] = useState(() => [newKostenRegel()]);
   const [bijlageFiles, setBijlageFiles] = useState([]);
@@ -739,6 +745,9 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
   const validate = () => {
     const next = {};
     if (!form.cost_date) next.cost_date = 'Kies een datum';
+    // Verplicht: zonder leverancier belandt de kost in de boekhouding onder de
+    // verzamelrelatie en moet iemand hem daar alsnog uitzoeken.
+    if (!form.leverancier_id) next.leverancier_id = 'Kies een leverancier';
     regels.forEach((r, i) => {
       if (!r.omschrijving.trim()) next[`r${i}o`] = true;
       if (!r.bedrag || Number(r.bedrag) <= 0) next[`r${i}b`] = true;
@@ -757,6 +766,7 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
     const header = {
       category: form.category,
       cost_date: form.cost_date,
+      leverancier_id: form.leverancier_id || null,
       bijlage_url: null,
       klant_type: form.customer_id ? 'klant' : 'algemeen',
       customer_id: form.customer_id || null,
@@ -857,13 +867,25 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
           <div className="f">
             <label>Categorie</label>
             <select value={form.category} onChange={e => setField('category', e.target.value)}>
-              <option value="Materiaal">Materiaal</option>
-              <option value="Arbeid">Arbeid</option>
-              <option value="Reiskosten">Reiskosten</option>
-              <option value="Inkoopfactuur">Inkoopfactuur</option>
-              <option value="Algemene kosten">Algemene kosten</option>
-              <option value="Overig">Overig</option>
+              {categorieOptiesMet(form.category).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
+          </div>
+          <div className="f">
+            <label>Leverancier *</label>
+            <select
+              value={form.leverancier_id}
+              onChange={e => setField('leverancier_id', e.target.value)}
+              style={errors.leverancier_id ? { borderColor: '#dc2626' } : undefined}
+            >
+              <option value="">— Kies leverancier —</option>
+              {leverancierOpties.map(l => <option key={l.id} value={l.id}>{l.naam}</option>)}
+            </select>
+            {errors.leverancier_id && <span className="bb-err">{errors.leverancier_id}</span>}
+            {leverancierOpties.length === 0 && (
+              <span style={{ fontSize: '.72rem', color: 'var(--dl)' }}>
+                Nog geen leveranciers — voeg er een toe via Relaties → Leveranciers.
+              </span>
+            )}
           </div>
           <div className="f s2">
             <label>Datum *</label>

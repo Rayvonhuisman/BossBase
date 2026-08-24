@@ -54,6 +54,9 @@ export function mapJobCostFormToPayload(input = {}) {
     payload.amount = amount
   }
   if (input.category !== undefined) payload.category = input.category || null
+  if (input.leverancier_id !== undefined || input.leverancierId !== undefined) {
+    payload.leverancier_id = input.leverancier_id ?? input.leverancierId ?? null
+  }
 
   // Accept cost_date, date, or coste_date (legacy aliases).
   const date = input.cost_date ?? input.date ?? input.coste_date
@@ -120,6 +123,33 @@ export function kostenPerGroep(kosten = []) {
   return totalen
 }
 
+// Werkbonmateriaal is wél kostprijs, maar géén boekhoudkost: die rijen worden
+// bewust niet naar de boekhouding geëxporteerd (exportKosten filtert op
+// werkbon_materiaal_id is null). De echte boekhoudkost is de inkoopfactuur van
+// de leverancier — één post voor een rol kabel die over meerdere klussen gaat.
+// Zonder dit onderscheid lijkt het kostenoverzicht niet te kloppen met de
+// boekhouding.
+export const isWerkbonMateriaal = k => Boolean(k?.werkbonMateriaalId ?? k?.werkbon_materiaal_id)
+
+/**
+ * Splitst kosten in kostprijs (alles) en boekhoudkosten (wat naar de
+ * boekhouding gaat). Geeft { kostprijs, boekhouding, werkbonMateriaal }.
+ */
+export function kostenSplitsing(kosten = []) {
+  let kostprijs = 0
+  let werkbonMateriaal = 0
+  for (const k of kosten) {
+    const bedrag = Number(k.amt ?? k.amount) || 0
+    kostprijs += bedrag
+    if (isWerkbonMateriaal(k)) werkbonMateriaal += bedrag
+  }
+  return {
+    kostprijs: Math.round(kostprijs * 100) / 100,
+    boekhouding: Math.round((kostprijs - werkbonMateriaal) * 100) / 100,
+    werkbonMateriaal: Math.round(werkbonMateriaal * 100) / 100,
+  }
+}
+
 export const toJobCost = row => ({
   id: row.id,
   dealId: row.deal_id,
@@ -129,6 +159,9 @@ export const toJobCost = row => ({
   companyId: row.company_id,
   cat: row.category || "overig",
   desc: row.description || "",
+  leverancierId: row.leverancier_id || null,
+  // Vervallen vrij tekstveld; alleen nog voor rijen van vóór de leveranciers-tabel.
+  leverancier: row.leverancier || "",
   amt: Number(row.amount || 0),
   // amount is exclusief BTW; btw-bedrag en incl. worden hieruit afgeleid.
   btwPercentage: row.btw_percentage != null ? Number(row.btw_percentage) : 21,

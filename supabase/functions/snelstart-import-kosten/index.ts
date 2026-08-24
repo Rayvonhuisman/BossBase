@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient, isScheduledCall } from "../_shared/scheduledSync.ts"
-import { ssFetch, ssFetchAll, forEachSnelStartCompany, pushVerkoopboeking, getActieveGrootboeken, ensureRelatie, ensureDiversenLeverancier, pushInkoopboeking } from "../_shared/snelstart.ts"
+import { ssFetch, ssFetchAll, forEachSnelStartCompany, pushVerkoopboeking, getActieveGrootboeken, ensureRelatie, ensureDiversenLeverancier, pushInkoopboeking, pushKostenBijlagen } from "../_shared/snelstart.ts"
 
 // Kosten/facturen-synchronisatie met SnelStart, twee richtingen:
 //   * EXPORT (altijd): verzonden/betaalde BossBase-facturen zonder snelstart_id
@@ -104,10 +104,25 @@ async function importKosten(
   const facturen = await ssFetchAll(clientKey, '/inkoopfacturen')
   const toImport = facturen.filter((f: any) => f.id && !importedFactuurIds.has(String(f.id)))
 
+  // InkoopfactuurModel geeft alleen relatie.id, geen naam. Eén keer de
+  // relatielijst ophalen om die te vertalen: zonder dit ging de leverancier
+  // verloren en belandden geïmporteerde kosten naamloos in BossBase.
+  const relatieNaam = new Map<string, string>()
+  if (toImport.length) {
+    try {
+      for (const r of await ssFetchAll(clientKey, '/relaties')) {
+        if (r?.id && r?.naam) relatieNaam.set(String(r.id), String(r.naam).trim())
+      }
+    } catch (err: any) {
+      console.error('Relatielijst niet leesbaar (leverancier blijft leeg):', err.message)
+    }
+  }
+
   const rows: Record<string, unknown>[] = []
   for (const f of toImport) {
     const costDate = f.factuurDatum ? String(f.factuurDatum).slice(0, 10) : null
     const baseDesc = f.factuurnummer ? `Inkoopfactuur ${f.factuurnummer}` : 'Inkoopfactuur'
+    const leverancier = f.relatie?.id ? (relatieNaam.get(String(f.relatie.id)) || null) : null
 
     // Btw-uitsplitsing via de onderliggende inkoopboeking (best-effort).
     let regels: any[] = []
@@ -127,6 +142,7 @@ async function importKosten(
           description: r.omschrijving ? `${baseDesc} — ${r.omschrijving}` : baseDesc,
           amount: Math.abs(Number(r.bedrag || 0)),
           category: 'Inkoopfactuur',
+          leverancier,
           cost_date: costDate,
           externe_referentie: `snelstart_${f.id}_${i}`,
           klant_type: 'algemeen',
@@ -140,6 +156,7 @@ async function importKosten(
         description: baseDesc,
         amount: Math.abs(Number(f.factuurBedrag || 0)),
         category: 'Inkoopfactuur',
+        leverancier,
         cost_date: costDate,
         externe_referentie: 'snelstart_' + f.id,
         klant_type: 'algemeen',
@@ -163,43 +180,105 @@ async function importKosten(
 // onder de verzamelleverancier — de boekhouder controleert en herverdeelt ze in
 // SnelStart. Werkbon-materiaalregels blijven buiten de boekhouding (risico op
 // dubbeltelling met de echte inkoopfactuur van dat materiaal).
-async function exportKosten(supabase: any, companyId: string, clientKey: string): Promise<number> {
-  const { data: teExporteren } = await supabase
-    .from('job_costs')
-    .select('*')
-    .eq('company_id', companyId)
-    .is('externe_referentie', null)
-    .is('snelstart_id', null)
-    .is('werkbon_materiaal_id', null)
-    .gt('amount', 0)
-    .order('cost_date', { ascending: true })
-    .limit(50)
+const KOSTEN_BATCH = 50
 
-  const lijst = teExporteren || []
-  if (!lijst.length) return 0
-
+// Boekt een batch kostenregels. Apart gehouden zodat exportKosten ook zonder
+// nieuwe regels doorloopt naar het nasturen van bonnen.
+async function boekKosten(supabase: any, clientKey: string, lijst: any[]): Promise<number> {
   const grootboeken = await getActieveGrootboeken(clientKey)
-  const leverancierId = await ensureDiversenLeverancier(clientKey)
+  // Eén keer ophalen en doorgeven: ensureLeverancier matcht client-side op naam
+  // en zet nieuwe relaties in deze lijst bij, zodat twee kostenregels van
+  // dezelfde leverancier niet twee relaties aanmaken.
+  const relaties = await ssFetchAll(clientKey, '/relaties')
+  const leverancierId = await ensureDiversenLeverancier(clientKey, relaties)
 
   let exported = 0
   for (const cost of lijst) {
     try {
-      const r = await pushInkoopboeking(supabase, clientKey, cost, leverancierId, grootboeken)
+      const r = await pushInkoopboeking(supabase, clientKey, cost, leverancierId, grootboeken, relaties)
       if (r.snelstart_id && !r.already_synced) exported++
     } catch (err: any) {
       console.error(`Kostenregel ${cost.id} exporteren mislukt:`, err.message)
     }
   }
-  console.log('Handmatige kosten naar SnelStart geboekt:', exported)
   return exported
+}
+
+async function exportKosten(
+  supabase: any, companyId: string, clientKey: string,
+): Promise<{ exported: number; resterend: number }> {
+  // Basisfilter voor "nog te boeken kosten". Wordt twee keer gebruikt: één keer
+  // om te tellen hoeveel er openstaan, één keer om een batch op te halen.
+  const basis = () => supabase
+    .from('job_costs')
+    .eq('company_id', companyId)
+    .is('externe_referentie', null)
+    .is('snelstart_id', null)
+    .is('werkbon_materiaal_id', null)
+    .gt('amount', 0)
+
+  // Hoeveel staan er in totaal open? Zonder dit meldde de sync alleen wat er in
+  // deze batch zat en las dat als "klaar", terwijl er nog een rest was.
+  const { count: openstaand } = await basis().select('id', { count: 'exact', head: true })
+  const totaalOpen = openstaand ?? 0
+
+  const { data: teExporteren } = await basis()
+    .select('*, leveranciers(id, naam, email, telefoon, mobiel, website, address, postcode, city, kvk_number, btw_number, iban, betaaltermijn_dagen, notities, actief, snelstart_id)')
+    .order('cost_date', { ascending: true })
+    .limit(KOSTEN_BATCH)
+
+  const lijst = teExporteren || []
+  // Géén vroege return bij een lege lijst: het nasturen van bonnen hieronder
+  // moet ook draaien als er niets nieuws te boeken valt.
+  const exported = lijst.length ? await boekKosten(supabase, clientKey, lijst) : 0
+  // Bonnen nasturen bij boekingen die al bestaan. Bijlagen worden ná het
+  // opslaan van de kost op de achtergrond geüpload, dus een sync die daar net
+  // tussendoor liep boekte zonder bon. Zonder deze stap kwam die bon er nooit
+  // meer bij, want de kost wordt daarna overgeslagen.
+  const { data: naTeSturen } = await supabase
+    .from('job_costs')
+    .select('id, bijlage_url, snelstart_id')
+    .eq('company_id', companyId)
+    .not('snelstart_id', 'is', null)
+    .not('bijlage_url', 'is', null)
+    .eq('snelstart_bijlage_gesynct', false)
+    .limit(KOSTEN_BATCH)
+
+  let bijlagenNagestuurd = 0
+  for (const cost of (naTeSturen || [])) {
+    try {
+      const r = await pushKostenBijlagen(supabase, clientKey, cost, cost.snelstart_id)
+      if (r.gelukt > 0 || r.overgeslagen.length === 0) {
+        await supabase.from('job_costs').update({ snelstart_bijlage_gesynct: true }).eq('id', cost.id)
+        bijlagenNagestuurd += r.gelukt
+      } else {
+        console.warn(`Kostenregel ${cost.id}: bijlagen overgeslagen — ${r.overgeslagen.join(', ')}`)
+      }
+    } catch (err: any) {
+      console.error(`Bijlage nasturen voor ${cost.id} mislukt:`, err?.message)
+    }
+  }
+  if (bijlagenNagestuurd) console.log('Bonnen alsnog naar SnelStart gestuurd:', bijlagenNagestuurd)
+
+  // Wat er ná deze batch nog openstaat: het totaal minus wat we nu geboekt
+  // hebben. Mislukte regels tellen mee als rest — die moeten opnieuw.
+  const resterend = Math.max(0, totaalOpen - exported)
+  console.log(`Handmatige kosten naar SnelStart geboekt: ${exported} (nog open: ${resterend})`)
+  return { exported, resterend }
 }
 
 async function syncCompany(
   supabase: any, companyId: string, clientKey: string, importCosts: boolean, paidOnly: boolean,
-): Promise<{ exported: { verkoopboekingen: number; inkoopboekingen: number }; imported: { inkoopfacturen: number } }> {
+): Promise<{
+  exported: { verkoopboekingen: number; inkoopboekingen: number };
+  imported: { inkoopfacturen: number };
+  kostenResterend: number;
+}> {
   const exported = await exportFacturen(supabase, companyId, clientKey, paidOnly)
   const imported = importCosts ? await importKosten(supabase, companyId, clientKey) : 0
-  const kostenExported = importCosts ? await exportKosten(supabase, companyId, clientKey) : 0
+  const kosten = importCosts
+    ? await exportKosten(supabase, companyId, clientKey)
+    : { exported: 0, resterend: 0 }
 
   await supabase
     .from('accounting_connections')
@@ -207,7 +286,11 @@ async function syncCompany(
     .eq('company_id', companyId)
     .eq('provider', 'snelstart')
 
-  return { exported: { verkoopboekingen: exported, inkoopboekingen: kostenExported }, imported: { inkoopfacturen: imported } }
+  return {
+    exported: { verkoopboekingen: exported, inkoopboekingen: kosten.exported },
+    imported: { inkoopfacturen: imported },
+    kostenResterend: kosten.resterend,
+  }
 }
 
 serve(async (req) => {

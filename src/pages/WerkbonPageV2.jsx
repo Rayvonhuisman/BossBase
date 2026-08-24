@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { listMaterialen } from '../services/materiaalService.js';
 import { I, ModalX, NotifyMailToggle } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -464,8 +465,33 @@ function TakenSection({ taken, onToggle, onAdd, onDelete, canEdit = true }) {
 // ─── MATERIALS ──────────────────────────────────────────────────────────────
 
 function MaterialenSection({ materialen, onAdd, onDelete, canEdit = true }) {
-  const [form, setForm] = useState({ naam: '', eenheid: 'stuk', aantal: 1, prijs_per: 0, btw_pct: 21 });
+  const { can } = usePermissions();
+  const magInkoop = can('inkoopprijzen');
+  const [form, setForm] = useState({
+    naam: '', eenheid: 'stuk', aantal: 1, prijs_per: 0, btw_pct: 21,
+    materiaal_id: null, inkoopprijs_per: null, leverancier_id: null,
+  });
   const [adding, setAdding] = useState(false);
+  // Bibliotheek voor de snelkeuze. Faalt dit, dan blijft vrij invoeren werken.
+  const [biblio, setBiblio] = useState([]);
+  useEffect(() => { listMaterialen({ inclusiefInactief: false }).then(setBiblio).catch(() => {}); }, []);
+
+  // Naam die exact overeenkomt met een materiaal → alle velden vullen. Zo hoeft
+  // de monteur niet eerst te kiezen: typen en doorwerken kan gewoon.
+  const kiesUitBiblio = naam => {
+    const m = biblio.find(x => x.naam.toLowerCase() === String(naam || '').toLowerCase());
+    if (!m) { setForm(f => ({ ...f, naam, materiaal_id: null, inkoopprijs_per: null, leverancier_id: null })); return; }
+    setForm(f => ({
+      ...f,
+      naam: m.naam,
+      eenheid: m.eenheid || 'stuk',
+      prijs_per: m.verkoopprijs ?? f.prijs_per,
+      btw_pct: m.btwPct ?? 21,
+      materiaal_id: m.id,
+      inkoopprijs_per: m.inkoopprijs ?? null,
+      leverancier_id: m.leverancierId || null,
+    }));
+  };
 
   // Totalen: excl. BTW (subtotalen) en incl. BTW (per regel met eigen percentage).
   const totalEx = materialen.reduce((s, m) => s + (m.subtotaal || m.aantal * m.prijsPer || 0), 0);
@@ -485,8 +511,13 @@ function MaterialenSection({ materialen, onAdd, onDelete, canEdit = true }) {
         aantal: Number(form.aantal) || 1,
         prijs_per: Number(form.prijs_per) || 0,
         btw_pct: Number(form.btw_pct) || 0,
+        // Prijzen worden gekopieerd, niet gerefereerd: verandert de bibliotheek
+        // later, dan blijft de nacalculatie van deze klus kloppen.
+        materiaal_id: form.materiaal_id,
+        inkoopprijs_per: form.inkoopprijs_per,
+        leverancier_id: form.leverancier_id,
       });
-      setForm({ naam: '', eenheid: 'stuk', aantal: 1, prijs_per: 0, btw_pct: 21 });
+      setForm({ naam: '', eenheid: 'stuk', aantal: 1, prijs_per: 0, btw_pct: 21, materiaal_id: null, inkoopprijs_per: null, leverancier_id: null });
     } finally {
       setAdding(false);
     }
@@ -520,7 +551,14 @@ function MaterialenSection({ materialen, onAdd, onDelete, canEdit = true }) {
                 <div>{m.naam}</div>
                 <div style={{ color: 'var(--dl)' }}>{m.eenheid || '—'}</div>
                 <div className="right mono">{m.aantal}</div>
-                <div className="right mono" style={{ color: 'var(--dmu)' }}>{fmtEur(m.prijsPer)}</div>
+                <div className="right mono" style={{ color: 'var(--dmu)' }}>
+                  {fmtEur(m.prijsPer)}
+                  {magInkoop && m.inkoopprijsPer != null && (
+                    <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--dl)' }} title="Inkoopprijs — intern, niet zichtbaar voor de klant">
+                      inkoop {fmtEur(m.inkoopprijsPer)}
+                    </div>
+                  )}
+                </div>
                 <div className="right mono" style={{ color: 'var(--dmu)' }}>{pct}%</div>
                 <div className="right mono" style={{ fontWeight: 600 }}>
                   {fmtEur(sub)}
@@ -535,10 +573,14 @@ function MaterialenSection({ materialen, onAdd, onDelete, canEdit = true }) {
             <input
               type="text"
               placeholder="Naam materiaal"
+              list="wb2-materiaal-biblio"
               value={form.naam}
-              onChange={e => setForm(f => ({ ...f, naam: e.target.value }))}
+              onChange={e => kiesUitBiblio(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') submit(); }}
             />
+            <datalist id="wb2-materiaal-biblio">
+              {biblio.map(m => <option key={m.id} value={m.naam} />)}
+            </datalist>
             <input
               type="text"
               placeholder="stuk"

@@ -665,6 +665,36 @@ ul{list-style:none}
 .bb-profile-link{margin-top:14px;width:100%;display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bgs);border:1px solid var(--border);border-radius:var(--r8);font-size:.82rem;font-weight:600;color:var(--p);cursor:pointer;transition:all .15s ease}
 .bb-profile-link:hover{background:var(--bg);border-color:var(--p)}
 
+/* Navigatiegroep (Relaties → Klanten / Leveranciers).
+   De kop is geen knop: hij labelt alleen. De kinderen zijn iets ingesprongen en
+   missen het icoon, zodat het niveauverschil zichtbaar is zonder extra chrome.
+   In de ingeklapte sidebar wordt de groep één gewone knop (zie App.jsx). */
+.sbi-groep{margin-bottom:2px}
+.sbi-groep-kop{cursor:pointer}
+/* Groep dicht terwijl er een kind actief is: markeer de kop, anders lijkt er
+   niets geselecteerd. */
+.sbi-groep-kop.actief-kind{color:#1DDB62}
+.sbi-chevron{margin-left:auto;display:flex;align-items:center;opacity:.55;transition:transform .15s ease}
+.sbi-chevron svg{width:14px;height:14px}
+.sbi-chevron.open{transform:rotate(180deg)}
+.sbi-kind{padding-left:32px;font-size:.82rem}
+.sbi-kind .sbi-label{margin-left:0}
+
+/* Sync-balk — blijft staan zolang een boekhoudkoppeling synchroniseert.
+   Zelfde visuele taal als .bb-toast (donkere kaart, accentrand, .84rem/600),
+   maar gecentreerd bovenin en zonder auto-verdwijnen: een sync duurt minuten. */
+.bb-syncbar{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:9500;
+  display:flex;align-items:center;gap:10px;max-width:min(560px,calc(100vw - 32px));
+  background:#0D0D0D;color:#fff;padding:11px 16px;border-radius:var(--r10);
+  box-shadow:0 12px 40px rgba(0,0,0,.22);border-left:3px solid var(--p);
+  font-size:.84rem;font-weight:600;line-height:1.4;
+  animation:bbToastIn .25s cubic-bezier(.22,1,.36,1) both}
+.bb-syncbar-spin{width:14px;height:14px;flex-shrink:0;border-radius:50%;
+  border:2px solid rgba(255,255,255,.3);border-top-color:var(--p);
+  animation:act2-spin 1s linear infinite}
+.bb-syncbar-duur{font-weight:500;color:rgba(255,255,255,.7)}
+@media(max-width:768px){.bb-syncbar{top:12px;font-size:.8rem;padding:10px 13px}}
+
 /* Toasts */
 .bb-toast-stack{position:fixed;top:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:10000;pointer-events:none}
 .bb-toast{pointer-events:auto;background:#0D0D0D;color:#fff;padding:11px 16px;border-radius:var(--r10);box-shadow:0 12px 40px rgba(0,0,0,.22);display:flex;align-items:center;gap:10px;font-size:.84rem;font-weight:600;min-width:240px;max-width:380px;animation:bbToastIn .25s cubic-bezier(.22,1,.36,1) both;border-left:3px solid var(--p);cursor:pointer}
@@ -2854,7 +2884,7 @@ ul{list-style:none}
 .adres-zoeker{display:flex;flex-direction:column;gap:5px;position:relative}
 .adres-zoeker label{font-weight:600;font-size:.78rem;color:var(--dm)}
 .adres-zoeker-input{position:relative;display:flex;align-items:center}
-.adres-zoeker-input input{width:100%;border:1px solid var(--bstrong);border-radius:var(--r8);padding:11px 34px 11px 32px;font-size:16px;color:var(--dk);background:white;outline:none;font-family:inherit;transition:all .15s ease;-webkit-appearance:none;appearance:none}
+.adres-zoeker .adres-zoeker-input input{width:100%;border:1px solid var(--bstrong);border-radius:var(--r8);padding:11px 34px 11px 32px;font-size:16px;color:var(--dk);background:white;outline:none;font-family:inherit;transition:all .15s ease;-webkit-appearance:none;appearance:none}
 .adres-zoeker-input input:focus{border-color:var(--p);box-shadow:0 0 0 3px rgba(29,219,98,.14)}
 .adres-zoeker-input input::-webkit-search-cancel-button{-webkit-appearance:none}
 .adres-zoeker-icon{position:absolute;left:10px;color:var(--dl);pointer-events:none}

@@ -5,7 +5,9 @@ import {
   fmt, custById, Av, StatusBadge, ModalX, Logo, CostCategoryBadge,
 } from '../bb-shared.jsx';
 import { createCalendarEvent, listCalendarEvents, updateCalendarEvent } from '../services/calendarService.js';
-import { createJobCost, deleteJobCost, listJobCosts, updateJobCost, getKostenBijlageUrl, kostenPerGroep } from '../services/jobCostService.js';
+import { createJobCost, deleteJobCost, listJobCosts, updateJobCost, getKostenBijlageUrl, kostenPerGroep, kostenSplitsing } from '../services/jobCostService.js'
+import { listLeveranciers } from '../services/leverancierService.js'
+import { categorieOptiesMet } from '../lib/kostenCategorieen.js';
 import { getFacturen, getAllFactuurRegels } from '../services/factuurService.js';
 import { getConnection } from '../services/accountingService.js';
 import { getBtwPeriodes, syncBtwData } from '../services/btwService.js';
@@ -792,15 +794,6 @@ export function HoursPage() {
 }
 
 // ── KOSTEN DETAIL MODAL ───────────────────────────────────────
-const CAT_OPTIONS = [
-  { value: 'Materiaal',       label: 'Materiaal' },
-  { value: 'Arbeid',          label: 'Arbeid' },
-  { value: 'Reiskosten',      label: 'Reiskosten' },
-  { value: 'Inkoopfactuur',   label: 'Inkoopfactuur' },
-  { value: 'Algemene kosten', label: 'Algemene kosten' },
-  { value: 'Overig',          label: 'Overig' },
-];
-
 function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onClose }) {
   const [cat, setCat] = useState(cost.cat);
   const [custId, setCustId] = useState(cost.customerId || '');
@@ -810,6 +803,9 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
   const [amt, setAmt] = useState(String(cost.amt ?? ''));
   const [date, setDate] = useState(cost.date || '');
   const [desc, setDesc] = useState(cost.desc || '');
+  const [leverancierId, setLeverancierId] = useState(cost.leverancierId || '');
+  const [leverancierOpties, setLeverancierOpties] = useState([]);
+  useEffect(() => { listLeveranciers({ inclusiefInactief: false }).then(setLeverancierOpties).catch(() => {}); }, []);
   const [savedField, setSavedField] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -945,16 +941,25 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
 
           {/* Rij 2: Omschrijving · Categorie */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-3)' }}>
+            <div className="f" style={{ flex: '1 1 170px', minWidth: 0 }}>
+              {/* Stond hier als één veld "Leverancier / omschrijving" dat naar
+                  description schreef. Gesplitst, zodat de leverancier als echte
+                  relatie naar de boekhouding kan i.p.v. losse tekst te zijn. */}
+              <label>Leverancier <Saved field="leverancier_id" /></label>
+              <select value={leverancierId} onChange={e => { setLeverancierId(e.target.value); save('leverancier_id', e.target.value); }}>
+                <option value="">Geen leverancier</option>
+                {leverancierOpties.map(l => <option key={l.id} value={l.id}>{l.naam}</option>)}
+              </select>
+            </div>
             <div className="f" style={{ flex: '2 1 200px', minWidth: 0 }}>
-              <label>Leverancier / omschrijving <Saved field="description" /></label>
+              <label>Omschrijving <Saved field="description" /></label>
               <input type="text" value={desc} placeholder="—"
                 onChange={e => setDesc(e.target.value)} onBlur={() => save('description', desc)} />
             </div>
             <div className="f" style={{ flex: '1 1 150px', minWidth: 0 }}>
               <label>Categorie <Saved field="category" /></label>
               <select value={cat} onChange={handleCatChange}>
-                {CAT_OPTIONS.some(o => o.value === cat) ? null : <option value={cat}>{cat}</option>}
-                {CAT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {categorieOptiesMet(cat).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
           </div>
@@ -1047,6 +1052,8 @@ export function CostsPage() {
   });
   const total = filtered.reduce((s, c) => s + c.amt, 0);
   const groepTotalen = kostenPerGroep(filtered);
+  // Kostprijs (alles) vs boekhoudkosten (wat naar SnelStart/Moneybird gaat).
+  const splitsing = kostenSplitsing(filtered);
   const cats = [...new Set(costs.map(c => c.cat))];
   return (
     <div>
@@ -1060,9 +1067,16 @@ export function CostsPage() {
       {error && <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>}
       {/* Groepering via kostenPerGroep — hoofdletterongevoelig en met een
           vangnet-groep, zodat de tegels altijd optellen tot het totaal. */}
-      <div className="stats-row afu2" style={{ gridTemplateColumns: 'repeat(5,1fr)' }}>
+      {/* Zes tegels: de eerste twee zijn de splitsing (kostprijs vs wat naar de
+          boekhouding gaat), de vier daarna zijn de categorie-verdeling en tellen
+          samen op tot de kostprijs. Arbeid blijft staan zolang er oude data is;
+          als categorie is hij niet meer te kiezen. */}
+      <div className="stats-row afu2" style={{ gridTemplateColumns: 'repeat(6,1fr)' }}>
         {[
-          { label: 'Totale kosten',    val: fmt(total),                    icon: I.costs },
+          { label: 'Kostprijs klus',   val: fmt(splitsing.kostprijs),      icon: I.costs,
+            sub: 'Alle kosten, inclusief werkbonmateriaal' },
+          { label: 'Boekhoudkosten',   val: fmt(splitsing.boekhouding),    icon: I.brief,
+            sub: 'Wat naar de boekhouding gaat' },
           { label: 'Materiaalkosten',  val: fmt(groepTotalen.materiaal),   icon: I.brief },
           { label: 'Arbeidskosten',    val: fmt(groepTotalen.arbeid),      icon: I.hours },
           { label: 'Reiskosten',       val: fmt(groepTotalen.reiskosten),  icon: I.map   },
@@ -1072,9 +1086,21 @@ export function CostsPage() {
             <div className="sc-top"><div className="sc-icon">{s.icon}</div></div>
             <div className="sc-val">{s.val}</div>
             <div className="sc-label">{s.label}</div>
+            {s.sub && <div style={{ fontSize: '.68rem', color: 'var(--dl)', marginTop: 2, lineHeight: 1.3 }}>{s.sub}</div>}
           </div>
         ))}
       </div>
+      {splitsing.werkbonMateriaal > 0 && (
+        <div className="afu2" style={{
+          fontSize: '.78rem', color: 'var(--dm)', background: 'var(--bgs)',
+          border: '1px solid var(--border)', borderRadius: 'var(--r8)',
+          padding: '8px 12px', marginBottom: 14,
+        }}>
+          {fmt(splitsing.werkbonMateriaal)} aan werkbonmateriaal telt mee in de kostprijs van je klussen,
+          maar gaat niet naar de boekhouding — daar is de inkoopfactuur van je leverancier de kostenpost.
+          Zo wordt dezelfde inkoop niet twee keer geteld.
+        </div>
+      )}
       <div className="tw afu3">
         <div className="tw-hd">
           <div className="card-title">Kostenregels</div>

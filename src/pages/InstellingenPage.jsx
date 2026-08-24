@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { I, ModalX, STAGE_COLOR_OPTIONS, stageColToHex, stageColorLabel, stageBadgeStyle } from '../bb-shared.jsx';
 import { supabase } from '../lib/supabase.js';
 import { useToast } from '../lib/toast.jsx';
+import SyncBanner from '../components/SyncBanner.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { usePlan } from '../hooks/usePlan.js';
 import { gaNaarAbonnement } from '../lib/abonnementNav.js';
@@ -274,6 +275,8 @@ export function InstellingenPage() {
   const [ssTogglingImport, setSsTogglingImport] = useState(false);
   // Klanten die zonder compleet adres naar SnelStart zijn gegaan (laatste sync).
   const [ssAdresWaarschuwingen, setSsAdresWaarschuwingen] = useState([]);
+  // Aantal kostenposten dat na de laatste sync nog niet geboekt was.
+  const [ssKostenResterend, setSsKostenResterend] = useState(0);
 
   // Voertuigen
   const [voertuigen, setVoertuigen] = useState([]);
@@ -846,9 +849,12 @@ export function InstellingenPage() {
         const delen = [`${result.exported?.verkoopboekingen ?? 0} facturen naar SnelStart geboekt`];
         if (ssConnection?.importCosts) {
           delen.push(`${result.imported?.inkoopfacturen ?? 0} inkoopfacturen geïmporteerd`);
-          delen.push(`${result.exported?.inkoopboekingen ?? 0} kosten als vraagpost geboekt`);
+          delen.push(`${result.exported?.inkoopboekingen ?? 0} kosten geboekt`);
         }
         toast.success(delen.join(', '));
+        // Kosten gaan per batch van 50. Zonder deze melding leest een halve
+        // batch als "klaar" terwijl er nog een rest openstaat.
+        setSsKostenResterend(result.kostenResterend ?? 0);
         const refreshed = await getConnection('snelstart');
         if (refreshed) setSsConnection(refreshed);
       } else {
@@ -1080,8 +1086,17 @@ export function InstellingenPage() {
     }
   };
 
+  // Een sync kan minuten duren; zonder melding lijkt het alsof er niets gebeurt.
+  const syncBezig = ssImporting || ssSyncingContacten || mbImporting || mbSyncingContacten;
+  const syncTekst = ssImporting ? 'Bezig met synchroniseren met SnelStart'
+    : ssSyncingContacten ? 'Bezig met klanten synchroniseren met SnelStart'
+    : mbImporting ? 'Bezig met importeren uit Moneybird'
+    : 'Bezig met contacten synchroniseren met Moneybird';
+
   return (
     <div>
+      <SyncBanner actief={syncBezig} tekst={syncTekst} />
+
       <div className="page-hd afu">
         <div>
           <h1>Instellingen</h1>
@@ -2553,6 +2568,20 @@ export function InstellingenPage() {
                   />
                   Alleen betaalde facturen synchroniseren
                 </label>
+              </div>
+            )}
+
+            {ssKostenResterend > 0 && (
+              <div style={{
+                border: '1px solid var(--warn-bd, #e0b050)', background: 'var(--warn-bg, rgba(224,176,80,.10))',
+                borderRadius: 8, padding: '10px 12px', marginBottom: 14, fontSize: '.82rem', color: 'var(--dm)',
+              }}>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                  Nog {ssKostenResterend} {ssKostenResterend === 1 ? 'kostenpost' : 'kostenposten'} te synchroniseren
+                </div>
+                <div>
+                  Kosten worden per 50 tegelijk geboekt. Klik nog een keer op “Kosten/facturen synchroniseren” om verder te gaan.
+                </div>
               </div>
             )}
 

@@ -27,6 +27,9 @@ import { WerkbonPageV2 as WerkbonPage } from './pages/WerkbonPageV2.jsx';
 import { PlanningPage } from './pages/PlanningPage.jsx';
 import { ProjectsPage } from './pages/ProjectsPage.jsx';
 const DatabasePage = lazy(() => import('./pages/DatabasePage.jsx').then(m => ({ default: m.DatabasePage })));
+const LeveranciersPage = lazy(() => import('./pages/LeveranciersPage.jsx'));
+const LeverancierPage  = lazy(() => import('./pages/LeverancierPage.jsx'));
+const MaterialenPage   = lazy(() => import('./pages/MaterialenPage.jsx'));
 import MarketingWebsite from './pages/MarketingWebsite.jsx';
 import FeaturesPage from './pages/marketing/FeaturesPage.jsx';
 import PricingPage from './pages/marketing/PricingPage.jsx';
@@ -58,6 +61,7 @@ import { ProfileContext, displayName, profileInitials } from './lib/profileConte
 import { DataContext, useData } from './lib/dataContext.jsx';
 import MobileBlock from './components/MobileBlock.jsx';
 import { listCustomers } from './services/customerService.js';
+import { listLeveranciers } from './services/leverancierService.js';
 import { listDeals, listPipelineStages } from './services/dealService.js';
 import { listActivities } from './services/activityService.js';
 import { getOffertes } from './services/offerteService.js';
@@ -86,12 +90,19 @@ const authLog = (...args) => {
 const NAV = [
   { id: 'dashboard',   label: 'Dashboard',    icon: 'dash',    section: 'main' },
   { id: 'pipeline',    label: 'Pipeline',     icon: 'pipe',    section: 'main', permission: 'verkoop' },
-  { id: 'customers',   label: 'Klanten',      icon: 'cust',    section: 'main' },
+  // Relaties is een groep: klanten en leveranciers zijn allebei relaties en
+  // gaan allebei als relatiesoort naar de boekhouding.
+  { id: 'relaties',    label: 'Relaties',     icon: 'cust',    section: 'main',
+    kinderen: [
+      { id: 'customers',    label: 'Klanten' },
+      { id: 'leveranciers', label: 'Leveranciers' },
+    ] },
   { id: 'activities',  label: 'Activiteiten', icon: 'act',     section: 'main' },
   { id: 'calendar',    label: 'Agenda',        icon: 'cal',     section: 'work' },
   { id: 'planning',    label: 'Planning',      icon: 'planning',section: 'work', permission: 'planning', feature: 'planning' },
   { id: 'projecten',   label: 'Projecten',     icon: 'projects',section: 'work' },
   { id: 'werkbonnen',  label: 'Werkbonnen',    icon: 'wo',      section: 'work' },
+  { id: 'materialen',  label: 'Materialen',    icon: 'box',     section: 'work' },
   { id: 'uren',        label: 'Uren',          icon: 'hours',   section: 'work' },
   { id: 'offertes',    label: 'Offertes',      icon: 'quotes',  section: 'finance', permission: 'offertes' },
   { id: 'facturen',    label: 'Facturen',      icon: 'brief',   section: 'finance', permission: 'facturen' },
@@ -136,6 +147,9 @@ const SECTIONS = [
 function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loading, onOpenProfile, badges = {}, collapsed, onToggleCollapsed }) {
   const { can } = usePermissions();
   const plan = usePlan();
+  // Handmatig open/dicht geklapte navigatiegroepen. Niet gezet = volg de
+  // actieve pagina (een groep met een actief kind staat vanzelf open).
+  const [openGroepen, setOpenGroepen] = useState({});
   const go = id => { setPage(id); onClose(); };
   const initials = profileInitials(profile, user);
   const name = displayName(profile, user);
@@ -218,6 +232,57 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loadin
                 <div className="sb-section">{sec.label}</div>
                 {items.map(item => {
                   const badge = badges[item.id] > 0 ? badges[item.id] : null;
+
+                  // Groep met subitems (Relaties → Klanten/Leveranciers).
+                  if (item.kinderen) {
+                    const actiefKind = item.kinderen.find(k => k.id === page);
+                    // Ingeklapt is er geen ruimte voor subitems: dan gedraagt de
+                    // groep zich als één knop naar het eerste kind, met de
+                    // subitems in de tooltip.
+                    if (collapsed) {
+                      return (
+                        <button
+                          key={item.id}
+                          className={`sbi${actiefKind ? ' active' : ''}`}
+                          onClick={() => go(item.kinderen[0].id)}
+                          aria-label={item.label}
+                          onMouseEnter={e => showNavTip(e, `${item.label}: ${item.kinderen.map(k => k.label).join(', ')}`)}
+                          onMouseLeave={hideNavTip}
+                        >
+                          <span className="sbi-icon">{I[item.icon]}</span>
+                          <span className="sbi-label">{item.label}</span>
+                        </button>
+                      );
+                    }
+                    // Standaard dicht; open zodra een kind actief is (dan wil
+                    // je zien waar je bent) of de gebruiker hem zelf openklapt.
+                    const open = openGroepen[item.id] ?? Boolean(actiefKind);
+                    return (
+                      <div key={item.id} className="sbi-groep">
+                        <button
+                          className={`sbi sbi-groep-kop${actiefKind && !open ? ' actief-kind' : ''}`}
+                          onClick={() => setOpenGroepen(g => ({ ...g, [item.id]: !open }))}
+                          aria-expanded={open}
+                          aria-label={item.label}
+                        >
+                          <span className="sbi-icon">{I[item.icon]}</span>
+                          <span className="sbi-label">{item.label}</span>
+                          <span className={`sbi-chevron${open ? ' open' : ''}`} aria-hidden="true">{I.chev_d}</span>
+                        </button>
+                        {open && item.kinderen.map(kind => (
+                          <button
+                            key={kind.id}
+                            className={`sbi sbi-kind${page === kind.id ? ' active' : ''}`}
+                            onClick={() => go(kind.id)}
+                            aria-label={kind.label}
+                          >
+                            <span className="sbi-label">{kind.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    );
+                  }
+
                   return (
                     <button
                       key={item.id}
@@ -276,8 +341,8 @@ function BossKnop({ onClick }) {
   );
 }
 
-function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, onLogout, openCustomer, navigatePage, refreshKey, onOpenBoss }) {
-  const { customers: dCustomers, deals: dDeals, activities: dActivities, offertes: dOffertes, werkbonnen: dWerkbonnen, refresh: refreshData } = useData();
+function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, onLogout, openCustomer, openLeverancier, navigatePage, refreshKey, onOpenBoss }) {
+  const { customers: dCustomers, leveranciers: dLeveranciers = [], deals: dDeals, activities: dActivities, offertes: dOffertes, werkbonnen: dWerkbonnen, refresh: refreshData } = useData();
   const [openMenu, setOpenMenu] = useState(null);
   const [search, setSearch] = useState('');
   // Zoekbalk staat ingeklapt tot je op het icoon klikt. Escape of een klik
@@ -327,8 +392,8 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
 
   // Zoekdata komt uit de gedeelde DataContext — geen eigen queries meer.
   const searchData = useMemo(
-    () => ({ customers: dCustomers, deals: dDeals, activities: dActivities }),
-    [dCustomers, dDeals, dActivities]
+    () => ({ customers: dCustomers, leveranciers: dLeveranciers, deals: dDeals, activities: dActivities }),
+    [dCustomers, dLeveranciers, dDeals, dActivities]
   );
   const searchLoading = false;
   const searchError = '';
@@ -394,6 +459,7 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
     const match = (s = '') => String(s).toLowerCase().includes(q);
     return {
       customers: searchData.customers.filter(c => match(c.name) || match(c.company) || match(c.email) || match(c.city)).slice(0, 6),
+      leveranciers: (searchData.leveranciers || []).filter(l => match(l.naam) || match(l.city) || match(l.email)).slice(0, 6),
       deals: searchData.deals.filter(d => match(d.title) || match(d.customerName) || match(d.city)).slice(0, 6),
       activities: searchData.activities.filter(a => match(a.title) || match(a.customerName)).slice(0, 6),
     };
@@ -452,11 +518,11 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
               {searchLoading && <div className="tb-pop-empty">Zoeken…</div>}
               {searchError && <div className="tb-pop-empty" style={{ color: '#dc2626' }}>{searchError}</div>}
               {!searchLoading && !searchError && !filteredSearch && (
-                <div className="tb-pop-empty">Typ om te zoeken in klanten, deals en activiteiten.</div>
+                <div className="tb-pop-empty">Typ om te zoeken in klanten, leveranciers, deals en activiteiten.</div>
               )}
               {!searchLoading && filteredSearch && (() => {
-                const { customers, deals, activities } = filteredSearch;
-                const total = customers.length + deals.length + activities.length;
+                const { customers, leveranciers = [], deals, activities } = filteredSearch;
+                const total = customers.length + leveranciers.length + deals.length + activities.length;
                 if (total === 0) return <div className="tb-pop-empty">Geen resultaten gevonden</div>;
                 return (
                   <>
@@ -469,6 +535,20 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
                             <div style={{ minWidth: 0, flex: 1 }}>
                               <div className="tb-pop-title">{c.name}</div>
                               <div className="tb-pop-sub">{c.company || c.email || c.city || 'Klant'}</div>
+                            </div>
+                          </button>
+                        ))}
+                      </>
+                    )}
+                    {leveranciers.length > 0 && (
+                      <>
+                        <div className="tb-search-section">Leveranciers</div>
+                        {leveranciers.map(l => (
+                          <button key={`lev-${l.id}`} className="tb-pop-item" onClick={() => { close(); setSearch(''); navigatePage('leveranciers'); openLeverancier?.(l.id); }}>
+                            <div className="tb-pop-icon">{initials(l.naam)}</div>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div className="tb-pop-title">{l.naam}</div>
+                              <div className="tb-pop-sub">{l.city || l.email || 'Leverancier'}</div>
                             </div>
                           </button>
                         ))}
@@ -878,7 +958,7 @@ function AppInner() {
     const path = window.location.pathname;
     if (path.startsWith('/dashboard/')) {
       const sub = path.slice('/dashboard/'.length).split('/')[0];
-      const VALID = ['pipeline','customers','activities','calendar','planning','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','database','team','instellingen','abonnement'];
+      const VALID = ['pipeline','customers','leveranciers','materialen','activities','calendar','planning','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','database','team','instellingen','abonnement'];
       if (VALID.includes(sub)) return sub;
     }
     return 'dashboard';
@@ -893,6 +973,8 @@ function AppInner() {
   const [drawerDeal, setDrawerDeal] = useState(null);
   const [drawerCalEvent, setDrawerCalEvent] = useState(null);
   const [navIntent,  setNavIntent]  = useState(null);
+  // Geselecteerde leverancier in de split-weergave (spiegel van drawerCust).
+  const [drawerLev,  setDrawerLev]  = useState(null);
   // Terug-naar-klant context: { page, klantId, klantNaam }. Blijft staan tot je
   // ergens anders heen navigeert of op "Terug" klikt (niet gewist door navIntent).
   const [backCtx,    setBackCtx]    = useState(null);
@@ -911,6 +993,7 @@ function AppInner() {
   const [globalLeadModal, setGlobalLeadModal] = useState(false);
   const [globalActivityModal, setGlobalActivityModal] = useState(null);
   const [globalCustomers, setGlobalCustomers] = useState([]);
+  const [globalLeveranciers, setGlobalLeveranciers] = useState([]);
   const [globalDeals, setGlobalDeals] = useState([]);
   const [globalStages, setGlobalStages] = useState([]);
   const [globalActivities, setGlobalActivities] = useState([]);
@@ -938,6 +1021,8 @@ function AppInner() {
       dashboard:  { title: 'Dashboard',    sub: greet },
       pipeline:   { title: 'Pipeline',     sub: 'Jouw sales & werk overzicht' },
       customers:  { title: 'Klanten',      sub: 'CRM — alle klantprofielen' },
+    leveranciers: { title: 'Leveranciers', sub: 'Relaties — je leveranciers' },
+    materialen:   { title: 'Materialen',   sub: 'Standaardmaterialen met prijs en leverancier' },
       activities: { title: 'Activiteiten', sub: 'Openstaande activiteiten en taken' },
       calendar:    { title: 'Agenda',        sub: 'Planning en afspraken' },
       planning:    { title: 'Planning',     sub: 'Weekplanning per medewerker en voertuig' },
@@ -959,7 +1044,7 @@ function AppInner() {
       setRoute(path || '/');
       if (path.startsWith('/dashboard/')) {
         const sub = path.slice('/dashboard/'.length).split('/')[0];
-        const VALID = ['pipeline','customers','activities','calendar','planning','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','database','team','instellingen','abonnement'];
+        const VALID = ['pipeline','customers','leveranciers','materialen','activities','calendar','planning','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','database','team','instellingen','abonnement'];
         setPage(VALID.includes(sub) ? sub : 'dashboard');
       } else if (path === '/dashboard') {
         setPage('dashboard');
@@ -1177,6 +1262,7 @@ function AppInner() {
   // Facturen worden geopend in de echte Facturen-module (/dashboard/facturen),
   // consistent met de klantkaart en projecten — geen aparte factuur-drawer meer.
   const openInvoice      = id => navigatePage('facturen', { id });
+  const openLeverancier  = id => setDrawerLev(id);
   const openCalendarEvent = id => { setDrawerCust(null); setDrawerDeal(null); setDrawerCalEvent(id); };
   const closeCalEvent    = () => setDrawerCalEvent(null);
   // Optional deep-open intent: { page, id } so a target page can open a
@@ -1247,8 +1333,9 @@ function AppInner() {
       listCalendarEvents().catch(() => []),
       getFacturen().catch(() => []),
       listJobCosts().catch(() => []),
+      listLeveranciers().catch(() => []),
     ])
-      .then(([cs, ds, st, acts, offs, wbs, ces, facs, jcs]) => {
+      .then(([cs, ds, st, acts, offs, wbs, ces, facs, jcs, levs]) => {
         if (!alive) return;
         setGlobalCustomers(cs);
         setGlobalDeals(ds);
@@ -1259,6 +1346,7 @@ function AppInner() {
         setGlobalCalendarEvents(ces);
         setGlobalFacturen(facs);
         setGlobalJobCosts(jcs);
+        setGlobalLeveranciers(levs);
       })
       .catch(() => {})
       .finally(() => { if (alive) setGlobalDataLoading(false); });
@@ -1278,6 +1366,7 @@ function AppInner() {
 
   const dataApi = useMemo(() => ({
     customers: globalCustomers,
+    leveranciers: globalLeveranciers,
     deals: globalDeals,
     stages: globalStages,
     activities: globalActivities,
@@ -1288,7 +1377,7 @@ function AppInner() {
     jobCosts: globalJobCosts,
     loading: globalDataLoading,
     refresh: bumpRefresh,
-  }), [globalCustomers, globalDeals, globalStages, globalActivities, globalOffertes, globalWerkbonnen, globalCalendarEvents, globalFacturen, globalJobCosts, globalDataLoading, bumpRefresh]);
+  }), [globalCustomers, globalLeveranciers, globalDeals, globalStages, globalActivities, globalOffertes, globalWerkbonnen, globalCalendarEvents, globalFacturen, globalJobCosts, globalDataLoading, bumpRefresh]);
 
   // Compute these here (BEFORE any early returns) so the useEffect below
   // is always called in the same order — required by React's hooks rules.
@@ -1353,6 +1442,18 @@ function AppInner() {
             </div>
           </div>
         ) : <CustomersPage openCustomer={openCustomer} />;
+      case 'leveranciers':
+        return drawerLev !== null ? (
+          <div className="cust-split">
+            <div className="cust-split-list">
+              <LeveranciersPage openLeverancier={openLeverancier} />
+            </div>
+            <div className="cust-split-panel">
+              <LeverancierPage leverancierId={drawerLev} onClose={() => setDrawerLev(null)} />
+            </div>
+          </div>
+        ) : <LeveranciersPage openLeverancier={openLeverancier} />;
+      case 'materialen': return <MaterialenPage />;
       case 'activities': return <ActivitiesPageV2 openCustomer={openCustomer} preOpenActivityId={navIntent?.page === 'activities' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'calendar':   return <CalendarPage openCustomer={openCustomer} openCalendarEvent={openCalendarEvent} setPage={navigatePage} preOpenActivityId={navIntent?.page === 'calendar' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'planning':   return <PlanningPage openCustomer={openCustomer} />;
@@ -1571,6 +1672,7 @@ function AppInner() {
             onOpenProfile={() => setOpenProfile(true)}
             onLogout={handleLogout}
             openCustomer={openCustomer}
+            openLeverancier={openLeverancier}
             navigatePage={navigatePage}
             refreshKey={refreshKey}
             onOpenBoss={() => setBossOpen(true)}

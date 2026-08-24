@@ -80,6 +80,15 @@ const toWerkbonMateriaal = row => {
     aantal: Number(row.aantal || 1),
     prijsPer: Number(row.prijs_per || 0),
     subtotaal: Number(row.subtotaal || 0),
+    materiaalId: row.materiaal_id || null,
+    leverancierId: row.leverancier_id || null,
+    // null = niet ingevuld óf geen recht om het te zien; de UI leest dat af aan
+    // het recht, niet aan de waarde.
+    inkoopprijsPer: (() => {
+      const k = Array.isArray(row.werkbon_materiaal_inkoop)
+        ? row.werkbon_materiaal_inkoop[0] : row.werkbon_materiaal_inkoop
+      return k?.inkoopprijs_per != null ? Number(k.inkoopprijs_per) : null
+    })(),
     btwPercentage: jc?.btw_percentage != null ? Number(jc.btw_percentage) : 21,
     raw: row,
   }
@@ -316,9 +325,11 @@ export async function deleteWerkbonTaak(id) {
 
 export async function getWerkbonMaterialen(werkbonId) {
   // BTW-percentage komt van de gekoppelde job_cost (werkbon_materiaal_id).
+  // De kostprijs staat in werkbon_materiaal_inkoop met eigen RLS: zonder het
+  // recht inkoopprijzen komt die inbedding gewoon leeg terug.
   let { data, error } = await supabase
     .from("werkbon_materialen")
-    .select("*, job_costs!werkbon_materiaal_id(btw_percentage)")
+    .select("*, job_costs!werkbon_materiaal_id(btw_percentage), werkbon_materiaal_inkoop(inkoopprijs_per)")
     .eq("werkbon_id", werkbonId)
     .order("created_at", { ascending: true })
   if (error && /could not find.*relationship|foreign key/i.test(error.message)) {
@@ -342,6 +353,10 @@ export async function createWerkbonMateriaal(input) {
     aantal,
     prijs_per: prijsPer,
     subtotaal,
+    // Uit de bibliotheek gekopieerd (of null bij vrij materiaal). De kostprijs
+    // gaat niet mee in deze insert — die staat in werkbon_materiaal_inkoop.
+    materiaal_id: input.materiaal_id ?? input.materiaalId ?? null,
+    leverancier_id: input.leverancier_id ?? input.leverancierId ?? null,
   }
   if (!base.werkbon_id) throw new Error("werkbon_id is verplicht voor een materiaalregel")
   if (!base.naam) throw new Error("naam is verplicht voor een materiaalregel")
@@ -354,7 +369,16 @@ export async function createWerkbonMateriaal(input) {
     .select()
     .single()
   if (error) throw error
-  return toWerkbonMateriaal(data)
+
+  // De prijsrij is door de trigger al aangemaakt; alleen nog de waarde erin.
+  // Zonder het recht weigert RLS deze update stil — precies de bedoeling.
+  const inkoop = input.inkoopprijs_per ?? input.inkoopprijsPer ?? null
+  if (inkoop != null) {
+    await supabase.from("werkbon_materiaal_inkoop")
+      .update({ inkoopprijs_per: Number(inkoop), updated_at: new Date().toISOString() })
+      .eq("werkbon_materiaal_id", data.id)
+  }
+  return toWerkbonMateriaal({ ...data, werkbon_materiaal_inkoop: { inkoopprijs_per: inkoop } })
 }
 
 export async function updateWerkbonMateriaal(id, input) {

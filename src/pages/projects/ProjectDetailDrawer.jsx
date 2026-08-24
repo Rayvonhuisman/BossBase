@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { listLeveranciers } from '../../services/leverancierService.js';
+import { categorieOptiesMet, STANDAARD_CATEGORIE } from '../../lib/kostenCategorieen.js';
 import { Maximize2, Minimize2, AlertTriangle, AlertOctagon } from 'lucide-react';
 import { I, ModalX, NotifyMailToggle, fmt, fmt0, CostCategoryBadge } from '../../bb-shared.jsx';
 import { useToast } from '../../lib/toast.jsx';
@@ -537,6 +539,13 @@ function UrenTab({ project, entries, onAdd, onDelete, canManage }) {
               <label>Uren</label>
               <input type="number" min="0" step="0.25" placeholder="0,0" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.hours} onChange={e => set('hours', e.target.value)} />
             </div>
+            <div className="f" style={{ flex: '1 1 130px', minWidth: 0 }}>
+              <label>Leverancier *</label>
+              <select style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.leverancier_id} onChange={e => set('leverancier_id', e.target.value)}>
+                <option value="">— Kies —</option>
+                {leveranciers.map(l => <option key={l.id} value={l.id}>{l.naam}</option>)}
+              </select>
+            </div>
             <div className="f" style={{ flex: '1 1 100%', minWidth: 0 }}>
               <label>Omschrijving</label>
               <input type="text" placeholder="Wat heb je gedaan?" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.description} onChange={e => set('description', e.target.value)} />
@@ -601,10 +610,13 @@ function KostenTab({ project, canManage }) {
     cost_date: new Date().toISOString().slice(0, 10),
     description: '',
     amount: '',
-    category: 'Materiaal',
+    category: STANDAARD_CATEGORIE,
+    leverancier_id: '',
     btw_mode: 'excl',
     btw_pct: 21,
   });
+  const [leveranciers, setLeveranciers] = useState([]);
+  useEffect(() => { listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(() => {}); }, []);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const btwLive = calcBtw(form.amount, form.btw_pct, form.btw_mode);
@@ -621,6 +633,9 @@ function KostenTab({ project, canManage }) {
 
   const submit = async () => {
     if (!Number(form.amount) || Number(form.amount) <= 0) { toast.error('Bedrag moet groter zijn dan 0'); return; }
+    // Leverancier is verplicht: zonder relatie belandt de kost in de
+    // boekhouding onder de verzamelrelatie en moet iemand hem daar uitzoeken.
+    if (!form.leverancier_id) { toast.error('Kies een leverancier'); return; }
     setSaving(true);
     try {
       const { excl } = calcBtw(form.amount, form.btw_pct, form.btw_mode);
@@ -630,6 +645,7 @@ function KostenTab({ project, canManage }) {
         btw_percentage: form.btw_pct,
         btw_inclusief: false,
         category: form.category,
+        leverancier_id: form.leverancier_id,
         cost_date: form.cost_date,
         project_id: project.id,
         customer_id: project.customerId || null,
@@ -701,12 +717,7 @@ function KostenTab({ project, canManage }) {
             <div className="f" style={{ flex: '1 1 130px', minWidth: 0 }}>
               <label>Categorie</label>
               <select style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.category} onChange={e => set('category', e.target.value)}>
-                <option value="Materiaal">Materiaal</option>
-                <option value="Arbeid">Arbeid</option>
-                <option value="Reiskosten">Reiskosten</option>
-                <option value="Inkoopfactuur">Inkoopfactuur</option>
-                <option value="Algemene kosten">Algemene kosten</option>
-                <option value="Overig">Overig</option>
+                {categorieOptiesMet(form.category).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
             <div className="f" style={{ flex: '1 1 100%', minWidth: 0 }}>
