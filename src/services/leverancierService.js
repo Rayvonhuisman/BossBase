@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
 import { withCompanyId } from '../lib/currentCompany'
+import { valideerRelatieVelden } from '../lib/validatie'
 
 // Leveranciers. Spiegel van customerService, maar met één harde regel: alleen
 // `naam` is verplicht. SnelStart stelt bij een relatie formeel geen enkel veld
@@ -56,6 +57,14 @@ export function mapLeverancierFormToPayload(form = {}) {
   }
 }
 
+// SnelStart wijst een ongeldig btw-nummer of IBAN af en laat dan de hele
+// relatie mislukken. Hier afvangen scheelt een onverklaarbaar mislukte sync.
+function keurZakelijkeVelden(form) {
+  const fouten = valideerRelatieVelden(form)
+  const eerste = Object.values(fouten)[0]
+  if (eerste) throw new Error(eerste)
+}
+
 export async function listLeveranciers({ inclusiefInactief = true } = {}) {
   let q = supabase.from('leveranciers').select('*').order('naam', { ascending: true })
   if (!inclusiefInactief) q = q.eq('actief', true)
@@ -73,6 +82,7 @@ export async function getLeverancier(id) {
 export async function createLeverancier(form) {
   const base = mapLeverancierFormToPayload(form)
   if (!base.naam) throw new Error('Naam is verplicht')
+  keurZakelijkeVelden(form)
   const payload = await withCompanyId(base)
   const { data, error } = await supabase.from('leveranciers').insert(payload).select().single()
   if (error) throw error
@@ -82,6 +92,7 @@ export async function createLeverancier(form) {
 export async function updateLeverancier(id, form) {
   const payload = mapLeverancierFormToPayload(form)
   if (payload.naam === '') throw new Error('Naam is verplicht')
+  keurZakelijkeVelden(form)
   const { data, error } = await supabase.from('leveranciers').update(payload).eq('id', id).select().single()
   if (error) throw error
   return toLeverancier(data)

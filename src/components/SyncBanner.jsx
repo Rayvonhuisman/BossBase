@@ -20,6 +20,13 @@ export default function SyncBanner({ actief, tekst }) {
     return () => clearInterval(t);
   }, [actief]);
 
+  // De balk staat op dezelfde plek als de toasts (rechtsboven). Zolang hij er
+  // staat schuift de toast-stack eronder, anders dekken ze elkaar af.
+  useEffect(() => {
+    document.body.classList.toggle('bb-syncbar-actief', Boolean(actief));
+    return () => document.body.classList.remove('bb-syncbar-actief');
+  }, [actief]);
+
   if (!actief) return null;
 
   const duur = seconden < 60

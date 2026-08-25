@@ -148,6 +148,23 @@ export async function syncContactenMetMoneybird() {
 // komt de sleutel binnen via de oAuth-activatielink + snelstart-webhook en
 // vervalt deze handmatige invoer. De subscription key is een platform-secret
 // van BossBase (edge functions) en hoort hier dus nooit thuis.
+// Alle snelstart_id-verwijzingen van het eigen bedrijf wissen, zodat een
+// volgende sync opnieuw boekt. Nodig na het intrekken van een sleutel of het
+// wisselen van administratie: zonder reset ziet de export alles als "al
+// gesynchroniseerd" en meldt hij overal 0.
+export async function resetSnelStartKoppeling() {
+  const { data, error } = await supabase.rpc('reset_snelstart_koppeling')
+  if (error) throw error
+  const row = Array.isArray(data) ? data[0] : data
+  vergeetKoppelStatus('snelstart')
+  return {
+    klanten: row?.klanten ?? 0,
+    leveranciers: row?.leveranciers ?? 0,
+    facturen: row?.facturen ?? 0,
+    kosten: row?.kosten ?? 0,
+  }
+}
+
 export async function saveSnelStartConnection({ clientKey }) {
   const { data, error } = await supabase.rpc('save_accounting_connection', {
     p_provider: 'snelstart',

@@ -41,7 +41,11 @@ function pctVoorBtwSoort(soort: string): number {
 // verkoopboeking boeken. Concepten blijven buiten de boekhouding; het
 // terugschrijven van snelstart_id maakt dit idempotent. Met sync_paid_only aan
 // gaan alleen betaalde facturen mee.
-async function exportFacturen(supabase: any, companyId: string, clientKey: string, paidOnly: boolean): Promise<number> {
+// Fouten worden verzameld i.p.v. alleen gelogd: anders meldt de sync "0
+// facturen" zonder dat iemand kan zien waarom.
+async function exportFacturen(
+  supabase: any, companyId: string, clientKey: string, paidOnly: boolean, foutenF: string[],
+): Promise<number> {
   const { data: teExporteren } = await supabase
     .from('facturen')
     .select('*, customers(name, email, address, city, phone, snelstart_id)')
@@ -78,6 +82,7 @@ async function exportFacturen(supabase: any, companyId: string, clientKey: strin
       if (r.snelstart_id && !r.already_synced) exported++
     } catch (err: any) {
       console.error(`Factuur ${factuur.nummer} exporteren mislukt:`, err.message)
+      foutenF.push(`Factuur ${factuur.nummer}: ${err.message}`)
     }
   }
   console.log('Facturen naar SnelStart geboekt:', exported)
@@ -101,8 +106,30 @@ async function importKosten(
       .filter(Boolean),
   )
 
+  // Onze eigen export terug-importeren zou elke kost verdubbelen: wij boeken
+  // kosten als inkoopboeking, en die verschijnen daarna als inkoopfactuur in
+  // dezelfde lijst. Twee filters, want ze vangen verschillende gevallen:
+  //
+  //  1. inkoopBoeking.id — de id die wij bij de export hebben teruggeschreven
+  //     naar job_costs.snelstart_id. Dit is de betrouwbare check: hij hangt aan
+  //     een echte sleutel en niet aan een naamconventie.
+  //  2. het factuurnummer BB-KST-… — vangnet voor boekingen waarvan de
+  //     verwijzing is gewist (bijvoorbeeld na "koppeling opnieuw opbouwen") of
+  //     die door een eerdere versie zijn aangemaakt.
+  const { data: eigenBoekingen } = await supabase
+    .from('job_costs')
+    .select('snelstart_id')
+    .eq('company_id', companyId)
+    .not('snelstart_id', 'is', null)
+  const eigenIds = new Set((eigenBoekingen || []).map((r: any) => String(r.snelstart_id)))
+
+  const isVanOnszelf = (f: any) =>
+    (f?.inkoopBoeking?.id && eigenIds.has(String(f.inkoopBoeking.id)))
+    || String(f?.factuurnummer || '').startsWith('BB-KST-')
+
   const facturen = await ssFetchAll(clientKey, '/inkoopfacturen')
-  const toImport = facturen.filter((f: any) => f.id && !importedFactuurIds.has(String(f.id)))
+  const toImport = facturen.filter((f: any) =>
+    f.id && !importedFactuurIds.has(String(f.id)) && !isVanOnszelf(f))
 
   // InkoopfactuurModel geeft alleen relatie.id, geen naam. Eén keer de
   // relatielijst ophalen om die te vertalen: zonder dit ging de leverancier
@@ -184,7 +211,9 @@ const KOSTEN_BATCH = 50
 
 // Boekt een batch kostenregels. Apart gehouden zodat exportKosten ook zonder
 // nieuwe regels doorloopt naar het nasturen van bonnen.
-async function boekKosten(supabase: any, clientKey: string, lijst: any[]): Promise<number> {
+async function boekKosten(
+  supabase: any, clientKey: string, lijst: any[], fouten: string[], meldingen: string[],
+): Promise<number> {
   const grootboeken = await getActieveGrootboeken(clientKey)
   // Eén keer ophalen en doorgeven: ensureLeverancier matcht client-side op naam
   // en zet nieuwe relaties in deze lijst bij, zodat twee kostenregels van
@@ -206,10 +235,11 @@ async function boekKosten(supabase: any, clientKey: string, lijst: any[]): Promi
   for (const cost of lijst) {
     try {
       const leverancierId = cost.leveranciers?.naam ? '' : await verzamelrelatie()
-      const r = await pushInkoopboeking(supabase, clientKey, cost, leverancierId, grootboeken, relaties)
+      const r = await pushInkoopboeking(supabase, clientKey, cost, leverancierId, grootboeken, relaties, meldingen)
       if (r.snelstart_id && !r.already_synced) exported++
     } catch (err: any) {
       console.error(`Kostenregel ${cost.id} exporteren mislukt:`, err.message)
+      fouten.push(`Kosten "${cost.description ?? cost.id}": ${err.message}`)
     }
   }
   return exported
@@ -217,11 +247,16 @@ async function boekKosten(supabase: any, clientKey: string, lijst: any[]): Promi
 
 async function exportKosten(
   supabase: any, companyId: string, clientKey: string,
-): Promise<{ exported: number; resterend: number }> {
+): Promise<{ exported: number; resterend: number; fouten: string[]; meldingen: string[] }> {
+  const fouten: string[] = []
+  const meldingen: string[] = []
   // Basisfilter voor "nog te boeken kosten". Wordt twee keer gebruikt: één keer
   // om te tellen hoeveel er openstaan, één keer om een batch op te halen.
-  const basis = () => supabase
-    .from('job_costs')
+  // De filters moeten NA .select() — een PostgrestQueryBuilder heeft nog geen
+  // .eq(); die zit pas op de filter-builder die select() teruggeeft. Vandaar dat
+  // de selectie hier per query wordt meegegeven in plaats van in een gedeelde
+  // helper vooraf.
+  const filters = (q: any) => q
     .eq('company_id', companyId)
     .is('externe_referentie', null)
     .is('snelstart_id', null)
@@ -230,18 +265,23 @@ async function exportKosten(
 
   // Hoeveel staan er in totaal open? Zonder dit meldde de sync alleen wat er in
   // deze batch zat en las dat als "klaar", terwijl er nog een rest was.
-  const { count: openstaand } = await basis().select('id', { count: 'exact', head: true })
+  const { count: openstaand } = await filters(
+    supabase.from('job_costs').select('id', { count: 'exact', head: true }),
+  )
   const totaalOpen = openstaand ?? 0
 
-  const { data: teExporteren } = await basis()
-    .select('*, leveranciers(id, naam, email, telefoon, mobiel, website, address, postcode, city, kvk_number, btw_number, iban, betaaltermijn_dagen, notities, actief, snelstart_id)')
+  const { data: teExporteren, error: exportErr } = await filters(
+    supabase.from('job_costs')
+      .select('*, leveranciers(id, naam, email, telefoon, mobiel, website, address, postcode, city, kvk_number, btw_number, iban, betaaltermijn_dagen, notities, actief, snelstart_id)'),
+  )
     .order('cost_date', { ascending: true })
     .limit(KOSTEN_BATCH)
+  if (exportErr) throw exportErr
 
   const lijst = teExporteren || []
   // Géén vroege return bij een lege lijst: het nasturen van bonnen hieronder
   // moet ook draaien als er niets nieuws te boeken valt.
-  const exported = lijst.length ? await boekKosten(supabase, clientKey, lijst) : 0
+  const exported = lijst.length ? await boekKosten(supabase, clientKey, lijst, fouten, meldingen) : 0
   // Bonnen nasturen bij boekingen die al bestaan. Bijlagen worden ná het
   // opslaan van de kost op de achtergrond geüpload, dus een sync die daar net
   // tussendoor liep boekte zonder bon. Zonder deze stap kwam die bon er nooit
@@ -275,7 +315,7 @@ async function exportKosten(
   // hebben. Mislukte regels tellen mee als rest — die moeten opnieuw.
   const resterend = Math.max(0, totaalOpen - exported)
   console.log(`Handmatige kosten naar SnelStart geboekt: ${exported} (nog open: ${resterend})`)
-  return { exported, resterend }
+  return { exported, resterend, fouten, meldingen }
 }
 
 async function syncCompany(
@@ -284,8 +324,11 @@ async function syncCompany(
   exported: { verkoopboekingen: number; inkoopboekingen: number };
   imported: { inkoopfacturen: number };
   kostenResterend: number;
+  fouten: string[];
+  meldingen: string[];
 }> {
-  const exported = await exportFacturen(supabase, companyId, clientKey, paidOnly)
+  const factuurFouten: string[] = []
+  const exported = await exportFacturen(supabase, companyId, clientKey, paidOnly, factuurFouten)
   const imported = importCosts ? await importKosten(supabase, companyId, clientKey) : 0
   const kosten = importCosts
     ? await exportKosten(supabase, companyId, clientKey)
@@ -301,6 +344,11 @@ async function syncCompany(
     exported: { verkoopboekingen: exported, inkoopboekingen: kosten.exported },
     imported: { inkoopfacturen: imported },
     kostenResterend: kosten.resterend,
+    // Wat er per regel misging — zodat de gebruiker niet naar "0" zit te kijken.
+    fouten: [...factuurFouten, ...kosten.fouten],
+    // Velden die SnelStart afwees maar die we hebben overgeslagen zodat de
+    // relatie tóch kon ontstaan.
+    meldingen: kosten.meldingen,
   }
 }
 

@@ -10,6 +10,8 @@ const toBedrijfsinstellingen = row => ({
   reiskostenPerKm: Number(row.reiskosten_per_km || 0.23),
   standaardMarge: Number(row.standaard_marge || 25),
   btwPct: Number(row.btw_pct || 21),
+  // 'factuur' = omzet telt op factuurdatum, 'kas' = op betaaldatum.
+  btwStelsel: row.btw_stelsel === 'kas' ? 'kas' : 'factuur',
   offerteGeldigDagen: Number(row.offerte_geldig_dagen || 14),
   // Interval (min) waarmee de uren-herinnering-pop-up terugkeert. 0 = uit.
   urenHerinneringIntervalMin: Number(row.uren_herinnering_interval_min ?? 60),
@@ -80,6 +82,7 @@ export async function upsertBedrijfsinstellingen(input) {
   const btw = input.btw_pct ?? input.btwPct
   const geldig = input.offerte_geldig_dagen ?? input.offerteGeldigDagen
   const herinnering = input.uren_herinnering_interval_min ?? input.urenHerinneringIntervalMin
+  const stelsel = input.btw_stelsel ?? input.btwStelsel
   const agStart = input.agenda_start_uur ?? input.agendaStartUur
   const agEind = input.agenda_eind_uur ?? input.agendaEindUur
   const updates = {
@@ -91,6 +94,7 @@ export async function upsertBedrijfsinstellingen(input) {
     uren_herinnering_interval_min: herinnering != null ? Number(herinnering) : undefined,
     agenda_start_uur: agStart != null ? Number(agStart) : undefined,
     agenda_eind_uur: agEind != null ? Number(agEind) : undefined,
+    btw_stelsel: stelsel === 'kas' || stelsel === 'factuur' ? stelsel : undefined,
     updated_at: new Date().toISOString(),
   }
   // Verwijder undefined waarden zodat bestaande DB-waarden niet worden overschreven

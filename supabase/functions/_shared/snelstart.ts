@@ -80,7 +80,15 @@ export async function ssFetch(clientKey: string, path: string, options: RequestI
     console.error(`SnelStart API ${res.status} op ${path}: ${body.substring(0, 300)}`)
     if (res.status === 401) throw new Error('SnelStart-koppelsleutel ongeldig of ingetrokken')
     if (res.status === 403) throw new Error(`SnelStart weigert toegang (403) op ${path}: de koppelsleutel mist de benodigde scope`)
-    throw new Error(`SnelStart ${res.status} op ${path}: ${body.substring(0, 200)}`)
+    const fout: any = new Error(`SnelStart ${res.status} op ${path}: ${body.substring(0, 200)}`)
+    // Gestructureerde foutcodes meegeven, zodat een aanroeper kan reageren op
+    // een specifiek geweigerd veld i.p.v. de tekst te moeten uitlezen.
+    fout.status = res.status
+    try {
+      const geparsed = JSON.parse(body)
+      fout.snelstartFouten = Array.isArray(geparsed) ? geparsed : [geparsed]
+    } catch { fout.snelstartFouten = [] }
+    throw fout
   }
   if (res.status === 204) return null
   return res.json()
@@ -123,6 +131,7 @@ export function ontbrekendeAdresvelden(customer: any): string[] {
 
 export async function ensureRelatie(
   supabase: any, clientKey: string, customer: any, bekendeRelaties?: any[],
+  meldingen?: string[],
 ): Promise<string | null> {
   if (customer.snelstart_id) return customer.snelstart_id
   const naam = (customer.name || '').trim()
@@ -148,8 +157,14 @@ export async function ensureRelatie(
         plaats: customer.city || undefined,
       }
     }
-    const created = await ssFetch(clientKey, '/relaties', { method: 'POST', body: JSON.stringify(body) })
-    relatieId = created?.id ?? null
+    const { id, overgeslagen } = await maakRelatie(clientKey, body)
+    relatieId = id
+    if (overgeslagen.length && meldingen) {
+      meldingen.push(
+        `Klant "${naam}" is aangemaakt zonder ${overgeslagen.map(relatieVeldLabel).join(' en ')} — `
+        + `SnelStart wees ${overgeslagen.length === 1 ? 'die waarde' : 'die waarden'} af als ongeldig.`,
+      )
+    }
   }
 
   if (relatieId) {
@@ -165,16 +180,20 @@ const round2 = (n: number) => Math.round(n * 100) / 100
 // 20260821120000_btw_regime.sql). Vóór die migratie bestond alleen btw_pct en
 // moest hier geraden worden wat 0% betekende — dat ging mis. Regels zonder
 // regime (oude data, andere schrijvers) vallen terug op het percentage.
-export type BtwRegime = 'normaal' | 'verlaagd' | 'verlegd'
+export type BtwRegime = 'normaal' | 'verlaagd' | 'vrijgesteld' | 'verlegd'
 
 export function regimeVanRegel(r: any): BtwRegime {
   const opgeslagen = String(r?.btw_regime || '')
-  if (opgeslagen === 'normaal' || opgeslagen === 'verlaagd' || opgeslagen === 'verlegd') {
+  if (opgeslagen === 'normaal' || opgeslagen === 'verlaagd'
+      || opgeslagen === 'vrijgesteld' || opgeslagen === 'verlegd') {
     return opgeslagen
   }
+  // Regels zonder regime (van vóór btw_regime): 0% valt terug op vrijgesteld.
+  // Dat is de onschuldigste aanname — vrijgesteld mag naast belaste regels
+  // staan, verlegd niet (SnelStart weigert die combinatie met BOE-0062).
   const pct = Number(r?.btw_pct ?? 21)
   if (pct === 9) return 'verlaagd'
-  if (pct === 0) return 'verlegd'
+  if (pct === 0) return 'vrijgesteld'
   return 'normaal'
 }
 
@@ -183,7 +202,10 @@ export function regimeVanRegel(r: any): BtwRegime {
 // de btw-collectie met VerkopenVerlegd.
 function regelBtwSoort(regime: BtwRegime, pct: number): string {
   if (regime === 'verlaagd') return 'Laag'
-  if (regime === 'verlegd') return 'Geen'
+  // Zowel vrijgesteld als verlegd staan op de REGEL als 'Geen' — de enum op
+  // regelniveau kent alleen Geen/Laag/Hoog/Overig. Het onderscheid zit in het
+  // grootboek en, bij verlegd, in de btw-collectie.
+  if (regime === 'verlegd' || regime === 'vrijgesteld') return 'Geen'
   if (pct === 21) return 'Hoog'
   if (pct === 0) return 'Geen'
   return 'Overig'
@@ -197,10 +219,23 @@ function afdrachtBtwSoort(regime: BtwRegime, pct: number): string {
   return 'VerkopenOverig'
 }
 
+// Vrijgesteld krijgt GEEN regel in de btw-collectie: er is niets af te dragen
+// en niets aan te geven. Beide komen op de aangifte in rubriek 1e; alleen de
+// btw-collectie onderscheidt ze in de boekhouding.
+
 // Regime → gewenste grootboekfunctie voor de omzetregel.
+// Vrijgesteld én verlegd gaan naar hetzelfde grootboek. Dat is geen compromis:
+// SnelStart's eigen standaardschema doet het ook zo — 8240 "Omzet nultarief" en
+// 8250 "Omzet verlegd" delen de functie VerkopenOmzetOnbelastVerlegd, en beide
+// komen op de aangifte in rubriek 1e. Het onderscheid zit in de btw-collectie:
+// verlegd krijgt een VerkopenVerlegd-regel, vrijgesteld niet.
+//
+// VerkopenBtwVrij bestaat wél in de API-enum maar in geen enkele standaard-
+// administratie (0 van 233 grootboeken), en aanmaken via POST /grootboeken
+// geeft een 500. Daarom niet gebruikt.
 function omzetGrootboekfunctie(regime: BtwRegime, pct: number): string {
   if (regime === 'verlaagd') return 'VerkopenOmzetLaag'
-  if (regime === 'verlegd') return 'VerkopenOmzetOnbelastVerlegd'
+  if (regime === 'verlegd' || regime === 'vrijgesteld') return 'VerkopenOmzetOnbelastVerlegd'
   if (pct === 21) return 'VerkopenOmzetHoog'
   return 'VerkopenOmzetOverig'
 }
@@ -211,14 +246,16 @@ function omzetGrootboekfunctie(regime: BtwRegime, pct: number): string {
 // "Omzet verlegd". Staat er niets uit deze lijst in de administratie, dan
 // stoppen we met een duidelijke fout in plaats van iets fout weg te boeken.
 const OMZET_TERUGVAL: Record<BtwRegime, string[]> = {
-  normaal:  ['VerkopenOmzetHoog', 'VerkopenOmzetOverig'],
-  verlaagd: ['VerkopenOmzetLaag', 'VerkopenOmzetOverig'],
-  verlegd:  ['VerkopenOmzetOnbelastVerlegd'],
+  normaal:     ['VerkopenOmzetHoog', 'VerkopenOmzetOverig'],
+  verlaagd:    ['VerkopenOmzetLaag', 'VerkopenOmzetOverig'],
+  vrijgesteld: ['VerkopenOmzetOnbelastVerlegd'],
+  verlegd:     ['VerkopenOmzetOnbelastVerlegd'],
 }
 
 const REGIME_LABEL: Record<BtwRegime, string> = {
   normaal: 'normaal (21%)',
   verlaagd: 'verlaagd (9%)',
+  vrijgesteld: 'vrijgesteld (0%)',
   verlegd: 'btw verlegd (0%)',
 }
 
@@ -238,7 +275,7 @@ export async function getActieveGrootboeken(clientKey: string): Promise<any[]> {
 // `grootboeken` mag voorgeladen worden (getActieveGrootboeken) bij bulk-runs.
 export async function pushVerkoopboeking(
   admin: any, clientKey: string, companyId: string, factuur: any, regels: any[],
-  grootboeken?: any[], bekendeRelaties?: any[],
+  grootboeken?: any[], bekendeRelaties?: any[], meldingen?: string[],
 ) {
   if (factuur.snelstart_id) {
     return { snelstart_id: factuur.snelstart_id, already_synced: true }
@@ -247,7 +284,7 @@ export async function pushVerkoopboeking(
 
   const customer = factuur.customers
   if (!customer) throw new Error('Factuur heeft geen klant')
-  const relatieId = await ensureRelatie(admin, clientKey, { ...customer, id: factuur.customer_id }, bekendeRelaties)
+  const relatieId = await ensureRelatie(admin, clientKey, { ...customer, id: factuur.customer_id }, bekendeRelaties, meldingen)
   if (!relatieId) throw new Error('Kon geen SnelStart-relatie bepalen voor de klant')
 
   const gbs = grootboeken ?? await getActieveGrootboeken(clientKey)
@@ -281,13 +318,18 @@ export async function pushVerkoopboeking(
   })
 
   // BTW-collectie. Verlegde regels hebben géén btw-bedrag maar moeten wél
-  // gemeld worden, anders blijft rubriek 2a leeg: daarom een VerkopenVerlegd-
-  // regel met btwBedrag 0 zodra er verlegde omzet op de factuur staat.
+  // gemeld worden: daarom een VerkopenVerlegd-regel met btwBedrag 0 zodra er
+  // verlegde omzet op de factuur staat. Dat stuurt de boeking naar de
+  // balansrekeningen 1673/1674 — het verschil met vrijgestelde omzet, die
+  // dezelfde grootboekfunctie gebruikt maar geen btw-regel krijgt.
   const btwPerSoort = new Map<string, number>()
   for (const r of regels) {
     const pct = Number(r.btw_pct ?? 21)
     const regime = regimeVanRegel(r)
     const soort = afdrachtBtwSoort(regime, pct)
+    // Vrijgesteld levert geen btw-regel op; verlegd wél (bedrag 0) omdat
+    // de verlegging anders nergens uit blijkt.
+    if (regime === 'vrijgesteld') continue
     const bedrag = regime === 'verlegd' ? 0 : regelExcl(r) * pct / 100
     if (regime !== 'verlegd' && pct === 0) continue
     btwPerSoort.set(soort, (btwPerSoort.get(soort) || 0) + bedrag)
@@ -322,12 +364,86 @@ export async function pushVerkoopboeking(
 // boekhouder herverdeelt ze in SnelStart naar de echte leverancier/kostenpost.
 const DIVERSEN_LEVERANCIER = 'BossBase kosten (controleren)'
 
+// ── Relaties aanmaken met terugval op geweigerde velden ─────────────────────
+// SnelStart valideert optionele velden streng: één ongeldig btw-nummer of IBAN
+// laat de HELE relatie mislukken, en daarmee elke factuur of kostenpost die
+// eraan hangt. Voor de gebruiker ziet dat eruit als "de sync doet niets".
+//
+// Daarom: weigert SnelStart op een optioneel veld, dan laten we dat veld weg en
+// proberen we opnieuw. De relatie ontstaat dan wél; welk veld is overgeslagen
+// melden we terug zodat de gebruiker het kan corrigeren.
+//
+// De foutcodes staan niet in de OpenAPI-spec; deze twee zijn waargenomen in de
+// praktijk. Onbekende codes vallen in het vangnet hieronder.
+const REL_FOUT_VELD: Record<string, string> = {
+  'REL-0088': 'btwNummer',
+  'REL-0011': 'iban',
+}
+
+// Velden die we in het uiterste geval allemaal weglaten. Alles wat SnelStart
+// kán valideren en dat niet essentieel is voor de boeking.
+const RISICOVELDEN = ['btwNummer', 'iban', 'kvkNummer', 'email', 'websiteUrl']
+
+const VELD_LABEL: Record<string, string> = {
+  btwNummer: 'btw-nummer', iban: 'IBAN', kvkNummer: 'KvK-nummer',
+  email: 'e-mailadres', websiteUrl: 'website',
+}
+
+/**
+ * POST /relaties met terugval. Geeft { id, overgeslagen } terug — overgeslagen
+ * bevat de veldnamen die we hebben moeten weglaten.
+ */
+async function maakRelatie(
+  clientKey: string, body: Record<string, unknown>,
+): Promise<{ id: string | null; overgeslagen: string[] }> {
+  const post = async (b: Record<string, unknown>) =>
+    ssFetch(clientKey, '/relaties', { method: 'POST', body: JSON.stringify(b) })
+
+  try {
+    const created = await post(body)
+    return { id: created?.id ? String(created.id) : null, overgeslagen: [] }
+  } catch (err: any) {
+    if (err?.status !== 400) throw err
+
+    // Stap 1: alleen de velden weglaten die SnelStart bij naam noemt.
+    const codes: string[] = (err.snelstartFouten ?? [])
+      .map((f: any) => String(f?.errorCode || ''))
+      .filter(Boolean)
+    const gericht = codes.map(c => REL_FOUT_VELD[c]).filter(Boolean) as string[]
+
+    if (gericht.length) {
+      const zonder = { ...body }
+      for (const v of gericht) delete zonder[v]
+      try {
+        const created = await post(zonder)
+        return { id: created?.id ? String(created.id) : null, overgeslagen: gericht }
+      } catch (err2: any) {
+        if (err2?.status !== 400) throw err2
+      }
+    }
+
+    // Stap 2 (vangnet): onbekende code, of het lukte nog steeds niet. Laat alle
+    // valideerbare optionele velden weg — de relatie moet er komen.
+    const kaal = { ...body }
+    const weggelaten: string[] = []
+    for (const v of RISICOVELDEN) {
+      if (kaal[v] !== undefined) { delete kaal[v]; weggelaten.push(v) }
+    }
+    if (!weggelaten.length) throw err
+    const created = await post(kaal)
+    return { id: created?.id ? String(created.id) : null, overgeslagen: weggelaten }
+  }
+}
+
+export const relatieVeldLabel = (veld: string) => VELD_LABEL[veld] ?? veld
+
 // Zoekt of maakt de SnelStart-relatie voor een BossBase-leverancier.
 // Spiegel van ensureRelatie, maar met relatiesoort ['Leverancier'] en met
 // terugschrijven naar leveranciers.snelstart_id, zodat een volgende sync hem
 // hergebruikt in plaats van een duplicaat aan te maken.
 export async function ensureLeverancier(
   admin: any, clientKey: string, leverancier: any, bekendeRelaties?: any[],
+  meldingen?: string[],
 ): Promise<string | null> {
   if (leverancier?.snelstart_id) return String(leverancier.snelstart_id)
   const naam = String(leverancier?.naam || '').trim()
@@ -360,8 +476,14 @@ export async function ensureLeverancier(
         plaats: leverancier.city || undefined,
       }
     }
-    const created = await ssFetch(clientKey, '/relaties', { method: 'POST', body: JSON.stringify(body) })
-    relatieId = created?.id ? String(created.id) : null
+    const { id, overgeslagen } = await maakRelatie(clientKey, body)
+    relatieId = id
+    if (overgeslagen.length && meldingen) {
+      meldingen.push(
+        `Leverancier "${naam}" is aangemaakt zonder ${overgeslagen.map(relatieVeldLabel).join(' en ')} — `
+        + `SnelStart wees ${overgeslagen.length === 1 ? 'die waarde' : 'die waarden'} af als ongeldig. Corrigeer het en synchroniseer opnieuw.`,
+      )
+    }
     if (relatieId && bekendeRelaties) bekendeRelaties.push({ id: relatieId, naam })
   }
 
@@ -510,7 +632,7 @@ function inkoopGrootboekVoorKost(gbs: any[], categorie: string, pct: number): { 
 // kostenpost zelf geen leverancier heeft ingevuld.
 export async function pushInkoopboeking(
   admin: any, clientKey: string, cost: any, leverancierId: string, grootboeken: any[],
-  bekendeRelaties?: any[],
+  bekendeRelaties?: any[], meldingen?: string[],
 ) {
   if (cost.snelstart_id) return { snelstart_id: cost.snelstart_id, already_synced: true }
 
@@ -519,7 +641,7 @@ export async function pushInkoopboeking(
   // leverancier wél weten. cost.leveranciers komt uit de join op de export-query.
   let relatieId = leverancierId
   if (cost.leveranciers?.naam) {
-    const eigen = await ensureLeverancier(admin, clientKey, cost.leveranciers, bekendeRelaties)
+    const eigen = await ensureLeverancier(admin, clientKey, cost.leveranciers, bekendeRelaties, meldingen)
     if (eigen) relatieId = eigen
   }
 

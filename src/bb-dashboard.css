@@ -455,7 +455,21 @@ ul{list-style:none}
 .lsec-empty{text-align:center;padding:24px 0;color:var(--dl);font-size:13px}
 
 /* Klantenlijst naast drawer: kaarten passen zich aan de smalle lijst aan */
-.cust-split-list .cust-card-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))!important;gap:10px!important}
+/* In de split-weergave is de lijstkolom smal (soms nog geen 200px). Een vaste
+   minimumkolom van 200px maakte de kaart breder dan het vak, en omdat
+   .cust-split-list overflow-x:hidden heeft werd de rechterrand — met de
+   prullenbak — er gewoon afgeknipt. min() laat de kolom meekrimpen. */
+.cust-split-list .cust-card-grid{grid-template-columns:repeat(auto-fill,minmax(min(200px,100%),1fr))!important;gap:10px!important}
+/* Zelfde probleem bij de tabelweergave: een tabel van ~820px in een kolom van
+   ~190px werd afgesneden in plaats van scrollbaar. De laatste kolom (acties)
+   was daardoor onbereikbaar. */
+.cust-split-list .tw{overflow-x:auto}
+/* De actiekolom blijft aan de rechterrand plakken, zodat de prullenbak
+   bereikbaar is zonder eerst horizontaal te scrollen. */
+.cust-split-list .dt th:last-child,
+.cust-split-list .dt td:last-child{position:sticky;right:0;background:#fff;box-shadow:-6px 0 6px -6px rgba(0,0,0,.18);z-index:1}
+.cust-split-list .dt tbody tr:hover td:last-child{background:var(--bgs)}
+.cust-split-list .page-hd-actions{flex-wrap:wrap}
 
 /* FORMS / MODALS */
 /* Geen backdrop-blur: dat stond op sommige overlays wel en op andere niet, wat
@@ -696,8 +710,11 @@ ul{list-style:none}
 /* Sync-balk — blijft staan zolang een boekhoudkoppeling synchroniseert.
    Zelfde visuele taal als .bb-toast (donkere kaart, accentrand, .84rem/600),
    maar gecentreerd bovenin en zonder auto-verdwijnen: een sync duurt minuten. */
-.bb-syncbar{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:9500;
-  display:flex;align-items:center;gap:10px;max-width:min(560px,calc(100vw - 32px));
+/* Zelfde plek als de toasts (rechtsboven): meldingen horen bij elkaar te staan,
+   anders zoekt de gebruiker op twee plaatsen. Iets lagere z-index dan de
+   toast-stack, zodat een toast er netjes overheen komt. */
+.bb-syncbar{position:fixed;top:20px;right:20px;z-index:9500;
+  display:flex;align-items:center;gap:10px;min-width:240px;max-width:min(380px,calc(100vw - 32px));
   background:#0D0D0D;color:#fff;padding:11px 16px;border-radius:var(--r10);
   box-shadow:0 12px 40px rgba(0,0,0,.22);border-left:3px solid var(--p);
   font-size:.84rem;font-weight:600;line-height:1.4;
@@ -706,10 +723,14 @@ ul{list-style:none}
   border:2px solid rgba(255,255,255,.3);border-top-color:var(--p);
   animation:act2-spin 1s linear infinite}
 .bb-syncbar-duur{font-weight:500;color:rgba(255,255,255,.7)}
-@media(max-width:768px){.bb-syncbar{top:12px;font-size:.8rem;padding:10px 13px}}
+@media(max-width:768px){.bb-syncbar{top:12px;right:12px;font-size:.8rem;padding:10px 13px}}
+/* Op smalle schermen staan de toasts onderaan; de sync-balk volgt dat. */
+@media(max-width:480px){.bb-syncbar{top:auto;bottom:14px;right:14px;left:14px;min-width:0;max-width:none}}
 
 /* Toasts */
 .bb-toast-stack{position:fixed;top:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:10000;pointer-events:none}
+/* Sync-balk actief: toasts eronder, niet erover. */
+body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .bb-toast{pointer-events:auto;background:#0D0D0D;color:#fff;padding:11px 16px;border-radius:var(--r10);box-shadow:0 12px 40px rgba(0,0,0,.22);display:flex;align-items:center;gap:10px;font-size:.84rem;font-weight:600;min-width:240px;max-width:380px;animation:bbToastIn .25s cubic-bezier(.22,1,.36,1) both;border-left:3px solid var(--p);cursor:pointer}
 .bb-toast-error{border-left-color:#dc2626}
 .bb-toast-info{border-left-color:#2563eb}

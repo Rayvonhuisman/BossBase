@@ -12,6 +12,7 @@ import { categorieOptiesMet } from '../lib/kostenCategorieen.js';
 import { getFacturen, getAllFactuurRegels } from '../services/factuurService.js';
 import { getConnection } from '../services/accountingService.js';
 import { getBtwPeriodes, syncBtwData } from '../services/btwService.js';
+import { berekenBtwIndicatie, RUBRIEKEN } from '../services/btwIndicatieService.js';
 import { getOffertes } from '../services/offerteService.js';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { listCustomers } from '../services/customerService.js';
@@ -1267,6 +1268,26 @@ function generatePeriodeOpties(type) {
   return opties;
 }
 
+// Label ("Q3 2026" / "Augustus 2026") terug naar begin- en einddatum, zodat de
+// eigen BTW-berekening weet welke periode hij moet optellen.
+function generatePeriodeRange(label, type) {
+  if (!label) return null;
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  if (type === 'kwartaal') {
+    const m = /^Q([1-4])\s+(\d{4})$/.exec(label);
+    if (!m) return null;
+    const q = Number(m[1]) - 1;
+    const jaar = Number(m[2]);
+    return { start: iso(new Date(jaar, q * 3, 1)), eind: iso(new Date(jaar, q * 3 + 3, 0)) };
+  }
+  const m = /^(\p{L}+)\s+(\d{4})$/u.exec(label);
+  if (!m) return null;
+  const maand = BTW_NL_MONTHS.findIndex(x => x.toLowerCase() === m[1].toLowerCase());
+  if (maand < 0) return null;
+  const jaar = Number(m[2]);
+  return { start: iso(new Date(jaar, maand, 1)), eind: iso(new Date(jaar, maand + 1, 0)) };
+}
+
 // ── FINANCIËN ─────────────────────────────────────────────────
 export function RevenuePage() {
   const toast = useToast();
@@ -1285,6 +1306,9 @@ export function RevenuePage() {
   const [btwPerioden, setBtwPerioden] = useState([]);
   const [btwPeriodeType, setBtwPeriodeType] = useState('kwartaal');
   const [btwLoading, setBtwLoading] = useState(false);
+  // Eigen berekening uit facturen en kosten — werkt zonder boekhoudkoppeling.
+  const [btwIndicatie, setBtwIndicatie] = useState(null);
+  const [btwStelsel, setBtwStelsel] = useState('factuur');
   const [btwSyncing, setBtwSyncing] = useState(false);
   const [btwSelectedLabel, setBtwSelectedLabel] = useState(() => generatePeriodeOpties('kwartaal')[0] || '');
   const [kpiPeriode, setKpiPeriode] = useState('deze-maand');
@@ -1320,6 +1344,24 @@ export function RevenuePage() {
       .catch(() => {})
       .finally(() => setBtwLoading(false));
   }, [mbConnection, btwPeriodeType]);
+
+  // Stelsel ophalen: bepaalt of omzet op factuur- of betaaldatum telt.
+  React.useEffect(() => {
+    getBedrijfsinstellingen()
+      .then(s => { if (s?.btwStelsel) setBtwStelsel(s.btwStelsel); })
+      .catch(() => {});
+  }, [refreshKey]);
+
+  // Eigen BTW-indicatie voor de gekozen periode. Hangt niet aan een koppeling.
+  React.useEffect(() => {
+    const p = generatePeriodeRange(btwSelectedLabel, btwPeriodeType);
+    if (!p) { setBtwIndicatie(null); return; }
+    let leeft = true;
+    berekenBtwIndicatie({ start: p.start, eind: p.eind, stelsel: btwStelsel })
+      .then(r => { if (leeft) setBtwIndicatie(r); })
+      .catch(() => { if (leeft) setBtwIndicatie(null); });
+    return () => { leeft = false; };
+  }, [btwSelectedLabel, btwPeriodeType, btwStelsel, refreshKey, facturen, costsData]);
 
   // ── KPI ──────────────────────────────────────────────────────
   const kpiRange = React.useMemo(() => {
@@ -1428,8 +1470,12 @@ export function RevenuePage() {
       await syncBtwData(btwPeriodeType);
       const data = await getBtwPeriodes(btwPeriodeType);
       setBtwPerioden(data);
-      toast.success('BTW data gesynchroniseerd');
-    } catch (err) { toast.error(err.message || 'Synchronisatie mislukt'); }
+      toast.success('BTW-gegevens opgehaald uit de boekhouding');
+    } catch (err) {
+      // Faalt bewust zacht: zonder de scope btwaangiftes:read geeft SnelStart
+      // een 403. De eigen indicatie blijft gewoon staan.
+      toast.error(err.message || 'Ophalen uit de boekhouding is niet gelukt — de indicatie hieronder blijft werken');
+    }
     finally { setBtwSyncing(false); }
   };
 
@@ -1544,18 +1590,19 @@ export function RevenuePage() {
         </div>
       </div>
 
-      {/* ── BTW-overzicht — feature uit de matrix (Groei+) én een actieve
-           boekhoudkoppeling. Server-side is de SELECT op btw_periodes gated. ── */}
-      {btwPlan.has('btw_overzicht') && mbConnection?.connected && (
+      {/* ── BTW-indicatie ──────────────────────────────────────────────────
+           Berekend uit de eigen facturen en kosten, dus ook zonder
+           boekhoudkoppeling bruikbaar. Staat er een koppeling én levert die
+           cijfers, dan komen die ernaast te staan; die winnen visueel, want
+           dat is de echte aangifte. Bewust GEEN aangifteknop of -export. */}
+      {btwPlan.has('btw_overzicht') && (
       <div className="tw afu3" style={{ marginBottom: 20 }}>
         <div className="tw-hd" style={{ flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
           <div>
-            <div className="card-title">BTW-overzicht</div>
-            {btwPerioden.find(p => p.periode_label === btwSelectedLabel)?.last_synced_at && (
-              <div style={{ fontSize: '.75rem', color: 'var(--dmu)', marginTop: 2 }}>
-                Laatste sync: {new Date(btwPerioden.find(p => p.periode_label === btwSelectedLabel).last_synced_at).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-              </div>
-            )}
+            <div className="card-title">BTW-indicatie</div>
+            <div style={{ fontSize: '.75rem', color: 'var(--dmu)', marginTop: 2 }}>
+              Berekend uit je facturen en kosten in BossBase. Dit is geen aangifte — je boekhouder of SnelStart is leidend.
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <div className="tabs">
@@ -1565,69 +1612,125 @@ export function RevenuePage() {
             <select value={btwSelectedLabel} onChange={e => setBtwSelectedLabel(e.target.value)}>
               {generatePeriodeOpties(btwPeriodeType).map(l => <option key={l} value={l}>{l}</option>)}
             </select>
-            <button className="btn btn-s btn-sm" onClick={handleSyncBtw} disabled={btwSyncing}>
-              {btwSyncing ? 'Synchroniseren...' : 'Synchroniseer BTW'}
-            </button>
+            {mbConnection?.connected && (
+              <button className="btn btn-s btn-sm" onClick={handleSyncBtw} disabled={btwSyncing}>
+                {btwSyncing ? 'Ophalen...' : 'Ophalen uit boekhouding'}
+              </button>
+            )}
           </div>
         </div>
 
-        {btwLoading ? (
-          <div style={{ fontSize: '.84rem', color: 'var(--dl)', padding: '8px 0' }}>Laden...</div>
-        ) : (() => {
-          const p = btwPerioden.find(x => x.periode_label === btwSelectedLabel);
-          if (!p) return (
-            <div style={{ fontSize: '.84rem', color: 'var(--dl)', padding: '8px 16px 16px' }}>
-              Geen data voor {btwSelectedLabel}. Klik "Synchroniseer BTW" om op te halen.
-            </div>
-          );
-          const totOntvangen = (p.btw_ontvangen_21 || 0) + (p.btw_ontvangen_9 || 0);
-          const totBetaald   = (p.btw_betaald_21  || 0) + (p.btw_betaald_9  || 0);
-          const saldo = totOntvangen - totBetaald;
-          const positief = saldo >= 0;
+        <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {(() => {
+            const boekhouding = btwPerioden.find(x => x.periode_label === btwSelectedLabel);
+            const eigen = btwIndicatie;
+            if (!eigen) return <div style={{ fontSize: '.84rem', color: 'var(--dl)' }}>Berekenen…</div>;
 
-          const BtwKaart = ({ titel, rijen, subtotaal }) => (
-            <div style={{ background: 'var(--bg)', border: '1px solid var(--br)', borderRadius: 'var(--r8)', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 0 }}>
-              <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 12 }}>{titel}</div>
-              {rijen.map((r, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '.85rem', padding: '4px 0' }}>
-                  <span style={{ color: 'var(--dmu)' }}>{r.label}</span>
-                  <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(r.val)}</span>
+            const eigenTeBetalen = eigen.teBetalen;
+            const bhOntvangen = boekhouding ? (boekhouding.btw_ontvangen_21 || 0) + (boekhouding.btw_ontvangen_9 || 0) : null;
+            const bhBetaald = boekhouding ? (boekhouding.btw_betaald_21 || 0) + (boekhouding.btw_betaald_9 || 0) : null;
+            const bhTeBetalen = boekhouding ? bhOntvangen - bhBetaald : null;
+            const verschil = bhTeBetalen != null ? Math.round((bhTeBetalen - eigenTeBetalen) * 100) / 100 : null;
+
+            const bhRubriek = code => {
+              if (!boekhouding) return null;
+              if (code === '1a') return boekhouding.btw_ontvangen_21;
+              if (code === '1b') return boekhouding.btw_ontvangen_9;
+              if (code === '5b') return (boekhouding.btw_betaald_21 || 0) + (boekhouding.btw_betaald_9 || 0);
+              if (code === '1e') return boekhouding.omzet_0_tarief;
+              return null;
+            };
+
+            return (
+              <>
+                {eigen.waarschuwingen.length > 0 && (
+                  <div style={{
+                    fontSize: '.8rem', color: 'var(--dm)',
+                    background: 'var(--warn-bg, rgba(224,176,80,.10))', border: '1px solid var(--warn-bd, #e0b050)',
+                    borderRadius: 'var(--r8)', padding: '9px 12px',
+                  }}>
+                    <strong>De indicatie is mogelijk niet compleet</strong>
+                    <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                      {eigen.waarschuwingen.map((w, i) => <li key={i}>{w}</li>)}
+                    </ul>
+                  </div>
+                )}
+
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="dt" style={{ minWidth: 560 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ width: 46 }}>Rubriek</th>
+                        <th>Omschrijving</th>
+                        <th style={{ textAlign: 'right' }}>Omzet</th>
+                        <th style={{ textAlign: 'right' }}>BTW (indicatie)</th>
+                        {boekhouding && <th style={{ textAlign: 'right' }}>Boekhouding</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {RUBRIEKEN.map(r => {
+                        const eig = eigen.rubrieken[r.code];
+                        const bh = bhRubriek(r.code);
+                        return (
+                          <tr key={r.code} style={{ opacity: r.kanWij ? 1 : 0.55 }}>
+                            <td style={{ fontWeight: 700 }}>{r.code}</td>
+                            <td style={{ fontSize: '.82rem' }}>{r.label}</td>
+                            <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                              {eig && eig.omzet != null ? fmt(eig.omzet) : ''}
+                            </td>
+                            <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: r.kanWij ? 600 : 400 }}>
+                              {r.kanWij
+                                ? fmt(eig ? eig.btw : 0)
+                                : <span style={{ fontSize: '.76rem', color: 'var(--dl)' }}>niet bekend in BossBase</span>}
+                            </td>
+                            {boekhouding && (
+                              <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
+                                {bh != null ? fmt(bh) : '—'}
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
-              <div style={{ borderTop: '1px solid var(--br)', marginTop: 8, paddingTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '.85rem' }}>
-                <span style={{ fontWeight: 700, color: 'var(--tx)' }}>Subtotaal</span>
-                <span style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{fmt(subtotaal)}</span>
-              </div>
-            </div>
-          );
 
-          const rijenOntvangen = [
-            { label: '21% tarief', val: p.btw_ontvangen_21 || 0 },
-            { label: '9% tarief',  val: p.btw_ontvangen_9  || 0 },
-            ...(p.omzet_0_tarief > 0 ? [{ label: 'Omzet 0% tarief', val: p.omzet_0_tarief }] : []),
-          ];
-          const rijenBetaald = [
-            { label: '21% tarief', val: p.btw_betaald_21 || 0 },
-            { label: '9% tarief',  val: p.btw_betaald_9  || 0 },
-          ];
-
-          return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '0 16px 16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-                <BtwKaart titel="BTW Ontvangen (Verkoop)" rijen={rijenOntvangen} subtotaal={totOntvangen} />
-                <BtwKaart titel="BTW Betaald (Inkoop)"    rijen={rijenBetaald}   subtotaal={totBetaald}   />
-              </div>
-              <div style={{ background: 'var(--bg)', border: '1px solid var(--br)', borderRadius: 'var(--r8)', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 600, fontSize: '.9rem', color: positief ? 'var(--tx)' : '#15A34A' }}>
-                  {positief ? 'Te betalen aan Belastingdienst' : 'Terug te krijgen'}
-                </span>
-                <span style={{ fontWeight: 800, fontSize: '1.05rem', fontVariantNumeric: 'tabular-nums', color: positief ? 'var(--tx)' : '#15A34A' }}>
-                  {fmt(Math.abs(saldo))}
-                </span>
-              </div>
-            </div>
-          );
-        })()}
+                <div style={{ background: 'var(--bg)', border: '1px solid var(--br)', borderRadius: 'var(--r8)', padding: '14px 18px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontWeight: 600, fontSize: '.9rem' }}>
+                      {eigenTeBetalen >= 0 ? 'Indicatie te betalen' : 'Indicatie terug te krijgen'}
+                    </span>
+                    <span style={{ fontWeight: 800, fontSize: '1.05rem', fontVariantNumeric: 'tabular-nums' }}>
+                      {fmt(Math.abs(eigenTeBetalen))}
+                    </span>
+                  </div>
+                  {boekhouding && (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--br)' }}>
+                        <span style={{ fontWeight: 700, fontSize: '.9rem' }}>Volgens je boekhouding</span>
+                        <span style={{ fontWeight: 800, fontSize: '1.05rem', fontVariantNumeric: 'tabular-nums' }}>
+                          {fmt(Math.abs(bhTeBetalen))}
+                        </span>
+                      </div>
+                      {verschil !== 0 && (
+                        <div style={{ fontSize: '.78rem', color: 'var(--dm)', marginTop: 6 }}>
+                          Verschil van {fmt(Math.abs(verschil))} — dat is wat er buiten BossBase om geboekt is,
+                          bijvoorbeeld door je boekhouder.
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <div style={{ fontSize: '.74rem', color: 'var(--dl)', marginTop: 8 }}>
+                    {btwStelsel === 'kas'
+                      ? 'Kasstelsel: alleen betaalde facturen tellen mee, op betaaldatum.'
+                      : 'Factuurstelsel: verzonden en betaalde facturen tellen mee, op factuurdatum.'}
+                    {' '}Aan te passen bij Instellingen.
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+        </div>
       </div>
       )}
 

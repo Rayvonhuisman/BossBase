@@ -42,6 +42,7 @@ import {
   importKostenVanuitMoneybird,
   syncContactenMetMoneybird,
   saveSnelStartConnection,
+  resetSnelStartKoppeling,
   testSnelStartConnection,
   importKostenVanuitSnelStart,
   syncContactenMetSnelStart,
@@ -277,6 +278,9 @@ export function InstellingenPage() {
   const [ssAdresWaarschuwingen, setSsAdresWaarschuwingen] = useState([]);
   // Aantal kostenposten dat na de laatste sync nog niet geboekt was.
   const [ssKostenResterend, setSsKostenResterend] = useState(0);
+  const [ssResetting, setSsResetting] = useState(false);
+  const [ssFouten, setSsFouten] = useState([]);
+  const [ssMeldingen, setSsMeldingen] = useState([]);
 
   // Voertuigen
   const [voertuigen, setVoertuigen] = useState([]);
@@ -389,6 +393,7 @@ export function InstellingenPage() {
             uren_herinnering_interval_min: instellingen.urenHerinneringIntervalMin ?? 60,
             agenda_start_uur: instellingen.agendaStartUur ?? 7,
             agenda_eind_uur: instellingen.agendaEindUur ?? 20,
+            btw_stelsel: instellingen.btwStelsel ?? 'factuur',
           });
         }
         setTemplates(emailTemplates);
@@ -855,6 +860,11 @@ export function InstellingenPage() {
         // Kosten gaan per batch van 50. Zonder deze melding leest een halve
         // batch als "klaar" terwijl er nog een rest openstaat.
         setSsKostenResterend(result.kostenResterend ?? 0);
+        // Regels die misgingen én velden die SnelStart afwees: die verdwenen
+        // eerder in de serverlogs, waardoor je naar "0 geboekt" zat te kijken
+        // zonder te weten waarom.
+        setSsFouten(result.fouten || []);
+        setSsMeldingen(result.meldingen || []);
         const refreshed = await getConnection('snelstart');
         if (refreshed) setSsConnection(refreshed);
       } else {
@@ -864,6 +874,36 @@ export function InstellingenPage() {
       toast.error(err.message || 'Synchroniseren mislukt');
     } finally {
       setSsImporting(false);
+    }
+  };
+
+  // Alle snelstart_id's wissen. Dubbele bevestiging: dit leidt tot opnieuw
+  // boeken, en als de administratie ongewijzigd is levert dat dubbele posten op.
+  const handleSsReset = async () => {
+    const akkoord = window.confirm(
+      'Koppeling opnieuw opbouwen?\n\n'
+      + 'RUIM EERST OP IN SNELSTART.\n'
+      + 'Deze knop wist alleen onze verwijzingen; in SnelStart blijft alles staan. '
+      + 'Verwijder daar eerst de boekingen die opnieuw moeten, anders weigert SnelStart '
+      + 'ze met "het factuurnummer bestaat al" en krijg je dubbele kostenposten.\n\n'
+      + 'Daarna worden klanten, leveranciers, facturen en kosten bij de volgende '
+      + 'synchronisatie opnieuw geboekt.\n\n'
+      + 'Gebruik dit alleen na opruimen in SnelStart of bij een wissel van administratie.'
+    );
+    if (!akkoord) return;
+    setSsResetting(true);
+    try {
+      const r = await resetSnelStartKoppeling();
+      toast.success(
+        `Koppeling gereset: ${r.klanten} klanten, ${r.leveranciers} leveranciers, `
+        + `${r.facturen} facturen en ${r.kosten} kosten worden opnieuw geboekt.`
+      );
+      const refreshed = await getConnection('snelstart');
+      if (refreshed) setSsConnection(refreshed);
+    } catch (err) {
+      toast.error(err.message || 'Resetten mislukt');
+    } finally {
+      setSsResetting(false);
     }
   };
 
@@ -1473,6 +1513,22 @@ export function InstellingenPage() {
                 value={standaardForm.btw_pct}
                 onChange={e => setStandaard('btw_pct', e.target.value)}
               />
+            </div>
+            <div className="f s2">
+              <label>BTW-stelsel</label>
+              <select
+                value={standaardForm.btw_stelsel || 'factuur'}
+                onChange={e => setStandaard('btw_stelsel', e.target.value)}
+              >
+                <option value="factuur">Factuurstelsel — omzet telt op factuurdatum</option>
+                <option value="kas">Kasstelsel — omzet telt op betaaldatum</option>
+              </select>
+              <span style={{ fontSize: '.75rem', color: 'var(--dl)', marginTop: 4, lineHeight: 1.4 }}>
+                Bij het factuurstelsel draag je btw af zodra je factureert, ook als de klant nog niet betaald heeft.
+                Bij het kasstelsel pas als het geld binnen is. De meeste kleine ondernemers zitten op het
+                factuurstelsel; twijfel je, kijk dan op je aangifte of vraag het je boekhouder.
+                Dit bepaalt in welke periode een factuur valt in de BTW-indicatie.
+              </span>
             </div>
             <div className="f">
               <label>Offerte geldig (dagen)</label>
@@ -2571,6 +2627,32 @@ export function InstellingenPage() {
               </div>
             )}
 
+            {ssFouten.length > 0 && (
+              <div style={{
+                border: '1px solid #fca5a5', background: 'rgba(220,38,38,.07)',
+                borderRadius: 8, padding: '10px 12px', marginBottom: 14, fontSize: '.82rem', color: 'var(--dm)',
+              }}>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                  {ssFouten.length} {ssFouten.length === 1 ? 'regel is' : 'regels zijn'} niet geboekt
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 18, maxHeight: 170, overflowY: 'auto' }}>
+                  {ssFouten.map((f, i) => <li key={i} style={{ marginBottom: 2 }}>{f}</li>)}
+                </ul>
+              </div>
+            )}
+
+            {ssMeldingen.length > 0 && (
+              <div style={{
+                border: '1px solid var(--warn-bd, #e0b050)', background: 'var(--warn-bg, rgba(224,176,80,.10))',
+                borderRadius: 8, padding: '10px 12px', marginBottom: 14, fontSize: '.82rem', color: 'var(--dm)',
+              }}>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>Velden overgeslagen</div>
+                <ul style={{ margin: 0, paddingLeft: 18 }}>
+                  {ssMeldingen.map((m, i) => <li key={i} style={{ marginBottom: 2 }}>{m}</li>)}
+                </ul>
+              </div>
+            )}
+
             {ssKostenResterend > 0 && (
               <div style={{
                 border: '1px solid var(--warn-bd, #e0b050)', background: 'var(--warn-bg, rgba(224,176,80,.10))',
@@ -2629,12 +2711,25 @@ export function InstellingenPage() {
                 </span>
               )}
               {ssConnection?.connected && !ssEditing ? (
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => setSsEditing(true)}
-                >
-                  Wijzigen
-                </button>
+                <>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setSsEditing(true)}
+                  >
+                    Wijzigen
+                  </button>
+                  {/* Na het intrekken van een sleutel of het wisselen van
+                      administratie wijzen de opgeslagen verwijzingen naar niets,
+                      en slaat de sync alles over als "al gesynchroniseerd". */}
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleSsReset}
+                    disabled={ssResetting}
+                    title="Wist onze verwijzingen naar SnelStart. Ruim eerst op in SnelStart zelf, anders botsen de factuurnummers."
+                  >
+                    {ssResetting ? 'Bezig...' : 'Koppeling opnieuw opbouwen'}
+                  </button>
+                </>
               ) : (
                 <>
                   <button
