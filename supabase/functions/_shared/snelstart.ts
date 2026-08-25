@@ -359,11 +359,6 @@ export async function pushVerkoopboeking(
   return { snelstart_id: snelstartId, already_synced: false }
 }
 
-// Vaste verzamelleverancier waaronder handmatige BossBase-kosten in SnelStart
-// worden geboekt. De boekingen staan op vraagposten + markering, dus de
-// boekhouder herverdeelt ze in SnelStart naar de echte leverancier/kostenpost.
-const DIVERSEN_LEVERANCIER = 'BossBase kosten (controleren)'
-
 // ── Relaties aanmaken met terugval op geweigerde velden ─────────────────────
 // SnelStart valideert optionele velden streng: één ongeldig btw-nummer of IBAN
 // laat de HELE relatie mislukken, en daarmee elke factuur of kostenpost die
@@ -493,18 +488,6 @@ export async function ensureLeverancier(
   return relatieId
 }
 
-export async function ensureDiversenLeverancier(clientKey: string, relaties?: any[]): Promise<string> {
-  const lijst = relaties ?? await ssFetchAll(clientKey, '/relaties')
-  const match = lijst.find((r: any) => (r?.naam || '').trim().toLowerCase() === DIVERSEN_LEVERANCIER.toLowerCase())
-  if (match?.id) return match.id
-  const created = await ssFetch(clientKey, '/relaties', {
-    method: 'POST',
-    body: JSON.stringify({ relatiesoort: ['Leverancier'], naam: DIVERSEN_LEVERANCIER }),
-  })
-  if (!created?.id) throw new Error('Kon verzamelleverancier voor kosten niet aanmaken')
-  return created.id
-}
-
 // ── Bijlagen ────────────────────────────────────────────────────────────────
 // Een boeking zonder bon is voor de boekhouding weinig waard. job_costs.bijlage_url
 // bevat een JSON-array met paden in de PRIVÉ bucket kosten-bijlagen; die halen we
@@ -628,21 +611,23 @@ function inkoopGrootboekVoorKost(gbs: any[], categorie: string, pct: number): { 
 // onbekend of grootboek ontbreekt), dan blijft de markering + "controleren"
 // staan zodat de boekhouder hem herverdeelt. Idempotent via job_costs.snelstart_id.
 //
-// `leverancierId` is de verzamelrelatie: die wordt alleen gebruikt als de
-// kostenpost zelf geen leverancier heeft ingevuld.
+// Een leverancier is verplicht. Vroeger viel een kost zonder leverancier terug
+// op een verzamelrelatie; dat leverde een fictieve relatie in de boekhouding op
+// en verplaatste het uitzoekwerk naar de boekhouder. Nu weigert de boeking, zodat
+// het bij de bron wordt opgelost.
 export async function pushInkoopboeking(
-  admin: any, clientKey: string, cost: any, leverancierId: string, grootboeken: any[],
+  admin: any, clientKey: string, cost: any, grootboeken: any[],
   bekendeRelaties?: any[], meldingen?: string[],
 ) {
   if (cost.snelstart_id) return { snelstart_id: cost.snelstart_id, already_synced: true }
 
-  // Echte leverancier als die bekend is; anders de verzamelrelatie. Zo staat er
-  // geen fictieve relatie in de boekhouding voor kosten waarvan we de
-  // leverancier wél weten. cost.leveranciers komt uit de join op de export-query.
-  let relatieId = leverancierId
-  if (cost.leveranciers?.naam) {
-    const eigen = await ensureLeverancier(admin, clientKey, cost.leveranciers, bekendeRelaties, meldingen)
-    if (eigen) relatieId = eigen
+  // cost.leveranciers komt uit de join op de export-query.
+  if (!cost.leveranciers?.naam) {
+    throw new Error('Geen leverancier ingevuld — vul die aan bij de kostenpost en synchroniseer opnieuw')
+  }
+  const relatieId = await ensureLeverancier(admin, clientKey, cost.leveranciers, bekendeRelaties, meldingen)
+  if (!relatieId) {
+    throw new Error(`Leverancier "${cost.leveranciers.naam}" kon niet in de boekhouding worden aangemaakt`)
   }
 
   const pct = Number(cost.btw_percentage ?? 21)

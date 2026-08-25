@@ -159,11 +159,19 @@ export default function LeveranciersPage({ openLeverancier }) {
   );
 
   const remove = async l => {
+    // Een leverancier met kosten kan niet meer weg: die kosten zouden hun
+    // relatie verliezen en daarmee niet meer naar de boekhouding kunnen. Zet hem
+    // op inactief — dan verdwijnt hij uit de keuzelijsten maar blijft de
+    // koppeling met bestaande kosten intact.
     const gekoppeld = totalen[l.id]?.aantal || 0;
-    const vraag = gekoppeld
-      ? `"${l.naam}" verwijderen? Er ${gekoppeld === 1 ? 'hangt 1 kostenpost' : `hangen ${gekoppeld} kostenposten`} aan. Die blijven bestaan, maar raken hun leverancier kwijt.`
-      : 'Weet je zeker dat je deze leverancier wilt verwijderen?';
-    if (!confirm(vraag)) return;
+    if (gekoppeld) {
+      toast.error(
+        `"${l.naam}" kan niet verwijderd worden: er ${gekoppeld === 1 ? 'hangt 1 kostenpost' : `hangen ${gekoppeld} kostenposten`} aan. `
+        + 'Zet hem op inactief, dan verdwijnt hij uit de keuzelijsten.',
+      );
+      return;
+    }
+    if (!confirm('Weet je zeker dat je deze leverancier wilt verwijderen?')) return;
     try {
       await deleteLeverancier(l.id);
       setLeveranciers(ls => ls.filter(x => x.id !== l.id));

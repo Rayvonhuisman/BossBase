@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient, isScheduledCall } from "../_shared/scheduledSync.ts"
-import { ssFetch, ssFetchAll, forEachSnelStartCompany, pushVerkoopboeking, getActieveGrootboeken, ensureRelatie, ensureDiversenLeverancier, pushInkoopboeking, pushKostenBijlagen } from "../_shared/snelstart.ts"
+import { ssFetch, ssFetchAll, forEachSnelStartCompany, pushVerkoopboeking, getActieveGrootboeken, ensureRelatie, pushInkoopboeking, pushKostenBijlagen } from "../_shared/snelstart.ts"
 
 // Kosten/facturen-synchronisatie met SnelStart, twee richtingen:
 //   * EXPORT (altijd): verzonden/betaalde BossBase-facturen zonder snelstart_id
@@ -203,10 +203,15 @@ async function importKosten(
 }
 
 // Export van handmatige kosten: elke BossBase-kostenregel zonder externe bron
-// (dus niet geïmporteerd) wordt een inkoopboeking op vraagposten + markering,
-// onder de verzamelleverancier — de boekhouder controleert en herverdeelt ze in
-// SnelStart. Werkbon-materiaalregels blijven buiten de boekhouding (risico op
-// dubbeltelling met de echte inkoopfactuur van dat materiaal).
+// (dus niet geïmporteerd) wordt een inkoopboeking onder de eigen leverancier van
+// die kostenpost. Werkbon-materiaalregels blijven buiten de boekhouding (risico
+// op dubbeltelling met de echte inkoopfactuur van dat materiaal).
+//
+// Kosten zónder leverancier gaan NIET meer mee. Ze belandden voorheen onder een
+// verzamelrelatie "BossBase kosten (controleren)"; dat zette een fictieve relatie
+// in de boekhouding en verplaatste het uitzoekwerk naar de boekhouder. Sinds de
+// leveranciersplicht kan er niets nieuws meer zonder ontstaan, dus wat overblijft
+// is oude data — die melden we terug zodat iemand hem hier aanvult.
 const KOSTEN_BATCH = 50
 
 // Boekt een batch kostenregels. Apart gehouden zodat exportKosten ook zonder
@@ -220,22 +225,10 @@ async function boekKosten(
   // dezelfde leverancier niet twee relaties aanmaken.
   const relaties = await ssFetchAll(clientKey, '/relaties')
 
-  // De verzamelrelatie "BossBase kosten (controleren)" is nog uitsluitend een
-  // terugval voor kosten van vóór de leveranciersplicht. Hem hier
-  // onvoorwaardelijk aanmaken zette die fictieve relatie in élke administratie,
-  // ook als geen enkele kost hem nodig had — daarom pas op het moment dat er
-  // werkelijk een kost zonder leverancier langskomt.
-  let verzamelId: string | null = null
-  const verzamelrelatie = async () => {
-    if (!verzamelId) verzamelId = await ensureDiversenLeverancier(clientKey, relaties)
-    return verzamelId
-  }
-
   let exported = 0
   for (const cost of lijst) {
     try {
-      const leverancierId = cost.leveranciers?.naam ? '' : await verzamelrelatie()
-      const r = await pushInkoopboeking(supabase, clientKey, cost, leverancierId, grootboeken, relaties, meldingen)
+      const r = await pushInkoopboeking(supabase, clientKey, cost, grootboeken, relaties, meldingen)
       if (r.snelstart_id && !r.already_synced) exported++
     } catch (err: any) {
       console.error(`Kostenregel ${cost.id} exporteren mislukt:`, err.message)
@@ -267,13 +260,26 @@ async function exportKosten(
   // deze batch zat en las dat als "klaar", terwijl er nog een rest was.
   const { count: openstaand } = await filters(
     supabase.from('job_costs').select('id', { count: 'exact', head: true }),
-  )
+  ).not('leverancier_id', 'is', null)
   const totaalOpen = openstaand ?? 0
+
+  // Kosten zonder leverancier blijven staan. Ze stilzwijgend overslaan zou
+  // hetzelfde probleem geven als de verzamelrelatie: niemand die het merkt.
+  const { count: zonderLeverancier } = await filters(
+    supabase.from('job_costs').select('id', { count: 'exact', head: true }),
+  ).is('leverancier_id', null)
+  if (zonderLeverancier) {
+    meldingen.push(
+      `${zonderLeverancier} ${zonderLeverancier === 1 ? 'kostenpost heeft' : 'kostenposten hebben'} geen leverancier `
+      + 'en zijn niet naar de boekhouding gestuurd. Vul de leverancier aan bij Kosten, dan gaan ze mee met de volgende synchronisatie.',
+    )
+  }
 
   const { data: teExporteren, error: exportErr } = await filters(
     supabase.from('job_costs')
       .select('*, leveranciers(id, naam, email, telefoon, mobiel, website, address, postcode, city, kvk_number, btw_number, iban, betaaltermijn_dagen, notities, actief, snelstart_id)'),
   )
+    .not('leverancier_id', 'is', null)
     .order('cost_date', { ascending: true })
     .limit(KOSTEN_BATCH)
   if (exportErr) throw exportErr

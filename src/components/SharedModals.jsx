@@ -666,7 +666,7 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
     werkbon_id: '',
     leverancier_id: '',
   });
-  // Leveranciers om uit te kiezen; lege keuze = boeken op de verzamelrelatie.
+  // Leveranciers om uit te kiezen. Verplicht: zie validate().
   const [leverancierOpties, setLeverancierOpties] = useState([]);
   const [werkbonnen, setWerkbonnen] = useState([]);
   const [projecten, setProjecten] = useState([]);
@@ -746,8 +746,7 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
   const validate = () => {
     const next = {};
     if (!form.cost_date) next.cost_date = 'Kies een datum';
-    // Verplicht: zonder leverancier belandt de kost in de boekhouding onder de
-    // verzamelrelatie en moet iemand hem daar alsnog uitzoeken.
+    // Verplicht: zonder leverancier kan de kost niet naar de boekhouding.
     if (!form.leverancier_id) next.leverancier_id = 'Kies een leverancier';
     regels.forEach((r, i) => {
       if (!r.omschrijving.trim()) next[`r${i}o`] = true;

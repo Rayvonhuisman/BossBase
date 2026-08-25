@@ -99,8 +99,8 @@ export async function updateLeverancier(id, form) {
 }
 
 export async function deleteLeverancier(id) {
-  // job_costs.leverancier_id staat op ON DELETE SET NULL: de kostenposten
-  // blijven bestaan en vallen terug op de verzamelrelatie.
+  // job_costs.leverancier_id staat op ON DELETE RESTRICT: een leverancier met
+  // kosten kan niet weg — die kosten zouden onboekbaar worden. Zet hem inactief.
   const { error } = await supabase.from('leveranciers').delete().eq('id', id)
   if (error) throw error
 }

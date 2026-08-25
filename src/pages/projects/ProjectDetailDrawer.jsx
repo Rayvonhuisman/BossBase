@@ -638,8 +638,7 @@ function KostenTab({ project, canManage }) {
 
   const submit = async () => {
     if (!Number(form.amount) || Number(form.amount) <= 0) { toast.error('Bedrag moet groter zijn dan 0'); return; }
-    // Leverancier is verplicht: zonder relatie belandt de kost in de
-    // boekhouding onder de verzamelrelatie en moet iemand hem daar uitzoeken.
+    // Leverancier is verplicht: zonder relatie kan de kost niet naar de boekhouding.
     if (!form.leverancier_id) { toast.error('Kies een leverancier'); return; }
     setSaving(true);
     try {
