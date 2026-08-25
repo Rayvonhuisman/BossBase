@@ -25,7 +25,7 @@ export const WIDGET_REGISTRY = [
   // ── Financial ─────────────────────────────────────────────
   { type: 'open_pipeline_value',    iconKey: 'brief',   label: 'Open pipelinewaarde',     category: 'financial', defaultSize: 'small', description: 'Totale waarde van alle open deals' },
   { type: 'accepted_value',         iconKey: 'euro',    label: 'Geaccepteerde waarde',    category: 'financial', defaultSize: 'small', description: 'Waarde van akkoord-deals en verder' },
-  { type: 'revenue_month',          iconKey: 'revenue', label: 'Omzet deze maand',        category: 'financial', defaultSize: 'small', description: 'Gefactureerde omzet deze maand' },
+  { type: 'revenue_month',          iconKey: 'revenue', label: 'Omzet deze maand',        category: 'financial', defaultSize: 'small', description: 'Gefactureerd deze maand, excl. btw' },
   { type: 'profit_month',           iconKey: 'trend',   label: 'Winst deze maand',        category: 'financial', defaultSize: 'small', description: 'Geschatte winst op basis van deals' },
   { type: 'costs_per_job',          iconKey: 'costs',   label: 'Kosten per klus',         category: 'financial', defaultSize: 'medium', supportedSizes: ['medium', 'large', 'full'], description: 'Gemiddelde kosten per afgeronde klus' },
   { type: 'costs_month',            iconKey: 'costs',   label: 'Kosten deze maand',        category: 'financial', defaultSize: 'small', description: 'Geschatte kosten afgelopen maand' },
@@ -40,7 +40,7 @@ export const WIDGET_REGISTRY = [
   { type: 'lead_followup',          iconKey: 'call',    label: 'Lead opvolging',          category: 'crm',       defaultSize: 'medium', supportedSizes: ['medium', 'large', 'full'], description: 'Leads gesorteerd op opvolgdatum met belknop' },
   { type: 'conversion_overview',    iconKey: 'pipe',    label: 'Conversie overzicht',     category: 'crm',       defaultSize: 'large',  supportedSizes: ['medium', 'large', 'full'], description: 'Verdeling deals over pipeline fasen' },
   // ── Charts ───────────────────────────────────────────────
-  { type: 'monthly_revenue_chart',   iconKey: 'revenue', label: 'Omzet per maand',         category: 'charts',    defaultSize: 'large', supportedSizes: ['large', 'full'], description: 'Lijngrafiek omzet per maand' },
+  { type: 'monthly_revenue_chart',   iconKey: 'revenue', label: 'Omzet per maand',         category: 'charts',    defaultSize: 'large', supportedSizes: ['large', 'full'], description: 'Lijngrafiek omzet per maand, excl. btw' },
   { type: 'monthly_profit_chart',    iconKey: 'trend',   label: 'Winst per maand',         category: 'charts',    defaultSize: 'large', supportedSizes: ['large', 'full'], description: 'Staafgrafiek winst per maand' },
   { type: 'pipeline_stage_chart',    iconKey: 'pipe',    label: 'Pipeline per fase',       category: 'charts',    defaultSize: 'large', supportedSizes: ['medium', 'large', 'full'], description: 'Waarde per pipeline fase' },
   { type: 'conversion_funnel',       iconKey: 'pipe',    label: 'Conversiefunnel',         category: 'charts',    defaultSize: 'large', supportedSizes: ['medium', 'large', 'full'], description: 'Trechter van lead tot afgerond' },
@@ -49,7 +49,7 @@ export const WIDGET_REGISTRY = [
   { type: 'weekly_hours_histogram',  iconKey: 'hours',   label: 'Uren per week',           category: 'charts',    defaultSize: 'large', supportedSizes: ['medium', 'large', 'full'], description: 'Histogram gewerkte uren per week' },
   { type: 'activities_per_day_chart',iconKey: 'act',     label: 'Activiteiten per dag',    category: 'charts',    defaultSize: 'medium', supportedSizes: ['medium', 'large', 'full'], description: 'Activiteiten per dag van de week' },
   { type: 'lead_source_chart',       iconKey: 'pipe',    label: 'Lead bronnen',            category: 'charts',    defaultSize: 'large', supportedSizes: ['medium', 'large', 'full'], description: 'Verdeling leads per bron' },
-  { type: 'top_customers_chart',     iconKey: 'cust',    label: 'Top klanten',             category: 'charts',    defaultSize: 'large', supportedSizes: ['medium', 'large', 'full'], description: 'Klanten gesorteerd op omzet' },
+  { type: 'top_customers_chart',     iconKey: 'cust',    label: 'Top klanten',             category: 'charts',    defaultSize: 'large', supportedSizes: ['medium', 'large', 'full'], description: 'Klanten gesorteerd op dealwaarde' },
 ];
 
 // ── Size helpers ──────────────────────────────────────────────

@@ -8,6 +8,7 @@ import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { useUrlTab } from '../hooks/useUrlTab.js';
 import { listCustomers, deleteCustomer } from '../services/customerService.js';
+import { sumGefactureerd, sumBetaald, sumOpenstaand } from '../services/customerTotalsService.js';
 import { getFacturen, getFactuurRegels, FACTUUR_STATUS_OPTIONS } from '../services/factuurService.js';
 import { getOffertes, getOfferteItems, OFFERTE_STATUS_OPTIONS } from '../services/offerteService.js';
 import { getOffertePdfBase64, getFactuurPdfBase64 } from '../utils/generatePdf.js';
@@ -815,7 +816,7 @@ export function DatabasePage({ openCustomer }) {
     { key: 'Aantal projecten',          width: 16 },
     { key: 'Aantal offertes',           width: 16 },
     { key: 'Aantal facturen',           width: 16 },
-    { key: 'Totaal geoffreerd',         width: 18 },
+    { key: 'Totaal gefactureerd',       width: 20 },
     { key: 'Totaal betaald',            width: 16 },
     { key: 'Openstaand bedrag',         width: 18 },
     { key: 'Laatste project naam',      width: 26 },
@@ -832,9 +833,10 @@ export function DatabasePage({ openCustomer }) {
     const lastProject = [...rel.projects].sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''))[0];
     const lastEmail   = [...rel.emails].sort((a,b) => (b.sent_at||'').localeCompare(a.sent_at||''))[0];
 
-    const totaalGeoffreerd = rel.offertes.reduce((s,o) => s + (o.totaalIncl||0), 0);
-    const totaalBetaald    = rel.facturen.filter(f => f.status === 'betaald' && !f.isCredit).reduce((s,f) => s + (f.totaalIncl||0), 0);
-    const openstaand       = rel.facturen.filter(f => f.status !== 'betaald' && !f.isCredit).reduce((s,f) => s + (f.totaalIncl||0), 0);
+    // Zelfde definitie als de klantenlijst, de klantkaart en Financiën.
+    const totaalGefactureerd = sumGefactureerd(rel.facturen);
+    const totaalBetaald      = sumBetaald(rel.facturen);
+    const openstaand         = sumOpenstaand(rel.facturen);
 
     const fmtEuro = n => n > 0 ? Number(n).toFixed(2).replace('.', ',') : '0,00';
 
@@ -853,7 +855,7 @@ export function DatabasePage({ openCustomer }) {
       'Aantal projecten':           rel.projects.length,
       'Aantal offertes':            rel.offertes.length,
       'Aantal facturen':            rel.facturen.filter(f => !f.isCredit).length,
-      'Totaal geoffreerd':          fmtEuro(totaalGeoffreerd),
+      'Totaal gefactureerd':        fmtEuro(totaalGefactureerd),
       'Totaal betaald':             fmtEuro(totaalBetaald),
       'Openstaand bedrag':          fmtEuro(openstaand),
       'Laatste project naam':       lastProject?.name || '',
@@ -1060,8 +1062,9 @@ export function DatabasePage({ openCustomer }) {
       const rel = byCustomer[c.id] || { projects: [], facturen: [], emails: [] };
       const lastProject = [...rel.projects].sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''))[0];
       const lastEmail   = [...rel.emails].sort((a,b) => (b.sent_at||'').localeCompare(a.sent_at||''))[0];
-      const omzet = rel.facturen.filter(f => f.status === 'betaald' && !f.isCredit).reduce((s,f) => s + (f.totaalIncl||0), 0);
-      m[c.id] = { lastProject, lastEmail, omzet, projectCount: rel.projects.length };
+      // Dit is het betaalde bedrag, niet de omzet excl. BTW van het dashboard.
+      const betaald = sumBetaald(rel.facturen);
+      m[c.id] = { lastProject, lastEmail, betaald, projectCount: rel.projects.length };
     });
     return m;
   }, [customers, byCustomer]);
@@ -1404,7 +1407,7 @@ export function DatabasePage({ openCustomer }) {
             <div style={TH}>Laatste project</div>
             <div style={TH}>Laatste mail</div>
             <div style={{ ...TH, textAlign: 'center' }}>Projecten</div>
-            <div style={{ ...TH, textAlign: 'right' }}>Omzet</div>
+            <div style={{ ...TH, textAlign: 'right' }}>Betaald</div>
             <div style={{ ...TH, textAlign: 'right' }}>Acties</div>
           </div>
 
@@ -1476,8 +1479,8 @@ export function DatabasePage({ openCustomer }) {
                     {meta.projectCount}
                   </span>
                 </div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: meta.omzet > 0 ? 'var(--pd)' : 'var(--dl)', textAlign: 'right' }}>
-                  {meta.omzet > 0 ? fmt(meta.omzet) : '—'}
+                <div style={{ fontSize: 13, fontWeight: 700, color: meta.betaald > 0 ? 'var(--pd)' : 'var(--dl)', textAlign: 'right' }}>
+                  {meta.betaald > 0 ? fmt(meta.betaald) : '—'}
                 </div>
 
                 {/* ── Acties kolom ── */}

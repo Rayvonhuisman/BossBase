@@ -12,6 +12,7 @@ import { getCompanyId } from '../lib/currentCompany.js';
 import { createCalendarEvent } from '../services/calendarService.js';
 import { createJobCost, updateJobCost } from '../services/jobCostService.js'
 import { listLeveranciers } from '../services/leverancierService.js'
+import LeverancierSelect from './LeverancierSelect.jsx'
 import { categorieOptiesMet, STANDAARD_CATEGORIE } from '../lib/kostenCategorieen.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
 import { getProjects } from '../services/projectsService.js';
@@ -872,20 +873,15 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
           </div>
           <div className="f">
             <label>Leverancier *</label>
-            <select
+            <LeverancierSelect
               value={form.leverancier_id}
-              onChange={e => setField('leverancier_id', e.target.value)}
-              style={errors.leverancier_id ? { borderColor: '#dc2626' } : undefined}
-            >
-              <option value="">— Kies leverancier —</option>
-              {leverancierOpties.map(l => <option key={l.id} value={l.id}>{l.naam}</option>)}
-            </select>
+              onChange={v => setField('leverancier_id', v)}
+              leveranciers={leverancierOpties}
+              onLijstGewijzigd={g => setLeverancierOpties(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
+              verplicht
+              fout={Boolean(errors.leverancier_id)}
+            />
             {errors.leverancier_id && <span className="bb-err">{errors.leverancier_id}</span>}
-            {leverancierOpties.length === 0 && (
-              <span style={{ fontSize: '.72rem', color: 'var(--dl)' }}>
-                Nog geen leveranciers — voeg er een toe via Relaties → Leveranciers.
-              </span>
-            )}
           </div>
           <div className="f s2">
             <label>Datum *</label>

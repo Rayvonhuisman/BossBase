@@ -22,6 +22,23 @@ export async function getConnection(provider = 'moneybird') {
   }
 }
 
+// Welke boekhoudkoppelingen staan er actief? Eén RPC voor alle providers, zodat
+// een scherm niet drie losse vragen stelt. Wordt gebruikt om de sync-indicator
+// alleen te tonen als er echt een koppeling is: zonder deze controle bleef een
+// oud moneybird_id/snelstart_id een vinkje geven nadat de koppeling was
+// losgekoppeld.
+export async function getActieveKoppelingen() {
+  const companyId = await getCompanyId()
+  if (!companyId) return {}
+  const { data, error } = await supabase.rpc('get_accounting_status')
+  if (error) return {}
+  const actief = {}
+  for (const row of (data || [])) {
+    if (row?.provider) actief[row.provider] = !!row.connected
+  }
+  return actief
+}
+
 // Opslaan loopt via de SECURITY DEFINER-RPC: een directe upsert faalt sinds de
 // token-afscherming (EXCLUDED.<geheime kolom> vereist SELECT-recht). De RPC
 // geeft dezelfde niet-geheime statusrij terug als get_accounting_status.

@@ -6,6 +6,7 @@ import { usePermissions } from '../../hooks/usePermissions.js';
 import { useToast } from '../../lib/toast.jsx';
 import { useData } from '../../lib/dataContext.jsx';
 import { getUrenregistratie } from '../../services/urenService.js';
+import { sumOmzetExclBtw } from '../../services/customerTotalsService.js';
 import { loadUserWidgets, saveUserWidgets } from '../../services/dashboardWidgetService.js';
 import { getDefaultWidgets, DEFAULT_LAYOUTS, DEFAULT_LAYOUT_KEY, DEFAULT_MEDEWERKER_LAYOUT_KEY, normalizeWidgetSize } from '../../data/widgetRegistry.js';
 import { DashboardCustomizeBar } from './DashboardCustomizeBar.jsx';
@@ -80,12 +81,14 @@ function deriveCharts({ deals = [], activities = [], offertes = [], customers = 
   const monthKey = v => { const x = new Date(v); return isNaN(x.getTime()) ? null : x.getFullYear() * 12 + x.getMonth(); };
 
   // ── Omzet/winst uit ECHTE facturen + job_costs (excl. BTW) ──
+  // Welke facturen meetellen komt uit customerTotalsService, net als op
+  // Financiën en de klantenlijst — concepten tellen dus niet mee.
   const months = [];
   for (let k = 5; k >= 0; k--) {
     const d = new Date(now.getFullYear(), now.getMonth() - k, 1);
     months.push({ label: MONTHS_NL[d.getMonth()], key: d.getFullYear() * 12 + d.getMonth() });
   }
-  const revInMonth = mk => facturen.reduce((s, f) => (monthKey(f.factuurdatum) === mk ? s + (Number(f.totaalExcl) || 0) : s), 0);
+  const revInMonth = mk => sumOmzetExclBtw(facturen.filter(f => monthKey(f.factuurdatum) === mk));
   const costInMonth = mk => jobCosts.reduce((s, c) => (monthKey(c.date) === mk ? s + (Number(c.amt) || 0) : s), 0);
   const monthlyRevenueAll = months.map(m => ({ label: m.label, value: Math.round(revInMonth(m.key)) }));
   const monthlyProfitAll = months.map(m => ({ label: m.label, value: Math.round(revInMonth(m.key) - costInMonth(m.key)) }));

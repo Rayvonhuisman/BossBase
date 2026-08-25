@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import SyncIndicator from '../components/SyncIndicator.jsx';
 import DOMPurify from 'dompurify';
 import { Bold, Calendar, Check, Edit2, Euro, FileText, Folder, Italic, List, ListOrdered, Maximize2, Minimize2, PenLine, Plus, RotateCcw, ShoppingCart, Sparkles, Underline, User, Wrench, X } from 'lucide-react';
 import {
@@ -6,6 +7,7 @@ import {
   fmt, custById, stageLabel, stageCol, Av, StatusBadge, ModalX, CostCategoryBadge,
 } from '../bb-shared.jsx';
 import { createCustomer, deleteCustomer, getCustomer, listCustomers, updateCustomer } from '../services/customerService.js';
+import { customerTotals, listCustomersWithTotals } from '../services/customerTotalsService.js';
 import { getKlantNotities, addKlantNotitie, getTijdlijnByCustomer, logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { NoteEditor, renderNote } from '../components/NoteEditor.jsx';
 import NotitieLog, { toLogItem } from '../components/NotitieLog.jsx';
@@ -185,12 +187,8 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
 
   const cDeals  = [];
   const cQuotes = [];
-  const totalGeoffreerd = cOffertes
-    .filter(o => ['concept', 'verzonden', 'geaccepteerd'].includes(o.status))
-    .reduce((s, o) => s + o.totaalIncl, 0);
-  const totalBetaald = cFacturen
-    .filter(f => !f.isCredit && !f.gecrediteerd && f.status === 'betaald')
-    .reduce((s, f) => s + f.totaalIncl, 0);
+  // Zelfde definitie als de klantenlijst, Financiën en de database-export.
+  const { total: totalGefactureerd, paid: totalBetaald } = customerTotals({ facturen: cFacturen });
   const totalCosts = cCosts.reduce((s, x) => s + x.amt, 0);
   const profit = totalBetaald - totalCosts;
   const margin = totalBetaald > 0 ? Math.round((profit / totalBetaald) * 100) : 0;
@@ -471,23 +469,19 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
           </div>
           <div style={{ fontSize: '.82rem', color: 'var(--dmu)', marginBottom: 10 }}>{c.company} · {c.city}</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-start', marginLeft: 0, paddingLeft: 0 }}>
-            {(c.moneybirdId || c.afasId || c.snelstartId) && (
-              <span
-                className="sync-indicator"
-                data-tooltip={c.moneybirdId ? 'Gesynchroniseerd met Moneybird' : c.afasId ? 'Gesynchroniseerd met AFAS' : 'Gesynchroniseerd met SnelStart'}
-              >
-                <Check size={15} style={{ color: '#15A34A' }} />
-              </span>
-            )}
+            {/* Toont zichzelf alleen als de betreffende koppeling ook echt
+                actief is — een oud id van een losgekoppelde boekhouding gaf
+                anders nog steeds een vinkje. */}
+            <SyncIndicator entiteit={c} />
           </div>
         </div>
       </div>
 
-      {/* Quick stats (projectbedragen) — geoffreerd/betaald/kosten/winst per klant */}
+      {/* Quick stats (projectbedragen) — gefactureerd/betaald/kosten/winst per klant */}
       {can('projectbedragen') && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
           {[
-            { label: 'Totaal geoffreerd', val: fmt(totalGeoffreerd) },
+            { label: 'Gefactureerd',      val: fmt(totalGefactureerd) },
             { label: 'Betaald',           val: fmt(totalBetaald),    green: totalBetaald > 0 },
             { label: 'Totale kosten',     val: fmt(totalCosts) },
             { label: 'Winst',             val: fmt(profit),    green: profit > 0, red: profit < 0 },
@@ -768,7 +762,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 14 }}>
             {[
               { label: 'Totale kosten',    val: fmt(totalCosts) },
-              { label: 'Omzet (betaald)',  val: fmt(totalBetaald) },
+              { label: 'Betaald',          val: fmt(totalBetaald) },
               { label: 'Winst / marge',    val: `${fmt(profit)} (${margin}%)`, green: profit > 0 },
             ].map((s, i) => (
               <div key={i} className="sc" style={{ padding: '14px 16px' }}>
@@ -1126,7 +1120,8 @@ export function CustomersPage({ openCustomer }) {
 
   const reload = () => {
     setLoading(true);
-    listCustomers()
+    // Inclusief de bedragen per klant — die staan niet in de customers-tabel.
+    listCustomersWithTotals()
       .then(data => { setCustomers(data); setError(''); })
       .catch(err => setError(err.message || 'Klanten laden is mislukt.'))
       .finally(() => setLoading(false));
@@ -1195,7 +1190,7 @@ export function CustomersPage({ openCustomer }) {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 'auto' }}>
                   <div>
-                    <div style={{ fontSize: '.68rem', color: 'var(--dl)' }}>Geoffreerd</div>
+                    <div style={{ fontSize: '.68rem', color: 'var(--dl)' }}>Gefactureerd</div>
                     <div style={{ fontWeight: 700, fontSize: '.88rem' }}>{fmt(c.total)}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
@@ -1213,7 +1208,7 @@ export function CustomersPage({ openCustomer }) {
       ) : (
         <div className="tw afu2">
           <table className="dt">
-            <thead><tr><th>Klant</th><th>Telefoonnummer</th><th>Stad</th><th>Totaal</th><th>Betaald</th><th></th></tr></thead>
+            <thead><tr><th>Klant</th><th>Telefoonnummer</th><th>Stad</th><th>Gefactureerd</th><th>Betaald</th><th></th></tr></thead>
             <tbody>
               {filtered.map(c => (
                 <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => openCustomer(c.id)}>
@@ -1222,7 +1217,7 @@ export function CustomersPage({ openCustomer }) {
                   <td>{c.city}</td>
                   <td style={{ fontWeight: 700 }}>{fmt(c.total)}</td>
                   <td style={{ fontWeight: 700, color: '#15A34A' }}>{fmt(c.paid)}</td>
-                  <td><button className="btn-icon" onClick={e => { e.stopPropagation(); openCustomer(c.id); }}>{I.arrow_r}</button>{can('klanten_verwijderen') && <button className="btn-icon" onClick={e => { e.stopPropagation(); remove(c.id); }}>{I.trash}</button>}</td>
+                  <td>{can('klanten_verwijderen') && <button className="btn-icon" onClick={e => { e.stopPropagation(); remove(c.id); }}>{I.trash}</button>}</td>
                 </tr>
               ))}
             </tbody>
@@ -1233,7 +1228,9 @@ export function CustomersPage({ openCustomer }) {
         <NewCustomerModal
           onClose={() => setShowNew(false)}
           onSaved={created => {
-            setCustomers(cs => [created, ...cs]);
+            // Verse klant heeft nog geen offertes/facturen — bedragen op 0 zodat
+            // de kaart geen NaN toont tot de volgende reload.
+            setCustomers(cs => [{ total: 0, paid: 0, openstaand: 0, ...created }, ...cs]);
             bumpRefresh?.();
             openCustomer?.(created.id);
           }}

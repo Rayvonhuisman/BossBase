@@ -190,11 +190,22 @@ async function boekKosten(supabase: any, clientKey: string, lijst: any[]): Promi
   // en zet nieuwe relaties in deze lijst bij, zodat twee kostenregels van
   // dezelfde leverancier niet twee relaties aanmaken.
   const relaties = await ssFetchAll(clientKey, '/relaties')
-  const leverancierId = await ensureDiversenLeverancier(clientKey, relaties)
+
+  // De verzamelrelatie "BossBase kosten (controleren)" is nog uitsluitend een
+  // terugval voor kosten van vóór de leveranciersplicht. Hem hier
+  // onvoorwaardelijk aanmaken zette die fictieve relatie in élke administratie,
+  // ook als geen enkele kost hem nodig had — daarom pas op het moment dat er
+  // werkelijk een kost zonder leverancier langskomt.
+  let verzamelId: string | null = null
+  const verzamelrelatie = async () => {
+    if (!verzamelId) verzamelId = await ensureDiversenLeverancier(clientKey, relaties)
+    return verzamelId
+  }
 
   let exported = 0
   for (const cost of lijst) {
     try {
+      const leverancierId = cost.leveranciers?.naam ? '' : await verzamelrelatie()
       const r = await pushInkoopboeking(supabase, clientKey, cost, leverancierId, grootboeken, relaties)
       if (r.snelstart_id && !r.already_synced) exported++
     } catch (err: any) {

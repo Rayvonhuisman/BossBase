@@ -7,6 +7,7 @@ import {
 import { createCalendarEvent, listCalendarEvents, updateCalendarEvent } from '../services/calendarService.js';
 import { createJobCost, deleteJobCost, listJobCosts, updateJobCost, getKostenBijlageUrl, kostenPerGroep, kostenSplitsing } from '../services/jobCostService.js'
 import { listLeveranciers } from '../services/leverancierService.js'
+import LeverancierSelect from '../components/LeverancierSelect.jsx'
 import { categorieOptiesMet } from '../lib/kostenCategorieen.js';
 import { getFacturen, getAllFactuurRegels } from '../services/factuurService.js';
 import { getConnection } from '../services/accountingService.js';
@@ -14,6 +15,7 @@ import { getBtwPeriodes, syncBtwData } from '../services/btwService.js';
 import { getOffertes } from '../services/offerteService.js';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { listCustomers } from '../services/customerService.js';
+import { sumGefactureerd, sumBetaald, sumOpenstaand, withCustomerTotals } from '../services/customerTotalsService.js';
 import { listDeals } from '../services/dealService.js';
 import { listActivities } from '../services/activityService.js';
 import { getConnectionStatus, startGoogleCalendarConnect, disconnectGoogleCalendar } from '../services/googleCalendarService.js';
@@ -893,8 +895,21 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
     } catch { setDeleting(false); }
   };
 
+  // Leverancier is verplicht omdat de kostenpost onder die relatie in de
+  // boekhouding landt. Dit scherm bewaart per veld en heeft geen opslaan-knop,
+  // dus dwingen we het af bij het sluiten: zolang er geen leverancier staat,
+  // blijft het scherm open met een melding. Werkbon-materiaal is uitgezonderd —
+  // die spiegelregels worden niet geëxporteerd.
+  const isWerkbonMateriaal = Boolean(cost.werkbonMateriaalId);
+  const levOntbreekt = !leverancierId && !isWerkbonMateriaal;
+  const [levGemeld, setLevGemeld] = useState(false);
+  const probeerSluiten = () => {
+    if (levOntbreekt) { setLevGemeld(true); return; }
+    onClose();
+  };
+
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={probeerSluiten}>
       <div className="modal" style={{ maxWidth: 500 }} onClick={e => e.stopPropagation()}>
         <div className="modal-hd">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -904,7 +919,7 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
               : <span style={{ fontSize: '.72rem', fontWeight: 600, color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 5, padding: '2px 7px' }}>Handmatig</span>
             }
           </div>
-          <ModalX onClose={onClose} />
+          <ModalX onClose={probeerSluiten} />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)' }}>
           {/* Rij 1: Bedrag · Datum · BTW */}
@@ -945,11 +960,20 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
               {/* Stond hier als één veld "Leverancier / omschrijving" dat naar
                   description schreef. Gesplitst, zodat de leverancier als echte
                   relatie naar de boekhouding kan i.p.v. losse tekst te zijn. */}
-              <label>Leverancier <Saved field="leverancier_id" /></label>
-              <select value={leverancierId} onChange={e => { setLeverancierId(e.target.value); save('leverancier_id', e.target.value); }}>
-                <option value="">Geen leverancier</option>
-                {leverancierOpties.map(l => <option key={l.id} value={l.id}>{l.naam}</option>)}
-              </select>
+              <label>Leverancier {!isWerkbonMateriaal && '*'} <Saved field="leverancier_id" /></label>
+              <LeverancierSelect
+                value={leverancierId}
+                onChange={v => { setLeverancierId(v); save('leverancier_id', v); if (v) setLevGemeld(false); }}
+                leveranciers={leverancierOpties}
+                onLijstGewijzigd={g => setLeverancierOpties(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
+                verplicht={!isWerkbonMateriaal}
+                fout={levGemeld && levOntbreekt}
+              />
+              {levGemeld && levOntbreekt && (
+                <div style={{ color: '#dc2626', fontSize: '.78rem', marginTop: 4 }}>
+                  Kies een leverancier — zonder leverancier kan deze kostenpost niet naar de boekhouding.
+                </div>
+              )}
             </div>
             <div className="f" style={{ flex: '2 1 200px', minWidth: 0 }}>
               <label>Omschrijving <Saved field="description" /></label>
@@ -1019,6 +1043,10 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
 }
 
 // ── COSTS ────────────────────────────────────────────────────
+// Werkbonmateriaal is uitgezonderd van de leveranciersplicht: die spiegelregels
+// worden niet naar de boekhouding geëxporteerd (exportKosten filtert ze eruit).
+const isWerkbonMateriaalKost = c => Boolean(c?.werkbonMateriaalId ?? c?.werkbon_materiaal_id);
+
 export function CostsPage() {
   const { refreshKey, bumpRefresh } = useProfile();
   const { guardSchrijven, planModal } = usePlanGuard();
@@ -1032,13 +1060,15 @@ export function CostsPage() {
   const [error, setError] = useState('');
   const [selectedCost, setSelectedCost] = useState(null);
   const [mbAdminId, setMbAdminId] = useState('');
+  const [leveranciers, setLeveranciers] = useState([]);
   React.useEffect(() => {
     setLoading(true);
-    Promise.all([listJobCosts(), listCustomers(), listDeals(), getConnection()])
-      .then(([costData, customerData, dealData, conn]) => {
+    Promise.all([listJobCosts(), listCustomers(), listDeals(), getConnection(), listLeveranciers()])
+      .then(([costData, customerData, dealData, conn, levData]) => {
         setCosts(costData);
         setCustomers(customerData);
         setDeals(dealData);
+        setLeveranciers(levData);
         if (conn?.administrationId) setMbAdminId(conn.administrationId);
         setError('');
       })
@@ -1052,6 +1082,9 @@ export function CostsPage() {
   });
   const total = filtered.reduce((s, c) => s + c.amt, 0);
   const groepTotalen = kostenPerGroep(filtered);
+  // Kosten zonder leverancier kunnen niet naar de boekhouding. Werkbonmateriaal
+  // telt niet mee: die regels worden sowieso niet geëxporteerd.
+  const zonderLeverancier = costs.filter(c => !c.leverancierId && !isWerkbonMateriaalKost(c));
   // Kostprijs (alles) vs boekhoudkosten (wat naar SnelStart/Moneybird gaat).
   const splitsing = kostenSplitsing(filtered);
   const cats = [...new Set(costs.map(c => c.cat))];
@@ -1101,6 +1134,22 @@ export function CostsPage() {
           Zo wordt dezelfde inkoop niet twee keer geteld.
         </div>
       )}
+      {zonderLeverancier.length > 0 && (
+        <div className="afu2" style={{
+          fontSize: '.82rem', color: 'var(--dm)',
+          background: 'var(--warn-bg, rgba(224,176,80,.10))', border: '1px solid var(--warn-bd, #e0b050)',
+          borderRadius: 'var(--r8)', padding: '10px 12px', marginBottom: 14,
+        }}>
+          <strong>
+            {zonderLeverancier.length} {zonderLeverancier.length === 1 ? 'kostenpost heeft' : 'kostenposten hebben'} nog geen leverancier
+          </strong>
+          <div style={{ marginTop: 3 }}>
+            Zonder leverancier kunnen ze niet naar de boekhouding. Ze staan hieronder gemarkeerd met “Ontbreekt” —
+            open zo’n regel en kies alsnog een leverancier.
+          </div>
+        </div>
+      )}
+
       <div className="tw afu3">
         <div className="tw-hd">
           <div className="card-title">Kostenregels</div>
@@ -1114,7 +1163,7 @@ export function CostsPage() {
           </div>
         </div>
         <table className="dt">
-          <thead><tr><th>Klant</th><th>Categorie</th><th>Omschrijving</th><th>Bedrag</th><th>Datum</th><th>Bron</th><th></th></tr></thead>
+          <thead><tr><th>Klant</th><th>Categorie</th><th>Omschrijving</th><th>Leverancier</th><th>Bedrag</th><th>Datum</th><th>Bron</th><th></th></tr></thead>
           <tbody>
             {filtered.map(r => {
               const c = customers.find(x => x.id === r.custId);
@@ -1123,6 +1172,19 @@ export function CostsPage() {
                   <td style={{ fontWeight: 600 }}>{r.customerId ? (customers.find(x => x.id === r.customerId)?.name || '—') : r.klantType === 'algemeen' ? 'Algemeen' : (c?.name || '—')}</td>
                   <td><CostCategoryBadge category={r.cat} /></td>
                   <td>{r.desc}</td>
+                  <td>
+                    {r.leverancierId
+                      ? (leveranciers.find(l => l.id === r.leverancierId)?.naam || '—')
+                      : isWerkbonMateriaalKost(r)
+                        ? <span style={{ color: 'var(--dl)', fontSize: '.78rem' }}>via werkbon</span>
+                        : <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '.72rem', fontWeight: 600,
+                            color: '#b45309', background: 'rgba(224,176,80,.14)', border: '1px solid #e0b050',
+                            borderRadius: 4, padding: '1px 6px',
+                          }} title="Zonder leverancier kan deze kostenpost niet naar de boekhouding">
+                            Ontbreekt
+                          </span>}
+                  </td>
                   <td style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
                     {fmt(r.amt)}
                     <span style={{ marginLeft: 5, fontSize: '.68rem', color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 5px', fontWeight: 400 }}>excl. · {r.btwPercentage ?? 21}% btw</span>
@@ -1260,8 +1322,6 @@ export function RevenuePage() {
   }, [mbConnection, btwPeriodeType]);
 
   // ── KPI ──────────────────────────────────────────────────────
-  const isRealFactuur = f => !f.isCredit && !f.gecrediteerd;
-
   const kpiRange = React.useMemo(() => {
     const now = new Date();
     const y = now.getFullYear();
@@ -1287,9 +1347,14 @@ export function RevenuePage() {
   const PERIODE_LABEL = { 'deze-maand': 'deze maand', 'vorige-maand': 'vorige maand', 'dit-jaar': 'dit jaar', 'vorig-jaar': 'vorig jaar', 'aangepast': 'geselecteerde periode' };
   const periodeLabel = PERIODE_LABEL[kpiPeriode] || 'deze periode';
 
-  const omzetPeriode     = facturen.filter(f => isRealFactuur(f) && f.status !== 'concept' && inPeriode(f.factuurdatum)).reduce((s, f) => s + f.totaalIncl, 0);
-  const ontvangenPeriode = facturen.filter(f => isRealFactuur(f) && f.status === 'betaald'  && inPeriode(f.betaaldOp)).reduce((s, f) => s + f.totaalIncl, 0);
-  const openstaand       = facturen.filter(f => isRealFactuur(f) && f.status === 'verzonden').reduce((s, f) => s + f.totaalIncl, 0);
+  // De tegels gebruiken exact dezelfde optellingen als de kolommen per klant
+  // hieronder — alleen het tijdvak verschilt. Elke tegel houdt daarbij zijn
+  // eigen datumveld: gefactureerd kijkt naar de factuurdatum, ontvangen naar de
+  // betaaldatum, en openstaand is een momentopname zonder tijdvak (net als de
+  // kolom Openstaand, die ook alles meetelt wat nog niet binnen is).
+  const omzetPeriode     = sumGefactureerd(facturen.filter(f => inPeriode(f.factuurdatum)));
+  const ontvangenPeriode = sumBetaald(facturen.filter(f => inPeriode(f.betaaldOp)));
+  const openstaand       = sumOpenstaand(facturen);
   const teVerwachten     = offertes.filter(o => o.status === 'geaccepteerd').reduce((s, o) => s + o.totaalIncl, 0);
   const kostenPeriode    = costsData.filter(c => inPeriode(c.date)).reduce((s, c) => s + c.amt, 0);
   const netto            = ontvangenPeriode - kostenPeriode;
@@ -1301,29 +1366,30 @@ export function RevenuePage() {
     const toIso = d => d.toISOString().slice(0, 10);
     const DAY_NL = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'];
 
+    // Eén staaf. Gebruikt dezelfde optellingen als de tegels erboven en de
+    // kolommen per klant eronder; alleen het tijdvak per staaf verschilt.
+    // `raakt` krijgt losse datums en is null-safe.
+    const staaf = (label, raakt) => ({
+      label,
+      gefactureerd: sumGefactureerd(facturen.filter(f => raakt(f.factuurdatum))),
+      ontvangen:    sumBetaald(facturen.filter(f => raakt(f.betaaldOp))),
+      kosten:       costsData.filter(c => raakt(c.date)).reduce((s, c) => s + c.amt, 0),
+    });
+    const opDag    = key => d => d === key;
+    const inBereik = (start, end) => d => Boolean(d) && d >= start && d <= end;
+    const inMaand  = key => d => Boolean(d) && d.startsWith(key);
+
     if (chartPeriod === 'week') {
       return Array.from({ length: 7 }, (_, i) => {
         const d = new Date(now); d.setDate(d.getDate() - 6 + i);
-        const key = toIso(d);
-        return {
-          label: DAY_NL[d.getDay()],
-          gefactureerd: facturen.filter(f => isRealFactuur(f) && f.status !== 'concept' && f.factuurdatum === key).reduce((s, f) => s + f.totaalIncl, 0),
-          ontvangen:    facturen.filter(f => isRealFactuur(f) && f.status === 'betaald' && f.betaaldOp === key).reduce((s, f) => s + f.totaalIncl, 0),
-          kosten:       costsData.filter(c => c.date === key).reduce((s, c) => s + c.amt, 0),
-        };
+        return staaf(DAY_NL[d.getDay()], opDag(toIso(d)));
       });
     }
 
     if (chartPeriod === 'maand') {
       return Array.from({ length: 30 }, (_, i) => {
         const d = new Date(now); d.setDate(d.getDate() - 29 + i);
-        const key = toIso(d);
-        return {
-          label: String(d.getDate()),
-          gefactureerd: facturen.filter(f => isRealFactuur(f) && f.status !== 'concept' && f.factuurdatum === key).reduce((s, f) => s + f.totaalIncl, 0),
-          ontvangen:    facturen.filter(f => isRealFactuur(f) && f.status === 'betaald' && f.betaaldOp === key).reduce((s, f) => s + f.totaalIncl, 0),
-          kosten:       costsData.filter(c => c.date === key).reduce((s, c) => s + c.amt, 0),
-        };
+        return staaf(String(d.getDate()), opDag(toIso(d)));
       });
     }
 
@@ -1331,14 +1397,8 @@ export function RevenuePage() {
       return Array.from({ length: 13 }, (_, i) => {
         const wEnd = new Date(now); wEnd.setDate(wEnd.getDate() - (12 - i) * 7);
         const wStart = new Date(wEnd); wStart.setDate(wEnd.getDate() - 6);
-        const start = toIso(wStart), end = toIso(wEnd);
         const label = `${wStart.getDate()} ${wStart.toLocaleDateString('nl-NL', { month: 'short' }).replace('.', '')}`;
-        return {
-          label,
-          gefactureerd: facturen.filter(f => isRealFactuur(f) && f.status !== 'concept' && f.factuurdatum >= start && f.factuurdatum <= end).reduce((s, f) => s + f.totaalIncl, 0),
-          ontvangen:    facturen.filter(f => isRealFactuur(f) && f.status === 'betaald' && f.betaaldOp >= start && f.betaaldOp <= end).reduce((s, f) => s + f.totaalIncl, 0),
-          kosten:       costsData.filter(c => c.date >= start && c.date <= end).reduce((s, c) => s + c.amt, 0),
-        };
+        return staaf(label, inBereik(toIso(wStart), toIso(wEnd)));
       });
     }
 
@@ -1346,31 +1406,20 @@ export function RevenuePage() {
     return Array.from({ length: 12 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      return {
-        label: d.toLocaleDateString('nl-NL', { month: 'short' }).replace('.', ''),
-        gefactureerd: facturen.filter(f => isRealFactuur(f) && f.status !== 'concept' && f.factuurdatum?.startsWith(key)).reduce((s, f) => s + f.totaalIncl, 0),
-        ontvangen:    facturen.filter(f => isRealFactuur(f) && f.status === 'betaald' && f.betaaldOp?.startsWith(key)).reduce((s, f) => s + f.totaalIncl, 0),
-        kosten:       costsData.filter(c => c.date?.startsWith(key)).reduce((s, c) => s + c.amt, 0),
-      };
+      return staaf(d.toLocaleDateString('nl-NL', { month: 'short' }).replace('.', ''), inMaand(key));
     });
   }, [facturen, costsData, chartPeriod]);
 
   // ── PER KLANT ─────────────────────────────────────────────────
-  // `total` en `paid` komen NIET uit customerService — die zet ze daar bewust op
-  // 0 ("UI helpers — synthesized, not stored"). De hele tabel toonde daardoor €0
-  // en 0% marge, ook in de CSV-export. We tellen ze hier op uit de offertes en
-  // facturen die deze pagina toch al inleest.
-  const rows = customers.map(c => {
-    const geoffreerd = offertes
-      .filter(o => o.customerId === c.id && o.status !== 'concept')
-      .reduce((s, o) => s + (o.totaalIncl || 0), 0);
-    const betaald = facturen
-      .filter(f => f.customerId === c.id && isRealFactuur(f) && f.status === 'betaald')
-      .reduce((s, f) => s + (f.totaalIncl || 0), 0);
+  // `total`, `paid` en `openstaand` komen NIET uit customerService — de
+  // customers-tabel kent die kolommen niet. customerTotalsService leidt ze af
+  // uit de facturen die deze pagina toch al inleest; de klantenlijst, de
+  // klantkaart en de database-export gebruiken exact dezelfde definitie.
+  const rows = withCustomerTotals(customers, { facturen }).map(c => {
     const costs  = costsData.filter(x => x.custId === c.id).reduce((s, x) => s + x.amt, 0);
-    const profit = betaald - costs;
-    const margin = betaald > 0 ? Math.round((profit / betaald) * 100) : 0;
-    return { ...c, total: geoffreerd, paid: betaald, costs, profit, margin };
+    const profit = c.paid - costs;
+    const margin = c.paid > 0 ? Math.round((profit / c.paid) * 100) : 0;
+    return { ...c, costs, profit, margin };
   });
 
   const handleSyncBtw = async () => {
@@ -1386,11 +1435,11 @@ export function RevenuePage() {
 
   const handleExport = () => {
     if (rows.length === 0) { toast.info('Geen financiële data om te exporteren'); return; }
-    const headers = ['Klant', 'Stad', 'Geoffreerd (€)', 'Kosten (€)', 'Betaald (€)', 'Openstaand (€)', 'Nettoresultaat (€)', 'Marge (%)', 'Status'];
+    const headers = ['Klant', 'Stad', 'Gefactureerd (€)', 'Kosten (€)', 'Betaald (€)', 'Openstaand (€)', 'Nettoresultaat (€)', 'Marge (%)', 'Status'];
     const escape = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const csvRows = [
       headers.map(escape).join(','),
-      ...rows.map(r => [r.name, r.city || '', r.total.toFixed(2), r.costs.toFixed(2), r.paid.toFixed(2), (r.total - r.paid).toFixed(2), r.profit.toFixed(2), r.margin, r.stage === 'completed' || r.stage === 'paid' ? 'Afgerond' : 'In uitvoering'].map(escape).join(',')),
+      ...rows.map(r => [r.name, r.city || '', r.total.toFixed(2), r.costs.toFixed(2), r.paid.toFixed(2), r.openstaand.toFixed(2), r.profit.toFixed(2), r.margin, r.stage === 'completed' || r.stage === 'paid' ? 'Afgerond' : 'In uitvoering'].map(escape).join(',')),
     ];
     const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -1415,9 +1464,9 @@ export function RevenuePage() {
   const CHART_PERIOD_LABELS = { week: 'afgelopen 7 dagen', maand: 'afgelopen 30 dagen', kwartaal: 'afgelopen kwartaal', jaar: 'afgelopen 12 maanden' };
 
   const KPI = [
-    { label: `Omzet ${periodeLabel}`,  val: fmt(omzetPeriode),     sub: 'Verzonden + betaald (incl. BTW)',    icon: I.chart   },
+    { label: `Gefactureerd ${periodeLabel}`, val: fmt(omzetPeriode), sub: 'Min creditfacturen, incl. btw',    icon: I.chart   },
     { label: 'Ontvangen',              val: fmt(ontvangenPeriode), sub: `Betaalde facturen ${periodeLabel}`,  icon: I.check   },
-    { label: 'Openstaand',             val: fmt(openstaand),       sub: 'Verzonden, nog te ontvangen',        icon: I.clock,  color: '#e8784a' },
+    { label: 'Openstaand',             val: fmt(openstaand),       sub: 'Nog niet betaald, alle periodes',    icon: I.clock,  color: '#e8784a' },
     { label: 'Te verwachten',          val: fmt(teVerwachten),     sub: 'Geaccepteerde offertes',             icon: I.quotes  },
     { label: `Kosten ${periodeLabel}`, val: fmt(kostenPeriode),    sub: `Alle kostenregels ${periodeLabel}`,  icon: I.costs   },
     { label: 'Nettoresultaat',         val: fmt(netto),            sub: `${marge}% marge ${periodeLabel}`,    icon: I.revenue, color: netto >= 0 ? '#15A34A' : '#dc2626' },
@@ -1588,7 +1637,7 @@ export function RevenuePage() {
           <table className="dt" style={{ minWidth: 680 }}>
             <thead>
               <tr>
-                <th>Klant</th><th>Geoffreerd</th><th>Kosten</th><th>Betaald</th><th>Openstaand</th><th>Nettoresultaat</th><th>Marge</th><th>Status</th>
+                <th>Klant</th><th>Gefactureerd</th><th>Kosten</th><th>Betaald</th><th>Openstaand</th><th>Nettoresultaat</th><th>Marge</th><th>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -1606,7 +1655,7 @@ export function RevenuePage() {
                   <td style={{ fontWeight: 600 }}>{fmt(r.total)}</td>
                   <td style={{ color: '#dc2626', fontWeight: 600 }}>{fmt(r.costs)}</td>
                   <td style={{ color: '#15A34A', fontWeight: 700 }}>{fmt(r.paid)}</td>
-                  <td style={{ fontWeight: 600, color: r.total - r.paid > 0 ? '#e8784a' : 'var(--dl)' }}>{fmt(r.total - r.paid)}</td>
+                  <td style={{ fontWeight: 600, color: r.openstaand > 0 ? '#e8784a' : 'var(--dl)' }}>{fmt(r.openstaand)}</td>
                   <td style={{ fontWeight: 800, color: r.profit >= 0 ? '#15A34A' : '#dc2626' }}>{fmt(r.profit)}</td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

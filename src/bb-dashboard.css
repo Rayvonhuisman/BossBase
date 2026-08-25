@@ -208,6 +208,19 @@ ul{list-style:none}
 /* Mobile reset — never apply collapsed styles on touch widths.
    Sidebar is already hidden via mobile.css, but in case mobile.css is not
    loaded (auth shell, marketing), this keeps the slide-in behaviour clean. */
+/* Materiaalregels op de werkbon. Zelfde maatvoering als .wb2-mat-add en als de
+   regelitems op offertes/facturen — zonder deze regels erven de losse inputs de
+   browserstandaard (16px) en oogt de sectie groter dan de rest van de app. */
+.wb2-mat-kop{font-size:11px;color:var(--dl);font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:0 0 4px}
+.wb2-mat-rij input,.wb2-mat-rij select{width:100%;height:32px;padding:0 8px;background:#fff;border:1px solid var(--br);border-radius:8px;font-size:13px;font-family:inherit;color:var(--dk);outline:none}
+/* Selects krijgen dezelfde horizontale ruimte als elders in het dashboard
+   (.f select), anders staat de native pijl te dicht op de rand. */
+.wb2-mat-rij select{padding:0 11px}
+.wb2-mat-rij input:focus,.wb2-mat-rij select:focus{border-color:#1DDB62;box-shadow:0 0 0 3px rgba(29,219,98,.14)}
+/* Ligt vast op het bibliotheekmateriaal: grijs en niet te bewerken, zodat
+   niemand zich afvraagt waarom er niets gebeurt bij typen. */
+.wb2-mat-rij input:disabled,.wb2-mat-rij select:disabled{background:var(--bgs);color:var(--dmu);cursor:not-allowed;border-style:dashed}
+
 @media(max-width:768px){
   .sb.collapsed{width:var(--sw)}
   .sb.collapsed .sb-logo{padding:18px 18px 14px;display:block}

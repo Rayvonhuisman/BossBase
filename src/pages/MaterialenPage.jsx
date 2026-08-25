@@ -16,23 +16,29 @@ import {
   listMaterialen, createMateriaal, updateMateriaal, deleteMateriaal, marge, EENHEDEN,
 } from '../services/materiaalService.js';
 import { listLeveranciers } from '../services/leverancierService.js';
+import LeverancierSelect from '../components/LeverancierSelect.jsx';
 
 const LEEG = {
   naam: '', eenheid: 'stuk', inkoopprijs: '', verkoopprijs: '',
   leverancierId: '', btwPct: 21, artikelnummer: '', actief: true,
 };
 
-function MateriaalModal({ materiaal, leveranciers, magInkoop, onClose, onSaved }) {
+function MateriaalModal({ materiaal, leveranciers, magInkoop, onClose, onSaved, onLeverancierToegevoegd }) {
   const toast = useToast();
   const bewerken = Boolean(materiaal);
   const [form, setForm] = useState(() => (materiaal ? { ...LEEG, ...materiaal } : LEEG));
   const [saving, setSaving] = useState(false);
   const [fout, setFout] = useState('');
+  const [foutLev, setFoutLev] = useState('');
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const mg = marge({ inkoopprijs: Number(form.inkoopprijs) || null, verkoopprijs: Number(form.verkoopprijs) || null });
 
   const submit = async () => {
     if (!form.naam.trim()) { setFout('Naam is verplicht'); return; }
+    // Leverancier is verplicht omdat hij via de kostenregel naar de boekhouding
+    // gaat. Ook bij bewerken: zo worden materialen van vóór deze regel alsnog
+    // aangevuld op het moment dat iemand ze toch al openheeft.
+    if (!form.leverancierId) { setFoutLev('Kies een leverancier'); return; }
     setSaving(true);
     try {
       const bewaard = bewerken ? await updateMateriaal(materiaal.id, form) : await createMateriaal(form);
@@ -78,29 +84,39 @@ function MateriaalModal({ materiaal, leveranciers, magInkoop, onClose, onSaved }
 
           {magInkoop && (
             <div className="f">
-              <label>Inkoopprijs <span style={{ color: 'var(--dl)', fontWeight: 400 }}>(intern)</span></label>
+              <label>Inkoopprijs <span style={{ color: 'var(--dl)', fontWeight: 400 }}>(excl. btw · intern)</span></label>
               <input type="number" min="0" step="0.01" value={form.inkoopprijs ?? ''} onChange={e => set('inkoopprijs', e.target.value)} />
             </div>
           )}
           <div className="f">
-            <label>Verkoopprijs <span style={{ color: 'var(--dl)', fontWeight: 400 }}>(naar de klant)</span></label>
+            <label>Verkoopprijs <span style={{ color: 'var(--dl)', fontWeight: 400 }}>(excl. btw · naar de klant)</span></label>
             <input type="number" min="0" step="0.01" value={form.verkoopprijs ?? ''} onChange={e => set('verkoopprijs', e.target.value)} />
           </div>
 
           {magInkoop && mg && (
             <div className="f s2">
               <div style={{ fontSize: '.82rem', color: mg.bedrag < 0 ? '#dc2626' : '#15A34A', fontWeight: 600 }}>
-                Marge: {fmt(mg.bedrag)}{mg.pct != null ? ` · ${mg.pct}%` : ''}
+                Marge: {fmt(mg.bedrag)}{mg.pct != null ? ` · ${mg.pct}%` : ''} <span style={{ fontWeight: 400, color: 'var(--dl)' }}>(excl. btw)</span>
               </div>
             </div>
           )}
 
           <div className="f">
-            <label>Leverancier</label>
-            <select value={form.leverancierId || ''} onChange={e => set('leverancierId', e.target.value)}>
-              <option value="">Geen leverancier</option>
-              {leveranciers.map(l => <option key={l.id} value={l.id}>{l.naam}</option>)}
-            </select>
+            <label>Leverancier *</label>
+            <LeverancierSelect
+              value={form.leverancierId}
+              onChange={v => { set('leverancierId', v); setFoutLev(''); }}
+              leveranciers={leveranciers}
+              onLijstGewijzigd={g => { onLeverancierToegevoegd?.(g); setFoutLev(''); }}
+              verplicht
+              fout={Boolean(foutLev)}
+            />
+            {foutLev && <div style={{ color: '#dc2626', fontSize: '.78rem', marginTop: 4 }}>{foutLev}</div>}
+            {bewerken && !materiaal?.leverancierId && (
+              <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginTop: 4 }}>
+                Dit materiaal heeft nog geen leverancier. Vul hem aan om op te kunnen slaan.
+              </div>
+            )}
           </div>
           <div className="f">
             <label>BTW-tarief</label>
@@ -206,9 +222,9 @@ export default function MaterialenPage() {
             <thead>
               <tr>
                 <th>Materiaal</th><th>Eenheid</th><th>Leverancier</th>
-                {magInkoop && <th>Inkoop</th>}
-                <th>Verkoop</th>
-                {magInkoop && <th>Marge</th>}
+                {magInkoop && <th>Inkoop (excl. btw)</th>}
+                <th>Verkoop (excl. btw)</th>
+                {magInkoop && <th>Marge (excl. btw)</th>}
                 <th>BTW</th><th></th>
               </tr>
             </thead>
@@ -254,6 +270,7 @@ export default function MaterialenPage() {
           materiaal={modal === 'nieuw' ? null : modal}
           leveranciers={leveranciers}
           magInkoop={magInkoop}
+          onLeverancierToegevoegd={g => setLeveranciers(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
           onClose={() => setModal(null)}
           onSaved={() => { herlaad(); bumpRefresh?.(); }}
         />

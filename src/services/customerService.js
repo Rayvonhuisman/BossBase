@@ -35,8 +35,9 @@ const toCustomer = (row, index = 0) => ({
   // UI helpers — synthesized, not stored:
   av: index,
   stage: "new_lead",
-  total: 0,
-  paid: 0,
+  // Let op: géén `total`/`paid` hier. Die stonden hier hardgecodeerd op 0,
+  // waardoor de klantenlijst overal €0 toonde. De bedragen per klant komen uit
+  // customerTotalsService (afgeleid van offertes + facturen).
   // UI-only display defaults (no DB columns for these):
   type: row.type || "Klant",
   source: row.source || "",

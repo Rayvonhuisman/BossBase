@@ -383,22 +383,50 @@ export async function createWerkbonMateriaal(input) {
 
 export async function updateWerkbonMateriaal(id, input) {
   const updates = { ...input }
-  // Herbereken subtotaal indien aantal of prijs gewijzigd
+
+  // De kostprijs staat in een aparte tabel met eigen RLS: apart wegschrijven.
+  const heeftInkoop = "inkoopprijs_per" in updates || "inkoopprijsPer" in updates
+  const inkoop = updates.inkoopprijs_per ?? updates.inkoopprijsPer
+  delete updates.inkoopprijs_per
+  delete updates.inkoopprijsPer
+
+  // Subtotaal herberekenen als aantal of prijs wijzigt. Bij een DEELpatch
+  // (alleen aantal, of alleen prijs) moet de ontbrekende helft uit de database
+  // komen — anders werd er met 0 gerekend en viel het subtotaal weg.
   if ("aantal" in updates || "prijs_per" in updates || "prijsPer" in updates) {
-    const aantal = Number(updates.aantal || 1)
-    const prijsPer = Number(updates.prijs_per || updates.prijsPer || 0)
+    const { data: huidig } = await supabase
+      .from("werkbon_materialen").select("aantal, prijs_per").eq("id", id).maybeSingle()
+    const aantal = "aantal" in updates ? Number(updates.aantal) || 0 : Number(huidig?.aantal ?? 1)
+    const prijsPer = ("prijs_per" in updates || "prijsPer" in updates)
+      ? Number(updates.prijs_per ?? updates.prijsPer) || 0
+      : Number(huidig?.prijs_per ?? 0)
     updates.subtotaal = Math.round(aantal * prijsPer * 100) / 100
     delete updates.prijsPer
   }
   delete updates.werkbonId
-  const { data, error } = await supabase
-    .from("werkbon_materialen")
-    .update(updates)
-    .eq("id", id)
-    .select()
-    .single()
-  if (error) throw error
-  return toWerkbonMateriaal(data)
+
+  let rij = null
+  if (Object.keys(updates).length) {
+    const { data, error } = await supabase
+      .from("werkbon_materialen").update(updates).eq("id", id).select().single()
+    if (error) throw error
+    rij = data
+  } else {
+    const { data } = await supabase.from("werkbon_materialen").select("*").eq("id", id).maybeSingle()
+    rij = data
+  }
+
+  if (heeftInkoop) {
+    // Zonder het recht weigert RLS dit stil — precies de bedoeling.
+    await supabase.from("werkbon_materiaal_inkoop")
+      .update({
+        inkoopprijs_per: inkoop === '' || inkoop == null ? null : Number(inkoop),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("werkbon_materiaal_id", id)
+  }
+
+  return toWerkbonMateriaal({ ...rij, werkbon_materiaal_inkoop: heeftInkoop ? { inkoopprijs_per: inkoop } : undefined })
 }
 
 export async function deleteWerkbonMateriaal(id) {

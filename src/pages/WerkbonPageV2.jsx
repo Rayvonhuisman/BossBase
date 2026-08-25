@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { listMaterialen } from '../services/materiaalService.js';
+import { listLeveranciers } from '../services/leverancierService.js';
+import LeverancierSelect from '../components/LeverancierSelect.jsx';
 import { I, ModalX, NotifyMailToggle } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -13,7 +15,7 @@ import { getTeamMembers, notifyNewAssignees } from '../services/notificatieServi
 import {
   getWerkbonnen, getWerkbonById, createWerkbon, updateWerkbon,
   getWerkbonTaken, createWerkbonTaak, toggleWerkbonTaak, deleteWerkbonTaak,
-  getWerkbonMaterialen, createWerkbonMateriaal, deleteWerkbonMateriaal,
+  getWerkbonMaterialen, createWerkbonMateriaal, updateWerkbonMateriaal, deleteWerkbonMateriaal,
   getWerkbonFotos, uploadWerkbonFoto, deleteWerkbonFoto,
   getWerkbonMeerwerk, createWerkbonMeerwerk, deleteWerkbonMeerwerk,
   getWerkbonNotities, addWerkbonNotitie, getAllWerkbonTakenCounts, plannedStartIso,
@@ -21,7 +23,8 @@ import {
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
 import { createUrenregel, getUrenregistratie, calculateHours } from '../services/urenService.js';
-import { createJobCost } from '../services/jobCostService.js';
+import { createJobCost, updateJobCost } from '../services/jobCostService.js';
+import { supabase } from '../lib/supabase';
 import { statusInfo } from '../utils/statusColors.js';
 import { calcBtw, BTW_PCT_OPTIONS } from '../utils/btw.js';
 
@@ -464,36 +467,26 @@ function TakenSection({ taken, onToggle, onAdd, onDelete, canEdit = true }) {
 
 // ─── MATERIALS ──────────────────────────────────────────────────────────────
 
-function MaterialenSection({ materialen, onAdd, onDelete, canEdit = true }) {
+function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = true }) {
   const { can } = usePermissions();
   const magInkoop = can('inkoopprijzen');
-  const [form, setForm] = useState({
-    naam: '', eenheid: 'stuk', aantal: 1, prijs_per: 0, btw_pct: 21,
-    materiaal_id: null, inkoopprijs_per: null, leverancier_id: null,
-  });
-  const [adding, setAdding] = useState(false);
-  // Bibliotheek voor de snelkeuze. Faalt dit, dan blijft vrij invoeren werken.
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+
   const [biblio, setBiblio] = useState([]);
-  useEffect(() => { listMaterialen({ inclusiefInactief: false }).then(setBiblio).catch(() => {}); }, []);
+  const [leveranciers, setLeveranciers] = useState([]);
+  useEffect(() => {
+    listMaterialen({ inclusiefInactief: false }).then(setBiblio).catch(() => {});
+    listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(() => {});
+  }, []);
 
-  // Naam die exact overeenkomt met een materiaal → alle velden vullen. Zo hoeft
-  // de monteur niet eerst te kiezen: typen en doorwerken kan gewoon.
-  const kiesUitBiblio = naam => {
-    const m = biblio.find(x => x.naam.toLowerCase() === String(naam || '').toLowerCase());
-    if (!m) { setForm(f => ({ ...f, naam, materiaal_id: null, inkoopprijs_per: null, leverancier_id: null })); return; }
-    setForm(f => ({
-      ...f,
-      naam: m.naam,
-      eenheid: m.eenheid || 'stuk',
-      prijs_per: m.verkoopprijs ?? f.prijs_per,
-      btw_pct: m.btwPct ?? 21,
-      materiaal_id: m.id,
-      inkoopprijs_per: m.inkoopprijs ?? null,
-      leverancier_id: m.leverancierId || null,
-    }));
+  const VRIJ = '__vrij__';
+  const LEEG = {
+    keuze: '', naam: '', eenheid: 'stuk', aantal: 1, prijs_per: '', btw_pct: 21,
+    materiaal_id: null, inkoopprijs_per: '', leverancier_id: '',
   };
+  const [form, setForm] = useState(LEEG);
+  const [adding, setAdding] = useState(false);
 
-  // Totalen: excl. BTW (subtotalen) en incl. BTW (per regel met eigen percentage).
   const totalEx = materialen.reduce((s, m) => s + (m.subtotaal || m.aantal * m.prijsPer || 0), 0);
   const totalIncl = materialen.reduce((s, m) => {
     const sub = m.subtotaal || m.aantal * m.prijsPer || 0;
@@ -501,12 +494,33 @@ function MaterialenSection({ materialen, onAdd, onDelete, canEdit = true }) {
   }, 0);
   const addSub = (Number(form.aantal) || 0) * (Number(form.prijs_per) || 0);
 
+  // Uit de bibliotheek kiezen vult alles in één keer. Leverancier en inkoop
+  // horen bij het materiaal zelf, dus die liggen daarna vast op de regel.
+  const kiesMateriaal = keuze => {
+    if (keuze === VRIJ) { setForm({ ...LEEG, keuze: VRIJ }); return; }
+    if (!keuze) { setForm(LEEG); return; }
+    const m = biblio.find(x => x.id === keuze);
+    if (!m) return;
+    setForm(f => ({
+      ...f,
+      keuze,
+      naam: m.naam,
+      eenheid: m.eenheid || 'stuk',
+      prijs_per: m.verkoopprijs ?? '',
+      btw_pct: m.btwPct ?? 21,
+      materiaal_id: m.id,
+      inkoopprijs_per: m.inkoopprijs ?? '',
+      leverancier_id: m.leverancierId || '',
+    }));
+  };
+
   const submit = async () => {
-    if (!form.naam.trim()) return;
+    const naam = form.naam.trim();
+    if (!naam) return;
     setAdding(true);
     try {
       await onAdd({
-        naam: form.naam.trim(),
+        naam,
         eenheid: form.eenheid || null,
         aantal: Number(form.aantal) || 1,
         prijs_per: Number(form.prijs_per) || 0,
@@ -514,14 +528,28 @@ function MaterialenSection({ materialen, onAdd, onDelete, canEdit = true }) {
         // Prijzen worden gekopieerd, niet gerefereerd: verandert de bibliotheek
         // later, dan blijft de nacalculatie van deze klus kloppen.
         materiaal_id: form.materiaal_id,
-        inkoopprijs_per: form.inkoopprijs_per,
-        leverancier_id: form.leverancier_id,
+        inkoopprijs_per: form.inkoopprijs_per === '' ? null : Number(form.inkoopprijs_per),
+        leverancier_id: form.leverancier_id || null,
       });
-      setForm({ naam: '', eenheid: 'stuk', aantal: 1, prijs_per: 0, btw_pct: 21, materiaal_id: null, inkoopprijs_per: null, leverancier_id: null });
+      setForm(LEEG);
     } finally {
       setAdding(false);
     }
   };
+
+  const veld = (r, k, v) => onUpdate?.(r, { [k]: v });
+  const uitBiblio = r => Boolean(r.materiaalId ?? r.materiaal_id);
+  const levNaam = id => leveranciers.find(l => l.id === id)?.naam || '—';
+
+  // Zelfde kolomopzet als de regelitems op offertes/facturen.
+  const COLS = magInkoop
+    ? 'minmax(0,2.2fr) 62px 74px 84px 84px minmax(0,1.3fr) 96px 30px'
+    : 'minmax(0,2.4fr) 62px 74px 84px minmax(0,1.4fr) 96px 30px';
+
+  const vastTitel = 'Ligt vast op het materiaal in de bibliotheek';
+
+  // Inkoop wordt per stuk opgeslagen én per stuk getoond — geen totaalregel
+  // eronder. Het aantal staat al in zijn eigen kolom.
 
   return (
     <div className="wb2-card">
@@ -530,95 +558,145 @@ function MaterialenSection({ materialen, onAdd, onDelete, canEdit = true }) {
       </div>
       <div className="wb2-card-body">
         <div className="wb2-mat-body">
-          <div className="wb2-mat-grid">
-            <div>Materiaal</div>
-            <div>Eenheid</div>
-            <div className="right">Aantal</div>
-            <div className="right">Per stuk</div>
-            <div className="right">BTW</div>
-            <div className="right">Subtotaal</div>
-            <div />
-          </div>
           {materialen.length === 0 && (
-            <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Nog geen materialen toegevoegd.</div>
+            <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', fontSize: 13 }}>
+              Nog geen materialen toegevoegd.
+            </div>
           )}
-          {materialen.map(m => {
-            const sub = m.subtotaal || m.aantal * m.prijsPer;
-            const pct = m.btwPercentage ?? 21;
-            const incl = calcBtw(sub, pct, 'excl').incl;
-            return (
-              <div key={m.id} className="wb2-mat-grid row">
-                <div>{m.naam}</div>
-                <div style={{ color: 'var(--dl)' }}>{m.eenheid || '—'}</div>
-                <div className="right mono">{m.aantal}</div>
-                <div className="right mono" style={{ color: 'var(--dmu)' }}>
-                  {fmtEur(m.prijsPer)}
-                  {magInkoop && m.inkoopprijsPer != null && (
-                    <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--dl)' }} title="Inkoopprijs — intern, niet zichtbaar voor de klant">
-                      inkoop {fmtEur(m.inkoopprijsPer)}
+
+          {isMobile ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {materialen.map(m => {
+                const sub = m.subtotaal || m.aantal * m.prijsPer;
+                const vast = uitBiblio(m);
+                return (
+                  <div key={m.id} className="wb2-mat-rij" style={{ border: '1px solid var(--bstrong)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <input type="text" value={m.naam || ''} disabled={!canEdit} style={{ flex: 1 }}
+                        onChange={e => veld(m, 'naam', e.target.value)} />
+                      {canEdit && <button className="btn btn-xs btn-danger btn-icon" onClick={() => onDelete(m)}>{I.trash}</button>}
                     </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                      <input type="number" min="0" step="0.01" value={m.aantal ?? 1} disabled={!canEdit}
+                        onChange={e => veld(m, 'aantal', e.target.value)} />
+                      <input type="text" value={m.eenheid || ''} placeholder="stuk" disabled={!canEdit}
+                        onChange={e => veld(m, 'eenheid', e.target.value)} />
+                      <input type="number" min="0" step="0.01" value={m.prijsPer ?? 0} disabled={!canEdit}
+                        onChange={e => veld(m, 'prijs_per', e.target.value)} />
+                    </div>
+                    {magInkoop && (
+                      vast
+                        ? <input type="text" readOnly disabled title={vastTitel}
+                            value={m.inkoopprijsPer != null ? `Inkoop ${fmtEur(m.inkoopprijsPer)} p/st` : 'Inkoop —'} />
+                        : <input type="number" min="0" step="0.01" value={m.inkoopprijsPer ?? ''} disabled={!canEdit}
+                            placeholder="Inkoopprijs per stuk (intern)" onChange={e => veld(m, 'inkoopprijs_per', e.target.value)} />
+                    )}
+                    {vast
+                      ? <input type="text" value={levNaam(m.leverancierId)} readOnly disabled title={vastTitel} />
+                      : <LeverancierSelect value={m.leverancierId || ''} disabled={!canEdit} leveranciers={leveranciers}
+                          onLijstGewijzigd={g => setLeveranciers(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
+                          onChange={v => veld(m, 'leverancier_id', v)} />}
+                    <div style={{ textAlign: 'right', fontWeight: 600, fontSize: 13 }}>{fmtEur(sub)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : materialen.length > 0 && (
+            <div>
+              <div className="wb2-mat-kop" style={{ display: 'grid', gridTemplateColumns: COLS, gap: 5 }}>
+                <span>Materiaal</span><span>Aantal</span><span>Eenheid</span><span>Verkoop</span>
+                {magInkoop && <span>Inkoop</span>}
+                <span>Leverancier</span><span style={{ textAlign: 'right' }}>Subtotaal</span><span />
+              </div>
+              {materialen.map(m => {
+                const sub = m.subtotaal || m.aantal * m.prijsPer;
+                const pct = m.btwPercentage ?? 21;
+                const vast = uitBiblio(m);
+                return (
+                  <div key={m.id} className="wb2-mat-rij" style={{ display: 'grid', gridTemplateColumns: COLS, gap: 5, alignItems: 'center', marginBottom: 5 }}>
+                    <input type="text" value={m.naam || ''} disabled={!canEdit}
+                      onChange={e => veld(m, 'naam', e.target.value)} style={{ minWidth: 0 }} />
+                    <input type="number" min="0" step="0.01" value={m.aantal ?? 1} disabled={!canEdit}
+                      onChange={e => veld(m, 'aantal', e.target.value)} style={{ minWidth: 0 }} />
+                    <input type="text" value={m.eenheid || ''} placeholder="stuk" disabled={!canEdit}
+                      onChange={e => veld(m, 'eenheid', e.target.value)} style={{ minWidth: 0 }} />
+                    <input type="number" min="0" step="0.01" value={m.prijsPer ?? 0} disabled={!canEdit}
+                      onChange={e => veld(m, 'prijs_per', e.target.value)} style={{ minWidth: 0 }} />
+                    {magInkoop && (
+                      vast
+                        ? <input type="text" readOnly disabled title={vastTitel} style={{ minWidth: 0 }}
+                            value={m.inkoopprijsPer != null ? fmtEur(m.inkoopprijsPer) : '—'} />
+                        : <input type="number" min="0" step="0.01" value={m.inkoopprijsPer ?? ''} placeholder="p/st"
+                            disabled={!canEdit} title="Inkoopprijs per stuk — intern" style={{ minWidth: 0 }}
+                            onChange={e => veld(m, 'inkoopprijs_per', e.target.value)} />
+                    )}
+                    {vast
+                      ? <input type="text" value={levNaam(m.leverancierId)} readOnly disabled title={vastTitel} style={{ minWidth: 0 }} />
+                      : <LeverancierSelect value={m.leverancierId || ''} disabled={!canEdit} leveranciers={leveranciers}
+                          onLijstGewijzigd={g => setLeveranciers(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
+                          onChange={v => veld(m, 'leverancier_id', v)} style={{ minWidth: 0, width: '100%' }} />}
+                    <div style={{ textAlign: 'right', overflow: 'hidden' }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>{fmtEur(sub)}</div>
+                      <div style={{ fontSize: 10, color: 'var(--dl)', whiteSpace: 'nowrap' }}>{fmtEur(calcBtw(sub, pct, 'excl').incl)} incl.</div>
+                    </div>
+                    {canEdit
+                      ? <button className="btn btn-xs btn-danger btn-icon" onClick={() => onDelete(m)} title="Verwijderen">{I.trash}</button>
+                      : <div />}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {canEdit && (
+            <div className="wb2-mat-rij" style={{ borderTop: materialen.length ? '1px solid var(--border)' : 'none', paddingTop: materialen.length ? 10 : 0, marginTop: materialen.length ? 6 : 0 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : COLS, gap: 5, alignItems: 'center' }}>
+                {/* De keuzelijst blijft altijd staan, ook bij vrij materiaal —
+                    anders kun je niet meer terug naar de bibliotheek. Het
+                    naamveld verschijnt er dan onder. */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+                  <select value={form.keuze} onChange={e => kiesMateriaal(e.target.value)} style={{ minWidth: 0 }}>
+                    <option value="">— Kies materiaal —</option>
+                    {biblio.map(m => <option key={m.id} value={m.id}>{m.naam}</option>)}
+                    <option value={VRIJ}>Vrij materiaal (zelf invullen)…</option>
+                  </select>
+                  {form.keuze === VRIJ && (
+                    <input type="text" autoFocus placeholder="Naam materiaal" value={form.naam}
+                      onChange={e => setForm(f => ({ ...f, naam: e.target.value }))}
+                      onKeyDown={e => { if (e.key === 'Enter') submit(); }} style={{ minWidth: 0 }} />
                   )}
                 </div>
-                <div className="right mono" style={{ color: 'var(--dmu)' }}>{pct}%</div>
-                <div className="right mono" style={{ fontWeight: 600 }}>
-                  {fmtEur(sub)}
-                  <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--dl)' }}>{fmtEur(incl)} incl.</div>
+                <input type="number" min="0" step="0.01" value={form.aantal} placeholder="1"
+                  onChange={e => setForm(f => ({ ...f, aantal: e.target.value }))} style={{ minWidth: 0 }} />
+                <input type="text" value={form.eenheid} placeholder="stuk"
+                  onChange={e => setForm(f => ({ ...f, eenheid: e.target.value }))} style={{ minWidth: 0 }} />
+                <input type="number" min="0" step="0.01" value={form.prijs_per} placeholder="0,00"
+                  onChange={e => setForm(f => ({ ...f, prijs_per: e.target.value }))} style={{ minWidth: 0 }} />
+                {magInkoop && (
+                  form.materiaal_id
+                    ? <input type="text" readOnly disabled title={vastTitel} style={{ minWidth: 0 }}
+                        value={form.inkoopprijs_per === '' ? '—' : fmtEur(Number(form.inkoopprijs_per))} />
+                    : <input type="number" min="0" step="0.01" value={form.inkoopprijs_per} placeholder="p/st"
+                        title="Inkoopprijs per stuk — intern" style={{ minWidth: 0 }}
+                        onChange={e => setForm(f => ({ ...f, inkoopprijs_per: e.target.value }))} />
+                )}
+                {form.materiaal_id
+                  ? <input type="text" value={levNaam(form.leverancier_id)} readOnly disabled title={vastTitel} style={{ minWidth: 0 }} />
+                  : <LeverancierSelect value={form.leverancier_id} leveranciers={leveranciers}
+                      onLijstGewijzigd={g => setLeveranciers(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
+                      onChange={v => setForm(f => ({ ...f, leverancier_id: v }))}
+                      style={{ minWidth: 0, width: '100%' }} />}
+                <div style={{ textAlign: 'right', overflow: 'hidden' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>{fmtEur(addSub)}</div>
+                  <div style={{ fontSize: 10, color: 'var(--dl)', whiteSpace: 'nowrap' }}>{fmtEur(calcBtw(addSub, form.btw_pct, 'excl').incl)} incl.</div>
                 </div>
-                {canEdit ? <button onClick={() => onDelete(m)} aria-label="Verwijderen">{I.trash}</button> : <div />}
+                <button onClick={submit} disabled={adding || !form.naam.trim()} className="wb2-mat-add-btn"
+                  aria-label="Materiaal toevoegen" title="Toevoegen">{I.plus}</button>
               </div>
-            );
-          })}
-          {canEdit && (
-          <div className="wb2-mat-add">
-            <input
-              type="text"
-              placeholder="Naam materiaal"
-              list="wb2-materiaal-biblio"
-              value={form.naam}
-              onChange={e => kiesUitBiblio(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') submit(); }}
-            />
-            <datalist id="wb2-materiaal-biblio">
-              {biblio.map(m => <option key={m.id} value={m.naam} />)}
-            </datalist>
-            <input
-              type="text"
-              placeholder="stuk"
-              value={form.eenheid}
-              onChange={e => setForm(f => ({ ...f, eenheid: e.target.value }))}
-            />
-            <input
-              type="number" min="0" step="0.01" className="right"
-              placeholder="1"
-              value={form.aantal}
-              onChange={e => setForm(f => ({ ...f, aantal: e.target.value }))}
-              style={{ textAlign: 'right' }}
-            />
-            <input
-              type="number" min="0" step="0.01"
-              placeholder="€"
-              value={form.prijs_per}
-              onChange={e => setForm(f => ({ ...f, prijs_per: e.target.value }))}
-              style={{ textAlign: 'right' }}
-            />
-            <select
-              value={form.btw_pct}
-              onChange={e => setForm(f => ({ ...f, btw_pct: Number(e.target.value) }))}
-              style={{ textAlign: 'right' }}
-              aria-label="BTW-percentage"
-            >
-              {BTW_PCT_OPTIONS.map(p => <option key={p} value={p}>{p}%</option>)}
-            </select>
-            <div className="right mono" style={{ fontWeight: 600, color: 'var(--dmu)' }}>
-              {fmtEur(addSub)}
-              <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--dl)' }}>{fmtEur(calcBtw(addSub, form.btw_pct, 'excl').incl)} incl.</div>
             </div>
-            <button onClick={submit} disabled={adding || !form.naam.trim()} className="wb2-mat-add-btn" aria-label="Materiaal toevoegen" title="Toevoegen">
-              {I.plus}
-            </button>
-          </div>
           )}
         </div>
+
         <div className="wb2-mat-foot">
           <div className="wb2-mat-foot-add" style={{ visibility: 'hidden' }}>spacer</div>
           <div style={{ textAlign: 'right' }}>
@@ -1008,10 +1086,51 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
           cost_date: new Date().toISOString().slice(0, 10),
           werkbon_id: selectedId,
           werkbon_materiaal_id: created.id,
+          // Komt uit de bibliotheek (waar leverancier verplicht is) of uit de
+          // vrije invoer. Deze spiegelregels worden niet geëxporteerd, dus leeg
+          // mag: de leveranciersplicht geldt hier niet.
+          leverancier_id: input.leverancier_id ?? created.leverancierId ?? null,
         }).catch(() => {});
       }
     } catch (e) {
       toast.error(e.message || 'Materiaal toevoegen mislukt');
+    }
+  };
+
+  // Regel bijwerken. Debounce is hier niet nodig: het zijn losse velden en de
+  // schrijfactie is klein. De spiegel-kost wordt meegetrokken zodra het bedrag
+  // verandert, anders lopen nacalculatie en werkbon uit elkaar.
+  const handleUpdateMaterial = async (m, patch) => {
+    const nieuwRij = { ...m };
+    if ('naam' in patch) nieuwRij.naam = patch.naam;
+    if ('eenheid' in patch) nieuwRij.eenheid = patch.eenheid;
+    if ('aantal' in patch) nieuwRij.aantal = Number(patch.aantal) || 0;
+    if ('prijs_per' in patch) nieuwRij.prijsPer = Number(patch.prijs_per) || 0;
+    if ('inkoopprijs_per' in patch) {
+      nieuwRij.inkoopprijsPer = patch.inkoopprijs_per === '' ? null : Number(patch.inkoopprijs_per);
+    }
+    if ('leverancier_id' in patch) nieuwRij.leverancierId = patch.leverancier_id || null;
+    nieuwRij.subtotaal = Math.round((nieuwRij.aantal || 0) * (nieuwRij.prijsPer || 0) * 100) / 100;
+
+    // Direct in beeld; de schrijfactie loopt erachteraan.
+    setMaterialen(prev => prev.map(x => (x.id === m.id ? nieuwRij : x)));
+    try {
+      await updateWerkbonMateriaal(m.id, patch);
+      // Spiegel-kost meetrekken zodra bedrag of naam wijzigt, anders lopen de
+      // nacalculatie en de werkbon uit elkaar.
+      if (nieuwRij.subtotaal !== m.subtotaal || nieuwRij.naam !== m.naam) {
+        const { data: kost } = await supabase
+          .from('job_costs').select('id').eq('werkbon_materiaal_id', m.id).maybeSingle();
+        if (kost?.id) {
+          await updateJobCost(kost.id, {
+            amount: nieuwRij.subtotaal,
+            description: `Materiaal: ${nieuwRij.naam}`,
+          }).catch(() => {});
+        }
+      }
+    } catch (e) {
+      toast.error(e.message || 'Bijwerken mislukt');
+      setMaterialen(prev => prev.map(x => (x.id === m.id ? m : x)));
     }
   };
 
@@ -1350,7 +1469,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
             <FotoSection fotos={fotos} onUpload={handleUploadFoto} onDelete={handleDeleteFoto} canEdit={canEdit} />
 
             {/* Materialen */}
-            <MaterialenSection materialen={materialen} onAdd={handleAddMaterial} onDelete={handleDeleteMaterial} canEdit={canEdit} />
+            <MaterialenSection materialen={materialen} onAdd={handleAddMaterial} onUpdate={handleUpdateMaterial} onDelete={handleDeleteMaterial} canEdit={canEdit} />
 
             {/* Meerwerk */}
             <MeerwerkSection meerwerk={meerwerk} onAdd={handleAddMeerwerk} onDelete={handleDeleteMeerwerk} canEdit={canEdit} />

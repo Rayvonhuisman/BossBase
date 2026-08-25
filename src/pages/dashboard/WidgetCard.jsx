@@ -4,6 +4,7 @@ import { getSupportedSizes } from '../../data/widgetRegistry.js';
 import { activiteitTypeLabel } from '../../services/activityService.js';
 import { statusInfo } from '../../utils/statusColors.js';
 import { buildStageIndex, firstStageId } from '../../utils/pipeline.js';
+import { sumOmzetExclBtw } from '../../services/customerTotalsService.js';
 
 // ── Design tokens (BossBase widget redesign v2) ───────────────
 // CSS classes (.bb-widget, .bb-kpi, .feed-row, .chip, .pill-tabs, …)
@@ -416,9 +417,10 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     }
 
     case 'revenue_month': {
-      // Omzet = gefactureerd deze maand (excl. BTW), uit echte facturen.
-      const md = facturen.filter(f => inThisMonth(f.factuurdatum));
-      const val = md.reduce((s, f) => s + (Number(f.totaalExcl) || 0), 0);
+      // Omzet = gefactureerd deze maand excl. BTW. Dezelfde factuurselectie als
+      // Financiën (geen concepten), alleen zonder BTW — vandaar een ander
+      // bedrag dan de tegel "Gefactureerd" daar.
+      const val = sumOmzetExclBtw(facturen.filter(f => inThisMonth(f.factuurdatum)));
       const series = (charts.monthlyRevenue || []);
       const spark = series.slice(-6);
       const prevVal = series.length > 1 ? series[series.length - 2].value : 0;
@@ -453,7 +455,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
 
     case 'profit_month': {
       // Winst = omzet (facturen excl. BTW) − kosten (job_costs), deze maand.
-      const rev = facturen.filter(f => inThisMonth(f.factuurdatum)).reduce((s, f) => s + (Number(f.totaalExcl) || 0), 0);
+      const rev = sumOmzetExclBtw(facturen.filter(f => inThisMonth(f.factuurdatum)));
       const cost = jobCosts.filter(c => inThisMonth(c.date)).reduce((s, c) => s + (Number(c.amt) || 0), 0);
       const val = rev - cost;
       const target = Math.max(1, Math.round(rev));
@@ -1417,7 +1419,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                 return (
                   <button key={i} className={`rank-row${i === 0 ? ' gold' : ''}`}
                     onClick={() => cid ? openCustomer(cid) : setPage('customers')}
-                    {...hov(<Tt title={it.label} rows={[{ k: 'Omzet', v: eur(it.value) }]} />)}>
+                    {...hov(<Tt title={it.label} rows={[{ k: 'Dealwaarde', v: eur(it.value) }]} />)}>
                     <span className="rank-num">{String(i + 1).padStart(2, '0')}</span>
                     <AvatarSq name={it.label} />
                     <div>
@@ -1454,7 +1456,7 @@ function MonthlyRevenueChart({ charts, widget, ux, onNav }) {
     return (
       <div className="bb-widget">
         <WHead eyebrow="Omzet" title="Per maand" sub="Maandelijkse omzetontwikkeling" />
-        <EmptyState title="Nog geen omzetdata" text="Markeer deals als betaald om je omzet hier te zien." />
+        <EmptyState title="Nog geen omzetdata" text="Verstuur facturen om je omzet hier te zien." />
       </div>
     );
   }

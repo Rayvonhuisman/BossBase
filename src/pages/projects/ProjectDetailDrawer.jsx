@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listLeveranciers } from '../../services/leverancierService.js';
+import LeverancierSelect from '../../components/LeverancierSelect.jsx';
 import { categorieOptiesMet, STANDAARD_CATEGORIE } from '../../lib/kostenCategorieen.js';
 import { Maximize2, Minimize2, AlertTriangle, AlertOctagon } from 'lucide-react';
 import { I, ModalX, NotifyMailToggle, fmt, fmt0, CostCategoryBadge } from '../../bb-shared.jsx';
@@ -541,10 +542,14 @@ function UrenTab({ project, entries, onAdd, onDelete, canManage }) {
             </div>
             <div className="f" style={{ flex: '1 1 130px', minWidth: 0 }}>
               <label>Leverancier *</label>
-              <select style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.leverancier_id} onChange={e => set('leverancier_id', e.target.value)}>
-                <option value="">— Kies —</option>
-                {leveranciers.map(l => <option key={l.id} value={l.id}>{l.naam}</option>)}
-              </select>
+              <LeverancierSelect
+                value={form.leverancier_id}
+                onChange={v => set('leverancier_id', v)}
+                leveranciers={leveranciers}
+                onLijstGewijzigd={g => setLeveranciers(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
+                verplicht
+                style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}
+              />
             </div>
             <div className="f" style={{ flex: '1 1 100%', minWidth: 0 }}>
               <label>Omschrijving</label>
