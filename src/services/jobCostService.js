@@ -42,6 +42,28 @@ export async function getKostenBijlageUrl(stored) {
 }
 
 
+// Bonnen uploaden naar de privé-bucket en de opslagpaden teruggeven. Gedeeld
+// door de kostenmodal en het snelle kostenformulier in de projectdrawer, zodat
+// beide dezelfde padopbouw gebruiken — de SnelStart-koppeling leest deze paden
+// weer uit om het document aan de inkoopboeking te hangen.
+//
+// Geeft een array met paden terug; de aanroeper zet die als JSON in bijlage_url.
+export async function uploadKostenBonnen(files, companyId) {
+  if (!files?.length) return []
+  const cid = companyId || (await supabase.auth.getUser()
+    .then(({ data }) => supabase.from('profiles').select('company_id').eq('id', data?.user?.id).maybeSingle())
+    .then(({ data }) => data?.company_id))
+  if (!cid) throw new Error('Geen bedrijf gevonden voor de bijlage')
+
+  return await Promise.all(files.map(async (file) => {
+    const ext = (file.name || 'bestand').split('.').pop()
+    const path = `${cid}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+    const { error } = await supabase.storage.from('kosten-bijlagen').upload(path, file)
+    if (error) throw error
+    return path
+  }))
+}
+
 // Real DB columns: id, company_id, deal_id, description, amount, category,
 // cost_date, created_at, updated_at.
 

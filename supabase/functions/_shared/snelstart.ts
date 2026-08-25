@@ -562,6 +562,46 @@ export async function pushKostenBijlagen(
   return { gelukt, overgeslagen }
 }
 
+// Hangt de factuur-PDF als document aan een bestaande verkoopboeking. De PDF
+// staat in de privé-bucket factuur-pdfs op {company_id}/{factuur_id}.pdf; die
+// wordt bij het versturen van de factuur weggeschreven vanuit de browser (de
+// opmaak zit in jsPDF, dus hier valt niets te genereren).
+//
+// Staat er geen PDF, dan geeft dit `ontbreekt` terug in plaats van een fout: de
+// boeking zelf is dan al gelukt en mag niet sneuvelen op een ontbrekend bestand.
+// De aanroeper meldt het en probeert het bij een volgende sync opnieuw.
+export async function pushFactuurPdf(
+  admin: any, clientKey: string, companyId: string, factuur: any, verkoopboekingId: string,
+): Promise<{ gelukt: boolean; reden?: string }> {
+  if (!verkoopboekingId) return { gelukt: false, reden: 'geen boeking' }
+
+  const pad = `${companyId}/${factuur.id}.pdf`
+  try {
+    const { data: blob, error } = await admin.storage.from('factuur-pdfs').download(pad)
+    if (error || !blob) return { gelukt: false, reden: 'ontbreekt' }
+
+    const buf = await blob.arrayBuffer()
+    if (buf.byteLength > MAX_BIJLAGE_BYTES) return { gelukt: false, reden: 'groter dan 5 MB' }
+
+    // Het type staat in de bestandsnaam zodat een boekhouder in SnelStart meteen
+    // ziet of het een factuur of een creditnota is.
+    const soort = factuur.is_credit ? 'Creditfactuur' : 'Factuur'
+    await ssFetch(clientKey, '/documenten/Verkoopboekingen', {
+      method: 'POST',
+      body: JSON.stringify({
+        parentIdentifier: verkoopboekingId,
+        fileName: `${soort}-${factuur.nummer || factuur.id}.pdf`,
+        content: naarBase64(buf),
+      }),
+    })
+    await admin.from('facturen').update({ snelstart_bijlage_gesynct: true }).eq('id', factuur.id)
+    return { gelukt: true }
+  } catch (err: any) {
+    console.error(`Factuur-PDF ${factuur.nummer} naar SnelStart mislukt:`, err?.message)
+    return { gelukt: false, reden: err?.message ?? 'fout' }
+  }
+}
+
 // ── Kostencategorie → grootboek ─────────────────────────────────────────────
 // job_costs.category werd eerder genegeerd: álle kosten belandden op de
 // vraagpost, terwijl BossBase wél weet waar het om gaat. Per categorie een

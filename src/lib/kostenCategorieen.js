@@ -30,6 +30,19 @@ const VERVALLEN = ['Arbeid', 'Brandstof'];
 export const isGeldigeCategorie = cat =>
   KOSTEN_CATEGORIEEN.some(c => c.value === cat) || VERVALLEN.includes(cat);
 
+// Categorieën waarbij géén inkoopfactuur bestaat om te bewaren. Reiskosten is
+// meestal een kilometervergoeding: daar is geen bon van, en er een verzinnen is
+// erger dan hem missen. Bij alle andere categorieën koop je iets van een
+// leverancier en hoort de factuur bij de boeking — zonder bon kun je de btw niet
+// terugvorderen en heb je bij een controle niets te laten zien.
+const ZONDER_BON = ['Reiskosten', 'Arbeid'];
+
+export const bonVerplicht = categorie => !ZONDER_BON.includes(categorie);
+
+export const BON_VERPLICHT_MELDING =
+  'Voeg de factuur of bon toe. Zonder bewijsstuk kun je de btw niet terugvorderen '
+  + 'en staat de kostenpost straks zonder document in je boekhouding.';
+
 // Keuzelijst die de huidige waarde altijd bevat, ook als die vervallen is.
 export function categorieOptiesMet(huidige) {
   const opts = [...KOSTEN_CATEGORIEEN];

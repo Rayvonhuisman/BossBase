@@ -13,7 +13,7 @@ import { createCalendarEvent } from '../services/calendarService.js';
 import { createJobCost, updateJobCost } from '../services/jobCostService.js'
 import { listLeveranciers } from '../services/leverancierService.js'
 import LeverancierSelect from './LeverancierSelect.jsx'
-import { categorieOptiesMet, STANDAARD_CATEGORIE } from '../lib/kostenCategorieen.js';
+import { categorieOptiesMet, STANDAARD_CATEGORIE, bonVerplicht, BON_VERPLICHT_MELDING } from '../lib/kostenCategorieen.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
 import { getProjects } from '../services/projectsService.js';
 import { calcBtw } from '../utils/btw.js';
@@ -748,6 +748,9 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
     if (!form.cost_date) next.cost_date = 'Kies een datum';
     // Verplicht: zonder leverancier kan de kost niet naar de boekhouding.
     if (!form.leverancier_id) next.leverancier_id = 'Kies een leverancier';
+    // Idem voor het bewijsstuk. Reiskosten zijn uitgezonderd: een
+    // kilometervergoeding heeft geen factuur.
+    if (bonVerplicht(form.category) && bijlageFiles.length === 0) next.bijlage = BON_VERPLICHT_MELDING;
     regels.forEach((r, i) => {
       if (!r.omschrijving.trim()) next[`r${i}o`] = true;
       if (!r.bedrag || Number(r.bedrag) <= 0) next[`r${i}b`] = true;
@@ -1000,11 +1003,11 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
         {/* Bijlagen */}
         <div style={{ marginTop: 14 }}>
           <label style={{ fontSize: '.8rem', fontWeight: 600, color: 'var(--dk)', marginBottom: 6, display: 'block' }}>
-            Bijlagen
+            Factuur of bon{bonVerplicht(form.category) ? ' *' : ''}
           </label>
           <div
             style={{
-              border: `2px dashed ${dragOver ? 'var(--p)' : 'var(--border)'}`,
+              border: `2px dashed ${errors.bijlage ? 'var(--rd)' : dragOver ? 'var(--p)' : 'var(--border)'}`,
               borderRadius: 'var(--r8)',
               padding: '18px 16px',
               textAlign: 'center',
@@ -1035,6 +1038,9 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
             style={{ display: 'none' }}
             onChange={e => { addFiles(Array.from(e.target.files)); e.target.value = ''; }}
           />
+          {errors.bijlage && (
+            <div style={{ fontSize: '.76rem', lineHeight: 1.4, color: 'var(--rd)', marginTop: 6 }}>{errors.bijlage}</div>
+          )}
           {bijlageFiles.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
               {bijlageFiles.map((f, i) => (

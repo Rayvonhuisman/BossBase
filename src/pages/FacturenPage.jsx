@@ -21,6 +21,7 @@ import BtwRegimeSelect, { VerlegdUitleg } from '../components/BtwRegimeSelect.js
 import { regimeVanPct, regimeVanRegel, regimeVoorOpslag } from '../lib/btwRegime.js';
 import { generateFactuurPdf, previewFactuurPdf, getFactuurPdfBase64 } from '../utils/generatePdf.js';
 import { buildCompanySnapshot, companyForDocument, isFactuurLocked } from '../utils/documentSnapshot.js';
+import { bewaarFactuurPdf, PDF_STATUSSEN } from '../utils/bewaarFactuurPdf.js';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
 import { mailTemplate, mailButton } from '../utils/mailTemplate.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
@@ -370,7 +371,7 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
 
 // ── EDIT FACTUUR MODAL ────────────────────────────────────────────────────────
 
-function EditFactuurModal({ factuur, customers, onClose, onSaved, onSaveAndSend }) {
+function EditFactuurModal({ factuur, customers, company, onClose, onSaved, onSaveAndSend }) {
   const toast = useToast();
   const [form, setForm] = useState({
     status: factuur.status || 'aangemaakt',
@@ -387,6 +388,13 @@ function EditFactuurModal({ factuur, customers, onClose, onSaved, onSaveAndSend 
     // markeren) mag nog wijzigen, de inhoud niet.
     const payload = locked ? { status: form.status } : form;
     const updated = await updateFactuur(factuur.id, payload);
+    // Handmatig op verzonden/betaald zetten maakt de factuur net zo definitief
+    // als hem mailen. Zonder deze regel kwam er dan geen PDF in de bucket en
+    // belandde de verkoopboeking straks zonder brondocument in de boekhouding.
+    if (PDF_STATUSSEN.includes(updated.status) && !PDF_STATUSSEN.includes(factuur.status)) {
+      const customer = customers.find(c => c.id === updated.customerId);
+      bewaarFactuurPdf(updated, customer, company).catch(() => {});
+    }
     onSaved?.(updated);
     return updated;
   };
@@ -829,9 +837,11 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
         const factuurForPdf = factuur.isCredit ? { ...factuur, creditNote: factuur.notities } : factuur;
         const pdfBase64 = await getFactuurPdfBase64(factuurForPdf, regels, customer, companyForDocument(factuur, company));
         attachments = [{ filename: `Factuur-${factuur.nummer}.pdf`, content: pdfBase64 }];
-        // Dezelfde PDF opslaan zodat de Stripe-webhook (geen browser) 'm later als
-        // bijlage kan meesturen bij de betaalbevestiging. Best-effort, blokkeert niet.
-        uploadFactuurPdf(factuur.id, factuur.companyId, pdfBase64).catch(() => {});
+        // Dezelfde PDF bewaren: de Stripe-webhook stuurt hem mee bij de
+        // betaalbevestiging, en de boekhoudkoppeling hangt hem aan de
+        // verkoopboeking. Bewust await: het markeren als verzonden hieronder kan
+        // een sync aftrappen, en die moet de PDF al kunnen vinden.
+        await uploadFactuurPdf(factuur.id, factuur.companyId, pdfBase64);
       } catch (pdfErr) {
         console.warn('PDF bijlage genereren mislukt:', pdfErr.message);
       }
@@ -1158,6 +1168,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
         <EditFactuurModal
           factuur={editFactuur}
           customers={customers}
+          company={company}
           onClose={() => setEditFactuur(null)}
           onSaved={saved => { handleSaved(saved); setEditFactuur(null); }}
           onSaveAndSend={saved => { handleSaved(saved); setEditFactuur(null); setSendMailFactuur({ factuur: saved, templateType: 'factuur' }); }}

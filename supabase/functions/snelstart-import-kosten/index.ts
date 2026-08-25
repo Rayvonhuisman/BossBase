@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient, isScheduledCall } from "../_shared/scheduledSync.ts"
-import { ssFetch, ssFetchAll, forEachSnelStartCompany, pushVerkoopboeking, getActieveGrootboeken, ensureRelatie, pushInkoopboeking, pushKostenBijlagen } from "../_shared/snelstart.ts"
+import { ssFetch, ssFetchAll, forEachSnelStartCompany, pushVerkoopboeking, pushFactuurPdf, getActieveGrootboeken, ensureRelatie, pushInkoopboeking, pushKostenBijlagen } from "../_shared/snelstart.ts"
 
 // Kosten/facturen-synchronisatie met SnelStart, twee richtingen:
 //   * EXPORT (altijd): verzonden/betaalde BossBase-facturen zonder snelstart_id
@@ -44,7 +44,8 @@ function pctVoorBtwSoort(soort: string): number {
 // Fouten worden verzameld i.p.v. alleen gelogd: anders meldt de sync "0
 // facturen" zonder dat iemand kan zien waarom.
 async function exportFacturen(
-  supabase: any, companyId: string, clientKey: string, paidOnly: boolean, foutenF: string[],
+  supabase: any, companyId: string, clientKey: string, paidOnly: boolean,
+  foutenF: string[], meldingenF: string[],
 ): Promise<number> {
   const { data: teExporteren } = await supabase
     .from('facturen')
@@ -56,7 +57,12 @@ async function exportFacturen(
     .limit(50)
 
   const lijst = teExporteren || []
-  if (!lijst.length) return 0
+  // Géén vroege return bij een lege lijst: de PDF's hieronder moeten ook
+  // nagestuurd worden als er niets nieuws te boeken valt.
+  if (!lijst.length) {
+    await stuurFactuurPdfsNa(supabase, companyId, clientKey, meldingenF)
+    return 0
+  }
 
   const grootboeken = await getActieveGrootboeken(clientKey)
   const relaties = await ssFetchAll(clientKey, '/relaties')
@@ -80,13 +86,53 @@ async function exportFacturen(
         .from('factuur_regels').select('*').eq('factuur_id', factuur.id).order('volgorde', { ascending: true })
       const r = await pushVerkoopboeking(supabase, clientKey, companyId, factuur, regels || [], grootboeken)
       if (r.snelstart_id && !r.already_synced) exported++
+      // De PDF hangt los van de boeking: mislukt hij, dan blijft de vlag op
+      // false en pakt stuurFactuurPdfsNa hem de volgende keer op.
+      if (r.snelstart_id) {
+        await pushFactuurPdf(supabase, clientKey, companyId, factuur, r.snelstart_id)
+      }
     } catch (err: any) {
       console.error(`Factuur ${factuur.nummer} exporteren mislukt:`, err.message)
       foutenF.push(`Factuur ${factuur.nummer}: ${err.message}`)
     }
   }
+  await stuurFactuurPdfsNa(supabase, companyId, clientKey, meldingenF)
   console.log('Facturen naar SnelStart geboekt:', exported)
   return exported
+}
+
+// PDF's nasturen bij verkoopboekingen die er al zijn. Nodig omdat de PDF door de
+// browser wordt weggeschreven bij het versturen van de factuur: een sync die daar
+// net tussendoor liep boekte zonder document. Zonder deze stap kwam de factuur
+// er nooit meer bij, want de boeking wordt daarna overgeslagen.
+//
+// Ontbreekt de PDF nog steeds, dan is de factuur nooit vanuit BossBase verstuurd
+// (bijvoorbeeld handmatig op 'verzonden' gezet). Dat melden we terug in plaats
+// van het stil te laten — een boeking zonder brondocument is precies wat we
+// wilden voorkomen.
+async function stuurFactuurPdfsNa(
+  supabase: any, companyId: string, clientKey: string, meldingenF: string[],
+): Promise<void> {
+  const { data: naTeSturen } = await supabase
+    .from('facturen')
+    .select('id, nummer, is_credit, snelstart_id')
+    .eq('company_id', companyId)
+    .not('snelstart_id', 'is', null)
+    .eq('snelstart_bijlage_gesynct', false)
+    .limit(50)
+
+  const zonderPdf: string[] = []
+  for (const f of (naTeSturen || [])) {
+    const r = await pushFactuurPdf(supabase, clientKey, companyId, f, f.snelstart_id)
+    if (!r.gelukt && r.reden === 'ontbreekt') zonderPdf.push(f.nummer || f.id)
+  }
+  if (zonderPdf.length) {
+    meldingenF.push(
+      `${zonderPdf.length} ${zonderPdf.length === 1 ? 'factuur staat' : 'facturen staan'} zonder PDF in de boekhouding `
+      + `(${zonderPdf.slice(0, 5).join(', ')}${zonderPdf.length > 5 ? ', …' : ''}). `
+      + 'Verstuur de factuur vanuit BossBase, dan wordt de PDF alsnog meegestuurd.',
+    )
+  }
 }
 
 async function importKosten(
@@ -334,7 +380,8 @@ async function syncCompany(
   meldingen: string[];
 }> {
   const factuurFouten: string[] = []
-  const exported = await exportFacturen(supabase, companyId, clientKey, paidOnly, factuurFouten)
+  const factuurMeldingen: string[] = []
+  const exported = await exportFacturen(supabase, companyId, clientKey, paidOnly, factuurFouten, factuurMeldingen)
   const imported = importCosts ? await importKosten(supabase, companyId, clientKey) : 0
   const kosten = importCosts
     ? await exportKosten(supabase, companyId, clientKey)
@@ -352,9 +399,9 @@ async function syncCompany(
     kostenResterend: kosten.resterend,
     // Wat er per regel misging — zodat de gebruiker niet naar "0" zit te kijken.
     fouten: [...factuurFouten, ...kosten.fouten],
-    // Velden die SnelStart afwees maar die we hebben overgeslagen zodat de
-    // relatie tóch kon ontstaan.
-    meldingen: kosten.meldingen,
+    // Wat er wel doorging maar aandacht vraagt: afgewezen relatievelden,
+    // kosten zonder leverancier, boekingen zonder brondocument.
+    meldingen: [...factuurMeldingen, ...kosten.meldingen],
   }
 }
 

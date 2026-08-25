@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listLeveranciers } from '../../services/leverancierService.js';
 import LeverancierSelect from '../../components/LeverancierSelect.jsx';
-import { categorieOptiesMet, STANDAARD_CATEGORIE } from '../../lib/kostenCategorieen.js';
+import { categorieOptiesMet, STANDAARD_CATEGORIE, bonVerplicht, BON_VERPLICHT_MELDING } from '../../lib/kostenCategorieen.js';
 import { Maximize2, Minimize2, AlertTriangle, AlertOctagon } from 'lucide-react';
 import { I, ModalX, NotifyMailToggle, fmt, fmt0, CostCategoryBadge } from '../../bb-shared.jsx';
 import { useToast } from '../../lib/toast.jsx';
@@ -23,7 +23,7 @@ import {
   PROJECT_STATUS_OPTIONS,
 } from '../../services/projectsService.js';
 import { getWerkbonnenByProject, createWerkbon } from '../../services/werkbonService.js';
-import { getProjectCosts, createJobCost, deleteJobCost } from '../../services/jobCostService.js';
+import { getProjectCosts, createJobCost, deleteJobCost, uploadKostenBonnen } from '../../services/jobCostService.js';
 import { calcBtw, BTW_PCT_OPTIONS } from '../../utils/btw.js';
 import { NewFactuurModal, SendFactuurMailModal } from '../FacturenPage.jsx';
 import { NewOfferteModal, SendOfferteMailModal } from '../OffertesPage.jsx';
@@ -540,17 +540,6 @@ function UrenTab({ project, entries, onAdd, onDelete, canManage }) {
               <label>Uren</label>
               <input type="number" min="0" step="0.25" placeholder="0,0" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.hours} onChange={e => set('hours', e.target.value)} />
             </div>
-            <div className="f" style={{ flex: '1 1 130px', minWidth: 0 }}>
-              <label>Leverancier *</label>
-              <LeverancierSelect
-                value={form.leverancier_id}
-                onChange={v => set('leverancier_id', v)}
-                leveranciers={leveranciers}
-                onLijstGewijzigd={g => setLeveranciers(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
-                verplicht
-                style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}
-              />
-            </div>
             <div className="f" style={{ flex: '1 1 100%', minWidth: 0 }}>
               <label>Omschrijving</label>
               <input type="text" placeholder="Wat heb je gedaan?" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.description} onChange={e => set('description', e.target.value)} />
@@ -622,6 +611,7 @@ function KostenTab({ project, canManage }) {
   });
   const [leveranciers, setLeveranciers] = useState([]);
   useEffect(() => { listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(() => {}); }, []);
+  const [bonFiles, setBonFiles] = useState([]);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const btwLive = calcBtw(form.amount, form.btw_pct, form.btw_mode);
@@ -640,9 +630,15 @@ function KostenTab({ project, canManage }) {
     if (!Number(form.amount) || Number(form.amount) <= 0) { toast.error('Bedrag moet groter zijn dan 0'); return; }
     // Leverancier is verplicht: zonder relatie kan de kost niet naar de boekhouding.
     if (!form.leverancier_id) { toast.error('Kies een leverancier'); return; }
+    // Bewijsstuk idem, behalve waar er geen factuur bestaat (reiskosten).
+    if (bonVerplicht(form.category) && bonFiles.length === 0) { toast.error(BON_VERPLICHT_MELDING); return; }
     setSaving(true);
     try {
       const { excl } = calcBtw(form.amount, form.btw_pct, form.btw_mode);
+      // De bon eerst uploaden: hier is geen achtergrond-indicator zoals in de
+      // kostenmodal, en een kost die vervolgens zonder bijlage wordt opgeslagen
+      // is precies wat de verplichting moet voorkomen.
+      const bijlage_url = bonFiles.length ? JSON.stringify(await uploadKostenBonnen(bonFiles)) : null;
       await createJobCost({
         description: form.description || form.category,
         amount: excl, // exclusief BTW opslaan
@@ -653,8 +649,10 @@ function KostenTab({ project, canManage }) {
         cost_date: form.cost_date,
         project_id: project.id,
         customer_id: project.customerId || null,
+        bijlage_url,
       });
       setForm(f => ({ ...f, description: '', amount: '' }));
+      setBonFiles([]);
       toast.success('Kosten toegevoegd');
       load();
     } catch (e) {
@@ -724,9 +722,30 @@ function KostenTab({ project, canManage }) {
                 {categorieOptiesMet(form.category).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
+            <div className="f" style={{ flex: '1 1 130px', minWidth: 0 }}>
+              <label>Leverancier *</label>
+              <LeverancierSelect
+                value={form.leverancier_id}
+                onChange={v => set('leverancier_id', v)}
+                leveranciers={leveranciers}
+                onLijstGewijzigd={g => setLeveranciers(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
+                verplicht
+                style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}
+              />
+            </div>
             <div className="f" style={{ flex: '1 1 100%', minWidth: 0 }}>
               <label>Omschrijving</label>
               <input type="text" placeholder="Waar zijn de kosten voor?" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.description} onChange={e => set('description', e.target.value)} />
+            </div>
+            <div className="f" style={{ flex: '1 1 100%', minWidth: 0 }}>
+              <label>Factuur of bon{bonVerplicht(form.category) ? ' *' : ''}</label>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,application/pdf"
+                multiple
+                style={{ width: '100%', minWidth: 0, boxSizing: 'border-box', fontSize: 12 }}
+                onChange={e => setBonFiles(Array.from(e.target.files))}
+              />
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>

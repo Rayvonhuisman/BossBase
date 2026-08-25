@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient, isScheduledCall } from "../_shared/scheduledSync.ts"
-import { pushVerkoopboeking } from "../_shared/snelstart.ts"
+import { pushVerkoopboeking, pushFactuurPdf } from "../_shared/snelstart.ts"
 
 // Pusht ÉÉN BossBase-factuur als verkoopboeking naar SnelStart (zie
 // pushVerkoopboeking in _shared/snelstart.ts voor het boekingsmodel).
@@ -66,11 +66,19 @@ serve(async (req) => {
 
     const result = await pushVerkoopboeking(admin, conn.client_key, companyId, factuur, regels || [])
 
+    // Factuur-PDF erbij. Los van de boeking: een ontbrekend of te groot bestand
+    // mag een geslaagde boeking niet ongedaan maken. Lukt het niet, dan blijft
+    // snelstart_bijlage_gesynct op false en pikt de periodieke sync hem op.
+    let bijlage: { gelukt: boolean; reden?: string } = { gelukt: false, reden: 'geen boeking' }
+    if (result.snelstart_id && !factuur.snelstart_bijlage_gesynct) {
+      bijlage = await pushFactuurPdf(admin, conn.client_key, companyId, factuur, result.snelstart_id)
+    }
+
     await admin.from('accounting_connections')
       .update({ last_synced_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq('company_id', companyId).eq('provider', 'snelstart')
 
-    return json({ success: true, ...result })
+    return json({ success: true, ...result, bijlage })
   } catch (err: any) {
     console.error('Error:', err?.message, err?.stack)
     return json({ success: false, error: err?.message }, 500)
