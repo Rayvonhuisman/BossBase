@@ -233,30 +233,34 @@ function afdrachtBtwSoort(regime: BtwRegime, pct: number): string {
 // VerkopenBtwVrij bestaat wél in de API-enum maar in geen enkele standaard-
 // administratie (0 van 233 grootboeken), en aanmaken via POST /grootboeken
 // geeft een 500. Daarom niet gebruikt.
-function omzetGrootboekfunctie(regime: BtwRegime, pct: number): string {
-  if (regime === 'verlaagd') return 'VerkopenOmzetLaag'
-  if (regime === 'verlegd' || regime === 'vrijgesteld') return 'VerkopenOmzetOnbelastVerlegd'
-  if (pct === 21) return 'VerkopenOmzetHoog'
-  return 'VerkopenOmzetOverig'
-}
-
-// Toegestane terugvallen per regime, in volgorde van voorkeur. Bewust een
-// expliciete lijst en NIET meer "het eerste beste Verkopen*-grootboek dat deze
-// btw-soort accepteert": die brede terugval boekte 0%-omzet stilzwijgend op
-// "Omzet verlegd". Staat er niets uit deze lijst in de administratie, dan
-// stoppen we met een duidelijke fout in plaats van iets fout weg te boeken.
-const OMZET_TERUGVAL: Record<BtwRegime, string[]> = {
-  normaal:     ['VerkopenOmzetHoog', 'VerkopenOmzetOverig'],
-  verlaagd:    ['VerkopenOmzetLaag', 'VerkopenOmzetOverig'],
-  vrijgesteld: ['VerkopenOmzetOnbelastVerlegd'],
-  verlegd:     ['VerkopenOmzetOnbelastVerlegd'],
-}
-
+// De keuze van de rekening zelf staat in _shared/grootboekKeuze.ts: op nummer,
+// met de functie als controle. Zoeken op functie alléén wees geen rekening aan
+// maar een groep van tientallen, waaruit willekeurig geplukt werd.
 const REGIME_LABEL: Record<BtwRegime, string> = {
   normaal: 'normaal (21%)',
   verlaagd: 'verlaagd (9%)',
   vrijgesteld: 'vrijgesteld (0%)',
   verlegd: 'btw verlegd (0%)',
+}
+
+// Per bedrijf ingestelde grootboekrekeningen (laag 2). Sleutel is
+// 'kosten:<categorie>' of 'omzet:<regime>', waarde het rekeningnummer.
+export type Voorkeuren = Record<string, number | null | undefined>
+
+// Leest de instellingen van één bedrijf. Leeg als er niets is ingesteld — dan
+// gelden de standaard voorkeursnummers uit grootboekKeuze.ts.
+export async function getGrootboekVoorkeuren(admin: any, companyId: string): Promise<Voorkeuren> {
+  const { data, error } = await admin
+    .from('grootboek_voorkeuren')
+    .select('sleutel, grootboek_nummer')
+    .eq('company_id', companyId)
+    .eq('provider', 'snelstart')
+  // Bestaat de tabel nog niet (migratie niet gedraaid), dan gewoon door met de
+  // standaardmapping in plaats van de hele sync laten klappen.
+  if (error) { console.warn('Grootboekvoorkeuren niet gelezen:', error.message); return {} }
+  const uit: Voorkeuren = {}
+  for (const r of (data || [])) uit[r.sleutel] = Number(r.grootboek_nummer) || null
+  return uit
 }
 
 export async function getActieveGrootboeken(clientKey: string): Promise<any[]> {
@@ -276,6 +280,7 @@ export async function getActieveGrootboeken(clientKey: string): Promise<any[]> {
 export async function pushVerkoopboeking(
   admin: any, clientKey: string, companyId: string, factuur: any, regels: any[],
   grootboeken?: any[], bekendeRelaties?: any[], meldingen?: string[],
+  voorkeuren?: Voorkeuren,
 ) {
   if (factuur.snelstart_id) {
     return { snelstart_id: factuur.snelstart_id, already_synced: true }
@@ -288,19 +293,15 @@ export async function pushVerkoopboeking(
   if (!relatieId) throw new Error('Kon geen SnelStart-relatie bepalen voor de klant')
 
   const gbs = grootboeken ?? await getActieveGrootboeken(clientKey)
+  // Waarschuwingen over teruggevallen rekeningen één keer per factuur melden,
+  // niet één keer per regel: drie regels van hetzelfde regime gaven anders drie
+  // identieke meldingen.
+  const gemeld = new Set<string>()
   const grootboekVoorRegime = (regime: BtwRegime, pct: number): string => {
-    // Alleen expliciet toegestane functies, in volgorde van voorkeur.
-    const kandidaten = [omzetGrootboekfunctie(regime, pct), ...OMZET_TERUGVAL[regime]]
-    for (const functie of kandidaten) {
-      const gb = gbs.find((g: any) => g.grootboekfunctie === functie)
-      if (gb?.id) return gb.id
-    }
-    const beschikbaar = [...new Set(gbs.map((g: any) => g.grootboekfunctie).filter((f: any) => String(f || '').startsWith('Verkopen')))].join(', ')
-    throw new Error(
-      `Geen passend omzet-grootboek voor ${REGIME_LABEL[regime]} in de administratie. `
-      + `Gezocht op: ${kandidaten.join(', ')}. Beschikbare verkoopfuncties: ${beschikbaar || 'geen'}. `
-      + `Maak in SnelStart een omzetgrootboek met de juiste functie aan; wij boeken bewust niet op een ander grootboek.`,
-    )
+    const eigen: string[] = []
+    const keuze = kiesOmzetGrootboek(gbs, regime, pct, voorkeuren?.[`omzet:${regime}`], eigen)
+    for (const m of eigen) if (!gemeld.has(m)) { gemeld.add(m); meldingen?.push(m) }
+    return keuze.id
   }
 
   const regelExcl = (r: any) =>
@@ -602,49 +603,6 @@ export async function pushFactuurPdf(
   }
 }
 
-// ── Kostencategorie → grootboek ─────────────────────────────────────────────
-// job_costs.category werd eerder genegeerd: álle kosten belandden op de
-// vraagpost, terwijl BossBase wél weet waar het om gaat. Per categorie een
-// voorkeursvolgorde van grootboekfuncties; {tarief} wordt Hoog/Laag/Overig op
-// basis van het btw-percentage. Vraagposten blijft de laatste terugval, zodat
-// een administratie zonder het gewenste grootboek nog steeds doorboekt (en de
-// boekhouder het daar zelf herverdeelt).
-//
-// Materiaal telt als inkoop van goederen; arbeid, reiskosten en gereedschap als
-// kosten. Inkoopfactuur is een verzamelcategorie zonder duidelijke kostensoort
-// en gaat daarom rechtstreeks naar de brede kostenrekening.
-const KOSTEN_GROOTBOEK: Record<string, string[]> = {
-  'Materiaal':     ['Inkopen{tarief}', 'InkopenKosten{tarief}', 'InkopenKostenAlleBtwTarieven'],
-  'Arbeid':        ['InkopenKosten{tarief}', 'InkopenKostenAlleBtwTarieven'],
-  'Reiskosten':    ['InkopenKosten{tarief}', 'InkopenKostenAlleBtwTarieven'],
-  'Gereedschap':   ['InkopenKosten{tarief}', 'InkopenKostenAlleBtwTarieven'],
-  'Inkoopfactuur': ['InkopenKostenAlleBtwTarieven', 'InkopenKosten{tarief}', 'Inkopen{tarief}'],
-}
-
-const TARIEF_SUFFIX = (pct: number) => (pct === 21 ? 'Hoog' : pct === 9 ? 'Laag' : 'Overig')
-
-// Grootboek voor een kosten-export: eerst de categorie-specifieke functies,
-// daarna altijd de vraagpost als vangnet.
-function inkoopGrootboekVoorKost(gbs: any[], categorie: string, pct: number): { id: string; viaVraagpost: boolean } {
-  const suffix = TARIEF_SUFFIX(pct)
-  const kandidaten = (KOSTEN_GROOTBOEK[categorie] || [])
-    .map(f => f.replace('{tarief}', suffix))
-
-  for (const functie of kandidaten) {
-    const gb = gbs.find((g: any) => g.grootboekfunctie === functie)
-    if (gb?.id) return { id: gb.id, viaVraagpost: false }
-  }
-
-  const vraagpost = gbs.find((g: any) => g.grootboekfunctie === 'InkopenVraagPosten')
-  if (vraagpost?.id) return { id: vraagpost.id, viaVraagpost: true }
-
-  const beschikbaar = [...new Set(gbs.map((g: any) => g.grootboekfunctie).filter((f: any) => String(f || '').startsWith('Inkopen')))].join(', ')
-  throw new Error(
-    `Geen inkoop-grootboek voor categorie "${categorie}" (${pct}% btw) en geen vraagpostenrekening in de administratie; `
-    + `beschikbare inkoopfuncties: ${beschikbaar || 'geen'}`,
-  )
-}
-
 // Boekt ÉÉN handmatige BossBase-kostenregel als inkoopboeking in SnelStart
 // (POST /v2/inkoopboekingen, scope boekhouden:write). De kostencategorie
 // bepaalt het grootboek; belandt de boeking alsnog op de vraagpost (categorie
@@ -657,7 +615,7 @@ function inkoopGrootboekVoorKost(gbs: any[], categorie: string, pct: number): { 
 // het bij de bron wordt opgelost.
 export async function pushInkoopboeking(
   admin: any, clientKey: string, cost: any, grootboeken: any[],
-  bekendeRelaties?: any[], meldingen?: string[],
+  bekendeRelaties?: any[], meldingen?: string[], voorkeuren?: Voorkeuren,
 ) {
   if (cost.snelstart_id) return { snelstart_id: cost.snelstart_id, already_synced: true }
 
@@ -677,7 +635,9 @@ export async function pushInkoopboeking(
   const excl = round2(cost.btw_inclusief ? bedrag / (1 + pct / 100) : bedrag)
   const btwBedrag = round2(excl * pct / 100)
 
-  const { id: grootboekId, viaVraagpost } = inkoopGrootboekVoorKost(grootboeken, categorie, pct)
+  const keuze = kiesInkoopGrootboek(grootboeken, categorie, pct, voorkeuren?.[`kosten:${categorie}`], meldingen)
+  const grootboekId = keuze.id
+  const viaVraagpost = keuze.bron === 'vraagpost'
   const basisOmschrijving = cost.description || categorie || 'Kostenregel'
   // Alleen nog "controleren" als de boeking daadwerkelijk op de vraagpost
   // eindigt; een correct ingedeelde kostenpost hoeft niet nagelopen te worden.

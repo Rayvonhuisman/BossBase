@@ -2,6 +2,14 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient, isScheduledCall } from "../_shared/scheduledSync.ts"
 import { ssFetchAll, ensureRelatie, forEachSnelStartCompany, ontbrekendeAdresvelden } from "../_shared/snelstart.ts"
 
+// Systeemrelaties dragen een negatief relatienummer. Alleen daarop filteren en
+// niet op naam: de naam is taalafhankelijk, het nummer niet, en een echte klant
+// krijgt nooit een negatief nummer.
+const isSysteemrelatie = (relatie: any): boolean => {
+  const code = Number(relatie?.relatiecode)
+  return Number.isFinite(code) && code < 0
+}
+
 // Contacten twee-richtingen sync met SnelStart (spiegel van moneybird-sync-
 // contacten). Scopes: relaties:read + relaties:write.
 //
@@ -21,12 +29,21 @@ type AdresWaarschuwing = { klant: string; mist: string[] }
 
 async function syncCompany(
   supabase: any, companyId: string, clientKey: string,
-): Promise<{ imported: number; exported: number; adresWaarschuwingen: AdresWaarschuwing[] }> {
+): Promise<{ imported: number; exported: number; adresWaarschuwingen: AdresWaarschuwing[]; systeemrelaties: number }> {
   let imported = 0
   let exported = 0
   const adresWaarschuwingen: AdresWaarschuwing[] = []
+  let systeemrelaties = 0
 
   // ── A: SNELSTART → BOSSBASE ──────────────────────────────────────────────
+  // Systeemrelaties van SnelStart zelf overslaan. Elke administratie heeft er
+  // twee — "Klant onbekend" en "Leverancier onbekend" — die niet verwijderd
+  // kunnen worden en herkenbaar zijn aan een NEGATIEF relatienummer (-2 en -1).
+  // Ze importeren vervuilt het klantenbestand met relaties waar nooit iets aan
+  // hangt, en verwijderen helpt niet: bij de volgende sync staan ze er weer.
+  //
+  // Het nummer is leidend, niet de naam: de naam is taalafhankelijk en een echte
+  // klant zou hem theoretisch kunnen voeren.
   // Alleen klanten (geen pure leveranciers); filter-casing conform het
   // documentatievoorbeeld: Relatiesoort/any(r:r eq '...').
   const relaties = await ssFetchAll(clientKey, `/relaties?$filter=${encodeURIComponent("Relatiesoort/any(r:r eq 'Klant')")}`)
@@ -50,6 +67,7 @@ async function syncCompany(
     const name = (relatie.naam || '').trim()
     if (!name) continue
     if (relatie.nonactief === true) continue
+    if (isSysteemrelatie(relatie)) { systeemrelaties++; continue }
     if (bySnelstartId.has(String(relatie.id))) continue
 
     const emailKey = (relatie.email || '').toLowerCase()
@@ -81,7 +99,7 @@ async function syncCompany(
       }
     }
   }
-  console.log('Geïmporteerd van SnelStart:', imported)
+  console.log('Geïmporteerd van SnelStart:', imported, `(${systeemrelaties} systeemrelaties overgeslagen)`)
 
   // ── B: BOSSBASE → SNELSTART ──────────────────────────────────────────────
   const { data: unsynced } = await supabase
@@ -117,7 +135,7 @@ async function syncCompany(
     .eq('company_id', companyId)
     .eq('provider', 'snelstart')
 
-  return { imported, exported, adresWaarschuwingen }
+  return { imported, exported, adresWaarschuwingen, systeemrelaties }
 }
 
 serve(async (req) => {

@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient, isScheduledCall } from "../_shared/scheduledSync.ts"
-import { ssFetch, ssFetchAll, forEachSnelStartCompany, pushVerkoopboeking, pushFactuurPdf, getActieveGrootboeken, ensureRelatie, pushInkoopboeking, pushKostenBijlagen } from "../_shared/snelstart.ts"
+import { ssFetch, ssFetchAll, forEachSnelStartCompany, pushVerkoopboeking, pushFactuurPdf, getActieveGrootboeken, ensureRelatie, pushInkoopboeking, pushKostenBijlagen, getGrootboekVoorkeuren } from "../_shared/snelstart.ts"
 
 // Kosten/facturen-synchronisatie met SnelStart, twee richtingen:
 //   * EXPORT (altijd): verzonden/betaalde BossBase-facturen zonder snelstart_id
@@ -65,6 +65,7 @@ async function exportFacturen(
   }
 
   const grootboeken = await getActieveGrootboeken(clientKey)
+  const voorkeuren = await getGrootboekVoorkeuren(supabase, companyId)
   const relaties = await ssFetchAll(clientKey, '/relaties')
   // Cache per klant: voorkomt dubbele relaties wanneer meerdere facturen van
   // dezelfde (nog ongekoppelde) klant in één run zitten.
@@ -84,7 +85,7 @@ async function exportFacturen(
       }
       const { data: regels } = await supabase
         .from('factuur_regels').select('*').eq('factuur_id', factuur.id).order('volgorde', { ascending: true })
-      const r = await pushVerkoopboeking(supabase, clientKey, companyId, factuur, regels || [], grootboeken)
+      const r = await pushVerkoopboeking(supabase, clientKey, companyId, factuur, regels || [], grootboeken, relaties, meldingenF, voorkeuren)
       if (r.snelstart_id && !r.already_synced) exported++
       // De PDF hangt los van de boeking: mislukt hij, dan blijft de vlag op
       // false en pakt stuurFactuurPdfsNa hem de volgende keer op.
@@ -263,9 +264,10 @@ const KOSTEN_BATCH = 50
 // Boekt een batch kostenregels. Apart gehouden zodat exportKosten ook zonder
 // nieuwe regels doorloopt naar het nasturen van bonnen.
 async function boekKosten(
-  supabase: any, clientKey: string, lijst: any[], fouten: string[], meldingen: string[],
+  supabase: any, companyId: string, clientKey: string, lijst: any[], fouten: string[], meldingen: string[],
 ): Promise<number> {
   const grootboeken = await getActieveGrootboeken(clientKey)
+  const voorkeuren = await getGrootboekVoorkeuren(supabase, companyId)
   // Eén keer ophalen en doorgeven: ensureLeverancier matcht client-side op naam
   // en zet nieuwe relaties in deze lijst bij, zodat twee kostenregels van
   // dezelfde leverancier niet twee relaties aanmaken.
@@ -274,7 +276,7 @@ async function boekKosten(
   let exported = 0
   for (const cost of lijst) {
     try {
-      const r = await pushInkoopboeking(supabase, clientKey, cost, grootboeken, relaties, meldingen)
+      const r = await pushInkoopboeking(supabase, clientKey, cost, grootboeken, relaties, meldingen, voorkeuren)
       if (r.snelstart_id && !r.already_synced) exported++
     } catch (err: any) {
       console.error(`Kostenregel ${cost.id} exporteren mislukt:`, err.message)
@@ -333,7 +335,7 @@ async function exportKosten(
   const lijst = teExporteren || []
   // Géén vroege return bij een lege lijst: het nasturen van bonnen hieronder
   // moet ook draaien als er niets nieuws te boeken valt.
-  const exported = lijst.length ? await boekKosten(supabase, clientKey, lijst, fouten, meldingen) : 0
+  const exported = lijst.length ? await boekKosten(supabase, companyId, clientKey, lijst, fouten, meldingen) : 0
   // Bonnen nasturen bij boekingen die al bestaan. Bijlagen worden ná het
   // opslaan van de kost op de achtergrond geüpload, dus een sync die daar net
   // tussendoor liep boekte zonder bon. Zonder deze stap kwam die bon er nooit

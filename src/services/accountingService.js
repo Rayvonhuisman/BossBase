@@ -292,3 +292,59 @@ export async function updateContactInMoneybird(customerId) {
   if (error) throw error
   return data
 }
+
+// ── Grootboekindeling per bedrijf ───────────────────────────────────────────
+// Welke rekening krijgt een kostencategorie of omzetsoort in de boekhouding?
+//
+// Standaard kiest de koppeling zelf, op voorkeursnummers uit het gangbare
+// Nederlandse rekeningschema. Dat gaat mis zodra een administratie anders is
+// ingericht: een grootboekFUNCTIE wijst geen rekening aan maar een groep van
+// tientallen, en dan werd er willekeurig geplukt. Hier kan de klant het
+// vastleggen.
+
+/** Alle actieve grootboekrekeningen uit de administratie van de klant. */
+export async function getGrootboekrekeningen() {
+  const { data, error } = await supabase.functions.invoke('snelstart-grootboek-setup', {
+    body: { lijst: true },
+  })
+  if (error) throw error
+  return data?.grootboeken || []
+}
+
+export async function getGrootboekVoorkeuren() {
+  const { data, error } = await supabase
+    .from('grootboek_voorkeuren')
+    .select('sleutel, grootboek_nummer, omschrijving')
+    .eq('provider', 'snelstart')
+  if (error) throw error
+  const uit = {}
+  for (const r of (data || [])) uit[r.sleutel] = { nummer: r.grootboek_nummer, omschrijving: r.omschrijving }
+  return uit
+}
+
+/**
+ * Legt één keuze vast, of wist hem als `grootboek` leeg is — dan valt de
+ * koppeling terug op de standaardindeling.
+ */
+export async function setGrootboekVoorkeur(sleutel, grootboek) {
+  const companyId = await getCompanyId()
+  if (!grootboek?.nummer) {
+    const { error } = await supabase.from('grootboek_voorkeuren')
+      .delete().eq('company_id', companyId).eq('provider', 'snelstart').eq('sleutel', sleutel)
+    if (error) throw error
+    return null
+  }
+  const rij = {
+    company_id: companyId,
+    provider: 'snelstart',
+    sleutel,
+    grootboek_nummer: Number(grootboek.nummer),
+    grootboek_id: grootboek.id || null,
+    omschrijving: grootboek.omschrijving || null,
+    updated_at: new Date().toISOString(),
+  }
+  const { error } = await supabase.from('grootboek_voorkeuren')
+    .upsert(rij, { onConflict: 'company_id,provider,sleutel' })
+  if (error) throw error
+  return rij
+}

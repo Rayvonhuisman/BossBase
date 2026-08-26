@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient, isScheduledCall } from "../_shared/scheduledSync.ts"
-import { pushVerkoopboeking, pushFactuurPdf } from "../_shared/snelstart.ts"
+import { pushVerkoopboeking, pushFactuurPdf, getGrootboekVoorkeuren } from "../_shared/snelstart.ts"
 
 // Pusht ÉÉN BossBase-factuur als verkoopboeking naar SnelStart (zie
 // pushVerkoopboeking in _shared/snelstart.ts voor het boekingsmodel).
@@ -64,7 +64,10 @@ serve(async (req) => {
     const { data: regels } = await admin
       .from('factuur_regels').select('*').eq('factuur_id', factuurId).order('volgorde', { ascending: true })
 
-    const result = await pushVerkoopboeking(admin, conn.client_key, companyId, factuur, regels || [])
+    const meldingen: string[] = []
+    const voorkeuren = await getGrootboekVoorkeuren(admin, companyId)
+    const result = await pushVerkoopboeking(
+      admin, conn.client_key, companyId, factuur, regels || [], undefined, undefined, meldingen, voorkeuren)
 
     // Factuur-PDF erbij. Los van de boeking: een ontbrekend of te groot bestand
     // mag een geslaagde boeking niet ongedaan maken. Lukt het niet, dan blijft
@@ -78,7 +81,7 @@ serve(async (req) => {
       .update({ last_synced_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq('company_id', companyId).eq('provider', 'snelstart')
 
-    return json({ success: true, ...result, bijlage })
+    return json({ success: true, ...result, bijlage, meldingen })
   } catch (err: any) {
     console.error('Error:', err?.message, err?.stack)
     return json({ success: false, error: err?.message }, 500)

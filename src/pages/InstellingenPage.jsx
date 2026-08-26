@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { I, ModalX, STAGE_COLOR_OPTIONS, stageColToHex, stageColorLabel, stageBadgeStyle } from '../bb-shared.jsx';
 import { supabase } from '../lib/supabase.js';
+import GrootboekIndeling from '../components/GrootboekIndeling.jsx';
 import { useToast } from '../lib/toast.jsx';
 import SyncBanner from '../components/SyncBanner.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -2685,6 +2686,8 @@ export function InstellingenPage() {
                 </ul>
               </div>
             )}
+
+            <GrootboekIndeling verbonden={!!ssConnection?.connected} />
 
             <div className="fa" style={{ flexWrap: 'wrap', gap: 8 }}>
               {ssConnection?.connected && (
