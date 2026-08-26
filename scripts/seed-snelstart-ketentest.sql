@@ -92,8 +92,12 @@ begin
   insert into public.facturen
     (company_id, customer_id, nummer, status, factuurdatum, vervaldatum,
      totaal_excl, totaal_incl, betaaltermijn_dagen)
+  -- 300 @ 21% = 63,00 · 200 @ 9% = 18,00 · 100 verlegd = 0,00 → 81,00 btw.
+  -- Stond hier eerder met de hand op 700,00 ingetypt; sinds de trigger
+  -- bb_factuurtotalen_forceren worden deze waarden toch uit de regels afgeleid,
+  -- maar een seedscript hoort te kloppen zonder dat de database het rechtzet.
   values (v_co, v_klant, 'KT-FACT-001', 'verzonden', current_date - 7, current_date + 7,
-          600.00, 700.00, 14)
+          600.00, 681.00, 14)
   returning id into v_fact;
 
   insert into public.factuur_regels

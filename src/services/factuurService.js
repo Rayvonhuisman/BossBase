@@ -256,8 +256,24 @@ export async function getAllFactuurRegels() {
 export async function createCreditFactuur(origineleFactuurId, regels, origineleFactuur) {
   const nummer = await generateCreditFactuurNummer()
   const totaalExcl = -Math.abs(Math.round(regels.reduce((s, r) => s + Math.abs(Number(r.regelprijs || 0)), 0) * 100) / 100)
-  const totaalBtw = Math.round(regels.reduce((s, r) => s + Math.abs(Number(r.regelprijs || 0)) * Number(r.btwPct || 21) / 100, 0) * 100) / 100
-  const totaalIncl = -(Math.abs(totaalExcl) + totaalBtw)
+  // BTW per tarief groeperen en per groep afronden — zelfde regel als
+  // useRegelTotals en de boekhoudexport, anders scheelt het centen.
+  //
+  // Het regime is leidend, niet het percentage. `btwPct || 21` maakte van een
+  // regel met percentage 0 een regel van 21%: bij vrijgestelde of verlegde omzet
+  // zou de creditnota btw terugvorderen die nooit is afgedragen. Het percentage
+  // is er alleen nog voor het bedrag; of er überhaupt btw is, bepaalt het regime.
+  const btwPerTarief = {}
+  for (const r of regels) {
+    const regime = r.btwRegime || regimeVanPct(r.btwPct)
+    if (regime === 'vrijgesteld' || regime === 'verlegd') continue
+    const pct = Number(r.btwPct ?? 21)
+    if (!pct) continue
+    const bedrag = Math.abs(Number(r.regelprijs || 0)) * pct / 100
+    btwPerTarief[pct] = Math.round(((btwPerTarief[pct] || 0) + bedrag) * 100) / 100
+  }
+  const totaalBtw = Object.values(btwPerTarief).reduce((s, v) => s + v, 0)
+  const totaalIncl = -Math.round((Math.abs(totaalExcl) + totaalBtw) * 100) / 100
   const base = {
     customer_id: origineleFactuur.customerId,
     nummer,
