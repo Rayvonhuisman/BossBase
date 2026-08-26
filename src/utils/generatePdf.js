@@ -11,6 +11,29 @@ async function loadJsPDF() {
 
 const euro = n => `€ ${Number(n || 0).toFixed(2).replace('.', ',')}`;
 
+// Factuurtotalen uit de regels. Het eindbedrag stond hier eerder uit
+// document.totaalIncl, terwijl de btw-regels eronder wél uit de regels kwamen.
+// Zolang beide klopten viel dat niet op, maar op een factuur met een scheef
+// opgeslagen totaal telde de PDF zichtbaar niet op: subtotaal + btw kwam niet
+// uit op het bedrag in het groene vak. Nu is er één bron.
+//
+// Dezelfde regel als useRegelTotals (FacturenPage), bb_factuurtotalen (database)
+// en pushVerkoopboeking (boekhouding): btw per tarief groeperen, per groep
+// afronden, dan optellen. Het regime bepaalt óf er btw is — bij vrijgesteld en
+// verlegd nooit, ongeacht het percentage dat erbij staat.
+function factuurTotalen(regels = []) {
+  const excl = Math.round(regels.reduce((s, r) => s + (Number(r.regelprijs) || 0), 0) * 100) / 100;
+  const btwPerTarief = {};
+  for (const r of regels) {
+    const pct = Number(r.btwPct ?? 21);
+    const vrij = r.btwRegime === 'vrijgesteld' || r.btwRegime === 'verlegd';
+    const bedrag = vrij ? 0 : (Number(r.regelprijs) || 0) * pct / 100;
+    btwPerTarief[pct] = Math.round(((btwPerTarief[pct] || 0) + bedrag) * 100) / 100;
+  }
+  const btw = Object.values(btwPerTarief).reduce((s, v) => s + v, 0);
+  return { excl, btwPerTarief, incl: Math.round((excl + btw) * 100) / 100 };
+}
+
 function hexToRgb(hex) {
   const h = (hex || '#1DDB62').replace('#', '');
   const r = parseInt(h.slice(0, 2), 16);
@@ -74,6 +97,9 @@ async function imgToBase64(url) {
 
 async function buildPdf(doc, type, document, regels, customer, company) {
   const W = 210, M = 16, CW = W - 2 * M;
+  // Alleen zinvol voor facturen: een offerte rekent met één btw-percentage op
+  // documentniveau en heeft geen regelprijs per regel.
+  const totalen = type === 'factuur' ? factuurTotalen(regels || []) : null;
   const accent = hexToRgb(company?.brandingColor);
   const accentInk = luminance(accent) > 0.62 ? C.dark : C.paper;
 
@@ -370,14 +396,9 @@ async function buildPdf(doc, type, document, regels, customer, company) {
   };
 
   if (type === 'factuur') {
-    subRow('Subtotaal excl. BTW', euro(document.totaalExcl));
+    subRow('Subtotaal excl. BTW', euro(totalen.excl));
     dc(C.line); doc.setLineWidth(0.3); doc.line(totX, y - 6, W - M, y - 6);
-    const btwGroups = {};
-    (regels || []).forEach(r => {
-      const pct = r.btwPct ?? 21;
-      btwGroups[pct] = (btwGroups[pct] || 0) + (r.regelprijs || 0) * pct / 100;
-    });
-    Object.entries(btwGroups)
+    Object.entries(totalen.btwPerTarief)
       .sort(([a], [b]) => Number(a) - Number(b))
       .forEach(([pct, amt]) => subRow(`BTW ${pct}%`, euro(amt)));
   } else {
@@ -400,7 +421,7 @@ async function buildPdf(doc, type, document, regels, customer, company) {
   doc.text('Totaal incl. BTW', totX + 4, y + 8);
 
   doc.setFontSize(14);
-  doc.text(euro(document.totaalIncl), W - M - 3, y + 8, { align: 'right' });
+  doc.text(euro(type === 'factuur' ? totalen.incl : document.totaalIncl), W - M - 3, y + 8, { align: 'right' });
 
   y += grandH + 10;
 
