@@ -302,13 +302,20 @@ export async function updateContactInMoneybird(customerId) {
 // tientallen, en dan werd er willekeurig geplukt. Hier kan de klant het
 // vastleggen.
 
-/** Alle actieve grootboekrekeningen uit de administratie van de klant. */
+/**
+ * Alle actieve grootboekrekeningen uit de administratie van de klant, plus welke
+ * rekening de standaardindeling in díé administratie zou kiezen.
+ *
+ * Die standaarden komen van de server en worden niet in de UI nagebouwd: twee
+ * lijsten die uit elkaar lopen geeft een scherm dat iets anders belooft dan de
+ * sync doet.
+ */
 export async function getGrootboekrekeningen() {
   const { data, error } = await supabase.functions.invoke('snelstart-grootboek-setup', {
     body: { lijst: true },
   })
   if (error) throw error
-  return data?.grootboeken || []
+  return { grootboeken: data?.grootboeken || [], standaarden: data?.standaarden || {} }
 }
 
 export async function getGrootboekVoorkeuren() {

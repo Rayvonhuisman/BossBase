@@ -211,7 +211,20 @@ export function kiesInkoopGrootboek(
   }
 
   const vraagpost = gbs.find(g => String(g.grootboekfunctie || '') === 'InkopenVraagPosten')
-  if (vraagpost?.id) return naarKeuze(vraagpost, 'vraagpost')
+  if (vraagpost?.id) {
+    // Een categorie die wij niet kennen is er een die de klant zelf heeft
+    // toegevoegd. Waar "Verzekeringen" of "Abonnementen" hoort valt niet te
+    // raden, dus: vraagpost met markering, en zeggen wat eraan te doen is. Dat
+    // is beter dan de boeking weigeren — dan mist er een kostenpost in de
+    // boekhouding en weet niemand waarom.
+    if (!KOSTEN_VOORKEUR[cat]) {
+      meldingen?.push(
+        `Categorie "${cat}" heeft nog geen grootboekrekening. De kosten staan nu op de vraagpost met een `
+        + `markering voor je boekhouder. Kies er een rekening bij onder Integraties → SnelStart → Boekhoudinstellingen.`,
+      )
+    }
+    return naarKeuze(vraagpost, 'vraagpost')
+  }
 
   const beschikbaar = [...new Set(gbs.map(g => g.grootboekfunctie).filter(f => String(f || '').startsWith('Inkopen')))].join(', ')
   throw new Error(
@@ -227,3 +240,33 @@ export const VOORKEUR_SLEUTELS = [
 ]
 
 export { KOSTEN_VOORKEUR, OMZET_VOORKEUR }
+
+/**
+ * Welke rekening zou de standaardindeling kiezen, gegeven deze administratie?
+ *
+ * Het instellingenscherm toont dit als "Standaard — 7002 Inkopen hoog tarief",
+ * zodat zichtbaar is wat er gebeurt als je een regel leeg laat. Bewust hier
+ * berekend en niet in de UI overgetypt: twee lijsten die uit elkaar lopen is
+ * precies hoe je een scherm krijgt dat iets anders belooft dan de sync doet.
+ *
+ * Kosten worden op 21% opgelost — het gangbaarste tarief. Een categorie kan bij
+ * een ander tarief op een andere rekening uitkomen (dat is juist de bedoeling
+ * van de functiecontrole), dus dit is een indicatie, geen belofte.
+ */
+export function standaardIndeling(gbs: Grootboek[]): Record<string, { nummer?: number; omschrijving?: string } | null> {
+  const uit: Record<string, { nummer?: number; omschrijving?: string } | null> = {}
+  for (const cat of Object.keys(KOSTEN_VOORKEUR)) {
+    try {
+      const k = kiesInkoopGrootboek(gbs, cat, 21)
+      uit[`kosten:${cat}`] = k.bron === 'vraagpost' ? null : { nummer: k.nummer, omschrijving: k.omschrijving }
+    } catch { uit[`kosten:${cat}`] = null }
+  }
+  for (const regime of Object.keys(OMZET_VOORKEUR)) {
+    const pct = regime === 'normaal' ? 21 : regime === 'verlaagd' ? 9 : 0
+    try {
+      const k = kiesOmzetGrootboek(gbs, regime, pct)
+      uit[`omzet:${regime}`] = { nummer: k.nummer, omschrijving: k.omschrijving }
+    } catch { uit[`omzet:${regime}`] = null }
+  }
+  return uit
+}

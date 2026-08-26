@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listLeveranciers } from '../../services/leverancierService.js';
 import LeverancierSelect from '../../components/LeverancierSelect.jsx';
-import { categorieOptiesMet, STANDAARD_CATEGORIE, bonVerplicht, BON_VERPLICHT_MELDING } from '../../lib/kostenCategorieen.js';
+import { categorieOptiesUit, standaardCategorieUit, bonVerplichtUit, BON_VERPLICHT_MELDING } from '../../lib/kostenCategorieen.js';
+import { useKostenCategorieen } from '../../hooks/useKostenCategorieen.js';
 import { Maximize2, Minimize2, AlertTriangle, AlertOctagon } from 'lucide-react';
 import { I, ModalX, NotifyMailToggle, fmt, fmt0, CostCategoryBadge } from '../../bb-shared.jsx';
 import { useToast } from '../../lib/toast.jsx';
@@ -604,13 +605,23 @@ function KostenTab({ project, canManage }) {
     cost_date: new Date().toISOString().slice(0, 10),
     description: '',
     amount: '',
-    category: STANDAARD_CATEGORIE,
+    category: '',
     leverancier_id: '',
     btw_mode: 'excl',
     btw_pct: 21,
   });
   const [leveranciers, setLeveranciers] = useState([]);
   useEffect(() => { listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(() => {}); }, []);
+  const categorieen = useKostenCategorieen();
+
+  // Categorie pas invullen zodra de lijst binnen is: de standaardcategorie kan
+  // per bedrijf anders heten of op inactief staan.
+  useEffect(() => {
+    if (!form.category && categorieen.length) {
+      setForm(f => (f.category ? f : { ...f, category: standaardCategorieUit(categorieen) }));
+    }
+  }, [categorieen]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [bonFiles, setBonFiles] = useState([]);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -631,7 +642,7 @@ function KostenTab({ project, canManage }) {
     // Leverancier is verplicht: zonder relatie kan de kost niet naar de boekhouding.
     if (!form.leverancier_id) { toast.error('Kies een leverancier'); return; }
     // Bewijsstuk idem, behalve waar er geen factuur bestaat (reiskosten).
-    if (bonVerplicht(form.category) && bonFiles.length === 0) { toast.error(BON_VERPLICHT_MELDING); return; }
+    if (bonVerplichtUit(categorieen, form.category) && bonFiles.length === 0) { toast.error(BON_VERPLICHT_MELDING); return; }
     setSaving(true);
     try {
       const { excl } = calcBtw(form.amount, form.btw_pct, form.btw_mode);
@@ -719,7 +730,7 @@ function KostenTab({ project, canManage }) {
             <div className="f" style={{ flex: '1 1 130px', minWidth: 0 }}>
               <label>Categorie</label>
               <select style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.category} onChange={e => set('category', e.target.value)}>
-                {categorieOptiesMet(form.category).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {categorieOptiesUit(categorieen, form.category).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
             <div className="f" style={{ flex: '1 1 130px', minWidth: 0 }}>
@@ -738,7 +749,7 @@ function KostenTab({ project, canManage }) {
               <input type="text" placeholder="Waar zijn de kosten voor?" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.description} onChange={e => set('description', e.target.value)} />
             </div>
             <div className="f" style={{ flex: '1 1 100%', minWidth: 0 }}>
-              <label>Factuur of bon{bonVerplicht(form.category) ? ' *' : ''}</label>
+              <label>Factuur of bon{bonVerplichtUit(categorieen, form.category) ? ' *' : ''}</label>
               <input
                 type="file"
                 accept="image/jpeg,image/png,application/pdf"

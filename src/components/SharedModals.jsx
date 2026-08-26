@@ -13,7 +13,8 @@ import { createCalendarEvent } from '../services/calendarService.js';
 import { createJobCost, updateJobCost } from '../services/jobCostService.js'
 import { listLeveranciers } from '../services/leverancierService.js'
 import LeverancierSelect from './LeverancierSelect.jsx'
-import { categorieOptiesMet, STANDAARD_CATEGORIE, bonVerplicht, BON_VERPLICHT_MELDING } from '../lib/kostenCategorieen.js';
+import { categorieOptiesUit, standaardCategorieUit, bonVerplichtUit, BON_VERPLICHT_MELDING } from '../lib/kostenCategorieen.js';
+import { useKostenCategorieen } from '../hooks/useKostenCategorieen.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
 import { getProjects } from '../services/projectsService.js';
 import { calcBtw } from '../utils/btw.js';
@@ -658,14 +659,24 @@ export function NewCalendarEventModal({ onClose, onSaved, customers, defaultDate
 export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defaultCustId = '', lockCustomer = false }) {
   const toast = useToast();
   const { startUpload } = useUploads();
+  const categorieen = useKostenCategorieen();
+
   const [form, setForm] = useState({
     customer_id: defaultCustId,
-    category: STANDAARD_CATEGORIE,
+    category: '',
     cost_date: new Date().toISOString().slice(0, 10),
     project_id: '',
     werkbon_id: '',
     leverancier_id: '',
   });
+
+  // Categorie pas invullen zodra de lijst binnen is: de standaardcategorie kan
+  // per bedrijf anders heten of op inactief staan.
+  useEffect(() => {
+    if (!form.category && categorieen.length) {
+      setForm(f => (f.category ? f : { ...f, category: standaardCategorieUit(categorieen) }));
+    }
+  }, [categorieen]); // eslint-disable-line react-hooks/exhaustive-deps
   // Leveranciers om uit te kiezen. Verplicht: zie validate().
   const [leverancierOpties, setLeverancierOpties] = useState([]);
   const [werkbonnen, setWerkbonnen] = useState([]);
@@ -750,7 +761,7 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
     if (!form.leverancier_id) next.leverancier_id = 'Kies een leverancier';
     // Idem voor het bewijsstuk. Reiskosten zijn uitgezonderd: een
     // kilometervergoeding heeft geen factuur.
-    if (bonVerplicht(form.category) && bijlageFiles.length === 0) next.bijlage = BON_VERPLICHT_MELDING;
+    if (bonVerplichtUit(categorieen, form.category) && bijlageFiles.length === 0) next.bijlage = BON_VERPLICHT_MELDING;
     regels.forEach((r, i) => {
       if (!r.omschrijving.trim()) next[`r${i}o`] = true;
       if (!r.bedrag || Number(r.bedrag) <= 0) next[`r${i}b`] = true;
@@ -870,7 +881,7 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
           <div className="f">
             <label>Categorie</label>
             <select value={form.category} onChange={e => setField('category', e.target.value)}>
-              {categorieOptiesMet(form.category).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              {categorieOptiesUit(categorieen, form.category).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
           <div className="f">
@@ -1003,7 +1014,7 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
         {/* Bijlagen */}
         <div style={{ marginTop: 14 }}>
           <label style={{ fontSize: '.8rem', fontWeight: 600, color: 'var(--dk)', marginBottom: 6, display: 'block' }}>
-            Factuur of bon{bonVerplicht(form.category) ? ' *' : ''}
+            Factuur of bon{bonVerplichtUit(categorieen, form.category) ? ' *' : ''}
           </label>
           <div
             style={{

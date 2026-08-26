@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient } from "../_shared/scheduledSync.ts"
 import { getActieveGrootboeken } from "../_shared/snelstart.ts"
+import { standaardIndeling } from "../_shared/grootboekKeuze.ts"
 
 // Controleert of de administratie de omzet-grootboeken heeft die de koppeling
 // nodig heeft.
@@ -68,6 +69,10 @@ serve(async (req) => {
       return json({
         success: true,
         aantal: bestaand.length,
+        // Wat de standaardindeling in DEZE administratie zou kiezen. Het
+        // instellingenscherm toont dat per regel, zodat "leeg laten" geen
+        // black box is.
+        standaarden: standaardIndeling(bestaand),
         grootboeken: bestaand
           .map((g: any) => ({ nummer: g.nummer, omschrijving: g.omschrijving, functie: g.grootboekfunctie, rubriek: g.grootboekRubriek, btwSoort: g.btwSoort }))
           .sort((a: any, b: any) => (a.nummer ?? 0) - (b.nummer ?? 0)),

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { I, ModalX, STAGE_COLOR_OPTIONS, stageColToHex, stageColorLabel, stageBadgeStyle } from '../bb-shared.jsx';
 import { supabase } from '../lib/supabase.js';
-import GrootboekIndeling from '../components/GrootboekIndeling.jsx';
+import GrootboekIndelingModal from '../components/GrootboekIndeling.jsx';
 import { useToast } from '../lib/toast.jsx';
 import SyncBanner from '../components/SyncBanner.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -268,6 +268,9 @@ export function InstellingenPage() {
   // certificering vervangt de oAuth-activatielink + webhook deze invoer.
   const [ssConnection, setSsConnection] = useState(null);
   const [ssForm, setSsForm] = useState({ clientKey: '' });
+  // Grootboekindeling + kostencategorieën: eigen scherm, want het gaat volledig
+  // over hoe déze koppeling boekt.
+  const [ssInstellingen, setSsInstellingen] = useState(false);
   const [ssShowKey, setSsShowKey] = useState(false);
   const [ssEditing, setSsEditing] = useState(false);
   const [ssTesting, setSsTesting] = useState(false);
@@ -2687,8 +2690,6 @@ export function InstellingenPage() {
               </div>
             )}
 
-            <GrootboekIndeling verbonden={!!ssConnection?.connected} />
-
             <div className="fa" style={{ flexWrap: 'wrap', gap: 8 }}>
               {ssConnection?.connected && (
                 <>
@@ -2698,6 +2699,18 @@ export function InstellingenPage() {
                     disabled={ssImporting}
                   >
                     {ssImporting ? 'Synchroniseren...' : 'Kosten/facturen synchroniseren'}
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setSsInstellingen(true)}
+                  >
+                    Boekhoudinstellingen
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setSsInstellingen(true)}
+                  >
+                    Boekhoudinstellingen
                   </button>
                   <button
                     className="btn btn-ghost btn-sm"
@@ -2886,6 +2899,7 @@ export function InstellingenPage() {
         </div>
       )}
 
+      {ssInstellingen && <GrootboekIndelingModal onClose={() => setSsInstellingen(false)} />}
 
     </div>
   );

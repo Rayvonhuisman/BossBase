@@ -8,7 +8,8 @@ import { createCalendarEvent, listCalendarEvents, updateCalendarEvent } from '..
 import { createJobCost, deleteJobCost, listJobCosts, updateJobCost, getKostenBijlageUrl, kostenPerGroep, kostenSplitsing } from '../services/jobCostService.js'
 import { listLeveranciers } from '../services/leverancierService.js'
 import LeverancierSelect from '../components/LeverancierSelect.jsx'
-import { categorieOptiesMet } from '../lib/kostenCategorieen.js';
+import { categorieOptiesUit } from '../lib/kostenCategorieen.js';
+import { useKostenCategorieen } from '../hooks/useKostenCategorieen.js';
 import { getFacturen, getAllFactuurRegels } from '../services/factuurService.js';
 import { getConnection } from '../services/accountingService.js';
 import { getBtwPeriodes, syncBtwData } from '../services/btwService.js';
@@ -798,6 +799,7 @@ export function HoursPage() {
 
 // ── KOSTEN DETAIL MODAL ───────────────────────────────────────
 function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onClose }) {
+  const kostenCategorieen = useKostenCategorieen();
   const [cat, setCat] = useState(cost.cat);
   const [custId, setCustId] = useState(cost.customerId || '');
   const [projectId, setProjectId] = useState(cost.projectId || '');
@@ -984,7 +986,7 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
             <div className="f" style={{ flex: '1 1 150px', minWidth: 0 }}>
               <label>Categorie <Saved field="category" /></label>
               <select value={cat} onChange={handleCatChange}>
-                {categorieOptiesMet(cat).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {categorieOptiesUit(kostenCategorieen, cat).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
           </div>

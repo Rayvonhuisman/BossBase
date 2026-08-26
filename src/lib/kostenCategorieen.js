@@ -51,3 +51,46 @@ export function categorieOptiesMet(huidige) {
   }
   return opts;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sinds kostencategorieën per bedrijf instelbaar zijn komt de lijst uit de
+// database (zie useKostenCategorieen). De constanten hierboven blijven staan als
+// terugval en als bron voor de standaardrijen die bij een nieuw bedrijf worden
+// aangemaakt.
+//
+// De functies hieronder werken op die geladen lijst. Ze verwachten rijen in de
+// vorm { naam, standaard, actief, bonVerplicht }.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Keuzelijst uit de geladen categorieën, met de huidige waarde er altijd bij.
+ *
+ * Dat laatste is essentieel: een kostenpost kan een categorie dragen die
+ * inmiddels op inactief staat of nooit in de lijst zat. Zonder deze toevoeging
+ * klapt zo'n rij bij openen-en-opslaan stilzwijgend om naar de eerste optie, en
+ * verandert daarmee zijn grootboekrekening.
+ */
+export function categorieOptiesUit(lijst = [], huidige) {
+  const opts = (lijst || [])
+    .filter(c => c.actief !== false)
+    .map(c => ({ value: c.naam, label: c.naam }));
+  if (huidige && !opts.some(o => o.value === huidige)) {
+    opts.push({ value: huidige, label: huidige });
+  }
+  return opts;
+}
+
+/** Is er een bon verplicht bij deze categorie? Onbekend = ja, dat is de veilige kant. */
+export function bonVerplichtUit(lijst = [], naam) {
+  const c = (lijst || []).find(x => x.naam === naam);
+  if (c) return c.bonVerplicht !== false;
+  return bonVerplicht(naam);
+}
+
+/** Eerste beschikbare categorie, voor een leeg formulier. */
+export function standaardCategorieUit(lijst = []) {
+  const actief = (lijst || []).filter(c => c.actief !== false);
+  return actief.find(c => c.naam === STANDAARD_CATEGORIE)?.naam
+    ?? actief[0]?.naam
+    ?? STANDAARD_CATEGORIE;
+}
