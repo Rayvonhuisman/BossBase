@@ -16,9 +16,10 @@ export const FACTUUR_STATUS_OPTIONS = Object.entries(FACTUUR_STATUS).map(([id, l
 
 // Slaat de bij verzending gegenereerde factuur-PDF op in de private bucket
 // 'factuur-pdfs' (pad {company_id}/{factuur_id}.pdf, upsert). Server-side flows
-// zonder browser (de Stripe-webhook) halen deze exacte kopie later op als bijlage
-// bij de betaalbevestigingsmails. Best-effort: faalt stil, mag de mailverzending
-// nooit blokkeren.
+// zonder browser halen deze kopie later op: de Stripe-webhook als bijlage bij de
+// betaalbevestiging, de boekhoudkoppeling als brondocument bij de
+// verkoopboeking. Best-effort: faalt stil, mag de mailverzending nooit
+// blokkeren.
 export async function uploadFactuurPdf(factuurId, companyId, pdfBase64) {
   if (!factuurId || !companyId || !pdfBase64) return false
   try {
@@ -29,7 +30,17 @@ export async function uploadFactuurPdf(factuurId, companyId, pdfBase64) {
     const { error } = await supabase.storage
       .from('factuur-pdfs')
       .upload(path, bytes, { contentType: 'application/pdf', upsert: true })
-    return !error
+    if (error) return false
+
+    // De bijlagevlag terug op "nog te sturen". Zonder dit bleef een factuur die
+    // al geboekt was maar pas later een PDF kreeg voorgoed zonder document in de
+    // boekhouding staan: de nastuurlus slaat alles over wat op gesynct staat.
+    await supabase
+      .from('facturen')
+      .update({ snelstart_bijlage_gesynct: false })
+      .eq('id', factuurId)
+      .eq('snelstart_bijlage_gesynct', true)
+    return true
   } catch {
     return false
   }
