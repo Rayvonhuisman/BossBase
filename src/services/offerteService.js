@@ -32,7 +32,9 @@ const toOfferte = row => ({
   uurtarief: Number(row.uurtarief || 55),
   materiaalkosten: Number(row.materiaalkosten || 0),
   reiskosten: Number(row.reiskosten || 0),
-  margePct: Number(row.marge_pct || 25),
+  // VERVALLEN, zie createOfferte. `?? 25` en niet `|| 25`: een opgeslagen 0 las
+  // anders terug als 25, waardoor elke offerte 25% marge leek te hebben.
+  margePct: Number(row.marge_pct ?? 25),
   btwPct: Number(row.btw_pct || 21),
   totaalExcl: Number(row.totaal_excl || 0),
   totaalIncl: Number(row.totaal_incl || 0),
@@ -259,7 +261,16 @@ export async function createOfferte(input) {
     uurtarief: Number(input.uurtarief || 55),
     materiaalkosten: Number(input.materiaalkosten || 0),
     reiskosten: Number(input.reiskosten || 0),
-    marge_pct: Number(input.marge_pct || input.margePct || 25),
+    // VERVALLEN. Er is geen invoerveld meer voor marge; de offertemodal werkt
+    // met regels die hun eigen prijs dragen en geeft de totalen expliciet mee,
+    // waardoor calculateOfferteTotals nooit voorbij zijn vroege terugkeer komt.
+    // De kolom blijft staan omdat de RPC's van de ondertekenpagina hem in hun
+    // signatuur hebben; hij wordt nergens meer op toegepast.
+    //
+    // `??` en niet `||`: de modal geeft bewust 0 mee, maar 0 is falsy, dus dat
+    // werd stilzwijgend 25. Daardoor stond er marge 25 op élke offerte, ook op
+    // die van vorige maand.
+    marge_pct: Number(input.marge_pct ?? input.margePct ?? 25),
     btw_pct: Number(input.btw_pct || input.btwPct || 21),
     ...totals,
     geldig_tot: input.geldig_tot || input.geldigTot || null,

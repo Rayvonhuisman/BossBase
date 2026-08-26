@@ -42,7 +42,9 @@ const EMPTY_FILTERS = {
   offerteStatussen: [], offerteVerlopen: false,
   offerteOndertekend: 'alles',
   offerteBedragMin: '', offerteBedragMax: '',
-  offerteMargeMin: '', offerteMargeMax: '',
+  // Marge min/max stond hier ook. Weggehaald: offertes hebben geen marge meer —
+  // regels dragen hun eigen prijs — en het veld las door een falsy-check altijd
+  // als 25%, waardoor de filter altijd alles of niets teruggaf.
   factuurStatussen: [], factuurVervallen: false,
   herinnering1: 'alles', herinnering2: 'alles',
   isCreditnota: false, betaaldVan: '', betaaldTot: '',
@@ -631,8 +633,6 @@ export function DatabasePage({ openCustomer }) {
       }
       if (filters.offerteBedragMin && !rel.offertes.some(o => o.totaalIncl >= Number(filters.offerteBedragMin))) return false;
       if (filters.offerteBedragMax && !rel.offertes.some(o => o.totaalIncl <= Number(filters.offerteBedragMax))) return false;
-      if (filters.offerteMargeMin && !rel.offertes.some(o => (o.margePct || 0) >= Number(filters.offerteMargeMin))) return false;
-      if (filters.offerteMargeMax && !rel.offertes.some(o => (o.margePct || 0) <= Number(filters.offerteMargeMax))) return false;
 
       if (filters.factuurStatussen.length > 0 && !rel.facturen.some(f => filters.factuurStatussen.includes(f.status))) return false;
       if (filters.factuurVervallen && !rel.facturen.some(f => f.status === 'verzonden' && f.vervaldatum && f.vervaldatum < TODAY)) return false;
@@ -1282,8 +1282,6 @@ export function DatabasePage({ openCustomer }) {
             </FilterRow>
             <FilterRow label="Bedrag min (€)"><input type="number" min="0" value={filters.offerteBedragMin} onChange={e => setFilter('offerteBedragMin', e.target.value)} placeholder="0" style={FIN} /></FilterRow>
             <FilterRow label="Bedrag max (€)"><input type="number" min="0" value={filters.offerteBedragMax} onChange={e => setFilter('offerteBedragMax', e.target.value)} placeholder="∞" style={FIN} /></FilterRow>
-            <FilterRow label="Marge min (%)"><input type="number" min="0" max="100" value={filters.offerteMargeMin} onChange={e => setFilter('offerteMargeMin', e.target.value)} placeholder="0" style={FIN} /></FilterRow>
-            <FilterRow label="Marge max (%)"><input type="number" min="0" max="100" value={filters.offerteMargeMax} onChange={e => setFilter('offerteMargeMax', e.target.value)} placeholder="100" style={FIN} /></FilterRow>
           </FilterSection>
 
           <FilterSection title="Facturen">
