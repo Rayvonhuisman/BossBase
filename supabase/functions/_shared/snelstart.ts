@@ -1,3 +1,5 @@
+import { kiesOmzetGrootboek, kiesInkoopGrootboek } from "./grootboekKeuze.ts"
+
 // Gedeelde SnelStart B2B-Api v2 client voor edge functions.
 //
 // Auth-model (docs/snelstart-b2b-api-v2-openapi.json + developer portal):
