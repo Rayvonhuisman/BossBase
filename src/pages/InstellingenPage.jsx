@@ -869,11 +869,18 @@ export function InstellingenPage() {
     try {
       const result = await importKostenVanuitSnelStart();
       if (result?.success) {
-        const delen = [`${result.exported?.verkoopboekingen ?? 0} facturen naar SnelStart geboekt`];
-        if (ssConnection?.importCosts) {
-          delen.push(`${result.imported?.inkoopfacturen ?? 0} inkoopfacturen geïmporteerd`);
-          delen.push(`${result.exported?.inkoopboekingen ?? 0} kosten geboekt`);
-        }
+        // Beide richtingen benoemen, en alleen wat er daadwerkelijk gebeurd is.
+        // Eerder stonden hier alleen de export-aantallen plus de inkoopfacturen,
+        // waardoor opgehaalde verkoopfacturen nergens werden gemeld — je zag ze
+        // wel in de lijst verschijnen maar niet in de melding.
+        const delen = [];
+        const uit = result.exported || {};
+        const inn = result.imported || {};
+        if (uit.verkoopboekingen) delen.push(`${uit.verkoopboekingen} facturen naar SnelStart geboekt`);
+        if (uit.inkoopboekingen) delen.push(`${uit.inkoopboekingen} kosten naar SnelStart geboekt`);
+        if (inn.inkoopfacturen) delen.push(`${inn.inkoopfacturen} inkoopfacturen opgehaald`);
+        if (inn.verkoopfacturen) delen.push(`${inn.verkoopfacturen} verkoopfacturen opgehaald`);
+        if (!delen.length) delen.push('niets te synchroniseren — alles was al bij');
         toast.success(delen.join(', '));
         // Kosten gaan per batch van 50. Zonder deze melding leest een halve
         // batch als "klaar" terwijl er nog een rest openstaat.

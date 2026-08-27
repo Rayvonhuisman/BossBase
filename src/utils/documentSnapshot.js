@@ -68,3 +68,15 @@ export function isOfferteFullyLocked(offerte) {
 export function isOfferteRevisable(offerte) {
   return !!offerte && !offerte.signedAt && !offerte.vervangenOp && offerte.status === 'verzonden'
 }
+
+/**
+ * Komt deze factuur uit de boekhouding in plaats van uit BossBase?
+ *
+ * Zulke facturen zijn een AFSPIEGELING: ze bestaan al in SnelStart, met een
+ * eigen nummer en een eigen document. Alles wat je er hier mee zou doen —
+ * bewerken, versturen, crediteren, een PDF genereren — maakt een tweede
+ * werkelijkheid naast die van de boekhouding. Ze zijn er om te tónen wat er is
+ * geboekt, niet om mee te werken.
+ */
+export const isGeimporteerdeFactuur = factuur =>
+  Boolean(factuur?.externeReferentie || factuur?.externe_referentie || factuur?.status === 'geboekt')

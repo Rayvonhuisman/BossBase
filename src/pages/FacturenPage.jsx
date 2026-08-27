@@ -10,7 +10,7 @@ import { createFactuurPaymentLink, getStripeConnection } from '../services/strip
 import {
   getFacturen, createFactuur, updateFactuur, deleteFactuur,
   generateFactuurNummer, getFactuurRegels, createFactuurRegel,
-  generateCreditFactuurNummer, createCreditFactuur, uploadFactuurPdf,
+  generateCreditFactuurNummer, createCreditFactuur, uploadFactuurPdf, getFactuurDocumentUrl,
 } from '../services/factuurService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
@@ -20,7 +20,7 @@ import { typeCfg, typeOptionsWith, applyTypeChange, omschrijvingFallback } from 
 import BtwRegimeSelect, { VerlegdUitleg } from '../components/BtwRegimeSelect.jsx';
 import { regimeVanPct, regimeVanRegel, regimeVoorOpslag } from '../lib/btwRegime.js';
 import { generateFactuurPdf, previewFactuurPdf, getFactuurPdfBase64 } from '../utils/generatePdf.js';
-import { buildCompanySnapshot, companyForDocument, isFactuurLocked } from '../utils/documentSnapshot.js';
+import { buildCompanySnapshot, companyForDocument, isFactuurLocked, isGeimporteerdeFactuur } from '../utils/documentSnapshot.js';
 import { bewaarFactuurPdf, PDF_STATUSSEN } from '../utils/bewaarFactuurPdf.js';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
 import { mailTemplate, mailButton } from '../utils/mailTemplate.js';
@@ -621,7 +621,13 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }
   const { plan, guardFeature, planModal } = usePlanGuard();
   const kanHerinneren = plan.has('betaalherinneringen');
   const canManage = profile?.role === 'admin' || profile?.role === 'planner';
-  const canCrediteer = canManage && (factuur.status === 'verzonden' || factuur.status === 'betaald') && !factuur.gecrediteerd && !factuur.isCredit;
+  // Uit de boekhouding opgehaald: alleen tonen, niets mee doen. Zie
+  // isGeimporteerdeFactuur — versturen of crediteren zou een tweede
+  // werkelijkheid maken naast die van SnelStart.
+  const uitBoekhouding = isGeimporteerdeFactuur(factuur);
+  const canCrediteer = canManage && !uitBoekhouding
+    && (factuur.status === 'verzonden' || factuur.status === 'betaald')
+    && !factuur.gecrediteerd && !factuur.isCredit;
   const customerName = factuur.customerName || customers.find(c => c.id == factuur.customerId)?.name || '—';
   const [regels, setRegels] = useState([]);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -641,6 +647,22 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }
       await generateFactuurPdf(factuurForPdf, regels, customer, companyForDocument(factuur, company));
     } catch (err) {
       console.error('PDF genereren mislukt:', err);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  // Het originele document uit de boekhouding. Bij import wordt dat in dezelfde
+  // bucket gezet als onze eigen factuur-PDF's, zodat er één plek is waar het
+  // brondocument van een factuur staat — ongeacht wie hem heeft gemaakt.
+  const handleBoekhoudDocument = async () => {
+    setPdfLoading(true);
+    try {
+      const url = await getFactuurDocumentUrl(factuur.id, factuur.companyId);
+      if (url) window.open(url, '_blank', 'noopener');
+      else toast.error('Er is geen origineel document meegekomen uit de boekhouding.');
+    } catch (err) {
+      toast.error(err.message || 'Document ophalen mislukt');
     } finally {
       setPdfLoading(false);
     }
@@ -733,15 +755,15 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }
           )}
         </div>
         <div className="fa" style={{ flexWrap: 'wrap', gap: 8 }}>
-          {onSendMail && canManage && (
+          {onSendMail && canManage && !uitBoekhouding && (
             <button className="btn btn-s" onClick={() => { onClose(); onSendMail(factuur, 'factuur'); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={14} /> Verstuur per mail</button>
           )}
-          {onSendMail && canManage && isOverdue && !factuur.herinnering1VerstuurdAt && (
+          {onSendMail && canManage && !uitBoekhouding && isOverdue && !factuur.herinnering1VerstuurdAt && (
             <button className="btn btn-ghost btn-sm" onClick={guardFeature('betaalherinneringen', () => { onClose(); onSendMail(factuur, 'herinnering_1'); })} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, opacity: kanHerinneren ? 1 : .6 }}>
               <Send size={13} /> Herinnering 1 sturen
             </button>
           )}
-          {onSendMail && canManage && isOverdue && kanHerinneren && factuur.herinnering1VerstuurdAt && !factuur.herinnering2VerstuurdAt && (
+          {onSendMail && canManage && !uitBoekhouding && isOverdue && kanHerinneren && factuur.herinnering1VerstuurdAt && !factuur.herinnering2VerstuurdAt && (
             <button className="btn btn-ghost btn-sm" onClick={() => { onClose(); onSendMail(factuur, 'herinnering_2'); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
               <Send size={13} /> Herinnering 2 sturen
             </button>
@@ -751,12 +773,23 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }
               Crediteer factuur
             </button>
           )}
-          <button className="btn btn-ghost" onClick={handlePreviewPdf} disabled={previewLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            {previewLoading ? 'Laden...' : 'Preview PDF'}
-          </button>
-          <button className="btn btn-p" onClick={handleDownloadPdf} disabled={pdfLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <Download size={15} />{pdfLoading ? 'Genereren...' : 'Download PDF'}
-          </button>
+          {uitBoekhouding ? (
+            /* Geen PDF genereren: dat zou een BossBase-opmaak maken voor een
+               factuur die hier nooit is opgemaakt. Wél het originele document
+               uit de boekhouding, als dat is meegekomen. */
+            <button className="btn btn-p" onClick={handleBoekhoudDocument} disabled={pdfLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Download size={15} />{pdfLoading ? 'Ophalen...' : 'Origineel document'}
+            </button>
+          ) : (
+            <>
+              <button className="btn btn-ghost" onClick={handlePreviewPdf} disabled={previewLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                {previewLoading ? 'Laden...' : 'Preview PDF'}
+              </button>
+              <button className="btn btn-p" onClick={handleDownloadPdf} disabled={pdfLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Download size={15} />{pdfLoading ? 'Genereren...' : 'Download PDF'}
+              </button>
+            </>
+          )}
           <button className="btn btn-ghost" onClick={onClose}>Sluiten</button>
         </div>
       </div>
@@ -1142,8 +1175,11 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
                       <td className="td">
                         <div style={{ display: 'flex', gap: 4 }}>
                           <button className="btn btn-xs btn-ghost btn-icon" title="Bekijken" onClick={() => setViewFactuur(f)}><MoreVertical size={14} /></button>
-                          {canManage && <button className="btn btn-xs btn-ghost btn-icon" title="Verstuur per mail" onClick={() => setSendMailFactuur({ factuur: f, templateType: 'factuur' })}><Send size={13} /></button>}
-                          {canManage && <button className="btn btn-xs btn-ghost btn-icon" title="Bewerken" onClick={() => setEditFactuur(f)}>{I.edit}</button>}
+                          {/* Uit de boekhouding: alleen inzien en verwijderen.
+                              Verwijderen mag wél — dan vult de prullenbak zich
+                              en komt hij niet terug. */}
+                          {canManage && !isGeimporteerdeFactuur(f) && <button className="btn btn-xs btn-ghost btn-icon" title="Verstuur per mail" onClick={() => setSendMailFactuur({ factuur: f, templateType: 'factuur' })}><Send size={13} /></button>}
+                          {canManage && !isGeimporteerdeFactuur(f) && <button className="btn btn-xs btn-ghost btn-icon" title="Bewerken" onClick={() => setEditFactuur(f)}>{I.edit}</button>}
                           {canManage && <button className="btn btn-xs btn-danger btn-icon" title="Verwijderen" onClick={() => handleDelete(f)}>{I.trash}</button>}
                         </div>
                       </td>

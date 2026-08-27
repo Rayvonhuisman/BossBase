@@ -858,3 +858,65 @@ export function relatieNaarKlantVelden(relatie: any): Record<string, unknown> {
 // ingevuld — de klant kan gegevens hebben aangevuld die daar ontbreken.
 export const alleenGevuld = (velden: Record<string, unknown>): Record<string, unknown> =>
   Object.fromEntries(Object.entries(velden).filter(([, w]) => w !== null && w !== undefined && w !== ''))
+
+// ── Import: documenten ophalen ──────────────────────────────────────────────
+// Een boeking in SnelStart kan documenten dragen (de bon, de factuur-PDF). Bij
+// het exporteren sturen wij die mee; bij het importeren hoorden ze ook terug te
+// komen — anders is een opgehaalde kostenpost een bedrag zonder bewijsstuk.
+//
+// GET /documenten/{id} geeft een DocumentContentModel met base64-inhoud.
+async function haalDocument(clientKey: string, documentId: string): Promise<{ naam: string; bytes: Uint8Array } | null> {
+  try {
+    const doc = await ssFetch(clientKey, `/documenten/${documentId}`)
+    if (!doc?.content) return null
+    const bin = atob(String(doc.content))
+    const bytes = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+    return { naam: String(doc.fileName || `${documentId}.pdf`), bytes }
+  } catch (err: any) {
+    console.error(`Document ${documentId} ophalen mislukt:`, err?.message)
+    return null
+  }
+}
+
+/**
+ * Zet de documenten van een boeking in de bonnen-bucket en geeft de paden terug
+ * voor job_costs.bijlage_url.
+ */
+export async function importeerKostenBijlagen(
+  admin: any, clientKey: string, companyId: string, documenten: any[],
+): Promise<string[]> {
+  const paden: string[] = []
+  for (const d of (documenten || [])) {
+    const id = d?.id ?? d
+    if (!id) continue
+    const doc = await haalDocument(clientKey, String(id))
+    if (!doc) continue
+    const ext = doc.naam.includes('.') ? doc.naam.split('.').pop() : 'pdf'
+    const pad = `${companyId}/import-${String(id).slice(0, 8)}.${ext}`
+    const { error } = await admin.storage.from('kosten-bijlagen')
+      .upload(pad, doc.bytes, { contentType: 'application/octet-stream', upsert: true })
+    if (!error) paden.push(pad)
+    else console.error(`Bon ${doc.naam} opslaan mislukt:`, error.message)
+  }
+  return paden
+}
+
+/**
+ * Zet het eerste document van een verkoopboeking op het vaste factuurpad, zodat
+ * het brondocument van een geïmporteerde factuur op dezelfde plek staat als de
+ * PDF van een eigen factuur.
+ */
+export async function importeerFactuurDocument(
+  admin: any, clientKey: string, companyId: string, factuurId: string, documenten: any[],
+): Promise<boolean> {
+  const eerste = (documenten || [])[0]
+  const id = eerste?.id ?? eerste
+  if (!id) return false
+  const doc = await haalDocument(clientKey, String(id))
+  if (!doc) return false
+  const { error } = await admin.storage.from('factuur-pdfs')
+    .upload(`${companyId}/${factuurId}.pdf`, doc.bytes, { contentType: 'application/pdf', upsert: true })
+  if (error) { console.error(`Factuurdocument opslaan mislukt:`, error.message); return false }
+  return true
+}

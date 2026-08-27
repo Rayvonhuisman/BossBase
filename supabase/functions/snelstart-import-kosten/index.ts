@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient, isScheduledCall } from "../_shared/scheduledSync.ts"
 import { ssFetch, ssFetchAll, forEachSnelStartCompany, pushVerkoopboeking, pushFactuurPdf, getActieveGrootboeken, ensureRelatie, pushInkoopboeking, pushKostenBijlagen, getGrootboekVoorkeuren, importeerLeverancier, getGenegeerd,
-  relatieNaarKlantVelden, alleenGevuld, regimeUitGrootboekfunctie, btwPctVoorRegime } from "../_shared/snelstart.ts"
+  relatieNaarKlantVelden, alleenGevuld, regimeUitGrootboekfunctie, btwPctVoorRegime,
+  importeerKostenBijlagen, importeerFactuurDocument } from "../_shared/snelstart.ts"
 
 // Kosten/facturen-synchronisatie met SnelStart, twee richtingen:
 //   * EXPORT (altijd): verzonden/betaalde BossBase-facturen zonder snelstart_id
@@ -211,14 +212,20 @@ async function importKosten(
 
     // Btw-uitsplitsing via de onderliggende inkoopboeking (best-effort).
     let regels: any[] = []
+    let bijlagePaden: string[] = []
     if (f.inkoopBoeking?.id) {
       try {
         const boeking = await ssFetch(clientKey, `/inkoopboekingen/${f.inkoopBoeking.id}`)
         regels = Array.isArray(boeking?.boekingsregels) ? boeking.boekingsregels : []
+        // De bon erbij: een kostenpost zonder bewijsstuk is voor de boekhouding
+        // weinig waard, en hij stond in SnelStart gewoon aan de boeking.
+        bijlagePaden = await importeerKostenBijlagen(supabase, clientKey, companyId, boeking?.documents || [])
       } catch (err: any) {
         console.error(`Inkoopboeking ${f.inkoopBoeking.id} niet leesbaar (fallback op factuurtotaal):`, err.message)
       }
     }
+    // Alle regels van dezelfde factuur delen de bon; er is er maar één.
+    const bijlageUrl = bijlagePaden.length ? JSON.stringify(bijlagePaden) : null
 
     if (regels.length > 0) {
       regels.forEach((r: any, i: number) => {
@@ -233,6 +240,8 @@ async function importKosten(
           klant_type: 'algemeen',
           btw_inclusief: false, // boekingsregels zijn exclusief btw
           btw_percentage: pctVoorBtwSoort(String(r.btwSoort || '')),
+          bijlage_url: bijlageUrl,
+          snelstart_bijlage_gesynct: true,
         })
       })
     } else {
@@ -246,6 +255,8 @@ async function importKosten(
         externe_referentie: 'snelstart_' + f.id,
         klant_type: 'algemeen',
         btw_inclusief: true, // factuurBedrag is het factuurtotaal (incl. btw)
+        bijlage_url: bijlageUrl,
+        snelstart_bijlage_gesynct: true,
       })
     }
   }
@@ -349,10 +360,12 @@ async function importFacturen(
       // Regels + btw uit de onderliggende boeking.
       let regels: any[] = []
       let btwRegels: any[] = []
+      let documenten: any[] = []
       if (f.verkoopBoeking?.id) {
         const boeking = await ssFetch(clientKey, `/verkoopboekingen/${f.verkoopBoeking.id}`)
         regels = Array.isArray(boeking?.boekingsregels) ? boeking.boekingsregels : []
         btwRegels = Array.isArray(boeking?.btw) ? boeking.btw : []
+        documenten = Array.isArray(boeking?.documents) ? boeking.documents : []
       }
       const heeftVerlegd = btwRegels.some((b: any) => String(b?.btwSoort || '') === 'VerkopenVerlegd')
 
@@ -373,6 +386,10 @@ async function importFacturen(
         status: betaald ? 'betaald' : 'geboekt',
         betaald_op: betaald ? datum : null,
         externe_referentie: ref,
+        // SnelStart kent geen creditnota-type: een creditering is een boeking
+        // met negatieve bedragen. Zonder deze afleiding kwam TC-001 terug als
+        // gewone factuur met een negatief bedrag.
+        is_credit: Number(f.factuurBedrag || 0) < 0,
         snelstart_id: f.verkoopBoeking?.id ? String(f.verkoopBoeking.id) : null,
         // Niets na te sturen: er is geen PDF van een boeking die hier niet is
         // gemaakt.
@@ -381,6 +398,12 @@ async function importFacturen(
         totaal_incl: 0,
       }).select('id').single()
       if (fErr) throw fErr
+
+      // Het originele document erbij, op dezelfde plek waar de PDF van een
+      // eigen factuur staat. Dan is er één plek voor het brondocument.
+      if (documenten.length) {
+        await importeerFactuurDocument(supabase, clientKey, companyId, factuur.id, documenten)
+      }
 
       // Regels wegschrijven; de triggers leiden de totalen eruit af.
       if (regels.length) {

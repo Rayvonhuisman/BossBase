@@ -47,6 +47,22 @@ export async function uploadFactuurPdf(factuurId, companyId, pdfBase64) {
   }
 }
 
+/**
+ * Tijdelijke link naar het bewaarde brondocument van een factuur.
+ *
+ * Voor een eigen factuur is dat de PDF die bij het versturen is weggeschreven;
+ * voor een geïmporteerde factuur het document dat uit de boekhouding is
+ * meegekomen. Zelfde bucket, zelfde pad — één plek waar het brondocument staat.
+ */
+export async function getFactuurDocumentUrl(factuurId, companyId) {
+  if (!factuurId || !companyId) return null
+  const { data, error } = await supabase.storage
+    .from('factuur-pdfs')
+    .createSignedUrl(`${companyId}/${factuurId}.pdf`, 3600)
+  if (error) return null
+  return data?.signedUrl || null
+}
+
 const toFactuur = row => ({
   id: row.id,
   companyId: row.company_id,
@@ -67,6 +83,9 @@ const toFactuur = row => ({
   createdAt: row.created_at,
   customerName: row.customers?.name || '',
   isCredit: row.is_credit || false,
+  // Gevuld bij import uit de boekhouding. De UI gebruikt dit om zulke facturen
+  // op slot te zetten: ze bestaan al in SnelStart en horen daar thuis.
+  externeReferentie: row.externe_referentie || null,
   creditVanFactuurId: row.credit_van_factuur_id || null,
   gecrediteerd: row.gecrediteerd || false,
   // Bevroren bedrijfs-branding op moment van versturen (zie documentSnapshot.js)
