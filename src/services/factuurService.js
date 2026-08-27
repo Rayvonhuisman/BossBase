@@ -63,6 +63,21 @@ export async function getFactuurDocumentUrl(factuurId, companyId) {
   return data?.signedUrl || null
 }
 
+/**
+ * Welke facturen hebben een bewaard brondocument? Geeft een Set met factuur-id's.
+ *
+ * Eén listing van de bucket in plaats van een check per rij: de facturenlijst
+ * toont er tientallen tegelijk en dat zouden evenveel losse aanvragen worden.
+ */
+export async function getFacturenMetDocument(companyId) {
+  if (!companyId) return new Set()
+  const { data, error } = await supabase.storage.from('factuur-pdfs').list(companyId, { limit: 1000 })
+  if (error) return new Set()
+  return new Set((data || [])
+    .filter(o => o.name?.endsWith('.pdf'))
+    .map(o => o.name.replace(/\.pdf$/, '')))
+}
+
 const toFactuur = row => ({
   id: row.id,
   companyId: row.company_id,

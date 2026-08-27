@@ -797,7 +797,21 @@ export function InstellingenPage() {
     try {
       const result = await syncContactenMetMoneybird();
       if (result?.success) {
-        toast.success(`${result.imported ?? 0} klanten geïmporteerd, ${result.exported ?? 0} geëxporteerd`);
+        // Eerder stond hier alleen "x klanten geïmporteerd, y geëxporteerd".
+        // Dat las als kapot zodra alles al bestond: dan is er niets nieuws maar
+        // wél van alles bijgewerkt, en leveranciers werden helemaal niet
+        // genoemd terwijl ze nu ook worden opgehaald.
+        const lev = result.leveranciers || {};
+        const delen = [];
+        if (result.imported) delen.push(`${result.imported} klanten opgehaald`);
+        if (result.bijgewerkt) delen.push(`${result.bijgewerkt} klanten bijgewerkt`);
+        if (result.exported) delen.push(`${result.exported} klanten naar SnelStart`);
+        if (lev.geimporteerd) delen.push(`${lev.geimporteerd} leveranciers opgehaald`);
+        if (lev.bijgewerkt) delen.push(`${lev.bijgewerkt} leveranciers bijgewerkt`);
+        if (result.overgeslagenUitPrullenbak) {
+          delen.push(`${result.overgeslagenUitPrullenbak} overgeslagen (eerder verwijderd)`);
+        }
+        toast.success(delen.length ? delen.join(', ') : 'Contacten waren al bij — niets gewijzigd');
       } else {
         toast.error(result?.error || 'Synchronisatie mislukt');
       }
@@ -933,7 +947,21 @@ export function InstellingenPage() {
     try {
       const result = await syncContactenMetSnelStart();
       if (result?.success) {
-        toast.success(`${result.imported ?? 0} klanten geïmporteerd, ${result.exported ?? 0} geëxporteerd`);
+        // Eerder stond hier alleen "x klanten geïmporteerd, y geëxporteerd".
+        // Dat las als kapot zodra alles al bestond: dan is er niets nieuws maar
+        // wél van alles bijgewerkt, en leveranciers werden helemaal niet
+        // genoemd terwijl ze nu ook worden opgehaald.
+        const lev = result.leveranciers || {};
+        const delen = [];
+        if (result.imported) delen.push(`${result.imported} klanten opgehaald`);
+        if (result.bijgewerkt) delen.push(`${result.bijgewerkt} klanten bijgewerkt`);
+        if (result.exported) delen.push(`${result.exported} klanten naar SnelStart`);
+        if (lev.geimporteerd) delen.push(`${lev.geimporteerd} leveranciers opgehaald`);
+        if (lev.bijgewerkt) delen.push(`${lev.bijgewerkt} leveranciers bijgewerkt`);
+        if (result.overgeslagenUitPrullenbak) {
+          delen.push(`${result.overgeslagenUitPrullenbak} overgeslagen (eerder verwijderd)`);
+        }
+        toast.success(delen.length ? delen.join(', ') : 'Contacten waren al bij — niets gewijzigd');
         // SnelStart accepteert klanten zonder adres, dus die komen er stilletjes
         // in. Melden welke het betreft, zonder de sync te blokkeren.
         setSsAdresWaarschuwingen(result.adresWaarschuwingen || []);

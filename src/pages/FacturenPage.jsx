@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, MoreVertical, Send, CheckCircle2 } from 'lucide-react';
+import { Download, MoreVertical, Send, CheckCircle2, Paperclip } from 'lucide-react';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
@@ -11,6 +11,7 @@ import {
   getFacturen, createFactuur, updateFactuur, deleteFactuur,
   generateFactuurNummer, getFactuurRegels, createFactuurRegel,
   generateCreditFactuurNummer, createCreditFactuur, uploadFactuurPdf, getFactuurDocumentUrl,
+  getFacturenMetDocument,
 } from '../services/factuurService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
@@ -969,6 +970,9 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
   const { profile, company } = useProfile();
   const canManage = profile?.role === 'admin' || profile?.role === 'planner';
   const [facturen, setFacturen] = useState([]);
+  // Factuur-id's waarvan een brondocument is bewaard: onze eigen PDF bij het
+  // versturen, of het document dat uit de boekhouding is meegekomen.
+  const [metDocument, setMetDocument] = useState(new Set());
   const [customers, setCustomers] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -987,7 +991,11 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
   const load = () => {
     setLoading(true);
     Promise.all([getFacturen(), listCustomers(), getProjects().catch(() => [])])
-      .then(([f, c, p]) => { setFacturen(f); setCustomers(c); setProjects(p); setError(''); })
+      .then(([f, c, p]) => {
+        setFacturen(f); setCustomers(c); setProjects(p); setError('');
+        // Eén listing van de bucket, niet één check per rij.
+        getFacturenMetDocument(f[0]?.companyId).then(setMetDocument).catch(() => {});
+      })
       .catch(err => setError(err.message || 'Laden mislukt'))
       .finally(() => setLoading(false));
   };
@@ -1178,6 +1186,21 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
                           {/* Uit de boekhouding: alleen inzien en verwijderen.
                               Verwijderen mag wél — dan vult de prullenbak zich
                               en komt hij niet terug. */}
+                          {/* Brondocument direct openen: de PDF die bij het
+                              versturen is bewaard, of het document uit de
+                              boekhouding. Alleen tonen als er echt een bestand
+                              is — een knop die niets doet is erger dan geen knop. */}
+                          {metDocument.has(f.id) && (
+                            <button
+                              className="btn btn-xs btn-ghost btn-icon"
+                              title="Brondocument openen"
+                              onClick={async () => {
+                                const url = await getFactuurDocumentUrl(f.id, f.companyId);
+                                if (url) window.open(url, '_blank', 'noopener');
+                                else toast.error('Document niet gevonden');
+                              }}
+                            ><Paperclip size={13} /></button>
+                          )}
                           {canManage && !isGeimporteerdeFactuur(f) && <button className="btn btn-xs btn-ghost btn-icon" title="Verstuur per mail" onClick={() => setSendMailFactuur({ factuur: f, templateType: 'factuur' })}><Send size={13} /></button>}
                           {canManage && !isGeimporteerdeFactuur(f) && <button className="btn btn-xs btn-ghost btn-icon" title="Bewerken" onClick={() => setEditFactuur(f)}>{I.edit}</button>}
                           {canManage && <button className="btn btn-xs btn-danger btn-icon" title="Verwijderen" onClick={() => handleDelete(f)}>{I.trash}</button>}
