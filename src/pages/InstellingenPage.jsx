@@ -2708,12 +2708,6 @@ export function InstellingenPage() {
                   </button>
                   <button
                     className="btn btn-ghost btn-sm"
-                    onClick={() => setSsInstellingen(true)}
-                  >
-                    Boekhoudinstellingen
-                  </button>
-                  <button
-                    className="btn btn-ghost btn-sm"
                     onClick={handleSsSyncContacten}
                     disabled={ssSyncingContacten}
                   >

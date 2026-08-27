@@ -42,11 +42,14 @@ const INKOOP_FUNCTIES = (pct: number): string[] => {
   return ['InkopenOverig', 'InkopenKostenOverig', ...alle]
 }
 
-const OMZET_FUNCTIE: Record<string, string> = {
-  normaal:     'VerkopenOmzetHoog',
-  verlaagd:    'VerkopenOmzetLaag',
-  vrijgesteld: 'VerkopenOmzetOnbelastVerlegd',
-  verlegd:     'VerkopenOmzetOnbelastVerlegd',
+// Het tarief telt mee, niet alleen het regime: een 'normaal' regel met een
+// afwijkend percentage (oude data met 6%) hoort op de overige-omzetrekening en
+// niet op de hoge. Dat deed de oude omzetGrootboekfunctie() ook zo; bij het
+// omzetten naar voorkeursnummers was die tariefcontrole eruit gevallen.
+const omzetFunctie = (regime: string, pct: number): string => {
+  if (regime === 'verlaagd') return 'VerkopenOmzetLaag'
+  if (regime === 'verlegd' || regime === 'vrijgesteld') return 'VerkopenOmzetOnbelastVerlegd'
+  return pct === 21 ? 'VerkopenOmzetHoog' : 'VerkopenOmzetOverig'
 }
 
 // ── Voorkeursnummers: kosten ────────────────────────────────────────────────
@@ -69,7 +72,12 @@ const OMZET_FUNCTIE: Record<string, string> = {
 //                  arbeid is 7100 "Kosten uitbesteed werk".
 //   Algemene/Overig 4798 heet letterlijk "Algemene kosten".
 const KOSTEN_VOORKEUR: Record<string, number[]> = {
-  'Materiaal':       [7002, 7001, 7000],
+  // Bewust ÉÉN rekening en niet [7002, 7001, 7000]: die reeks boekte 21% op
+  // 7002, 9% op 7001 en 0% op 7000. Boekhoudkundig verdedigbaar, maar het
+  // instellingenscherm kan dan niet één standaard tonen zonder te liegen — en
+  // materiaal in drieën splitsen levert geen inzicht op dat iemand wil.
+  // 7000 accepteert alle tarieven, dus alle materiaalinkoop staat bij elkaar.
+  'Materiaal':       [7000],
   'Inkoopfactuur':   [7000],
   'Gereedschap':     [4303, 7000],
   'Reiskosten':      [4406, 4509, 7000],
@@ -99,6 +107,9 @@ const KOSTEN_FUNCTIE_TERUGVAL: Record<string, string[]> = {
 // een rekening die "Omzet verlegd" heet leest verkeerd in het grootboek.
 const OMZET_VOORKEUR: Record<string, number[]> = {
   normaal:     [8200, 8000, 8100],
+  // Voor een normaal-regel met een afwijkend percentage. De 82xx-reeks
+  // (diensten) kent geen overige-omzetrekening, dus hier wél 80xx/81xx.
+  overig:      [8020, 8120],
   verlaagd:    [8210, 8010, 8110],
   vrijgesteld: [8240, 8140, 8040],
   verlegd:     [8250, 8150, 8040],
@@ -137,8 +148,10 @@ export function kiesOmzetGrootboek(
   gbs: Grootboek[], regime: string, pct: number,
   voorkeurNummer?: number | null, meldingen?: string[],
 ): Keuze {
-  const functie = OMZET_FUNCTIE[regime] || (pct === 21 ? 'VerkopenOmzetHoog' : 'VerkopenOmzetOverig')
+  const functie = omzetFunctie(regime, pct)
   const toegestaan = [functie]
+  // Een normaal-regel met een afwijkend percentage heeft zijn eigen reeks.
+  const voorkeuren = (regime === 'normaal' && pct !== 21) ? OMZET_VOORKEUR.overig : (OMZET_VOORKEUR[regime] || [])
 
   // 1. Instelling van de klant wint, mits de functie klopt.
   if (voorkeurNummer) {
@@ -151,7 +164,7 @@ export function kiesOmzetGrootboek(
   }
 
   // 2. Onze voorkeursnummers.
-  for (const nr of (OMZET_VOORKEUR[regime] || [])) {
+  for (const nr of voorkeuren) {
     const gb = opNummer(gbs, nr, toegestaan)
     if (gb) return naarKeuze(gb, 'voorkeur')
   }
@@ -160,7 +173,7 @@ export function kiesOmzetGrootboek(
   const gb = opFunctie(gbs, toegestaan)
   if (gb) {
     meldingen?.push(
-      `Geen van de gebruikelijke omzetrekeningen (${(OMZET_VOORKEUR[regime] || []).join(', ')}) bestaat in je `
+      `Geen van de gebruikelijke omzetrekeningen (${voorkeuren.join(', ')}) bestaat in je `
       + `administratie. ${regime === 'normaal' ? 'Belaste' : regime[0].toUpperCase() + regime.slice(1) + 'e'} omzet is `
       + `daarom geboekt op ${gb.nummer} ${gb.omschrijving}. Controleer of dat klopt en stel het zo nodig in.`,
     )
@@ -169,7 +182,7 @@ export function kiesOmzetGrootboek(
 
   throw new Error(
     `Geen omzetrekening gevonden voor ${regime} (${pct}%). Gezocht op nummer `
-    + `${(OMZET_VOORKEUR[regime] || []).join(', ')} en op functie ${functie}. `
+    + `${voorkeuren.join(', ')} en op functie ${functie}. `
     + `Maak zo'n rekening aan in SnelStart of kies er een in de boekhoudinstellingen.`,
   )
 }
@@ -241,31 +254,59 @@ export const VOORKEUR_SLEUTELS = [
 
 export { KOSTEN_VOORKEUR, OMZET_VOORKEUR }
 
+export type Standaard =
+  | { soort: 'een'; nummer?: number; omschrijving?: string }
+  // Voor een categorie die per btw-tarief anders uitpakt. Dan MOET het scherm
+  // de splitsing tonen; één regel laten zien zou een halve waarheid zijn.
+  | { soort: 'per_tarief'; perTarief: { pct: number; nummer?: number; omschrijving?: string }[] }
+  | null
+
 /**
  * Welke rekening zou de standaardindeling kiezen, gegeven deze administratie?
  *
- * Het instellingenscherm toont dit als "Standaard — 7002 Inkopen hoog tarief",
- * zodat zichtbaar is wat er gebeurt als je een regel leeg laat. Bewust hier
- * berekend en niet in de UI overgetypt: twee lijsten die uit elkaar lopen is
- * precies hoe je een scherm krijgt dat iets anders belooft dan de sync doet.
+ * Het instellingenscherm toont dit per regel, zodat zichtbaar is wat er gebeurt
+ * als je niets invult. Bewust hier berekend en niet in de UI overgetypt: twee
+ * lijsten die uit elkaar lopen is precies hoe je een scherm krijgt dat iets
+ * anders belooft dan de sync doet.
  *
- * Kosten worden op 21% opgelost — het gangbaarste tarief. Een categorie kan bij
- * een ander tarief op een andere rekening uitkomen (dat is juist de bedoeling
- * van de functiecontrole), dus dit is een indicatie, geen belofte.
+ * Kosten worden op alle drie de tarieven opgelost. Een voorkeursreeks kan per
+ * tarief op een andere rekening uitkomen — dat is juist de bedoeling van de
+ * functiecontrole — en dan is één antwoord tonen niet waar. Komen alle drie op
+ * dezelfde rekening uit, dan is het één regel.
  */
-export function standaardIndeling(gbs: Grootboek[]): Record<string, { nummer?: number; omschrijving?: string } | null> {
-  const uit: Record<string, { nummer?: number; omschrijving?: string } | null> = {}
+export function standaardIndeling(gbs: Grootboek[]): Record<string, Standaard> {
+  const uit: Record<string, Standaard> = {}
+
   for (const cat of Object.keys(KOSTEN_VOORKEUR)) {
-    try {
-      const k = kiesInkoopGrootboek(gbs, cat, 21)
-      uit[`kosten:${cat}`] = k.bron === 'vraagpost' ? null : { nummer: k.nummer, omschrijving: k.omschrijving }
-    } catch { uit[`kosten:${cat}`] = null }
+    const per = [21, 9, 0].map(pct => {
+      try {
+        const k = kiesInkoopGrootboek(gbs, cat, pct)
+        return k.bron === 'vraagpost'
+          ? { pct, nummer: undefined, omschrijving: undefined }
+          : { pct, nummer: k.nummer, omschrijving: k.omschrijving }
+      } catch {
+        return { pct, nummer: undefined, omschrijving: undefined }
+      }
+    })
+    const uniek = new Set(per.map(p => String(p.nummer ?? '')))
+    if (uniek.size === 1) {
+      const eerste = per[0]
+      uit[`kosten:${cat}`] = eerste.nummer
+        ? { soort: 'een', nummer: eerste.nummer, omschrijving: eerste.omschrijving }
+        : null
+    } else {
+      uit[`kosten:${cat}`] = { soort: 'per_tarief', perTarief: per }
+    }
   }
+
+  // Omzet: elk regime heeft één tarief, dus hier is één antwoord wél volledig.
+  // De uitzondering — een normaal-regel met een afwijkend percentage — hoort bij
+  // de sleutel 'overig' en krijgt daarmee zijn eigen regel.
   for (const regime of Object.keys(OMZET_VOORKEUR)) {
-    const pct = regime === 'normaal' ? 21 : regime === 'verlaagd' ? 9 : 0
+    const pct = regime === 'normaal' ? 21 : regime === 'verlaagd' ? 9 : regime === 'overig' ? 6 : 0
     try {
-      const k = kiesOmzetGrootboek(gbs, regime, pct)
-      uit[`omzet:${regime}`] = { nummer: k.nummer, omschrijving: k.omschrijving }
+      const k = kiesOmzetGrootboek(gbs, regime === 'overig' ? 'normaal' : regime, pct)
+      uit[`omzet:${regime}`] = { soort: 'een', nummer: k.nummer, omschrijving: k.omschrijving }
     } catch { uit[`omzet:${regime}`] = null }
   }
   return uit

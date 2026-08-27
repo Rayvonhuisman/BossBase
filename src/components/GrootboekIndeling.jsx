@@ -39,7 +39,21 @@ const OMZET_FUNCTIE = {
   verlegd: 'VerkopenOmzetOnbelastVerlegd',
 };
 
-const rekeningLabel = gb => (gb ? `${gb.nummer} — ${gb.omschrijving}` : null);
+// Wat er gebeurt als je een regel leeg laat. De server rekent dit uit tegen de
+// administratie van de klant; hier alleen de weergave.
+//
+// Komt een categorie bij elk btw-tarief op dezelfde rekening uit, dan is dat één
+// regel. Pakt hij per tarief anders uit, dan MOET dat te zien zijn — anders
+// belooft het scherm iets anders dan er geboekt wordt.
+function standaardTekst(std) {
+  if (!std) return 'vraagpost';
+  if (std.soort === 'een') return `${std.nummer} — ${std.omschrijving}`;
+  return std.perTarief
+    .map(p => `${p.pct}% → ${p.nummer ? `${p.nummer} ${p.omschrijving}` : 'vraagpost'}`)
+    .join(' · ');
+}
+
+const isGesplitst = std => std?.soort === 'per_tarief';
 
 export default function GrootboekIndelingModal({ onClose }) {
   const toast = useToast();
@@ -92,6 +106,16 @@ export default function GrootboekIndelingModal({ onClose }) {
       verplicht: false,
       past: g => String(g.grootboekfunctie || g.functie || '') === OMZET_FUNCTIE[r.value],
     })),
+    // Regels met een afwijkend percentage (oude data, bijvoorbeeld 6%) gaan naar
+    // de overige-omzetrekening, niet naar de hoge. Eigen regel, anders zou de
+    // regel "21% — normaal" ook voor die boekingen lijken te gelden.
+    {
+      sleutel: 'omzet:overig',
+      label: 'Afwijkend percentage',
+      groep: 'Omzet',
+      verplicht: false,
+      past: g => String(g.grootboekfunctie || g.functie || '') === 'VerkopenOmzetOverig',
+    },
   ], [categorieen]);
 
   const ontbrekend = rijen.filter(r => r.verplicht && !voorkeuren[r.sleutel]?.nummer);
@@ -223,12 +247,21 @@ export default function GrootboekIndelingModal({ onClose }) {
                           <option value="">
                             {rij.verplicht
                               ? '— kies een rekening —'
-                              : `Standaard — ${rekeningLabel(standaard) || 'vraagpost'}`}
+                              : isGesplitst(standaard)
+                                ? 'Standaard — hangt af van het btw-tarief'
+                                : `Standaard — ${standaardTekst(standaard)}`}
                           </option>
                           {opties.map(g => (
                             <option key={g.nummer} value={g.nummer}>{g.nummer} — {g.omschrijving}</option>
                           ))}
                         </select>
+                        {/* Een categorie die per tarief ergens anders landt kan
+                            niet in één regel eerlijk worden samengevat. */}
+                        {!gekozen?.nummer && isGesplitst(standaard) && (
+                          <div style={{ flex: '1 1 100%', fontSize: 11, color: 'var(--dl)', paddingLeft: 160 }}>
+                            {standaardTekst(standaard)}
+                          </div>
+                        )}
                         {/* Een lege keuzelijst betekent dat de administratie geen
                             enkele rekening heeft die dit btw-tarief accepteert.
                             Dan is de standaard óók machteloos. */}
