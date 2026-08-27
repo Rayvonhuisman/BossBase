@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase'
+import { negeerBijImport } from './accountingService.js'
 import { withCompanyId } from '../lib/currentCompany'
 import { syncFactuurNaarBoekhouding } from './accountingService'
 import { logTijdlijnSafe } from './klantTijdlijnService'
@@ -230,6 +231,10 @@ export async function updateFactuur(id, input) {
 }
 
 export async function deleteFactuur(id) {
+  // Eerst opzoeken: na de delete is niet meer te zien of hij uit SnelStart kwam.
+  const { data: bestaand } = await supabase
+    .from('facturen').select('externe_referentie').eq('id', id).maybeSingle()
+
   const { error } = await supabase.from('facturen').delete().eq('id', id)
   if (error) {
     // Een gecrediteerde factuur kan niet weg zolang de creditnota ernaar
@@ -243,6 +248,13 @@ export async function deleteFactuur(id) {
       )
     }
     throw error
+  }
+
+  // Onthouden dat deze factuur hier bewust weg is, zodat de import hem niet
+  // terughaalt. Alleen zinvol bij een geïmporteerde factuur; een eigen factuur
+  // wordt sowieso nooit opgehaald.
+  if (bestaand?.externe_referentie) {
+    await negeerBijImport('factuur', bestaand.externe_referentie, 'verwijderd in BossBase').catch(() => {})
   }
 }
 

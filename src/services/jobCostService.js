@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase"
+import { negeerBijImport } from "./accountingService.js"
 import { withCompanyId } from "../lib/currentCompany"
 
 // ── CATEGORIE → LABEL + KLEUR ────────────────────────────────────────────────
@@ -227,7 +228,7 @@ export async function deleteJobCost(id) {
   // de FK (ON DELETE CASCADE) ruimt de kost dan mee op. Zo blijven materiaal en
   // kost in sync, ongeacht vanaf welke kant je verwijdert.
   const { data: cost } = await supabase
-    .from('job_costs').select('werkbon_materiaal_id').eq('id', id).maybeSingle()
+    .from('job_costs').select('werkbon_materiaal_id, externe_referentie').eq('id', id).maybeSingle()
   if (cost?.werkbon_materiaal_id) {
     const { error } = await supabase.from('werkbon_materialen').delete().eq('id', cost.werkbon_materiaal_id)
     if (error) throw error
@@ -235,6 +236,18 @@ export async function deleteJobCost(id) {
   }
   const { error } = await supabase.from('job_costs').delete().eq('id', id)
   if (error) throw error
+
+  // Onthouden dat deze kostenpost hier bewust weg is, zodat de import hem niet
+  // terughaalt.
+  //
+  // LET OP: één inkoopfactuur uit SnelStart kan als meerdere kostenregels zijn
+  // binnengekomen (referentie snelstart_<factuur>_<n>). De prullenbak werkt op
+  // het FACTUURnummer, dus één regel weggooien onderdrukt de hele factuur. Dat
+  // is de bedoeling: anders zou de verwijderde regel bij de volgende sync toch
+  // terugkomen, samen met een dubbele van de regels die je liet staan.
+  if (cost?.externe_referentie) {
+    await negeerBijImport('kost', cost.externe_referentie, 'verwijderd in BossBase').catch(() => {})
+  }
 }
 
 // ── PROJECT-KOSTEN (direct + via werkbon, één keer geteld) ───────────────────

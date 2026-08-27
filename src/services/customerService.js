@@ -1,3 +1,4 @@
+import { negeerBijImport } from './accountingService.js'
 import { supabase } from "../lib/supabase"
 import { withCompanyId } from "../lib/currentCompany"
 import { safeInsert } from "../lib/safeInsert"
@@ -117,6 +118,19 @@ export async function updateCustomerNotities(id, notities) {
 }
 
 export async function deleteCustomer(id) {
+  // Eerst opzoeken, daarna pas verwijderen: na de delete is de rij weg en is
+  // niet meer te achterhalen of hij uit SnelStart kwam.
+  const { data: bestaand } = await supabase
+    .from("customers").select("snelstart_id").eq("id", id).maybeSingle()
+
   const { error } = await supabase.from("customers").delete().eq("id", id)
   if (error) throw error
+
+    // Onthouden dat dit record hier bewust weg is, zodat de import het niet
+  // terughaalt. Zonder deze regel komt alles wat je verwijdert bij de volgende
+  // sync gewoon terug — de import kijkt naar wat er in SnelStart staat, niet naar
+  // wat jij hebt besloten.
+  if (bestaand?.snelstart_id) {
+    await negeerBijImport('klant', bestaand.snelstart_id, 'verwijderd in BossBase').catch(() => {})
+  }
 }

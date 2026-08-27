@@ -1,3 +1,4 @@
+import { negeerBijImport } from './accountingService.js'
 import { supabase } from '../lib/supabase'
 import { withCompanyId } from '../lib/currentCompany'
 import { valideerRelatieVelden } from '../lib/validatie'
@@ -101,8 +102,19 @@ export async function updateLeverancier(id, form) {
 export async function deleteLeverancier(id) {
   // job_costs.leverancier_id staat op ON DELETE RESTRICT: een leverancier met
   // kosten kan niet weg — die kosten zouden onboekbaar worden. Zet hem inactief.
+  const { data: bestaand } = await supabase
+    .from('leveranciers').select('snelstart_id').eq('id', id).maybeSingle()
+
   const { error } = await supabase.from('leveranciers').delete().eq('id', id)
   if (error) throw error
+
+// Onthouden dat dit record hier bewust weg is, zodat de import het niet
+// terughaalt. Zonder deze regel komt alles wat je verwijdert bij de volgende
+// sync gewoon terug — de import kijkt naar wat er in SnelStart staat, niet naar
+// wat jij hebt besloten.
+  if (bestaand?.snelstart_id) {
+    await negeerBijImport('leverancier', bestaand.snelstart_id, 'verwijderd in BossBase').catch(() => {})
+  }
 }
 
 // Hoeveel kosten hangen er aan deze leveranciers? Voedt de kolom "kosten" in het
