@@ -43,7 +43,7 @@ import {
   importKostenVanuitMoneybird,
   syncContactenMetMoneybird,
   saveSnelStartConnection,
-  resetSnelStartKoppeling,
+  controleerSnelStartAdministratie,
   testSnelStartConnection,
   importKostenVanuitSnelStart,
   syncContactenMetSnelStart,
@@ -282,7 +282,6 @@ export function InstellingenPage() {
   const [ssAdresWaarschuwingen, setSsAdresWaarschuwingen] = useState([]);
   // Aantal kostenposten dat na de laatste sync nog niet geboekt was.
   const [ssKostenResterend, setSsKostenResterend] = useState(0);
-  const [ssResetting, setSsResetting] = useState(false);
   const [ssFouten, setSsFouten] = useState([]);
   const [ssMeldingen, setSsMeldingen] = useState([]);
 
@@ -839,6 +838,21 @@ export function InstellingenPage() {
     setSsSaving(true);
     try {
       const saved = await saveSnelStartConnection({ clientKey: ssForm.clientKey });
+      // Wijst deze sleutel naar een andere administratie? Dan wijzen alle
+      // opgeslagen verwijzingen naar niets en slaat de sync straks alles over.
+      // Dit ving vroeger de knop "Koppeling opnieuw opbouwen" op; die is weg
+      // omdat er zonder opruimen in SnelStart dubbele boekingen van kwamen.
+      try {
+        const check = await controleerSnelStartAdministratie();
+        if (check?.status === 'gewisseld') {
+          const h = check.hersteld || {};
+          toast.info(
+            `${check.melding} (${h.klanten ?? 0} klanten, ${h.leveranciers ?? 0} leveranciers, `
+            + `${h.facturen ?? 0} facturen en ${h.kosten ?? 0} kosten worden opnieuw geboekt.)`,
+            { duration: 12000 },
+          );
+        }
+      } catch { /* de koppeling zelf is opgeslagen; dit mag dat niet blokkeren */ }
       setSsConnection(saved);
       setSsForm({ clientKey: '' });
       setSsEditing(false);
@@ -881,35 +895,6 @@ export function InstellingenPage() {
     }
   };
 
-  // Alle snelstart_id's wissen. Dubbele bevestiging: dit leidt tot opnieuw
-  // boeken, en als de administratie ongewijzigd is levert dat dubbele posten op.
-  const handleSsReset = async () => {
-    const akkoord = window.confirm(
-      'Koppeling opnieuw opbouwen?\n\n'
-      + 'RUIM EERST OP IN SNELSTART.\n'
-      + 'Deze knop wist alleen onze verwijzingen; in SnelStart blijft alles staan. '
-      + 'Verwijder daar eerst de boekingen die opnieuw moeten, anders weigert SnelStart '
-      + 'ze met "het factuurnummer bestaat al" en krijg je dubbele kostenposten.\n\n'
-      + 'Daarna worden klanten, leveranciers, facturen en kosten bij de volgende '
-      + 'synchronisatie opnieuw geboekt.\n\n'
-      + 'Gebruik dit alleen na opruimen in SnelStart of bij een wissel van administratie.'
-    );
-    if (!akkoord) return;
-    setSsResetting(true);
-    try {
-      const r = await resetSnelStartKoppeling();
-      toast.success(
-        `Koppeling gereset: ${r.klanten} klanten, ${r.leveranciers} leveranciers, `
-        + `${r.facturen} facturen en ${r.kosten} kosten worden opnieuw geboekt.`
-      );
-      const refreshed = await getConnection('snelstart');
-      if (refreshed) setSsConnection(refreshed);
-    } catch (err) {
-      toast.error(err.message || 'Resetten mislukt');
-    } finally {
-      setSsResetting(false);
-    }
-  };
 
   const handleSsToggleImportCosts = async (enabled) => {
     setSsTogglingImport(true);
@@ -2727,17 +2712,6 @@ export function InstellingenPage() {
                     onClick={() => setSsEditing(true)}
                   >
                     Wijzigen
-                  </button>
-                  {/* Na het intrekken van een sleutel of het wisselen van
-                      administratie wijzen de opgeslagen verwijzingen naar niets,
-                      en slaat de sync alles over als "al gesynchroniseerd". */}
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={handleSsReset}
-                    disabled={ssResetting}
-                    title="Wist onze verwijzingen naar SnelStart. Ruim eerst op in SnelStart zelf, anders botsen de factuurnummers."
-                  >
-                    {ssResetting ? 'Bezig...' : 'Koppeling opnieuw opbouwen'}
                   </button>
                 </>
               ) : (

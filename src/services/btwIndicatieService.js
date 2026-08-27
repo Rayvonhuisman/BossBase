@@ -2,8 +2,10 @@ import { supabase } from '../lib/supabase'
 
 // BTW-indicatie: berekend uit de eigen facturen en kosten in BossBase.
 //
-// Dit is NADRUKKELIJK geen aangifte. Wat er buiten BossBase om is geboekt —
-// journaalposten van de boekhouder, correcties, suppleties — zit hier niet in.
+// Dit is NADRUKKELIJK geen aangifte. Journaalposten, correcties en suppleties
+// van de boekhouder zitten hier niet in. Facturen en kosten die uit SnelStart
+// zijn opgehaald WEL — sinds de import telt ook mee wat daar buiten BossBase om
+// is geboekt.
 // De rubrieken die we niet kunnen kennen worden expliciet als "onbekend"
 // teruggegeven, zodat de UI ze kan tonen in plaats van weglaten; anders lijkt
 // het overzicht compleet terwijl het dat niet is.
@@ -64,7 +66,10 @@ export async function berekenBtwIndicatie({ start, eind, stelsel = 'factuur' }) 
 
   factuurQ = stelsel === 'kas'
     ? factuurQ.eq('status', 'betaald')
-    : factuurQ.in('status', ['verzonden', 'betaald'])
+    // 'geboekt' = uit SnelStart opgehaald. Die facturen zijn daar definitief en
+    // horen dus in de aangifte-indicatie mee te tellen; ze weglaten zou het
+    // omzetbeeld precies zo incompleet maken als het vóór de import was.
+    : factuurQ.in('status', ['verzonden', 'betaald', 'geboekt'])
 
   const [{ data: facturen, error: fErr }, { data: kosten, error: kErr }, { data: concepten }] = await Promise.all([
     factuurQ,

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient, isScheduledCall } from "../_shared/scheduledSync.ts"
-import { ssFetch, ssFetchAll, forEachSnelStartCompany, pushVerkoopboeking, pushFactuurPdf, getActieveGrootboeken, ensureRelatie, pushInkoopboeking, pushKostenBijlagen, getGrootboekVoorkeuren } from "../_shared/snelstart.ts"
+import { ssFetch, ssFetchAll, forEachSnelStartCompany, pushVerkoopboeking, pushFactuurPdf, getActieveGrootboeken, ensureRelatie, pushInkoopboeking, pushKostenBijlagen, getGrootboekVoorkeuren, importeerLeverancier, getGenegeerd,
+  relatieNaarKlantVelden, alleenGevuld, regimeUitGrootboekfunctie, btwPctVoorRegime } from "../_shared/snelstart.ts"
 
 // Kosten/facturen-synchronisatie met SnelStart, twee richtingen:
 //   * EXPORT (altijd): verzonden/betaalde BossBase-facturen zonder snelstart_id
@@ -53,6 +54,10 @@ async function exportFacturen(
     .eq('company_id', companyId)
     .in('status', paidOnly ? ['betaald'] : ['verzonden', 'betaald'])
     .is('snelstart_id', null)
+    // Geïmporteerde facturen gaan NOOIT terug. snelstart_id alleen is te zwak:
+    // een reset wist dat veld, en dan zou de sync elke opgehaalde factuur
+    // terugboeken als duplicaat. De externe referentie blijft altijd staan.
+    .is('externe_referentie', null)
     .order('factuurdatum', { ascending: true })
     .limit(50)
 
@@ -174,29 +179,26 @@ async function importKosten(
     (f?.inkoopBoeking?.id && eigenIds.has(String(f.inkoopBoeking.id)))
     || String(f?.factuurnummer || '').startsWith('BB-KST-')
 
+  const genegeerd = await getGenegeerd(supabase, companyId, 'kost')
   const facturen = await ssFetchAll(clientKey, '/inkoopfacturen')
   const toImport = facturen.filter((f: any) =>
-    f.id && !importedFactuurIds.has(String(f.id)) && !isVanOnszelf(f))
+    f.id && !importedFactuurIds.has(String(f.id)) && !isVanOnszelf(f) && !genegeerd.has(String(f.id)))
 
-  // InkoopfactuurModel geeft alleen relatie.id, geen naam. Eén keer de
-  // relatielijst ophalen om die te vertalen: zonder dit ging de leverancier
-  // verloren en belandden geïmporteerde kosten naamloos in BossBase.
-  const relatieNaam = new Map<string, string>()
-  if (toImport.length) {
-    try {
-      for (const r of await ssFetchAll(clientKey, '/relaties')) {
-        if (r?.id && r?.naam) relatieNaam.set(String(r.id), String(r.naam).trim())
-      }
-    } catch (err: any) {
-      console.error('Relatielijst niet leesbaar (leverancier blijft leeg):', err.message)
-    }
-  }
+  // InkoopfactuurModel geeft alleen relatie.id. Die vertalen we niet meer naar
+  // een stuk tekst maar naar een ECHTE leverancier: opzoeken op snelstart_id,
+  // en bestaat hij nog niet, dan ophalen en aanmaken. Zonder dit kwamen
+  // geïmporteerde kosten binnen als losse regels zonder leverancier — je zag in
+  // BossBase niet bij wie er was ingekocht, en de kostenpost kon niet mee in de
+  // leveranciersoverzichten.
+  const levCache = new Map<string, string>()
 
   const rows: Record<string, unknown>[] = []
   for (const f of toImport) {
     const costDate = f.factuurDatum ? String(f.factuurDatum).slice(0, 10) : null
     const baseDesc = f.factuurnummer ? `Inkoopfactuur ${f.factuurnummer}` : 'Inkoopfactuur'
-    const leverancier = f.relatie?.id ? (relatieNaam.get(String(f.relatie.id)) || null) : null
+    const leverancierId = f.relatie?.id
+      ? await importeerLeverancier(supabase, clientKey, companyId, String(f.relatie.id), levCache)
+      : null
 
     // Btw-uitsplitsing via de onderliggende inkoopboeking (best-effort).
     let regels: any[] = []
@@ -216,7 +218,7 @@ async function importKosten(
           description: r.omschrijving ? `${baseDesc} — ${r.omschrijving}` : baseDesc,
           amount: Math.abs(Number(r.bedrag || 0)),
           category: 'Inkoopfactuur',
-          leverancier,
+          leverancier_id: leverancierId,
           cost_date: costDate,
           externe_referentie: `snelstart_${f.id}_${i}`,
           klant_type: 'algemeen',
@@ -230,7 +232,7 @@ async function importKosten(
         description: baseDesc,
         amount: Math.abs(Number(f.factuurBedrag || 0)),
         category: 'Inkoopfactuur',
-        leverancier,
+        leverancier_id: leverancierId,
         cost_date: costDate,
         externe_referentie: 'snelstart_' + f.id,
         klant_type: 'algemeen',
@@ -246,6 +248,181 @@ async function importKosten(
     imported = toImport.length
   }
   console.log(`SnelStart inkoopfacturen geïmporteerd: ${imported} (${rows.length} kostenregels)`)
+  return imported
+}
+
+
+// ── Import: verkoopfacturen uit SnelStart ───────────────────────────────────
+// Zodat het omzetbeeld compleet is, ook voor facturen die de boekhouder zelf
+// heeft geboekt.
+//
+// Twee endpoints, want geen van beide geeft het hele plaatje:
+//   GET /verkoopfacturen        nummer, datum, vervaldatum, klant, bedrag,
+//                               openstaandSaldo — maar GEEN regels en GEEN btw
+//   GET /verkoopboekingen/{id}  boekingsregels + btw per soort
+//
+// Het btw-REGIME per regel bestaat niet als veld in SnelStart, maar is af te
+// leiden uit de GROOTBOEKFUNCTIE van de regel: dat is precies de indeling die
+// wij bij het exporteren aanbrengen, teruggelezen. Vrijgesteld en verlegd delen
+// die functie en zijn uit elkaar te houden aan de VerkopenVerlegd-btwregel op
+// de boeking.
+//
+// Wat NIET reconstrueerbaar is: aantal en eenheidsprijs (een boekingsregel heeft
+// alleen een bedrag), de PDF, en de koppeling van een creditnota aan zijn
+// originele factuur — SnelStart kent geen creditnota-type.
+//
+// Zulke facturen zijn ALLEEN-LEZEN. Ze krijgen status 'geboekt' (waarmee
+// isFactuurLocked ze automatisch vergrendelt) en externe_referentie
+// 'snelstart_<id>', waarop de export ze overslaat.
+async function importFacturen(
+  supabase: any, companyId: string, clientKey: string, meldingen: string[],
+): Promise<number> {
+  const genegeerd = await getGenegeerd(supabase, companyId, 'factuur')
+
+  // Wat we al kennen: op externe referentie (geïmporteerd) én op snelstart_id
+  // (door onszelf geëxporteerd). Dat tweede is de terugkoppellus: onze eigen
+  // facturen mogen niet als "nieuwe" factuur terugkomen.
+  const { data: bekend } = await supabase
+    .from('facturen')
+    .select('externe_referentie, snelstart_id, nummer')
+    .eq('company_id', companyId)
+  const bekendeRefs = new Set<string>()
+  const eigenBoekingen = new Set<string>()
+  const bekendeNummers = new Set<string>()
+  for (const f of (bekend || [])) {
+    if (f.externe_referentie) bekendeRefs.add(String(f.externe_referentie))
+    if (f.snelstart_id) eigenBoekingen.add(String(f.snelstart_id))
+    if (f.nummer) bekendeNummers.add(String(f.nummer).toLowerCase())
+  }
+
+  const facturen = await ssFetchAll(clientKey, '/verkoopfacturen')
+  const grootboeken = await getActieveGrootboeken(clientKey)
+  const functieVan = new Map<string, string>(
+    grootboeken.map((g: any) => [String(g.id), String(g.grootboekfunctie || '')]))
+
+  let imported = 0
+  let overgeslagen = 0
+  const klantCache = new Map<string, string | null>()
+
+  for (const f of facturen) {
+    const ref = `snelstart_${f.id}`
+    if (bekendeRefs.has(ref)) continue
+    if (genegeerd.has(String(f.id))) { overgeslagen++; continue }
+    // Door onszelf geëxporteerd: die staat hier al als eigen factuur.
+    if (f.verkoopBoeking?.id && eigenBoekingen.has(String(f.verkoopBoeking.id))) continue
+    if (f.factuurnummer && bekendeNummers.has(String(f.factuurnummer).toLowerCase())) continue
+
+    try {
+      // Klant erbij zoeken of aanmaken, anders staat de omzet nergens aan vast.
+      let customerId: string | null = null
+      if (f.relatie?.id) {
+        const sleutel = String(f.relatie.id)
+        if (klantCache.has(sleutel)) {
+          customerId = klantCache.get(sleutel) ?? null
+        } else {
+          const { data: bestaand } = await supabase
+            .from('customers').select('id').eq('company_id', companyId).eq('snelstart_id', sleutel).maybeSingle()
+          if (bestaand?.id) customerId = bestaand.id
+          else {
+            const relatie = await ssFetch(clientKey, `/relaties/${sleutel}`)
+            const velden = relatieNaarKlantVelden(relatie)
+            if (velden.name) {
+              const { data: nieuw } = await supabase.from('customers')
+                .insert({ company_id: companyId, snelstart_id: sleutel, ...velden })
+                .select('id').single()
+              customerId = nieuw?.id ?? null
+            }
+          }
+          klantCache.set(sleutel, customerId)
+        }
+      }
+
+      // Regels + btw uit de onderliggende boeking.
+      let regels: any[] = []
+      let btwRegels: any[] = []
+      if (f.verkoopBoeking?.id) {
+        const boeking = await ssFetch(clientKey, `/verkoopboekingen/${f.verkoopBoeking.id}`)
+        regels = Array.isArray(boeking?.boekingsregels) ? boeking.boekingsregels : []
+        btwRegels = Array.isArray(boeking?.btw) ? boeking.btw : []
+      }
+      const heeftVerlegd = btwRegels.some((b: any) => String(b?.btwSoort || '') === 'VerkopenVerlegd')
+
+      // openstaandSaldo 0 = betaald. Voor een geïmporteerde factuur is SnelStart
+      // de waarheid over de betaalstatus; wij hebben er geen eigen beeld van.
+      const saldo = Number(f.openstaandSaldo ?? 0)
+      const betaald = Math.abs(saldo) < 0.005
+      const datum = f.factuurDatum ? String(f.factuurDatum).slice(0, 10) : null
+
+      const { data: factuur, error: fErr } = await supabase.from('facturen').insert({
+        company_id: companyId,
+        customer_id: customerId,
+        nummer: f.factuurnummer || `SS-${String(f.id).slice(0, 8)}`,
+        factuurdatum: datum,
+        vervaldatum: f.vervalDatum ? String(f.vervalDatum).slice(0, 10) : null,
+        // 'geboekt' bestaat niet in de eigen statusflow en valt daarmee buiten
+        // ['concept','aangemaakt'] — isFactuurLocked vergrendelt hem dus vanzelf.
+        status: betaald ? 'betaald' : 'geboekt',
+        betaald_op: betaald ? datum : null,
+        externe_referentie: ref,
+        snelstart_id: f.verkoopBoeking?.id ? String(f.verkoopBoeking.id) : null,
+        // Niets na te sturen: er is geen PDF van een boeking die hier niet is
+        // gemaakt.
+        snelstart_bijlage_gesynct: true,
+        totaal_excl: 0,
+        totaal_incl: 0,
+      }).select('id').single()
+      if (fErr) throw fErr
+
+      // Regels wegschrijven; de triggers leiden de totalen eruit af.
+      if (regels.length) {
+        const rijen = regels.map((r: any, i: number) => {
+          const functie = functieVan.get(String(r?.grootboek?.id)) || ''
+          const regime = regimeUitGrootboekfunctie(functie, heeftVerlegd)
+          const bedrag = Math.round(Number(r?.bedrag || 0) * 100) / 100
+          return {
+            factuur_id: factuur.id,
+            company_id: companyId,
+            type: 'vast',
+            omschrijving: r?.omschrijving || f.factuurnummer || 'Boekingsregel',
+            // Aantal en eenheidsprijs bestaan niet in een boeking; 1 × bedrag is
+            // de enige eerlijke weergave.
+            aantal: 1,
+            eenheidsprijs: bedrag,
+            regelprijs: bedrag,
+            btw_pct: btwPctVoorRegime(regime),
+            btw_regime: regime,
+            volgorde: i,
+          }
+        })
+        const { error: rErr } = await supabase.from('factuur_regels').insert(rijen)
+        if (rErr) throw rErr
+      } else {
+        // Geen boeking leesbaar: dan alleen het totaal, als één regel.
+        await supabase.from('factuur_regels').insert({
+          factuur_id: factuur.id,
+          company_id: companyId,
+          type: 'vast',
+          omschrijving: f.factuurnummer ? `Factuur ${f.factuurnummer}` : 'Verkoopfactuur',
+          aantal: 1,
+          eenheidsprijs: Number(f.factuurBedrag || 0),
+          regelprijs: Number(f.factuurBedrag || 0),
+          btw_pct: 0,
+          btw_regime: 'vrijgesteld',
+          volgorde: 0,
+        })
+        meldingen.push(
+          `Factuur ${f.factuurnummer || f.id} is opgehaald zonder btw-uitsplitsing — de onderliggende boeking was niet leesbaar. `
+          + 'Het bedrag klopt, de btw-verdeling niet.',
+        )
+      }
+      imported++
+    } catch (err: any) {
+      console.error(`Verkoopfactuur ${f.factuurnummer || f.id} importeren mislukt:`, err?.message)
+      meldingen.push(`Factuur ${f.factuurnummer || f.id} kon niet worden opgehaald: ${err?.message}`)
+    }
+  }
+
+  console.log('Verkoopfacturen geïmporteerd:', imported, `(${overgeslagen} uit de prullenbak overgeslagen)`)
   return imported
 }
 
@@ -376,7 +553,7 @@ async function syncCompany(
   supabase: any, companyId: string, clientKey: string, importCosts: boolean, paidOnly: boolean,
 ): Promise<{
   exported: { verkoopboekingen: number; inkoopboekingen: number };
-  imported: { inkoopfacturen: number };
+  imported: { inkoopfacturen: number; verkoopfacturen: number };
   kostenResterend: number;
   fouten: string[];
   meldingen: string[];
@@ -385,6 +562,11 @@ async function syncCompany(
   const factuurMeldingen: string[] = []
   const exported = await exportFacturen(supabase, companyId, clientKey, paidOnly, factuurFouten, factuurMeldingen)
   const imported = importCosts ? await importKosten(supabase, companyId, clientKey) : 0
+  // Verkoopfacturen ophalen hangt aan dezelfde instelling: wie zijn boekhouding
+  // als bron wil zien, wil dat voor kosten én omzet.
+  const importedFacturen = importCosts
+    ? await importFacturen(supabase, companyId, clientKey, factuurMeldingen)
+    : 0
   const kosten = importCosts
     ? await exportKosten(supabase, companyId, clientKey)
     : { exported: 0, resterend: 0 }
@@ -397,7 +579,7 @@ async function syncCompany(
 
   return {
     exported: { verkoopboekingen: exported, inkoopboekingen: kosten.exported },
-    imported: { inkoopfacturen: imported },
+    imported: { inkoopfacturen: imported, verkoopfacturen: importedFacturen },
     kostenResterend: kosten.resterend,
     // Wat er per regel misging — zodat de gebruiker niet naar "0" zit te kijken.
     fouten: [...factuurFouten, ...kosten.fouten],

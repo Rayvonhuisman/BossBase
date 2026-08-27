@@ -20,6 +20,9 @@ export const STATUS_TONES = {
   orange: { cls: 'b-orange', bg: '#fff4ec', color: '#e8784a', dot: '#e8784a', chip: 'orange'  },
   green:  { cls: 'b-green',  bg: '#ecfdf5', color: '#15A34A', dot: '#15A34A', chip: 'success' },
   red:    { cls: 'b-red',    bg: '#fef2f2', color: '#dc2626', dot: '#dc2626', chip: 'warn'    },
+  // Voor wat niet in BossBase is gemaakt maar uit de boekhouding komt. De
+  // klasse .b-purple stond al in bb-dashboard.css.
+  purple: { cls: 'b-purple', bg: '#f5f3ff', color: '#7c3aed', dot: '#7c3aed', chip: 'neutral' },
 };
 
 // Per domein: genormaliseerde status-key → [tone, NL-label]. Varianten/spellingen
@@ -49,6 +52,11 @@ const DOMAINS = {
     verlopen:   ['red',   'Te laat'],
     te_laat:    ['red',   'Te laat'],
     vervallen:  ['red',   'Te laat'],
+    // Uit SnelStart opgehaald, niet in BossBase gemaakt. Eigen kleur zodat je in
+    // de lijst meteen ziet welk deel van het omzetbeeld uit de boekhouding komt
+    // — die facturen hebben geen regels met eigen prijzen, geen PDF en zijn
+    // niet te bewerken.
+    geboekt:    ['purple', 'Uit SnelStart'],
   },
   // OFFERTE — Concept = grijs, Verzonden = blauw, Geaccepteerd = groen, Afgewezen = rood.
   offerte: {

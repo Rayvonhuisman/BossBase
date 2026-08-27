@@ -1,14 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient, isScheduledCall } from "../_shared/scheduledSync.ts"
-import { ssFetchAll, ensureRelatie, forEachSnelStartCompany, ontbrekendeAdresvelden } from "../_shared/snelstart.ts"
-
-// Systeemrelaties dragen een negatief relatienummer. Alleen daarop filteren en
-// niet op naam: de naam is taalafhankelijk, het nummer niet, en een echte klant
-// krijgt nooit een negatief nummer.
-const isSysteemrelatie = (relatie: any): boolean => {
-  const code = Number(relatie?.relatiecode)
-  return Number.isFinite(code) && code < 0
-}
+import {
+  ssFetchAll, ensureRelatie, forEachSnelStartCompany, ontbrekendeAdresvelden,
+  relatieNaarKlantVelden, relatieNaarVelden, alleenGevuld, isSysteemrelatie, getGenegeerd,
+} from "../_shared/snelstart.ts"
 
 // Contacten twee-richtingen sync met SnelStart (spiegel van moneybird-sync-
 // contacten). Scopes: relaties:read + relaties:write.
@@ -29,11 +24,15 @@ type AdresWaarschuwing = { klant: string; mist: string[] }
 
 async function syncCompany(
   supabase: any, companyId: string, clientKey: string,
-): Promise<{ imported: number; exported: number; adresWaarschuwingen: AdresWaarschuwing[]; systeemrelaties: number }> {
+): Promise<Record<string, unknown>> {
   let imported = 0
   let exported = 0
   const adresWaarschuwingen: AdresWaarschuwing[] = []
   let systeemrelaties = 0
+  let bijgewerkt = 0
+  let levGeimporteerd = 0
+  let levBijgewerkt = 0
+  let overgeslagen = 0
 
   // ── A: SNELSTART → BOSSBASE ──────────────────────────────────────────────
   // Systeemrelaties van SnelStart zelf overslaan. Elke administratie heeft er
@@ -63,32 +62,43 @@ async function syncCompany(
     if (c.name) byName.set(c.name.toLowerCase(), c)
   }
 
+  const genegeerd = await getGenegeerd(supabase, companyId, 'klant')
+
   for (const relatie of relaties) {
     const name = (relatie.naam || '').trim()
     if (!name) continue
     if (relatie.nonactief === true) continue
     if (isSysteemrelatie(relatie)) { systeemrelaties++; continue }
-    if (bySnelstartId.has(String(relatie.id))) continue
+    // Bewust hier verwijderd: niet terughalen. Alleen "Alles opnieuw ophalen"
+    // maakt de prullenbak leeg.
+    if (genegeerd.has(String(relatie.id))) { overgeslagen++; continue }
+
+    const velden = relatieNaarKlantVelden(relatie)
+    const bestaandeRij = bySnelstartId.get(String(relatie.id))
+
+    if (bestaandeRij) {
+      // Al gekoppeld: bijwerken met wat SnelStart heeft. Lege velden daar mogen
+      // niet overschrijven wat hier is aangevuld.
+      await supabase.from('customers').update(alleenGevuld(velden)).eq('id', bestaandeRij.id)
+      bijgewerkt++
+      continue
+    }
 
     const emailKey = (relatie.email || '').toLowerCase()
     const existing = (emailKey ? byEmail.get(emailKey) : null) ?? byName.get(name.toLowerCase()) ?? null
 
     if (existing) {
-      if (!existing.snelstart_id) {
-        await supabase.from('customers').update({ snelstart_id: String(relatie.id) }).eq('id', existing.id)
-        existing.snelstart_id = String(relatie.id)
-        bySnelstartId.set(String(relatie.id), existing)
-      }
+      await supabase.from('customers')
+        .update({ snelstart_id: String(relatie.id), ...alleenGevuld(velden) })
+        .eq('id', existing.id)
+      existing.snelstart_id = String(relatie.id)
+      bySnelstartId.set(String(relatie.id), existing)
+      bijgewerkt++
     } else {
-      const adres = relatie.vestigingsAdres || relatie.correspondentieAdres || null
       const { data: newCustomer } = await supabase.from('customers').insert({
         company_id: companyId,
-        name,
-        email: relatie.email || null,
-        phone: relatie.telefoon || relatie.mobieleTelefoon || null,
-        address: adres?.straat || null,
-        city: adres?.plaats || null,
         snelstart_id: String(relatie.id),
+        ...velden,
       }).select().single()
 
       if (newCustomer) {
@@ -99,7 +109,58 @@ async function syncCompany(
       }
     }
   }
-  console.log('Geïmporteerd van SnelStart:', imported, `(${systeemrelaties} systeemrelaties overgeslagen)`)
+  console.log('Klanten geïmporteerd:', imported, 'bijgewerkt:', bijgewerkt, `(${systeemrelaties} systeemrelaties, ${overgeslagen} uit de prullenbak overgeslagen)`)
+
+  // ── A2: LEVERANCIERS UIT SNELSTART ───────────────────────────────────────
+  // Nieuw importpad. Leveranciers gingen tot nu toe alleen heen: wat de
+  // boekhouder in SnelStart aanmaakte was in BossBase onzichtbaar, en een
+  // geïmporteerde inkoopfactuur had daardoor niemand om aan te hangen.
+  //
+  // Een relatie kan beide soorten dragen; die komt dan zowel als klant als als
+  // leverancier binnen. Dat is juist: in beide rollen is het een echte relatie.
+  const levRelaties = await ssFetchAll(
+    clientKey, `/relaties?$filter=${encodeURIComponent("Relatiesoort/any(r:r eq 'Leverancier')")}`)
+  const levGenegeerd = await getGenegeerd(supabase, companyId, 'leverancier')
+
+  const { data: bestaandeLev } = await supabase
+    .from('leveranciers').select('id, naam, snelstart_id').eq('company_id', companyId)
+  const levOpId = new Map<string, any>()
+  const levOpNaam = new Map<string, any>()
+  for (const l of (bestaandeLev || [])) {
+    if (l.snelstart_id) levOpId.set(String(l.snelstart_id), l)
+    if (l.naam) levOpNaam.set(l.naam.toLowerCase(), l)
+  }
+
+  for (const relatie of levRelaties) {
+    const naam = (relatie.naam || '').trim()
+    if (!naam) continue
+    if (isSysteemrelatie(relatie)) { systeemrelaties++; continue }
+    if (levGenegeerd.has(String(relatie.id))) { overgeslagen++; continue }
+
+    const velden = relatieNaarVelden(relatie)
+    const bestaand = levOpId.get(String(relatie.id)) ?? levOpNaam.get(naam.toLowerCase()) ?? null
+
+    if (bestaand) {
+      await supabase.from('leveranciers')
+        .update({ snelstart_id: String(relatie.id), ...alleenGevuld(velden) })
+        .eq('id', bestaand.id)
+      levBijgewerkt++
+    } else {
+      const { data: nieuw } = await supabase.from('leveranciers').insert({
+        company_id: companyId,
+        snelstart_id: String(relatie.id),
+        // nonactief in SnelStart = uit de keuzelijsten hier, maar niet weg.
+        actief: relatie.nonactief !== true,
+        ...velden,
+      }).select('id, naam').single()
+      if (nieuw) {
+        levGeimporteerd++
+        levOpId.set(String(relatie.id), nieuw)
+        levOpNaam.set(naam.toLowerCase(), nieuw)
+      }
+    }
+  }
+  console.log('Leveranciers geïmporteerd:', levGeimporteerd, 'bijgewerkt:', levBijgewerkt)
 
   // ── B: BOSSBASE → SNELSTART ──────────────────────────────────────────────
   const { data: unsynced } = await supabase
@@ -135,7 +196,11 @@ async function syncCompany(
     .eq('company_id', companyId)
     .eq('provider', 'snelstart')
 
-  return { imported, exported, adresWaarschuwingen, systeemrelaties }
+  return {
+    imported, exported, adresWaarschuwingen, systeemrelaties, bijgewerkt,
+    leveranciers: { geimporteerd: levGeimporteerd, bijgewerkt: levBijgewerkt },
+    overgeslagenUitPrullenbak: overgeslagen,
+  }
 }
 
 serve(async (req) => {

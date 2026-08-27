@@ -974,7 +974,9 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
   const today = TODAY();
   const thisMonth = THIS_MONTH();
 
-  const kpiOpenstaand = facturen.filter(f => f.status === 'verzonden' && !isVerlopen(f));
+  // 'geboekt' = uit SnelStart opgehaald en daar nog niet afgeletterd; dat is
+  // net zo goed openstaand als een eigen verzonden factuur.
+  const kpiOpenstaand = facturen.filter(f => ['verzonden', 'geboekt'].includes(f.status) && !isVerlopen(f));
   const kpiBetaaldMaand = facturen.filter(f => f.status === 'betaald' && f.betaaldOp?.startsWith(thisMonth));
   const kpiVerlopen = facturen.filter(f => isVerlopen(f));
 

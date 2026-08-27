@@ -18,7 +18,7 @@ import { ModalX } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { BTW_REGIMES } from '../lib/btwRegime.js';
 import {
-  getGrootboekrekeningen, getGrootboekVoorkeuren, setGrootboekVoorkeur,
+  getGrootboekrekeningen, getGrootboekVoorkeuren, setGrootboekVoorkeur, haalAllesOpnieuwOp,
 } from '../services/accountingService.js';
 import {
   listKostenCategorieen, createKostenCategorie, updateKostenCategorie,
@@ -65,6 +65,7 @@ export default function GrootboekIndelingModal({ onClose }) {
   const [laden, setLaden] = useState(true);
   const [fout, setFout] = useState(null);
   const [nieuw, setNieuw] = useState('');
+  const [ophalen, setOphalen] = useState(false);
 
   const laad = async () => {
     setLaden(true);
@@ -329,7 +330,35 @@ export default function GrootboekIndelingModal({ onClose }) {
           )}
         </div>
 
-        <div className="fa">
+        <div className="fa" style={{ justifyContent: 'space-between' }}>
+          {/* Wat hier verwijderd is komt normaal niet meer terug — de import
+              respecteert die keuze. Dit is de enige weg terug, en dus expres
+              een bewuste handeling in plaats van iets dat elke sync doet. */}
+          <button
+            className="btn btn-s btn-sm"
+            disabled={ophalen}
+            onClick={async () => {
+              if (!confirm(
+                'Alles opnieuw ophalen uit SnelStart?\n\n'
+                + 'Ook wat je hier eerder hebt verwijderd komt dan terug. '
+                + 'Wat in BossBase is gemaakt en al geboekt is, blijft ongemoeid.',
+              )) return;
+              setOphalen(true);
+              try {
+                const r = await haalAllesOpnieuwOp();
+                const i = r?.imported || {};
+                toast.success(
+                  `Opgehaald: ${i.inkoopfacturen ?? 0} inkoopfacturen en ${i.verkoopfacturen ?? 0} verkoopfacturen.`,
+                );
+              } catch (err) {
+                toast.error(err.message || 'Ophalen mislukt');
+              } finally {
+                setOphalen(false);
+              }
+            }}
+          >
+            {ophalen ? 'Ophalen…' : 'Alles opnieuw ophalen'}
+          </button>
           <button className="btn btn-p" onClick={onClose}>Klaar</button>
         </div>
       </div>

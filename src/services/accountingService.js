@@ -355,3 +355,48 @@ export async function setGrootboekVoorkeur(sleutel, grootboek) {
   if (error) throw error
   return rij
 }
+
+/**
+ * Controleert of de opgeslagen koppelsleutel naar een andere administratie
+ * wijst dan de vorige keer, en zet de verwijzingen dan gericht terug.
+ *
+ * Vervangt de knop "Koppeling opnieuw opbouwen": die was te makkelijk per
+ * ongeluk te raken en leverde zonder opruimen in SnelStart dubbele boekingen op.
+ */
+export async function controleerSnelStartAdministratie() {
+  const { data, error } = await supabase.functions.invoke('snelstart-administratie-check', { body: {} })
+  if (error) throw error
+  return data
+}
+
+/**
+ * Leegt de prullenbak met genegeerde importrecords, zodat alles wat in SnelStart
+ * staat opnieuw opgehaald wordt — ook wat hier ooit is weggegooid.
+ */
+export async function haalAllesOpnieuwOp() {
+  const companyId = await getCompanyId()
+  const { error } = await supabase
+    .from('import_genegeerd')
+    .delete()
+    .eq('company_id', companyId)
+    .eq('provider', 'snelstart')
+  if (error) throw error
+  return importKostenVanuitSnelStart()
+}
+
+/**
+ * Onthoudt dat een geïmporteerd record hier bewust is verwijderd. Zonder dit
+ * komt het bij elke sync terug: de import kijkt naar wat er in SnelStart staat,
+ * niet naar wat de gebruiker hier heeft besloten.
+ *
+ * @param soort  'klant' | 'leverancier' | 'factuur' | 'kost'
+ */
+export async function negeerBijImport(soort, externeReferentie, reden) {
+  if (!externeReferentie) return
+  const externeId = String(externeReferentie).replace(/^snelstart_/, '').split('_')[0]
+  if (!externeId) return
+  const companyId = await getCompanyId()
+  await supabase.from('import_genegeerd')
+    .upsert({ company_id: companyId, provider: 'snelstart', soort, externe_id: externeId, reden: reden || null },
+            { onConflict: 'company_id,provider,soort,externe_id' })
+}

@@ -715,3 +715,146 @@ export async function forEachSnelStartCompany(
 
   return { scheduled: true, companies: list.length, ok: results.length, failed: errors.length, results, errors }
 }
+
+// ── Import: relaties uit SnelStart ──────────────────────────────────────────
+// BossBase moet het volledige financiële beeld tonen, ook wat de boekhouder
+// buiten BossBase om heeft geboekt. Daarvoor moet er méér binnenkomen dan naam,
+// e-mail en plaats — dat was alles wat de contactensync las.
+//
+// Contactpersoon zit in het ADRESOBJECT (AdresModel.contactpersoon), niet op de
+// relatie zelf; daar zocht ik hem eerst tevergeefs.
+export function relatieNaarVelden(relatie: any): Record<string, unknown> {
+  const adres = relatie?.vestigingsAdres || relatie?.correspondentieAdres || null
+  return {
+    naam: String(relatie?.naam || '').trim(),
+    email: relatie?.email || null,
+    telefoon: relatie?.telefoon || null,
+    mobiel: relatie?.mobieleTelefoon || null,
+    address: adres?.straat || null,
+    postcode: adres?.postcode || null,
+    city: adres?.plaats || null,
+    contactpersoon: adres?.contactpersoon || null,
+    kvk_number: relatie?.kvkNummer || null,
+    btw_number: relatie?.btwNummer || null,
+    iban: relatie?.iban || null,
+    website: relatie?.websiteUrl || null,
+    notities: relatie?.memo || null,
+    betaaltermijn_dagen: Number.isFinite(Number(relatie?.krediettermijn)) && Number(relatie.krediettermijn) > 0
+      ? Number(relatie.krediettermijn)
+      : null,
+  }
+}
+
+// Systeemrelaties dragen een negatief relatienummer ("Klant onbekend" = -2,
+// "Leverancier onbekend" = -1). Op het nummer filteren en niet op de naam: de
+// naam is taalafhankelijk, het nummer niet.
+export const isSysteemrelatie = (relatie: any): boolean => {
+  const code = Number(relatie?.relatiecode)
+  return Number.isFinite(code) && code < 0
+}
+
+/** Alles wat de gebruiker bewust heeft weggegooid; die halen we niet terug. */
+export async function getGenegeerd(admin: any, companyId: string, soort: string): Promise<Set<string>> {
+  const { data, error } = await admin
+    .from('import_genegeerd')
+    .select('externe_id')
+    .eq('company_id', companyId)
+    .eq('provider', 'snelstart')
+    .eq('soort', soort)
+  if (error) { console.warn('Prullenbak niet gelezen:', error.message); return new Set() }
+  return new Set((data || []).map((r: any) => String(r.externe_id)))
+}
+
+/**
+ * Haalt één relatie op en zet hem als leverancier in BossBase, of geeft de
+ * bestaande terug. Gebruikt bij het importeren van inkoopfacturen: die kwamen
+ * binnen als losse kostenregels zonder leverancier, waardoor je in BossBase niet
+ * kon zien bij wie er was ingekocht.
+ */
+export async function importeerLeverancier(
+  admin: any, clientKey: string, companyId: string, relatieId: string,
+  cache?: Map<string, string>,
+): Promise<string | null> {
+  if (!relatieId) return null
+  const sleutel = String(relatieId)
+  if (cache?.has(sleutel)) return cache.get(sleutel) ?? null
+
+  const { data: bestaand } = await admin
+    .from('leveranciers').select('id').eq('company_id', companyId).eq('snelstart_id', sleutel).maybeSingle()
+  if (bestaand?.id) { cache?.set(sleutel, bestaand.id); return bestaand.id }
+
+  try {
+    const relatie = await ssFetch(clientKey, `/relaties/${sleutel}`)
+    const velden = relatieNaarVelden(relatie)
+    if (!velden.naam) return null
+
+    // Bestaat hij al op naam (bijvoorbeeld handmatig aangemaakt), dan koppelen
+    // in plaats van een tweede rij maken.
+    const { data: opNaam } = await admin
+      .from('leveranciers').select('id').eq('company_id', companyId).ilike('naam', String(velden.naam)).maybeSingle()
+    if (opNaam?.id) {
+      await admin.from('leveranciers').update({ snelstart_id: sleutel }).eq('id', opNaam.id)
+      cache?.set(sleutel, opNaam.id)
+      return opNaam.id
+    }
+
+    const { data: nieuw } = await admin
+      .from('leveranciers').insert({ company_id: companyId, snelstart_id: sleutel, actief: true, ...velden })
+      .select('id').single()
+    if (nieuw?.id) { cache?.set(sleutel, nieuw.id); return nieuw.id }
+  } catch (err: any) {
+    console.error(`Leverancier ${sleutel} ophalen mislukt:`, err?.message)
+  }
+  return null
+}
+
+// ── Import: verkoopfacturen ─────────────────────────────────────────────────
+// Zodat het omzetbeeld compleet is, inclusief facturen die de boekhouder zelf
+// heeft geboekt.
+//
+// Twee endpoints nodig. GET /verkoopfacturen geeft nummer, datum, klant, bedrag
+// en openstaand saldo — maar GEEN regels en GEEN btw-uitsplitsing. Die zitten in
+// de onderliggende boeking: GET /verkoopboekingen/{id} levert boekingsregels en
+// btw per soort.
+//
+// Het btw-REGIME per regel is niet als veld beschikbaar, maar wel af te leiden
+// uit de grootboekfunctie van de regel — dat is precies de indeling die wij bij
+// het exporteren aanbrengen, teruggelezen. Vrijgesteld en verlegd delen die
+// functie; ze zijn uit elkaar te houden aan de aanwezigheid van een
+// VerkopenVerlegd-btwregel op de boeking.
+export function regimeUitGrootboekfunctie(functie: string, boekingHeeftVerlegd: boolean): BtwRegime {
+  if (functie === 'VerkopenOmzetLaag') return 'verlaagd'
+  if (functie === 'VerkopenOmzetOnbelastVerlegd') return boekingHeeftVerlegd ? 'verlegd' : 'vrijgesteld'
+  return 'normaal'
+}
+
+export const btwPctVoorRegime = (regime: BtwRegime): number =>
+  regime === 'verlaagd' ? 9 : regime === 'normaal' ? 21 : 0
+
+// Dezelfde relatie, maar naar de kolomnamen van `customers`. Die tabel heet
+// zijn velden anders (name/phone i.p.v. naam/telefoon) en kent geen apart
+// mobiel nummer; dat valt terug op het vaste nummer.
+export function relatieNaarKlantVelden(relatie: any): Record<string, unknown> {
+  const v = relatieNaarVelden(relatie)
+  return {
+    name: v.naam,
+    email: v.email,
+    phone: v.telefoon || v.mobiel,
+    address: v.address,
+    postcode: v.postcode,
+    city: v.city,
+    contactpersoon: v.contactpersoon,
+    kvk_number: v.kvk_number,
+    btw_number: v.btw_number,
+    iban: v.iban,
+    website: v.website,
+    notities: v.notities,
+    betaaltermijn_dagen: v.betaaltermijn_dagen,
+  }
+}
+
+// Alleen velden die iets bevatten. Bij het bijwerken van een bestaande relatie
+// mag een leeg veld uit SnelStart niet iets overschrijven dat hier wél is
+// ingevuld — de klant kan gegevens hebben aangevuld die daar ontbreken.
+export const alleenGevuld = (velden: Record<string, unknown>): Record<string, unknown> =>
+  Object.fromEntries(Object.entries(velden).filter(([, w]) => w !== null && w !== undefined && w !== ''))
