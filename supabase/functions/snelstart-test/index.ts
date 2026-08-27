@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient } from "../_shared/scheduledSync.ts"
-import { ssFetch } from "../_shared/snelstart.ts"
+import { ssFetch, getActieveGrootboeken } from "../_shared/snelstart.ts"
 
 // Verbindingstest voor de SnelStart-koppeling. Test de opgegeven koppelsleutel
 // (body.client_key, vóór het opslaan) of anders de opgeslagen sleutel van het
@@ -41,12 +41,42 @@ serve(async (req) => {
     }
     if (!clientKey) return json({ success: false, error: 'Geen koppelsleutel opgegeven of opgeslagen' }, 400)
 
+    // Met { inkoopboeking: "<id>" } één boeking teruglezen, met per regel het
+    // grootboeknummer erbij. Anders is het niet te controleren of een wijziging
+    // in de indeling ook echt zo geboekt is — de sync schrijft alleen het id
+    // terug, niet de gekozen rekening.
+    if (typeof body?.inkoopboeking === 'string' && body.inkoopboeking) {
+      const boeking = await ssFetch(clientKey, `/inkoopboekingen/${body.inkoopboeking}`)
+      const gbs = await getActieveGrootboeken(clientKey)
+      const nummers = new Map(gbs.map((g: any) => [String(g.id), `${g.nummer} ${g.omschrijving}`]))
+      return json({
+        success: true,
+        factuurnummer: boeking?.factuurnummer,
+        markering: boeking?.markering,
+        regels: (boeking?.boekingsregels || []).map((r: any) => ({
+          omschrijving: r.omschrijving,
+          bedrag: r.bedrag,
+          btwSoort: r.btwSoort,
+          grootboek: nummers.get(String(r.grootboek?.id)) ?? r.grootboek?.id,
+        })),
+      })
+    }
+
     const relaties = await ssFetch(clientKey, '/relaties?$top=1')
+
+    // Met { velden: true } ook de veldnamen van één relatie terug. Nodig omdat
+    // de import systeemrelaties filtert op een negatief relatienummer: heet dat
+    // veld anders dan we denken, dan doet die filter stilzwijgend niets en valt
+    // dat nergens op. Alleen namen en het relatienummer, geen klantgegevens.
+    const velden = body?.velden && Array.isArray(relaties) && relaties[0]
+      ? { sleutels: Object.keys(relaties[0]).sort(), relatiecode: relaties[0].relatiecode }
+      : undefined
 
     return json({
       success: true,
       message: 'Verbinding met SnelStart geslaagd',
       relaties_bereikbaar: Array.isArray(relaties),
+      ...(velden ? { velden } : {}),
     })
   } catch (err: any) {
     console.error('Error:', err.message)
