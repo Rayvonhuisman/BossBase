@@ -347,8 +347,11 @@ export default function GrootboekIndelingModal({ onClose }) {
               try {
                 const r = await haalAllesOpnieuwOp();
                 const i = r?.imported || {};
+                const c = r?.contacten || {};
+                const lev = c.leveranciers || {};
                 toast.success(
-                  `Opgehaald: ${i.inkoopfacturen ?? 0} inkoopfacturen en ${i.verkoopfacturen ?? 0} verkoopfacturen.`,
+                  `Opgehaald: ${c.imported ?? 0} klanten, ${lev.geimporteerd ?? 0} leveranciers, `
+                  + `${i.inkoopfacturen ?? 0} inkoopfacturen en ${i.verkoopfacturen ?? 0} verkoopfacturen.`,
                 );
               } catch (err) {
                 toast.error(err.message || 'Ophalen mislukt');

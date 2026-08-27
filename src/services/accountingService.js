@@ -370,8 +370,13 @@ export async function controleerSnelStartAdministratie() {
 }
 
 /**
- * Leegt de prullenbak met genegeerde importrecords, zodat alles wat in SnelStart
- * staat opnieuw opgehaald wordt — ook wat hier ooit is weggegooid.
+ * Leegt de prullenbak met genegeerde importrecords en haalt daarna alles op wat
+ * in SnelStart staat — ook wat hier ooit is weggegooid.
+ *
+ * Draait BEIDE syncs. Eerst deed hij alleen kosten en facturen, waardoor er geen
+ * enkele leverancier terugkwam en alleen de klanten die toevallig aan een
+ * geïmporteerde factuur hingen. Relaties eerst, zodat de facturen en kosten
+ * daarna aan een bestaande klant of leverancier gekoppeld kunnen worden.
  */
 export async function haalAllesOpnieuwOp() {
   const companyId = await getCompanyId()
@@ -381,7 +386,10 @@ export async function haalAllesOpnieuwOp() {
     .eq('company_id', companyId)
     .eq('provider', 'snelstart')
   if (error) throw error
-  return importKostenVanuitSnelStart()
+
+  const contacten = await syncContactenMetSnelStart()
+  const boekingen = await importKostenVanuitSnelStart()
+  return { contacten, ...boekingen }
 }
 
 /**

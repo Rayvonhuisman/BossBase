@@ -160,14 +160,24 @@ async function importKosten(
 
   // Onze eigen export terug-importeren zou elke kost verdubbelen: wij boeken
   // kosten als inkoopboeking, en die verschijnen daarna als inkoopfactuur in
-  // dezelfde lijst. Twee filters, want ze vangen verschillende gevallen:
+  // dezelfde lijst.
   //
-  //  1. inkoopBoeking.id — de id die wij bij de export hebben teruggeschreven
-  //     naar job_costs.snelstart_id. Dit is de betrouwbare check: hij hangt aan
-  //     een echte sleutel en niet aan een naamconventie.
-  //  2. het factuurnummer BB-KST-… — vangnet voor boekingen waarvan de
-  //     verwijzing is gewist (bijvoorbeeld na "koppeling opnieuw opbouwen") of
-  //     die door een eerdere versie zijn aangemaakt.
+  // De check is de inkoopBoeking.id die wij bij de export hebben teruggeschreven
+  // naar job_costs.snelstart_id. Die hangt aan een echte sleutel, en — dit is de
+  // kern — hij geldt alleen zolang de kostenpost hier ook echt bestaat. Is hij
+  // verwijderd, dan mag hij terugkomen; dat is precies wat een inzichtportaal
+  // hoort te doen.
+  //
+  // Hier stond ook een filter op het factuurnummer BB-KST-…, als vangnet voor
+  // boekingen waarvan de verwijzing was gewist. Dat vangnet blokkeerde élk
+  // herstel: een verwijderde kostenpost kwam nooit meer terug, want het
+  // factuurnummer in SnelStart blijft BB-KST-…. Weggehaald.
+  //
+  // Restrisico: slaagt een export wél maar mislukt het terugschrijven van het
+  // id, dan komt die kost bij de volgende sync alsnog binnen — als GEÏMPORTEERDE
+  // regel, herkenbaar aan zijn externe referentie, en te verwijderen waarna de
+  // prullenbak hem tegenhoudt. Dat is een zichtbaar en oplosbaar gevolg; een
+  // kostenpost die nooit meer terug te halen is, is dat niet.
   const { data: eigenBoekingen } = await supabase
     .from('job_costs')
     .select('snelstart_id')
@@ -176,8 +186,7 @@ async function importKosten(
   const eigenIds = new Set((eigenBoekingen || []).map((r: any) => String(r.snelstart_id)))
 
   const isVanOnszelf = (f: any) =>
-    (f?.inkoopBoeking?.id && eigenIds.has(String(f.inkoopBoeking.id)))
-    || String(f?.factuurnummer || '').startsWith('BB-KST-')
+    Boolean(f?.inkoopBoeking?.id && eigenIds.has(String(f.inkoopBoeking.id)))
 
   const genegeerd = await getGenegeerd(supabase, companyId, 'kost')
   const facturen = await ssFetchAll(clientKey, '/inkoopfacturen')
