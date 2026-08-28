@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, MoreVertical, Send, CheckCircle2, Paperclip } from 'lucide-react';
+import { Download, Send, CheckCircle2 } from 'lucide-react';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
@@ -11,7 +11,7 @@ import {
   getFacturen, createFactuur, updateFactuur, deleteFactuur,
   generateFactuurNummer, getFactuurRegels, createFactuurRegel,
   generateCreditFactuurNummer, createCreditFactuur, uploadFactuurPdf, getFactuurDocumentUrl,
-  getFacturenMetDocument,
+  getFacturenMetDocument, FACTUUR_STATUS_OPTIONS,
 } from '../services/factuurService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
@@ -20,13 +20,14 @@ import { getEigenEenheden } from '../services/eigenEenheidService.js';
 import { typeCfg, typeOptionsWith, applyTypeChange, omschrijvingFallback } from '../lib/regelTypes.js';
 import BtwRegimeSelect, { VerlegdUitleg } from '../components/BtwRegimeSelect.jsx';
 import { regimeVanPct, regimeVanRegel, regimeVoorOpslag } from '../lib/btwRegime.js';
-import { generateFactuurPdf, previewFactuurPdf, getFactuurPdfBase64 } from '../utils/generatePdf.js';
+import { previewFactuurPdf, getFactuurPdfBase64 } from '../utils/generatePdf.js';
 import { buildCompanySnapshot, companyForDocument, isFactuurLocked, isGeimporteerdeFactuur } from '../utils/documentSnapshot.js';
 import { bewaarFactuurPdf, PDF_STATUSSEN } from '../utils/bewaarFactuurPdf.js';
 import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
 import { mailTemplate, mailButton } from '../utils/mailTemplate.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { statusInfo } from '../utils/statusColors.js';
+import ActieMenu from '../components/ActieMenu.jsx';
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -612,9 +613,32 @@ function CrediteerModal({ factuur, regels, onClose, onSuccess }) {
   );
 }
 
+// Wat de paperclip bij deze factuur doet, en hoe hij dat aankondigt.
+//
+// Eén knop, drie situaties. Bij een verstuurde factuur is het BEWAARDE bestand
+// het enige juiste: dat is letterlijk wat de klant heeft gekregen, met de
+// bevroren branding. Opnieuw genereren zou er anders uit kunnen zien zodra het
+// logo of adres is gewijzigd. Bij een concept bestaat dat bestand nog niet en is
+// een voorbeeld juist het enige zinnige. Bij een geïmporteerde factuur is er
+// niets te genereren — alleen het document uit de boekhouding.
+function paperclipCfg(factuur, heeftDocument) {
+  if (isGeimporteerdeFactuur(factuur)) {
+    return heeftDocument
+      ? { soort: 'document', titel: 'Origineel document uit de boekhouding openen' }
+      : { soort: 'geen', titel: 'Er is geen document meegekomen uit de boekhouding' };
+  }
+  if (heeftDocument) {
+    return { soort: 'document', titel: 'Bewaarde factuur openen — het bestand zoals de klant het kreeg' };
+  }
+  // Bewust over het BESTAND en niet over de status: een factuur kan op verzonden
+  // staan zonder ooit vanuit BossBase gemaild te zijn, en dan is er niets
+  // bewaard. "Nog niet verstuurd" zou daar onzin zijn.
+  return { soort: 'voorbeeld', titel: 'Voorbeeld bekijken — er is geen bewaard bestand van deze factuur' };
+}
+
 // ── VIEW FACTUUR MODAL ────────────────────────────────────────────────────────
 
-function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }) {
+function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail, onEdit, onDelete }) {
   const { company, profile } = useProfile();
   // Betaalherinneringen zijn een feature (Groei+). Zonder die feature tonen we
   // de knoppen niet; server-side blokkeert een trigger op facturen het zetten
@@ -640,22 +664,7 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }
     getFactuurRegels(factuur.id).then(setRegels).catch(() => {});
   }, [factuur.id]);
 
-  const handleDownloadPdf = async () => {
-    setPdfLoading(true);
-    try {
-      const customer = customers.find(c => String(c.id) === String(factuur.customerId));
-      const factuurForPdf = factuur.isCredit ? { ...factuur, creditNote: factuur.notities } : factuur;
-      await generateFactuurPdf(factuurForPdf, regels, customer, companyForDocument(factuur, company));
-    } catch (err) {
-      console.error('PDF genereren mislukt:', err);
-    } finally {
-      setPdfLoading(false);
-    }
-  };
 
-  // Het originele document uit de boekhouding. Bij import wordt dat in dezelfde
-  // bucket gezet als onze eigen factuur-PDF's, zodat er één plek is waar het
-  // brondocument van een factuur staat — ongeacht wie hem heeft gemaakt.
   const handleBoekhoudDocument = async () => {
     setPdfLoading(true);
     try {
@@ -681,6 +690,81 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }
       setPreviewLoading(false);
     }
   };
+
+  // Is er een bewaard document? Bepaalt wat de paperclip doet.
+  const [heeftDocument, setHeeftDocument] = useState(false);
+  useEffect(() => {
+    getFacturenMetDocument(factuur.companyId)
+      .then(set => setHeeftDocument(set.has(factuur.id)))
+      .catch(() => {});
+  }, [factuur.id, factuur.companyId]);
+  const clip = paperclipCfg(factuur, heeftDocument);
+
+  // ── Welke acties kan deze factuur nú ondergaan? ──────────────────────────
+  // Eén lijst, zodat er niets kan wegvallen doordat een voorwaarde ergens
+  // anders staat. De eerste die past wordt de primaire knop; de rest komt in
+  // het menu.
+  const magMailen = onSendMail && canManage && !uitBoekhouding;
+  const magHerinnering1 = magMailen && isOverdue && !factuur.herinnering1VerstuurdAt;
+  const magHerinnering2 = magMailen && isOverdue && kanHerinneren
+    && factuur.herinnering1VerstuurdAt && !factuur.herinnering2VerstuurdAt;
+  const isConcept = ['concept', 'aangemaakt'].includes(factuur.status);
+
+  // De primaire actie volgt de status: bij een concept wil je versturen, bij een
+  // te late factuur herinneren, bij een verstuurde factuur afboeken.
+  const primair =
+    uitBoekhouding
+      ? (heeftDocument
+        ? { label: 'Origineel document', icon: <Download size={15} />, onClick: handleBoekhoudDocument }
+        : null)
+    : magHerinnering1
+      ? { label: 'Herinnering sturen', icon: <Send size={14} />,
+          onClick: guardFeature('betaalherinneringen', () => { onClose(); onSendMail(factuur, 'herinnering_1'); }) }
+    : magHerinnering2
+      ? { label: 'Tweede herinnering', icon: <Send size={14} />,
+          onClick: () => { onClose(); onSendMail(factuur, 'herinnering_2'); } }
+    : magMailen && isConcept
+      ? { label: 'Verstuur per mail', icon: <Send size={14} />,
+          onClick: () => { onClose(); onSendMail(factuur, 'factuur'); } }
+    : canManage && !uitBoekhouding && factuur.status === 'verzonden'
+      ? { label: 'Markeer als betaald', icon: <CheckCircle2 size={15} />,
+          onClick: async () => {
+            try { await updateFactuur(factuur.id, { status: 'betaald' }); onRefresh?.(); toast.success('Factuur op betaald gezet'); }
+            catch (err) { toast.error(err.message || 'Mislukt'); }
+          } }
+    : magMailen
+      ? { label: 'Verstuur per mail', icon: <Send size={14} />,
+          onClick: () => { onClose(); onSendMail(factuur, 'factuur'); } }
+      : null;
+
+  // Alles wat niet de primaire actie is. Bewust dezelfde voorwaarden, zodat een
+  // actie die kan ook altijd érgens staat.
+  const acties = [
+    magMailen && primair?.label !== 'Verstuur per mail' && {
+      label: 'Verstuur per mail', icon: <Send size={14} />,
+      onClick: () => { onClose(); onSendMail(factuur, 'factuur'); },
+    },
+    magHerinnering1 && primair?.label !== 'Herinnering sturen' && {
+      label: 'Herinnering 1 sturen', icon: <Send size={14} />,
+      onClick: guardFeature('betaalherinneringen', () => { onClose(); onSendMail(factuur, 'herinnering_1'); }),
+    },
+    magHerinnering2 && primair?.label !== 'Tweede herinnering' && {
+      label: 'Herinnering 2 sturen', icon: <Send size={14} />,
+      onClick: () => { onClose(); onSendMail(factuur, 'herinnering_2'); },
+    },
+    canManage && !uitBoekhouding && !isFactuurLocked(factuur) && {
+      label: 'Factuur wijzigen', icon: I.edit, onClick: () => { onClose(); onEdit?.(factuur); },
+    },
+    // Vanaf hier apart: dit maakt iets kapot of onomkeerbaar.
+    canCrediteer && {
+      label: 'Crediteer factuur', gevaarlijk: true, scheiding: true,
+      onClick: () => setShowCrediteer(true),
+    },
+    canManage && {
+      label: 'Factuur verwijderen', icon: I.trash, gevaarlijk: true, scheiding: !canCrediteer,
+      onClick: () => { onClose(); onDelete?.(factuur); },
+    },
+  ].filter(Boolean);
 
   return (
     <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -755,41 +839,45 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail }
             </div>
           )}
         </div>
-        <div className="fa" style={{ flexWrap: 'wrap', gap: 8 }}>
-          {onSendMail && canManage && !uitBoekhouding && (
-            <button className="btn btn-s" onClick={() => { onClose(); onSendMail(factuur, 'factuur'); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={14} /> Verstuur per mail</button>
+        {/* Eén primaire actie die meebeweegt met de status, de rest achter het
+            acties-menu. Zes gelijkwaardige knoppen naast elkaar vertelden niet
+            wat je nú zou moeten doen. */}
+        <div className="fa" style={{ flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          {/* Status hoort hier thuis: het is de meest gewijzigde eigenschap van
+              een factuur en zat verstopt achter "factuur wijzigen". Bij een
+              geïmporteerde factuur niet: die volgt SnelStart. */}
+          {canManage && !uitBoekhouding && (
+            <select
+              value={factuur.status}
+              onChange={async e => {
+                try {
+                  await updateFactuur(factuur.id, { status: e.target.value });
+                  onRefresh?.();
+                } catch (err) { toast.error(err.message || 'Status wijzigen mislukt'); }
+              }}
+              style={{ fontSize: 12.5, maxWidth: 150 }}
+              title="Status van deze factuur"
+            >
+              {FACTUUR_STATUS_OPTIONS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </select>
           )}
-          {onSendMail && canManage && !uitBoekhouding && isOverdue && !factuur.herinnering1VerstuurdAt && (
-            <button className="btn btn-ghost btn-sm" onClick={guardFeature('betaalherinneringen', () => { onClose(); onSendMail(factuur, 'herinnering_1'); })} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, opacity: kanHerinneren ? 1 : .6 }}>
-              <Send size={13} /> Herinnering 1 sturen
+
+          <div style={{ flex: 1 }} />
+
+          <button
+            className="btn btn-ghost btn-icon"
+            title={clip.titel}
+            disabled={clip.soort === 'geen' || pdfLoading || previewLoading}
+            onClick={clip.soort === 'document' ? handleBoekhoudDocument : handlePreviewPdf}
+            style={{ opacity: clip.soort === 'geen' ? .4 : 1 }}
+          >{I.paperclip}</button>
+
+          <ActieMenu knop="knop" items={acties} />
+
+          {primair && (
+            <button className="btn btn-p" onClick={primair.onClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              {primair.icon}{primair.label}
             </button>
-          )}
-          {onSendMail && canManage && !uitBoekhouding && isOverdue && kanHerinneren && factuur.herinnering1VerstuurdAt && !factuur.herinnering2VerstuurdAt && (
-            <button className="btn btn-ghost btn-sm" onClick={() => { onClose(); onSendMail(factuur, 'herinnering_2'); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <Send size={13} /> Herinnering 2 sturen
-            </button>
-          )}
-          {canCrediteer && (
-            <button className="btn btn-danger" onClick={() => setShowCrediteer(true)}>
-              Crediteer factuur
-            </button>
-          )}
-          {uitBoekhouding ? (
-            /* Geen PDF genereren: dat zou een BossBase-opmaak maken voor een
-               factuur die hier nooit is opgemaakt. Wél het originele document
-               uit de boekhouding, als dat is meegekomen. */
-            <button className="btn btn-p" onClick={handleBoekhoudDocument} disabled={pdfLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Download size={15} />{pdfLoading ? 'Ophalen...' : 'Origineel document'}
-            </button>
-          ) : (
-            <>
-              <button className="btn btn-ghost" onClick={handlePreviewPdf} disabled={previewLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                {previewLoading ? 'Laden...' : 'Preview PDF'}
-              </button>
-              <button className="btn btn-p" onClick={handleDownloadPdf} disabled={pdfLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <Download size={15} />{pdfLoading ? 'Genereren...' : 'Download PDF'}
-              </button>
-            </>
           )}
           <button className="btn btn-ghost" onClick={onClose}>Sluiten</button>
         </div>
@@ -1042,6 +1130,52 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
     return true;
   });
 
+  // Voorbeeld-PDF vanuit de lijst, voor een factuur die nog niet verstuurd is
+  // en dus geen bewaard bestand heeft.
+  const handleRowPreview = async f => {
+    try {
+      const regels = await getFactuurRegels(f.id);
+      const customer = customers.find(c => String(c.id) === String(f.customerId));
+      const voorPdf = f.isCredit ? { ...f, creditNote: f.notities } : f;
+      await previewFactuurPdf(voorPdf, regels, customer, companyForDocument(f, company));
+    } catch (err) {
+      toast.error(err.message || 'Voorbeeld maken mislukt');
+    }
+  };
+
+  // Acties in de rij. Alles wat vroeger als los icoontje naast de rij stond
+  // staat hier — er is niets weggevallen, het is verplaatst. Verwijderen blijft
+  // wél als apart icoon staan, want dat is de enige actie die je bij élke
+  // factuur wilt kunnen doen zonder eerst een menu te openen.
+  const rijActies = f => {
+    const geimporteerd = isGeimporteerdeFactuur(f);
+    const verlopen = isVerlopen(f);
+    return [
+      { label: 'Factuur bekijken', onClick: () => setViewFactuur(f) },
+      canManage && !geimporteerd && {
+        label: 'Verstuur per mail', icon: <Send size={14} />,
+        onClick: () => setSendMailFactuur({ factuur: f, templateType: 'factuur' }),
+      },
+      canManage && !geimporteerd && verlopen && !f.herinnering1VerstuurdAt && {
+        label: 'Herinnering 1 sturen', icon: <Send size={14} />,
+        onClick: () => setSendMailFactuur({ factuur: f, templateType: 'herinnering_1' }),
+      },
+      canManage && !geimporteerd && verlopen && f.herinnering1VerstuurdAt && !f.herinnering2VerstuurdAt && {
+        label: 'Herinnering 2 sturen', icon: <Send size={14} />,
+        onClick: () => setSendMailFactuur({ factuur: f, templateType: 'herinnering_2' }),
+      },
+      canManage && !geimporteerd && {
+        label: 'Factuur wijzigen', icon: I.edit, onClick: () => setEditFactuur(f),
+      },
+      // Crediteren zat alleen op de kaart; nu ook hier, met dezelfde voorwaarden.
+      canManage && !geimporteerd && ['verzonden', 'betaald'].includes(f.status)
+        && !f.gecrediteerd && !f.isCredit && {
+        label: 'Crediteer factuur', gevaarlijk: true, scheiding: true,
+        onClick: () => handleCrediteerFromMenu(f),
+      },
+    ].filter(Boolean);
+  };
+
   const handleDelete = async f => {
     if (!window.confirm(`Factuur ${f.nummer} verwijderen?`)) return;
     try {
@@ -1057,15 +1191,6 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
       if (idx >= 0) { const next = [...prev]; next[idx] = saved; return next; }
       return [saved, ...prev];
     });
-  };
-
-  const handleDownloadPdfFromMenu = async f => {
-    try {
-      const regels = await getFactuurRegels(f.id);
-      const customer = customers.find(c => String(c.id) === String(f.customerId));
-      const factuurForPdf = f.isCredit ? { ...f, creditNote: f.notities } : f;
-      await generateFactuurPdf(factuurForPdf, regels, customer, companyForDocument(f, company));
-    } catch { toast.error('PDF genereren mislukt'); }
   };
 
   const handleCrediteerFromMenu = async f => {
@@ -1160,7 +1285,12 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
                 {filtered.map(f => {
                   const customerName = f.customerName || customers.find(c => c.id == f.customerId)?.name || '—';
                   return (
-                    <tr key={f.id}>
+                    <tr
+                      key={f.id}
+                      onClick={() => setViewFactuur(f)}
+                      style={{ cursor: 'pointer' }}
+                      title="Factuur openen"
+                    >
                       <td className="td">
                         <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: 13 }}>{f.nummer}</span>
                         {f.isCredit && <span className="badge" style={{ background: '#fee2e2', color: '#dc2626', marginLeft: 6, fontSize: 10 }}>CF</span>}
@@ -1180,29 +1310,31 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
                         {f.gecrediteerd && <span className="badge b-gray" style={{ marginLeft: 4, fontSize: 10 }}>Gecrediteerd</span>}
                       </td>
                       <td className="td" style={{ color: isVerlopen(f) ? '#dc2626' : 'inherit' }}>{fmtDate(f.vervaldatum)}</td>
-                      <td className="td">
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          <button className="btn btn-xs btn-ghost btn-icon" title="Bekijken" onClick={() => setViewFactuur(f)}><MoreVertical size={14} /></button>
-                          {/* Uit de boekhouding: alleen inzien en verwijderen.
-                              Verwijderen mag wél — dan vult de prullenbak zich
-                              en komt hij niet terug. */}
-                          {/* Brondocument direct openen: de PDF die bij het
-                              versturen is bewaard, of het document uit de
-                              boekhouding. Alleen tonen als er echt een bestand
-                              is — een knop die niets doet is erger dan geen knop. */}
-                          {metDocument.has(f.id) && (
-                            <button
-                              className="btn btn-xs btn-ghost btn-icon"
-                              title="Brondocument openen"
-                              onClick={async () => {
-                                const url = await getFactuurDocumentUrl(f.id, f.companyId);
-                                if (url) window.open(url, '_blank', 'noopener');
-                                else toast.error('Document niet gevonden');
-                              }}
-                            ><Paperclip size={13} /></button>
-                          )}
-                          {canManage && !isGeimporteerdeFactuur(f) && <button className="btn btn-xs btn-ghost btn-icon" title="Verstuur per mail" onClick={() => setSendMailFactuur({ factuur: f, templateType: 'factuur' })}><Send size={13} /></button>}
-                          {canManage && !isGeimporteerdeFactuur(f) && <button className="btn btn-xs btn-ghost btn-icon" title="Bewerken" onClick={() => setEditFactuur(f)}>{I.edit}</button>}
+                      <td className="td" onClick={e => e.stopPropagation()}>
+                        {/* Drie iconen: het document, het menu, en weggooien.
+                            De rest zit in het menu — zes iconen naast elkaar
+                            vertelden niet meer wat wat deed. */}
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                          {(() => {
+                            const clip = paperclipCfg(f, metDocument.has(f.id));
+                            if (clip.soort === 'geen') return null;
+                            return (
+                              <button
+                                className="btn btn-xs btn-ghost btn-icon"
+                                title={clip.titel}
+                                onClick={async () => {
+                                  if (clip.soort === 'document') {
+                                    const url = await getFactuurDocumentUrl(f.id, f.companyId);
+                                    if (url) window.open(url, '_blank', 'noopener');
+                                    else toast.error('Document niet gevonden');
+                                  } else {
+                                    await handleRowPreview(f);
+                                  }
+                                }}
+                              >{I.paperclip}</button>
+                            );
+                          })()}
+                          <ActieMenu items={rijActies(f)} />
                           {canManage && <button className="btn btn-xs btn-danger btn-icon" title="Verwijderen" onClick={() => handleDelete(f)}>{I.trash}</button>}
                         </div>
                       </td>
@@ -1242,6 +1374,8 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
           onClose={() => setViewFactuur(null)}
           onRefresh={load}
           onSendMail={(f, type) => { setSendMailFactuur({ factuur: f, templateType: type || 'factuur' }); setViewFactuur(null); }}
+          onEdit={f => setEditFactuur(f)}
+          onDelete={f => handleDelete(f)}
         />
       )}
       {planModal}
