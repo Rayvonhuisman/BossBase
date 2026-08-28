@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { I, ModalX, STAGE_COLOR_OPTIONS, stageColToHex, stageColorLabel, stageBadgeStyle } from '../bb-shared.jsx';
 import { supabase } from '../lib/supabase.js';
-import GrootboekIndelingModal from '../components/GrootboekIndeling.jsx';
+import GrootboekIndeling from '../components/GrootboekIndeling.jsx';
+import IntegratiesOverzicht from '../components/Integraties.jsx';
 import { useToast } from '../lib/toast.jsx';
 import SyncBanner from '../components/SyncBanner.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -38,6 +39,7 @@ import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
 import {
   getConnection,
+  getLaatsteSyncRun,
   saveConnection,
   testMoneybirdConnection,
   importKostenVanuitMoneybird,
@@ -47,8 +49,6 @@ import {
   testSnelStartConnection,
   importKostenVanuitSnelStart,
   syncContactenMetSnelStart,
-  setSnelStartImportCosts,
-  setSyncPaidOnly,
   saveAfasConnection,
   testAfasConnection,
   setAfasConnected,
@@ -116,52 +116,25 @@ function ColorSwatchPicker({ value, onChange }) {
   );
 }
 
+// Wat een sync doet, ligt vast. Er stonden twee schakelaars ("alleen betaalde
+// facturen" en "kosten synchroniseren") die dit per bedrijf konden veranderen;
+// die zijn eruit. Een boekhouding hoort compleet te zijn, en een half
+// gesynchroniseerde administratie is lastiger te herstellen dan een volledige.
+// Wat er nu gebeurt staat hier, zodat het bij de sync te lezen is in plaats van
+// af te leiden uit een vinkje dat er niet meer is.
+const VASTE_WERKWIJZE = (
+  <>
+    <strong>Wat er meegaat.</strong> Al je facturen worden geboekt, behalve
+    concepten — die zijn nog niet verstuurd en horen dus niet in de boekhouding.
+    Kosten gaan altijd mee: inkoopfacturen komen binnen als kostenregels, en
+    handmatige kosten gaan als vraagpost de andere kant op. Facturen die uit de
+    boekhouding zijn opgehaald gaan nooit terug.
+  </>
+);
+
 // Alle mogelijke tab-ids (permissie-onafhankelijk) — weert onbekende ?tab=-waarden.
 const SETTINGS_TAB_IDS = ['profiel', 'bedrijf', 'standaard', 'templates', 'pipeline', 'voertuigen', 'abonnement', 'integraties'];
 
-// Logo's van de integratiepartners staan in public/brand en worden vanaf de root
-// geserveerd. De merken hebben sterk verschillende verhoudingen (Stripe ~2,4:1,
-// Moneybird en SnelStart ~6:1), dus schalen we op vaste hoogte met vrije breedte:
-// zo ogen ze even groot zonder uit te rekken. objectFit vangt de maxWidth-clamp op
-// smalle schermen op, zodat de verhouding ook daar klopt.
-// De drie logo's zijn woordmerken die de naam al tonen; een zichtbare titel eronder
-// zou die dubbelen. De alt-tekst op de <img> levert daarom de toegankelijke naam.
-const INTEG_LOGO_STYLE = {
-  height: 22,
-  width: 'auto',
-  maxWidth: '100%',
-  objectFit: 'contain',
-  objectPosition: 'left center',
-  display: 'block',
-  marginBottom: 8,
-};
-
-// Statuspill rechtsboven op een integratiekaart. Eén vorm voor alle koppelingen:
-// actief is een groene pill met stip, al het overige een neutrale pill. Eerder
-// gebruikte alleen Stripe deze vorm en toonden Moneybird/SnelStart/AFAS kale
-// gekleurde tekst.
-const INTEG_PILL_BASE = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 6,
-  fontSize: '.72rem',
-  fontWeight: 600,
-  borderRadius: 999,
-  padding: '3px 10px',
-  whiteSpace: 'nowrap',
-};
-
-function IntegStatusPill({ actief = false, children }) {
-  const tone = actief
-    ? { color: 'var(--pd)', background: 'var(--pll)', border: '1px solid var(--pl)' }
-    : { color: 'var(--dmu)', background: 'var(--bgs)', border: '1px solid var(--border)' };
-  return (
-    <span style={{ ...INTEG_PILL_BASE, ...tone }}>
-      {actief && <span style={{ width: 6, height: 6, borderRadius: 999, background: 'var(--pd)' }} />}
-      {children}
-    </span>
-  );
-}
 
 export function InstellingenPage() {
   const toast = useToast();
@@ -257,7 +230,6 @@ export function InstellingenPage() {
   // Moneybird
   const [mbConnection, setMbConnection] = useState(null);
   const [mbForm, setMbForm] = useState({ apiToken: '', administrationId: '' });
-  const [mbShowToken, setMbShowToken] = useState(false);
   const [mbEditing, setMbEditing] = useState(false);
   const [mbTesting, setMbTesting] = useState(false);
   const [mbSaving, setMbSaving] = useState(false);
@@ -270,19 +242,18 @@ export function InstellingenPage() {
   const [ssForm, setSsForm] = useState({ clientKey: '' });
   // Grootboekindeling + kostencategorieën: eigen scherm, want het gaat volledig
   // over hoe déze koppeling boekt.
-  const [ssInstellingen, setSsInstellingen] = useState(false);
-  const [ssShowKey, setSsShowKey] = useState(false);
   const [ssEditing, setSsEditing] = useState(false);
   const [ssTesting, setSsTesting] = useState(false);
   const [ssSaving, setSsSaving] = useState(false);
   const [ssImporting, setSsImporting] = useState(false);
   const [ssSyncingContacten, setSsSyncingContacten] = useState(false);
-  const [ssTogglingImport, setSsTogglingImport] = useState(false);
   // Klanten die zonder compleet adres naar SnelStart zijn gegaan (laatste sync).
   const [ssAdresWaarschuwingen, setSsAdresWaarschuwingen] = useState([]);
   // Aantal kostenposten dat na de laatste sync nog niet geboekt was.
   const [ssKostenResterend, setSsKostenResterend] = useState(0);
   const [ssFouten, setSsFouten] = useState([]);
+  // Laatste run uit accounting_sync_runs — óók die van de nachtelijke cron.
+  const [ssLaatsteAutoRun, setSsLaatsteAutoRun] = useState(null);
   const [ssMeldingen, setSsMeldingen] = useState([]);
 
   // Voertuigen
@@ -302,7 +273,6 @@ export function InstellingenPage() {
   const [afasImporting, setAfasImporting] = useState(false);
   const [afasSyncingContacten, setAfasSyncingContacten] = useState(false);
   const [afasTested, setAfasTested] = useState(false);
-  const [afasShowToken, setAfasShowToken] = useState(false);
 
   // Stripe Connect — feature uit de centrale matrix (Team, of als module bij
   // Groei). Ook server-side afgedwongen in stripe-connect-start.
@@ -416,6 +386,9 @@ export function InstellingenPage() {
         if (ssConn) {
           setSsConnection(ssConn);
           setSsForm({ clientKey: '' });
+          // Wat de laatste (nachtelijke) run heeft opgeleverd. Faalt stil:
+          // vóór migratie 20260828150000 bestaat de tabel nog niet.
+          getLaatsteSyncRun('snelstart').then(setSsLaatsteAutoRun).catch(() => {});
         }
         if (afasConn) {
           setAfasConnection(afasConn);
@@ -911,6 +884,7 @@ export function InstellingenPage() {
         setSsMeldingen(result.meldingen || []);
         const refreshed = await getConnection('snelstart');
         if (refreshed) setSsConnection(refreshed);
+        getLaatsteSyncRun('snelstart').then(setSsLaatsteAutoRun).catch(() => {});
       } else {
         toast.error(result?.error || 'Synchroniseren mislukt');
       }
@@ -921,31 +895,6 @@ export function InstellingenPage() {
     }
   };
 
-
-  const handleSsToggleImportCosts = async (enabled) => {
-    setSsTogglingImport(true);
-    try {
-      await setSnelStartImportCosts(enabled);
-      setSsConnection(c => (c ? { ...c, importCosts: enabled } : c));
-      toast.success(enabled ? 'Kosten importeren staat aan' : 'Kosten importeren staat uit');
-    } catch (err) {
-      toast.error(err.message || 'Instelling opslaan mislukt');
-    } finally {
-      setSsTogglingImport(false);
-    }
-  };
-
-  // "Alleen betaalde facturen synchroniseren" — per provider (moneybird/snelstart)
-  const handleTogglePaidOnly = async (provider, enabled) => {
-    const setConn = provider === 'moneybird' ? setMbConnection : setSsConnection;
-    try {
-      await setSyncPaidOnly(provider, enabled);
-      setConn(c => (c ? { ...c, syncPaidOnly: enabled } : c));
-      toast.success(enabled ? 'Alleen betaalde facturen worden gesynchroniseerd' : 'Verzonden én betaalde facturen worden gesynchroniseerd');
-    } catch (err) {
-      toast.error(err.message || 'Instelling opslaan mislukt');
-    }
-  };
 
   const handleSsSyncContacten = async () => {
     setSsSyncingContacten(true);
@@ -1161,6 +1110,307 @@ export function InstellingenPage() {
     : ssSyncingContacten ? 'Bezig met klanten synchroniseren met SnelStart'
     : mbImporting ? 'Bezig met importeren uit Moneybird'
     : 'Bezig met contacten synchroniseren met Moneybird';
+
+
+  // ── Integraties ────────────────────────────────────────────────────────────
+  // Eén beschrijving per koppeling; de opbouw zit in components/Integraties.jsx.
+  // Wat hier staat is dus alleen wat déze integratie eigen maakt: zijn velden,
+  // schakelaars, acties en meldingen. Een nieuwe koppeling is een item in deze
+  // lijst — over de indeling hoef je niet opnieuw na te denken.
+  //
+  // De boekhoudkoppeling is een feature uit de centrale matrix (Groei+), ook
+  // server-side afgedwongen met RLS + trigger op accounting_connections. Zonder
+  // dat pakket blijven de kaarten staan mét de pill "Vanaf …": zo zie je wát je
+  // mist in plaats van een lege plek.
+  const boekhoudGate = !plan.has('boekhoudkoppeling') ? {
+    pill: `Vanaf ${tierLabel(plan.needsFor('boekhoudkoppeling'))}`,
+    tekst: (
+      <>
+        Facturen automatisch naar je boekhouding en inkoopfacturen als kostenregels terug
+        horen bij <strong>{tierLabel(plan.needsFor('boekhoudkoppeling'))}</strong>.
+      </>
+    ),
+    knop: 'Bekijk opties',
+    onClick: () => gaNaarAbonnement(null, { soort: 'feature', key: 'boekhoudkoppeling' }),
+  } : null;
+
+  // Regel onder de syncknoppen: wanneer draaide de cron voor het laatst en ging
+  // dat goed? De handmatige knop zie je zelf werken; de nachtelijke run niet.
+  const autoSyncStatus = (run) => {
+    if (!run) return null;
+    const wanneer = new Date(run.gestartOp).toLocaleString('nl-NL', {
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+    const [tekst, kleur] = run.afgebroken
+      ? ['afgebroken — waarschijnlijk een time-out', '#b4820f']
+      : run.gelukt
+        ? ['geslaagd', 'var(--pd)']
+        : ['mislukt', '#dc2626'];
+    return (
+      <div style={{ fontSize: '.78rem', color: 'var(--dmu)' }}>
+        Automatisch gesynchroniseerd: {wanneer} — <strong style={{ color: kleur }}>{tekst}</strong>
+        {run.fout && <div style={{ marginTop: 3, color: '#b91c1c' }}>{run.fout}</div>}
+      </div>
+    );
+  };
+
+  const INTEGRATIES = [
+    // Google Agenda — verborgen tot de OAuth-koppeling geconfigureerd is.
+    {
+      id: 'google',
+      naam: 'Google Agenda',
+      omschrijving: 'Synchroniseer je geplande klussen en afspraken met Google Agenda.',
+      logo: { node: I.google },
+      verborgen: true,
+      status: { actief: googleConnected, label: googleConnected ? 'Actief (demo)' : 'Niet gekoppeld' },
+      koppeling: {
+        velden: [],
+        acties: googleConnected
+          ? [{
+              label: 'Loskoppelen', variant: 'danger',
+              onClick: () => { setGoogleConnected(false); toast.info('Google Agenda losgekoppeld'); },
+            }]
+          : [{
+              label: 'Verbinden', variant: 's', icon: I.google,
+              onClick: () => {
+                setGoogleConnected(true);
+                toast.info('Google Agenda-koppeling is voorbereid. Echte OAuth-koppeling moet nog worden geconfigureerd.');
+              },
+            }],
+      },
+    },
+
+    // Stripe Connect — eigen, eenvoudiger opzet: geen sleutel-invoer, alleen een
+    // koppel-actie. De frontend leest alleen statusvelden; de platform secret key
+    // blijft in de edge functions.
+    {
+      id: 'stripe',
+      naam: 'Stripe',
+      omschrijving: 'Laat klanten je facturen online betalen.',
+      logo: { src: '/brand/stripe.svg', alt: 'Stripe' },
+      status: {
+        actief: !!stripeConn?.chargesEnabled,
+        label: stripeConn?.chargesEnabled ? 'Actief'
+          : stripeConn?.accountId ? 'In verificatie'
+          : 'Niet gekoppeld',
+      },
+      gate: !stripeAllowed ? {
+        pill: `Vanaf ${tierLabel(plan.needsFor('stripe_betaallink'))}`,
+        tekst: (
+          <>
+            Stripe-betalingen horen bij <strong>{tierLabel(plan.needsFor('stripe_betaallink'))}</strong>,
+            of als losse module bij Groei.
+          </>
+        ),
+        knop: 'Bekijk opties',
+        onClick: () => gaNaarAbonnement(null, { soort: 'feature', key: 'stripe_betaallink' }),
+      } : null,
+      koppeling: {
+        inleiding: stripeConn?.chargesEnabled ? 'Klanten kunnen je facturen nu online betalen.'
+          : stripeConn?.accountId ? 'Stripe verifieert je gegevens… Dit kan even duren.'
+          : null,
+        velden: [],
+        fout: stripeError ? <><strong>Koppelen met Stripe is mislukt.</strong> {stripeError}</> : null,
+        acties: stripeConn?.chargesEnabled
+          ? [{ label: 'Ontkoppelen', onClick: handleStripeDisconnect, disabled: stripeBusy }]
+          : stripeConn?.accountId
+            ? [
+                { label: stripeBusy ? 'Vernieuwen…' : 'Status vernieuwen', variant: 's', onClick: handleStripeRefresh, disabled: stripeBusy },
+                { label: 'Ontkoppelen', onClick: handleStripeDisconnect, disabled: stripeBusy },
+              ]
+            : [{ label: stripeBusy ? 'Bezig…' : 'Stripe koppelen', variant: 'p', onClick: handleStripeConnect, disabled: stripeBusy }],
+      },
+    },
+
+    // Moneybird
+    {
+      id: 'moneybird',
+      naam: 'Moneybird',
+      omschrijving: 'Synchroniseer facturen automatisch naar Moneybird en importeer inkoopfacturen als kostenregels.',
+      logo: { src: '/brand/moneybird.svg', alt: 'Moneybird' },
+      status: { actief: !!mbConnection?.connected, label: mbConnection?.connected ? 'Actief' : 'Niet gekoppeld' },
+      gate: boekhoudGate,
+      koppeling: {
+        velden: [
+          {
+            key: 'token', label: 'API token', type: 'password', name: 'moneybird-api-token',
+            value: mbForm.apiToken, onChange: v => setMbForm(f => ({ ...f, apiToken: v })),
+            placeholder: 'Moneybird API token...',
+            disabled: !!(mbConnection?.connected && !mbEditing),
+          },
+          {
+            key: 'administratie', label: 'Administratie-ID',
+            hint: <>Te vinden in de URL: moneybird.com/<strong>123456789</strong>/…</>,
+            value: mbForm.administrationId, onChange: v => setMbForm(f => ({ ...f, administrationId: v })),
+            placeholder: 'bijv. 123456789',
+            disabled: !!(mbConnection?.connected && !mbEditing),
+          },
+        ],
+        acties: mbConnection?.connected && !mbEditing
+          ? [{ label: 'Wijzigen', onClick: () => setMbEditing(true) }]
+          : [
+              {
+                label: mbTesting ? 'Testen...' : 'Verbinding testen', onClick: handleMbTest,
+                disabled: mbTesting || !mbForm.apiToken || !mbForm.administrationId,
+              },
+              {
+                label: mbSaving ? 'Opslaan...' : 'Opslaan', variant: 'p', onClick: handleMbSave,
+                disabled: mbSaving || !mbForm.apiToken || !mbForm.administrationId,
+              },
+            ],
+      },
+      // Geen instellingen: de werkwijze ligt vast (zie toelichting bij Synchroniseren).
+      instellingen: null,
+      sync: !boekhoudGate && (mbConnection?.connected || mbConnection?.lastSyncedAt) ? {
+        toelichting: VASTE_WERKWIJZE,
+        laatsteSync: mbConnection?.lastSyncedAt || null,
+        acties: mbConnection?.connected ? [
+          { label: mbImporting ? 'Importeren...' : 'Kosten importeren', onClick: handleMbImport, disabled: mbImporting },
+          { label: mbSyncingContacten ? 'Synchroniseren...' : 'Contacten synchroniseren', onClick: handleMbSyncContacten, disabled: mbSyncingContacten },
+        ] : [],
+      } : null,
+    },
+
+    // SnelStart — testfase: handmatige koppelsleutel-invoer. Eén platform-
+    // subscriptionkey leeft als edge-function secret; de klant heeft alleen zijn
+    // koppelsleutel (aan te maken op web.snelstart.nl). Na certificering vervangt
+    // de oAuth-activatielink + webhook deze invoer.
+    {
+      id: 'snelstart',
+      naam: 'SnelStart',
+      omschrijving: 'Boek facturen automatisch als verkoopboeking in SnelStart en synchroniseer klanten.',
+      logo: { src: '/brand/snelstart.svg', alt: 'SnelStart' },
+      status: { actief: !!ssConnection?.connected, label: ssConnection?.connected ? 'Actief' : 'Niet gekoppeld' },
+      gate: boekhoudGate,
+      koppeling: {
+        velden: [{
+          key: 'koppelsleutel', label: 'Koppelsleutel', type: 'password', name: 'snelstart-koppelsleutel',
+          hint: 'Aan te maken in SnelStart Web (web.snelstart.nl) bij je administratie',
+          value: ssForm.clientKey, onChange: v => setSsForm({ clientKey: v }),
+          placeholder: 'SnelStart koppelsleutel...',
+          disabled: !!(ssConnection?.connected && !ssEditing),
+        }],
+        acties: ssConnection?.connected && !ssEditing
+          ? [{ label: 'Wijzigen', onClick: () => setSsEditing(true) }]
+          : [
+              {
+                label: ssTesting ? 'Testen...' : 'Verbinding testen', onClick: handleSsTest,
+                disabled: ssTesting || (!ssForm.clientKey && !ssConnection?.connected),
+              },
+              {
+                label: ssSaving ? 'Opslaan...' : 'Opslaan', variant: 'p', onClick: handleSsSave,
+                disabled: ssSaving || !ssForm.clientKey,
+              },
+            ],
+      },
+      // De grootboekindeling stond achter een knop naar een apart scherm; die
+      // staat nu gewoon hier. Alles wat je aan deze koppeling kunt instellen op
+      // één plek, zonder door te klikken.
+      instellingen: !boekhoudGate && ssConnection?.connected ? {
+        inhoud: <GrootboekIndeling />,
+      } : null,
+      sync: !boekhoudGate && (ssConnection?.connected || ssConnection?.lastSyncedAt) ? {
+        status: autoSyncStatus(ssLaatsteAutoRun),
+        toelichting: VASTE_WERKWIJZE,
+        laatsteSync: ssConnection?.lastSyncedAt || null,
+        acties: ssConnection?.connected ? [
+          { label: ssImporting ? 'Synchroniseren...' : 'Kosten/facturen synchroniseren', onClick: handleSsImport, disabled: ssImporting },
+          { label: ssSyncingContacten ? 'Synchroniseren...' : 'Contacten synchroniseren', onClick: handleSsSyncContacten, disabled: ssSyncingContacten },
+        ] : [],
+      } : null,
+      meldingen: boekhoudGate ? [] : [
+        // Uit de laatste automatische run. Die fouten stonden tot nu toe alleen
+        // in de functielogs: mislukt er 's nachts een boeking, dan hoort dat
+        // 's ochtends met een teller op je scherm te staan.
+        ssLaatsteAutoRun?.fout ? {
+          toon: 'fout',
+          titel: 'De automatische synchronisatie is afgebroken',
+          tekst: ssLaatsteAutoRun.fout,
+        } : null,
+        ssLaatsteAutoRun?.fouten?.length ? {
+          toon: 'fout',
+          titel: `${ssLaatsteAutoRun.fouten.length} ${ssLaatsteAutoRun.fouten.length === 1 ? 'regel is' : 'regels zijn'} niet geboekt bij de automatische synchronisatie`,
+          items: ssLaatsteAutoRun.fouten,
+        } : null,
+        ssLaatsteAutoRun?.meldingen?.length ? {
+          toon: 'waarschuwing',
+          titel: 'Aandachtspunten uit de automatische synchronisatie',
+          items: ssLaatsteAutoRun.meldingen,
+        } : null,
+        ssFouten.length ? {
+          toon: 'fout',
+          titel: `${ssFouten.length} ${ssFouten.length === 1 ? 'regel is' : 'regels zijn'} niet geboekt`,
+          items: ssFouten,
+        } : null,
+        ssMeldingen.length ? {
+          toon: 'waarschuwing',
+          titel: 'Velden overgeslagen',
+          items: ssMeldingen,
+        } : null,
+        ssKostenResterend > 0 ? {
+          toon: 'waarschuwing',
+          titel: `Nog ${ssKostenResterend} ${ssKostenResterend === 1 ? 'kostenpost' : 'kostenposten'} te synchroniseren`,
+          tekst: 'Kosten worden per 50 tegelijk geboekt. Klik nog een keer op “Kosten/facturen synchroniseren” om verder te gaan.',
+        } : null,
+        ssAdresWaarschuwingen.length ? {
+          toon: 'waarschuwing',
+          titel: `${ssAdresWaarschuwingen.length} ${ssAdresWaarschuwingen.length === 1 ? 'klant is' : 'klanten zijn'} zonder compleet adres doorgezet`,
+          tekst: 'SnelStart accepteert ze wel, maar in je boekhouding staat dan een relatie zonder adresgegevens. Vul ze aan bij de klant en synchroniseer opnieuw.',
+          items: ssAdresWaarschuwingen.map(w => `${w.klant} — mist ${w.mist.join(', ')}`),
+        } : null,
+      ].filter(Boolean),
+    },
+
+    // AFAS — verborgen, nog niet actief.
+    {
+      id: 'afas',
+      naam: 'AFAS',
+      omschrijving: 'Koppel je AFAS administratie met BossBase',
+      logo: { img: 'https://logo.clearbit.com/afas.nl', alt: 'AFAS' },
+      verborgen: true,
+      status: {
+        actief: afasTested,
+        label: afasTested ? 'Actief' : afasConnection?.connected ? 'Niet getest' : 'Niet gekoppeld',
+      },
+      gate: boekhoudGate,
+      koppeling: {
+        velden: [
+          {
+            key: 'omgeving', label: 'Omgevings ID', hint: 'Te vinden in de URL van je AFAS omgeving',
+            value: afasForm.environmentId, onChange: v => setAfasForm(f => ({ ...f, environmentId: v })),
+            placeholder: 'bijv. 12345', disabled: !!(afasTested && !afasEditing),
+          },
+          {
+            key: 'token', label: 'App token', hint: 'Genereer een token via AFAS → App Connector', type: 'password',
+            value: afasForm.token, onChange: v => setAfasForm(f => ({ ...f, token: v })),
+            placeholder: 'AFAS App token...', disabled: !!(afasTested && !afasEditing),
+          },
+        ],
+        acties: afasTested && !afasEditing
+          ? [{ label: 'Wijzigen', onClick: () => { setAfasEditing(true); setAfasTested(false); } }]
+          : [
+              {
+                label: afasTesting ? 'Testen...' : 'Verbinding testen', onClick: handleAfasTest,
+                disabled: afasTesting || !afasForm.environmentId || !afasForm.token,
+              },
+              {
+                label: afasSaving ? 'Opslaan...' : 'Opslaan', variant: 'p', onClick: handleAfasSave,
+                disabled: afasSaving || !afasForm.environmentId || !afasForm.token,
+              },
+            ],
+      },
+      sync: !boekhoudGate && (afasConnection?.connected || afasConnection?.lastSyncedAt) ? {
+        laatsteSync: afasConnection?.lastSyncedAt || null,
+        acties: afasConnection?.connected ? [
+          {
+            label: afasImporting ? 'Importeren...' : 'Kosten importeren', onClick: handleAfasImport,
+            disabled: afasImporting, title: "Vereist de 'Inkoop' connectorbundel in AFAS SB",
+          },
+          { label: afasSyncingContacten ? 'Synchroniseren...' : 'Contacten synchroniseren', onClick: handleAfasSyncContacten, disabled: afasSyncingContacten },
+        ] : [],
+      } : null,
+    },
+  ];
 
   return (
     <div>
@@ -2320,594 +2570,8 @@ export function InstellingenPage() {
       {!loading && tab === 'abonnement' && isAdmin && <AbonnementSectie />}
 
       {!loading && tab === 'integraties' && (
-        <div className="afu3" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-          {/* Google Agenda — tijdelijk verborgen voor klanten (OAuth nog niet geconfigureerd). Zet {false} op {true} om terug te zetten. */}
-          {false && (
-          <div className="card card-p" style={{ border: '1px solid var(--border)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bgs)', borderRadius: 'var(--r8)', border: '1px solid var(--border)', flexShrink: 0 }}>
-                {I.google}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: '.95rem', marginBottom: 2 }}>Google Agenda</div>
-                <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>
-                  Synchroniseer je geplande klussen en afspraken met Google Agenda.
-                </div>
-              </div>
-              <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                {googleConnected ? (
-                  <>
-                    <IntegStatusPill actief>Actief (demo)</IntegStatusPill>
-                    <button
-                      className="btn btn-danger btn-sm"
-                      onClick={() => { setGoogleConnected(false); toast.info('Google Agenda losgekoppeld'); }}
-                    >
-                      Loskoppelen
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <IntegStatusPill>Niet gekoppeld</IntegStatusPill>
-                    <button
-                      className="btn btn-s btn-sm"
-                      onClick={() => {
-                        setGoogleConnected(true);
-                        toast.info('Google Agenda-koppeling is voorbereid. Echte OAuth-koppeling moet nog worden geconfigureerd.');
-                      }}
-                    >
-                      {I.google} Verbinden
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-          )}
-
-          {/* Stripe Connect — tier-gated (Groei/Team). Eigen, eenvoudiger opzet dan
-              Moneybird: geen sleutel-invoer, alleen een koppel-actie. Frontend leest
-              alleen statusvelden; de platform secret key blijft in de edge functions. */}
-          <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
-            <div className="integ-card-hd" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <img src="/brand/stripe.svg" alt="Stripe" style={INTEG_LOGO_STYLE} />
-                <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>
-                  Laat klanten je facturen online betalen.
-                </div>
-              </div>
-              {/* Status-pill */}
-              <div style={{ flexShrink: 0 }}>
-                {!stripeAllowed ? (
-                  <IntegStatusPill>Vanaf {tierLabel(plan.needsFor('stripe_betaallink'))}</IntegStatusPill>
-                ) : stripeConn?.chargesEnabled ? (
-                  <IntegStatusPill actief>Actief</IntegStatusPill>
-                ) : stripeConn?.accountId ? (
-                  <IntegStatusPill>In verificatie</IntegStatusPill>
-                ) : (
-                  <IntegStatusPill>Niet gekoppeld</IntegStatusPill>
-                )}
-              </div>
-            </div>
-
-            {!stripeAllowed ? (
-              <div className="fa" style={{ gap: 8 }}>
-                <span style={{ fontSize: '.82rem', color: 'var(--dmu)', alignSelf: 'center', marginRight: 'auto' }}>
-                  Stripe-betalingen horen bij <strong>{tierLabel(plan.needsFor('stripe_betaallink'))}</strong>, of als losse module bij Groei.
-                </span>
-                <button className="btn btn-s btn-sm" onClick={() => gaNaarAbonnement(null, { soort: 'feature', key: 'stripe_betaallink' })}>Bekijk opties</button>
-              </div>
-            ) : stripeConn?.chargesEnabled ? (
-              <div className="fa" style={{ gap: 8 }}>
-                <span style={{ fontSize: '.82rem', color: 'var(--dm)', alignSelf: 'center', marginRight: 'auto' }}>
-                  Klanten kunnen je facturen nu online betalen.
-                </span>
-                <button className="btn btn-ghost btn-sm" onClick={handleStripeDisconnect} disabled={stripeBusy}>Ontkoppelen</button>
-              </div>
-            ) : stripeConn?.accountId ? (
-              <div className="fa" style={{ gap: 8 }}>
-                <span style={{ fontSize: '.82rem', color: 'var(--dm)', alignSelf: 'center', marginRight: 'auto' }}>
-                  Stripe verifieert je gegevens… Dit kan even duren.
-                </span>
-                <button className="btn btn-s btn-sm" onClick={handleStripeRefresh} disabled={stripeBusy}>
-                  {stripeBusy ? 'Vernieuwen…' : 'Status vernieuwen'}
-                </button>
-                <button className="btn btn-ghost btn-sm" onClick={handleStripeDisconnect} disabled={stripeBusy}>Ontkoppelen</button>
-              </div>
-            ) : (
-              <>
-                <button className="btn btn-p" onClick={handleStripeConnect} disabled={stripeBusy}>
-                  {stripeBusy ? 'Bezig…' : 'Stripe koppelen'}
-                </button>
-                {stripeError && (
-                  <div style={{ marginTop: 10, padding: '9px 12px', borderRadius: 'var(--r8)', background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: '.8rem', lineHeight: 1.5 }}>
-                    <strong>Koppelen met Stripe is mislukt.</strong> {stripeError}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Boekhoudkoppelingen — feature uit de centrale matrix (Groei+). Ook
-              server-side afgedwongen: RLS + trigger op accounting_connections. */}
-          {!plan.has('boekhoudkoppeling') ? (
-            <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
-              <div className="integ-card-hd" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 12 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: '.95rem', marginBottom: 2 }}>Boekhoudkoppeling</div>
-                  <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>
-                    Facturen automatisch naar Moneybird of SnelStart, inkoopfacturen als kostenregels terug.
-                  </div>
-                </div>
-                <div style={{ flexShrink: 0 }}>
-                  <IntegStatusPill>Vanaf {tierLabel(plan.needsFor('boekhoudkoppeling'))}</IntegStatusPill>
-                </div>
-              </div>
-              <button className="btn btn-s btn-sm" onClick={() => gaNaarAbonnement(null, { soort: 'feature', key: 'boekhoudkoppeling' })}>Bekijk opties</button>
-            </div>
-          ) : (
-          <>
-          {/* Moneybird */}
-          <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
-            <div className="integ-card-hd" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <img src="/brand/moneybird.svg" alt="Moneybird" style={INTEG_LOGO_STYLE} />
-                <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>
-                  Synchroniseer facturen automatisch naar Moneybird en importeer inkoopfacturen als kostenregels.
-                </div>
-              </div>
-              <div style={{ flexShrink: 0 }}>
-                {mbConnection?.connected ? (
-                  <IntegStatusPill actief>Actief</IntegStatusPill>
-                ) : (
-                  <IntegStatusPill>Niet gekoppeld</IntegStatusPill>
-                )}
-              </div>
-            </div>
-
-            <div className="fg" style={{ marginBottom: 14 }}>
-              <div className="f s2">
-                <label>API token</label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type="password"
-                    // Zonder deze hints vult Chrome hier het wachtwoord van de
-                    // gebruiker in — dit is een API-token, geen wachtwoord.
-                    name="moneybird-api-token"
-                    autoComplete="off"
-                    data-1p-ignore
-                    data-lpignore="true"
-                    value={mbForm.apiToken}
-                    onChange={e => setMbForm(f => ({ ...f, apiToken: e.target.value }))}
-                    placeholder="Moneybird API token..."
-                    disabled={!!(mbConnection?.connected && !mbEditing)}
-                    style={{ paddingRight: mbConnection?.connected && !mbEditing ? 0 : 40, opacity: mbConnection?.connected && !mbEditing ? 0.6 : 1 }}
-                  />
-                  {!(mbConnection?.connected && !mbEditing) && (
-                    <button
-                      type="button"
-                      onClick={() => setMbShowToken(v => !v)}
-                      style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dmu)', fontSize: '.8rem', padding: 0 }}
-                    >
-                      {mbShowToken ? 'Verberg' : 'Toon'}
-                    </button>
-                  )}
-                </div>
-              </div>
-              <div className="f s2">
-                <label>
-                  Administratie-ID
-                  <span style={{ fontSize: '.73rem', color: 'var(--dl)', fontWeight: 400, marginLeft: 6 }}>
-                    Te vinden in de URL: moneybird.com/
-                    <strong>123456789</strong>
-                    /…
-                  </span>
-                </label>
-                <input
-                  value={mbForm.administrationId}
-                  onChange={e => setMbForm(f => ({ ...f, administrationId: e.target.value }))}
-                  placeholder="bijv. 123456789"
-                  disabled={!!(mbConnection?.connected && !mbEditing)}
-                  style={{ opacity: mbConnection?.connected && !mbEditing ? 0.6 : 1 }}
-                />
-              </div>
-            </div>
-
-            {mbConnection?.connected && (
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '.82rem', color: 'var(--dm)', marginBottom: 14, cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={!!mbConnection?.syncPaidOnly}
-                  onChange={e => handleTogglePaidOnly('moneybird', e.target.checked)}
-                  style={{ width: 'auto' }}
-                />
-                Alleen betaalde facturen synchroniseren
-              </label>
-            )}
-
-            <div className="fa" style={{ flexWrap: 'wrap', gap: 8 }}>
-              {mbConnection?.connected && (
-                <>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={handleMbImport}
-                    disabled={mbImporting}
-                  >
-                    {mbImporting ? 'Importeren...' : 'Kosten importeren'}
-                  </button>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={handleMbSyncContacten}
-                    disabled={mbSyncingContacten}
-                  >
-                    {mbSyncingContacten ? 'Synchroniseren...' : 'Contacten synchroniseren'}
-                  </button>
-                </>
-              )}
-              {mbConnection?.lastSyncedAt && (
-                <span style={{ fontSize: '.75rem', color: 'var(--dl)', alignSelf: 'center', marginRight: 'auto' }}>
-                  Laatste sync: {new Date(mbConnection.lastSyncedAt).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                </span>
-              )}
-              {mbConnection?.connected && !mbEditing ? (
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => setMbEditing(true)}
-                >
-                  Wijzigen
-                </button>
-              ) : (
-                <>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={handleMbTest}
-                    disabled={mbTesting || !mbForm.apiToken || !mbForm.administrationId}
-                  >
-                    {mbTesting ? 'Testen...' : 'Verbinding testen'}
-                  </button>
-                  <button
-                    className="btn btn-p btn-sm"
-                    onClick={handleMbSave}
-                    disabled={mbSaving || !mbForm.apiToken || !mbForm.administrationId}
-                  >
-                    {mbSaving ? 'Opslaan...' : 'Opslaan'}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* SnelStart — testfase: handmatige koppelsleutel-invoer. Eén platform-
-              subscriptionkey leeft als edge-function secret; de klant heeft alleen
-              zijn koppelsleutel (aan te maken op web.snelstart.nl). Na certificering
-              vervangt de oAuth-activatielink + webhook deze invoer. */}
-          <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
-            <div className="integ-card-hd" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <img src="/brand/snelstart.svg" alt="SnelStart" style={INTEG_LOGO_STYLE} />
-                <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>
-                  Boek facturen automatisch als verkoopboeking in SnelStart en synchroniseer klanten.
-                </div>
-              </div>
-              <div style={{ flexShrink: 0 }}>
-                {ssConnection?.connected ? (
-                  <IntegStatusPill actief>Actief</IntegStatusPill>
-                ) : (
-                  <IntegStatusPill>Niet gekoppeld</IntegStatusPill>
-                )}
-              </div>
-            </div>
-
-            <div className="fg" style={{ marginBottom: 14 }}>
-              <div className="f s2">
-                <label>
-                  Koppelsleutel
-                  <span style={{ fontSize: '.73rem', color: 'var(--dl)', fontWeight: 400, marginLeft: 6 }}>
-                    Aan te maken in SnelStart Web (web.snelstart.nl) bij je administratie
-                  </span>
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type={ssShowKey ? 'text' : 'password'}
-                    name="snelstart-koppelsleutel"
-                    autoComplete="off"
-                    data-1p-ignore
-                    data-lpignore="true"
-                    value={ssForm.clientKey}
-                    onChange={e => setSsForm({ clientKey: e.target.value })}
-                    placeholder="SnelStart koppelsleutel..."
-                    disabled={!!(ssConnection?.connected && !ssEditing)}
-                    style={{ paddingRight: ssConnection?.connected && !ssEditing ? 0 : 40, opacity: ssConnection?.connected && !ssEditing ? 0.6 : 1 }}
-                  />
-                  {!(ssConnection?.connected && !ssEditing) && (
-                    <button
-                      type="button"
-                      onClick={() => setSsShowKey(v => !v)}
-                      style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dmu)', fontSize: '.8rem', padding: 0 }}
-                    >
-                      {ssShowKey ? 'Verberg' : 'Toon'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {ssConnection?.connected && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '.82rem', color: 'var(--dm)', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={!!ssConnection?.importCosts}
-                    onChange={e => handleSsToggleImportCosts(e.target.checked)}
-                    disabled={ssTogglingImport}
-                    style={{ width: 'auto' }}
-                  />
-                  Kosten synchroniseren (inkoopfacturen importeren én handmatige kosten als vraagpost naar SnelStart)
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '.82rem', color: 'var(--dm)', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={!!ssConnection?.syncPaidOnly}
-                    onChange={e => handleTogglePaidOnly('snelstart', e.target.checked)}
-                    style={{ width: 'auto' }}
-                  />
-                  Alleen betaalde facturen synchroniseren
-                </label>
-              </div>
-            )}
-
-            {ssFouten.length > 0 && (
-              <div style={{
-                border: '1px solid #fca5a5', background: 'rgba(220,38,38,.07)',
-                borderRadius: 8, padding: '10px 12px', marginBottom: 14, fontSize: '.82rem', color: 'var(--dm)',
-              }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                  {ssFouten.length} {ssFouten.length === 1 ? 'regel is' : 'regels zijn'} niet geboekt
-                </div>
-                <ul style={{ margin: 0, paddingLeft: 18, maxHeight: 170, overflowY: 'auto' }}>
-                  {ssFouten.map((f, i) => <li key={i} style={{ marginBottom: 2 }}>{f}</li>)}
-                </ul>
-              </div>
-            )}
-
-            {ssMeldingen.length > 0 && (
-              <div style={{
-                border: '1px solid var(--warn-bd, #e0b050)', background: 'var(--warn-bg, rgba(224,176,80,.10))',
-                borderRadius: 8, padding: '10px 12px', marginBottom: 14, fontSize: '.82rem', color: 'var(--dm)',
-              }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Velden overgeslagen</div>
-                <ul style={{ margin: 0, paddingLeft: 18 }}>
-                  {ssMeldingen.map((m, i) => <li key={i} style={{ marginBottom: 2 }}>{m}</li>)}
-                </ul>
-              </div>
-            )}
-
-            {ssKostenResterend > 0 && (
-              <div style={{
-                border: '1px solid var(--warn-bd, #e0b050)', background: 'var(--warn-bg, rgba(224,176,80,.10))',
-                borderRadius: 8, padding: '10px 12px', marginBottom: 14, fontSize: '.82rem', color: 'var(--dm)',
-              }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                  Nog {ssKostenResterend} {ssKostenResterend === 1 ? 'kostenpost' : 'kostenposten'} te synchroniseren
-                </div>
-                <div>
-                  Kosten worden per 50 tegelijk geboekt. Klik nog een keer op “Kosten/facturen synchroniseren” om verder te gaan.
-                </div>
-              </div>
-            )}
-
-            {ssAdresWaarschuwingen.length > 0 && (
-              <div style={{
-                border: '1px solid var(--warn-bd, #e0b050)', background: 'var(--warn-bg, rgba(224,176,80,.10))',
-                borderRadius: 8, padding: '10px 12px', marginBottom: 14, fontSize: '.82rem', color: 'var(--dm)',
-              }}>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                  {ssAdresWaarschuwingen.length} {ssAdresWaarschuwingen.length === 1 ? 'klant is' : 'klanten zijn'} zonder compleet adres doorgezet
-                </div>
-                <div style={{ marginBottom: 6 }}>
-                  SnelStart accepteert ze wel, maar in je boekhouding staat dan een relatie zonder adresgegevens. Vul ze aan bij de klant en synchroniseer opnieuw.
-                </div>
-                <ul style={{ margin: 0, paddingLeft: 18 }}>
-                  {ssAdresWaarschuwingen.map((w, i) => (
-                    <li key={i}>{w.klant} — mist {w.mist.join(', ')}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            <div className="fa" style={{ flexWrap: 'wrap', gap: 8 }}>
-              {ssConnection?.connected && (
-                <>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={handleSsImport}
-                    disabled={ssImporting}
-                  >
-                    {ssImporting ? 'Synchroniseren...' : 'Kosten/facturen synchroniseren'}
-                  </button>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => setSsInstellingen(true)}
-                  >
-                    Boekhoudinstellingen
-                  </button>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={handleSsSyncContacten}
-                    disabled={ssSyncingContacten}
-                  >
-                    {ssSyncingContacten ? 'Synchroniseren...' : 'Contacten synchroniseren'}
-                  </button>
-                </>
-              )}
-              {ssConnection?.lastSyncedAt && (
-                <span style={{ fontSize: '.75rem', color: 'var(--dl)', alignSelf: 'center', marginRight: 'auto' }}>
-                  Laatste sync: {new Date(ssConnection.lastSyncedAt).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                </span>
-              )}
-              {ssConnection?.connected && !ssEditing ? (
-                <>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => setSsEditing(true)}
-                  >
-                    Wijzigen
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={handleSsTest}
-                    disabled={ssTesting || (!ssForm.clientKey && !ssConnection?.connected)}
-                  >
-                    {ssTesting ? 'Testen...' : 'Verbinding testen'}
-                  </button>
-                  <button
-                    className="btn btn-p btn-sm"
-                    onClick={handleSsSave}
-                    disabled={ssSaving || !ssForm.clientKey}
-                  >
-                    {ssSaving ? 'Opslaan...' : 'Opslaan'}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-
-
-          {/* AFAS — tijdelijk verborgen voor klanten, nog niet actief. Zet {false} op {true} om terug te zetten. */}
-          {false && (
-          <div className="card card-p integ-card" style={{ border: '1px solid var(--border)' }}>
-            <div className="integ-card-hd" style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-              <img
-                src="https://logo.clearbit.com/afas.nl"
-                alt="AFAS"
-                style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 6 }}
-                onError={e => { e.currentTarget.style.display = 'none'; }}
-              />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: '.95rem', marginBottom: 2 }}>AFAS</div>
-                <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>
-                  Koppel je AFAS administratie met BossBase
-                </div>
-              </div>
-              <div style={{ flexShrink: 0 }}>
-                {afasTested ? (
-                  <IntegStatusPill actief>Actief</IntegStatusPill>
-                ) : afasConnection?.connected ? (
-                  <IntegStatusPill>Niet getest</IntegStatusPill>
-                ) : (
-                  <IntegStatusPill>Niet gekoppeld</IntegStatusPill>
-                )}
-              </div>
-            </div>
-
-            <div className="fg" style={{ marginBottom: 14 }}>
-              <div className="f s2">
-                <label>
-                  Omgevings ID
-                  <span style={{ fontSize: '.73rem', color: 'var(--dl)', fontWeight: 400, marginLeft: 6 }}>
-                    Te vinden in de URL van je AFAS omgeving
-                  </span>
-                </label>
-                <input
-                  value={afasForm.environmentId}
-                  onChange={e => setAfasForm(f => ({ ...f, environmentId: e.target.value }))}
-                  placeholder="bijv. 12345"
-                  disabled={!!(afasTested && !afasEditing)}
-                  style={{ opacity: afasTested && !afasEditing ? 0.6 : 1 }}
-                />
-              </div>
-              <div className="f s2">
-                <label>
-                  App token
-                  <span style={{ fontSize: '.73rem', color: 'var(--dl)', fontWeight: 400, marginLeft: 6 }}>
-                    Genereer een token via AFAS → App Connector
-                  </span>
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type={afasShowToken ? 'text' : 'password'}
-                    value={afasForm.token}
-                    onChange={e => setAfasForm(f => ({ ...f, token: e.target.value }))}
-                    placeholder="AFAS App token..."
-                    disabled={!!(afasTested && !afasEditing)}
-                    style={{ paddingRight: afasTested && !afasEditing ? 0 : 40, opacity: afasTested && !afasEditing ? 0.6 : 1 }}
-                  />
-                  {!(afasTested && !afasEditing) && (
-                    <button
-                      type="button"
-                      onClick={() => setAfasShowToken(v => !v)}
-                      style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dmu)', fontSize: '.8rem', padding: 0 }}
-                    >
-                      {afasShowToken ? 'Verberg' : 'Toon'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="fa" style={{ flexWrap: 'wrap', gap: 8 }}>
-              {afasConnection?.connected && (
-                <>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={handleAfasImport}
-                    disabled={afasImporting}
-                    title="Vereist de 'Inkoop' connectorbundel in AFAS SB"
-                  >
-                    {afasImporting ? 'Importeren...' : 'Kosten importeren'}
-                  </button>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={handleAfasSyncContacten}
-                    disabled={afasSyncingContacten}
-                  >
-                    {afasSyncingContacten ? 'Synchroniseren...' : 'Contacten synchroniseren'}
-                  </button>
-                </>
-              )}
-              {afasConnection?.lastSyncedAt && (
-                <span style={{ fontSize: '.75rem', color: 'var(--dl)', alignSelf: 'center', marginRight: 'auto' }}>
-                  Laatste sync: {new Date(afasConnection.lastSyncedAt).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                </span>
-              )}
-              {afasTested && !afasEditing ? (
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => { setAfasEditing(true); setAfasTested(false); }}
-                >
-                  Wijzigen
-                </button>
-              ) : (
-                <>
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={handleAfasTest}
-                    disabled={afasTesting || !afasForm.environmentId || !afasForm.token}
-                  >
-                    {afasTesting ? 'Testen...' : 'Verbinding testen'}
-                  </button>
-                  <button
-                    className="btn btn-p btn-sm"
-                    onClick={handleAfasSave}
-                    disabled={afasSaving || !afasForm.environmentId || !afasForm.token}
-                  >
-                    {afasSaving ? 'Opslaan...' : 'Opslaan'}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-          )}
-          </>
-          )}
-
-        </div>
+        <IntegratiesOverzicht integraties={INTEGRATIES} />
       )}
-
-      {ssInstellingen && <GrootboekIndelingModal onClose={() => setSsInstellingen(false)} />}
 
     </div>
   );

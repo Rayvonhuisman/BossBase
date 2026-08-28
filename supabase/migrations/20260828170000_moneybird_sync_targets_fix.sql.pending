@@ -1,0 +1,58 @@
+-- ⚠️  BESTANDSNAAM EINDIGT BEWUST OP .pending
+--     `supabase db push` draait alles wat openstaat; deze migratie mag pas
+--     nadat je handmatig een Moneybird-sync hebt gedaan en gezien hebt wat
+--     eruit komt. Hernoem naar .sql en push zodra je zover bent:
+--         mv 20260828170000_moneybird_sync_targets_fix.sql.pending \
+--            20260828170000_moneybird_sync_targets_fix.sql
+--         supabase db push
+--
+-- Moneybird-crons: ze draaiden voor niemand.
+--
+-- ⚠️  DRAAI DEZE MIGRATIE APART, en pas nadat je één keer HANDMATIG een
+--     Moneybird-sync hebt gedaan en hebt gezien wat eruit komt. De crons staan
+--     sinds juli stil; daar zit een berg opgehoopt werk achter dat je niet
+--     ongezien 's nachts wilt laten wegschrijven.
+--
+-- WAT ER MIS WAS
+-- get_moneybird_sync_targets() eist `is_connected = true`. Dat veld wordt in de
+-- hele codebase maar op één plek geschreven — setAfasConnected() in
+-- accountingService.js — en die schrijft uitsluitend op provider 'afas'. Voor
+-- Moneybird komt het dus nooit op true. De UI gebruikt een heel ander
+-- criterium (api_token aanwezig), vandaar dat de koppeling in het scherm wél
+-- "Actief" heet.
+--
+-- Gevolg: de drie Moneybird-crons vuren netjes en krijgen een 200 terug, maar
+-- met een lege lijst. Gemeten op 28-08-2026 in net._http_response:
+--   {"scheduled":true,"companies":0,"ok":0,"failed":0,"results":[],"errors":[]}
+--
+-- DE FIX
+-- Dezelfde regel als de UI en als get_snelstart_sync_targets(): een koppeling is
+-- actief zodra de gegevens er zijn om ermee te praten. `is_connected` blijft
+-- bestaan voor AFAS, waar het wél wordt gezet (na een geslaagde test).
+--
+-- Alleen de functie verandert; er is geen datamigratie nodig.
+
+create or replace function public.get_moneybird_sync_targets()
+returns table (company_id uuid, api_token text, administration_id text)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select ac.company_id, ac.api_token, ac.administration_id
+  from accounting_connections ac
+  where ac.provider = 'moneybird'
+    and ac.api_token is not null
+    and ac.api_token <> ''
+    and ac.administration_id is not null
+    and ac.administration_id <> ''
+$$;
+
+comment on function public.get_moneybird_sync_targets() is
+  'Minimale sync-doelen (company_id, api_token, administration_id) voor bedrijven met een Moneybird-koppeling. Actief = gegevens aanwezig, gelijk aan get_snelstart_sync_targets en aan wat de app toont. Alleen service_role mag dit aanroepen — nooit anon/authenticated (bevat geheime tokens).';
+
+-- Rechten opnieuw zetten: create or replace behoudt ze wel, maar expliciet is
+-- hier beter dan impliciet — dit is een functie die tokens teruggeeft.
+revoke all     on function public.get_moneybird_sync_targets() from public;
+revoke execute on function public.get_moneybird_sync_targets() from anon, authenticated;
+grant  execute on function public.get_moneybird_sync_targets() to service_role;

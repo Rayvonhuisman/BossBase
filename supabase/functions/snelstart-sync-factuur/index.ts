@@ -42,7 +42,7 @@ serve(async (req) => {
 
     const { data: conn } = await admin
       .from('accounting_connections')
-      .select('client_key, sync_paid_only')
+      .select('client_key')
       .eq('company_id', companyId)
       .eq('provider', 'snelstart')
       .maybeSingle()
@@ -56,9 +56,11 @@ serve(async (req) => {
       .single()
     if (!factuur) return json({ error: 'Factuur niet gevonden' }, 404)
 
-    // Instelling "alleen betaalde facturen synchroniseren"
-    if (conn.sync_paid_only && factuur.status !== 'betaald') {
-      return json({ success: true, skipped: 'alleen betaalde facturen worden gesynchroniseerd' })
+    // Vaste regel: alles gaat mee behalve concepten — die zijn nog niet verstuurd
+    // en horen dus niet in de boekhouding. Hier stond de instelling "alleen
+    // betaalde facturen synchroniseren"; die is vervallen.
+    if (factuur.status === 'concept') {
+      return json({ success: true, skipped: 'concepten worden niet geboekt' })
     }
 
     const { data: regels } = await admin

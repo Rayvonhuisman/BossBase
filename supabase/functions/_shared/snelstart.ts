@@ -692,7 +692,7 @@ export async function pushInkoopboeking(
 // forEachMoneybirdCompany in scheduledSync.ts.
 export async function forEachSnelStartCompany(
   admin: any,
-  perCompany: (companyId: string, clientKey: string, importCosts: boolean, syncPaidOnly: boolean) => Promise<Record<string, unknown>>,
+  perCompany: (companyId: string, clientKey: string) => Promise<Record<string, unknown>>,
   betweenMs = 500,
 ) {
   const { data: targets, error } = await admin.rpc('get_snelstart_sync_targets')
@@ -704,7 +704,7 @@ export async function forEachSnelStartCompany(
 
   for (const c of list) {
     try {
-      const r = await perCompany(c.company_id, c.client_key, Boolean(c.import_costs), Boolean(c.sync_paid_only))
+      const r = await perCompany(c.company_id, c.client_key)
       results.push({ company_id: c.company_id, ...r })
     } catch (e: any) {
       console.error(`[snelstart-cron] bedrijf ${c.company_id} mislukt:`, e?.message)

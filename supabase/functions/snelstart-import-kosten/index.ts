@@ -1,15 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { makeAdminClient, isScheduledCall } from "../_shared/scheduledSync.ts"
+import { makeAdminClient, isScheduledCall, startSyncRun, eindSyncRun } from "../_shared/scheduledSync.ts"
 import { ssFetch, ssFetchAll, forEachSnelStartCompany, pushVerkoopboeking, pushFactuurPdf, getActieveGrootboeken, ensureRelatie, pushInkoopboeking, pushKostenBijlagen, getGrootboekVoorkeuren, importeerLeverancier, getGenegeerd,
   relatieNaarKlantVelden, alleenGevuld, regimeUitGrootboekfunctie, btwPctVoorRegime,
   importeerKostenBijlagen, importeerFactuurDocument } from "../_shared/snelstart.ts"
 
-// Kosten/facturen-synchronisatie met SnelStart, twee richtingen:
-//   * EXPORT (altijd): verzonden/betaalde BossBase-facturen zonder snelstart_id
-//     worden als verkoopboeking geboekt (pushVerkoopboeking) — vangnet voor
+// Kosten/facturen-synchronisatie met SnelStart, twee richtingen. Beide staan
+// altijd aan; de vinkjes `import_costs` en `sync_paid_only` zijn vervallen.
+//   * EXPORT: alle BossBase-facturen zonder snelstart_id behalve concepten
+//     worden als verkoopboeking geboekt (pushVerkoopboeking) — ook vangnet voor
 //     facturen van vóór de koppeling en gemiste triggers.
-//   * IMPORT (optioneel): inkoopfacturen → kostenregels (job_costs). Draait
-//     alleen als accounting_connections.import_costs aan staat (standaard uit).
+//   * IMPORT: inkoopfacturen → kostenregels (job_costs), en verkoopfacturen die
+//     buiten BossBase om zijn geboekt.
 //
 // Lezen gaat via GET /v2/inkoopfacturen (OData, scope orders:read) — LET OP:
 // /v2/inkoopboekingen is alleen POST als lijst; lezen kan wél per stuk via
@@ -41,19 +42,24 @@ function pctVoorBtwSoort(soort: string): number {
 
 // Export: alle definitieve facturen die SnelStart nog niet kent als
 // verkoopboeking boeken. Concepten blijven buiten de boekhouding; het
-// terugschrijven van snelstart_id maakt dit idempotent. Met sync_paid_only aan
-// gaan alleen betaalde facturen mee.
+// terugschrijven van snelstart_id maakt dit idempotent.
+//
+// Welke facturen: ALLES behalve concepten. Een concept is nog niet verstuurd en
+// hoort dus niet in de boekhouding; al het overige wel. Hier stond een
+// instelling "alleen betaalde facturen" die dit per bedrijf kon inperken — die
+// is eruit, een boekhouding hoort compleet te zijn. Geïmporteerde facturen gaan
+// sowieso nooit terug (zie de externe_referentie-check hieronder).
 // Fouten worden verzameld i.p.v. alleen gelogd: anders meldt de sync "0
 // facturen" zonder dat iemand kan zien waarom.
 async function exportFacturen(
-  supabase: any, companyId: string, clientKey: string, paidOnly: boolean,
+  supabase: any, companyId: string, clientKey: string,
   foutenF: string[], meldingenF: string[],
 ): Promise<number> {
   const { data: teExporteren } = await supabase
     .from('facturen')
     .select('*, customers(name, email, address, city, phone, snelstart_id)')
     .eq('company_id', companyId)
-    .in('status', paidOnly ? ['betaald'] : ['verzonden', 'betaald'])
+    .neq('status', 'concept')
     .is('snelstart_id', null)
     // Geïmporteerde facturen gaan NOOIT terug. snelstart_id alleen is te zwak:
     // een reset wist dat veld, en dan zou de sync elke opgehaalde factuur
@@ -589,8 +595,76 @@ async function exportKosten(
   return { exported, resterend, fouten, meldingen }
 }
 
+// Kosten gaan per 50 tegelijk naar SnelStart (KOSTEN_BATCH). Eén batch per dag
+// betekent bij een achterstand van honderden posten dat je weken bezig bent, dus
+// draait de export door zolang er restant is.
+//
+// Twee remmen, want zonder rem eet één bedrijf met een grote achterstand de hele
+// run op en komt de rest van de bedrijven niet meer aan de beurt:
+//
+//   * KOSTEN_MAX_PER_RUN — harde bovengrens op het aantal geboekte posten.
+//   * KOSTEN_TIJDBUDGET_MS — een tijdslimiet, want een aantal zegt niets over de
+//     duur: elke post is minstens één API-aanroep, soms met bijlage. De edge
+//     function heeft zelf ook een wall-clock-limiet; die wil je niet raken,
+//     want dan is er niets vastgelegd.
+//
+// Wat overblijft gaat mee met de volgende run, en de gebruiker ziet het restant
+// in de Meldingen-tab.
+const KOSTEN_MAX_PER_RUN = 500
+const KOSTEN_TIJDBUDGET_MS = 120_000
+
+async function exportKostenDoorlopend(
+  supabase: any, companyId: string, clientKey: string,
+): Promise<{ exported: number; resterend: number; fouten: string[]; meldingen: string[] }> {
+  const start = Date.now()
+  const fouten: string[] = []
+  const meldingen: string[] = []
+  // Dezelfde melding ("x kosten zonder leverancier") komt elke ronde terug;
+  // één keer tonen is genoeg.
+  const gezien = new Set<string>()
+  let exported = 0
+  let resterend = 0
+
+  for (let ronde = 1; ; ronde++) {
+    const r = await exportKosten(supabase, companyId, clientKey)
+    exported += r.exported
+    resterend = r.resterend
+    fouten.push(...r.fouten)
+    for (const m of r.meldingen) if (!gezien.has(m)) { gezien.add(m); meldingen.push(m) }
+
+    if (!resterend) break
+
+    // Geen voortgang meer: alles in deze ronde mislukte. Doorgaan zou een
+    // eindeloze lus zijn op dezelfde kapotte regels.
+    if (r.exported === 0) {
+      meldingen.push(
+        `${resterend} ${resterend === 1 ? 'kostenpost is' : 'kostenposten zijn'} niet geboekt en er kwam geen enkele regel doorheen. `
+        + 'Kijk bij de foutmeldingen hierboven wat er misgaat.',
+      )
+      break
+    }
+    if (exported >= KOSTEN_MAX_PER_RUN) {
+      meldingen.push(
+        `De grens van ${KOSTEN_MAX_PER_RUN} kostenposten per synchronisatie is bereikt. `
+        + `Er ${resterend === 1 ? 'staat er nog 1' : `staan er nog ${resterend}`} open; die gaan mee met de volgende run.`,
+      )
+      break
+    }
+    if (Date.now() - start > KOSTEN_TIJDBUDGET_MS) {
+      meldingen.push(
+        `De synchronisatie van kosten is na ${Math.round((Date.now() - start) / 1000)} seconden gestopt om ruimte te laten voor de rest. `
+        + `Er ${resterend === 1 ? 'staat er nog 1' : `staan er nog ${resterend}`} open; die gaan mee met de volgende run.`,
+      )
+      break
+    }
+    console.log(`Kosten-export ronde ${ronde} klaar: ${exported} geboekt, nog ${resterend} open`)
+  }
+
+  return { exported, resterend, fouten, meldingen }
+}
+
 async function syncCompany(
-  supabase: any, companyId: string, clientKey: string, importCosts: boolean, paidOnly: boolean,
+  supabase: any, companyId: string, clientKey: string, bron: 'cron' | 'handmatig' = 'handmatig',
 ): Promise<{
   exported: { verkoopboekingen: number; inkoopboekingen: number };
   imported: { inkoopfacturen: number; verkoopfacturen: number };
@@ -599,38 +673,56 @@ async function syncCompany(
   fouten: string[];
   meldingen: string[];
 }> {
-  const factuurFouten: string[] = []
-  const factuurMeldingen: string[] = []
-  const exported = await exportFacturen(supabase, companyId, clientKey, paidOnly, factuurFouten, factuurMeldingen)
-  const leeg = { imported: 0, overgeslagen: 0 }
-  const kostenImport = importCosts ? await importKosten(supabase, companyId, clientKey) : leeg
-  // Verkoopfacturen ophalen hangt aan dezelfde instelling: wie zijn boekhouding
-  // als bron wil zien, wil dat voor kosten én omzet.
-  const factuurImport = importCosts
-    ? await importFacturen(supabase, companyId, clientKey, factuurMeldingen)
-    : leeg
-  const kosten = importCosts
-    ? await exportKosten(supabase, companyId, clientKey)
-    : { exported: 0, resterend: 0 }
+  const runId = await startSyncRun(supabase, companyId, 'snelstart', 'kosten-facturen', bron)
+  try {
+    const factuurFouten: string[] = []
+    const factuurMeldingen: string[] = []
+    const exported = await exportFacturen(supabase, companyId, clientKey, factuurFouten, factuurMeldingen)
+    // Kosten gaan altijd mee, beide kanten op. Dit hing aan een vinkje
+    // `import_costs`; dat is vervallen — een koppeling die de helft van de
+    // administratie overslaat levert een beeld op dat nergens klopt.
+    const kostenImport = await importKosten(supabase, companyId, clientKey)
+    const factuurImport = await importFacturen(supabase, companyId, clientKey, factuurMeldingen)
+    const kosten = await exportKostenDoorlopend(supabase, companyId, clientKey)
 
-  await supabase
-    .from('accounting_connections')
-    .update({ last_synced_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-    .eq('company_id', companyId)
-    .eq('provider', 'snelstart')
+    await supabase
+      .from('accounting_connections')
+      .update({ last_synced_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('company_id', companyId)
+      .eq('provider', 'snelstart')
 
-  return {
-    exported: { verkoopboekingen: exported, inkoopboekingen: kosten.exported },
-    imported: { inkoopfacturen: kostenImport.imported, verkoopfacturen: factuurImport.imported },
-    // Wat er is overgeslagen omdat het hier ooit is weggegooid. Naar de UI toe
-    // één getal; in de logs staat het per soort uitgesplitst.
-    overgeslagenUitPrullenbak: kostenImport.overgeslagen + factuurImport.overgeslagen,
-    kostenResterend: kosten.resterend,
-    // Wat er per regel misging — zodat de gebruiker niet naar "0" zit te kijken.
-    fouten: [...factuurFouten, ...kosten.fouten],
-    // Wat er wel doorging maar aandacht vraagt: afgewezen relatievelden,
-    // kosten zonder leverancier, boekingen zonder brondocument.
-    meldingen: [...factuurMeldingen, ...kosten.meldingen],
+    const uitslag = {
+      exported: { verkoopboekingen: exported, inkoopboekingen: kosten.exported },
+      imported: { inkoopfacturen: kostenImport.imported, verkoopfacturen: factuurImport.imported },
+      // Wat er is overgeslagen omdat het hier ooit is weggegooid. Naar de UI toe
+      // één getal; in de logs staat het per soort uitgesplitst.
+      overgeslagenUitPrullenbak: kostenImport.overgeslagen + factuurImport.overgeslagen,
+      kostenResterend: kosten.resterend,
+      // Wat er per regel misging — zodat de gebruiker niet naar "0" zit te kijken.
+      fouten: [...factuurFouten, ...kosten.fouten],
+      // Wat er wel doorging maar aandacht vraagt: afgewezen relatievelden,
+      // kosten zonder leverancier, boekingen zonder brondocument.
+      meldingen: [...factuurMeldingen, ...kosten.meldingen],
+    }
+
+    // Vastleggen wat deze run heeft opgeleverd, zodat de app kan tonen wanneer
+      // er voor het laatst automatisch is gesynchroniseerd en of dat lukte.
+    await eindSyncRun(supabase, runId, {
+      gelukt: uitslag.fouten.length === 0,
+      fouten: uitslag.fouten,
+      meldingen: uitslag.meldingen,
+      samenvatting: {
+        exported: uitslag.exported,
+        imported: uitslag.imported,
+        kostenResterend: uitslag.kostenResterend,
+        overgeslagenUitPrullenbak: uitslag.overgeslagenUitPrullenbak,
+      },
+    })
+    return uitslag
+  } catch (err: any) {
+    // Ook een harde fout hoort zichtbaar te zijn in de app, niet alleen in de logs.
+    await eindSyncRun(supabase, runId, { gelukt: false, fout: err?.message ?? String(err) })
+    throw err
   }
 }
 
@@ -643,10 +735,10 @@ serve(async (req) => {
   const body = await req.json().catch(() => ({}))
 
   try {
-    // ── Scheduled-modus: alle bedrijven (facturen altijd; kosten per vinkje) ──
+    // ── Scheduled-modus: alle bedrijven met een koppelsleutel ────────────────
     if (isScheduledCall(body)) {
-      const summary = await forEachSnelStartCompany(supabase, (companyId, clientKey, importCosts, syncPaidOnly) =>
-        syncCompany(supabase, companyId, clientKey, importCosts, syncPaidOnly))
+      const summary = await forEachSnelStartCompany(supabase, (companyId, clientKey) =>
+        syncCompany(supabase, companyId, clientKey, 'cron'))
       return json(summary)
     }
 
@@ -659,13 +751,13 @@ serve(async (req) => {
 
     const { data: conn } = await supabase
       .from('accounting_connections')
-      .select('client_key, import_costs, sync_paid_only')
+      .select('client_key')
       .eq('company_id', profile.company_id)
       .eq('provider', 'snelstart')
       .maybeSingle()
     if (!conn?.client_key) return json({ error: 'SnelStart niet geconfigureerd' }, 400)
 
-    const r = await syncCompany(supabase, profile.company_id, conn.client_key, Boolean(conn.import_costs), Boolean(conn.sync_paid_only))
+    const r = await syncCompany(supabase, profile.company_id, conn.client_key)
     return json({ success: true, ...r })
   } catch (err: any) {
     console.error('Error:', err.message, err.stack)

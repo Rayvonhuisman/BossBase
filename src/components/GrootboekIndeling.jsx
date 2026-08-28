@@ -1,8 +1,11 @@
 // Boekhoudinstellingen voor SnelStart: welke grootboekrekening krijgt elke
 // kostencategorie en omzetsoort, en welke categorieën bestaan er?
 //
-// Opent als eigen scherm vanaf de SnelStart-kaart. Het hoort daar en niet bij de
-// algemene instellingen: alles hierin gaat over hoe déze koppeling boekt.
+// Staat INLINE in de Instellingen-tab van de SnelStart-drawer. Was een modal,
+// maar dan moest je vanuit de instellingen nóg een keer doorklikken om je
+// instellingen te zien; alles wat je aan deze koppeling kunt instellen hoort op
+// één plek. (Die modal was overigens nooit een echte modal: de klassen
+// .mo/.mc/.mh stonden in geen enkel stylesheet.)
 //
 // De koppeling kiest standaard zelf, op vaste voorkeursnummers uit het gangbare
 // Nederlandse rekeningschema. Werkt zolang een administratie dat schema volgt.
@@ -14,7 +17,6 @@
 // categorie kan BossBase niets raden. Die moet een rekening krijgen.
 
 import { useEffect, useMemo, useState } from 'react';
-import { ModalX } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { BTW_REGIMES } from '../lib/btwRegime.js';
 import {
@@ -55,7 +57,7 @@ function standaardTekst(std) {
 
 const isGesplitst = std => std?.soort === 'per_tarief';
 
-export default function GrootboekIndelingModal({ onClose }) {
+export default function GrootboekIndeling() {
   const toast = useToast();
   const [rekeningen, setRekeningen] = useState(null);
   const [standaarden, setStandaarden] = useState({});
@@ -173,20 +175,21 @@ export default function GrootboekIndelingModal({ onClose }) {
     }
   };
 
+  // Klassen .mo/.mc/.mh/.mt/.mb bestonden in geen enkel stylesheet: dit scherm
+  // rendeerde daardoor als een gewoon blok onderaan de pagina in plaats van als
+  // modal. Nu de bestaande overlay/modal-klassen, dezelfde als elders in het
+  // dashboard — zichtbaar zodra je hem vanuit de integratiedrawer opent.
   return (
-    <div className="mo" onClick={onClose}>
-      <div className="mc" style={{ maxWidth: 720, width: '100%' }} onClick={e => e.stopPropagation()}>
-        <div className="mh">
-          <div>
-            <div className="mt">Boekhoudinstellingen</div>
-            <div style={{ fontSize: '.8rem', color: 'var(--dmu)', marginTop: 2 }}>
-              Hoe BossBase jouw boekingen indeelt in SnelStart
-            </div>
+    <div>
+      <div>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Grootboekindeling</div>
+          <div style={{ fontSize: '.78rem', color: 'var(--dmu)', marginTop: 2 }}>
+            Hoe BossBase jouw boekingen indeelt in SnelStart
           </div>
-          <ModalX onClose={onClose} />
         </div>
 
-        <div className="mb" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+        <div>
           {laden && <div style={{ fontSize: 12.5, color: 'var(--dl)' }}>Rekeningen ophalen…</div>}
           {fout && (
             <div style={{ fontSize: 12.5, color: 'var(--rd)' }}>
@@ -362,7 +365,6 @@ export default function GrootboekIndelingModal({ onClose }) {
           >
             {ophalen ? 'Ophalen…' : 'Alles opnieuw ophalen'}
           </button>
-          <button className="btn btn-p" onClick={onClose}>Klaar</button>
         </div>
       </div>
     </div>

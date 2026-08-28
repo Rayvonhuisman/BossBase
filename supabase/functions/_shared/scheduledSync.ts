@@ -44,6 +44,69 @@ export function isScheduledCall(body: any): boolean {
   return Boolean(expected) && timingSafeEqual(provided, expected)
 }
 
+
+// ── Sync-runs vastleggen ────────────────────────────────────────────────────
+// Elke sync — handmatig of via de cron — schrijft één rij in
+// accounting_sync_runs. Zonder dat is een nachtelijke run alleen terug te
+// vinden in de functielogs, en die leest niemand: een mislukte boeking bleef
+// daardoor onzichtbaar tot iemand toevallig zijn boekhouding naliep.
+//
+// Best-effort: lukt het schrijven niet, dan gaat de sync gewoon door. Een
+// kapotte logregel mag nooit een werkende synchronisatie tegenhouden.
+//
+// Bij de start wordt de rij aangemaakt en bij het einde bijgewerkt. Blijft
+// `klaar_op` leeg, dan is de functie halverwege afgekapt (timeout) — ook dát is
+// informatie die je wilt kunnen zien.
+
+/** Maximaal aantal foutregels dat we bewaren; de rest wordt samengevat. */
+const MAX_BEWAARDE_REGELS = 50
+
+function kortLijst(regels: string[]): string[] {
+  if (regels.length <= MAX_BEWAARDE_REGELS) return regels
+  const rest = regels.length - MAX_BEWAARDE_REGELS
+  return [...regels.slice(0, MAX_BEWAARDE_REGELS), `… en nog ${rest} ${rest === 1 ? 'regel' : 'regels'}`]
+}
+
+export async function startSyncRun(
+  admin: any, companyId: string, provider: string, onderdeel: string, bron: 'cron' | 'handmatig',
+): Promise<string | null> {
+  try {
+    const { data, error } = await admin
+      .from('accounting_sync_runs')
+      .insert({ company_id: companyId, provider, onderdeel, bron })
+      .select('id')
+      .single()
+    if (error) { console.warn('[sync-run] start niet vastgelegd:', error.message); return null }
+    return data?.id ?? null
+  } catch (e: any) {
+    console.warn('[sync-run] start niet vastgelegd:', e?.message)
+    return null
+  }
+}
+
+export async function eindSyncRun(
+  admin: any, runId: string | null,
+  uitslag: { gelukt: boolean; fout?: string | null; fouten?: string[]; meldingen?: string[]; samenvatting?: unknown },
+): Promise<void> {
+  if (!runId) return
+  try {
+    const { error } = await admin
+      .from('accounting_sync_runs')
+      .update({
+        klaar_op: new Date().toISOString(),
+        gelukt: uitslag.gelukt,
+        fout: uitslag.fout ?? null,
+        fouten: kortLijst(uitslag.fouten ?? []),
+        meldingen: kortLijst(uitslag.meldingen ?? []),
+        samenvatting: uitslag.samenvatting ?? null,
+      })
+      .eq('id', runId)
+    if (error) console.warn('[sync-run] einde niet vastgelegd:', error.message)
+  } catch (e: any) {
+    console.warn('[sync-run] einde niet vastgelegd:', e?.message)
+  }
+}
+
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 // Loopt over alle bedrijven met een ACTIEVE Moneybird-connectie en draait

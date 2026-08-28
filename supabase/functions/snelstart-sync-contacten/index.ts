@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { makeAdminClient, isScheduledCall } from "../_shared/scheduledSync.ts"
+import { makeAdminClient, isScheduledCall, startSyncRun, eindSyncRun } from "../_shared/scheduledSync.ts"
 import {
   ssFetchAll, ensureRelatie, forEachSnelStartCompany, ontbrekendeAdresvelden,
   relatieNaarKlantVelden, relatieNaarVelden, alleenGevuld, isSysteemrelatie, getGenegeerd,
@@ -22,7 +22,7 @@ const json = (body: unknown, status = 200) =>
 
 type AdresWaarschuwing = { klant: string; mist: string[] }
 
-async function syncCompany(
+async function syncCompanyInner(
   supabase: any, companyId: string, clientKey: string,
 ): Promise<Record<string, unknown>> {
   let imported = 0
@@ -217,6 +217,34 @@ async function syncCompany(
   }
 }
 
+// Dunne schil om syncCompanyInner die de run vastlegt. Bewust een schil en geen
+// code midden in de sync: zo wordt óók een harde fout vastgelegd, en die is
+// anders alleen in de functielogs terug te vinden.
+async function syncCompany(
+  supabase: any, companyId: string, clientKey: string, bron: 'cron' | 'handmatig' = 'handmatig',
+): Promise<Record<string, unknown>> {
+  const runId = await startSyncRun(supabase, companyId, 'snelstart', 'contacten', bron)
+  try {
+    const r = await syncCompanyInner(supabase, companyId, clientKey)
+    const waarschuwingen = (r.adresWaarschuwingen ?? []) as { klant: string; mist: string[] }[]
+    const lev = (r.leveranciers ?? {}) as Record<string, number>
+    await eindSyncRun(supabase, runId, {
+      // Adreswaarschuwingen zijn geen fouten: de relatie is wél doorgezet.
+      gelukt: true,
+      meldingen: waarschuwingen.map(w => `${w.klant} — mist ${w.mist.join(', ')}`),
+      samenvatting: {
+        klanten: { geimporteerd: r.imported, bijgewerkt: r.bijgewerkt, geexporteerd: r.exported },
+        leveranciers: { geimporteerd: lev.geimporteerd, bijgewerkt: lev.bijgewerkt },
+        overgeslagenUitPrullenbak: r.overgeslagenUitPrullenbak,
+      },
+    })
+    return r
+  } catch (err: any) {
+    await eindSyncRun(supabase, runId, { gelukt: false, fout: err?.message ?? String(err) })
+    throw err
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -229,7 +257,7 @@ serve(async (req) => {
     // ── Scheduled-modus (cron_secret in de body): alle bedrijven ─────────────
     if (isScheduledCall(body)) {
       const summary = await forEachSnelStartCompany(supabase, (companyId, clientKey) =>
-        syncCompany(supabase, companyId, clientKey))
+        syncCompany(supabase, companyId, clientKey, 'cron'))
       return json(summary)
     }
 

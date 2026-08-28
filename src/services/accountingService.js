@@ -182,31 +182,48 @@ export async function testSnelStartConnection(clientKey) {
   return data
 }
 
-// Kosten-import aan/uit (standaard uit). Alleen het vinkje — de import zelf
-// draait via importKostenVanuitSnelStart of de scheduled-modus.
-export async function setSnelStartImportCosts(enabled) {
-  const companyId = await getCompanyId()
-  if (!companyId) return
-  const { error } = await supabase
-    .from('accounting_connections')
-    .update({ import_costs: !!enabled, updated_at: new Date().toISOString() })
-    .eq('company_id', companyId)
-    .eq('provider', 'snelstart')
-  if (error) throw error
-}
+// De schakelaars `import_costs` en `sync_paid_only` zijn vervallen: kosten gaan
+// altijd mee en alle facturen behalve concepten worden geboekt. De kolommen
+// staan er nog (zie migratie 20260828140000) maar worden nergens meer gelezen.
 
-// "Alleen betaalde facturen synchroniseren" aan/uit (standaard uit); geldt per
-// provider (moneybird/snelstart) en wordt server-side gelezen door de
-// sync-functies.
-export async function setSyncPaidOnly(provider, enabled) {
-  const companyId = await getCompanyId()
-  if (!companyId) return
-  const { error } = await supabase
-    .from('accounting_connections')
-    .update({ sync_paid_only: !!enabled, updated_at: new Date().toISOString() })
-    .eq('company_id', companyId)
+/**
+ * De laatste synchronisatie van deze provider. Standaard die van de cron: dat
+ * is de run die niemand heeft zien gebeuren. Voedt twee dingen in de
+ * integratiedrawer: de regel "laatste automatische sync" en de meldingen van
+ * die run. Geef `{ bron: null }` mee voor de laatste run ongeacht herkomst.
+ *
+ * Zonder dit was een nachtelijke run alleen in de functielogs terug te vinden,
+ * en dan blijft een mislukte boeking onzichtbaar tot iemand zijn boekhouding
+ * naloopt.
+ */
+export async function getLaatsteSyncRun(provider = 'snelstart', { bron = 'cron' } = {}) {
+  let query = supabase
+    .from('accounting_sync_runs')
+    .select('*')
     .eq('provider', provider)
-  if (error) throw error
+  if (bron) query = query.eq('bron', bron)
+  const { data, error } = await query
+    .order('gestart_op', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  // De tabel bestaat pas na migratie 20260828150000; tot die tijd hoort de
+  // drawer gewoon te werken, alleen zonder deze regel.
+  if (error) return null
+  if (!data) return null
+  return {
+    id: data.id,
+    onderdeel: data.onderdeel,
+    bron: data.bron,
+    gestartOp: data.gestart_op,
+    klaarOp: data.klaar_op,
+    // klaar_op leeg = halverwege afgekapt. Dat is geen "geslaagd" en geen
+    // "mislukt", maar wel iets om te tonen.
+    afgebroken: !data.klaar_op,
+    gelukt: data.gelukt === true,
+    fout: data.fout || null,
+    fouten: Array.isArray(data.fouten) ? data.fouten : [],
+    meldingen: Array.isArray(data.meldingen) ? data.meldingen : [],
+  }
 }
 
 export async function importKostenVanuitSnelStart() {
