@@ -23,6 +23,7 @@ import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../ser
 import { mailTemplate, mailButton } from '../utils/mailTemplate.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { statusInfo } from '../utils/statusColors.js';
+import ActieMenu from '../components/ActieMenu.jsx';
 import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
 
 const offerteBadge = status => {
@@ -649,7 +650,7 @@ function CopyOfferteModal({ offerte, customers, onClose, onCopied }) {
 
 // ── VIEW OFFERTE MODAL ───────────────────────────────────────────────────────
 
-function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMail, onCopy, openCustomer }) {
+function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMail, onCopy, onEdit, onDelete, openCustomer }) {
   const { company } = useProfile();
   const toast = useToast();
   const customerName = offerte.customerName || customers.find(c => c.id == offerte.customerId)?.name || '—';
@@ -694,6 +695,49 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
       setPreviewLoading(false);
     }
   };
+
+  // ── Welke acties kan deze offerte nú ondergaan? ─────────────────────────
+  // De eerste die past wordt de primaire knop, de rest komt in het menu. Zelfde
+  // opzet als bij facturen, met de acties die bij een offerte horen.
+  const isGeaccepteerd = offerte.status === 'geaccepteerd';
+  const isConceptOfferte = offerte.status === 'concept';
+
+  const primair =
+    isGeaccepteerd && onMaakFactuur
+      ? { label: 'Maak factuur', icon: I.brief, onClick: () => onMaakFactuur(offerte) }
+    : onSendMail
+      ? { label: 'Verstuur per mail', icon: I.send, onClick: () => { onClose(); onSendMail(offerte); } }
+    : offerte.signedAt
+      ? { label: 'Download getekende offerte', icon: I.paperclip, onClick: handleDownloadPdf }
+      : null;
+
+  const acties = [
+    onSendMail && primair?.label !== 'Verstuur per mail' && {
+      label: 'Verstuur per mail', icon: I.send, onClick: () => { onClose(); onSendMail(offerte); },
+    },
+    // Getekend bestand niet ook nog in het menu: de paperclip ernaast doet dat
+    // al, en dezelfde actie twee keer aanbieden maakt het menu langer zonder
+    // iets toe te voegen.
+    onEdit && !isConceptOfferte && {
+      // Bij een verstuurde offerte maakt opslaan een nieuwe VERSIE. Dat mag
+      // hier: een offerte is geen boekstuk. Bij facturen is dat juist verboden.
+      label: 'Herzien (nieuwe versie)', icon: I.edit, onClick: () => { onClose(); onEdit(offerte); },
+    },
+    onEdit && isConceptOfferte && {
+      label: 'Offerte wijzigen', icon: I.edit, onClick: () => { onClose(); onEdit(offerte); },
+    },
+    onCopy && {
+      label: 'Kopiëren', icon: I.copy, onClick: () => { onClose(); onCopy(offerte); },
+    },
+    isGeaccepteerd && onMaakFactuur && primair?.label !== 'Maak factuur' && {
+      label: 'Maak factuur', icon: I.brief, onClick: () => onMaakFactuur(offerte),
+    },
+    onDelete && {
+      label: 'Offerte verwijderen', icon: I.trash, gevaarlijk: true, scheiding: true,
+      onClick: () => { onClose(); onDelete(offerte); },
+    },
+  ].filter(Boolean);
+
 
   return (
     <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -793,31 +837,30 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
             </div>
           )}
         </div>
-        <div className="fa">
-          {onSendMail && <button className="btn btn-s" onClick={() => { onClose(); onSendMail(offerte); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={14} /> Verstuur per mail</button>}
-          {offerte.signedAt ? (
-            <button className="btn btn-p" onClick={handleDownloadPdf} disabled={pdfLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Download size={15} />{pdfLoading ? 'Genereren...' : 'Download getekende offerte'}
-            </button>
-          ) : (
-            <>
-              <button className="btn btn-ghost" onClick={handlePreviewPdf} disabled={previewLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                {previewLoading ? 'Laden...' : 'Preview PDF'}
-              </button>
-              <button className="btn btn-p" onClick={handleDownloadPdf} disabled={pdfLoading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <Download size={15} />{pdfLoading ? 'Genereren...' : 'Download PDF'}
-              </button>
-            </>
-          )}
-          {onCopy && (
-            <button className="btn btn-ghost" onClick={() => { onClose(); onCopy(offerte); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Copy size={14} /> Kopiëren
+        {/* Zelfde opzet als bij facturen: één primaire actie die de status
+            volgt, de rest achter het acties-menu. Offertes houden hun eigen
+            acties — inclusief versiebeheer, dat hier wél mag: een verstuurde
+            offerte is geen boekstuk. */}
+        <div className="fa" style={{ flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          <div style={{ flex: 1 }} />
+
+          <button
+            className="btn btn-ghost btn-icon"
+            title={offerte.signedAt
+              ? 'Getekende offerte openen — het bestand met handtekening'
+              : 'Voorbeeld bekijken'}
+            disabled={previewLoading || pdfLoading}
+            onClick={offerte.signedAt ? handleDownloadPdf : handlePreviewPdf}
+          >{I.paperclip}</button>
+
+          <ActieMenu knop="knop" items={acties} />
+
+          {primair && (
+            <button className="btn btn-p" onClick={primair.onClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              {primair.icon}{primair.label}
             </button>
           )}
           <button className="btn btn-ghost" onClick={onClose}>Sluiten</button>
-          {offerte.status === 'geaccepteerd' && onMaakFactuur && (
-            <button className="btn btn-p" onClick={() => onMaakFactuur(offerte)}>{I.brief} Maak factuur</button>
-          )}
         </div>
       </div>
     </div>
@@ -1024,6 +1067,43 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
 
   const totalAccepted = offertes.filter(o => o.status === 'geaccepteerd').reduce((s, o) => s + o.totaalIncl, 0);
 
+  // Voorbeeld of getekend bestand vanuit de rij.
+  const handleRowPdf = async o => {
+    try {
+      const items = await getOfferteItems(o.id);
+      const customer = customers.find(c => String(c.id) === String(o.customerId));
+      await previewOffertePdf(o, items, customer, companyForDocument(o, company));
+    } catch (err) {
+      toast.error(err.message || 'Voorbeeld maken mislukt');
+    }
+  };
+
+  // Alles wat vroeger als los icoontje naast de rij stond, plus wat alleen op de
+  // kaart zat. Er is niets weggevallen; het versiebeheer blijft zoals het was.
+  const rijActies = o => {
+    const isConceptOfferte = o.status === 'concept';
+    return [
+      { label: 'Offerte bekijken', icon: I.eye, onClick: () => setViewOfferte(o) },
+      canManageOffertes && {
+        label: 'Verstuur per mail', icon: I.send, onClick: () => setSendMailOfferte(o),
+      },
+      canManageOffertes && !isConceptOfferte && {
+        // Bij een verstuurde offerte maakt opslaan een nieuwe versie. Dat is bij
+        // offertes correct — bij facturen juist niet.
+        label: 'Herzien (nieuwe versie)', icon: I.edit, onClick: () => setEditOfferte(o),
+      },
+      canManageOffertes && isConceptOfferte && {
+        label: 'Offerte wijzigen', icon: I.edit, onClick: () => setEditOfferte(o),
+      },
+      canManageOffertes && {
+        label: 'Kopiëren', icon: I.copy, onClick: () => setCopySource(o),
+      },
+      canManageOffertes && o.status === 'geaccepteerd' && {
+        label: 'Maak factuur', icon: I.brief, onClick: () => handleMaakFactuur(o),
+      },
+    ].filter(Boolean);
+  };
+
   const handleDelete = async (o) => {
     if (!window.confirm(`Offerte ${o.nummer} verwijderen?`)) return;
     try {
@@ -1184,7 +1264,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
                 {filtered.map(o => {
                   const customerName = o.customerName || customers.find(c => c.id == o.customerId)?.name || '—';
                   return (
-                    <tr key={o.id}>
+                    <tr key={o.id} onClick={() => setViewOfferte(o)} style={{ cursor: 'pointer' }} title="Offerte openen">
                       <td className="td">
                         <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: 13 }}>{o.nummer}</span>
                       </td>
@@ -1200,12 +1280,16 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
                       <td className="td" style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(o.totaalIncl)}</td>
                       <td className="td">{offerteBadge(o.status)}</td>
                       <td className="td">{fmtDate(o.geldigTot)}</td>
-                      <td className="td">
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          <button className="btn btn-xs btn-ghost btn-icon" title="Bekijken" onClick={() => setViewOfferte(o)}><MoreVertical size={14} /></button>
-                          {canManageOffertes && <button className="btn btn-xs btn-ghost btn-icon" title="Verstuur per mail" onClick={() => setSendMailOfferte(o)}><Send size={13} /></button>}
-                          {canManageOffertes && <button className="btn btn-xs btn-ghost btn-icon" title="Bewerken" onClick={() => setEditOfferte(o)}>{I.edit}</button>}
-                          {canManageOffertes && <button className="btn btn-xs btn-ghost btn-icon" title="Kopiëren" onClick={() => setCopySource(o)}><Copy size={13} /></button>}
+                      <td className="td" onClick={e => e.stopPropagation()}>
+                        {/* Drie iconen, net als bij facturen: het document,
+                            het menu en weggooien. De rest zit in het menu. */}
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                          <button
+                            className="btn btn-xs btn-ghost btn-icon"
+                            title={o.signedAt ? 'Getekende offerte openen' : 'Voorbeeld bekijken'}
+                            onClick={() => handleRowPdf(o)}
+                          >{I.paperclip}</button>
+                          <ActieMenu items={rijActies(o)} />
                           {canManageOffertes && <button className="btn btn-xs btn-danger btn-icon" title="Verwijderen" onClick={() => handleDelete(o)}>{I.trash}</button>}
                         </div>
                       </td>
@@ -1245,6 +1329,8 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
           onMaakFactuur={handleMaakFactuur}
           onSendMail={o => setSendMailOfferte(o)}
           onCopy={o => setCopySource(o)}
+          onEdit={o => setEditOfferte(o)}
+          onDelete={o => handleDelete(o)}
           openCustomer={openCustomer}
         />
       )}

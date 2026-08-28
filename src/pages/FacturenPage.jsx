@@ -11,7 +11,7 @@ import {
   getFacturen, createFactuur, updateFactuur, deleteFactuur,
   generateFactuurNummer, getFactuurRegels, createFactuurRegel,
   generateCreditFactuurNummer, createCreditFactuur, uploadFactuurPdf, getFactuurDocumentUrl,
-  getFacturenMetDocument, FACTUUR_STATUS_OPTIONS,
+  getFacturenMetDocument, FACTUUR_STATUS_OPTIONS, kopieerFactuur,
 } from '../services/factuurService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
@@ -638,7 +638,7 @@ function paperclipCfg(factuur, heeftDocument) {
 
 // ── VIEW FACTUUR MODAL ────────────────────────────────────────────────────────
 
-function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail, onEdit, onDelete }) {
+function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail, onEdit, onDelete, onCopy }) {
   const { company, profile } = useProfile();
   // Betaalherinneringen zijn een feature (Groei+). Zonder die feature tonen we
   // de knoppen niet; server-side blokkeert een trigger op facturen het zetten
@@ -741,23 +741,29 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail, 
   // actie die kan ook altijd érgens staat.
   const acties = [
     magMailen && primair?.label !== 'Verstuur per mail' && {
-      label: 'Verstuur per mail', icon: <Send size={14} />,
+      label: 'Verstuur per mail', icon: I.send,
       onClick: () => { onClose(); onSendMail(factuur, 'factuur'); },
     },
     magHerinnering1 && primair?.label !== 'Herinnering sturen' && {
-      label: 'Herinnering 1 sturen', icon: <Send size={14} />,
+      label: 'Herinnering 1 sturen', icon: I.clock,
       onClick: guardFeature('betaalherinneringen', () => { onClose(); onSendMail(factuur, 'herinnering_1'); }),
     },
     magHerinnering2 && primair?.label !== 'Tweede herinnering' && {
-      label: 'Herinnering 2 sturen', icon: <Send size={14} />,
+      label: 'Herinnering 2 sturen', icon: I.clock,
       onClick: () => { onClose(); onSendMail(factuur, 'herinnering_2'); },
     },
+    // Bewerken alleen zolang er niets verstuurd is. Daarna is de factuur een
+    // boekstuk en is kopiëren naar een nieuwe het juiste gereedschap.
     canManage && !uitBoekhouding && !isFactuurLocked(factuur) && {
       label: 'Factuur wijzigen', icon: I.edit, onClick: () => { onClose(); onEdit?.(factuur); },
     },
+    canManage && !uitBoekhouding && {
+      label: 'Kopiëren naar nieuwe factuur', icon: I.copy,
+      onClick: () => { onClose(); onCopy?.(factuur); },
+    },
     // Vanaf hier apart: dit maakt iets kapot of onomkeerbaar.
     canCrediteer && {
-      label: 'Crediteer factuur', gevaarlijk: true, scheiding: true,
+      label: 'Crediteer factuur', icon: I.euro, gevaarlijk: true, scheiding: true,
       onClick: () => setShowCrediteer(true),
     },
     canManage && {
@@ -1151,29 +1157,47 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
     const geimporteerd = isGeimporteerdeFactuur(f);
     const verlopen = isVerlopen(f);
     return [
-      { label: 'Factuur bekijken', onClick: () => setViewFactuur(f) },
+      { label: 'Factuur bekijken', icon: I.eye, onClick: () => setViewFactuur(f) },
       canManage && !geimporteerd && {
-        label: 'Verstuur per mail', icon: <Send size={14} />,
+        label: 'Verstuur per mail', icon: I.send,
         onClick: () => setSendMailFactuur({ factuur: f, templateType: 'factuur' }),
       },
       canManage && !geimporteerd && verlopen && !f.herinnering1VerstuurdAt && {
-        label: 'Herinnering 1 sturen', icon: <Send size={14} />,
+        label: 'Herinnering 1 sturen', icon: I.clock,
         onClick: () => setSendMailFactuur({ factuur: f, templateType: 'herinnering_1' }),
       },
       canManage && !geimporteerd && verlopen && f.herinnering1VerstuurdAt && !f.herinnering2VerstuurdAt && {
-        label: 'Herinnering 2 sturen', icon: <Send size={14} />,
+        label: 'Herinnering 2 sturen', icon: I.clock,
         onClick: () => setSendMailFactuur({ factuur: f, templateType: 'herinnering_2' }),
       },
-      canManage && !geimporteerd && {
+      // Wijzigen verdwijnt zodra de factuur verstuurd is: dan is het een
+      // boekstuk. Kopiëren blijft, want een nieuwe factuur maken mag altijd.
+      canManage && !geimporteerd && !isFactuurLocked(f) && {
         label: 'Factuur wijzigen', icon: I.edit, onClick: () => setEditFactuur(f),
+      },
+      canManage && !geimporteerd && {
+        label: 'Kopiëren naar nieuwe factuur', icon: I.copy, onClick: () => handleKopieer(f),
       },
       // Crediteren zat alleen op de kaart; nu ook hier, met dezelfde voorwaarden.
       canManage && !geimporteerd && ['verzonden', 'betaald'].includes(f.status)
         && !f.gecrediteerd && !f.isCredit && {
-        label: 'Crediteer factuur', gevaarlijk: true, scheiding: true,
+        label: 'Crediteer factuur', icon: I.euro, gevaarlijk: true, scheiding: true,
         onClick: () => handleCrediteerFromMenu(f),
       },
     ].filter(Boolean);
+  };
+
+  // Kopiëren naar een nieuwe conceptfactuur. Geen versie van het origineel:
+  // een verstuurde factuur is een boekstuk en blijft onaangeroerd.
+  const handleKopieer = async f => {
+    try {
+      const nieuw = await kopieerFactuur(f.id);
+      toast.success(`Factuur ${nieuw.nummer} aangemaakt als concept`);
+      await load();
+      setEditFactuur(nieuw);
+    } catch (err) {
+      toast.error(err.message || 'Kopiëren mislukt');
+    }
   };
 
   const handleDelete = async f => {
@@ -1376,6 +1400,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
           onSendMail={(f, type) => { setSendMailFactuur({ factuur: f, templateType: type || 'factuur' }); setViewFactuur(null); }}
           onEdit={f => setEditFactuur(f)}
           onDelete={f => handleDelete(f)}
+          onCopy={f => handleKopieer(f)}
         />
       )}
       {planModal}

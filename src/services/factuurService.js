@@ -423,3 +423,50 @@ export async function createFactuurRegel(input) {
   if (error) throw error
   return toRegel(data)
 }
+
+/**
+ * Kopieert een factuur naar een NIEUWE, losse conceptfactuur.
+ *
+ * Nadrukkelijk géén versiebeheer zoals bij offertes. Een verstuurde offerte mag
+ * je vervangen door een v2 — daar is niets mee geboekt. Een verstuurde factuur
+ * is een boekstuk: die staat in je administratie, mogelijk bij de Belastingdienst
+ * in een aangifte, en bij de klant in zijn boekhouding. Klopt er iets niet, dan
+ * crediteer je hem en stuur je een nieuwe. Aanpassen of "vervangen" mag niet.
+ *
+ * Vandaar: een eigen nieuw nummer, status concept, en géén verwijzing terug naar
+ * het origineel. Het origineel blijft volledig onaangeroerd.
+ */
+export async function kopieerFactuur(bronId) {
+  const { data: bron, error: bronErr } = await supabase
+    .from('facturen').select('*').eq('id', bronId).single()
+  if (bronErr) throw bronErr
+
+  const regels = await getFactuurRegels(bronId)
+  const nummer = await generateFactuurNummer()
+
+  const nieuw = await createFactuur({
+    customer_id: bron.customer_id,
+    project_id: bron.project_id,
+    nummer,
+    factuurdatum: new Date().toISOString().slice(0, 10),
+    betaaltermijn_dagen: bron.betaaltermijn_dagen,
+    notities: bron.notities,
+    // Bewust NIET meegenomen: status, betaald_op, snelstart_id,
+    // externe_referentie, credit_van_factuur_id, de branding-snapshot en de
+    // herinneringsdatums. Dit is een nieuwe factuur, geen doorslag van een oude.
+  })
+
+  for (const r of regels) {
+    await createFactuurRegel({
+      factuur_id: nieuw.id,
+      type: r.type,
+      omschrijving: r.omschrijving,
+      aantal: r.aantal,
+      eenheidsprijs: r.eenheidsprijs,
+      btw_pct: r.btwPct,
+      btw_regime: r.btwRegime,
+      volgorde: r.volgorde,
+    })
+  }
+  return nieuw
+}
