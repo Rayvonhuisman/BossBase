@@ -12,18 +12,14 @@ export async function getBtwPeriodes(periodeType = 'kwartaal') {
 }
 
 export async function syncBtwData(periodeType = 'kwartaal') {
-  // Beide boekhoudkoppelingen best-effort: de niet-gekoppelde provider
-  // antwoordt "niet geconfigureerd" en doet niets. SnelStart negeert
-  // periode_type — de periode zit in de aangifte zelf.
-  const [mb, ss] = await Promise.allSettled([
-    supabase.functions.invoke('moneybird-sync-btw', { body: { periode_type: periodeType } }),
-    supabase.functions.invoke('snelstart-sync-btw', { body: {} }),
-  ])
-  const results = [mb, ss]
-    .filter(r => r.status === 'fulfilled' && !r.value.error)
-    .map(r => r.value.data)
-  const ok = results.find(d => d?.success)
-  if (ok) return ok
-  if (results.length) return results[0]
-  throw new Error('BTW-synchronisatie mislukt')
+  // Alleen Moneybird. SnelStart stond hier ook in, maar de scope
+  // btwaangiftes:read komt er niet: die aanroep kon alleen maar 403 opleveren.
+  // Daarmee vervalt ook de reden voor de allSettled-constructie — er is nog maar
+  // één bron, dus een fout mag gewoon naar boven.
+  const { data, error } = await supabase.functions.invoke('moneybird-sync-btw', {
+    body: { periode_type: periodeType },
+  })
+  if (error) throw error
+  if (!data) throw new Error('BTW-synchronisatie mislukt')
+  return data
 }

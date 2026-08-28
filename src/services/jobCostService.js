@@ -232,7 +232,9 @@ export async function deleteJobCost(id) {
   if (cost?.werkbon_materiaal_id) {
     const { error } = await supabase.from('werkbon_materialen').delete().eq('id', cost.werkbon_materiaal_id)
     if (error) throw error
-    return
+    // Spiegelregels van een werkbon komen niet uit de boekhouding: geen prullenbak,
+    // dus ook niets te waarschuwen.
+    return null
   }
   const { error } = await supabase.from('job_costs').delete().eq('id', id)
   if (error) throw error
@@ -245,9 +247,13 @@ export async function deleteJobCost(id) {
   // het FACTUURnummer, dus één regel weggooien onderdrukt de hele factuur. Dat
   // is de bedoeling: anders zou de verwijderde regel bij de volgende sync toch
   // terugkomen, samen met een dubbele van de regels die je liet staan.
+  //
+  // Retourwaarde in plaats van een throw: de kostenpost is echt weg, dus het
+  // scherm mag sluiten — maar een mislukte prullenbak moet de gebruiker zien.
   if (cost?.externe_referentie) {
-    await negeerBijImport('kost', cost.externe_referentie, 'verwijderd in BossBase').catch(() => {})
+    return await negeerBijImport('kost', cost.externe_referentie, 'verwijderd in BossBase')
   }
+  return null
 }
 
 // ── PROJECT-KOSTEN (direct + via werkbon, één keer geteld) ───────────────────

@@ -287,9 +287,15 @@ export async function deleteFactuur(id) {
   // Onthouden dat deze factuur hier bewust weg is, zodat de import hem niet
   // terughaalt. Alleen zinvol bij een geïmporteerde factuur; een eigen factuur
   // wordt sowieso nooit opgehaald.
+  //
+  // De factuur is op dit punt echt verwijderd; lukt de prullenbak niet, dan is
+  // dat een waarschuwing en geen mislukte verwijdering. Vandaar een retourwaarde
+  // in plaats van een throw: de lijst mag bijgewerkt worden, de gebruiker moet
+  // de melding zien.
   if (bestaand?.externe_referentie) {
-    await negeerBijImport('factuur', bestaand.externe_referentie, 'verwijderd in BossBase').catch(() => {})
+    return await negeerBijImport('factuur', bestaand.externe_referentie, 'verwijderd in BossBase')
   }
+  return null
 }
 
 export async function getFactuurRegels(factuurId) {

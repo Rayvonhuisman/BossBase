@@ -1134,9 +1134,10 @@ export function CustomersPage({ openCustomer }) {
   const remove = async id => {
     if (!confirm('Weet je zeker dat je deze klant wilt verwijderen?')) return;
     try {
-      await deleteCustomer(id);
+      const waarschuwing = await deleteCustomer(id);
       setCustomers(cs => cs.filter(c => c.id !== id));
-      toast.success('Klant verwijderd');
+      if (waarschuwing) toast.error(waarschuwing, { duration: 10000 });
+      else toast.success('Klant verwijderd');
       bumpRefresh?.();
     } catch (err) {
       toast.error(err.message || 'Verwijderen mislukt');

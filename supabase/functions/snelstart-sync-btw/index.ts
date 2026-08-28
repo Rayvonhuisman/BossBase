@@ -2,6 +2,24 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient, isScheduledCall } from "../_shared/scheduledSync.ts"
 import { ssFetchAll, forEachSnelStartCompany } from "../_shared/snelstart.ts"
 
+// ⚠️  NIET IN GEBRUIK — deze functie wordt nergens meer aangeroepen (28-08-2026).
+//
+// De koppelsleutel krijgt de scope `btwaangiftes:read` niet, en zonder die scope
+// antwoordt SnelStart op /btwaangiftes gegarandeerd met:
+//   403 {"error": "insufficient access rights. required scopes for this
+//        operation are: btwaangiftes:read"}
+// Dat leverde bij élke syncronde een foutmelding in de console op voor iets dat
+// niet kon slagen. De aanroepen zijn daarom weggehaald uit
+// src/services/accountingService.js (importKostenVanuitSnelStart) en
+// src/services/btwService.js (syncBtwData, nu Moneybird-only), en de knop
+// "Ophalen uit boekhouding" op Financiën is alleen nog zichtbaar bij een
+// Moneybird-koppeling.
+//
+// De code blijft staan voor als de scope ooit wél beschikbaar komt: dan is het
+// terugzetten van die twee aanroepen genoeg. Er staat geen cron op. De
+// BTW-indicatie in BossBase rekent ondertussen met onze eigen facturen en
+// kosten en heeft deze functie niet nodig.
+//
 // Voedt het btw-overzicht (btw_periodes) vanuit de ECHTE btw-aangiftes in
 // SnelStart: GET /v2/btwaangiftes (OData, scope btwaangiftes:read). Anders dan
 // de Moneybird-variant (die zelf facturen optelt) zijn dit de aangiftecijfers

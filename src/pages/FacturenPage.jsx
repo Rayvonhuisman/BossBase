@@ -639,6 +639,11 @@ function paperclipCfg(factuur, heeftDocument) {
 // ── VIEW FACTUUR MODAL ────────────────────────────────────────────────────────
 
 function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail, onEdit, onDelete, onCopy }) {
+  // Deze component gebruikt toast op vijf plekken maar riep de hook nooit aan.
+  // Elke foutmelding hier gaf daardoor een ReferenceError in plaats van de
+  // melding zelf — onder meer achter "Origineel document uit de boekhouding
+  // openen", precies op het moment dat er iets uit te leggen viel.
+  const toast = useToast();
   const { company, profile } = useProfile();
   // Betaalherinneringen zijn een feature (Groei+). Zonder die feature tonen we
   // de knoppen niet; server-side blokkeert een trigger op facturen het zetten
@@ -1203,9 +1208,12 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
   const handleDelete = async f => {
     if (!window.confirm(`Factuur ${f.nummer} verwijderen?`)) return;
     try {
-      await deleteFactuur(f.id);
+      // De factuur is weg zodra deleteFactuur klaar is; een waarschuwing gaat
+      // alleen over de prullenbak. De lijst werken we dus hoe dan ook bij.
+      const waarschuwing = await deleteFactuur(f.id);
       setFacturen(prev => prev.filter(x => x.id !== f.id));
-      toast.success('Factuur verwijderd');
+      if (waarschuwing) toast.error(waarschuwing, { duration: 10000 });
+      else toast.success('Factuur verwijderd');
     } catch (err) { toast.error(err.message || 'Verwijderen mislukt'); }
   };
 

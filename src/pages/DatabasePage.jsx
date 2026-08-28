@@ -744,10 +744,11 @@ export function DatabasePage({ openCustomer }) {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await deleteCustomer(deleteTarget.id);
+      const waarschuwing = await deleteCustomer(deleteTarget.id);
       setCustomers(cs => cs.filter(c => c.id !== deleteTarget.id));
       setSelected(s => { const n = new Set(s); n.delete(deleteTarget.id); return n; });
-      toast.success(`${deleteTarget.name} verwijderd`);
+      if (waarschuwing) toast.error(waarschuwing, { duration: 10000 });
+      else toast.success(`${deleteTarget.name} verwijderd`);
       setDeleteTarget(null);
     } catch { toast.error('Verwijderen mislukt'); }
     finally { setDeleting(false); }

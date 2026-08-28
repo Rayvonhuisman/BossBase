@@ -173,9 +173,10 @@ export default function LeveranciersPage({ openLeverancier }) {
     }
     if (!confirm('Weet je zeker dat je deze leverancier wilt verwijderen?')) return;
     try {
-      await deleteLeverancier(l.id);
+      const waarschuwing = await deleteLeverancier(l.id);
       setLeveranciers(ls => ls.filter(x => x.id !== l.id));
-      toast.success('Leverancier verwijderd');
+      if (waarschuwing) toast.error(waarschuwing, { duration: 10000 });
+      else toast.success('Leverancier verwijderd');
       bumpRefresh?.();
     } catch (err) {
       toast.error(err.message || 'Verwijderen mislukt');

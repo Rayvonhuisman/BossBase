@@ -214,9 +214,12 @@ export async function importKostenVanuitSnelStart() {
     body: {},
   })
   if (error) throw error
-  // Btw-overzicht bijwerken vanuit de echte SnelStart-aangiftes (faalt stil,
-  // bijv. zolang de btwaangiftes:read-scope ontbreekt op de sleutel).
-  await supabase.functions.invoke('snelstart-sync-btw', { body: {} }).catch(() => {})
+  // Hier stond een aanroep van snelstart-sync-btw, om het btw-overzicht bij te
+  // werken uit de echte aangiftes. Die is eruit: de scope btwaangiftes:read komt
+  // er niet, dus SnelStart antwoordde gegarandeerd met 403 — bij elke syncronde
+  // een foutmelding in de console voor iets dat nooit kon slagen. De
+  // BTW-indicatie op Financiën rekent met onze eigen facturen en kosten en heeft
+  // deze aanroep niet nodig.
   return data
 }
 
@@ -392,19 +395,55 @@ export async function haalAllesOpnieuwOp() {
   return { contacten, ...boekingen }
 }
 
+const PRULLENBAK_LABEL = {
+  klant: 'De klant',
+  leverancier: 'De leverancier',
+  factuur: 'De factuur',
+  kost: 'De kostenpost',
+}
+
 /**
  * Onthoudt dat een geïmporteerd record hier bewust is verwijderd. Zonder dit
  * komt het bij elke sync terug: de import kijkt naar wat er in SnelStart staat,
  * niet naar wat de gebruiker hier heeft besloten.
  *
+ * Mislukt dat schrijven, dan is het record hier wél weg maar staat het niet in
+ * de prullenbak — bij de volgende sync komt het gewoon terug. Dat is geen
+ * detail voor de logs: eerder werd de fout niet eens uitgelezen en stond er
+ * "Verwijderd" op het scherm terwijl het record de volgende sync terugkwam.
+ * Daarom geeft deze functie een zin terug die de aanroeper moet tonen.
+ *
+ * De rauwe databasefout gaat naar de console en niet naar de gebruiker: bij een
+ * policy-fout bevat die de tekst "row-level security", en toast.error vertaalt
+ * zo'n melding via nettePlanFout naar het abonnementsverhaal — dan zou de
+ * eigenlijke waarschuwing van het scherm verdwijnen.
+ *
  * @param soort  'klant' | 'leverancier' | 'factuur' | 'kost'
+ * @returns {Promise<string|null>} null als het goed ging, anders de melding
+ *   voor de gebruiker.
  */
 export async function negeerBijImport(soort, externeReferentie, reden) {
-  if (!externeReferentie) return
+  if (!externeReferentie) return null
   const externeId = String(externeReferentie).replace(/^snelstart_/, '').split('_')[0]
-  if (!externeId) return
-  const companyId = await getCompanyId()
-  await supabase.from('import_genegeerd')
-    .upsert({ company_id: companyId, provider: 'snelstart', soort, externe_id: externeId, reden: reden || null },
-            { onConflict: 'company_id,provider,soort,externe_id' })
+  if (!externeId) return null
+
+  const melding = `${PRULLENBAK_LABEL[soort] || 'Het record'} is verwijderd, maar kon niet in de `
+    + 'prullenbak worden gezet. Bij de volgende synchronisatie met de boekhouding komt hij terug.'
+
+  try {
+    const companyId = await getCompanyId()
+    const { error } = await supabase.from('import_genegeerd')
+      .upsert({ company_id: companyId, provider: 'snelstart', soort, externe_id: externeId, reden: reden || null },
+              { onConflict: 'company_id,provider,soort,externe_id' })
+    if (error) {
+      console.error('Prullenbak niet bijgewerkt:', error.message)
+      return melding
+    }
+    return null
+  } catch (err) {
+    // getCompanyId() kan ook omvallen (geen sessie meer). Zelfde gevolg voor de
+    // gebruiker, dus zelfde melding.
+    console.error('Prullenbak niet bijgewerkt:', err?.message || err)
+    return melding
+  }
 }

@@ -32,7 +32,13 @@ async function syncCompany(
   let bijgewerkt = 0
   let levGeimporteerd = 0
   let levBijgewerkt = 0
+  // Klanten en leveranciers tellen apart. Ze deelden één teller, en die werd
+  // weggeschreven in de klantenregel VOORDAT de leverancierslus liep — een
+  // leverancier die de prullenbak tegenhield kwam daardoor in geen enkel log
+  // terecht.
   let overgeslagen = 0
+  let levSysteemrelaties = 0
+  let levOvergeslagen = 0
 
   // ── A: SNELSTART → BOSSBASE ──────────────────────────────────────────────
   // Systeemrelaties van SnelStart zelf overslaan. Elke administratie heeft er
@@ -134,8 +140,8 @@ async function syncCompany(
   for (const relatie of levRelaties) {
     const naam = (relatie.naam || '').trim()
     if (!naam) continue
-    if (isSysteemrelatie(relatie)) { systeemrelaties++; continue }
-    if (levGenegeerd.has(String(relatie.id))) { overgeslagen++; continue }
+    if (isSysteemrelatie(relatie)) { levSysteemrelaties++; continue }
+    if (levGenegeerd.has(String(relatie.id))) { levOvergeslagen++; continue }
 
     const velden = relatieNaarVelden(relatie)
     const bestaand = levOpId.get(String(relatie.id)) ?? levOpNaam.get(naam.toLowerCase()) ?? null
@@ -160,7 +166,8 @@ async function syncCompany(
       }
     }
   }
-  console.log('Leveranciers geïmporteerd:', levGeimporteerd, 'bijgewerkt:', levBijgewerkt)
+  console.log('Leveranciers geïmporteerd:', levGeimporteerd, 'bijgewerkt:', levBijgewerkt,
+    `(${levSysteemrelaties} systeemrelaties, ${levOvergeslagen} uit de prullenbak overgeslagen)`)
 
   // ── B: BOSSBASE → SNELSTART ──────────────────────────────────────────────
   const { data: unsynced } = await supabase
@@ -198,8 +205,15 @@ async function syncCompany(
 
   return {
     imported, exported, adresWaarschuwingen, systeemrelaties, bijgewerkt,
-    leveranciers: { geimporteerd: levGeimporteerd, bijgewerkt: levBijgewerkt },
-    overgeslagenUitPrullenbak: overgeslagen,
+    leveranciers: {
+      geimporteerd: levGeimporteerd,
+      bijgewerkt: levBijgewerkt,
+      systeemrelaties: levSysteemrelaties,
+      overgeslagenUitPrullenbak: levOvergeslagen,
+    },
+    klantenOvergeslagenUitPrullenbak: overgeslagen,
+    // Het totaal blijft het veld dat de UI toont; de splitsing staat erboven.
+    overgeslagenUitPrullenbak: overgeslagen + levOvergeslagen,
   }
 }
 

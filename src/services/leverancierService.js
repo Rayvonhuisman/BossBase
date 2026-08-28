@@ -112,9 +112,13 @@ export async function deleteLeverancier(id) {
 // terughaalt. Zonder deze regel komt alles wat je verwijdert bij de volgende
 // sync gewoon terug — de import kijkt naar wat er in SnelStart staat, niet naar
 // wat jij hebt besloten.
+//
+// Retourwaarde in plaats van een throw: de leverancier is echt weg, dus de lijst
+// mag bijgewerkt worden — maar een mislukte prullenbak moet de gebruiker zien.
   if (bestaand?.snelstart_id) {
-    await negeerBijImport('leverancier', bestaand.snelstart_id, 'verwijderd in BossBase').catch(() => {})
+    return await negeerBijImport('leverancier', bestaand.snelstart_id, 'verwijderd in BossBase')
   }
+  return null
 }
 
 // Hoeveel kosten hangen er aan deze leveranciers? Voedt de kolom "kosten" in het

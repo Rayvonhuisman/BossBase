@@ -144,7 +144,7 @@ async function stuurFactuurPdfsNa(
 
 async function importKosten(
   supabase: any, companyId: string, clientKey: string,
-): Promise<number> {
+): Promise<{ imported: number; overgeslagen: number }> {
   // Bestaande referenties voor deduplicatie. Regels van één factuur krijgen
   // refs `snelstart_{id}_{n}` (fallback: `snelstart_{id}`); een factuur geldt
   // als geïmporteerd zodra er één ref van bestaat.
@@ -193,6 +193,13 @@ async function importKosten(
   const facturen = await ssFetchAll(clientKey, '/inkoopfacturen')
   const toImport = facturen.filter((f: any) =>
     f.id && !importedFactuurIds.has(String(f.id)) && !isVanOnszelf(f) && !genegeerd.has(String(f.id)))
+
+  // Apart tellen wat de prullenbak tegenhoudt. Zonder deze teller was een
+  // overgeslagen inkoopfactuur nergens te zien: je las "0 geïmporteerd" en kon
+  // niet weten of er niets nieuws was of dat je eigen verwijdering hem
+  // tegenhield. Dezelfde voorwaarden als hierboven, alleen de laatste omgekeerd.
+  const overgeslagen = facturen.filter((f: any) =>
+    f.id && !importedFactuurIds.has(String(f.id)) && !isVanOnszelf(f) && genegeerd.has(String(f.id))).length
 
   // InkoopfactuurModel geeft alleen relatie.id. Die vertalen we niet meer naar
   // een stuk tekst maar naar een ECHTE leverancier: opzoeken op snelstart_id,
@@ -267,8 +274,9 @@ async function importKosten(
     if (insertErr) throw insertErr
     imported = toImport.length
   }
-  console.log(`SnelStart inkoopfacturen geïmporteerd: ${imported} (${rows.length} kostenregels)`)
-  return imported
+  console.log(`SnelStart inkoopfacturen geïmporteerd: ${imported} `
+    + `(${rows.length} kostenregels, ${overgeslagen} uit de prullenbak overgeslagen)`)
+  return { imported, overgeslagen }
 }
 
 
@@ -296,7 +304,7 @@ async function importKosten(
 // 'snelstart_<id>', waarop de export ze overslaat.
 async function importFacturen(
   supabase: any, companyId: string, clientKey: string, meldingen: string[],
-): Promise<number> {
+): Promise<{ imported: number; overgeslagen: number }> {
   const genegeerd = await getGenegeerd(supabase, companyId, 'factuur')
 
   // Wat we al kennen: op externe referentie (geïmporteerd) én op snelstart_id
@@ -455,7 +463,7 @@ async function importFacturen(
   }
 
   console.log('Verkoopfacturen geïmporteerd:', imported, `(${overgeslagen} uit de prullenbak overgeslagen)`)
-  return imported
+  return { imported, overgeslagen }
 }
 
 // Export van handmatige kosten: elke BossBase-kostenregel zonder externe bron
@@ -586,6 +594,7 @@ async function syncCompany(
 ): Promise<{
   exported: { verkoopboekingen: number; inkoopboekingen: number };
   imported: { inkoopfacturen: number; verkoopfacturen: number };
+  overgeslagenUitPrullenbak: number;
   kostenResterend: number;
   fouten: string[];
   meldingen: string[];
@@ -593,12 +602,13 @@ async function syncCompany(
   const factuurFouten: string[] = []
   const factuurMeldingen: string[] = []
   const exported = await exportFacturen(supabase, companyId, clientKey, paidOnly, factuurFouten, factuurMeldingen)
-  const imported = importCosts ? await importKosten(supabase, companyId, clientKey) : 0
+  const leeg = { imported: 0, overgeslagen: 0 }
+  const kostenImport = importCosts ? await importKosten(supabase, companyId, clientKey) : leeg
   // Verkoopfacturen ophalen hangt aan dezelfde instelling: wie zijn boekhouding
   // als bron wil zien, wil dat voor kosten én omzet.
-  const importedFacturen = importCosts
+  const factuurImport = importCosts
     ? await importFacturen(supabase, companyId, clientKey, factuurMeldingen)
-    : 0
+    : leeg
   const kosten = importCosts
     ? await exportKosten(supabase, companyId, clientKey)
     : { exported: 0, resterend: 0 }
@@ -611,7 +621,10 @@ async function syncCompany(
 
   return {
     exported: { verkoopboekingen: exported, inkoopboekingen: kosten.exported },
-    imported: { inkoopfacturen: imported, verkoopfacturen: importedFacturen },
+    imported: { inkoopfacturen: kostenImport.imported, verkoopfacturen: factuurImport.imported },
+    // Wat er is overgeslagen omdat het hier ooit is weggegooid. Naar de UI toe
+    // één getal; in de logs staat het per soort uitgesplitst.
+    overgeslagenUitPrullenbak: kostenImport.overgeslagen + factuurImport.overgeslagen,
     kostenResterend: kosten.resterend,
     // Wat er per regel misging — zodat de gebruiker niet naar "0" zit te kijken.
     fouten: [...factuurFouten, ...kosten.fouten],

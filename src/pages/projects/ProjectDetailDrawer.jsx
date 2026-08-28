@@ -676,8 +676,9 @@ function KostenTab({ project, canManage }) {
   const remove = async (id) => {
     if (!window.confirm('Deze kostenpost verwijderen?')) return;
     try {
-      await deleteJobCost(id);
+      const waarschuwing = await deleteJobCost(id);
       load();
+      if (waarschuwing) toast.error(waarschuwing, { duration: 10000 });
     } catch (e) {
       toast.error(e.message || 'Verwijderen mislukt');
     }

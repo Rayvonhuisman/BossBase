@@ -894,6 +894,11 @@ export function InstellingenPage() {
         if (uit.inkoopboekingen) delen.push(`${uit.inkoopboekingen} kosten naar SnelStart geboekt`);
         if (inn.inkoopfacturen) delen.push(`${inn.inkoopfacturen} inkoopfacturen opgehaald`);
         if (inn.verkoopfacturen) delen.push(`${inn.verkoopfacturen} verkoopfacturen opgehaald`);
+        // Wat de prullenbak tegenhield: anders leest "0 opgehaald" als een
+        // mislukking terwijl het precies is wat je zelf hebt gevraagd.
+        if (result.overgeslagenUitPrullenbak) {
+          delen.push(`${result.overgeslagenUitPrullenbak} overgeslagen (eerder verwijderd)`);
+        }
         if (!delen.length) delen.push('niets te synchroniseren — alles was al bij');
         toast.success(delen.join(', '));
         // Kosten gaan per batch van 50. Zonder deze melding leest een halve

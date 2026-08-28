@@ -813,6 +813,7 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
   useEffect(() => { listLeveranciers({ inclusiefInactief: false }).then(setLeverancierOpties).catch(() => {}); }, []);
   const [savedField, setSavedField] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const toast = useToast();
 
   const [werkbonnen, setWerkbonnen] = useState([]);
   const [projecten, setProjecten] = useState([]);
@@ -892,10 +893,16 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
     if (!window.confirm(msg)) return;
     setDeleting(true);
     try {
-      await deleteJobCost(cost.id);
+      // De kostenpost is weg zodra deleteJobCost klaar is; een waarschuwing gaat
+      // alleen over de prullenbak. Het scherm sluit dus hoe dan ook.
+      const waarschuwing = await deleteJobCost(cost.id);
       onDelete?.(cost.id);
       onClose();
-    } catch { setDeleting(false); }
+      if (waarschuwing) toast.error(waarschuwing, { duration: 10000 });
+    } catch (err) {
+      toast.error(err.message || 'Verwijderen mislukt');
+      setDeleting(false);
+    }
   };
 
   // Leverancier is verplicht omdat de kostenpost onder die relatie in de
@@ -1321,16 +1328,18 @@ export function RevenuePage() {
 
   React.useEffect(() => {
     setLoading(true);
-    Promise.all([listCustomers(), listJobCosts(), getFacturen(), getOffertes(), getAllFactuurRegels(), getConnection(), getConnection('snelstart')])
-      .then(([custData, costData, facturenData, offertesData, regelsData, mbConn, ssConn]) => {
+    Promise.all([listCustomers(), listJobCosts(), getFacturen(), getOffertes(), getAllFactuurRegels(), getConnection()])
+      .then(([custData, costData, facturenData, offertesData, regelsData, mbConn]) => {
         setCustomers(custData);
         setCostsData(costData);
         setFacturen(facturenData);
         setOffertes(offertesData);
         setAllRegels(regelsData);
-        // Boekhoudkoppeling voor de BTW-widget: Moneybird óf SnelStart — beide
-        // voeden btw_periodes, de widget is provider-onafhankelijk.
-        setMbConnection(mbConn?.connected ? mbConn : (ssConn?.connected ? ssConn : mbConn));
+        // Alleen Moneybird: dat is de enige koppeling die btw_periodes nog vult.
+        // SnelStart stond hier als terugval, maar snelstart-sync-btw is eruit —
+        // de scope btwaangiftes:read komt er niet. Een SnelStart-klant zag
+        // daardoor een knop "Ophalen uit boekhouding" die niets kon ophalen.
+        setMbConnection(mbConn);
       }).catch(() => {}).finally(() => setLoading(false));
   }, [refreshKey]);
 
@@ -1474,8 +1483,8 @@ export function RevenuePage() {
       setBtwPerioden(data);
       toast.success('BTW-gegevens opgehaald uit de boekhouding');
     } catch (err) {
-      // Faalt bewust zacht: zonder de scope btwaangiftes:read geeft SnelStart
-      // een 403. De eigen indicatie blijft gewoon staan.
+      // Faalt bewust zacht: de eigen indicatie hieronder blijft gewoon staan,
+      // die hangt niet aan een koppeling.
       toast.error(err.message || 'Ophalen uit de boekhouding is niet gelukt — de indicatie hieronder blijft werken');
     }
     finally { setBtwSyncing(false); }
@@ -1594,16 +1603,18 @@ export function RevenuePage() {
 
       {/* ── BTW-indicatie ──────────────────────────────────────────────────
            Berekend uit de eigen facturen en kosten, dus ook zonder
-           boekhoudkoppeling bruikbaar. Staat er een koppeling én levert die
-           cijfers, dan komen die ernaast te staan; die winnen visueel, want
-           dat is de echte aangifte. Bewust GEEN aangifteknop of -export. */}
+           boekhoudkoppeling bruikbaar. Staat er een MONEYBIRD-koppeling én
+           levert die cijfers, dan komen die ernaast te staan; die winnen
+           visueel, want dat is de echte aangifte. SnelStart voedt deze kolom
+           niet (geen btwaangiftes:read-scope), dus daar blijft het bij de eigen
+           indicatie. Bewust GEEN aangifteknop of -export. */}
       {btwPlan.has('btw_overzicht') && (
       <div className="tw afu3" style={{ marginBottom: 20 }}>
         <div className="tw-hd" style={{ flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
           <div>
             <div className="card-title">BTW-indicatie</div>
             <div style={{ fontSize: '.75rem', color: 'var(--dmu)', marginTop: 2 }}>
-              Berekend uit je facturen en kosten in BossBase. Dit is geen aangifte — je boekhouder of SnelStart is leidend.
+              Berekend uit je facturen en kosten in BossBase. Dit is geen aangifte — je boekhouder of boekhoudpakket is leidend.
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
