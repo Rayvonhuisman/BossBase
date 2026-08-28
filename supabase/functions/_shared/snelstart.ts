@@ -723,6 +723,23 @@ export async function forEachSnelStartCompany(
 //
 // Contactpersoon zit in het ADRESOBJECT (AdresModel.contactpersoon), niet op de
 // relatie zelf; daar zocht ik hem eerst tevergeefs.
+// SnelStart bewaart een Nederlands btw-nummer ZONDER landcode: NL123456782B01
+// komt terug als 123456782B01. Dat is geen fout van ons, maar het heeft drie
+// gevolgen: het nummer ontsnapt aan onze elfproef (valideerBtwNummer laat alles
+// zonder NL-prefix ongemoeid — "buitenlands, niet ons oordeel"), hetzelfde
+// bedrijf staat er anders in naargelang je het typte of ophaalde, en bij een
+// volgende export sturen we de prefixloze vorm terug.
+//
+// Alleen aanvullen als het verder exact de Nederlandse vorm heeft: 9 cijfers,
+// een B, 2 cijfers. Een buitenlands nummer draagt zijn eigen landcode en blijft
+// letterlijk staan zoals het binnenkwam.
+export function metNlPrefix(waarde: unknown): string | null {
+  const ruw = String(waarde ?? '').trim()
+  if (!ruw) return null
+  const kaal = ruw.replace(/[\s.\-]/g, '').toUpperCase()
+  return /^\d{9}B\d{2}$/.test(kaal) ? `NL${kaal}` : ruw
+}
+
 export function relatieNaarVelden(relatie: any): Record<string, unknown> {
   const adres = relatie?.vestigingsAdres || relatie?.correspondentieAdres || null
   return {
@@ -735,7 +752,7 @@ export function relatieNaarVelden(relatie: any): Record<string, unknown> {
     city: adres?.plaats || null,
     contactpersoon: adres?.contactpersoon || null,
     kvk_number: relatie?.kvkNummer || null,
-    btw_number: relatie?.btwNummer || null,
+    btw_number: metNlPrefix(relatie?.btwNummer),
     iban: relatie?.iban || null,
     website: relatie?.websiteUrl || null,
     notities: relatie?.memo || null,
