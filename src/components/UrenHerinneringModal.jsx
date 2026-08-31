@@ -5,7 +5,8 @@ import { useToast } from '../lib/toast.jsx';
 import { getBedrijfsinstellingen } from '../services/instellingenService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
 import { listActivities } from '../services/activityService.js';
-import { getUrenregistratie, createUrenregel, calculateHours } from '../services/urenService.js';
+import { getUrenregistratie, createUrenregel, berekenUren } from '../services/urenService.js';
+import { PauzeKnoppen, rondAfOpVijf } from './UrenVelden.jsx';
 
 // ── Uren-herinnering-pop-up ───────────────────────────────────────────────────
 // Herinnert MEDEWERKERS (niet admin/planner) eraan hun uren in te vullen voor een
@@ -149,9 +150,11 @@ export function UrenHerinneringModal({ navigatePage }) {
   // Boekt één dag direct vanuit de pop-up. Werkbon-koppeling laat de urenservice
   // klant/project automatisch afleiden (project-nacalculatie blijft kloppen).
   const saveEntry = async (entry) => {
-    const uren = calculateHours(entry.start, entry.eind);
+    const uren = berekenUren(entry.start, entry.eind, entry.pauze || 0);
     if (!uren || uren <= 0) {
-      toast.error('Vul een geldige start- en eindtijd in (eind na start)');
+      toast.error(entry.pauze
+        ? 'Er blijft geen tijd over na aftrek van de pauze'
+        : 'Vul een geldige start- en eindtijd in (eind na start)');
       return;
     }
     updateEntry(entry.date, { saving: true });
@@ -161,6 +164,7 @@ export function UrenHerinneringModal({ navigatePage }) {
         datum: entry.date,
         start_tijd: entry.start,
         eind_tijd: entry.eind,
+        pauze_minuten: entry.pauze || 0,
         werkbon_id: entry.werkbonId || null,
       });
       toast.success(`${uren} uur geboekt voor ${fmtDag(entry.date)}`);
@@ -198,7 +202,7 @@ export function UrenHerinneringModal({ navigatePage }) {
           style={{ maxHeight: '58vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}
         >
           {entries.map(e => {
-            const uren = calculateHours(e.start, e.eind);
+            const uren = berekenUren(e.start, e.eind, e.pauze || 0);
             return (
               <div
                 key={e.date}
@@ -221,16 +225,30 @@ export function UrenHerinneringModal({ navigatePage }) {
                     <label>Starttijd</label>
                     <input
                       type="time"
+                      step="300"
                       value={e.start}
                       onChange={ev => updateEntry(e.date, { start: ev.target.value })}
+                      onBlur={ev => updateEntry(e.date, { start: rondAfOpVijf(ev.target.value) })}
                     />
                   </div>
                   <div className="f" style={{ flex: '1 1 110px', minWidth: 100 }}>
                     <label>Eindtijd</label>
                     <input
                       type="time"
+                      step="300"
                       value={e.eind}
                       onChange={ev => updateEntry(e.date, { eind: ev.target.value })}
+                      onBlur={ev => updateEntry(e.date, { eind: rondAfOpVijf(ev.target.value) })}
+                    />
+                  </div>
+                  {/* Ook hier de pauze: anders boekt de herinnering nog steeds
+                      een halfuur te veel per dag. */}
+                  <div className="f" style={{ flex: '1 1 100%' }}>
+                    <label>Pauze (minuten)</label>
+                    <PauzeKnoppen
+                      waarde={e.pauze || 0}
+                      onChange={v => updateEntry(e.date, { pauze: v })}
+                      disabled={e.saving}
                     />
                   </div>
                   <button

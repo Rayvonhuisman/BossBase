@@ -3,8 +3,12 @@ import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { useUrlTab } from '../hooks/useUrlTab.js';
 import {
-  getUrenregistratie, createUrenregel, updateUrenregel, deleteUrenregel,
+  getUrenregistratie, createUrenregel, updateUrenregel, deleteUrenregel, berekenUren,
 } from '../services/urenService.js';
+import { listUursoorten } from '../services/uursoortService.js';
+import {
+  PauzeKnoppen, UursoortKeuze, standaardUursoortId, rondAfOpVijf,
+} from '../components/UrenVelden.jsx';
 import { listCustomers } from '../services/customerService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
 import { getProjects } from '../services/projectsService.js';
@@ -35,15 +39,7 @@ const fmtTimeRange = (s, e) => {
   return `${trimTime(s) || '—'} – ${trimTime(e) || '—'}`;
 };
 
-const computeUren = (start, end) => {
-  if (!start || !end) return null;
-  const [sh, sm] = start.split(':').map(Number);
-  const [eh, em] = end.split(':').map(Number);
-  if ([sh, sm, eh, em].some(v => Number.isNaN(v))) return null;
-  const diff = (eh * 60 + em) - (sh * 60 + sm);
-  if (diff <= 0) return null;
-  return Math.round((diff / 60) * 100) / 100;
-};
+const computeUren = (start, end, pauze = 0) => berekenUren(start, end, pauze);
 
 const fmtUren = n => (n == null || Number.isNaN(n)) ? '—' : Number(n).toFixed(2);
 
@@ -388,6 +384,9 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
     datum: todayIso(),
     start_tijd: '',
     eind_tijd: '',
+    pauze_minuten: 0,
+    uursoort_id: '',
+    reis_km: '',
     customer_id: '',
     werkbon_id: '',
     project_id: '',
@@ -397,6 +396,19 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
   const [form, setForm] = useState(empty);
   const [touched, setTouched] = useState({});
   const [busy, setBusy] = useState(false);
+  const [uursoorten, setUursoorten] = useState([]);
+
+  // Bij één soort valt er niets te kiezen: de lijst blijft verborgen en die ene
+  // soort gaat stilzwijgend mee.
+  useEffect(() => {
+    if (!open) return;
+    listUursoorten().then(setUursoorten).catch(() => {});
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !uursoorten.length) return;
+    setForm(f => (f.uursoort_id ? f : { ...f, uursoort_id: standaardUursoortId(uursoorten) || '' }));
+  }, [open, uursoorten]);
 
   useEffect(() => {
     if (!open) return;
@@ -405,6 +417,9 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
         datum: initial.datum || todayIso(),
         start_tijd: trimTime(initial.startTijd) || '',
         eind_tijd: trimTime(initial.eindTijd) || '',
+        pauze_minuten: Number(initial.pauzeMinuten) || 0,
+        uursoort_id: initial.uursoortId || '',
+        reis_km: initial.reisKm == null ? '' : String(initial.reisKm),
         customer_id: initial.customerId || '',
         werkbon_id: initial.werkbonId || '',
         project_id: initial.projectId || '',
@@ -452,7 +467,7 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
     }
     return next;
   });
-  const hint = computeUren(form.start_tijd, form.eind_tijd);
+  const hint = computeUren(form.start_tijd, form.eind_tijd, form.pauze_minuten);
   const datumInvalid = touched.datum && !form.datum;
   const timeInvalid = form.start_tijd && form.eind_tijd && hint === null;
   const canSave = !!form.datum && !busy && !timeInvalid;
@@ -549,9 +564,11 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
             <input
               id="uren2-start"
               type="time"
+              step="300"
               className="uren2-input"
               value={form.start_tijd}
               onChange={e => set('start_tijd', e.target.value)}
+              onBlur={e => set('start_tijd', rondAfOpVijf(e.target.value))}
             />
           </div>
           <div className="uren2-field">
@@ -559,13 +576,48 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
             <input
               id="uren2-eind"
               type="time"
+              step="300"
               className={`uren2-input${timeInvalid ? ' is-invalid' : ''}`}
               value={form.eind_tijd}
               onChange={e => set('eind_tijd', e.target.value)}
+              onBlur={e => set('eind_tijd', rondAfOpVijf(e.target.value))}
             />
-            {hint !== null && <div className="uren2-hint">≈ {hint.toFixed(2)} uur</div>}
-            {timeInvalid && <div className="uren2-error">Eindtijd moet later zijn dan starttijd</div>}
+            {hint !== null && (
+              <div className="uren2-hint">
+                ≈ {hint.toFixed(2)} uur{Number(form.pauze_minuten) > 0 ? ` (${form.pauze_minuten} min pauze eraf)` : ''}
+              </div>
+            )}
+            {timeInvalid && (
+              <div className="uren2-error">
+                {Number(form.pauze_minuten) > 0
+                  ? 'Er blijft geen tijd over na aftrek van de pauze'
+                  : 'Eindtijd moet later zijn dan starttijd'}
+              </div>
+            )}
           </div>
+
+          {/* Pauze — het totaal is eind − begin − pauze. */}
+          <div className="uren2-field uren2-field-full">
+            <label className="uren2-label">Pauze (minuten)</label>
+            <PauzeKnoppen
+              waarde={Number(form.pauze_minuten) || 0}
+              onChange={v => set('pauze_minuten', v)}
+              disabled={busy}
+            />
+          </div>
+
+          {uursoorten.length > 1 && (
+            <div className="uren2-field">
+              <label className="uren2-label">Soort uren</label>
+              <UursoortKeuze
+                soorten={uursoorten}
+                waarde={form.uursoort_id}
+                onChange={v => set('uursoort_id', v || '')}
+                disabled={busy}
+                className="uren2-input"
+              />
+            </div>
+          )}
 
           <div className="uren2-field">
             <label className="uren2-label">Werkbon <span className="uren2-opt">(optioneel)</span></label>
@@ -579,6 +631,23 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
           <div className="uren2-field uren2-field-full">
             <label className="uren2-label">Klant</label>
             <Dropdown value={form.customer_id} options={klantOptions} onChange={onKlantChange} ariaLabel="Klant" />
+          </div>
+
+          <div className="uren2-field">
+            <label className="uren2-label" htmlFor="uren2-km">
+              Gereden kilometers <span className="uren2-opt">(optioneel)</span>
+            </label>
+            <input
+              id="uren2-km"
+              type="number"
+              min="0"
+              step="1"
+              inputMode="numeric"
+              className="uren2-input"
+              value={form.reis_km}
+              onChange={e => set('reis_km', e.target.value)}
+              placeholder="bijv. 24"
+            />
           </div>
 
           <div className="uren2-field uren2-field-full">
@@ -728,6 +797,9 @@ export function UrenPageV2() {
       datum: form.datum,
       start_tijd: form.start_tijd || null,
       eind_tijd: form.eind_tijd || null,
+      pauze_minuten: Number(form.pauze_minuten) || 0,
+      uursoort_id: form.uursoort_id || null,
+      reis_km: form.reis_km === '' ? null : form.reis_km,
       customer_id: form.customer_id || null,
       werkbon_id: form.werkbon_id || null,
       project_id: form.project_id || null,

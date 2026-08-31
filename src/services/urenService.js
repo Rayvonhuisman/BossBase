@@ -2,7 +2,21 @@ import { supabase } from "../lib/supabase"
 import { withCompanyId } from "../lib/currentCompany"
 
 // DB columns: id, company_id, profile_id, customer_id, werkbon_id, deal_id,
-// project_id, datum, start_tijd, eind_tijd, uren, type, notitie, created_at, updated_at
+// project_id, datum, start_tijd, eind_tijd, pauze_minuten, uren, uursoort_id,
+// reis_km, notitie, created_at, updated_at
+//
+// `type` bestaat nog maar is vervallen (zie migratie 20260831120000): de soort
+// staat nu in uursoort_id.
+
+// De select met alle joins, en dezelfde select zonder de uursoort-join als
+// vangnet. Zelfde patroon als selectWithDealsFallback in jobCostService: de
+// tabel `uursoorten` komt pas met migratie 20260831120000, en tot die gedraaid
+// is mag de urenlijst niet omvallen op een relatie die nog niet bestaat.
+const SELECT_VOL = "*, profiles(full_name), customers(name), uursoorten(naam)"
+const SELECT_KAAL = "*, profiles(full_name), customers(name)"
+
+const isOnbekendeRelatie = error =>
+  !!error && /could not find.*relationship|uursoorten/i.test(error.message || '')
 
 const toUrenregel = row => ({
   id: row.id,
@@ -15,8 +29,12 @@ const toUrenregel = row => ({
   datum: row.datum,
   startTijd: row.start_tijd || null,
   eindTijd: row.eind_tijd || null,
+  pauzeMinuten: Number(row.pauze_minuten || 0),
   uren: Number(row.uren || 0),
-  type: row.type || "arbeid",
+  uursoortId: row.uursoort_id || null,
+  uursoortNaam: row.uursoorten?.naam || "",
+  // Leeg blijft leeg: 0 km en "niet ingevuld" zijn niet hetzelfde.
+  reisKm: row.reis_km == null ? null : Number(row.reis_km),
   notitie: row.notitie || "",
   createdAt: row.created_at,
   // Joined relaties (optioneel)
@@ -26,19 +44,34 @@ const toUrenregel = row => ({
 })
 
 /**
- * Berekent het aantal uren tussen twee tijdstrings (HH:MM formaat).
- * Retourneert null als een van de waarden ontbreekt of ongeldig is.
+ * Het totaal van een urenregel: eind − begin − pauze.
+ *
+ * De pauze zat hier niet in, en dat is geen detail: 08:00–16:00 telde acht uur
+ * terwijl het er zeven en een half zijn. Elke werkbon telde te veel, en dat is
+ * wat iemand afleest bij het factureren.
+ *
+ * Retourneert null als een tijd ontbreekt, ongeldig is, of als er na aftrek van
+ * de pauze niets overblijft — dan is de invoer niet kloppend te maken en hoort
+ * het scherm dat te zeggen in plaats van 0 op te slaan.
  */
-export function calculateHours(startTijd, eindTijd) {
+export function berekenUren(startTijd, eindTijd, pauzeMinuten = 0) {
   if (!startTijd || !eindTijd) return null
-  const [sh, sm] = startTijd.split(":").map(Number)
-  const [eh, em] = eindTijd.split(":").map(Number)
+  const [sh, sm] = String(startTijd).split(":").map(Number)
+  const [eh, em] = String(eindTijd).split(":").map(Number)
   if ([sh, sm, eh, em].some(v => isNaN(v))) return null
-  const startMinuten = sh * 60 + sm
-  const eindMinuten = eh * 60 + em
-  const verschil = eindMinuten - startMinuten
+  const pauze = Math.max(0, Number(pauzeMinuten) || 0)
+  const verschil = (eh * 60 + em) - (sh * 60 + sm) - pauze
   if (verschil <= 0) return null
   return Math.round((verschil / 60) * 100) / 100
+}
+
+/**
+ * @deprecated Gebruik berekenUren(start, eind, pauze). Blijft bestaan omdat de
+ * urenherinnering en de werkbonpagina hem nog aanroepen; zonder pauze is het
+ * gedrag identiek aan vroeger.
+ */
+export function calculateHours(startTijd, eindTijd, pauzeMinuten = 0) {
+  return berekenUren(startTijd, eindTijd, pauzeMinuten)
 }
 
 // ── FILTERS ──────────────────────────────────────────────────────────────────
@@ -49,20 +82,24 @@ export function calculateHours(startTijd, eindTijd) {
  *   { profileId, werkbonId, customerId, dealId, vanDatum, totDatum }
  */
 export async function getUrenregistratie(filters = {}) {
-  let query = supabase
-    .from("urenregistratie")
-    .select("*, profiles(full_name), customers(name)")
-    .order("datum", { ascending: false })
-    .order("created_at", { ascending: false })
+  const bouw = (select) => {
+    let query = supabase
+      .from("urenregistratie")
+      .select(select)
+      .order("datum", { ascending: false })
+      .order("created_at", { ascending: false })
 
-  if (filters.profileId) query = query.eq("profile_id", filters.profileId)
-  if (filters.werkbonId) query = query.eq("werkbon_id", filters.werkbonId)
-  if (filters.customerId) query = query.eq("customer_id", filters.customerId)
-  if (filters.dealId) query = query.eq("deal_id", filters.dealId)
-  if (filters.vanDatum) query = query.gte("datum", filters.vanDatum)
-  if (filters.totDatum) query = query.lte("datum", filters.totDatum)
+    if (filters.profileId) query = query.eq("profile_id", filters.profileId)
+    if (filters.werkbonId) query = query.eq("werkbon_id", filters.werkbonId)
+    if (filters.customerId) query = query.eq("customer_id", filters.customerId)
+    if (filters.dealId) query = query.eq("deal_id", filters.dealId)
+    if (filters.vanDatum) query = query.gte("datum", filters.vanDatum)
+    if (filters.totDatum) query = query.lte("datum", filters.totDatum)
+    return query
+  }
 
-  const { data, error } = await query
+  let { data, error } = await bouw(SELECT_VOL)
+  if (isOnbekendeRelatie(error)) ({ data, error } = await bouw(SELECT_KAAL))
   if (error) throw error
   return (data || []).map(toUrenregel)
 }
@@ -95,13 +132,27 @@ export async function getUrenSummary(filters = {}) {
   }
 }
 
+// Kilometers: alleen opslaan als er echt iets is ingevuld. Een leeg veld is
+// "niet gemeten", niet "nul gereden".
+function reisKmWaarde(input) {
+  const ruw = input.reis_km ?? input.reisKm
+  if (ruw === '' || ruw == null) return null
+  const n = Number(ruw)
+  return Number.isFinite(n) && n >= 0 ? n : null
+}
+
+// De select met alle joins, en dezelfde select zonder de uursoort-join als
+// vangnet. Zelfde patroon als selectWithDealsFallback in jobCostService: de
+// tabel `uursoorten` komt pas met migratie 20260831120000, en tot die migratie
+// gedraaid is mag de urenlijst niet omvallen op een relatie die er nog niet is.
 // ── CRUD ─────────────────────────────────────────────────────────────────────
 
 export async function createUrenregel(input) {
   // Bereken uren automatisch als start/eind opgegeven zijn maar uren ontbreekt
+  const pauzeMinuten = Math.max(0, Number(input.pauze_minuten ?? input.pauzeMinuten ?? 0) || 0)
   let uren = input.uren != null ? Number(input.uren) : null
   if ((uren == null || uren === 0) && input.start_tijd && input.eind_tijd) {
-    uren = calculateHours(input.start_tijd || input.startTijd, input.eind_tijd || input.eindTijd)
+    uren = berekenUren(input.start_tijd || input.startTijd, input.eind_tijd || input.eindTijd, pauzeMinuten)
   }
   if (!uren || uren <= 0) throw new Error("uren moet groter zijn dan 0")
   if (!input.datum) throw new Error("datum is verplicht")
@@ -133,19 +184,25 @@ export async function createUrenregel(input) {
     datum: input.datum,
     start_tijd: input.start_tijd || input.startTijd || null,
     eind_tijd: input.eind_tijd || input.eindTijd || null,
+    pauze_minuten: pauzeMinuten,
     uren,
-    type: input.type || "arbeid",
+    uursoort_id: input.uursoort_id || input.uursoortId || null,
+    // Leeg laten als er niets is ingevuld; 0 km is een uitspraak, leeg niet.
+    reis_km: reisKmWaarde(input),
     notitie: input.notitie || null,
   }
   if (!base.profile_id) throw new Error("profile_id is verplicht")
-  Object.keys(base).forEach(k => base[k] === null && delete base[k])
+  // pauze_minuten bewust behouden als hij 0 is: de kolom is not null en 0 is een
+  // geldige waarde, geen "niet ingevuld".
+  Object.keys(base).forEach(k => k !== 'pauze_minuten' && base[k] === null && delete base[k])
 
   const payload = await withCompanyId(base)
-  const { data, error } = await supabase
-    .from("urenregistratie")
-    .insert(payload)
-    .select("*, profiles(full_name), customers(name)")
-    .single()
+  let { data, error } = await supabase
+    .from("urenregistratie").insert(payload).select(SELECT_VOL).single()
+  if (isOnbekendeRelatie(error)) {
+    ({ data, error } = await supabase
+      .from("urenregistratie").insert(payload).select(SELECT_KAAL).single())
+  }
   if (error) throw error
   return toUrenregel(data)
 }
@@ -154,13 +211,26 @@ export async function updateUrenregel(id, input) {
   const updates = { ...input }
 
   // Herbereken uren als start/eind gewijzigd zijn
-  if ("start_tijd" in updates || "eind_tijd" in updates || "startTijd" in updates || "eindTijd" in updates) {
+  if ("start_tijd" in updates || "eind_tijd" in updates || "startTijd" in updates
+      || "eindTijd" in updates || "pauze_minuten" in updates || "pauzeMinuten" in updates) {
     const start = updates.start_tijd || updates.startTijd
     const eind = updates.eind_tijd || updates.eindTijd
-    const berekend = calculateHours(start, eind)
+    if ("pauzeMinuten" in updates && updates.pauze_minuten === undefined) {
+      updates.pauze_minuten = Math.max(0, Number(updates.pauzeMinuten) || 0)
+    }
+    const berekend = berekenUren(start, eind, updates.pauze_minuten ?? 0)
     if (berekend !== null) updates.uren = berekend
     delete updates.startTijd
     delete updates.eindTijd
+    delete updates.pauzeMinuten
+  }
+  if ("reisKm" in updates && updates.reis_km === undefined) {
+    updates.reis_km = reisKmWaarde(updates)
+    delete updates.reisKm
+  }
+  if ("uursoortId" in updates && updates.uursoort_id === undefined) {
+    updates.uursoort_id = updates.uursoortId || null
+    delete updates.uursoortId
   }
 
   // Verwijder frontend-aliases (camelCase → echte kolommen blijven staan)
@@ -173,12 +243,12 @@ export async function updateUrenregel(id, input) {
   delete updates.medewerkerNaam
   delete updates.customerName
 
-  const { data, error } = await supabase
-    .from("urenregistratie")
-    .update(updates)
-    .eq("id", id)
-    .select("*, profiles(full_name), customers(name)")
-    .single()
+  let { data, error } = await supabase
+    .from("urenregistratie").update(updates).eq("id", id).select(SELECT_VOL).single()
+  if (isOnbekendeRelatie(error)) {
+    ({ data, error } = await supabase
+      .from("urenregistratie").update(updates).eq("id", id).select(SELECT_KAAL).single())
+  }
   if (error) throw error
   return toUrenregel(data)
 }

@@ -22,7 +22,11 @@ import {
 } from '../services/werkbonService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
-import { createUrenregel, getUrenregistratie, calculateHours } from '../services/urenService.js';
+import { createUrenregel, getUrenregistratie, berekenUren } from '../services/urenService.js';
+import { listUursoorten } from '../services/uursoortService.js';
+import {
+  PauzeKnoppen, UursoortKeuze, standaardUursoortId, rondAfOpVijf, UrenTotaal, ExtraVelden,
+} from '../components/UrenVelden.jsx';
 import { createJobCost, updateJobCost } from '../services/jobCostService.js';
 import { supabase } from '../lib/supabase';
 import { statusInfo } from '../utils/statusColors.js';
@@ -283,6 +287,11 @@ function HoursQuickAdd({ werkbon, customers, onSaved }) {
   const [datum, setDatum] = useState(TODAY());
   const [start, setStart] = useState('');
   const [eind, setEind] = useState('');
+  const [pauze, setPauze] = useState(0);
+  const [km, setKm] = useState('');
+  const [opmerking, setOpmerking] = useState('');
+  const [uursoorten, setUursoorten] = useState([]);
+  const [uursoortId, setUursoortId] = useState(null);
   const [saving, setSaving] = useState(false);
   // Admin-vangnet: uren namens een collega boeken. Alleen zichtbaar voor admin;
   // de RLS op urenregistratie dwingt af dat enkel admin/planner dit mag.
@@ -294,19 +303,36 @@ function HoursQuickAdd({ werkbon, customers, onSaved }) {
     getTeamMembers().then(ms => setTeamMembers(ms.filter(m => m.profileId))).catch(() => {});
   }, [canBookForOthers]);
 
+  // Bij één soort blijft de keuzelijst verborgen en gaat die ene soort
+  // stilzwijgend mee. Faalt het ophalen (tabel bestaat nog niet), dan werkt het
+  // formulier gewoon zonder soort.
+  useEffect(() => {
+    listUursoorten()
+      .then(l => { setUursoorten(l); setUursoortId(standaardUursoortId(l)); })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     setStart('');
     setEind('');
+    setPauze(0);
+    setKm('');
+    setOpmerking('');
     setDatum(TODAY());
     setBookForId(profile?.id || '');
   }, [werkbon?.id, profile?.id]);
 
-  const computed = calculateHours(start, eind);
+  const computed = berekenUren(start, eind, pauze);
 
   const submit = async () => {
     if (!profile?.id) { toast.error('Profiel niet geladen'); return; }
     if (!start || !eind) { toast.error('Start- en eindtijd zijn verplicht'); return; }
-    if (!computed) { toast.error('Eindtijd moet na starttijd liggen'); return; }
+    if (!computed) {
+      toast.error(pauze > 0
+        ? 'Er blijft geen tijd over na aftrek van de pauze'
+        : 'Eindtijd moet na starttijd liggen');
+      return;
+    }
     setSaving(true);
     try {
       await createUrenregel({
@@ -316,9 +342,13 @@ function HoursQuickAdd({ werkbon, customers, onSaved }) {
         datum,
         start_tijd: start,
         eind_tijd: eind,
+        pauze_minuten: pauze,
+        uursoort_id: uursoortId,
+        reis_km: km,
+        notitie: opmerking || null,
       });
       toast.success('Uren opgeslagen');
-      setStart(''); setEind('');
+      setStart(''); setEind(''); setPauze(0); setKm(''); setOpmerking('');
       onSaved?.();
     } catch (e) {
       toast.error(e.message || 'Opslaan mislukt');
@@ -363,26 +393,71 @@ function HoursQuickAdd({ werkbon, customers, onSaved }) {
           <div className="wb2-hours-field-lbl">Start</div>
           <input
             type="time"
+            step="300"
             className="wb2-hours-input"
             value={start}
             onChange={e => setStart(e.target.value)}
+            onBlur={e => setStart(rondAfOpVijf(e.target.value))}
           />
         </div>
         <div className="wb2-hours-field">
           <div className="wb2-hours-field-lbl">Eind</div>
           <input
             type="time"
+            step="300"
             className="wb2-hours-input"
             value={eind}
             onChange={e => setEind(e.target.value)}
+            onBlur={e => setEind(rondAfOpVijf(e.target.value))}
           />
         </div>
       </div>
 
-      {computed != null && (
+      {/* Datum: stond hard op vandaag, wat misgaat zodra iemand 's avonds of de
+          dag erna boekt. */}
+      <div className="wb2-hours-field" style={{ marginBottom: 10 }}>
+        <div className="wb2-hours-field-lbl">Datum</div>
+        <input
+          type="date"
+          className="wb2-hours-input"
+          value={datum}
+          onChange={e => setDatum(e.target.value)}
+        />
+      </div>
+
+      <div className="wb2-hours-field" style={{ marginBottom: 10 }}>
+        <div className="wb2-hours-field-lbl">Pauze (minuten)</div>
+        <PauzeKnoppen waarde={pauze} onChange={setPauze} disabled={saving} />
+      </div>
+
+      {uursoorten.length > 1 && (
+        <div className="wb2-hours-field" style={{ marginBottom: 10 }}>
+          <div className="wb2-hours-field-lbl">Soort uren</div>
+          <UursoortKeuze
+            soorten={uursoorten}
+            waarde={uursoortId}
+            onChange={setUursoortId}
+            disabled={saving}
+            className="wb2-hours-input"
+          />
+        </div>
+      )}
+
+      <div style={{ marginBottom: 10 }}>
+        <ExtraVelden
+          km={km}
+          onKm={setKm}
+          opmerking={opmerking}
+          onOpmerking={setOpmerking}
+          disabled={saving}
+          inputClassName="wb2-hours-input"
+        />
+      </div>
+
+      {(start && eind) && (
         <div className="wb2-hours-live" style={{ marginBottom: 10 }}>
           <span className="wb2-hours-live-dot" />
-          {computed.toFixed(2).replace('.', ',')} uur berekend
+          <UrenTotaal start={start} eind={eind} pauze={pauze} />
         </div>
       )}
 
@@ -393,7 +468,7 @@ function HoursQuickAdd({ werkbon, customers, onSaved }) {
         <button
           type="button"
           className="wb2-hours-secondary"
-          onClick={() => { setStart(''); setEind(''); }}
+          onClick={() => { setStart(''); setEind(''); setPauze(0); setKm(''); setOpmerking(''); }}
           disabled={saving}
         >
           Wissen
@@ -1453,13 +1528,31 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
                     {I.clock}
                   </div>
                   <div className="wb2-uren-main">
-                    <div className="wb2-uren-title">{shortDate(u.datum)}</div>
-                    <div className="wb2-uren-sub">{u.notitie || u.medewerkerNaam || '—'}</div>
+                    <div className="wb2-uren-title">
+                      {shortDate(u.datum)}
+                      {u.medewerkerNaam ? ` · ${u.medewerkerNaam}` : ''}
+                    </div>
+                    {/* Onderregel: eerst wat er gebeurd is (soort, pauze, km),
+                        dan pas de opmerking — die verklaart een uitloop en is
+                        het lezen waard, maar hij mag de feiten niet verdringen. */}
+                    <div className="wb2-uren-sub">
+                      {[
+                        u.uursoortNaam,
+                        u.pauzeMinuten ? `${u.pauzeMinuten} min pauze` : null,
+                        u.reisKm != null ? `${String(u.reisKm).replace('.', ',')} km` : null,
+                        u.notitie || null,
+                      ].filter(Boolean).join(' · ') || '—'}
+                    </div>
                   </div>
                   <div className="wb2-uren-time">
                     {u.startTijd && u.eindTijd
                       ? `${fmtTime(u.startTijd)}–${fmtTime(u.eindTijd)}`
                       : `${u.uren.toFixed(2).replace('.', ',')}u`}
+                    {u.startTijd && u.eindTijd && (
+                      <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600 }}>
+                        {u.uren.toFixed(2).replace('.', ',')}u
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

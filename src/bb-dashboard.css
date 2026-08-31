@@ -1308,7 +1308,13 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .wb2-hours-input::-webkit-datetime-edit-minute-field:focus,
 .wb2-hours-input::-webkit-datetime-edit-second-field:focus,
 .wb2-hours-input::-webkit-datetime-edit-ampm-field:focus{background:var(--pl);color:var(--dk);border-radius:3px;outline:none}
-.wb2-hours-live{background:rgba(29,219,98,.12);color:#1DDB62;border-radius:8px;padding:8px 10px;font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;display:flex;align-items:center;gap:6px}
+/* Het berekende totaal is het belangrijkste getal op de regel, dus het mag er
+   ook uitzien. Was een lichte groene waas met groene tekst op een donkere
+   kaart — te weinig contrast, en de bijzin erachter viel in het grijs weg.
+   Nu een steviger vlak, wit voor het getal en de bijzin op currentColor met
+   verlaagde dekking, zodat hij leesbaar blijft maar ondergeschikt. */
+.wb2-hours-live{background:rgba(29,219,98,.18);border:1px solid rgba(29,219,98,.35);color:#fff;border-radius:8px;padding:10px 12px;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;display:flex;align-items:center;gap:8px}
+.wb2-hours-live .uren-bijzin{font-weight:600;font-size:12.5px;opacity:.75;font-family:var(--font, inherit)}
 .wb2-hours-live-dot{width:6px;height:6px;border-radius:3px;background:#1DDB62;animation:wb2pulse 1.4s infinite}
 @keyframes wb2pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .wb2-hours-actions{display:flex;gap:8px}

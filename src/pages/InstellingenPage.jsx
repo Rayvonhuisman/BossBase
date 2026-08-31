@@ -3,6 +3,7 @@ import { I, ModalX, STAGE_COLOR_OPTIONS, stageColToHex, stageColorLabel, stageBa
 import { supabase } from '../lib/supabase.js';
 import GrootboekIndeling from '../components/GrootboekIndeling.jsx';
 import IntegratiesOverzicht from '../components/Integraties.jsx';
+import UursoortBeheer from '../components/UursoortBeheer.jsx';
 import { useToast } from '../lib/toast.jsx';
 import SyncBanner from '../components/SyncBanner.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -1824,6 +1825,11 @@ export function InstellingenPage() {
               {savingStandaard ? 'Opslaan...' : 'Opslaan'}
             </button>
           </div>
+        </div>
+
+        {/* ── Uursoorten ── */}
+        <div className="card card-p afu3" style={{ marginTop: 16 }}>
+          <UursoortBeheer />
         </div>
 
         {/* ── Herinneringen ── */}
