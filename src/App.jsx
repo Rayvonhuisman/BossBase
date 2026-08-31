@@ -6,6 +6,7 @@ import { LoginPage, RegisterFlow, EmailVerificationScreen } from './pages/BbAuth
 import { ResetPasswordPage } from './pages/ResetPasswordPage.jsx';
 import { UitnodigingPage } from './pages/UitnodigingPage.jsx';
 import OfferteSigneren from './pages/OfferteSigneren.jsx';
+import WerkbonOndertekenen from './pages/WerkbonOndertekenen.jsx';
 import { DashboardHome } from './pages/dashboard/DashboardHome.jsx';
 import { Pipeline } from './pages/BbDashboard.jsx';
 import { DealDetailDrawer } from './pages/dashboard/DealDetailDrawer.jsx';
@@ -1572,6 +1573,13 @@ function AppInner() {
   if (route.startsWith('/offerte/')) {
     const token = route.replace('/offerte/', '').split('?')[0];
     return <OfferteSigneren token={token} />;
+  }
+
+  // Publieke ondertekenpagina van een werkbon. Staat bewust vóór de
+  // mobiel-blokkade verderop: juist op een telefoon tekent de klant.
+  if (route.startsWith('/werkbon/')) {
+    const token = route.replace('/werkbon/', '').split('?')[0];
+    return <WerkbonOndertekenen token={token} />;
   }
 
   if (route === '/superadmin') {

@@ -1,7 +1,7 @@
 // jsPDF wordt dynamisch geladen zodat de ~350KB lib niet in de hoofdbundle
 // zit — pas opgehaald wanneer er daadwerkelijk een PDF gemaakt wordt.
 let _jsPDF = null;
-async function loadJsPDF() {
+export async function loadJsPDF() {
   if (!_jsPDF) {
     const mod = await import('jspdf');
     _jsPDF = mod.jsPDF || mod.default;
@@ -42,7 +42,7 @@ function documentTotalen(regels = [], { bedragVeld, standaardPct = 21 } = {}) {
   return { excl, btwPerTarief, incl: Math.round((excl + btw) * 100) / 100 };
 }
 
-function hexToRgb(hex) {
+export function hexToRgb(hex) {
   const h = (hex || '#1DDB62').replace('#', '');
   const r = parseInt(h.slice(0, 2), 16);
   const g = parseInt(h.slice(2, 4), 16);
@@ -50,18 +50,18 @@ function hexToRgb(hex) {
   return [isNaN(r) ? 29 : r, isNaN(g) ? 219 : g, isNaN(b) ? 98 : b];
 }
 
-function luminance([r, g, b]) {
+export function luminance([r, g, b]) {
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 }
 
-const fmtDate = d => {
+export const fmtDate = d => {
   if (!d) return '—';
   const parts = String(d).slice(0, 10).split('-');
   if (parts.length !== 3) return d;
   return `${parts[2]}-${parts[1]}-${parts[0]}`;
 };
 
-const fmtDateTime = d => {
+export const fmtDateTime = d => {
   if (!d) return '—';
   try {
     return new Date(d).toLocaleString('nl-NL', {
@@ -75,8 +75,10 @@ const TYPE_OMSCHR_DEFAULT = {
   uren: 'Arbeidsuren', m2: 'Prijs per m²', stuks: 'Materiaalkosten', km: 'Reisvergoeding', vast: 'Overige kosten',
 };
 
-// Ink palette matching the design prototype
-const C = {
+// Ink palette matching the design prototype. Geëxporteerd omdat de werkbon-PDF
+// (generateWerkbonPdf.js) dezelfde huisstijl aanhoudt — één palet, geen kopie
+// die na de eerste kleurwijziging uit de pas loopt.
+export const C = {
   dark:    [20, 22, 28],      // #14161c
   soft:    [60, 66, 80],      // #3c4250
   muted:   [128, 134, 154],   // #80869a
@@ -88,7 +90,7 @@ const C = {
   green:   [15, 157, 88],     // #0f9d58
 };
 
-async function imgToBase64(url) {
+export async function imgToBase64(url) {
   try {
     const res = await fetch(url, { mode: 'cors' });
     const blob = await res.blob();
@@ -100,6 +102,94 @@ async function imgToBase64(url) {
     });
   } catch {
     return null;
+  }
+}
+
+
+// ── Afbeeldingen verkleinen vóór ze de PDF in gaan ──────────────────────────
+// jsPDF neemt een afbeelding op zoals hij hem krijgt. Een bedrijfslogo van 2,5 MB
+// levert dus een PDF van 3 MB op voor een plaatje dat op papier 55 mm breed is —
+// en die PDF gaat als bijlage mee met elke offerte, factuur en werkbon. Sommige
+// mailservers weigeren grote bijlagen, dus dit is geen cosmetisch probleem.
+//
+// De oplossing is niet "harder comprimeren" maar "niet meer pixels meesturen dan
+// er afgedrukt worden". 300 dpi is de drukstandaard; boven die dichtheid ziet
+// niemand nog verschil, ook niet op papier.
+const DPI = 300;
+const MM_PER_INCH = 25.4;
+const mmNaarPx = mm => Math.ceil((mm / MM_PER_INCH) * DPI);
+
+const FORMAAT_UIT_MIME = { jpeg: 'JPEG', jpg: 'JPEG', png: 'PNG', gif: 'GIF', webp: 'WEBP' };
+
+function afbeeldingAfmetingen(dataUrl) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight, img });
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+
+/**
+ * Bereidt een afbeelding voor op plaatsing in de PDF: past hem in een vak van
+ * maxWmm × maxHmm en levert niet meer pixels dan daar op 300 dpi in passen.
+ *
+ * Geeft ook een JPEG-variant terug als die kleiner is. Dat kost transparantie,
+ * dus dat mag alleen omdat de ondergrond wit papier is — de afbeelding wordt dan
+ * eerst op wit samengevoegd en ziet er identiek uit.
+ *
+ * @returns {Promise<{dataUrl:string, formaat:string, breedte:number, hoogte:number}|null>}
+ *          breedte/hoogte in mm, klaar voor doc.addImage.
+ */
+export async function bereidAfbeeldingVoor(dataUrl, maxWmm, maxHmm) {
+  if (!dataUrl) return null;
+  const dims = await afbeeldingAfmetingen(dataUrl);
+  if (!dims || !dims.w || !dims.h) return null;
+
+  // Afmetingen op papier: passend binnen het vak, met behoud van de verhouding.
+  const schaalMm = Math.min(maxWmm / dims.w, maxHmm / dims.h);
+  const breedte = dims.w * schaalMm;
+  const hoogte = dims.h * schaalMm;
+
+  const doelPx = mmNaarPx(breedte);
+  const bronMime = (dataUrl.match(/^data:image\/([^;]+)/i)?.[1] || 'jpeg').toLowerCase();
+  const origineelFormaat = FORMAAT_UIT_MIME[bronMime] || 'JPEG';
+
+  // Al klein genoeg? Dan niets aanraken — hertekenen kan alleen kwaliteit kosten.
+  if (dims.w <= doelPx) {
+    return { dataUrl, formaat: origineelFormaat, breedte, hoogte };
+  }
+
+  try {
+    const schaal = doelPx / dims.w;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(dims.w * schaal));
+    canvas.height = Math.max(1, Math.round(dims.h * schaal));
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(dims.img, 0, 0, canvas.width, canvas.height);
+
+    const alsPng = canvas.toDataURL('image/png');
+
+    // JPEG erbij, op wit samengevoegd. Vlakke logo's blijven als PNG kleiner;
+    // fotografische logo's en klusfoto's winnen fors met JPEG.
+    const witCanvas = document.createElement('canvas');
+    witCanvas.width = canvas.width;
+    witCanvas.height = canvas.height;
+    const wctx = witCanvas.getContext('2d');
+    wctx.fillStyle = '#ffffff';
+    wctx.fillRect(0, 0, witCanvas.width, witCanvas.height);
+    wctx.drawImage(canvas, 0, 0);
+    const alsJpeg = witCanvas.toDataURL('image/jpeg', 0.9);
+
+    const kleinste = alsJpeg.length < alsPng.length
+      ? { dataUrl: alsJpeg, formaat: 'JPEG' }
+      : { dataUrl: alsPng, formaat: 'PNG' };
+    return { ...kleinste, breedte, hoogte };
+  } catch {
+    // Canvas kan getaint zijn of ontbreken; dan liever een grote PDF dan geen.
+    return { dataUrl, formaat: origineelFormaat, breedte, hoogte };
   }
 }
 
@@ -130,22 +220,10 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     const logoData = await imgToBase64(company.logoUrl);
     if (logoData) {
       try {
-        const match = logoData.match(/^data:image\/([^;]+)/i);
-        const ext = match?.[1]?.toLowerCase();
-        const fmtMap = { jpeg: 'JPEG', jpg: 'JPEG', png: 'PNG', gif: 'GIF', webp: 'WEBP' };
-        const imgFmt = fmtMap[ext] || 'JPEG';
-        const imgDims = await new Promise((resolve) => {
-          const img = new Image();
-          img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-          img.onerror = () => resolve(null);
-          img.src = logoData;
-        });
-        if (imgDims) {
-          const maxW = 55, maxH = 20;
-          const ratio = Math.min(maxW / imgDims.w, maxH / imgDims.h);
-          const lw = imgDims.w * ratio, lh = imgDims.h * ratio;
-          doc.addImage(logoData, imgFmt, M, y, lw, lh, '', 'FAST');
-          headerBottom = Math.max(headerBottom, y + lh);
+        const logo = await bereidAfbeeldingVoor(logoData, 55, 20);
+        if (logo) {
+          doc.addImage(logo.dataUrl, logo.formaat, M, y, logo.breedte, logo.hoogte, '', 'FAST');
+          headerBottom = Math.max(headerBottom, y + logo.hoogte);
         }
       } catch {}
     }

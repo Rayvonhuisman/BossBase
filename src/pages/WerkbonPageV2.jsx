@@ -18,8 +18,13 @@ import {
   getWerkbonMaterialen, createWerkbonMateriaal, updateWerkbonMateriaal, deleteWerkbonMateriaal,
   getWerkbonFotos, uploadWerkbonFoto, deleteWerkbonFoto,
   getWerkbonMeerwerk, createWerkbonMeerwerk, deleteWerkbonMeerwerk,
-  getWerkbonNotities, addWerkbonNotitie, getAllWerkbonTakenCounts, plannedStartIso,
+  getWerkbonNotities, addWerkbonNotitie, updateWerkbonNotitieZichtbaarheid,
+  getAllWerkbonTakenCounts, plannedStartIso,
 } from '../services/werkbonService.js';
+import WerkbonAfrondenModal from '../components/WerkbonAfrondenModal.jsx';
+import { downloadWerkbonPdf } from '../utils/generateWerkbonPdf.js';
+import { bouwPdfData, bouwPdfWerkbon } from '../services/werkbonOndertekenenService.js';
+import { getCurrentCompany } from '../services/profileService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
 import { berekenUren } from '../services/urenService.js';
@@ -27,7 +32,7 @@ import {
   createWerkbonUur, getWerkbonUren, magWerkbonUrenBeheren,
 } from '../services/werkbonUrenService.js';
 import {
-  PauzeKnoppen, rondAfOpVijf, UrenTotaal, ExtraVelden,
+  PauzeKnoppen, rondAfOpVijf, Dropdown,
 } from '../components/UrenVelden.jsx';
 import { createJobCost, updateJobCost } from '../services/jobCostService.js';
 import { supabase } from '../lib/supabase';
@@ -37,12 +42,6 @@ import { calcBtw, BTW_PCT_OPTIONS } from '../utils/btw.js';
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
-
-const fmtDate = d => {
-  if (!d) return '—';
-  const [y, m, day] = d.split('-');
-  return `${day}-${m}-${y}`;
-};
 
 const fmtEur = n => `€ ${Number(n || 0).toFixed(2).replace('.', ',')}`;
 
@@ -282,22 +281,23 @@ function WerkbonListCard({ w, takenCount, onClick }) {
 
 // ─── HOURS QUICK-ADD CARD (dark) ────────────────────────────────────────────
 
-function HoursQuickAdd({ werkbon, customers, onSaved }) {
+function HoursQuickAdd({ werkbon, onSaved }) {
   const toast = useToast();
   const { profile } = useProfile();
   const canBookForOthers = ['admin', 'planner'].includes(profile?.role);
   // Wie op deze klus zit mag hier boeken; de RLS dwingt hetzelfde af. We vragen
   // het hier na zodat er geen knop staat die je toch niet mag indrukken.
   const magBoeken = magWerkbonUrenBeheren(werkbon, profile);
+
   const [datum, setDatum] = useState(TODAY());
   const [start, setStart] = useState('');
   const [eind, setEind] = useState('');
   const [pauze, setPauze] = useState(0);
   const [km, setKm] = useState('');
-  const [opmerking, setOpmerking] = useState('');
+  const [notitie, setNotitie] = useState('');
   const [saving, setSaving] = useState(false);
-  // Admin-vangnet: uren namens een collega boeken. Alleen zichtbaar voor admin;
-  // de RLS op urenregistratie dwingt af dat enkel admin/planner dit mag.
+  // Admin-vangnet: uren namens een collega boeken. Alleen voor admin/planner —
+  // een monteur boekt op de werkbon altijd voor zichzelf.
   const [teamMembers, setTeamMembers] = useState([]);
   const [bookForId, setBookForId] = useState(profile?.id || '');
 
@@ -307,21 +307,29 @@ function HoursQuickAdd({ werkbon, customers, onSaved }) {
   }, [canBookForOthers]);
 
   useEffect(() => {
-    setStart('');
-    setEind('');
-    setPauze(0);
-    setKm('');
-    setOpmerking('');
+    setStart(''); setEind(''); setPauze(0); setKm(''); setNotitie('');
     setDatum(TODAY());
     setBookForId(profile?.id || '');
   }, [werkbon?.id, profile?.id]);
 
-  const computed = berekenUren(start, eind, pauze);
+  const berekend = berekenUren(start, eind, pauze);
+  // Zelfde foutconditie als op de urenpagina: beide tijden ingevuld maar er komt
+  // geen positief aantal uren uit.
+  const tijdFout = !!start && !!eind && berekend === null;
+  const kanOpslaan = !!datum && !!start && !!eind && !tijdFout && !saving;
+
+  const medewerkerOpties = teamMembers.map(m => ({
+    value: m.profileId,
+    label: `${m.fullName || m.email || 'Medewerker'}${m.profileId === profile?.id ? ' (ikzelf)' : ''}`,
+  }));
+  if (profile?.id && !medewerkerOpties.some(o => o.value === profile.id)) {
+    medewerkerOpties.unshift({ value: profile.id, label: 'Ikzelf' });
+  }
 
   const submit = async () => {
     if (!profile?.id) { toast.error('Profiel niet geladen'); return; }
     if (!start || !eind) { toast.error('Start- en eindtijd zijn verplicht'); return; }
-    if (!computed) {
+    if (!berekend) {
       toast.error(pauze > 0
         ? 'Er blijft geen tijd over na aftrek van de pauze'
         : 'Eindtijd moet na starttijd liggen');
@@ -337,10 +345,10 @@ function HoursQuickAdd({ werkbon, customers, onSaved }) {
         eind_tijd: eind,
         pauze_minuten: pauze,
         reis_km: km,
-        notitie: opmerking || null,
+        notitie: notitie || null,
       });
       toast.success('Uren opgeslagen');
-      setStart(''); setEind(''); setPauze(0); setKm(''); setOpmerking('');
+      setStart(''); setEind(''); setPauze(0); setKm(''); setNotitie('');
       onSaved?.();
     } catch (e) {
       toast.error(e.message || 'Opslaan mislukt');
@@ -351,129 +359,135 @@ function HoursQuickAdd({ werkbon, customers, onSaved }) {
 
   if (!magBoeken) {
     return (
-      <div className="wb2-hours">
-        <div className="wb2-hours-hd">
-          <div className="wb2-hours-ic">{I.clock}</div>
-          <div>
-            <div className="wb2-hours-title">Uren registreren</div>
-            <div className="wb2-hours-meta">Alleen voor wie op deze klus zit</div>
-          </div>
-        </div>
-        <div style={{ fontSize: '.84rem', opacity: .8, lineHeight: 1.5 }}>
-          Uren op deze werkbon worden geboekt door de uitvoerder of de verantwoordelijke.
-          Sta je er wél op maar zie je dit toch, vraag dan of je aan de werkbon
-          gekoppeld bent. Je eigen werkdag boek je op de urenpagina.
-        </div>
+      <div style={{ fontSize: '.84rem', color: 'var(--dmu)', lineHeight: 1.55 }}>
+        Uren op deze werkbon worden geboekt door de uitvoerder of de verantwoordelijke.
+        Sta je er wél op maar zie je dit toch, vraag dan of je aan de werkbon
+        gekoppeld bent. Je eigen werkdag boek je op de urenpagina.
       </div>
     );
   }
 
+  // Bewust exact de opmaak van het formulier op de urenpagina (uren2-*): het is
+  // hetzelfde invulwerk, en twee verschillende schermen voor één handeling laten
+  // mensen twijfelen of ze wel op de goede plek zitten.
   return (
-    <div className="wb2-hours">
-      <div className="wb2-hours-hd">
-        <div className="wb2-hours-ic">{I.clock}</div>
-        <div>
-          <div className="wb2-hours-title">Uren registreren</div>
-          <div className="wb2-hours-meta">{shortDate(datum)} · {werkbon.titel?.slice(0, 32) || 'Werkbon'}</div>
-        </div>
-        <span className="wb2-hours-tag">Snel boeken</span>
-      </div>
-
-      {canBookForOthers && (
-        <div className="wb2-hours-field" style={{ marginBottom: 10 }}>
-          <div className="wb2-hours-field-lbl">Medewerker</div>
-          <select
-            className="wb2-hours-input"
-            value={bookForId}
-            onChange={e => setBookForId(e.target.value)}
-          >
-            {profile?.id && !teamMembers.some(m => m.profileId === profile.id) && (
-              <option value={profile.id}>{profile.fullName || 'Ikzelf'}</option>
-            )}
-            {teamMembers.map(m => (
-              <option key={m.profileId} value={m.profileId}>
-                {m.fullName || m.email || 'Medewerker'}{m.profileId === profile?.id ? ' (ikzelf)' : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      <div className="wb2-hours-grid">
-        <div className="wb2-hours-field">
-          <div className="wb2-hours-field-lbl">Start</div>
+    <div>
+      <div className="uren2-form">
+        <div className="uren2-field">
+          <label className="uren2-label" htmlFor="wb-uren-datum">
+            Datum <span className="uren2-req">*</span>
+          </label>
           <input
+            id="wb-uren-datum"
+            type="date"
+            className="uren2-input"
+            value={datum}
+            onChange={e => setDatum(e.target.value)}
+          />
+        </div>
+
+        {canBookForOthers && (
+          <div className="uren2-field uren2-field-full">
+            <label className="uren2-label">Medewerker</label>
+            <Dropdown
+              value={bookForId}
+              options={medewerkerOpties}
+              onChange={setBookForId}
+              ariaLabel="Medewerker"
+            />
+          </div>
+        )}
+
+        <div className="uren2-field">
+          <label className="uren2-label" htmlFor="wb-uren-start">Starttijd</label>
+          <input
+            id="wb-uren-start"
             type="time"
             step="300"
-            className="wb2-hours-input"
+            className="uren2-input"
             value={start}
             onChange={e => setStart(e.target.value)}
             onBlur={e => setStart(rondAfOpVijf(e.target.value))}
           />
         </div>
-        <div className="wb2-hours-field">
-          <div className="wb2-hours-field-lbl">Eind</div>
+
+        <div className="uren2-field">
+          <label className="uren2-label" htmlFor="wb-uren-eind">Eindtijd</label>
           <input
+            id="wb-uren-eind"
             type="time"
             step="300"
-            className="wb2-hours-input"
+            className={`uren2-input${tijdFout ? ' is-invalid' : ''}`}
             value={eind}
             onChange={e => setEind(e.target.value)}
             onBlur={e => setEind(rondAfOpVijf(e.target.value))}
           />
+          {berekend !== null && (
+            <div className="uren2-hint">
+              ≈ {berekend.toFixed(2)} uur{pauze > 0 ? ` (${pauze} min pauze eraf)` : ''}
+            </div>
+          )}
+          {tijdFout && (
+            <div className="uren2-error">
+              {pauze > 0
+                ? 'Er blijft geen tijd over na aftrek van de pauze'
+                : 'Eindtijd moet later zijn dan starttijd'}
+            </div>
+          )}
+        </div>
+
+        <div className="uren2-field uren2-field-full">
+          <label className="uren2-label">Pauze (minuten)</label>
+          <PauzeKnoppen waarde={pauze} onChange={setPauze} disabled={saving} />
+        </div>
+
+        <div className="uren2-field">
+          <label className="uren2-label" htmlFor="wb-uren-km">
+            Gereden kilometers <span className="uren2-opt">(optioneel)</span>
+          </label>
+          <input
+            id="wb-uren-km"
+            type="number"
+            min="0"
+            step="1"
+            inputMode="numeric"
+            className="uren2-input"
+            value={km}
+            onChange={e => setKm(e.target.value)}
+            placeholder="bijv. 24"
+          />
+        </div>
+
+        <div className="uren2-field uren2-field-full">
+          <label className="uren2-label" htmlFor="wb-uren-notitie">Notitie</label>
+          <textarea
+            id="wb-uren-notitie"
+            className="uren2-textarea"
+            rows={2}
+            value={notitie}
+            onChange={e => setNotitie(e.target.value)}
+            placeholder="Optionele notitie..."
+          />
         </div>
       </div>
 
-      {/* Datum: stond hard op vandaag, wat misgaat zodra iemand 's avonds of de
-          dag erna boekt. */}
-      <div className="wb2-hours-field" style={{ marginBottom: 10 }}>
-        <div className="wb2-hours-field-lbl">Datum</div>
-        <input
-          type="date"
-          className="wb2-hours-input"
-          value={datum}
-          onChange={e => setDatum(e.target.value)}
-        />
-      </div>
-
-      <div className="wb2-hours-field" style={{ marginBottom: 10 }}>
-        <div className="wb2-hours-field-lbl">Pauze (minuten)</div>
-        <PauzeKnoppen waarde={pauze} onChange={setPauze} disabled={saving} />
-      </div>
-
-      <div style={{ marginBottom: 10 }}>
-        <ExtraVelden
-          km={km}
-          onKm={setKm}
-          opmerking={opmerking}
-          onOpmerking={setOpmerking}
-          disabled={saving}
-          inputClassName="wb2-hours-input"
-        />
-      </div>
-
-      {(start && eind) && (
-        <div className="wb2-hours-live" style={{ marginBottom: 10 }}>
-          <span className="wb2-hours-live-dot" />
-          <UrenTotaal start={start} eind={eind} pauze={pauze} />
-        </div>
-      )}
-
-      <div className="wb2-hours-actions">
-        <button type="button" className="wb2-hours-primary" onClick={submit} disabled={saving}>
-          {I.check} {saving ? 'Opslaan…' : 'Uren opslaan'}
-        </button>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
         <button
           type="button"
-          className="wb2-hours-secondary"
-          onClick={() => { setStart(''); setEind(''); setPauze(0); setKm(''); setOpmerking(''); }}
+          className="uren2-btn uren2-btn-ghost"
+          onClick={() => { setStart(''); setEind(''); setPauze(0); setKm(''); setNotitie(''); }}
           disabled={saving}
         >
           Wissen
         </button>
-      </div>
-      <div className="wb2-hours-tip">
-        Datum <b>{fmtDate(datum)}</b> · medewerker <b>{profile?.fullName || profile?.email || 'jij'}</b>
+        <button
+          type="button"
+          className="uren2-btn uren2-btn-primary"
+          onClick={submit}
+          disabled={!kanOpslaan}
+        >
+          {saving ? 'Opslaan…' : 'Opslaan'}
+        </button>
       </div>
     </div>
   );
@@ -923,32 +937,103 @@ function MeerwerkSection({ meerwerk, onAdd, onDelete, canEdit = true }) {
 
 // Notitielogboek op de werkbon — zelfde component en gedrag als de klantkaart.
 // Alleen-inzage (geen bewerkrecht): wel de log, geen invoerveld.
-function NotitiesSection({ notities = [], onAdd, teamMembers = [], canEdit = true }) {
-  const items = notities.map(n => toLogItem({
+function NotitiesSection({
+  notities = [], onAdd, onZichtbaarheid, teamMembers = [], canEdit = true,
+}) {
+  // Twee tabs en geen vinkje bij het invoerveld: waar je typt bepaalt waar het
+  // terechtkomt. Dat is de enige vorm die op een telefoon niet fout gaat — een
+  // aangevinkt vakje dat je over het hoofd ziet, zet een interne opmerking op
+  // het document dat de klant ondertekent.
+  const [tab, setTab] = useState('intern');
+  const voorKlant = tab === 'klant';
+
+  const zichtbaar = notities.filter(n => !!n.voorKlant === voorKlant);
+  const items = zichtbaar.map(n => toLogItem({
     id: n.id, body: n.note, authorName: n.authorName || 'Onbekend', createdAt: n.createdAt,
   }));
+  const aantalKlant = notities.filter(n => n.voorKlant).length;
 
   return (
     <div className="wb2-card">
-      <div className="wb2-card-hd"><div className="wb2-card-hd-title">Notities uitvoerder</div></div>
+      <div className="wb2-card-hd">
+        <div className="wb2-card-hd-title">Notities</div>
+        <div className="wb2-card-hd-spacer" />
+        <div style={{ display: 'flex', gap: 4 }}>
+          {[
+            ['intern', 'Intern', notities.length - aantalKlant],
+            ['klant', 'Voor de klant', aantalKlant],
+          ].map(([id, label, n]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className={`wb2-chip${tab === id ? ' active' : ''}`}
+              style={{ padding: '4px 10px', fontSize: '.76rem' }}
+            >
+              {label}
+              <span className="wb2-chip-count">{n}</span>
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="wb2-card-body">
+        <div style={{
+          fontSize: '.78rem', color: voorKlant ? '#075985' : 'var(--dl)',
+          background: voorKlant ? '#F0F9FF' : 'transparent',
+          border: voorKlant ? '1px solid #BAE6FD' : 'none',
+          borderRadius: 8, padding: voorKlant ? '8px 11px' : '0 0 8px',
+          marginBottom: 10, lineHeight: 1.5,
+        }}>
+          {voorKlant
+            ? 'Deze regels staan op de werkbon-PDF en op de pagina waar de klant tekent.'
+            : 'Alleen voor collega\u2019s. Komt niet op de werkbon en niet in beeld bij de klant.'}
+        </div>
+
         {canEdit ? (
           <NotitieLog
             items={items}
-            onAdd={onAdd}
+            onAdd={text => onAdd(text, voorKlant)}
             teamMembers={teamMembers}
-            placeholder="Bijzonderheden, bevindingen, aandachtspunten voor de baas… Typ @ om iemand te taggen"
-            emptyText="Nog geen notities."
+            placeholder={voorKlant
+              ? 'Wat moet de klant weten? Bijvoorbeeld: kraan vervangen, oude meegenomen\u2026'
+              : 'Bijzonderheden, bevindingen, aandachtspunten voor de baas\u2026 Typ @ om iemand te taggen'}
+            emptyText={voorKlant ? 'Nog geen notities voor de klant.' : 'Nog geen interne notities.'}
           />
         ) : items.length === 0 ? (
-          <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af' }}>Nog geen notities.</div>
-        ) : (
+          <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af' }}>
+            {voorKlant ? 'Nog geen notities voor de klant.' : 'Nog geen interne notities.'}
+          </div>
+        ) : null}
+
+        {/* Verplaatsknop per regel: een notitie belandt vaak eerst intern en
+            blijkt daarna prima voor de klant (of andersom). */}
+        {canEdit && zichtbaar.length > 0 && onZichtbaarheid && (
+          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {zichtbaar.map(n => (
+              <div key={`verplaats-${n.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '.75rem', color: 'var(--dl)' }}>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {n.note}
+                </span>
+                <button
+                  type="button"
+                  className="wb2-card-action"
+                  style={{ flexShrink: 0 }}
+                  onClick={() => onZichtbaarheid(n, !n.voorKlant)}
+                >
+                  {n.voorKlant ? 'Naar intern' : 'Naar de klant'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!canEdit && items.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {items.map(n => (
               <div key={n.id} className="card card-p" style={{ padding: '12px 16px' }}>
                 <div className="bb-notitie-content" style={{ fontSize: '.85rem', color: 'var(--dk)', lineHeight: 1.6, wordBreak: 'break-word' }}>{renderNote(n.body)}</div>
                 <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginTop: 6, fontWeight: 600 }}>
-                  {n.authorName ? `${n.authorName} · ` : ''}{fmtNotitieDatum(n.createdAt)}
+                  {n.authorName ? `${n.authorName} \u00b7 ` : ''}{fmtNotitieDatum(n.createdAt)}
                 </div>
               </div>
             ))}
@@ -997,6 +1082,11 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
   const [promptTijd, setPromptTijd] = useState('');
   const [completing, setCompleting] = useState(false);
   const [teamMembers, setTeamMembers] = useState([]);
+  // Afrondmodal met handtekening. Het startmoment-vraagje hierboven blijft
+  // ervoor staan: zonder start geen kloppende doorlooptijd op de bon.
+  const [afrondModal, setAfrondModal] = useState(false);
+  const [company, setCompany] = useState(null);
+  const [pdfBezig, setPdfBezig] = useState(false);
 
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -1031,6 +1121,9 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
 
   // Teamleden voor @ tagging in de notities-sectie van het werkbon-detail.
   useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
+
+  // Bedrijfsgegevens voor de werkbon-PDF (logo, huisstijlkleur, adres).
+  useEffect(() => { getCurrentCompany().then(setCompany).catch(() => {}); }, []);
 
   useEffect(() => {
     if (!preOpenWerkbonId || loading) return;
@@ -1090,6 +1183,17 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
       return `${w.titel} ${w.customerName} ${w.locatie}`.toLowerCase().includes(q);
     });
   }, [werkbonnen, statusFilter, search]);
+
+  // Namen van de uitvoerder(s) en de verantwoordelijke van de geopende werkbon —
+  // wie er namens het bedrijf voor het werk staat. Dat is iets anders dan wie de
+  // uren boekte; die namen staan niet op de bon die de klant krijgt.
+  const uitvoerderNamen = useMemo(() => {
+    if (!detail) return [];
+    const ids = [...new Set([...(detail.verantwoordelijkeIds || []), ...(detail.assignedToIds || [])])];
+    return ids
+      .map(id => teamMembers.find(m => m.profileId === id)?.fullName)
+      .filter(Boolean);
+  }, [detail, teamMembers]);
 
   // Werkbon-specifiek bewerk-recht op het geopende detail: beheer (admin/planner)
   // óf verantwoordelijke van juist deze werkbon. Alleen dan zijn bewerk-acties
@@ -1217,10 +1321,10 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
     }
   };
 
-  // Voert het daadwerkelijke afronden uit. Geef optioneel een handmatig
-  // startmoment (ISO) mee — dat wordt dan als gestart_op vastgelegd.
+  // Zet de werkbon op afgerond. Geef optioneel een handmatig startmoment (ISO)
+  // mee — dat wordt dan als gestart_op vastgelegd.
   const finishComplete = async (gestartIso) => {
-    if (!detail) return;
+    if (!detail) return null;
     setCompleting(true);
     try {
       const updated = await updateWerkbon(detail.id, {
@@ -1230,18 +1334,19 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
       });
       setDetail(updated);
       setWerkbonnen(prev => prev.map(w => w.id === updated.id ? updated : w));
-      toast.success('Klus afgerond!');
       setStartPrompt(false);
+      return updated;
     } catch (e) {
       toast.error(e.message || 'Afronden mislukt');
+      return null;
     } finally {
       setCompleting(false);
     }
   };
 
   // Startpunt van het afronden. Is er geen enkel startmoment bekend (geen
-  // werkelijke start én geen geplande start), dan eerst het startmoment opvragen;
-  // anders gewoon bevestigen en afronden.
+  // werkelijke start én geen geplande start), dan eerst het startmoment
+  // opvragen; anders meteen de afrondmodal met de handtekening.
   const requestComplete = () => {
     if (!detail || detail.status === 'afgerond') return;
     if (!detail.effectiveStartOp) {
@@ -1250,15 +1355,73 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
       setStartPrompt(true);
       return;
     }
-    if (!confirm('Weet je zeker dat je de klus wil afronden?')) return;
-    finishComplete(null);
+    setAfrondModal(true);
   };
 
-  // Bevestigen vanuit de "Wanneer is de klus gestart?"-modal.
-  const submitStartPrompt = () => {
+  // Bevestigen vanuit de "Wanneer is de klus gestart?"-modal: startmoment
+  // vastleggen en dan door naar het tekenen.
+  const submitStartPrompt = async () => {
     const iso = plannedStartIso(promptDatum, promptTijd);
     if (!iso) { toast.error('Vul een geldige startdatum en -tijd in'); return; }
-    finishComplete(iso);
+    const updated = await updateWerkbon(detail.id, { gestart_op: iso }).catch(e => {
+      toast.error(e.message || 'Startmoment opslaan mislukt');
+      return null;
+    });
+    if (!updated) return;
+    setDetail(updated);
+    setWerkbonnen(prev => prev.map(w => (w.id === updated.id ? updated : w)));
+    setStartPrompt(false);
+    setAfrondModal(true);
+  };
+
+  // Uitkomst van de afrondmodal. Drie wegen, zie de kop van die component.
+  const handleAfrondKlaar = async ({ ondertekend, gemaild, email, zonderHandtekening }) => {
+    if (ondertekend) {
+      // De edge function heeft de bon al bijgewerkt en op slot gezet; opnieuw
+      // ophalen is de enige manier om de UI daarmee gelijk te krijgen.
+      const vers = await getWerkbonById(detail.id).catch(() => null);
+      if (vers) {
+        setDetail(vers);
+        setWerkbonnen(prev => prev.map(w => (w.id === vers.id ? vers : w)));
+      }
+      setAfrondModal(false);
+      toast.success('Ondertekend en afgerond. De klant heeft de bon per mail gekregen.');
+      return;
+    }
+    if (gemaild) {
+      setAfrondModal(false);
+      toast.success(`Werkbon verstuurd naar ${email}. De bon blijft open tot de klant tekent.`);
+      const vers = await getWerkbonById(detail.id).catch(() => null);
+      if (vers) setDetail(vers);
+      return;
+    }
+    if (zonderHandtekening) {
+      const updated = await finishComplete(null);
+      if (updated) {
+        setAfrondModal(false);
+        toast.success('Klus afgerond.');
+      }
+    }
+  };
+
+  // De bon downloaden zoals de klant hem krijgt — ook zonder handtekening
+  // bruikbaar: dan komt er een leeg tekenvak op, om met pen af te tekenen.
+  const handleDownloadPdf = async () => {
+    if (!detail) return;
+    setPdfBezig(true);
+    try {
+      const customer = customers.find(c => c.id === detail.customerId) || { name: detail.customerName };
+      await downloadWerkbonPdf(
+        bouwPdfWerkbon(detail, { uitvoerders: uitvoerderNamen }),
+        bouwPdfData({ taken, uren, materialen, notities: werkbonNotities, fotos }),
+        customer,
+        company,
+      );
+    } catch (e) {
+      toast.error(e.message || 'PDF maken mislukt');
+    } finally {
+      setPdfBezig(false);
+    }
   };
 
   const handleCycleStatus = async () => {
@@ -1323,10 +1486,20 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
 
   // NotitieLog beheert veld + opslaan-status en toont de foutmelding; hier
   // alleen de insert, fouten gooien we door.
-  const handleAddNotitie = async text => {
-    const created = await addWerkbonNotitie(detail.id, text);
+  const handleAddNotitie = async (text, voorKlant = false) => {
+    const created = await addWerkbonNotitie(detail.id, text, voorKlant);
     setWerkbonNotities(list => [created, ...list]);
-    toast.success('Notitie opgeslagen');
+    toast.success(voorKlant ? 'Notitie voor de klant opgeslagen' : 'Notitie opgeslagen');
+  };
+
+  const handleNotitieZichtbaarheid = async (notitie, voorKlant) => {
+    try {
+      const bij = await updateWerkbonNotitieZichtbaarheid(notitie.id, voorKlant);
+      setWerkbonNotities(list => list.map(n => (n.id === bij.id ? bij : n)));
+      toast.success(voorKlant ? 'Staat nu op de werkbon' : 'Weer intern');
+    } catch (e) {
+      toast.error(e.message || 'Verplaatsen mislukt');
+    }
   };
 
   const handlePhonePick = () => {
@@ -1369,10 +1542,17 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
 
   if (view === 'detail' && selectedId) {
     const totalUren = uren.reduce((s, u) => s + u.uren, 0);
+    // Ondertekend = op slot. Uren, taken en materiaal liggen dan vast; de
+    // DB-trigger bb_werkbon_op_slot weigert het ook, dit voorkomt alleen dat we
+    // knoppen tonen die daarna falen.
+    const opSlot = !!detail?.ondertekendOp;
     // Bewerk-recht op dit detail (beheer óf verantwoordelijke van deze werkbon).
-    const canEdit = canEditDetail;
+    const canEdit = canEditDetail && !opSlot;
     // Gekoppelde, maar niet-verantwoordelijke medewerker → alleen inzage.
-    const viewOnly = !!detail && !canEdit;
+    // Let op: NIET afleiden uit canEdit, want die is ook false zodra de bon op
+    // slot staat. Dan zou een admin een badge krijgen die zegt dat hij geen
+    // rechten heeft, terwijl het slot de reden is — die staat er al boven.
+    const viewOnly = !!detail && !canEditDetail;
 
     return (
       <div className="wb2-page">
@@ -1478,6 +1658,48 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
               </button>
             </div>
 
+            {/* Ondertekend: slotmelding met wie en wanneer */}
+            {opSlot && (
+              <div className="wb2-card" style={{ borderLeft: '3px solid #0f9d58' }}>
+                <div style={{ padding: '13px 16px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <span style={{ color: '#0f9d58', flexShrink: 0, marginTop: 1 }}>{I.check}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--dk)' }}>
+                      Ondertekend door {detail.ondertekendDoorNaam || 'de klant'}
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--dl)', marginTop: 2, lineHeight: 1.5 }}>
+                      {detail.ondertekendOp
+                        ? new Date(detail.ondertekendOp).toLocaleString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                        : ''}
+                      {' · '}Uren, taken en materiaal staan op slot. Een correctie loopt via een nieuwe werkbon.
+                    </div>
+                  </div>
+                  {detail.ondertekendePdfUrl && (
+                    <a
+                      className="wb2-card-action"
+                      href={detail.ondertekendePdfUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ flexShrink: 0, textDecoration: 'none' }}
+                    >
+                      Ondertekende bon
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Verstuurd, nog niet getekend */}
+            {!opSlot && detail.verstuurdOp && (
+              <div className="wb2-card" style={{ borderLeft: '3px solid #FDBA74' }}>
+                <div style={{ padding: '11px 16px', fontSize: 12.5, color: 'var(--dmu)', lineHeight: 1.5 }}>
+                  Ter ondertekening gestuurd naar <b>{detail.verstuurdNaarEmail}</b> op{' '}
+                  {new Date(detail.verstuurdOp).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}.
+                  Nog niet getekend.
+                </div>
+              </div>
+            )}
+
             {/* Omschrijving */}
             {(detail.omschrijving || detail.notes) && (
               <div className="wb2-card">
@@ -1514,7 +1736,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
               </div>
               {showHoursAdd && (
                 <div style={{ padding: '14px 16px', borderBottom: uren.length ? '1px solid #EFF2EF' : 'none' }}>
-                  <HoursQuickAdd werkbon={detail} customers={customers} onSaved={() => { refreshUren(); setShowHoursAdd(false); }} />
+                  <HoursQuickAdd werkbon={detail} onSaved={() => { refreshUren(); setShowHoursAdd(false); }} />
                 </div>
               )}
               {uren.length === 0 && !showHoursAdd && (
@@ -1565,19 +1787,37 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
             <MeerwerkSection meerwerk={meerwerk} onAdd={handleAddMeerwerk} onDelete={handleDeleteMeerwerk} canEdit={canEdit} />
 
             {/* Notities */}
-            <NotitiesSection notities={werkbonNotities} onAdd={handleAddNotitie} teamMembers={teamMembers} canEdit={canEdit} />
+            <NotitiesSection
+              notities={werkbonNotities}
+              onAdd={handleAddNotitie}
+              onZichtbaarheid={handleNotitieZichtbaarheid}
+              teamMembers={teamMembers}
+              canEdit={canEditDetail}
+            />
+
+            {/* Werkbon als PDF — zonder handtekening met een leeg tekenvak, zodat
+                een uitgeprinte bon ook met pen kan worden afgetekend. */}
+            <button className="btn btn-s" onClick={handleDownloadPdf} disabled={pdfBezig} type="button" style={{ width: '100%' }}>
+              {pdfBezig ? 'PDF maken…' : 'Werkbon als PDF'}
+            </button>
 
             {/* Afronden */}
-            {detail.status !== 'afgerond' && canEdit && (
+            {detail.status !== 'afgerond' && canEditDetail && (
               <button className="wb2-complete-btn" onClick={requestComplete} type="button">
                 {I.check} Klus afronden
               </button>
             )}
-            {detail.status === 'afgerond' && (
+            {/* Afgerond maar nog niet getekend: alsnog laten ondertekenen. */}
+            {detail.status === 'afgerond' && !opSlot && canEditDetail && (
+              <button className="wb2-complete-btn" onClick={() => setAfrondModal(true)} type="button">
+                {I.check} Laten ondertekenen
+              </button>
+            )}
+            {opSlot && (
               <button className="wb2-complete-btn done" disabled type="button">
-                {I.check} Klus afgerond
-                {detail.afgerondOp
-                  ? ` · ${new Date(detail.afgerondOp).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                {I.check} Ondertekend en afgerond
+                {detail.ondertekendOp
+                  ? ` · ${new Date(detail.ondertekendOp).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
                   : ''}
               </button>
             )}
@@ -1616,11 +1856,24 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
               <div className="fa">
                 <button className="btn btn-ghost" onClick={() => setStartPrompt(false)} disabled={completing}>Annuleren</button>
                 <button className="btn btn-p" onClick={submitStartPrompt} disabled={completing || !promptDatum || !promptTijd}>
-                  {completing ? 'Afronden…' : 'Opslaan & afronden'}
+                  {completing ? 'Bezig…' : 'Opslaan & verder'}
                 </button>
               </div>
             </div>
           </div>
+        )}
+
+        {afrondModal && detail && (
+          <WerkbonAfrondenModal
+            werkbon={detail}
+            uitvoerders={uitvoerderNamen}
+            onTaakToggle={handleToggleTaak}
+            detail={{ taken, uren, materialen, notities: werkbonNotities, fotos }}
+            customer={customers.find(c => c.id === detail.customerId) || { name: detail.customerName }}
+            company={company}
+            onClose={() => setAfrondModal(false)}
+            onKlaar={handleAfrondKlaar}
+          />
         )}
 
         {planModal}

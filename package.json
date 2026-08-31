@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint src",
-    "lint:fix": "eslint src --fix"
+    "lint:fix": "eslint src --fix",
+    "migratie:check": "node scripts/migratie-check.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

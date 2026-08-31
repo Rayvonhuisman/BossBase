@@ -56,3 +56,7 @@ comment on function public.get_moneybird_sync_targets() is
 revoke all     on function public.get_moneybird_sync_targets() from public;
 revoke execute on function public.get_moneybird_sync_targets() from anon, authenticated;
 grant  execute on function public.get_moneybird_sync_targets() to service_role;
+
+-- ── PostgREST-cache verversen ───────────────────────────────────────────────
+-- Vaste afsluiting van elke migratie; zie CLAUDE.md, "Database en migraties".
+notify pgrst, 'reload schema';

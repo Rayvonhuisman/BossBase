@@ -7,7 +7,7 @@
 // Ze zijn gemaakt voor iemand met handschoenen aan op een dak: zo min mogelijk
 // tikken, en niets tonen wat er niet toe doet.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { berekenUren } from '../services/urenService.js';
 
 // ── Pauze ───────────────────────────────────────────────────────────────────
@@ -190,6 +190,65 @@ export function ExtraVelden({
           style={inputClassName ? undefined : { width: '100%' }}
         />
       </div>
+    </div>
+  );
+}
+
+// ── Keuzelijst ──────────────────────────────────────────────────────────────
+// Verhuisd uit UrenPageV2 toen de werkbon hetzelfde urenformulier kreeg. Het
+// native <select> ziet er per besturingssysteem anders uit; dit niet, en dat is
+// precies waarom de twee formulieren anders oogden.
+const CHEV = (
+  <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor"
+       strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+);
+const VINK = (
+  <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor"
+       strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+);
+
+export function Dropdown({ value, options, onChange, placeholder, width, size = 'md', ariaLabel }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+  const cur = options.find(o => o.value === value);
+  return (
+    <div ref={ref} className={`uren2-dropdown ${size === 'sm' ? 'is-sm' : ''}`} style={width ? { width } : null}>
+      <button
+        type="button"
+        className="uren2-dropdown-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        onClick={() => setOpen(o => !o)}
+      >
+        <span className="uren2-dropdown-value">{cur ? cur.label : (placeholder || 'Kies\u2026')}</span>
+        <span className={`uren2-dropdown-chev${open ? ' is-open' : ''}`}>{CHEV}</span>
+      </button>
+      {open && (
+        <div className="uren2-dropdown-menu" role="listbox">
+          {options.map(o => {
+            const actief = o.value === value;
+            return (
+              <button
+                key={String(o.value)}
+                role="option"
+                aria-selected={actief}
+                className={`uren2-dropdown-opt${actief ? ' is-active' : ''}`}
+                onClick={() => { onChange(o.value); setOpen(false); }}
+              >
+                <span className="uren2-dropdown-opt-label">{o.label}</span>
+                {actief && <span className="uren2-dropdown-opt-check">{VINK}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

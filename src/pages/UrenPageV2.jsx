@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { useUrlTab } from '../hooks/useUrlTab.js';
 import {
   getUrenregistratie, createUrenregel, updateUrenregel, deleteUrenregel, berekenUren,
 } from '../services/urenService.js';
-import { PauzeKnoppen, rondAfOpVijf } from '../components/UrenVelden.jsx';
+import { PauzeKnoppen, rondAfOpVijf, Dropdown } from '../components/UrenVelden.jsx';
 import { getAlleWerkbonUren } from '../services/werkbonUrenService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
@@ -157,52 +157,6 @@ function PeriodTabs({ value, onChange }) {
           onClick={() => onChange(t.id)}
         >{t.label}</button>
       ))}
-    </div>
-  );
-}
-
-function Dropdown({ value, options, onChange, placeholder, width, size = 'md', ariaLabel }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, [open]);
-  const cur = options.find(o => o.value === value);
-  return (
-    <div ref={ref} className={`uren2-dropdown ${size === 'sm' ? 'is-sm' : ''}`} style={width ? { width } : null}>
-      <button
-        type="button"
-        className="uren2-dropdown-trigger"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label={ariaLabel}
-        onClick={() => setOpen(o => !o)}
-      >
-        <span className="uren2-dropdown-value">{cur ? cur.label : (placeholder || 'Kies…')}</span>
-        <span className={`uren2-dropdown-chev${open ? ' is-open' : ''}`}>{Ic.Chev}</span>
-      </button>
-      {open && (
-        <div className="uren2-dropdown-menu" role="listbox">
-          {options.map(o => {
-            const active = o.value === value;
-            return (
-              <button
-                key={String(o.value)}
-                role="option"
-                aria-selected={active}
-                className={`uren2-dropdown-opt${active ? ' is-active' : ''}`}
-                onClick={() => { onChange(o.value); setOpen(false); }}
-              >
-                <span className="uren2-dropdown-opt-label">{o.label}</span>
-                {active && <span className="uren2-dropdown-opt-check">{Ic.Check}</span>}
-              </button>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }

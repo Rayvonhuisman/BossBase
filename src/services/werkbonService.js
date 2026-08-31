@@ -42,6 +42,21 @@ const toWerkbon = row => ({
   locatie: row.locatie || "",
   notes: row.notes || "",
   werkbonNotities: row.werkbon_notities || "",
+  nummer: row.nummer || "",
+  // Ondertekening. sign_token is de publieke link (/werkbon/<token>) en staat
+  // bewust in de mapper: de app moet hem kunnen mailen zonder extra query.
+  signToken: row.sign_token || null,
+  ondertekendOp: row.ondertekend_op || null,
+  handtekeningUrl: row.handtekening_url || null,
+  ondertekendDoorNaam: row.ondertekend_door_naam || "",
+  ondertekendDoorEmail: row.ondertekend_door_email || "",
+  ondertekendePdfUrl: row.ondertekende_pdf_url || null,
+  verstuurdNaarEmail: row.verstuurd_naar_email || "",
+  verstuurdOp: row.verstuurd_op || null,
+  // Ondertekend = op slot: uren, taken en materiaal liggen vast. De DB-trigger
+  // bb_werkbon_op_slot weigert het ook, dit vlagje is er zodat de UI niet eerst
+  // een knop toont die daarna faalt.
+  opSlot: !!row.ondertekend_op,
   gestartOp: row.gestart_op || null,
   // Effectief startmoment: het werkelijk vastgelegde start (gestart_op, gezet bij
   // "Start klus") valt terug op de geplande start (gepland_op + starttijd) zolang
@@ -224,6 +239,15 @@ export async function updateWerkbon(id, input) {
   delete updates.voertuigKleur
   delete updates.gestartOp
   delete updates.afgerondOp
+  delete updates.signToken
+  delete updates.ondertekendOp
+  delete updates.handtekeningUrl
+  delete updates.ondertekendDoorNaam
+  delete updates.ondertekendDoorEmail
+  delete updates.ondertekendePdfUrl
+  delete updates.verstuurdNaarEmail
+  delete updates.verstuurdOp
+  delete updates.opSlot
   delete updates.raw
 
   // Legt het startmoment vast zodra de status naar 'in_uitvoering' gaat, tenzij
@@ -597,6 +621,9 @@ const toWerkbonNotitie = row => ({
   createdBy: row.created_by,
   note: row.note || '',
   createdAt: row.created_at,
+  // false = interne notitie (de standaard), true = staat op de werkbon-PDF en
+  // op de ondertekenpagina die de klant ziet.
+  voorKlant: row.voor_klant === true,
   authorName: row.profiles?.full_name || '',
   raw: row,
 })
@@ -612,12 +639,15 @@ export async function getWerkbonNotities(werkbonId) {
   return (data || []).map(toWerkbonNotitie)
 }
 
-export async function addWerkbonNotitie(werkbonId, note) {
+export async function addWerkbonNotitie(werkbonId, note, voorKlant = false) {
   if (!werkbonId) throw new Error('werkbonId is verplicht')
   const text = (typeof note === 'string' ? note : note?.note || '').trim()
   if (!text) throw new Error('Notitie mag niet leeg zijn')
 
-  const base = { werkbon_id: werkbonId, note: text }
+  // Standaard intern. Klantnotities zijn de uitzondering en moeten expliciet
+  // worden aangevinkt — een notitie die per ongeluk bij de klant belandt is
+  // erger dan een notitie die hij mist.
+  const base = { werkbon_id: werkbonId, note: text, voor_klant: voorKlant === true }
   try {
     const { data: u } = await supabase.auth.getUser()
     if (u?.user?.id) base.created_by = u.user.id
@@ -627,6 +657,19 @@ export async function addWerkbonNotitie(werkbonId, note) {
   const { data, error } = await supabase
     .from('werkbon_notities')
     .insert(payload)
+    .select('*, profiles(full_name)')
+    .single()
+  if (error) throw error
+  return toWerkbonNotitie(data)
+}
+
+/** Zet een bestaande logregel om van intern naar klantnotitie of terug. */
+export async function updateWerkbonNotitieZichtbaarheid(notitieId, voorKlant) {
+  if (!notitieId) throw new Error('notitieId is verplicht')
+  const { data, error } = await supabase
+    .from('werkbon_notities')
+    .update({ voor_klant: voorKlant === true, updated_at: new Date().toISOString() })
+    .eq('id', notitieId)
     .select('*, profiles(full_name)')
     .single()
   if (error) throw error
