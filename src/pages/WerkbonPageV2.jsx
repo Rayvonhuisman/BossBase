@@ -22,10 +22,12 @@ import {
 } from '../services/werkbonService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
-import { createUrenregel, getUrenregistratie, berekenUren } from '../services/urenService.js';
-import { listUursoorten } from '../services/uursoortService.js';
+import { berekenUren } from '../services/urenService.js';
 import {
-  PauzeKnoppen, UursoortKeuze, standaardUursoortId, rondAfOpVijf, UrenTotaal, ExtraVelden,
+  createWerkbonUur, getWerkbonUren, magWerkbonUrenBeheren,
+} from '../services/werkbonUrenService.js';
+import {
+  PauzeKnoppen, rondAfOpVijf, UrenTotaal, ExtraVelden,
 } from '../components/UrenVelden.jsx';
 import { createJobCost, updateJobCost } from '../services/jobCostService.js';
 import { supabase } from '../lib/supabase';
@@ -284,14 +286,15 @@ function HoursQuickAdd({ werkbon, customers, onSaved }) {
   const toast = useToast();
   const { profile } = useProfile();
   const canBookForOthers = ['admin', 'planner'].includes(profile?.role);
+  // Wie op deze klus zit mag hier boeken; de RLS dwingt hetzelfde af. We vragen
+  // het hier na zodat er geen knop staat die je toch niet mag indrukken.
+  const magBoeken = magWerkbonUrenBeheren(werkbon, profile);
   const [datum, setDatum] = useState(TODAY());
   const [start, setStart] = useState('');
   const [eind, setEind] = useState('');
   const [pauze, setPauze] = useState(0);
   const [km, setKm] = useState('');
   const [opmerking, setOpmerking] = useState('');
-  const [uursoorten, setUursoorten] = useState([]);
-  const [uursoortId, setUursoortId] = useState(null);
   const [saving, setSaving] = useState(false);
   // Admin-vangnet: uren namens een collega boeken. Alleen zichtbaar voor admin;
   // de RLS op urenregistratie dwingt af dat enkel admin/planner dit mag.
@@ -302,15 +305,6 @@ function HoursQuickAdd({ werkbon, customers, onSaved }) {
     if (!canBookForOthers) return;
     getTeamMembers().then(ms => setTeamMembers(ms.filter(m => m.profileId))).catch(() => {});
   }, [canBookForOthers]);
-
-  // Bij één soort blijft de keuzelijst verborgen en gaat die ene soort
-  // stilzwijgend mee. Faalt het ophalen (tabel bestaat nog niet), dan werkt het
-  // formulier gewoon zonder soort.
-  useEffect(() => {
-    listUursoorten()
-      .then(l => { setUursoorten(l); setUursoortId(standaardUursoortId(l)); })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     setStart('');
@@ -335,15 +329,13 @@ function HoursQuickAdd({ werkbon, customers, onSaved }) {
     }
     setSaving(true);
     try {
-      await createUrenregel({
+      await createWerkbonUur({
         profile_id: canBookForOthers ? (bookForId || profile.id) : profile.id,
         werkbon_id: werkbon.id,
-        customer_id: werkbon.customerId || null,
         datum,
         start_tijd: start,
         eind_tijd: eind,
         pauze_minuten: pauze,
-        uursoort_id: uursoortId,
         reis_km: km,
         notitie: opmerking || null,
       });
@@ -356,6 +348,25 @@ function HoursQuickAdd({ werkbon, customers, onSaved }) {
       setSaving(false);
     }
   };
+
+  if (!magBoeken) {
+    return (
+      <div className="wb2-hours">
+        <div className="wb2-hours-hd">
+          <div className="wb2-hours-ic">{I.clock}</div>
+          <div>
+            <div className="wb2-hours-title">Uren registreren</div>
+            <div className="wb2-hours-meta">Alleen voor wie op deze klus zit</div>
+          </div>
+        </div>
+        <div style={{ fontSize: '.84rem', opacity: .8, lineHeight: 1.5 }}>
+          Uren op deze werkbon worden geboekt door de uitvoerder of de verantwoordelijke.
+          Sta je er wél op maar zie je dit toch, vraag dan of je aan de werkbon
+          gekoppeld bent. Je eigen werkdag boek je op de urenpagina.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="wb2-hours">
@@ -429,19 +440,6 @@ function HoursQuickAdd({ werkbon, customers, onSaved }) {
         <div className="wb2-hours-field-lbl">Pauze (minuten)</div>
         <PauzeKnoppen waarde={pauze} onChange={setPauze} disabled={saving} />
       </div>
-
-      {uursoorten.length > 1 && (
-        <div className="wb2-hours-field" style={{ marginBottom: 10 }}>
-          <div className="wb2-hours-field-lbl">Soort uren</div>
-          <UursoortKeuze
-            soorten={uursoorten}
-            waarde={uursoortId}
-            onChange={setUursoortId}
-            disabled={saving}
-            className="wb2-hours-input"
-          />
-        </div>
-      )}
 
       <div style={{ marginBottom: 10 }}>
         <ExtraVelden
@@ -1051,7 +1049,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
       getWerkbonById(selectedId).catch(() => null),
       getWerkbonTaken(selectedId).catch(() => []),
       getWerkbonMaterialen(selectedId).catch(() => []),
-      getUrenregistratie({ werkbonId: selectedId }).catch(() => []),
+      getWerkbonUren(selectedId).catch(() => []),
       getWerkbonFotos(selectedId).catch(() => []),
       getWerkbonMeerwerk(selectedId).catch(() => []),
       getWerkbonNotities(selectedId).catch(() => []),
@@ -1347,7 +1345,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
   const refreshUren = async () => {
     if (!selectedId) return;
     try {
-      const u = await getUrenregistratie({ werkbonId: selectedId });
+      const u = await getWerkbonUren(selectedId);
       setUren(u);
     } catch { /* ignore */ }
   };
@@ -1537,7 +1535,6 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
                         het lezen waard, maar hij mag de feiten niet verdringen. */}
                     <div className="wb2-uren-sub">
                       {[
-                        u.uursoortNaam,
                         u.pauzeMinuten ? `${u.pauzeMinuten} min pauze` : null,
                         u.reisKm != null ? `${String(u.reisKm).replace('.', ',')} km` : null,
                         u.notitie || null,

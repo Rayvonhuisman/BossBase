@@ -5,10 +5,8 @@ import { useUrlTab } from '../hooks/useUrlTab.js';
 import {
   getUrenregistratie, createUrenregel, updateUrenregel, deleteUrenregel, berekenUren,
 } from '../services/urenService.js';
-import { listUursoorten } from '../services/uursoortService.js';
-import {
-  PauzeKnoppen, UursoortKeuze, standaardUursoortId, rondAfOpVijf,
-} from '../components/UrenVelden.jsx';
+import { PauzeKnoppen, rondAfOpVijf } from '../components/UrenVelden.jsx';
+import { getAlleWerkbonUren } from '../services/werkbonUrenService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
 import { getProjects } from '../services/projectsService.js';
@@ -39,7 +37,6 @@ const fmtTimeRange = (s, e) => {
   return `${trimTime(s) || '—'} – ${trimTime(e) || '—'}`;
 };
 
-const computeUren = (start, end, pauze = 0) => berekenUren(start, end, pauze);
 
 const fmtUren = n => (n == null || Number.isNaN(n)) ? '—' : Number(n).toFixed(2);
 
@@ -235,6 +232,119 @@ function EmptyState({ message }) {
   );
 }
 
+
+// ── Werkbonuren (alleen-lezen) ──────────────────────────────────────────────
+// Deze uren horen bij een klus en worden op de werkbon beheerd; hier staan ze
+// alleen ter inzage. Wijzigen doe je waar ze thuishoren, anders krijg je twee
+// plekken die hetzelfde beweren.
+function WerkbonUrenTable({ rows, onOpenWerkbon }) {
+  if (!rows.length) return <EmptyState message="Geen werkbonuren in deze periode" />;
+  return (
+    <div className="uren2-table-wrap">
+      <table className="uren2-table">
+        <thead>
+          <tr>
+            <th className="uren2-th uren2-th-date">Datum</th>
+            <th className="uren2-th">Medewerker</th>
+            <th className="uren2-th">Werkbon</th>
+            <th className="uren2-th uren2-th-time">Start–Eind</th>
+            <th className="uren2-th uren2-th-hours">Pauze</th>
+            <th className="uren2-th uren2-th-hours">Uren</th>
+            <th className="uren2-th">Opmerking</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.id} className="uren2-tr">
+              <td className="uren2-td uren2-td-date">{fmtNL(r.datum)}</td>
+              <td className="uren2-td">
+                {r.medewerkerNaam ? (
+                  <span className="uren2-md">
+                    <Avatar name={r.medewerkerNaam} size={26} />
+                    <span>{r.medewerkerNaam}</span>
+                  </span>
+                ) : <span className="uren2-muted">—</span>}
+              </td>
+              <td className="uren2-td">
+                <button
+                  type="button"
+                  onClick={() => onOpenWerkbon?.(r.werkbonId)}
+                  style={{
+                    background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                    color: 'var(--pd)', fontWeight: 600, textAlign: 'left', textDecoration: 'underline',
+                  }}
+                >
+                  {r.werkbonTitel || 'Werkbon'}
+                </button>
+              </td>
+              <td className={`uren2-td uren2-td-time${r.startTijd ? '' : ' uren2-muted'}`}>
+                {fmtTimeRange(r.startTijd, r.eindTijd)}
+              </td>
+              <td className={`uren2-td uren2-td-hours${r.pauzeMinuten ? '' : ' uren2-muted'}`}>
+                {r.pauzeMinuten ? `${r.pauzeMinuten} min` : '—'}
+              </td>
+              <td className="uren2-td uren2-td-hours">{fmtUren(r.uren)}</td>
+              <td className={`uren2-td uren2-td-note${r.notitie ? '' : ' uren2-muted'}`}>{r.notitie || '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── Werkdag naast klus, per medewerker per dag ──────────────────────────────
+// Bewust geen waarschuwing en geen blokkade: de twee soorten uren beantwoorden
+// verschillende vragen en hoeven niet gelijk te zijn. Maar ze naast elkaar
+// zetten maakt zichtbaar of iemand vier uur werkdag boekt en acht uur op
+// klussen — dan zie je het vanzelf, zonder dat de app erover gaat zeuren.
+function DagVergelijking({ werkdag, werkbon }) {
+  const perDag = new Map();
+  const sleutel = r => `${r.datum}|${r.profileId}`;
+  for (const r of werkdag) {
+    const k = sleutel(r);
+    if (!perDag.has(k)) perDag.set(k, { datum: r.datum, naam: r.medewerkerNaam, dag: 0, klus: 0 });
+    perDag.get(k).dag += Number(r.uren || 0);
+  }
+  for (const r of werkbon) {
+    const k = sleutel(r);
+    if (!perDag.has(k)) perDag.set(k, { datum: r.datum, naam: r.medewerkerNaam, dag: 0, klus: 0 });
+    perDag.get(k).klus += Number(r.uren || 0);
+  }
+  const regels = [...perDag.values()].sort((a, b) => (a.datum < b.datum ? 1 : -1)).slice(0, 30);
+  if (!regels.length) return null;
+
+  return (
+    <div className="uren2-table-wrap" style={{ marginBottom: 18 }}>
+      <table className="uren2-table">
+        <thead>
+          <tr>
+            <th className="uren2-th uren2-th-date">Datum</th>
+            <th className="uren2-th">Medewerker</th>
+            <th className="uren2-th uren2-th-hours">Werkdag</th>
+            <th className="uren2-th uren2-th-hours">Op klussen</th>
+            <th className="uren2-th uren2-th-hours">Verschil</th>
+          </tr>
+        </thead>
+        <tbody>
+          {regels.map((r, i) => {
+            const verschil = Math.round((r.dag - r.klus) * 100) / 100;
+            return (
+              <tr key={i} className="uren2-tr">
+                <td className="uren2-td uren2-td-date">{fmtNL(r.datum)}</td>
+                <td className="uren2-td">{r.naam || '—'}</td>
+                <td className={`uren2-td uren2-td-hours${r.dag ? '' : ' uren2-muted'}`}>{r.dag ? fmtUren(r.dag) : '—'}</td>
+                <td className={`uren2-td uren2-td-hours${r.klus ? '' : ' uren2-muted'}`}>{r.klus ? fmtUren(r.klus) : '—'}</td>
+                <td className="uren2-td uren2-td-hours">{verschil === 0 ? '—' : fmtUren(verschil)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ── Desktop table ───────────────────────────────────────────────────────────
 function UrenTable({ rows, onEdit, onDelete }) {
   if (!rows.length) return <EmptyState />;
@@ -246,8 +356,8 @@ function UrenTable({ rows, onEdit, onDelete }) {
             <th className="uren2-th uren2-th-date">Datum</th>
             <th className="uren2-th">Medewerker</th>
             <th className="uren2-th uren2-th-time">Start–Eind</th>
+            <th className="uren2-th uren2-th-hours">Pauze</th>
             <th className="uren2-th uren2-th-hours">Uren</th>
-            <th className="uren2-th">Klant</th>
             <th className="uren2-th">Notitie</th>
             <th className="uren2-th uren2-th-actions">Acties</th>
           </tr>
@@ -267,8 +377,10 @@ function UrenTable({ rows, onEdit, onDelete }) {
               <td className={`uren2-td uren2-td-time${r.startTijd ? '' : ' uren2-muted'}`}>
                 {fmtTimeRange(r.startTijd, r.eindTijd)}
               </td>
+              <td className={`uren2-td uren2-td-hours${r.pauzeMinuten ? '' : ' uren2-muted'}`}>
+                {r.pauzeMinuten ? `${r.pauzeMinuten} min` : '—'}
+              </td>
               <td className="uren2-td uren2-td-hours">{fmtUren(r.uren)}</td>
-              <td className={`uren2-td${r.customerName ? '' : ' uren2-muted'}`}>{r.customerName || '—'}</td>
               <td className="uren2-td uren2-td-note">
                 <div className="uren2-note-ellipsis" title={r.notitie || ''}>{r.notitie || '—'}</div>
               </td>
@@ -337,7 +449,9 @@ function MobileList({ rows, onEdit, onDelete }) {
               </div>
               <div className="uren2-mcard-meta">
                 <span>{fmtTimeRange(r.startTijd, r.eindTijd)}</span>
-                <span className={r.customerName ? '' : 'uren2-muted'}>{r.customerName || '—'}</span>
+                <span className={r.pauzeMinuten ? '' : 'uren2-muted'}>
+                  {r.pauzeMinuten ? `${r.pauzeMinuten} min pauze` : 'geen pauze'}
+                </span>
               </div>
               {r.notitie && <div className="uren2-mcard-note">{r.notitie}</div>}
               <div className="uren2-mcard-actions">
@@ -385,30 +499,13 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
     start_tijd: '',
     eind_tijd: '',
     pauze_minuten: 0,
-    uursoort_id: '',
     reis_km: '',
-    customer_id: '',
-    werkbon_id: '',
-    project_id: '',
     notitie: '',
     profile_id: currentProfileId || '',
   }), [currentProfileId]);
   const [form, setForm] = useState(empty);
   const [touched, setTouched] = useState({});
   const [busy, setBusy] = useState(false);
-  const [uursoorten, setUursoorten] = useState([]);
-
-  // Bij één soort valt er niets te kiezen: de lijst blijft verborgen en die ene
-  // soort gaat stilzwijgend mee.
-  useEffect(() => {
-    if (!open) return;
-    listUursoorten().then(setUursoorten).catch(() => {});
-  }, [open]);
-
-  useEffect(() => {
-    if (!open || !uursoorten.length) return;
-    setForm(f => (f.uursoort_id ? f : { ...f, uursoort_id: standaardUursoortId(uursoorten) || '' }));
-  }, [open, uursoorten]);
 
   useEffect(() => {
     if (!open) return;
@@ -418,11 +515,7 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
         start_tijd: trimTime(initial.startTijd) || '',
         eind_tijd: trimTime(initial.eindTijd) || '',
         pauze_minuten: Number(initial.pauzeMinuten) || 0,
-        uursoort_id: initial.uursoortId || '',
         reis_km: initial.reisKm == null ? '' : String(initial.reisKm),
-        customer_id: initial.customerId || '',
-        werkbon_id: initial.werkbonId || '',
-        project_id: initial.projectId || '',
         notitie: initial.notitie || '',
         profile_id: initial.profileId || currentProfileId || '',
       });
@@ -434,40 +527,10 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
   }, [open, initial, empty]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  // Werkbon kiezen → project en klant automatisch overnemen van de werkbon.
-  const onWerkbonChange = (wid) => setForm(f => {
-    const next = { ...f, werkbon_id: wid };
-    const wb = werkbonnen.find(w => w.id === wid);
-    if (wb) {
-      if (wb.projectId) next.project_id = wb.projectId;
-      if (wb.customerId) {
-        next.customer_id = wb.customerId;
-        // Project resetten als het niet bij de klant van de werkbon hoort.
-        const pr = projecten.find(p => p.id === next.project_id);
-        if (pr && pr.customerId !== wb.customerId) next.project_id = '';
-      }
-    }
-    return next;
-  });
-  // Project kiezen → klant automatisch afleiden van het project.
-  const onProjectChange = (pid) => setForm(f => {
-    const next = { ...f, project_id: pid };
-    const pr = projecten.find(p => p.id === pid);
-    if (pr && pr.customerId) next.customer_id = pr.customerId;
-    return next;
-  });
-  // Klant kiezen → werkbon/project resetten als ze niet bij deze klant horen.
-  const onKlantChange = (cid) => setForm(f => {
-    const next = { ...f, customer_id: cid };
-    if (cid) {
-      const wb = werkbonnen.find(w => w.id === f.werkbon_id);
-      if (wb && wb.customerId !== cid) next.werkbon_id = '';
-      const pr = projecten.find(p => p.id === f.project_id);
-      if (pr && pr.customerId !== cid) next.project_id = '';
-    }
-    return next;
-  });
-  const hint = computeUren(form.start_tijd, form.eind_tijd, form.pauze_minuten);
+
+  // Het totaal zoals het opgeslagen wordt: eind − begin − pauze.
+  const hint = berekenUren(form.start_tijd, form.eind_tijd, form.pauze_minuten);
+
   const datumInvalid = touched.datum && !form.datum;
   const timeInvalid = form.start_tijd && form.eind_tijd && hint === null;
   const canSave = !!form.datum && !busy && !timeInvalid;
@@ -495,21 +558,6 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  const klantOptions = [{ value: '', label: 'Geen klant' }, ...klanten.map(k => ({ value: k.id, label: k.name }))];
-  // Met een gekozen klant alleen de werkbonnen/projecten van die klant tonen;
-  // zonder klant: alles.
-  const werkbonOptions = [
-    { value: '', label: 'Geen werkbon' },
-    ...werkbonnen
-      .filter(w => !form.customer_id || w.customerId === form.customer_id)
-      .map(w => ({ value: w.id, label: w.titel || 'Werkbon' })),
-  ];
-  const projectOptions = [
-    { value: '', label: 'Geen project' },
-    ...projecten
-      .filter(p => !form.customer_id || p.customerId === form.customer_id)
-      .map(p => ({ value: p.id, label: p.name || 'Project' })),
-  ];
   // Admin-vangnet: keuze voor wélke medewerker de uren zijn (default jezelf).
   const medewerkerOptions = profiles.map(m => ({
     value: m.profileId,
@@ -606,33 +654,9 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
             />
           </div>
 
-          {uursoorten.length > 1 && (
-            <div className="uren2-field">
-              <label className="uren2-label">Soort uren</label>
-              <UursoortKeuze
-                soorten={uursoorten}
-                waarde={form.uursoort_id}
-                onChange={v => set('uursoort_id', v || '')}
-                disabled={busy}
-                className="uren2-input"
-              />
-            </div>
-          )}
-
-          <div className="uren2-field">
-            <label className="uren2-label">Werkbon <span className="uren2-opt">(optioneel)</span></label>
-            <Dropdown value={form.werkbon_id} options={werkbonOptions} onChange={onWerkbonChange} ariaLabel="Werkbon" />
-          </div>
-          <div className="uren2-field">
-            <label className="uren2-label">Project <span className="uren2-opt">(optioneel)</span></label>
-            <Dropdown value={form.project_id} options={projectOptions} onChange={onProjectChange} ariaLabel="Project" />
-          </div>
-
-          <div className="uren2-field uren2-field-full">
-            <label className="uren2-label">Klant</label>
-            <Dropdown value={form.customer_id} options={klantOptions} onChange={onKlantChange} ariaLabel="Klant" />
-          </div>
-
+          {/* Geen werkbon, project of klant meer: dit zijn werkdaguren — de
+              werkdag van de medewerker, voor loon en verlof. Uren op een klus
+              boek je op de werkbon zelf. */}
           <div className="uren2-field">
             <label className="uren2-label" htmlFor="uren2-km">
               Gereden kilometers <span className="uren2-opt">(optioneel)</span>
@@ -683,12 +707,14 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
 }
 
 // ── Page ────────────────────────────────────────────────────────────────────
-export function UrenPageV2() {
+export function UrenPageV2({ navigatePage } = {}) {
   const toast = useToast();
   const { profile, bumpRefresh } = useProfile();
   const { guardSchrijven, planModal } = usePlanGuard();
   const canBookForOthers = ['admin', 'planner'].includes(profile?.role);
   const [allRows, setAllRows] = useState([]);
+  // Werkbonuren komen uit een eigen tabel en zijn hier alleen ter inzage.
+  const [werkbonUren, setWerkbonUren] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [werkbonnen, setWerkbonnen] = useState([]);
   const [projecten, setProjecten] = useState([]);
@@ -720,10 +746,11 @@ export function UrenPageV2() {
       listCustomers(),
       getWerkbonnen().catch(() => []),
       getProjects().catch(() => []),
+      getAlleWerkbonUren().catch(() => []),
     ])
-      .then(([r, c, w, p]) => {
+      .then(([r, c, w, p, wu]) => {
         if (!alive) return;
-        setAllRows(r); setCustomers(c); setWerkbonnen(w); setProjecten(p); setError('');
+        setAllRows(r); setCustomers(c); setWerkbonnen(w); setProjecten(p); setWerkbonUren(wu); setError('');
       })
       .catch(err => { if (!alive) return; setError(err.message || 'Laden mislukt'); })
       .finally(() => { if (alive) setLoading(false); });
@@ -751,6 +778,18 @@ export function UrenPageV2() {
       return d && d >= van && d <= tot;
     });
   }, [allRows, periodType, anchor]);
+
+  // Zelfde periodefilter over de werkbonuren, zodat beide tabellen dezelfde
+  // periode tonen.
+  const werkbonRowsPeriod = useMemo(() => {
+    if (periodType === 'alles') return werkbonUren;
+    const { van, tot } = periodRange(periodType, anchor);
+    return werkbonUren.filter(r => r.datum && r.datum >= van && r.datum <= tot);
+  }, [werkbonUren, periodType, anchor]);
+
+  const werkbonVisible = useMemo(() => (
+    employee === 'all' ? werkbonRowsPeriod : werkbonRowsPeriod.filter(r => r.profileId === employee)
+  ), [werkbonRowsPeriod, employee]);
 
   // KPI: counts over period (NOT employee)
   const kpis = useMemo(() => {
@@ -798,11 +837,7 @@ export function UrenPageV2() {
       start_tijd: form.start_tijd || null,
       eind_tijd: form.eind_tijd || null,
       pauze_minuten: Number(form.pauze_minuten) || 0,
-      uursoort_id: form.uursoort_id || null,
       reis_km: form.reis_km === '' ? null : form.reis_km,
-      customer_id: form.customer_id || null,
-      werkbon_id: form.werkbon_id || null,
-      project_id: form.project_id || null,
       notitie: form.notitie || null,
     };
     try {
@@ -931,6 +966,38 @@ export function UrenPageV2() {
         )}
       </div>
 
+      {/* ── Werkbonuren ── */}
+      {!loading && (
+        <div className="uren2-card" style={{ marginTop: 18 }}>
+          <div className="uren2-card-hd">
+            <div>
+              <h2 className="uren2-card-title">Werkbonuren</h2>
+              <p className="uren2-card-sub">
+                Uren op een klus, geboekt op de werkbon zelf. Hier alleen ter inzage —
+                wijzigen doe je op de werkbon.
+              </p>
+            </div>
+          </div>
+          <WerkbonUrenTable rows={werkbonVisible} onOpenWerkbon={id => navigatePage?.('werkbonnen', { id })} />
+        </div>
+      )}
+
+      {/* ── Werkdag naast klus ── */}
+      {!loading && (visible.length > 0 || werkbonVisible.length > 0) && (
+        <div className="uren2-card" style={{ marginTop: 18 }}>
+          <div className="uren2-card-hd">
+            <div>
+              <h2 className="uren2-card-title">Werkdag naast klus</h2>
+              <p className="uren2-card-sub">
+                Per medewerker per dag. Ze hoeven niet gelijk te zijn — reistijd en kantoorwerk
+                zitten wel in de werkdag en niet op een klus — maar een groot verschil valt hier op.
+              </p>
+            </div>
+          </div>
+          <DagVergelijking werkdag={visible} werkbon={werkbonVisible} />
+        </div>
+      )}
+
       {/* FAB on mobile */}
       {isMobile && (
         <button
@@ -970,7 +1037,6 @@ export function UrenPageV2() {
           {confirmRow && (
             <p className="uren2-confirm-sub">
               {fmtNL(confirmRow.datum)} · {confirmRow.medewerkerNaam || '—'} · {fmtUren(confirmRow.uren)} uur
-              {confirmRow.customerName ? ` · ${confirmRow.customerName}` : ''}
             </p>
           )}
         </div>

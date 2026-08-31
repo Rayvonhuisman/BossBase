@@ -157,7 +157,9 @@ function deriveCharts({ deals = [], activities = [], offertes = [], customers = 
   });
   const activitiesPerDay = apd.some(x => x.value > 0) ? apd : [];
 
-  // Hours from real urenregistratie (datum = 'YYYY-MM-DD', uren = number)
+  // Werkdaguren uit urenregistratie (datum = 'YYYY-MM-DD', uren = number).
+  // Bewust de werkdag en niet de werkbonuren: deze grafiek gaat over hoeveel er
+  // gewerkt is, niet over hoeveel er op klussen is geschreven.
   const isoOf = dt => { const x = new Date(dt); x.setHours(0, 0, 0, 0); return x.toISOString().slice(0, 10); };
   const urenOnDay = iso => uren.reduce((s, r) => (r.datum && String(r.datum).slice(0, 10) === iso ? s + (Number(r.uren) || 0) : s), 0);
   const dh = DN.map((label, i) => {

@@ -3,7 +3,7 @@ import { withCompanyId, getCompanyId } from '../lib/currentCompany'
 import { logTijdlijnSafe } from './klantTijdlijnService'
 
 // =============================================================================
-// projects / uren (urenregistratie) / project_notes  service-laag
+// projects / uren (werkbon_uren) / project_notes  service-laag
 // Schema: zie supabase/migrations/017_projects.sql
 // =============================================================================
 
@@ -34,8 +34,10 @@ const toProject = row => ({
   raw: row,
 })
 
-// Uren leven in urenregistratie (de enige bron van waarheid). We mappen een
-// urenregistratie-rij naar het time-entry model dat de project-UI verwacht.
+// Projecturen komen uit werkbon_uren, via de werkbon. Werkdaguren
+// (urenregistratie) tellen hier NIET in mee: die gaan over loon en verlof, niet
+// over wat een klus heeft gekost. We mappen een werkbon_uren-rij naar het
+// time-entry model dat de project-UI verwacht.
 // `resolvedProjectId` is project_id direct, of afgeleid via de werkbon.
 const toTimeEntry = (row, resolvedProjectId = null) => ({
   id: row.id,
@@ -236,17 +238,15 @@ export async function getTimeEntries(projectId) {
   if (!projectId) return []
   const wbMap = await getWerkbonProjectMap()
   const werkbonIds = Object.keys(wbMap).filter(id => wbMap[id] === projectId)
-
-  const orParts = [`project_id.eq.${projectId}`]
-  if (werkbonIds.length) orParts.push(`werkbon_id.in.(${werkbonIds.join(',')})`)
+  if (!werkbonIds.length) return []
 
   const { data, error } = await supabase
-    .from('urenregistratie')
+    .from('werkbon_uren')
     .select('*, profiles(full_name)')
-    .or(orParts.join(','))
+    .in('werkbon_id', werkbonIds)
     .order('datum', { ascending: false })
     .order('created_at', { ascending: false })
-  if (error) throw error
+  if (error) return []
   return (data || []).map(r => toTimeEntry(r, projectId))
 }
 
@@ -254,85 +254,22 @@ export async function getTimeEntries(projectId) {
 // project-lijst (nacalculatie). Geeft { projectId: totaalUren }.
 export async function getProjectHoursMap() {
   const [urenRes, wbMap] = await Promise.all([
-    supabase.from('urenregistratie').select('uren, project_id, werkbon_id'),
+    supabase.from('werkbon_uren').select('uren, werkbon_id'),
     getWerkbonProjectMap(),
   ])
   const byProject = {}
   for (const u of (urenRes.data || [])) {
-    const pid = u.project_id || wbMap[u.werkbon_id] || null
+    const pid = wbMap[u.werkbon_id] || null
     if (!pid) continue
     byProject[pid] = (byProject[pid] || 0) + Number(u.uren || 0)
   }
   return byProject
 }
 
-export async function addTimeEntry(projectId, entryData = {}) {
-  if (!projectId) throw new Error('projectId is verplicht')
-  const hours = Number(entryData.hours ?? 0)
-  if (!hours || hours <= 0) throw new Error('Uren moet groter zijn dan 0')
-
-  // profile_id: expliciet of de ingelogde gebruiker.
-  let profileId = entryData.user_id || entryData.userId || entryData.profile_id || entryData.profileId || null
-  if (!profileId) {
-    try {
-      const { data: u } = await supabase.auth.getUser()
-      profileId = u?.user?.id || null
-    } catch { /* ignore */ }
-  }
-  if (!profileId) throw new Error('Geen medewerker bekend voor deze urenregistratie')
-
-  const base = {
-    profile_id: profileId,
-    project_id: projectId,
-    datum: entryData.entry_date || entryData.entryDate || new Date().toISOString().slice(0, 10),
-    uren: hours,
-    type: entryData.type || 'arbeid',
-    notitie: entryData.description || null,
-  }
-  Object.keys(base).forEach(k => base[k] === null && delete base[k])
-  const payload = await withCompanyId(base)
-
-  const { data, error } = await supabase
-    .from('urenregistratie')
-    .insert(payload)
-    .select('*, profiles(full_name)')
-    .single()
-  if (error) throw error
-  return toTimeEntry(data, projectId)
-}
-
-export async function updateTimeEntry(entryId, patch) {
-  if (!entryId) throw new Error('entryId is verplicht')
-  const updates = {}
-  const map = {
-    description: 'notitie',
-    notitie: 'notitie',
-    hours: 'uren',
-    uren: 'uren',
-    entryDate: 'datum',
-    entry_date: 'datum',
-    datum: 'datum',
-  }
-  Object.keys(patch || {}).forEach(k => {
-    if (k in map) updates[map[k]] = patch[k]
-  })
-  if (Object.keys(updates).length === 0) return null
-
-  const { data, error } = await supabase
-    .from('urenregistratie')
-    .update(updates)
-    .eq('id', entryId)
-    .select('*, profiles(full_name)')
-    .single()
-  if (error) throw error
-  return toTimeEntry(data)
-}
-
-export async function deleteTimeEntry(entryId) {
-  if (!entryId) throw new Error('entryId is verplicht')
-  const { error } = await supabase.from('urenregistratie').delete().eq('id', entryId)
-  if (error) throw error
-}
+// Uren op een project worden niet meer hier geboekt maar op de werkbon: de
+// werkbon bepaalt wie mag boeken en aan welke klus de uren hangen. De
+// projectpagina toont ze alleen nog. Daarom zijn addTimeEntry, updateTimeEntry
+// en deleteTimeEntry hier vervallen — beheren doe je in werkbonUrenService.
 
 // =============================================================================
 // PROJECT NOTES

@@ -13,8 +13,6 @@ import {
   updateProject,
   deleteProject,
   getTimeEntries,
-  addTimeEntry,
-  deleteTimeEntry,
   getProjectNotes,
   addProjectNote,
   deleteProjectNote,
@@ -420,53 +418,10 @@ function OfferteTab({ project, offertes, customers, deals = [], company, setPage
 
 // ── UREN TAB ─────────────────────────────────────────────────────────────────
 
-function UrenTab({ project, entries, onAdd, onDelete, canManage }) {
-  const toast = useToast();
-  const { profile } = useProfile();
-  // Admin-vangnet: uren namens een collega boeken. Alleen zichtbaar voor
-  // admin/planner; de RLS op urenregistratie dwingt af dat enkel zij dit mogen.
-  const canBookForOthers = ['admin', 'planner'].includes(profile?.role);
-  const [teamMembers, setTeamMembers] = useState([]);
-  const [form, setForm] = useState({
-    entry_date: new Date().toISOString().slice(0, 10),
-    description: '',
-    hours: '',
-    billable: true,
-    hourly_rate: '',
-    profile_id: '',
-  });
-  const [saving, setSaving] = useState(false);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-
-  useEffect(() => {
-    if (!canBookForOthers) return;
-    getTeamMembers().then(ms => setTeamMembers(ms.filter(m => m.profileId))).catch(() => {});
-  }, [canBookForOthers]);
-
-  const submit = async () => {
-    const h = Number(form.hours);
-    if (!h || h <= 0) { toast.error('Uren moet groter zijn dan 0'); return; }
-    setSaving(true);
-    try {
-      await onAdd({
-        entry_date: form.entry_date,
-        description: form.description || null,
-        hours: h,
-        billable: form.billable,
-        hourly_rate: form.hourly_rate ? Number(form.hourly_rate) : null,
-        // Alleen admin/planner mag een andere medewerker kiezen; anders default
-        // (server) de ingelogde gebruiker.
-        ...(canBookForOthers ? { profile_id: form.profile_id || profile?.id } : {}),
-      });
-      setForm(f => ({ ...f, description: '', hours: '' }));
-      toast.success('Uren toegevoegd');
-    } catch (e) {
-      toast.error(e.message || 'Toevoegen mislukt');
-    } finally {
-      setSaving(false);
-    }
-  };
-
+// Alleen-lezen sinds werkbonuren een eigen tabel hebben: uren horen bij een
+// klus, en die boek je op de werkbon. Deze tab is de optelsom van de werkbonnen
+// van dit project.
+function UrenTab({ project, entries }) {
   const pct = project.hoursPercentage || 0;
   const warningTone = pct > 1 ? 'risk' : pct >= 0.8 ? 'warning' : null;
 
@@ -513,46 +468,16 @@ function UrenTab({ project, entries, onAdd, onDelete, canManage }) {
         </div>
       </div>
 
-      {/* Add time entry */}
-      {canManage && (
-        <div className="card card-p" style={{ padding: 12 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--dl)', marginBottom: 8 }}>Uren toevoegen</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {canBookForOthers && (
-              <div className="f" style={{ flex: '1 1 100%', minWidth: 0 }}>
-                <label>Medewerker</label>
-                <select style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.profile_id || profile?.id || ''} onChange={e => set('profile_id', e.target.value)}>
-                  {profile?.id && !teamMembers.some(m => m.profileId === profile.id) && (
-                    <option value={profile.id}>{profile.fullName || 'Ikzelf'}</option>
-                  )}
-                  {teamMembers.map(m => (
-                    <option key={m.profileId} value={m.profileId}>
-                      {m.fullName || m.email || 'Medewerker'}{m.profileId === profile?.id ? ' (ikzelf)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <div className="f" style={{ flex: '1 1 120px', minWidth: 0 }}>
-              <label>Datum</label>
-              <input type="date" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.entry_date} onChange={e => set('entry_date', e.target.value)} />
-            </div>
-            <div className="f" style={{ flex: '1 1 90px', minWidth: 0 }}>
-              <label>Uren</label>
-              <input type="number" min="0" step="0.25" placeholder="0,0" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.hours} onChange={e => set('hours', e.target.value)} />
-            </div>
-            <div className="f" style={{ flex: '1 1 100%', minWidth: 0 }}>
-              <label>Omschrijving</label>
-              <input type="text" placeholder="Wat heb je gedaan?" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.description} onChange={e => set('description', e.target.value)} />
-            </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-            <button className="btn btn-p btn-sm" onClick={submit} disabled={saving}>
-              {saving ? 'Toevoegen…' : 'Uren toevoegen'}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Uren toevoegen kan hier niet meer: ze horen bij een werkbon, en die
+          bepaalt wie mag boeken. Verwijzen is nuttiger dan een knop die het
+          ergens anders toch weer anders doet. */}
+      <div style={{
+        fontSize: 12.5, color: 'var(--dm)', background: 'var(--bgs)',
+        border: '1px solid var(--border)', borderRadius: 'var(--r8)', padding: '10px 12px',
+      }}>
+        Uren boek je op de werkbon van deze klus. Wat je hier ziet is de optelsom van
+        de werkbonnen van dit project.
+      </div>
 
       {/* Time entries list */}
       <div>
@@ -577,13 +502,7 @@ function UrenTab({ project, entries, onAdd, onDelete, canManage }) {
                   </div>
                 </div>
                 <div style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{fmtHours(e.hours)}</div>
-                {canManage && (
-                  <button
-                    className="btn btn-xs btn-ghost btn-icon"
-                    title="Verwijderen"
-                    onClick={() => onDelete(e.id)}
-                  >{I.trash}</button>
-                )}
+
               </div>
             ))}
           </div>
@@ -1131,27 +1050,6 @@ export function ProjectDetailDrawer({
     onChanged?.();
   };
 
-  const handleAddEntry = async data => {
-    const created = await addTimeEntry(projectId, data);
-    const next = [created, ...entries];
-    setEntries(next);
-    recompute(next, invoices);
-    onChanged?.();
-  };
-
-  const handleDeleteEntry = async id => {
-    if (!confirm('Deze uren-regel verwijderen?')) return;
-    try {
-      await deleteTimeEntry(id);
-      const next = entries.filter(e => e.id !== id);
-      setEntries(next);
-      recompute(next, invoices);
-      onChanged?.();
-      toast.success('Uren-regel verwijderd');
-    } catch (e) {
-      toast.error(e.message || 'Verwijderen mislukt');
-    }
-  };
 
   const handleAddNote = async text => {
     const n = await addProjectNote(projectId, text);
@@ -1215,13 +1113,7 @@ export function ProjectDetailDrawer({
                 />
               )}
               {tab === 'uren' && (
-                <UrenTab
-                  project={project}
-                  entries={entries}
-                  onAdd={handleAddEntry}
-                  onDelete={handleDeleteEntry}
-                  canManage={canManage}
-                />
+                <UrenTab project={project} entries={entries} />
               )}
               {tab === 'kosten' && (
                 <KostenTab project={project} canManage={canManage} />

@@ -545,8 +545,18 @@ export function DatabasePage({ openCustomer }) {
       (async () => {
         const companyId = await getCompanyId();
         if (!companyId) return [];
-        const { data } = await supabase.from('urenregistratie').select('id,project_id,werkbon_id,customer_id,profile_id,uren,datum').eq('company_id', companyId);
-        return data || [];
+        // Factureerbare uren zijn werkbonuren; de werkbon levert de klant en
+        // het project. Werkdaguren (urenregistratie) horen hier niet: die gaan
+        // over loon, niet over wat er bij een klant te factureren valt.
+        const { data } = await supabase
+          .from('werkbon_uren')
+          .select('id,profile_id,uren,datum,werkbonnen(customer_id,project_id)')
+          .eq('company_id', companyId);
+        return (data || []).map(u => ({
+          ...u,
+          customer_id: u.werkbonnen?.customer_id || null,
+          project_id: u.werkbonnen?.project_id || null,
+        }));
       })(),
       (async () => {
         const companyId = await getCompanyId();
@@ -670,8 +680,8 @@ export function DatabasePage({ openCustomer }) {
       if (filters.mailTemplateType && !rel.emails.some(e => e.related_type === filters.mailTemplateType)) return false;
 
       if (filters.heeftFactureerbareUren) {
-        // Uren leven in urenregistratie: gekoppeld aan de klant direct (customer_id)
-        // of aan een project van deze klant (project_id).
+        // Werkbonuren hangen via hun werkbon aan een klant en soms aan een
+        // project van die klant.
         const custProjects = rel.projects.map(p => p.id);
         const heeftUren = urenData.some(u =>
           (u.customer_id && u.customer_id === c.id) || custProjects.includes(u.project_id)

@@ -1463,7 +1463,7 @@ function AppInner() {
       case 'offertes':    return <OffertesPage openCustomer={openCustomer} preOpenOfferteId={navIntent?.page === 'offertes' ? navIntent.id : null} preFillDealId={navIntent?.page === 'offertes' ? navIntent.dealId : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'offertes' ? backCtx : null} onBackKlant={goBack} />;
       case 'projecten':   return <ProjectsPage openCustomer={openCustomer} openInvoice={openInvoice} setPage={navigatePage} preOpenProjectId={navIntent?.page === 'projecten' ? navIntent.id : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'projecten' ? backCtx : null} onBackKlant={goBack} />;
       case 'werkbonnen':  return <WerkbonPage preOpenWerkbonId={navIntent?.page === 'werkbonnen' ? navIntent.id : null} onNavConsumed={clearNavIntent} setPage={navigatePage} openCustomer={openCustomer} backKlant={backCtx?.page === 'werkbonnen' ? backCtx : null} onBackKlant={goBack} />;
-      case 'uren':        return <UrenPage />;
+      case 'uren':        return <UrenPage navigatePage={navigatePage} />;
       case 'database':    return <DatabasePage openCustomer={openCustomer} />;
       case 'team':        return <TeamPage />;
       case 'instellingen':return <InstellingenPage />;

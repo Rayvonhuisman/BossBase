@@ -6,10 +6,17 @@ import { getBedrijfsinstellingen } from '../services/instellingenService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
 import { listActivities } from '../services/activityService.js';
 import { getUrenregistratie, createUrenregel, berekenUren } from '../services/urenService.js';
+import { getTeamMembers } from '../services/notificatieService.js';
 import { PauzeKnoppen, rondAfOpVijf } from './UrenVelden.jsx';
 
 // ── Uren-herinnering-pop-up ───────────────────────────────────────────────────
-// Herinnert MEDEWERKERS (niet admin/planner) eraan hun uren in te vullen voor een
+// Herinnert personeel eraan hun WERKDAG in te vullen — het getal waar de
+// loonadministratie op draait. Werkbonuren tellen hier niet: die staan sinds
+// migratie 20260831140000 in een eigen tabel en zeggen niets over de lengte van
+// iemands werkdag. Een monteur die zes uur op klussen boekt maar geen werkdag,
+// krijgt dus nog steeds een herinnering.
+//
+// Herinnert personeel eraan hun uren in te vullen voor een
 // reeds verstreken dag waarop ze op de planning stonden (toegewezen werkbon of
 // activiteit) maar nog geen uren hebben geboekt. Het herhaalinterval is een
 // bedrijfsinstelling (uren_herinnering_interval_min; 0 = uit). De pop-up kan
@@ -21,7 +28,7 @@ import { PauzeKnoppen, rondAfOpVijf } from './UrenVelden.jsx';
 //
 // "Gepland maar geen uren" leunt op de bestaande bronnen:
 //   • gepland  = werkbonnen (gepland_op + assigned_to_ids) ∪ activiteiten (due_at → lokale datum + assigned_to_ids)
-//   • geboekt  = urenregistratie (profile_id + datum)
+//   • geboekt  = werkdaguren in urenregistratie (profile_id + datum)
 // Geen parallel systeem — dezelfde list-functies die de agenda/uren-pagina ook gebruiken.
 
 // Hoe ver terug we kijken. Voorkomt eindeloos zeuren over lang vervlogen dagen.
@@ -51,8 +58,10 @@ function computeMissingEntries(uid, werkbonnen, activities, urenRows) {
           date: w.geplandOp,
           werkbonId: w.id,
           contextLabel: [w.titel, w.customerName].filter(Boolean).join(' · '),
-          start: w.starttijd || '',
-          eind: w.eindtijd || '',
+          // Bewust NIET de tijden van de werkbon voorvullen: dit gaat over de
+          // hele werkdag, en die begint eerder en eindigt later dan de klus.
+          start: '',
+          eind: '',
         });
       }
     }
@@ -90,7 +99,16 @@ export function UrenHerinneringModal({ navigatePage }) {
   const { profile, refreshKey } = useProfile();
   const toast = useToast();
   const uid = profile?.id;
-  const isMedewerker = !!profile && profile.role !== 'admin' && profile.role !== 'planner';
+  // Werkdaguren zijn er voor wie ze aan iemand anders verantwoordt. Dus:
+  //   * niet de admin/eigenaar — die hoeft zichzelf niet te herinneren;
+  //   * planners wél — een voorman staat gewoon op het dak en zijn uren tellen
+  //     net zo goed mee voor het loon;
+  //   * en alleen als er écht personeel is. Dat leiden we af uit het aantal
+  //     actieve leden en niet uit het abonnement: een Groei-klant met twee
+  //     gebruikersplekken kan in zijn eentje werken.
+  const [heeftPersoneel, setHeeftPersoneel] = useState(false);
+  const isPersoneel = !!profile && profile.role !== 'admin';
+  const toonHerinnering = isPersoneel && heeftPersoneel;
 
   const [intervalMin, setIntervalMin] = useState(0);
   const [entries, setEntries] = useState([]);
@@ -99,8 +117,20 @@ export function UrenHerinneringModal({ navigatePage }) {
 
   const snoozeKey = uid ? `bb_uren_herinnering_snooze_${uid}` : null;
 
+  // Meer dan één actief lid = er is personeel. Een ZZP'er valt hierdoor vanzelf
+  // buiten de herinnering, ook als hij zichzelf ooit als medewerker heeft
+  // ingericht.
+  useEffect(() => {
+    if (!isPersoneel) { setHeeftPersoneel(false); return; }
+    let alive = true;
+    getTeamMembers()
+      .then(ms => { if (alive) setHeeftPersoneel((ms || []).filter(m => m.profileId).length > 1); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [isPersoneel, refreshKey]);
+
   const load = useCallback(async () => {
-    if (!isMedewerker || !uid) { setEntries([]); setIntervalMin(0); return; }
+    if (!toonHerinnering || !uid) { setEntries([]); setIntervalMin(0); return; }
     try {
       const [inst, wbs, acts, uren] = await Promise.all([
         getBedrijfsinstellingen().catch(() => null),
@@ -116,7 +146,7 @@ export function UrenHerinneringModal({ navigatePage }) {
     } catch {
       // Stil falen — een herinnering mag nooit de app blokkeren.
     }
-  }, [isMedewerker, uid]);
+  }, [toonHerinnering, uid]);
 
   // (Her)laad bij mount, rolwissel en globale refresh (o.a. ná uren boeken).
   useEffect(() => { load(); }, [load, refreshKey]);
@@ -178,7 +208,7 @@ export function UrenHerinneringModal({ navigatePage }) {
 
   const goToUren = () => { snooze(); navigatePage?.('uren'); };
 
-  const visible = isMedewerker && intervalMin > 0 && entries.length > 0 && !snoozed;
+  const visible = toonHerinnering && intervalMin > 0 && entries.length > 0 && !snoozed;
   if (!visible) return null;
 
   const meer = entries.length > 1;
@@ -188,10 +218,10 @@ export function UrenHerinneringModal({ navigatePage }) {
       <div className="modal" style={{ maxWidth: 560, width: '100%' }}>
         <div className="modal-hd">
           <div>
-            <div className="modal-title">Vul je uren in</div>
+            <div className="modal-title">Vul je werkdag in</div>
             <div className="modal-sub">
               Je stond {meer ? 'op deze dagen' : 'op deze dag'} gepland, maar er
-              {meer ? ' zijn' : ' is'} nog geen uren geboekt. Vul ze hier direct in.
+              {meer ? ' zijn' : ' is'} nog geen werkdag ingevuld. Doe het hier direct.
             </div>
           </div>
           <ModalX onClose={snooze} />
@@ -217,6 +247,8 @@ export function UrenHerinneringModal({ navigatePage }) {
                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--pd)' }}>{uren} uur</div>
                   )}
                 </div>
+                {/* De werkbon is hier alleen de aanleiding — je vult je hele dag in,
+                    niet de tijd die je op die klus stond. */}
                 {e.contextLabel && (
                   <div style={{ fontSize: 12.5, color: 'var(--dmu)', marginBottom: 10 }}>{e.contextLabel}</div>
                 )}

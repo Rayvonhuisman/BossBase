@@ -78,35 +78,6 @@ export function PauzeKnoppen({ waarde = 0, onChange, disabled = false }) {
   );
 }
 
-// ── Uursoort ────────────────────────────────────────────────────────────────
-// Verbergt zichzelf als er maar één soort is: dan valt er niets te kiezen en is
-// een keuzelijst alleen maar een extra handeling. De soort wordt in dat geval
-// door de aanroeper stilzwijgend meegestuurd.
-export function UursoortKeuze({ soorten = [], waarde, onChange, disabled = false, className }) {
-  if (soorten.length <= 1) return null;
-  return (
-    <select
-      className={className}
-      value={waarde || ''}
-      onChange={e => onChange(e.target.value || null)}
-      disabled={disabled}
-      aria-label="Uursoort"
-      style={className ? undefined : { width: '100%' }}
-    >
-      {soorten.map(s => <option key={s.id} value={s.id}>{s.naam}</option>)}
-    </select>
-  );
-}
-
-/**
- * De soort die standaard geselecteerd hoort te staan: de eerste op volgorde,
- * wat door de migratie "Normaal" is. Ook de waarde die meegaat als de keuzelijst
- * verborgen is.
- */
-export function standaardUursoortId(soorten = []) {
-  return soorten[0]?.id || null;
-}
-
 // ── Tijden ──────────────────────────────────────────────────────────────────
 /**
  * Rondt een HH:MM-tijd af op vijf minuten. Niemand boekt 14:37, en op een
