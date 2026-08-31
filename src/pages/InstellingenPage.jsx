@@ -37,6 +37,7 @@ import { AvatarUpload } from '../components/AvatarUpload.jsx';
 import { PasswordRequirements, PasswordMatch, passwordValid } from '../components/PasswordStrength.jsx';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
+import { comprimeerAfbeelding, LOGO_MAX_ZIJDE } from '../utils/afbeeldingComprimeren.js';
 import {
   getConnection,
   getLaatsteSyncRun,
@@ -445,13 +446,35 @@ export function InstellingenPage() {
     }
     // Niet-blokkerend: upload + koppelen op de achtergrond via de upload-indicator.
     startUpload(file.name, async () => {
-      const ext = file.name.split('.').pop().toLowerCase() || 'jpg';
+      // Verkleinen vóór het uploaden. Dit logo wordt bij élke offerte, factuur
+      // en werkbon opnieuw opgehaald; een bestand van een paar MB kost dan
+      // eindeloos bandbreedte voor een plaatje van hooguit 55 mm breed.
+      // Transparantie blijft behouden — een logo staat niet altijd op wit.
+      const { file: teUploaden } = await comprimeerAfbeelding(file, {
+        maxZijde: LOGO_MAX_ZIJDE,
+        kwaliteit: 0.9,
+        behoudTransparantie: true,
+      });
+      const ext = teUploaden.name.split('.').pop().toLowerCase() || 'jpg';
       const path = `${company.id}/logo.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from('bedrijf-logos')
-        .upload(path, file, { upsert: true, contentType: file.type });
+        .upload(path, teUploaden, { upsert: true, contentType: teUploaden.type });
       if (uploadError) throw uploadError;
       const { data: { publicUrl } } = supabase.storage.from('bedrijf-logos').getPublicUrl(path);
+
+      // Oude logobestanden met een ándere extensie opruimen. De naam is
+      // logo.<ext>, dus een PNG die na het comprimeren een JPG wordt laat het
+      // origineel anders als wees achter — en dat is precies het geval dat we
+      // hier proberen op te lossen. Best-effort: het logo staat al goed.
+      try {
+        const { data: bestaand } = await supabase.storage.from('bedrijf-logos').list(company.id);
+        const wezen = (bestaand || [])
+          .filter(f => /^logo\./i.test(f.name) && `${company.id}/${f.name}` !== path)
+          .map(f => `${company.id}/${f.name}`);
+        if (wezen.length) await supabase.storage.from('bedrijf-logos').remove(wezen);
+      } catch { /* opruimen mag het uploaden niet laten falen */ }
+
       await updateCompany(company.id, { logo_url: publicUrl });
       await refresh();
     });

@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase"
 import { getCompanyId, withCompanyId } from "../lib/currentCompany"
+import { comprimeerAfbeelding, FOTO_MAX_ZIJDE } from "../utils/afbeeldingComprimeren.js"
 
 
 // DB columns werkbonnen: id, company_id, customer_id, deal_id, offerte_id,
@@ -505,12 +506,21 @@ export async function getWerkbonFotos(werkbonId) {
 
 export async function uploadWerkbonFoto(werkbonId, file, categorie) {
   const companyId = await getCompanyId()
-  const ext = (file.name.split(".").pop() || "jpg").toLowerCase()
+  // Een telefoonfoto is al gauw 4000 pixels breed en een paar megabyte. Die
+  // wordt hier nooit groter getoond dan volledig scherm en op de PDF niet groter
+  // dan 83 mm, dus verkleinen vóór het uploaden — dat scheelt opslag én de
+  // wachttijd bij het openen van een werkbon met tien foto's. Mislukt het, dan
+  // gaat het origineel gewoon omhoog.
+  const { file: teUploaden } = await comprimeerAfbeelding(file, {
+    maxZijde: FOTO_MAX_ZIJDE,
+    kwaliteit: 0.82,
+  })
+  const ext = (teUploaden.name.split(".").pop() || "jpg").toLowerCase()
   const path = `${companyId}/${werkbonId}/${crypto.randomUUID()}.${ext}`
 
   const { error: uploadError } = await supabase.storage
     .from("werkbon-fotos")
-    .upload(path, file, { contentType: file.type || "image/jpeg" })
+    .upload(path, teUploaden, { contentType: teUploaden.type || "image/jpeg" })
   if (uploadError) throw uploadError
 
   // Sla het opslagpad op (bucket is privé; weergave loopt via signed URLs).
