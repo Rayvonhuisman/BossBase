@@ -51,6 +51,10 @@ export default function WerkbonOndertekenen({ token }) {
   const [signing, setSigning] = useState(false)
   const [klaar, setKlaar] = useState(false)
   const [pdfBezig, setPdfBezig] = useState(false)
+  // Wat er zojuist is getekend. De werkbon in de status komt uit de RPC en weet
+  // nog van niets; zonder dit levert "Werkbon downloaden" op het bedankscherm
+  // een bon met een leeg handtekeningvak — precies het bewijsstuk dat ontbreekt.
+  const [ondertekening, setOndertekening] = useState(null)
 
   const canvasRef = useRef(null)
 
@@ -103,8 +107,13 @@ export default function WerkbonOndertekenen({ token }) {
       geplandOp: werkbon.gepland_op,
       gestartOp: werkbon.gestart_op,
       afgerondOp: werkbon.afgerond_op,
-      ondertekendOp: werkbon.ondertekend_op,
-      ondertekendDoorNaam: werkbon.ondertekend_door_naam,
+      ondertekendOp: ondertekening?.op || werkbon.ondertekend_op,
+      ondertekendDoorNaam: ondertekening?.naam || werkbon.ondertekend_door_naam,
+      ondertekendDoorEmail: ondertekening?.email || werkbon.ondertekend_door_email,
+      // Vers getekend: de afbeelding zit nog in het geheugen. Bij een later
+      // bezoek komt hij als opgeslagen link uit get_werkbon_by_sign_token.
+      handtekeningDataUrl: ondertekening?.dataUrl || null,
+      handtekeningUrl: werkbon.handtekening_url || null,
       uitvoerders,
       ...extra,
     },
@@ -160,20 +169,26 @@ export default function WerkbonOndertekenen({ token }) {
       try {
         pdfBase64 = await getWerkbonPdfBase64(...pdfArgs({
           ondertekendOp: new Date().toISOString(),
-          ondertekendDoorNaam: form.name,
-          ondertekendDoorEmail: form.email,
+          ondertekendDoorNaam: form.name.trim(),
+          ondertekendDoorEmail: form.email.trim(),
           handtekeningDataUrl: dataUrl,
         }))
       } catch (e) {
         console.warn('Ondertekende PDF maken mislukt:', e.message)
       }
 
-      await signWerkbon({
+      const resultaat = await signWerkbon({
         signToken: token,
         name: form.name.trim(),
         email: form.email.trim(),
         signatureDataUrl: dataUrl,
         signedPdfBase64: pdfBase64,
+      })
+      setOndertekening({
+        op: resultaat?.ondertekend_op || new Date().toISOString(),
+        naam: form.name.trim(),
+        email: form.email.trim(),
+        dataUrl,
       })
       setKlaar(true)
     } catch (err) {
@@ -366,7 +381,14 @@ export default function WerkbonOndertekenen({ token }) {
       </div>
 
       <div style={{ marginBottom: 20 }}>
-        <HandtekeningCanvas ref={canvasRef} onChange={setHeeftHandtekening} />
+        {/* Hier leest de klant zelf mee, dus in de u-vorm — net als op de
+            ondertekenpagina van een offerte. */}
+        <HandtekeningCanvas
+          ref={canvasRef}
+          onChange={setHeeftHandtekening}
+          titel="Handtekening"
+          plaatshouder="Teken hier uw handtekening"
+        />
       </div>
 
       <div style={{ fontSize: '.78rem', color: '#6b7280', marginBottom: 16, lineHeight: 1.6 }}>

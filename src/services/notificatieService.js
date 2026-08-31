@@ -253,7 +253,14 @@ export async function getActiveTeamMembers({ includeSelf = false } = {}) {
 
   const { data, error } = await query;
   if (import.meta.env.DEV) console.log('[getActiveTeamMembers] rows:', data?.length ?? 0, 'error:', error?.message ?? null);
-  return (data || []).map(r => ({ id: r.id, fullName: r.full_name || '' })).filter(m => m.fullName);
+  // `profileId` staat er als alias naast `id` omdat de urenschermen, de
+  // urenherinnering en de uitvoerdersnamen op de werkbon-PDF op die naam
+  // filteren. Zonder dit veld filterden ze de hele lijst weg en kon een admin
+  // geen uren meer boeken op naam van een collega — zonder foutmelding, want een
+  // lege dropdown ziet eruit als "er zijn geen collega's".
+  return (data || [])
+    .map(r => ({ id: r.id, profileId: r.id, fullName: r.full_name || '' }))
+    .filter(m => m.fullName);
 }
 
 // Backwards-compatibele naam — levert ALLE actieve teamleden, inclusief jezelf,

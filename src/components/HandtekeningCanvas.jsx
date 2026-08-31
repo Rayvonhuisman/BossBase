@@ -9,8 +9,17 @@
 
 import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react';
 
+// De teksten zijn instelbaar omdat er twee verschillende lezers zijn: in de
+// afrondmodal kijkt de monteur mee ("laat de klant tekenen"), op de publieke
+// pagina leest de klant zélf het scherm en moet hij worden aangesproken.
 const HandtekeningCanvas = forwardRef(function HandtekeningCanvas(
-  { hoogte = 160, disabled = false, onChange }, ref,
+  {
+    hoogte = 160,
+    disabled = false,
+    onChange,
+    titel = 'Handtekening klant',
+    plaatshouder = 'Laat de klant hier tekenen',
+  }, ref,
 ) {
   const canvasRef = useRef(null);
   const drawing = useRef(false);
@@ -82,7 +91,7 @@ const HandtekeningCanvas = forwardRef(function HandtekeningCanvas(
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <div style={{ fontWeight: 700, fontSize: '.85rem' }}>Handtekening klant</div>
+        <div style={{ fontWeight: 700, fontSize: '.85rem' }}>{titel}</div>
         {heeftHandtekening && !disabled && (
           <button
             type="button"
@@ -121,7 +130,7 @@ const HandtekeningCanvas = forwardRef(function HandtekeningCanvas(
             position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
             justifyContent: 'center', color: '#9ca3af', fontSize: '.85rem', pointerEvents: 'none',
           }}>
-            Laat de klant hier tekenen
+            {plaatshouder}
           </div>
         )}
       </div>
