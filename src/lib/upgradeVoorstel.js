@@ -14,7 +14,7 @@ export const euro = n => `€ ${Number(n || 0)}`;
 
 export const fmtDatum = d => d
   ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
-  : '—';
+  : '';
 
 // ── Wat is het probleem, en wat lost het op? ─────────────────────────────────
 // Eén functie die van een aanleiding een voorstel maakt. Alles wat het scherm

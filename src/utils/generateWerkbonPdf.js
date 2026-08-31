@@ -125,7 +125,7 @@ async function buildWerkbonPdf(doc, werkbon, data, customer, company) {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8); tc(C.muted);
     doc.text(label, metaX, metaY);
     doc.setFont('helvetica', 'bold'); tc(C.dark);
-    doc.text(val || '—', W - M, metaY, { align: 'right' });
+    doc.text(val || '', W - M, metaY, { align: 'right' });
     metaY += 5;
   };
   metaRow('Werkbonnummer', werkbon?.nummer);
@@ -259,7 +259,7 @@ async function buildWerkbonPdf(doc, werkbon, data, customer, company) {
       const van = tijdFmt(u.startTijd || u.start_tijd);
       const tot = tijdFmt(u.eindTijd || u.eind_tijd);
       const pauze = Number(u.pauzeMinuten ?? u.pauze_minuten ?? 0);
-      doc.text(van && tot ? `${van} – ${tot}${pauze ? ` (${pauze} min pauze)` : ''}` : '—', M + 34, y);
+      doc.text(van && tot ? `${van} – ${tot}${pauze ? ` (${pauze} min pauze)` : ''}` : '', M + 34, y);
       doc.setFont('helvetica', 'bold'); tc(C.dark);
       doc.text(uurFmt(u.uren), W - M, y, { align: 'right' });
       // De opmerking verklaart een uitloop en is voor de klant het antwoord op
@@ -398,8 +398,8 @@ async function buildWerkbonPdf(doc, werkbon, data, customer, company) {
     doc.text(`Ondertekend · ${fmtDate(String(ondertekendOp).slice(0, 10))}`, W - M, y + 8, { align: 'right' });
 
     let fy = y + 20;
-    [['Ondertekend door', naam || '—'],
-     ['E-mailadres', email || '—'],
+    [['Ondertekend door', naam || ''],
+     ['E-mailadres', email || ''],
      ['Datum en tijd', fmtDateTime(ondertekendOp)]].forEach(([label, val]) => {
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); tc(C.muted);
       doc.text(label, M + 5, fy);

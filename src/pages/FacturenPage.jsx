@@ -47,7 +47,7 @@ const factuurBadge = f => {
 export function FactuurBadge({ f }) { return factuurBadge(f); }
 
 const fmtDate = d => {
-  if (!d) return '—';
+  if (!d) return '';
   const [y, m, day] = d.split('-');
   return `${day}-${m}-${y}`;
 };
@@ -658,7 +658,7 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail, 
   const canCrediteer = canManage && !uitBoekhouding
     && (factuur.status === 'verzonden' || factuur.status === 'betaald')
     && !factuur.gecrediteerd && !factuur.isCredit;
-  const customerName = factuur.customerName || customers.find(c => c.id == factuur.customerId)?.name || '—';
+  const customerName = factuur.customerName || customers.find(c => c.id == factuur.customerId)?.name || '';
   const [regels, setRegels] = useState([]);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -920,7 +920,7 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
 
   const customer = customers.find(c => c.id == factuur.customerId);
   const fmt2 = n => new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0);
-  const fmtD = d => d ? new Date(d).toLocaleDateString('nl-NL') : '—';
+  const fmtD = d => d ? new Date(d).toLocaleDateString('nl-NL') : '';
 
   const TITLE_MAP = { factuur: 'Factuur versturen per e-mail', herinnering_1: 'Betaalherinnering 1 versturen', herinnering_2: 'Betaalherinnering 2 versturen' };
 
@@ -1315,7 +1315,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
                   </tr>
                 )}
                 {filtered.map(f => {
-                  const customerName = f.customerName || customers.find(c => c.id == f.customerId)?.name || '—';
+                  const customerName = f.customerName || customers.find(c => c.id == f.customerId)?.name || '';
                   return (
                     <tr
                       key={f.id}

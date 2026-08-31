@@ -402,18 +402,18 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       jobCosts.forEach(c => { const k = c.dealId || c.projectId || c.werkbonId || c.id; byJob.set(k, (byJob.get(k) || 0) + (Number(c.amt) || 0)); });
       const jobs = [...byJob.values()];
       const avg = jobs.length ? jobs.reduce((s, v) => s + v, 0) / jobs.length : 0;
-      return <KpiCard tone="neutral" icon={I.costs} label="Kosten per klus" value={avg > 0 ? eur(avg) : '—'} sub={jobs.length ? `gemiddeld · ${jobs.length} klussen` : 'geen kosten geregistreerd'} onClick={() => setPage('costs')} />;
+      return <KpiCard tone="neutral" icon={I.costs} label="Kosten per klus" value={avg > 0 ? eur(avg) : ''} sub={jobs.length ? `gemiddeld · ${jobs.length} klussen` : 'geen kosten geregistreerd'} onClick={() => setPage('costs')} />;
     }
     case 'costs_month': {
       const md = jobCosts.filter(c => inThisMonth(c.date));
       const val = md.reduce((s, c) => s + (Number(c.amt) || 0), 0);
-      return <KpiCard tone="amber" icon={I.costs} label="Kosten deze maand" value={val > 0 ? eur(val) : '—'} sub={`${md.length} kostenposten`} onClick={() => setPage('costs')} />;
+      return <KpiCard tone="amber" icon={I.costs} label="Kosten deze maand" value={val > 0 ? eur(val) : ''} sub={`${md.length} kostenposten`} onClick={() => setPage('costs')} />;
     }
     case 'billable': {
       // Te factureren = afgeronde klussen (deals in een 'afgerond'-fase).
       const b = deals.filter(d => dealCat(d) === 'won');
       const val = b.reduce((s, d) => s + (d.value || 0), 0);
-      return <KpiCard tone="warn" icon={I.euro} label="Te factureren" value={val > 0 ? eur(val) : '—'} sub={b.length ? `${b.length} afgeronde klussen` : 'niets in de wacht'} onClick={() => setPage('facturen')} />;
+      return <KpiCard tone="warn" icon={I.euro} label="Te factureren" value={val > 0 ? eur(val) : ''} sub={b.length ? `${b.length} afgeronde klussen` : 'niets in de wacht'} onClick={() => setPage('facturen')} />;
     }
 
     case 'revenue_month': {
@@ -509,12 +509,12 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                     <div className="feed-main">
                       <div className="feed-title">{a.title}{c && <> · <strong>{c.name}</strong></>}</div>
                       <div className="feed-meta">
-                        <span>{a.time || a.dueAt?.slice(0, 10) || '—'}</span>
+                        <span>{a.time || a.dueAt?.slice(0, 10) || ''}</span>
                         {a.type && (<><span className="sep">·</span><span>{activiteitTypeLabel(a.type)}</span></>)}
                       </div>
                     </div>
                     <div className="feed-aside">
-                      <Chip tone={od ? 'warn' : (a.dueAt?.slice(0, 10) === today ? 'info' : 'neutral')}>{od ? 'Te laat' : (a.dueAt?.slice(0, 10) === today ? 'Vandaag' : (a.time || '—'))}</Chip>
+                      <Chip tone={od ? 'warn' : (a.dueAt?.slice(0, 10) === today ? 'info' : 'neutral')}>{od ? 'Te laat' : (a.dueAt?.slice(0, 10) === today ? 'Vandaag' : (a.time || ''))}</Chip>
                     </div>
                   </button>
                 );
@@ -797,7 +797,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 17l9 4 9-4M3 12l9 4 9-4"/></svg>
                     </span>
                     <div className="feed-main">
-                      <div className="feed-title">{w.customerName || w.titel || w.title || '—'}</div>
+                      <div className="feed-title">{w.customerName || w.titel || w.title || ''}</div>
                       <div className="feed-meta">
                         <span style={{ fontFamily: 'ui-monospace,Menlo,monospace' }}>{ref}</span>
                         {w.locatie && (<><span className="sep">·</span><span>{w.locatie}</span></>)}

@@ -241,7 +241,7 @@ export default function LeveranciersPage({ openLeverancier }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 'auto' }}>
                 <div>
                   <div style={{ fontSize: '.68rem', color: 'var(--dl)' }}>Kosten</div>
-                  <div style={{ fontWeight: 700, fontSize: '.88rem' }}>{totalen[l.id] ? fmt(totalen[l.id].bedrag) : '—'}</div>
+                  <div style={{ fontWeight: 700, fontSize: '.88rem' }}>{totalen[l.id] ? fmt(totalen[l.id].bedrag) : ''}</div>
                 </div>
                 {can('klanten_verwijderen') && (
                   <button className="btn-icon" title="Verwijderen" onClick={e => { e.stopPropagation(); remove(l); }}>{I.trash}</button>
@@ -258,9 +258,9 @@ export default function LeveranciersPage({ openLeverancier }) {
               {filtered.map(l => (
                 <tr key={l.id} style={{ cursor: 'pointer', opacity: l.actief ? 1 : 0.6 }} onClick={() => openLeverancier?.(l.id)}>
                   <td><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Av name={l.naam} size="sm" /><span style={{ fontWeight: 600 }}>{l.naam}</span></div></td>
-                  <td style={{ color: 'var(--dmu)' }}>{l.telefoon || '—'}</td>
-                  <td>{l.city || '—'}</td>
-                  <td style={{ fontWeight: 700 }}>{totalen[l.id] ? fmt(totalen[l.id].bedrag) : '—'}</td>
+                  <td style={{ color: 'var(--dmu)' }}>{l.telefoon || ''}</td>
+                  <td>{l.city || ''}</td>
+                  <td style={{ fontWeight: 700 }}>{totalen[l.id] ? fmt(totalen[l.id].bedrag) : ''}</td>
                   <td>{can('klanten_verwijderen') && <button className="btn-icon" onClick={e => { e.stopPropagation(); remove(l); }}>{I.trash}</button>}</td>
                 </tr>
               ))}

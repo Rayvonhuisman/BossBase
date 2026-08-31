@@ -13,7 +13,7 @@ function CRMVisual() {
         {[
           { name: "Bakker Loodgieters",     status: "Actief",  val: "€ 12.400", cls: "badge-accepted" },
           { name: "Jansen Schilderwerk",    status: "Offerte", val: "€ 3.800",  cls: "badge-sent" },
-          { name: "Peters Installatiewerk", status: "Nieuw",   val: "—",        cls: "badge-concept" },
+          { name: "Peters Installatiewerk", status: "Nieuw",   val: "",        cls: "badge-concept" },
         ].map(r => (
           <div key={r.name} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 13px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>

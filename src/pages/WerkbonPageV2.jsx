@@ -51,7 +51,7 @@ const DAY_LABEL = ['zo','ma','di','wo','do','vr','za'];
 const MONTH_LABEL = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
 
 const shortDate = d => {
-  if (!d) return '—';
+  if (!d) return '';
   const dt = new Date(d + 'T00:00:00');
   if (Number.isNaN(dt.valueOf())) return d;
   return `${DAY_LABEL[dt.getDay()]} ${dt.getDate()} ${MONTH_LABEL[dt.getMonth()]}`;
@@ -253,7 +253,7 @@ function WerkbonListCard({ w, takenCount, onClick }) {
   return (
     <button className="wb2-list-card" onClick={onClick} type="button">
       <div className="wb2-list-card-row1">
-        <div className="wb2-list-card-titel">{w.titel || '—'}</div>
+        <div className="wb2-list-card-titel">{w.titel || ''}</div>
         <StatusBadge status={w.status} size="sm" />
       </div>
       {w.customerName && <div className="wb2-list-card-customer">{w.customerName}</div>}
@@ -626,7 +626,7 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
 
   const veld = (r, k, v) => onUpdate?.(r, { [k]: v });
   const uitBiblio = r => Boolean(r.materiaalId ?? r.materiaal_id);
-  const levNaam = id => leveranciers.find(l => l.id === id)?.naam || '—';
+  const levNaam = id => leveranciers.find(l => l.id === id)?.naam || '';
 
   // Zelfde kolomopzet als de regelitems op offertes/facturen.
   const COLS = magInkoop
@@ -712,7 +712,7 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
                     {magInkoop && (
                       vast
                         ? <input type="text" readOnly disabled title={vastTitel} style={{ minWidth: 0 }}
-                            value={m.inkoopprijsPer != null ? fmtEur(m.inkoopprijsPer) : '—'} />
+                            value={m.inkoopprijsPer != null ? fmtEur(m.inkoopprijsPer) : ''} />
                         : <input type="number" min="0" step="0.01" value={m.inkoopprijsPer ?? ''} placeholder="p/st"
                             disabled={!canEdit} title="Inkoopprijs per stuk — intern" style={{ minWidth: 0 }}
                             onChange={e => veld(m, 'inkoopprijs_per', e.target.value)} />
@@ -743,7 +743,7 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
                     naamveld verschijnt er dan onder. */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
                   <select value={form.keuze} onChange={e => kiesMateriaal(e.target.value)} style={{ minWidth: 0 }}>
-                    <option value="">— Kies materiaal —</option>
+                    <option value="">Kies materiaal</option>
                     {biblio.map(m => <option key={m.id} value={m.id}>{m.naam}</option>)}
                     <option value={VRIJ}>Vrij materiaal (zelf invullen)…</option>
                   </select>
@@ -762,7 +762,7 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
                 {magInkoop && (
                   form.materiaal_id
                     ? <input type="text" readOnly disabled title={vastTitel} style={{ minWidth: 0 }}
-                        value={form.inkoopprijs_per === '' ? '—' : fmtEur(Number(form.inkoopprijs_per))} />
+                        value={form.inkoopprijs_per === '' ? 'niet ingevuld' : fmtEur(Number(form.inkoopprijs_per))} />
                     : <input type="number" min="0" step="0.01" value={form.inkoopprijs_per} placeholder="p/st"
                         title="Inkoopprijs per stuk — intern" style={{ minWidth: 0 }}
                         onChange={e => setForm(f => ({ ...f, inkoopprijs_per: e.target.value }))} />
@@ -1628,9 +1628,9 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
                 {(detail.geplandOp || detail.starttijd) && (
                   <div style={{ fontSize: 13, color: 'var(--dl)', display: 'flex', alignItems: 'center', gap: 5 }}>
                     {I.cal}
-                    {detail.geplandOp ? shortDate(detail.geplandOp) : '—'}
+                    {detail.geplandOp ? shortDate(detail.geplandOp) : ''}
                     {(detail.starttijd || detail.eindtijd)
-                      ? ` · ${fmtTime(detail.starttijd) || '—'}${detail.eindtijd ? ` – ${fmtTime(detail.eindtijd)}` : ''}`
+                      ? ` · ${fmtTime(detail.starttijd) || ''}${detail.eindtijd ? ` – ${fmtTime(detail.eindtijd)}` : ''}`
                       : ''}
                   </div>
                 )}
@@ -1760,7 +1760,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
                         u.pauzeMinuten ? `${u.pauzeMinuten} min pauze` : null,
                         u.reisKm != null ? `${String(u.reisKm).replace('.', ',')} km` : null,
                         u.notitie || null,
-                      ].filter(Boolean).join(' · ') || '—'}
+                      ].filter(Boolean).join(' · ') || ''}
                     </div>
                   </div>
                   <div className="wb2-uren-time">

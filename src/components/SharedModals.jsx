@@ -307,7 +307,7 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
             ) : (
               <>
                 <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)}>
-                  <option value="">— Kies klant —</option>
+                  <option value="">Kies klant</option>
                   {(customers || []).map(c => <option key={c.id} value={c.id}>{c.name} {c.company ? `· ${c.company}` : ''}</option>)}
                 </select>
                 {errors.customer_id && <span className="bb-err">{errors.customer_id}</span>}
@@ -1425,7 +1425,7 @@ export function ProfileModal({ onClose, profile, company, user, onSaved, onLogou
           </div>
           <div className="f">
             <label>Bedrijf</label>
-            <input value={company?.name || '—'} disabled />
+            <input value={company?.name || ''} disabled />
           </div>
           <div className="f">
             <label>Rol</label>

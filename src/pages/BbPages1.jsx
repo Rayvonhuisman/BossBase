@@ -42,7 +42,7 @@ const emptyCustomerForm = { name: '', company: '', email: '', phone: '', city: '
 // Zelfde datumweergave als de project-tab (ProjectDetailDrawer) zodat de
 // facturenlijst identiek is: 'YYYY-MM-DD' → 'DD-MM-YYYY'. Null-safe.
 const fmtRowDate = d => {
-  if (!d) return '—';
+  if (!d) return '';
   const [y, m, day] = String(d).split('-');
   if (!day) return d;
   return `${day}-${m}-${y}`;
@@ -588,7 +588,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
               <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: '.83rem' }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 600, color: 'var(--dl)', fontSize: '.75rem' }}>{o.nummer}</div>
-                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.omschrijving || '—'}</div>
+                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.omschrijving || ''}</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                   <span style={{ fontWeight: 700 }}>{fmt(o.totaalIncl)}</span>
@@ -609,7 +609,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
               <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: '.83rem' }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 600, color: 'var(--dl)', fontSize: '.75rem' }}>{f.nummer}</div>
-                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.notities || '—'}</div>
+                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.notities || ''}</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                   <span style={{ fontWeight: 700 }}>{fmt(f.totaalIncl)}</span>
@@ -717,7 +717,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
                 {cOffertes.map(o => (
                   <div key={o.id} className="lrow" onClick={() => setPage('offertes', { id: o.id, from: 'klant', klantId: custId, klantNaam: c?.name })}>
                     <div className="lrow-main">
-                      <div className="lrow-title">{o.omschrijving || o.nummer || '—'}</div>
+                      <div className="lrow-title">{o.omschrijving || o.nummer || ''}</div>
                       {o.omschrijving && o.nummer && <div className="lrow-sub">{o.nummer}</div>}
                     </div>
                     <OfferteBadge status={o.status} />
@@ -742,7 +742,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
               <div className="lrows">
                 {cFacturen.map(f => (
                   <div key={f.id} className="lrow" onClick={() => setPage('facturen', { id: f.id, from: 'klant', klantId: custId, klantNaam: c?.name })}>
-                    <div className="lrow-num">{f.nummer || '—'}</div>
+                    <div className="lrow-num">{f.nummer || ''}</div>
                     <div className="lrow-meta">
                       {fmtRowDate(f.factuurdatum)}
                       {f.vervaldatum && ` · vervalt ${fmtRowDate(f.vervaldatum)}`}
@@ -783,7 +783,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
                   {cCosts.map(r => (
                     <div key={r.id} className="lrow lrow-static">
                       <div className="lrow-main">
-                        <div className="lrow-title">{r.desc || '—'}</div>
+                        <div className="lrow-title">{r.desc || ''}</div>
                         <div className="lrow-sub"><CostCategoryBadge category={r.cat} /></div>
                       </div>
                       <div className="lrow-amount" style={{ textAlign: 'right' }}>
@@ -1024,7 +1024,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
                     <span className="cust-info-val" style={{ flex: 1, color: c[field.key] ? undefined : 'var(--dl)' }}>
-                      {c[field.key] || '—'}
+                      {c[field.key] || ''}
                     </span>
                     {can('klanten_bewerken') && (
                       <button onClick={() => startEdit(field.key)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}>
@@ -1214,7 +1214,7 @@ export function CustomersPage({ openCustomer }) {
               {filtered.map(c => (
                 <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => openCustomer(c.id)}>
                   <td><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Av name={c.name} size="sm" idx={c.av} /><span style={{ fontWeight: 600 }}>{c.name}</span></div></td>
-                  <td style={{ color: 'var(--dmu)' }}>{c.phone || '—'}</td>
+                  <td style={{ color: 'var(--dmu)' }}>{c.phone || ''}</td>
                   <td>{c.city}</td>
                   <td style={{ fontWeight: 700 }}>{fmt(c.total)}</td>
                   <td style={{ fontWeight: 700, color: '#15A34A' }}>{fmt(c.paid)}</td>

@@ -41,7 +41,7 @@ const TABS = [
 ];
 
 const fmtDate = d => {
-  if (!d) return '—';
+  if (!d) return '';
   const [y, m, day] = String(d).split('-');
   if (!day) return d;
   return `${day}-${m}-${y}`;
@@ -316,7 +316,7 @@ function OfferteTab({ project, offertes, customers, deals = [], company, setPage
           ) : (
             <div style={{ maxWidth: 360, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
               <select value={pickId} onChange={e => setPickId(e.target.value)}>
-                <option value="">— Kies een offerte —</option>
+                <option value="">Kies een offerte</option>
                 {eligible.map(o => (
                   <option key={o.id} value={o.id}>
                     {o.nummer || 'Offerte'}{o.omschrijving ? ` · ${o.omschrijving.slice(0, 40)}` : ''} · {fmt(o.totaalIncl)}
@@ -378,7 +378,7 @@ function OfferteTab({ project, offertes, customers, deals = [], company, setPage
           </div>
           <div>
             <div style={labelStyle}>Geaccepteerd</div>
-            <div style={{ fontWeight: 600 }}>{linkedOfferte.geaccepteerdOp ? fmtDate(linkedOfferte.geaccepteerdOp.slice(0, 10)) : '—'}</div>
+            <div style={{ fontWeight: 600 }}>{linkedOfferte.geaccepteerdOp ? fmtDate(linkedOfferte.geaccepteerdOp.slice(0, 10)) : ''}</div>
           </div>
         </div>
       </div>
@@ -777,7 +777,7 @@ function FacturenTab({ project, invoices, openInvoice, setPage, customers, compa
               <div key={f.id} role="button" tabIndex={0} title="Open factuur" className="lrow"
                 onClick={() => openFactuur(f)}
                 onKeyDown={e => { if (e.key === 'Enter') openFactuur(f); }}>
-                <div className="lrow-num">{f.nummer || '—'}</div>
+                <div className="lrow-num">{f.nummer || ''}</div>
                 <div className="lrow-meta">
                   {fmtDate(f.factuurdatum)}
                   {f.vervaldatum && ` · vervalt ${fmtDate(f.vervaldatum)}`}
@@ -836,7 +836,7 @@ function NotesTab({ notes, onAdd, onDelete }) {
 const WB_DAY   = ['zo','ma','di','wo','do','vr','za'];
 const WB_MONTH = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
 const wbShortDate = d => {
-  if (!d) return '—';
+  if (!d) return '';
   const dt = new Date(d + 'T00:00:00');
   if (Number.isNaN(dt.valueOf())) return d;
   return `${WB_DAY[dt.getDay()]} ${dt.getDate()} ${WB_MONTH[dt.getMonth()]}`;

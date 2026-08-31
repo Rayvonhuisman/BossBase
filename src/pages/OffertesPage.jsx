@@ -34,7 +34,7 @@ const offerteBadge = status => {
 export function OfferteBadge({ status }) { return offerteBadge(status); }
 
 const fmtDate = d => {
-  if (!d) return '—';
+  if (!d) return '';
   const [y, m, day] = d.split('-');
   return `${day}-${m}-${y}`;
 };
@@ -653,7 +653,7 @@ function CopyOfferteModal({ offerte, customers, onClose, onCopied }) {
 function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMail, onCopy, onEdit, onDelete, openCustomer }) {
   const { company } = useProfile();
   const toast = useToast();
-  const customerName = offerte.customerName || customers.find(c => c.id == offerte.customerId)?.name || '—';
+  const customerName = offerte.customerName || customers.find(c => c.id == offerte.customerId)?.name || '';
   const [pdfLoading, setPdfLoading] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   // De echte offerteregels. Hier stond een samenvatting op basis van de oude
@@ -792,7 +792,7 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
                     {items.map(it => (
                       <tr key={it.id}>
                         <td>
-                          {it.omschrijving || '—'}
+                          {it.omschrijving || ''}
                           {it.eenheid ? <span style={{ color: 'var(--dl)', fontSize: '.76rem' }}> · {it.eenheid}</span> : null}
                         </td>
                         <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{it.aantal}</td>
@@ -884,7 +884,7 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
   const signLink = `${appUrl}/offerte/${offerte.sign_token || ''}`;
   const customer = customers.find(c => c.id == offerte.customerId);
   const fmt2 = n => new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0);
-  const fmtDate = d => d ? new Date(d).toLocaleDateString('nl-NL') : '—';
+  const fmtDate = d => d ? new Date(d).toLocaleDateString('nl-NL') : '';
 
   useEffect(() => {
     // Let op: GEEN `link` in vars. Zo blijft {{link}} als zichtbare placeholder
@@ -1262,7 +1262,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
                   </tr>
                 )}
                 {filtered.map(o => {
-                  const customerName = o.customerName || customers.find(c => c.id == o.customerId)?.name || '—';
+                  const customerName = o.customerName || customers.find(c => c.id == o.customerId)?.name || '';
                   return (
                     <tr key={o.id} onClick={() => setViewOfferte(o)} style={{ cursor: 'pointer' }} title="Offerte openen">
                       <td className="td">

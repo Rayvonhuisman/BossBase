@@ -122,7 +122,7 @@ function normalize(status) {
 
 function prettify(status) {
   const t = String(status ?? '').replace(/_/g, ' ').trim();
-  if (!t) return '—';
+  if (!t) return '';
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 

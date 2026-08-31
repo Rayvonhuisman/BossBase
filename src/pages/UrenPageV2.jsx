@@ -16,7 +16,7 @@ import { usePlanGuard } from '../components/PlanUpgradeModal.jsx';
 
 // ── Date / time helpers ─────────────────────────────────────────────────────
 const todayIso = () => new Date().toISOString().slice(0, 10);
-const fmtNL = iso => { if (!iso) return '—'; const [y, m, d] = iso.split('-'); return `${d}-${m}-${y}`; };
+const fmtNL = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${d}-${m}-${y}`; };
 const MONTHS_NL = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
 const DAYS_NL = ['Zondag','Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag'];
 
@@ -33,12 +33,12 @@ const dayLabel = iso => {
 
 const trimTime = t => (t ? String(t).slice(0, 5) : t);
 const fmtTimeRange = (s, e) => {
-  if (!s && !e) return '—';
-  return `${trimTime(s) || '—'} – ${trimTime(e) || '—'}`;
+  if (!s && !e) return '';
+  return `${trimTime(s) || ''} – ${trimTime(e) || ''}`;
 };
 
 
-const fmtUren = n => (n == null || Number.isNaN(n)) ? '—' : Number(n).toFixed(2);
+const fmtUren = n => (n == null || Number.isNaN(n)) ? '' : Number(n).toFixed(2);
 
 // ── Period navigation (zelfde patroon/stijl als de Agenda) ──────────────────
 // Datumhelpers gelijk aan CalendarPage: maandag-start, ISO-weeknummer.
@@ -117,9 +117,9 @@ const Ic = {
 // ── Small reusable bits ─────────────────────────────────────────────────────
 
 function Avatar({ name, size = 26 }) {
-  if (!name) {
-    return <span className="uren2-avatar uren2-avatar-empty" style={{ width: size, height: size, fontSize: size * 0.36 }}>—</span>;
-  }
+  // Geen naam, geen rondje. Een leeg bolletje met een streepje erin ziet eruit
+  // als een fout; helemaal niets tonen leest als "niet ingevuld".
+  if (!name) return null;
   return (
     <span className="uren2-avatar" style={{ width: size, height: size, background: tintOf(name), fontSize: size * 0.36 }}>
       {initialsOf(name)}
@@ -149,6 +149,31 @@ function PeriodTabs({ value, onChange }) {
   return (
     <div className="tabs" role="tablist">
       {tabs.map(t => (
+        <button
+          key={t.id}
+          role="tab"
+          aria-selected={value === t.id}
+          className={`tab${value === t.id ? ' active' : ''}`}
+          onClick={() => onChange(t.id)}
+        >{t.label}</button>
+      ))}
+    </div>
+  );
+}
+
+// Welke soort uren je bekijkt. Bewust één weergave tegelijk: de twee soorten
+// beantwoorden verschillende vragen, en drie tabellen onder elkaar laat ze door
+// elkaar lopen in plaats van naast elkaar staan.
+const SOORTEN = [
+  { id: 'werkdag', label: 'Werkdaguren' },
+  { id: 'werkbon', label: 'Werkbonuren' },
+  { id: 'vergelijk', label: 'Werkdag naast klus' },
+];
+
+function SoortTabs({ value, onChange }) {
+  return (
+    <div className="tabs" role="tablist">
+      {SOORTEN.map(t => (
         <button
           key={t.id}
           role="tab"
@@ -217,7 +242,7 @@ function WerkbonUrenTable({ rows, onOpenWerkbon }) {
                     <Avatar name={r.medewerkerNaam} size={26} />
                     <span>{r.medewerkerNaam}</span>
                   </span>
-                ) : <span className="uren2-muted">—</span>}
+                ) : null}
               </td>
               <td className="uren2-td">
                 <button
@@ -235,10 +260,12 @@ function WerkbonUrenTable({ rows, onOpenWerkbon }) {
                 {fmtTimeRange(r.startTijd, r.eindTijd)}
               </td>
               <td className={`uren2-td uren2-td-hours${r.pauzeMinuten ? '' : ' uren2-muted'}`}>
-                {r.pauzeMinuten ? `${r.pauzeMinuten} min` : '—'}
+                {r.pauzeMinuten ? `${r.pauzeMinuten} min` : 'geen'}
               </td>
               <td className="uren2-td uren2-td-hours">{fmtUren(r.uren)}</td>
-              <td className={`uren2-td uren2-td-note${r.notitie ? '' : ' uren2-muted'}`}>{r.notitie || '—'}</td>
+              <td className="uren2-td uren2-td-note">
+                <div className="uren2-note-ellipsis" title={r.notitie || ''}>{r.notitie}</div>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -265,11 +292,11 @@ function DagVergelijking({ werkdag, werkbon }) {
     if (!perDag.has(k)) perDag.set(k, { datum: r.datum, naam: r.medewerkerNaam, dag: 0, klus: 0 });
     perDag.get(k).klus += Number(r.uren || 0);
   }
-  const regels = [...perDag.values()].sort((a, b) => (a.datum < b.datum ? 1 : -1)).slice(0, 30);
-  if (!regels.length) return null;
+  const regels = [...perDag.values()].sort((a, b) => (a.datum < b.datum ? 1 : -1));
+  if (!regels.length) return <EmptyState message="Niets te vergelijken in deze periode" />;
 
   return (
-    <div className="uren2-table-wrap" style={{ marginBottom: 18 }}>
+    <div className="uren2-table-wrap">
       <table className="uren2-table">
         <thead>
           <tr>
@@ -286,10 +313,10 @@ function DagVergelijking({ werkdag, werkbon }) {
             return (
               <tr key={i} className="uren2-tr">
                 <td className="uren2-td uren2-td-date">{fmtNL(r.datum)}</td>
-                <td className="uren2-td">{r.naam || '—'}</td>
-                <td className={`uren2-td uren2-td-hours${r.dag ? '' : ' uren2-muted'}`}>{r.dag ? fmtUren(r.dag) : '—'}</td>
-                <td className={`uren2-td uren2-td-hours${r.klus ? '' : ' uren2-muted'}`}>{r.klus ? fmtUren(r.klus) : '—'}</td>
-                <td className="uren2-td uren2-td-hours">{verschil === 0 ? '—' : fmtUren(verschil)}</td>
+                <td className="uren2-td">{r.naam}</td>
+                <td className={`uren2-td uren2-td-hours${r.dag ? '' : ' uren2-muted'}`}>{r.dag ? fmtUren(r.dag) : 'geen'}</td>
+                <td className={`uren2-td uren2-td-hours${r.klus ? '' : ' uren2-muted'}`}>{r.klus ? fmtUren(r.klus) : 'geen'}</td>
+                <td className={`uren2-td uren2-td-hours${verschil === 0 ? ' uren2-muted' : ''}`}>{verschil === 0 ? 'gelijk' : fmtUren(verschil)}</td>
               </tr>
             );
           })}
@@ -326,17 +353,17 @@ function UrenTable({ rows, onEdit, onDelete }) {
                     <Avatar name={r.medewerkerNaam} size={26} />
                     <span>{r.medewerkerNaam}</span>
                   </span>
-                ) : <span className="uren2-muted">—</span>}
+                ) : null}
               </td>
               <td className={`uren2-td uren2-td-time${r.startTijd ? '' : ' uren2-muted'}`}>
                 {fmtTimeRange(r.startTijd, r.eindTijd)}
               </td>
               <td className={`uren2-td uren2-td-hours${r.pauzeMinuten ? '' : ' uren2-muted'}`}>
-                {r.pauzeMinuten ? `${r.pauzeMinuten} min` : '—'}
+                {r.pauzeMinuten ? `${r.pauzeMinuten} min` : 'geen'}
               </td>
               <td className="uren2-td uren2-td-hours">{fmtUren(r.uren)}</td>
               <td className="uren2-td uren2-td-note">
-                <div className="uren2-note-ellipsis" title={r.notitie || ''}>{r.notitie || '—'}</div>
+                <div className="uren2-note-ellipsis" title={r.notitie || ''}>{r.notitie}</div>
               </td>
               <td className="uren2-td uren2-td-actions">
                 <span className="uren2-row-actions">
@@ -391,9 +418,7 @@ function MobileList({ rows, onEdit, onDelete }) {
                 <div className="uren2-mcard-md">
                   <Avatar name={r.medewerkerNaam} size={32} />
                   <div className="uren2-mcard-md-text">
-                    <div className={`uren2-mcard-name${r.medewerkerNaam ? '' : ' uren2-muted'}`}>
-                      {r.medewerkerNaam || '—'}
-                    </div>
+                    <div className="uren2-mcard-name">{r.medewerkerNaam}</div>
                   </div>
                 </div>
                 <div className="uren2-mcard-hrs">
@@ -521,7 +546,7 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
     medewerkerOptions.unshift({ value: currentProfileId, label: 'Ikzelf' });
   }
 
-  const editMedewerker = initial?.medewerkerNaam || '—';
+  const editMedewerker = initial?.medewerkerNaam || '';
 
   return (
     <ModalShell open={open} onClose={onClose} busy={busy} mobile={mobile}>
@@ -680,6 +705,9 @@ export function UrenPageV2({ navigatePage } = {}) {
   const [periodType, setPeriodType] = useUrlTab('alles', { validIds: ['alles', 'dag', 'week', 'maand'] });
   const [anchor, setAnchor] = useState(() => new Date());
   const [employee, setEmployee] = useState('all');
+  // Welke soort uren in beeld staat. Werkdaguren is de standaard: dat is wat de
+  // meeste mensen hier komen doen, en het is het enige wat je hier kunt wijzigen.
+  const [soort, setSoort] = useState('werkdag');
 
   const [modal, setModal] = useState(null);            // { mode: 'register'|'edit', initial }
   const [confirmRow, setConfirmRow] = useState(null);
@@ -745,11 +773,14 @@ export function UrenPageV2({ navigatePage } = {}) {
     employee === 'all' ? werkbonRowsPeriod : werkbonRowsPeriod.filter(r => r.profileId === employee)
   ), [werkbonRowsPeriod, employee]);
 
-  // KPI: counts over period (NOT employee)
+  // KPI's over de periode (niet over de medewerkerfilter) én over de soort die
+  // in beeld staat: kijk je naar werkbonuren, dan tellen die. Anders staat er
+  // een totaal boven een tabel waar het niet bij hoort.
+  const kpiBron = soort === 'werkbon' ? werkbonRowsPeriod : rowsPeriod;
   const kpis = useMemo(() => {
-    const totaal = rowsPeriod.reduce((s, r) => s + (Number(r.uren) || 0), 0);
-    const medewerkers = new Set(rowsPeriod.map(r => r.profileId).filter(Boolean)).size;
-    const dagen = new Set(rowsPeriod.map(r => r.datum)).size;
+    const totaal = kpiBron.reduce((s, r) => s + (Number(r.uren) || 0), 0);
+    const medewerkers = new Set(kpiBron.map(r => r.profileId).filter(Boolean)).size;
+    const dagen = new Set(kpiBron.map(r => r.datum)).size;
     const gemPerDag = dagen ? totaal / dagen : 0;
     return {
       totaal: Math.round(totaal * 100) / 100,
@@ -757,7 +788,19 @@ export function UrenPageV2({ navigatePage } = {}) {
       gemPerDag: Math.round(gemPerDag * 100) / 100,
       dagen,
     };
-  }, [rowsPeriod]);
+  }, [kpiBron]);
+
+  // In de vergelijkweergave zijn drie losse totalen niet het interessante: daar
+  // gaat het om het verschil tussen de twee soorten.
+  const vergelijkKpis = useMemo(() => {
+    const dag = rowsPeriod.reduce((s, r) => s + (Number(r.uren) || 0), 0);
+    const klus = werkbonRowsPeriod.reduce((s, r) => s + (Number(r.uren) || 0), 0);
+    return {
+      dag: Math.round(dag * 100) / 100,
+      klus: Math.round(klus * 100) / 100,
+      verschil: Math.round((dag - klus) * 100) / 100,
+    };
+  }, [rowsPeriod, werkbonRowsPeriod]);
 
   // Visible rows: period + employee + sort
   const visible = useMemo(() => {
@@ -766,17 +809,22 @@ export function UrenPageV2({ navigatePage } = {}) {
     return sortRows(xs);
   }, [rowsPeriod, employee]);
 
-  // Employee options: unique medewerkers from current period, alphabetical
+  // Wat de teller naast de filter telt, hangt af van wat er in beeld staat.
+  const aantalZichtbaar = soort === 'werkbon' ? werkbonVisible.length : visible.length;
+
+  // Medewerkers in de filterlijst: uit béide soorten uren. Werd die lijst alleen
+  // uit de werkdaguren opgebouwd, dan kon je in de werkbonweergave niet filteren
+  // op iemand die alleen op klussen boekt — en dat is nou juist de monteur.
   const employeeOptions = useMemo(() => {
     const seen = new Map();
-    for (const r of allRows) {
+    for (const r of [...allRows, ...werkbonUren]) {
       if (r.profileId && r.medewerkerNaam && !seen.has(r.profileId)) seen.set(r.profileId, r.medewerkerNaam);
     }
     const opts = [...seen.entries()]
       .sort((a, b) => a[1].localeCompare(b[1]))
       .map(([id, name]) => ({ value: id, label: name }));
     return [{ value: 'all', label: 'Alle medewerkers' }, ...opts];
-  }, [allRows]);
+  }, [allRows, werkbonUren]);
 
   // Periode-navigatie (vorige / volgende / vandaag) — alleen zinvol bij een
   // begrensde periode (dag/week/maand), niet bij 'Alles'.
@@ -858,34 +906,65 @@ export function UrenPageV2({ navigatePage } = {}) {
         </div>
       )}
 
-      {/* KPIs */}
+      {/* KPIs — volgen de gekozen soort */}
       <div className="uren2-kpis">
-        <KpiCard
-          icon={Ic.Clock}
-          label="Totaal uren"
-          value={kpis.totaal.toFixed(2)}
-          unit="uur"
-          hint={`Som over ${periodNoun(periodType)}`}
-        />
-        <KpiCard
-          icon={Ic.Users}
-          label="Medewerkers"
-          value={String(kpis.medewerkers)}
-          hint={`Uniek binnen ${periodNoun(periodType)}`}
-        />
-        <KpiCard
-          icon={Ic.Trend}
-          label="Gem. per dag"
-          value={kpis.gemPerDag.toFixed(2)}
-          unit="uur"
-          hint={`Over ${kpis.dagen} ${kpis.dagen === 1 ? 'dag' : 'dagen'}`}
-        />
+        {soort === 'vergelijk' ? (
+          <>
+            <KpiCard
+              icon={Ic.Clock}
+              label="Werkdaguren"
+              value={vergelijkKpis.dag.toFixed(2)}
+              unit="uur"
+              hint={`Som over ${periodNoun(periodType)}`}
+            />
+            <KpiCard
+              icon={Ic.Clock}
+              label="Op klussen"
+              value={vergelijkKpis.klus.toFixed(2)}
+              unit="uur"
+              hint="Geboekt op werkbonnen"
+            />
+            <KpiCard
+              icon={Ic.Trend}
+              label="Verschil"
+              value={vergelijkKpis.verschil.toFixed(2)}
+              unit="uur"
+              hint="Werkdag min klus"
+            />
+          </>
+        ) : (
+          <>
+            <KpiCard
+              icon={Ic.Clock}
+              label={soort === 'werkbon' ? 'Totaal werkbonuren' : 'Totaal uren'}
+              value={kpis.totaal.toFixed(2)}
+              unit="uur"
+              hint={`Som over ${periodNoun(periodType)}`}
+            />
+            <KpiCard
+              icon={Ic.Users}
+              label="Medewerkers"
+              value={String(kpis.medewerkers)}
+              hint={`Uniek binnen ${periodNoun(periodType)}`}
+            />
+            <KpiCard
+              icon={Ic.Trend}
+              label="Gem. per dag"
+              value={kpis.gemPerDag.toFixed(2)}
+              unit="uur"
+              hint={`Over ${kpis.dagen} ${kpis.dagen === 1 ? 'dag' : 'dagen'}`}
+            />
+          </>
+        )}
       </div>
 
       {/* Filter + table/list */}
       <div className="uren2-card">
         <div className="uren2-filter-bar">
           <div className="uren2-period">
+            {/* Zelfde plek en stijl als de periodefilters: het is één blok
+                keuzes over wat je ziet, niet twee losse dingen. */}
+            <SoortTabs value={soort} onChange={setSoort} />
             <PeriodTabs value={periodType} onChange={setPeriodType} />
             {periodType !== 'alles' && (
               <div className="uren2-periodnav">
@@ -896,9 +975,9 @@ export function UrenPageV2({ navigatePage } = {}) {
             )}
           </div>
           <div className="uren2-filter-right">
-            {!loading && (
+            {!loading && soort !== 'vergelijk' && (
               <span className="uren2-count">
-                {visible.length} {visible.length === 1 ? 'registratie' : 'registraties'}
+                {aantalZichtbaar} {aantalZichtbaar === 1 ? 'registratie' : 'registraties'}
               </span>
             )}
             <Dropdown
@@ -911,46 +990,33 @@ export function UrenPageV2({ navigatePage } = {}) {
           </div>
         </div>
 
+        {/* Eén regel uitleg bij de twee weergaven die niet vanzelf spreken.
+            Werkdaguren heeft er geen nodig: dat is de standaard. */}
+        {!loading && soort === 'werkbon' && (
+          <p className="uren2-view-note">
+            Uren op een klus, geboekt op de werkbon zelf. Hier alleen ter inzage; wijzigen doe je
+            op de werkbon.
+          </p>
+        )}
+        {!loading && soort === 'vergelijk' && (
+          <p className="uren2-view-note">
+            Per medewerker per dag. Ze hoeven niet gelijk te zijn — reistijd en kantoorwerk zitten
+            wel in de werkdag en niet op een klus — maar een groot verschil valt hier op.
+          </p>
+        )}
+
         {loading ? (
           <div className="uren2-loading">Laden…</div>
+        ) : soort === 'werkbon' ? (
+          <WerkbonUrenTable rows={werkbonVisible} onOpenWerkbon={id => navigatePage?.('werkbonnen', { id })} />
+        ) : soort === 'vergelijk' ? (
+          <DagVergelijking werkdag={visible} werkbon={werkbonVisible} />
         ) : isMobile ? (
           <MobileList rows={visible} onEdit={r => setModal({ mode: 'edit', initial: r })} onDelete={r => setConfirmRow(r)} />
         ) : (
           <UrenTable rows={visible} onEdit={r => setModal({ mode: 'edit', initial: r })} onDelete={r => setConfirmRow(r)} />
         )}
       </div>
-
-      {/* ── Werkbonuren ── */}
-      {!loading && (
-        <div className="uren2-card" style={{ marginTop: 18 }}>
-          <div className="uren2-card-hd">
-            <div>
-              <h2 className="uren2-card-title">Werkbonuren</h2>
-              <p className="uren2-card-sub">
-                Uren op een klus, geboekt op de werkbon zelf. Hier alleen ter inzage —
-                wijzigen doe je op de werkbon.
-              </p>
-            </div>
-          </div>
-          <WerkbonUrenTable rows={werkbonVisible} onOpenWerkbon={id => navigatePage?.('werkbonnen', { id })} />
-        </div>
-      )}
-
-      {/* ── Werkdag naast klus ── */}
-      {!loading && (visible.length > 0 || werkbonVisible.length > 0) && (
-        <div className="uren2-card" style={{ marginTop: 18 }}>
-          <div className="uren2-card-hd">
-            <div>
-              <h2 className="uren2-card-title">Werkdag naast klus</h2>
-              <p className="uren2-card-sub">
-                Per medewerker per dag. Ze hoeven niet gelijk te zijn — reistijd en kantoorwerk
-                zitten wel in de werkdag en niet op een klus — maar een groot verschil valt hier op.
-              </p>
-            </div>
-          </div>
-          <DagVergelijking werkdag={visible} werkbon={werkbonVisible} />
-        </div>
-      )}
 
       {/* FAB on mobile */}
       {isMobile && (
@@ -990,7 +1056,8 @@ export function UrenPageV2({ navigatePage } = {}) {
           <h2 className="uren2-confirm-title">Deze urenregistratie verwijderen?</h2>
           {confirmRow && (
             <p className="uren2-confirm-sub">
-              {fmtNL(confirmRow.datum)} · {confirmRow.medewerkerNaam || '—'} · {fmtUren(confirmRow.uren)} uur
+              {[fmtNL(confirmRow.datum), confirmRow.medewerkerNaam, `${fmtUren(confirmRow.uren)} uur`]
+                .filter(Boolean).join(' · ')}
             </p>
           )}
         </div>

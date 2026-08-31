@@ -31,7 +31,7 @@ const WEBSITE_STATUS = {
   geannuleerd:       'geannuleerd',
 };
 
-const fmtDatum = d => d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+const fmtDatum = d => d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
 
 function StatusPil({ status, opzeggen, stoptOp }) {
   const s = STATUS_LABELS[status] || { label: status || 'Onbekend', kleur: 'var(--dmu)', bg: 'var(--bgs)' };

@@ -23,7 +23,7 @@ import { statusInfo } from '../utils/statusColors.js';
 const THIS_MONTH = () => new Date().toISOString().slice(0, 7);
 
 const fmtDate = d => {
-  if (!d) return '—';
+  if (!d) return '';
   const [y, m, day] = d.split('-');
   return `${day}-${m}-${y}`;
 };
@@ -519,8 +519,8 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
                               style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'inherit', cursor: 'pointer', textAlign: 'left' }}
                               onMouseEnter={e => { e.currentTarget.style.color = 'var(--p)'; e.currentTarget.style.textDecoration = 'underline'; }}
                               onMouseLeave={e => { e.currentTarget.style.color = 'inherit'; e.currentTarget.style.textDecoration = 'none'; }}
-                            >{p.customerName || '—'}</button>
-                          ) : <span style={{ color: 'var(--dl)' }}>—</span>}
+                            >{p.customerName || ''}</button>
+                          ) : null}
                         </td>
                         <td className="td"><ProjectBadge status={p.status} /></td>
                         <td className="td" style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(p.projectValue)}</td>

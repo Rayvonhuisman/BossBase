@@ -233,7 +233,7 @@ export default function LeverancierPage({ leverancierId, onClose }) {
             {l.telefoon && <a href={`tel:${l.telefoon}`} className="btn btn-s btn-sm" style={{ flexShrink: 0, marginLeft: 12 }}>{I.call} {l.telefoon}</a>}
           </div>
           <div style={{ fontSize: '.82rem', color: 'var(--dmu)', marginBottom: 10 }}>
-            {[l.contactpersoon, l.city].filter(Boolean).join(' · ') || '—'}
+            {[l.contactpersoon, l.city].filter(Boolean).join(' · ') || ''}
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <SyncIndicator entiteit={l} />
@@ -248,7 +248,7 @@ export default function LeverancierPage({ leverancierId, onClose }) {
             // Geen "Boekhouding" hier: dat staat al als vinkje in de kop,
             // en drie keer dezelfde melding op één scherm is er twee te veel.
             { label: 'Materialen', val: String(aantalMaterialen) },
-            { label: 'Betaaltermijn', val: l.betaaltermijnDagen ? `${l.betaaltermijnDagen} dagen` : '—' },
+            { label: 'Betaaltermijn', val: l.betaaltermijnDagen ? `${l.betaaltermijnDagen} dagen` : '' },
           ].map((s, i) => (
             <div key={i} style={{ background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 'var(--r10)', padding: '12px 14px' }}>
               <div style={{ fontSize: '.7rem', color: 'var(--dl)', marginBottom: 4, fontWeight: 600 }}>{s.label}</div>
@@ -368,12 +368,12 @@ export default function LeverancierPage({ leverancierId, onClose }) {
                     <tr key={m.id}>
                       <td style={{ fontWeight: 600 }}>{m.naam}</td>
                       <td>{m.eenheid}</td>
-                      <td>{m.verkoopprijs != null ? fmt(m.verkoopprijs) : '—'}</td>
+                      <td>{m.verkoopprijs != null ? fmt(m.verkoopprijs) : ''}</td>
                       {can('inkoopprijzen') && (
                         <>
-                          <td>{m.inkoopprijs != null ? fmt(m.inkoopprijs) : '—'}</td>
+                          <td>{m.inkoopprijs != null ? fmt(m.inkoopprijs) : ''}</td>
                           <td style={{ color: mg && mg.bedrag < 0 ? '#dc2626' : '#15A34A' }}>
-                            {mg ? `${fmt(mg.bedrag)}${mg.pct != null ? ` · ${mg.pct}%` : ''}` : '—'}
+                            {mg ? `${fmt(mg.bedrag)}${mg.pct != null ? ` · ${mg.pct}%` : ''}` : ''}
                           </td>
                         </>
                       )}
@@ -461,7 +461,7 @@ export default function LeverancierPage({ leverancierId, onClose }) {
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
                     <span className="cust-info-val" style={{ flex: 1, color: l[field.key] ? undefined : 'var(--dl)' }}>
-                      {l[field.key] || '—'}
+                      {l[field.key] || ''}
                     </span>
                     {magBewerken && (
                       <button onClick={() => startEdit(field.key)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}>

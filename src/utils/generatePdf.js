@@ -55,14 +55,14 @@ export function luminance([r, g, b]) {
 }
 
 export const fmtDate = d => {
-  if (!d) return '—';
+  if (!d) return '';
   const parts = String(d).slice(0, 10).split('-');
   if (parts.length !== 3) return d;
   return `${parts[2]}-${parts[1]}-${parts[0]}`;
 };
 
 export const fmtDateTime = d => {
-  if (!d) return '—';
+  if (!d) return '';
   try {
     return new Date(d).toLocaleString('nl-NL', {
       day: 'numeric', month: 'numeric', year: 'numeric',
@@ -296,7 +296,7 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     doc.text(label, metaX, metaY);
     doc.setFont('helvetica', 'bold');
     tc(C.dark);
-    doc.text(val || '—', W - M, metaY, { align: 'right' });
+    doc.text(val || '', W - M, metaY, { align: 'right' });
     metaY += 5;
   };
 
@@ -616,8 +616,8 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     // Velden
     let fy = y + 20;
     const fields = [
-      ['Ondertekend door', signedByName || '—'],
-      ['E-mailadres', signedByEmail || '—'],
+      ['Ondertekend door', signedByName || ''],
+      ['E-mailadres', signedByEmail || ''],
       ['Datum en tijd', fmtDateTime(signedAt)],
     ];
     fields.forEach(([label, val]) => {

@@ -1469,7 +1469,7 @@ export function DatabasePage({ openCustomer }) {
                       </div>
                       {meta.lastProject.status && <StatusBadge status={meta.lastProject.status} />}
                     </>
-                  ) : <span style={{ color: 'var(--dl)' }}>—</span>}
+                  ) : null}
                 </div>
                 <div style={{ fontSize: 12, color: meta.lastEmail ? 'var(--dk)' : 'var(--dl)' }}>
                   {meta.lastEmail ? (
@@ -1481,7 +1481,7 @@ export function DatabasePage({ openCustomer }) {
                         {meta.lastEmail.subject}
                       </div>
                     </>
-                  ) : '—'}
+                  ) : ''}
                 </div>
                 <div style={{ textAlign: 'center' }}>
                   <span style={{ fontWeight: 700, fontSize: 13, color: meta.projectCount > 0 ? 'var(--dk)' : 'var(--dl)' }}>
@@ -1489,7 +1489,7 @@ export function DatabasePage({ openCustomer }) {
                   </span>
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: meta.betaald > 0 ? 'var(--pd)' : 'var(--dl)', textAlign: 'right' }}>
-                  {meta.betaald > 0 ? fmt(meta.betaald) : '—'}
+                  {meta.betaald > 0 ? fmt(meta.betaald) : ''}
                 </div>
 
                 {/* ── Acties kolom ── */}

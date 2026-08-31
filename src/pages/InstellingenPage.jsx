@@ -2547,7 +2547,7 @@ export function InstellingenPage() {
                       <td>
                         {editingVoertuigId === v.id ? (
                           <input value={editingVoertuigForm.kenteken} onChange={e => setEditingVoertuigForm(f => ({ ...f, kenteken: e.target.value }))} style={{ width: '100%' }} />
-                        ) : v.kenteken || '—'}
+                        ) : v.kenteken || ''}
                       </td>
                       <td>
                         {editingVoertuigId === v.id ? (

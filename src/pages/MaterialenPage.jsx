@@ -169,7 +169,7 @@ export default function MaterialenPage() {
   };
   useEffect(herlaad, [refreshKey]);
 
-  const levNaam = id => leveranciers.find(l => l.id === id)?.naam || '—';
+  const levNaam = id => leveranciers.find(l => l.id === id)?.naam || '';
   const term = zoek.toLowerCase();
   const gefilterd = lijst.filter(m =>
     m.naam.toLowerCase().includes(term) || (m.artikelnummer || '').toLowerCase().includes(term));
@@ -245,11 +245,11 @@ export default function MaterialenPage() {
                     </td>
                     <td>{m.eenheid}</td>
                     <td style={{ color: 'var(--dmu)' }}>{levNaam(m.leverancierId)}</td>
-                    {magInkoop && <td>{m.inkoopprijs != null ? fmt(m.inkoopprijs) : '—'}</td>}
-                    <td style={{ fontWeight: 700 }}>{m.verkoopprijs != null ? fmt(m.verkoopprijs) : '—'}</td>
+                    {magInkoop && <td>{m.inkoopprijs != null ? fmt(m.inkoopprijs) : ''}</td>}
+                    <td style={{ fontWeight: 700 }}>{m.verkoopprijs != null ? fmt(m.verkoopprijs) : ''}</td>
                     {magInkoop && (
                       <td style={{ fontWeight: 600, color: mg && mg.bedrag < 0 ? '#dc2626' : '#15A34A' }}>
-                        {mg ? `${fmt(mg.bedrag)}${mg.pct != null ? ` · ${mg.pct}%` : ''}` : '—'}
+                        {mg ? `${fmt(mg.bedrag)}${mg.pct != null ? ` · ${mg.pct}%` : ''}` : ''}
                       </td>
                     )}
                     <td>{m.btwPct}%</td>

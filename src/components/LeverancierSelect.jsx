@@ -147,7 +147,7 @@ export default function LeverancierSelect({
         // net buiten zijn cel in het formulier.
         style={{ width: '100%', maxWidth: '100%', minWidth: 0, ...(fout ? { borderColor: '#dc2626' } : null), ...style }}
       >
-        <option value="">{verplicht ? '— Kies leverancier —' : 'Geen leverancier'}</option>
+        <option value="">{verplicht ? 'Kies leverancier' : 'Geen leverancier'}</option>
         {lijst.map(l => <option key={l.id} value={l.id}>{l.naam}</option>)}
         <option value={NIEUW}>+ Nieuwe leverancier…</option>
       </select>

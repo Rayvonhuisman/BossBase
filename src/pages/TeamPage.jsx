@@ -579,7 +579,7 @@ export function TeamPage() {
                   <td>{roleBadge(member.role)}</td>
                   <td>{statusBadge(member.status, member)}</td>
                   <td style={{ color: 'var(--dmu)', fontSize: '.83rem' }}>{member.email}</td>
-                  <td style={{ color: 'var(--dm)' }}>{member.hoursPerWeek > 0 ? `${member.hoursPerWeek}u` : '—'}</td>
+                  <td style={{ color: 'var(--dm)' }}>{member.hoursPerWeek > 0 ? `${member.hoursPerWeek}u` : ''}</td>
                   <td>
                     {isAdmin && (
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>

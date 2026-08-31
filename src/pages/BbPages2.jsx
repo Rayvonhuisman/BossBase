@@ -987,7 +987,7 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
             </div>
             <div className="f" style={{ flex: '2 1 200px', minWidth: 0 }}>
               <label>Omschrijving <Saved field="description" /></label>
-              <input type="text" value={desc} placeholder="—"
+              <input type="text" value={desc} placeholder="Omschrijving"
                 onChange={e => setDesc(e.target.value)} onBlur={() => save('description', desc)} />
             </div>
             <div className="f" style={{ flex: '1 1 150px', minWidth: 0 }}>
@@ -1179,12 +1179,12 @@ export function CostsPage() {
               const c = customers.find(x => x.id === r.custId);
               return (
                 <tr key={r.id} onClick={() => setSelectedCost(r)} style={{ cursor: 'pointer' }}>
-                  <td style={{ fontWeight: 600 }}>{r.customerId ? (customers.find(x => x.id === r.customerId)?.name || '—') : r.klantType === 'algemeen' ? 'Algemeen' : (c?.name || '—')}</td>
+                  <td style={{ fontWeight: 600 }}>{r.customerId ? (customers.find(x => x.id === r.customerId)?.name || '') : r.klantType === 'algemeen' ? 'Algemeen' : (c?.name || '')}</td>
                   <td><CostCategoryBadge category={r.cat} /></td>
                   <td>{r.desc}</td>
                   <td>
                     {r.leverancierId
-                      ? (leveranciers.find(l => l.id === r.leverancierId)?.naam || '—')
+                      ? (leveranciers.find(l => l.id === r.leverancierId)?.naam || '')
                       : isWerkbonMateriaalKost(r)
                         ? <span style={{ color: 'var(--dl)', fontSize: '.78rem' }}>via werkbon</span>
                         : <span style={{
@@ -1206,7 +1206,7 @@ export function CostsPage() {
                       ? (r.externeRef.startsWith('snelstart_')
                         ? <span style={{ fontSize: '.7rem', fontWeight: 700, color: '#fff', background: '#0A5BC4', borderRadius: 4, padding: '2px 6px' }}>SS</span>
                         : <span style={{ fontSize: '.7rem', fontWeight: 700, color: '#fff', background: '#2563EB', borderRadius: 4, padding: '2px 6px' }}>MB</span>)
-                      : <span style={{ fontSize: '.7rem', color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 6px' }}>—</span>
+                      : <span style={{ fontSize: '.7rem', color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 6px' }}>handmatig</span>
                     }
                   </td>
                   <td onClick={e => e.stopPropagation()}>
@@ -1698,7 +1698,7 @@ export function RevenuePage() {
                             </td>
                             {boekhouding && (
                               <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
-                                {bh != null ? fmt(bh) : '—'}
+                                {bh != null ? fmt(bh) : ''}
                               </td>
                             )}
                           </tr>

@@ -1830,6 +1830,12 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 /* Period tabs gebruiken de standaard .tabs/.tab classes (consistent met de
    rest van het dashboard) — geen aparte uren2-tab stijl meer. */
 
+/* Uitleg onder de filterbalk bij de weergaven die niet vanzelf spreken. */
+.uren2-view-note{
+  margin:0; padding:12px 20px 0;
+  font-size:12.5px; line-height:1.5; color:var(--uren2-muted);
+}
+
 /* Dropdown */
 .uren2-dropdown{ position:relative; min-width:0 }
 .uren2-dropdown-trigger{
@@ -1905,6 +1911,9 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .uren2-td-date{ padding-left:24px; font-weight:500 }
 .uren2-td-time{}
 .uren2-td-hours{ text-align:right; font-weight:700 }
+/* "geen" of "gelijk" in een getallenkolom is een woord, geen getal: niet vet,
+   anders trekt de afwezigheid van een waarde meer aandacht dan de waardes. */
+.uren2-td.uren2-muted{ font-weight:400 }
 .uren2-td-note{ max-width:160px }
 .uren2-note-ellipsis{
   max-width:160px; overflow:hidden; text-overflow:ellipsis;

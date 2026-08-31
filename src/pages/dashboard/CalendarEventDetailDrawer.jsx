@@ -281,7 +281,7 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
           <span className={`badge ${tone}`}>{typeLabel}</span>
           <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.3, color: '#0a0a0a', marginTop: 6 }}>{ev.title || 'Afspraak'}</div>
           <div style={{ marginTop: 6, fontSize: 13, color: '#6b7280' }}>
-            {ev.date || '—'}{(ev.time || ev.end) ? ` · ${ev.time || ''}${ev.end ? `–${ev.end}` : ''}` : ''}
+            {ev.date || ''}{(ev.time || ev.end) ? ` · ${ev.time || ''}${ev.end ? `–${ev.end}` : ''}` : ''}
           </div>
         </div>
         {HeadClose}
@@ -340,15 +340,15 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
         </Section>
       ) : (
         <Section title="Overzicht">
-          <Row k="Titel" v={ev.title || '—'} />
+          <Row k="Titel" v={ev.title || ''} />
           <Row k="Type" v={typeLabel} />
-          <Row k="Datum" v={ev.date || '—'} />
-          <Row k="Starttijd" v={ev.time || '—'} />
-          <Row k="Eindtijd" v={ev.end || '—'} />
-          <Row k="Locatie" v={ev.location || '—'} />
+          <Row k="Datum" v={ev.date || ''} />
+          <Row k="Starttijd" v={ev.time || ''} />
+          <Row k="Eindtijd" v={ev.end || ''} />
+          <Row k="Locatie" v={ev.location || ''} />
           <Row k="Klant" v={ev.custId && openCustomer
             ? <button type="button" onClick={() => openCustomer(ev.custId)} title="Open klantkaart" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', fontWeight: 700, color: 'var(--p)', textDecoration: 'none' }} onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')} onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}>{customers.find(c => c.id === ev.custId)?.name || 'Gekoppeld'}</button>
-            : '—'} />
+            : ''} />
         </Section>
       )}
 

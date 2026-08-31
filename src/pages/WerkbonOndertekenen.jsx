@@ -15,7 +15,7 @@ import { getWerkbonPdfUrl, getWerkbonPdfBase64 } from '../utils/generateWerkbonP
 import { signWerkbon, getFotosViaToken } from '../services/werkbonOndertekenenService.js'
 
 const fmtDatum = d => {
-  if (!d) return '—'
+  if (!d) return ''
   return new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 const uurFmt = n => `${Number(n || 0).toFixed(2).replace('.', ',')} u`
@@ -254,7 +254,7 @@ export default function WerkbonOndertekenen({ token }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16, marginBottom: 24 }}>
-        <Info label="Klant" value={klant?.name || '—'} />
+        <Info label="Klant" value={klant?.name || ''} />
         <Info label="Uitgevoerd op" value={fmtDatum(werkbon.afgerond_op || werkbon.gestart_op || werkbon.gepland_op)} />
         {werkbon.locatie && <Info label="Locatie" value={werkbon.locatie} />}
         {totaalUren > 0 && <Info label="Gewerkte uren" value={uurFmt(totaalUren)} />}

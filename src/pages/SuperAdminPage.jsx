@@ -34,12 +34,12 @@ function PlanBadge({ plan }) {
 }
 
 function fmtDate(iso) {
-  if (!iso) return '—'
+  if (!iso) return ''
   return new Date(iso).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 function fmtRelative(iso) {
-  if (!iso) return '—'
+  if (!iso) return ''
   const diff = Date.now() - new Date(iso).getTime()
   const mins = Math.floor(diff / 60000)
   if (mins < 2) return 'zojuist'
@@ -270,7 +270,7 @@ export function SuperAdminPage({ navigate, profile }) {
                           {c.name}
                         </div>
                       </td>
-                      <td style={{ padding: '11px 14px', color: '#6b7280' }}>{c.email || '—'}</td>
+                      <td style={{ padding: '11px 14px', color: '#6b7280' }}>{c.email || ''}</td>
                       <td style={{ padding: '11px 14px' }}><PlanBadge plan={c.subscription?.plan || 'trial'} /></td>
                       <td style={{ padding: '11px 14px' }}><StatusBadge status={c.status || 'actief'} /></td>
                       <td style={{ padding: '11px 14px', textAlign: 'center' }}>{c.memberCount}</td>
@@ -376,7 +376,7 @@ function CompanyDrawer({ company, notes, onNotesChange, onSaveNotes, onPlanSelec
               }
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{company.name}</div>
-                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>{company.email || '—'}</div>
+                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>{company.email || ''}</div>
               </div>
             </div>
             <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ flexShrink: 0 }}><X size={16} /></button>
@@ -436,14 +436,14 @@ function CompanyDrawer({ company, notes, onNotesChange, onSaveNotes, onPlanSelec
           {/* 1. Bedrijfsgegevens */}
           <DrawerSection title="Bedrijfsgegevens">
             <DrawerRow label="Naam"       value={company.name} />
-            <DrawerRow label="E-mail"     value={company.email || '—'} />
-            <DrawerRow label="Telefoon"   value={company.phone || '—'} />
-            <DrawerRow label="Adres"      value={company.address ? `${company.address}, ${company.postalCode || ''} ${company.city || ''}`.trim().replace(/^,\s*/, '') : '—'} />
-            <DrawerRow label="KvK"        value={company.kvk || '—'} />
-            <DrawerRow label="BTW"        value={company.btwNumber || '—'} />
+            <DrawerRow label="E-mail"     value={company.email || ''} />
+            <DrawerRow label="Telefoon"   value={company.phone || ''} />
+            <DrawerRow label="Adres"      value={company.address ? `${company.address}, ${company.postalCode || ''} ${company.city || ''}`.trim().replace(/^,\s*/, '') : ''} />
+            <DrawerRow label="KvK"        value={company.kvk || ''} />
+            <DrawerRow label="BTW"        value={company.btwNumber || ''} />
             <DrawerRow label="Website"    value={company.website
               ? <a href={company.website.startsWith('http') ? company.website : 'https://' + company.website} target="_blank" rel="noreferrer" style={{ color: '#1DDB62' }}>{company.website}</a>
-              : '—'} />
+              : ''} />
             <DrawerRow label="Aangemaakt" value={fmtDate(company.createdAt)} />
             <DrawerRow label="Status"     value={<StatusBadge status={company.status || 'actief'} />} />
             <DrawerRow label="Branding"   value={
@@ -486,7 +486,7 @@ function CompanyDrawer({ company, notes, onNotesChange, onSaveNotes, onPlanSelec
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 600, fontSize: 13 }}>{m.fullName || '—'}</span>
+                    <span style={{ fontWeight: 600, fontSize: 13 }}>{m.fullName || ''}</span>
                     <span style={{ fontSize: 10, fontWeight: 600, color: '#6b7280', background: '#f1f5f9', padding: '1px 6px', borderRadius: 99 }}>{m.role}</span>
                     {m.isSuperAdmin && (
                       <span style={{ fontSize: 10, fontWeight: 700, color: '#6366f1', background: '#eef2ff', padding: '1px 6px', borderRadius: 99 }}>super admin</span>

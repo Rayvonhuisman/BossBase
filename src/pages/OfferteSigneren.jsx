@@ -7,7 +7,7 @@ const fmt = n =>
   new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0)
 
 const fmtDate = d => {
-  if (!d) return '—'
+  if (!d) return ''
   const dt = new Date(d)
   return dt.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
 }
@@ -364,7 +364,7 @@ export default function OfferteSigneren({ token }) {
 
         {/* Gegevens */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
-          <InfoBlok label="Klant" value={klant?.name || '—'} />
+          <InfoBlok label="Klant" value={klant?.name || ''} />
           <InfoBlok label="Datum" value={fmtDate(offerte.created_at || offerte.geldig_tot)} />
           <InfoBlok label="Geldig tot" value={fmtDate(offerte.geldig_tot)} />
           <InfoBlok label="Totaalbedrag incl. BTW" value={fmt(offerte.totaal_incl)} />

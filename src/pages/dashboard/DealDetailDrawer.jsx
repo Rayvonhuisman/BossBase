@@ -286,7 +286,7 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
           }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#0a0a0a' }}>{o.nummer || 'Offerte'} <span style={{ fontWeight: 500, color: '#6b7280' }}>· {o.status}</span></div>
-              <div style={{ fontSize: 11.5, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.omschrijving || o.customerName || '—'}</div>
+              <div style={{ fontSize: 11.5, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.omschrijving || o.customerName || ''}</div>
             </div>
             <span style={{ fontSize: 13, fontWeight: 800, color: '#15A34A' }}>{fmt(o.totaalIncl || 0)}</span>
           </button>

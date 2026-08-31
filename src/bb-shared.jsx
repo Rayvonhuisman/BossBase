@@ -118,11 +118,11 @@ export const ACTIVITIES_DATA = [
 
 export const QUOTES_DATA = [
   { id: 'BB-001', custId: 1, title: 'Schilderwerk gevel + kozijnen',   amount: 3850,  status: 'sent',     date: '28 apr 2026', valid: '12 mei 2026' },
-  { id: 'BB-002', custId: 2, title: 'Tuinonderhoud abonnement 2026',   amount: 5200,  status: 'accepted', date: '20 apr 2026', valid: '—' },
-  { id: 'BB-003', custId: 3, title: 'Schutting plaatsen + behandelen', amount: 2400,  status: 'accepted', date: '15 apr 2026', valid: '—' },
-  { id: 'BB-004', custId: 4, title: 'Badkamer renovatie volledig',      amount: 4100,  status: 'accepted', date: '10 apr 2026', valid: '—' },
+  { id: 'BB-002', custId: 2, title: 'Tuinonderhoud abonnement 2026',   amount: 5200,  status: 'accepted', date: '20 apr 2026', valid: '' },
+  { id: 'BB-003', custId: 3, title: 'Schutting plaatsen + behandelen', amount: 2400,  status: 'accepted', date: '15 apr 2026', valid: '' },
+  { id: 'BB-004', custId: 4, title: 'Badkamer renovatie volledig',      amount: 4100,  status: 'accepted', date: '10 apr 2026', valid: '' },
   { id: 'BB-005', custId: 5, title: 'Kozijnen schilderen 6 stuks',     amount: 1850,  status: 'draft',    date: '1 mei 2026',  valid: '15 mei 2026' },
-  { id: 'BB-006', custId: 6, title: 'Tuinonderhoud Q2 2026',           amount:12600,  status: 'accepted', date: '1 jan 2026',  valid: '—' },
+  { id: 'BB-006', custId: 6, title: 'Tuinonderhoud Q2 2026',           amount:12600,  status: 'accepted', date: '1 jan 2026',  valid: '' },
 ];
 
 export const COSTS_DATA = [

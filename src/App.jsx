@@ -577,7 +577,7 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
                             <div className="tb-pop-icon">{I.act}</div>
                             <div style={{ minWidth: 0, flex: 1 }}>
                               <div className="tb-pop-title">{a.title}</div>
-                              <div className="tb-pop-sub">{a.customerName || 'Geen klant'} · {a.date || '—'}</div>
+                              <div className="tb-pop-sub">{a.customerName || 'Geen klant'} · {a.date || ''}</div>
                             </div>
                           </button>
                         ))}
@@ -701,7 +701,7 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
                   <button key={`of-${o.id}`} className="tb-pop-item" onClick={() => { close(); navigatePage('offertes'); }}>
                     <div className="tb-pop-icon">{I.quotes}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="tb-pop-title">Offerte {o.status}: {o.nummer || o.omschrijving || '—'}</div>
+                      <div className="tb-pop-title">Offerte {o.status}: {o.nummer || o.omschrijving || ''}</div>
                       <div className="tb-pop-sub">{o.customerName || 'Geen klant'}</div>
                     </div>
                   </button>

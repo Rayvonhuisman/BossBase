@@ -15,7 +15,7 @@ const STATUSSEN = [
 ];
 
 const statusInfo = k => STATUSSEN.find(s => s.key === k) || { label: k, kleur: '#6b7280', bg: '#f3f4f6' };
-const fmt = d => d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+const fmt = d => d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
 
 export function WebsiteAanvragen() {
   const toast = useToast();
@@ -98,9 +98,9 @@ export function WebsiteAanvragen() {
                   <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}>
                     <td style={{ padding: '9px 10px 9px 0' }}>
                       <div style={{ fontWeight: 600 }}>{r.bedrijf}</div>
-                      <div style={{ color: '#9ca3af', fontSize: 12 }}>{r.email || '—'}{r.telefoon ? ` · ${r.telefoon}` : ''}</div>
+                      <div style={{ color: '#9ca3af', fontSize: 12 }}>{r.email || ''}{r.telefoon ? ` · ${r.telefoon}` : ''}</div>
                     </td>
-                    <td style={{ padding: '9px 10px' }}>{r.plan || '—'}</td>
+                    <td style={{ padding: '9px 10px' }}>{r.plan || ''}</td>
                     <td style={{ padding: '9px 10px' }}>
                       {fmt(r.aangevraagd_op)}
                       {r.mail_verstuurd_op && (
