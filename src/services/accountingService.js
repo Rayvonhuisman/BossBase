@@ -15,10 +15,7 @@ export async function getConnection(provider = 'moneybird') {
     afasEnvironmentId: row.afas_environment_id || '',
     afasIsConnected: !!row.connected,
     connected: !!row.connected,
-    importCosts: !!row.import_costs,
-    syncPaidOnly: !!row.sync_paid_only,
     lastSyncedAt: row.last_synced_at || null,
-    apiToken: '', subscriptionKey: '', secondaryKey: '', afasToken: '',
   }
 }
 
@@ -51,12 +48,14 @@ const rpcRowToStatus = (data) => {
     afasEnvironmentId: row.afas_environment_id || '',
     afasIsConnected: !!row.connected,
     connected: !!row.connected,
-    importCosts: !!row.import_costs,
-    syncPaidOnly: !!row.sync_paid_only,
     lastSyncedAt: row.last_synced_at || null,
-    apiToken: '', subscriptionKey: '', secondaryKey: '', afasToken: '',
   }
 }
+// Hier stonden apiToken/subscriptionKey/secondaryKey/afasToken als lege
+// tekenreeksen. Niemand las ze, en ze wekten precies de verkeerde indruk: dat
+// een statusrij het token zou kunnen bevatten. Dat kan niet — `authenticated`
+// heeft niet eens SELECT-recht op die kolommen, en subscription_key en
+// secondary_key bestaan al langer niet meer.
 
 export async function saveConnection({ apiToken, administrationId, provider = 'moneybird' }) {
   const { data, error } = await supabase.rpc('save_accounting_connection', {
@@ -65,6 +64,7 @@ export async function saveConnection({ apiToken, administrationId, provider = 'm
     p_administration_id: administrationId,
   })
   if (error) throw error
+  vergeetKoppelStatus(provider)
   return rpcRowToStatus(data)
 }
 
@@ -148,29 +148,15 @@ export async function syncContactenMetMoneybird() {
 // komt de sleutel binnen via de oAuth-activatielink + snelstart-webhook en
 // vervalt deze handmatige invoer. De subscription key is een platform-secret
 // van BossBase (edge functions) en hoort hier dus nooit thuis.
-// Alle snelstart_id-verwijzingen van het eigen bedrijf wissen, zodat een
-// volgende sync opnieuw boekt. Nodig na het intrekken van een sleutel of het
-// wisselen van administratie: zonder reset ziet de export alles als "al
-// gesynchroniseerd" en meldt hij overal 0.
-export async function resetSnelStartKoppeling() {
-  const { data, error } = await supabase.rpc('reset_snelstart_koppeling')
-  if (error) throw error
-  const row = Array.isArray(data) ? data[0] : data
-  vergeetKoppelStatus('snelstart')
-  return {
-    klanten: row?.klanten ?? 0,
-    leveranciers: row?.leveranciers ?? 0,
-    facturen: row?.facturen ?? 0,
-    kosten: row?.kosten ?? 0,
-  }
-}
-
 export async function saveSnelStartConnection({ clientKey }) {
   const { data, error } = await supabase.rpc('save_accounting_connection', {
     p_provider: 'snelstart',
     p_secret: clientKey,
   })
   if (error) throw error
+  // Zonder dit blijft de gecachete koppelstatus een minuut lang op de oude
+  // waarde staan, en slaat de eerstvolgende factuur-sync de export over.
+  vergeetKoppelStatus('snelstart')
   return rpcRowToStatus(data)
 }
 
@@ -265,6 +251,7 @@ export async function saveAfasConnection({ environmentId, token }) {
     p_afas_environment_id: environmentId,
   })
   if (error) throw error
+  vergeetKoppelStatus('afas')
   return rpcRowToStatus(data)
 }
 

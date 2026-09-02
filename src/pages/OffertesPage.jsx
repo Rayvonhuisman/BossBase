@@ -19,7 +19,7 @@ import { listDeals } from '../services/dealService.js';
 import { NewFactuurModal, SendFactuurMailModal } from './FacturenPage.jsx';
 import { generateOffertePdf, previewOffertePdf, getOffertePdfBase64 } from '../utils/generatePdf.js';
 import { buildCompanySnapshot, companyForDocument, isOfferteFullyLocked, isOfferteRevisable } from '../utils/documentSnapshot.js';
-import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
+import { getMailTemplate, sendEmail, substituteVars, substituteVarsHtml, logSentEmail } from '../services/emailService.js';
 import { mailTemplate, mailButton } from '../utils/mailTemplate.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { statusInfo } from '../utils/statusColors.js';
@@ -900,12 +900,16 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
     getMailTemplate('offerte')
       .then(tpl => {
         const sub = tpl ? substituteVars(tpl.onderwerp || '', vars) : `Offerte ${offerte.nummer} van ${company?.name || ''}`;
+        // Eerst het sjabloon naar HTML, dan pas de waarden erin. Het sjabloon is
+        // door de beheerder geschreven en mag opmaak bevatten; de waarden zijn
+        // data — een klantnaam komt uit SnelStart en kan markup bevatten. Zo
+        // wordt er precies één keer ge-escaped, op de goede helft.
         const rawBody = tpl
-          ? substituteVars(tpl.body || '', vars)
+          ? substituteVarsHtml(plainToEditorHtml(tpl.body || ''), vars)
           : kanOndertekenen
             ? `Beste ${vars.klant_naam},\n\nHierbij sturen wij u offerte ${offerte.nummer} toe.\n\nVia onderstaande knop kunt u de offerte bekijken en digitaal ondertekenen:\n{{link}}\n\nHeeft u vragen? Neem gerust contact met ons op.\n\nMet vriendelijke groet,\n${company?.name || ''}`
             : `Beste ${vars.klant_naam},\n\nHierbij sturen wij u offerte ${offerte.nummer} toe als bijlage.\n\nHeeft u vragen? Neem gerust contact met ons op.\n\nMet vriendelijke groet,\n${company?.name || ''}`;
-        setForm({ to: customer?.email || '', subject: sub, body: plainToEditorHtml(rawBody) });
+        setForm({ to: customer?.email || '', subject: sub, body: tpl ? rawBody : plainToEditorHtml(rawBody) });
       })
       .catch(() => setForm({ to: customer?.email || '', subject: `Offerte ${offerte.nummer}`, body: '' }))
       .finally(() => setLoading(false));

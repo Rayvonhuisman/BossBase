@@ -21,7 +21,7 @@ import { listActivities, ACTIVITEIT_TYPE_LABELS } from '../services/activityServ
 // de labelmap bevat daarnaast varianten die alleen voor weergave van oude data bestaan.
 const ACTIVITEIT_FILTER_TYPEN = ['call', 'email', 'visit', 'task', 'follow'];
 import { getEmailTemplates } from '../services/instellingenService.js';
-import { sendEmail, logSentEmail, substituteVars } from '../services/emailService.js';
+import { sendEmail, logSentEmail, substituteVars, substituteVarsHtml } from '../services/emailService.js';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
@@ -795,6 +795,8 @@ export function DatabasePage({ openCustomer }) {
         if (!c.email) { skipped++; continue; }
         const vars = { klant_naam: c.name, bedrijfsnaam: c.name };
         const subject = substituteVars(mailForm.subject, vars);
+        // Geen substituteVarsHtml: de regel hieronder escapet het resultaat al
+        // per regel. Twee keer escapen zet letterlijk "&lt;" in de mail.
         const body    = substituteVars(mailForm.body, vars);
         const html    = body.split('\n').map(l => l.trim() === '' ? '<br>' : `<p style="margin:0 0 6px">${l.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>`).join('');
         const tpl     = templates.find(t => t.id === mailForm.templateId);

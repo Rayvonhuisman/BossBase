@@ -64,6 +64,43 @@ Dat probeert de tabel via de REST-API, stuurt zo nodig opnieuw een notify, en
 eindigt met een exitcode die je kunt vertrouwen. Voeg dit toe aan je
 uitrolvolgorde, niet aan je geheugen.
 
+### Een functie aanmaken: altijd zelf de rechten zetten
+
+```sql
+create function public.iets(...) ...;
+
+revoke all on function public.iets(...) from public, anon, authenticated;
+grant execute on function public.iets(...) to service_role;  -- of authenticated
+```
+
+**`anon, authenticated` moeten daar letterlijk staan.** Supabase heeft default
+privileges die EXECUTE op een *nieuwe* functie automatisch aan `anon` en
+`authenticated` geven. `revoke all ... from public` haalt die er **niet** af —
+dat zijn expliciete rolgrants, en PUBLIC is iets anders dan een rol.
+
+Dat is geen theorie. Bij het opruimen van de SnelStart-koppeling (migratie
+20260902120000) werd `get_snelstart_sync_targets()` opnieuw aangemaakt met
+drop-and-create. Die functie geeft de koppelsleutel van *álle* bedrijven terug en
+was daarom alleen voor `service_role`. Na `revoke ... from public` bleek hij toch
+uitvoerbaar voor elke ingelogde gebruiker. Een droogloop in een teruggedraaide
+transactie liet dat zien; zonder die controle was het een lek van de
+boekhoudsleutels van alle klanten geweest.
+
+Twee dingen volgen daaruit:
+
+- Let extra op bij `create or replace` dat een **drop-and-create** wordt. Bij een
+  tabelfunctie waarvan het retourtype wijzigt, kán het niet anders (SQLSTATE
+  42P13), en dan zijn de oude, strengere grants weg.
+- Controleer het achteraf, niet op je geheugen:
+
+```sql
+select r.rolname
+from pg_roles r, pg_proc p
+where p.proname = 'iets' and p.pronamespace = 'public'::regnamespace
+  and r.rolname in ('anon','authenticated','service_role')
+  and has_function_privilege(r.rolname, p.oid, 'EXECUTE');
+```
+
 ### Uitrolvolgorde
 
 1. Edge functions deployen (als ze meeveranderen) — vóór de crons die ze

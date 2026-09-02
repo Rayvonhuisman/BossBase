@@ -41,8 +41,11 @@ export async function getSnelStartToken(clientKey: string): Promise<string> {
     body: new URLSearchParams({ grant_type: 'clientkey', clientkey: clientKey }),
   })
   if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    console.error(`SnelStart auth ${res.status}: ${body.substring(0, 300)}`)
+    // Bewust ZONDER de responsebody: dit is het auth-endpoint en het verzoek
+    // bevatte de koppelsleutel. Een foutbody die het verzoek echoot, zet die
+    // sleutel dan in de functielogs. De status zegt genoeg om te diagnosticeren.
+    await res.text().catch(() => '')
+    console.error(`SnelStart auth mislukt met status ${res.status}`)
     if (res.status === 400 || res.status === 401) {
       throw new Error('SnelStart-koppelsleutel ongeldig of ingetrokken')
     }

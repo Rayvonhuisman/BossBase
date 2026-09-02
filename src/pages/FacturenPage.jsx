@@ -23,7 +23,7 @@ import { regimeVanPct, regimeVanRegel, regimeVoorOpslag } from '../lib/btwRegime
 import { previewFactuurPdf, getFactuurPdfBase64 } from '../utils/generatePdf.js';
 import { buildCompanySnapshot, companyForDocument, isFactuurLocked, isGeimporteerdeFactuur } from '../utils/documentSnapshot.js';
 import { bewaarFactuurPdf, PDF_STATUSSEN } from '../utils/bewaarFactuurPdf.js';
-import { getMailTemplate, sendEmail, substituteVars, logSentEmail } from '../services/emailService.js';
+import { getMailTemplate, sendEmail, substituteVars, substituteVarsHtml, logSentEmail } from '../services/emailService.js';
 import { mailTemplate, mailButton } from '../utils/mailTemplate.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { statusInfo } from '../utils/statusColors.js';
@@ -947,10 +947,14 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
       try {
         const tpl = await getMailTemplate(templateType);
         const sub = tpl ? substituteVars(tpl.onderwerp || '', vars) : `Factuur ${factuur.nummer} van ${company?.name || ''}`;
+        // Eerst het sjabloon naar HTML, dan pas de waarden erin. Het sjabloon is
+        // door de beheerder geschreven en mag opmaak bevatten; de waarden zijn
+        // data — een klantnaam komt uit SnelStart en kan markup bevatten. Zo
+        // wordt er precies één keer ge-escaped, op de goede helft.
         const rawBody = tpl
-          ? substituteVars(tpl.body || '', vars)
+          ? substituteVarsHtml(plainToEditorHtml(tpl.body || ''), vars)
           : `Beste ${vars.klant_naam},\n\nHierbij uw factuur ${factuur.nummer}.\n\n${vars.betaalinstructie}\n\nMet vriendelijke groet,\n${company?.name || ''}`;
-        if (alive) setForm({ to: customer?.email || '', subject: sub, body: plainToEditorHtml(rawBody) });
+        if (alive) setForm({ to: customer?.email || '', subject: sub, body: tpl ? rawBody : plainToEditorHtml(rawBody) });
       } catch {
         if (alive) setForm({ to: customer?.email || '', subject: `Factuur ${factuur.nummer}`, body: '' });
       } finally {

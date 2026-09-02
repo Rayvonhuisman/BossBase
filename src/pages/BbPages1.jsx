@@ -30,7 +30,7 @@ import { usePermissions } from '../hooks/usePermissions.js';
 import { ActivityEditModal, NewActivityModal, NewCustomerModal, NewJobCostModal } from '../components/SharedModals.jsx';
 import AdresZoeker from '../components/AdresZoeker.jsx';
 import { ChevronDown, Download, Mail, Send } from 'lucide-react';
-import { getMailTemplate, sendEmail, substituteVars, logSentEmail, getSentEmailsByCustomer } from '../services/emailService.js';
+import { getMailTemplate, sendEmail, substituteVars, substituteVarsHtml, logSentEmail, getSentEmailsByCustomer } from '../services/emailService.js';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { mailTemplate } from '../utils/mailTemplate.js';
 import { getEmailTemplates } from '../services/instellingenService.js';
@@ -359,7 +359,9 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
       ...f,
       templateId,
       subject: substituteVars(tpl.onderwerp || '', vars),
-      body: plainToEditorHtml(substituteVars(tpl.body || '', vars)),
+      // Sjabloon eerst naar HTML, waarden daarna erin: één keer escapen, en
+      // alleen op de data (een klantnaam kan uit SnelStart komen).
+      body: substituteVarsHtml(plainToEditorHtml(tpl.body || ''), vars),
     }));
   };
 

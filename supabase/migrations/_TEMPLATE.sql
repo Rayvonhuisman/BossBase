@@ -18,6 +18,26 @@
 
 
 
+-- ── Maak je een FUNCTIE aan? Zet dan zelf de rechten ────────────────────────
+-- Supabase heeft default privileges die EXECUTE op een NIEUWE functie
+-- automatisch aan anon en authenticated geven. `revoke all ... from public`
+-- haalt die er NIET af: dat zijn expliciete rolgrants, en PUBLIC is iets anders
+-- dan een rol. Noem anon en authenticated dus met naam:
+--
+--     revoke all on function public.mijn_functie(uuid) from public, anon, authenticated;
+--     grant execute on function public.mijn_functie(uuid) to service_role;
+--
+-- Let vooral op wanneer een `create or replace` een DROP-AND-CREATE wordt — bij
+-- een tabelfunctie waarvan het retourtype wijzigt kan het niet anders (SQLSTATE
+-- 42P13), en dan zijn de oude, strengere grants weg. Zo stond een functie die de
+-- boekhoudsleutel van álle bedrijven teruggeeft bijna open voor elke ingelogde
+-- gebruiker; een droogloop ving het net op tijd.
+--
+-- Controleer het achteraf, met has_function_privilege — niet op je geheugen.
+-- Zie CLAUDE.md, "Een functie aanmaken: altijd zelf de rechten zetten".
+
+
+
 -- ── PostgREST-cache verversen ───────────────────────────────────────────────
 -- LAAT DIT STAAN, ook als je denkt dat het niet nodig is.
 --

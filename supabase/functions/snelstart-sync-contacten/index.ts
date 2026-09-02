@@ -194,7 +194,10 @@ async function syncCompanyInner(
   }
   console.log('Geëxporteerd naar SnelStart:', exported)
   if (adresWaarschuwingen.length) {
-    console.warn('Klanten zonder compleet adres:', adresWaarschuwingen.map(w => `${w.klant} (mist ${w.mist.join(', ')})`).join('; '))
+    // Alleen tellen, geen namen: de functielogs zijn geen plek voor de
+    // klantgegevens van een bedrijf. Wie het precies betreft staat in de
+    // response en in accounting_sync_runs, achter de RLS van dat bedrijf.
+    console.warn(`Klanten zonder compleet adres: ${adresWaarschuwingen.length}`)
   }
 
   await supabase
@@ -265,8 +268,13 @@ serve(async (req) => {
     const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt)
     if (authErr || !user) return json({ error: 'Niet ingelogd' }, 401)
 
-    const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single()
+    const { data: profile } = await supabase.from('profiles').select('company_id, role').eq('id', user.id).single()
     if (!profile?.company_id) return json({ error: 'Geen bedrijf gevonden' }, 400)
+    // Een sync schrijft in de boekhouding van de klant; dat is geen handeling
+    // voor een monteur. Dezelfde grens als snelstart-grootboek-setup en
+    // snelstart-administratie-check, die dit al deden. De cron-route hierboven
+    // heeft geen gebruiker en wordt hier dus niet geraakt.
+    if (profile.role !== 'admin') return json({ error: 'Alleen admins kunnen synchroniseren' }, 403)
 
     const { data: conn } = await supabase
       .from('accounting_connections')

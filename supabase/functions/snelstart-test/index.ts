@@ -25,12 +25,20 @@ serve(async (req) => {
     const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt)
     if (authErr || !user) return json({ error: 'Niet ingelogd' }, 401)
 
+    // Admin-only, en dat is hier belangrijker dan het lijkt: deze functie
+    // accepteert een koppelsleutel uit de body zodat een admin er één kan testen
+    // vóór het opslaan. Zonder deze grens kan elke ingelogde gebruiker er
+    // wíllekeurige sleutels mee valideren — op onze subscription key, en dus als
+    // gratis controle-orakel voor SnelStart-sleutels.
+    const { data: profile } = await supabase
+      .from('profiles').select('company_id, role').eq('id', user.id).single()
+    if (!profile?.company_id) return json({ error: 'Geen bedrijf gevonden' }, 400)
+    if (profile.role !== 'admin') return json({ error: 'Alleen admins beheren de koppeling' }, 403)
+
     const body = await req.json().catch(() => ({}))
     let clientKey: string = typeof body.client_key === 'string' ? body.client_key.trim() : ''
 
     if (!clientKey) {
-      const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single()
-      if (!profile?.company_id) return json({ error: 'Geen bedrijf gevonden' }, 400)
       const { data: conn } = await supabase
         .from('accounting_connections')
         .select('client_key')
