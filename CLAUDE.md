@@ -130,6 +130,15 @@ nacalculatie draait uitsluitend op werkbonuren.
 
 ## Losse dingen die tijd kosten als je ze niet weet
 
+- **RLS kijkt niet naar TRUNCATE.** Dat is een tabel-operatie, geen rij-operatie,
+  dus geen enkele policy houdt hem tegen. Supabase kent standaard alle
+  tabelrechten toe aan `anon` en `authenticated`; daardoor kon de anon-rol
+  `truncate accounting_connections cascade` uitvoeren en in één keer de
+  boekhoudkoppeling van élk bedrijf wissen. Migratie 20260902140000 haalt dat
+  recht schemabreed weg en zet de default privileges van `postgres` zo dat nieuwe
+  tabellen het niet terugkrijgen. Maak je een tabel via het dashboard (die komt
+  van `supabase_admin`), doe de revoke er dan zelf bij.
+
 - `supabase functions deploy <naam>` kent **geen** `--linked`-vlag; zonder vlag
   deployt hij naar het gekoppelde project.
 - De waarde van een secret is niet uitleesbaar, maar `supabase secrets list`

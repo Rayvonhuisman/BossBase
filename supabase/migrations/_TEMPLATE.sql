@@ -18,6 +18,21 @@
 
 
 
+-- ── Maak je een TABEL aan? ──────────────────────────────────────────────────
+-- Migraties draaien als `postgres`, en daarvoor staan de default privileges zo
+-- ingesteld dat een nieuwe tabel géén TRUNCATE meer aan anon/authenticated geeft
+-- (migratie 20260902140000). Je hoeft daar dus niets voor te doen.
+--
+-- Maak je een tabel via het Supabase-dashboard, dan komt hij van `supabase_admin`
+-- en gelden díéns default privileges — daar kunnen wij niet bij. Doe de revoke er
+-- dan zelf bij:
+--
+--     revoke truncate on table public.nieuwe_tabel from anon, authenticated;
+--
+-- Waarom dat uitmaakt: RLS kijkt niet naar TRUNCATE. Dat is geen rij-operatie
+-- maar een tabel-operatie, dus een policy houdt hem niet tegen.
+
+
 -- ── Maak je een FUNCTIE aan? Zet dan zelf de rechten ────────────────────────
 -- Supabase heeft default privileges die EXECUTE op een NIEUWE functie
 -- automatisch aan anon en authenticated geven. `revoke all ... from public`
