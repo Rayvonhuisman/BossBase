@@ -274,6 +274,23 @@ ${hasPdf ? '<p>De ondertekende offerte is als bijlage toegevoegd.</p>' : ''}`,
       warnings.push(`Bevestigingsmails mislukt: ${mailErr}`)
     }
 
+    // ── STAP 5c: Tijdlijn op de klantkaart ───────────────────────────────────
+    // Stond op de publieke ondertekenpagina als anon-insert met een lege catch.
+    // RLS weigerde die, en niemand zag het: "offerte geaccepteerd" kwam nooit op
+    // de klanttijdlijn. Hier lukt het wél, want deze functie draait met de
+    // service-role — zelfde plek als bij sign-werkbon.
+    if (offerte.customer_id) {
+      const { error: tijdlijnErr } = await admin.from('klant_tijdlijn').insert({
+        customer_id: offerte.customer_id,
+        company_id: offerte.company_id,
+        type: 'offerte_geaccepteerd',
+        omschrijving: `Offerte ${offerte.nummer} ondertekend door ${name}`,
+        aangemaakt_op: now,
+        meta: { nummer: offerte.nummer, signed_by: name, signed_by_email: email },
+      })
+      if (tijdlijnErr) warnings.push(`Tijdlijnregel schrijven mislukt: ${tijdlijnErr.message}`)
+    }
+
     // ── STAP 6: Response samenstellen ────────────────────────────────────────
     const bedrijfNaam = (company?.name as string) || 'BossBase'
     const totaal = new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(offerte.totaal_incl || 0)

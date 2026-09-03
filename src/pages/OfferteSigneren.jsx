@@ -214,21 +214,17 @@ export default function OfferteSigneren({ token }) {
       })
       setDone(true)
 
-      // Tijdlijn: offerte_geaccepteerd (best-effort, omzeilt service-laag want pagina is publiek)
-      if (offerte?.customer_id && offerte?.company_id) {
-        supabase.from('klant_tijdlijn').insert({
-          customer_id: offerte.customer_id,
-          company_id: offerte.company_id,
-          type: 'offerte_geaccepteerd',
-          omschrijving: `Offerte ${offerte.nummer} ondertekend door ${form.name}`,
-          aangemaakt_op: new Date().toISOString(),
-          meta: { nummer: offerte.nummer, signed_by: form.name, signed_by_email: form.email },
-        }).then(() => {}).catch(() => {})
+      // De tijdlijnregel én de bevestigingsmails gaan server-side, vanuit de
+      // sign-offerte edge function. Hier stond een anon-insert in klant_tijdlijn
+      // met een lege catch; RLS weigerde die en niemand merkte het, dus
+      // "offerte geaccepteerd" belandde nooit op de klanttijdlijn. Een fout die
+      // niemand ziet is erger dan een fout.
+      //
+      // Meldt de edge function alsnog iets, dan tonen we dat — het ondertekenen
+      // is gelukt, maar de gebruiker mag weten dat er iets niet is bijgewerkt.
+      if (Array.isArray(result?.warnings) && result.warnings.length) {
+        console.warn('[offerte ondertekenen] server meldde:', result.warnings.join(' · '))
       }
-
-      // Bevestigingsmails worden server-side verstuurd door de sign-offerte edge
-      // function (via de send-email relay met intern secret) — niet meer vanaf
-      // deze publieke pagina, die geen ingelogde sessie heeft.
     } catch (err) {
       alert('Er is iets misgegaan: ' + err.message)
     } finally {
