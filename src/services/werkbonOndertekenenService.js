@@ -29,12 +29,15 @@ export function werkbonSignUrl(werkbon) {
  * alles weg wat de klant niet hoort te zien. Eén plek, gebruikt door de app én
  * door de publieke pagina, zodat de twee PDF's identiek zijn.
  */
-export function bouwPdfData({ taken = [], uren = [], materialen = [], notities = [], fotos = [] }) {
+export function bouwPdfData({ taken = [], uren = [], materialen = [], meerwerk = [], notities = [], fotos = [] }) {
   return {
-    // Alleen afgevinkte taken: de klant tekent voor het uitgevoerde werk. Wat
+    // Alleen afgevinkte regels: de klant tekent voor het uitgevoerde werk. Wat
     // nog openstaat blijft in de app staan — anders tekent hij voor een lijst
     // met wat er níét gedaan is, en dat is een discussie in plaats van een bon.
-    taken: taken.filter(t => t.afgerond).map(t => ({
+    //
+    // Taken en meerwerk komen uit dezelfde tabel maar krijgen een eigen blok, zodat
+    // zichtbaar is wat er tijdens de klus bij is gevraagd.
+    taken: taken.filter(t => t.afgerond && !t.isMeerwerk).map(t => ({
       omschrijving: t.omschrijving, afgerond: true,
     })),
     // Geen medewerkernaam: wie het werk deed is loonadministratie en gaat de
@@ -53,6 +56,12 @@ export function bouwPdfData({ taken = [], uren = [], materialen = [], notities =
     materialen: materialen.map(m => ({
       naam: m.naam, eenheid: m.eenheid || '', aantal: Number(m.aantal || 0),
     })),
+    // Meerwerk: dezelfde regel als bij taken — alleen afgevinkt. Uit `meerwerk`
+    // als de aanroeper een aparte lijst meegeeft (de app), anders uit de
+    // takenlijst zelf (de ondertekenpagina krijgt één lijst uit de RPC).
+    meerwerk: (meerwerk.length ? meerwerk : taken.filter(t => t.isMeerwerk))
+      .filter(m => m.afgerond)
+      .map(m => ({ omschrijving: m.omschrijving })),
     // Alleen wat expliciet als klantnotitie is gemarkeerd.
     notities: notities.filter(n => n.voorKlant === true || n.voor_klant === true)
       .map(n => ({ note: n.note })),

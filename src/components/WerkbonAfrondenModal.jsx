@@ -44,14 +44,14 @@ export default function WerkbonAfrondenModal({
   // die blijft staan boven het mailformulier leest als een fout in het mailen.
   const setStap = volgende => { setFout(''); setStapRuw(volgende); };
 
-  const { taken = [], uren = [], materialen = [], notities = [], fotos = [] } = detail || {};
+  const { taken = [], uren = [], materialen = [], meerwerk = [], notities = [], fotos = [] } = detail || {};
   const totaalUren = useMemo(() => uren.reduce((s, u) => s + Number(u.uren || 0), 0), [uren]);
   const openTaken = taken.filter(t => !t.afgerond);
   const klantNotities = notities.filter(n => n.voorKlant);
 
   const pdfArgs = (extra = {}) => ([
     bouwPdfWerkbon(werkbon, { uitvoerders, ...extra }),
-    bouwPdfData({ taken, uren, materialen, notities, fotos }),
+    bouwPdfData({ taken, uren, materialen, meerwerk, notities, fotos }),
     customer,
     company,
   ]);
@@ -112,7 +112,7 @@ export default function WerkbonAfrondenModal({
     try {
       const res = await verstuurWerkbonTerOndertekening({
         werkbon, email, customer, company,
-        detail: { taken, uren, materialen, notities, fotos },
+        detail: { taken, uren, materialen, meerwerk, notities, fotos },
       });
       onKlaar?.({ gemaild: true, email: res.email });
     } catch (e) {

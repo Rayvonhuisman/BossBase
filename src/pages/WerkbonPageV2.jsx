@@ -17,7 +17,6 @@ import {
   getWerkbonTaken, createWerkbonTaak, toggleWerkbonTaak, deleteWerkbonTaak,
   getWerkbonMaterialen, createWerkbonMateriaal, updateWerkbonMateriaal, deleteWerkbonMateriaal,
   getWerkbonFotos, uploadWerkbonFoto, deleteWerkbonFoto,
-  getWerkbonMeerwerk, createWerkbonMeerwerk, deleteWerkbonMeerwerk,
   getWerkbonNotities, addWerkbonNotitie, updateWerkbonNotitieZichtbaarheid,
   getAllWerkbonTakenCounts, plannedStartIso,
 } from '../services/werkbonService.js';
@@ -495,7 +494,16 @@ function HoursQuickAdd({ werkbon, onSaved }) {
 
 // ─── TASKS ──────────────────────────────────────────────────────────────────
 
-function TakenSection({ taken, onToggle, onAdd, onDelete, canEdit = true }) {
+// Eén component voor taken én meerwerk. Meerwerk is exact hetzelfde: een
+// omschrijving met een vinkje. Alleen de koppen verschillen, en meerwerk krijgt
+// geen voortgangsbalk — dat is geen opdracht die je afwerkt maar iets dat er
+// tijdens de klus bij kwam.
+function TakenSection({
+  taken, onToggle, onAdd, onDelete, canEdit = true,
+  titel = 'Taken', toonVoortgang = true, uitleg = null,
+  leegTekst = 'Nog geen taken — voeg de eerste hieronder toe.',
+  plaatshouder = 'Nieuwe taak…', knopLabel = 'Taak',
+}) {
   const [text, setText] = useState('');
   const total = taken.length;
   const done = taken.filter(t => t.afgerond).length;
@@ -511,12 +519,15 @@ function TakenSection({ taken, onToggle, onAdd, onDelete, canEdit = true }) {
   return (
     <div className="wb2-card">
       <div className="wb2-card-hd">
-        <div className="wb2-card-hd-title">Taken · {done} / {total}</div>
+        <div className="wb2-card-hd-title">{titel} · {done} / {total}</div>
       </div>
       <div className="wb2-card-body">
-        <div className="wb2-progress"><span style={{ width: `${pct}%` }} /></div>
+        {toonVoortgang && <div className="wb2-progress"><span style={{ width: `${pct}%` }} /></div>}
+        {uitleg && (
+          <div style={{ fontSize: '.78rem', color: 'var(--dl)', lineHeight: 1.5, marginBottom: 8 }}>{uitleg}</div>
+        )}
         {taken.length === 0 && (
-          <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Nog geen taken — voeg de eerste hieronder toe.</div>
+          <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>{leegTekst}</div>
         )}
         {taken.map(t => (
           <div key={t.id} className="wb2-taak">
@@ -539,11 +550,11 @@ function TakenSection({ taken, onToggle, onAdd, onDelete, canEdit = true }) {
               type="text"
               value={text}
               onChange={e => setText(e.target.value)}
-              placeholder="Nieuwe taak…"
+              placeholder={plaatshouder}
               onKeyDown={e => { if (e.key === 'Enter') submit(); }}
             />
             <button className="btn btn-s btn-sm" onClick={submit} disabled={!text.trim()}>
-              {I.plus} Taak
+              {I.plus} {knopLabel}
             </button>
           </div>
         )}
@@ -873,70 +884,6 @@ function FotoSection({ fotos, onUpload, onDelete, canEdit = true }) {
 
 // ─── MEERWERK SECTION ────────────────────────────────────────────────────────
 
-function MeerwerkSection({ meerwerk, onAdd, onDelete, canEdit = true }) {
-  const [form, setForm] = useState({ omschrijving: '', prijs: '' });
-  const [adding, setAdding] = useState(false);
-
-  const total = meerwerk.reduce((s, m) => s + Number(m.prijs || 0), 0);
-
-  const submit = async () => {
-    if (!form.omschrijving.trim()) return;
-    setAdding(true);
-    try {
-      await onAdd({ omschrijving: form.omschrijving.trim(), prijs: Number(form.prijs) || 0 });
-      setForm({ omschrijving: '', prijs: '' });
-    } finally { setAdding(false); }
-  };
-
-  return (
-    <div className="wb2-card">
-      <div className="wb2-card-hd"><div className="wb2-card-hd-title">Meerwerk</div></div>
-      <div className="wb2-card-body">
-        {meerwerk.length === 0 && (
-          <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Geen meerwerk geregistreerd.</div>
-        )}
-        {meerwerk.map(m => (
-          <div key={m.id} className="wb2-meerwerk-item">
-            <div className="wb2-meerwerk-omschr">{m.omschrijving}</div>
-            <span className="wb2-meerwerk-akkoord">Klant akkoord gevraagd</span>
-            <div className="wb2-meerwerk-prijs">{fmtEur(m.prijs)}</div>
-            {canEdit && <button className="wb2-taak-del" onClick={() => onDelete(m)}>{I.trash}</button>}
-          </div>
-        ))}
-        {meerwerk.length > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, paddingTop: 10, borderTop: '1px solid #EFF2EF', marginTop: 2 }}>
-            <span style={{ fontSize: 12, color: 'var(--dl)' }}>Totaal meerwerk</span>
-            <span style={{ fontWeight: 700, fontSize: 16, fontVariantNumeric: 'tabular-nums' }}>{fmtEur(total)}</span>
-          </div>
-        )}
-        {canEdit && (
-          <div className="wb2-meerwerk-add">
-            <input
-              type="text" placeholder="Omschrijving meerwerk…"
-              value={form.omschrijving}
-              onChange={e => setForm(f => ({ ...f, omschrijving: e.target.value }))}
-              onKeyDown={e => e.key === 'Enter' && submit()}
-            />
-            <input
-              type="number" min="0" step="0.01" placeholder="€ 0,00"
-              value={form.prijs}
-              onChange={e => setForm(f => ({ ...f, prijs: e.target.value }))}
-              style={{ width: 110 }}
-            />
-            <button className="btn btn-s btn-sm" onClick={submit} disabled={adding || !form.omschrijving.trim()}>
-              {I.plus} Toevoegen
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── NOTITIES SECTION ────────────────────────────────────────────────────────
-
-// Notitielogboek op de werkbon — zelfde component en gedrag als de klantkaart.
-// Alleen-inzage (geen bewerkrecht): wel de log, geen invoerveld.
 function NotitiesSection({
   notities = [], onAdd, onZichtbaarheid, teamMembers = [], canEdit = true,
 }) {
@@ -1144,7 +1091,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
       getWerkbonMaterialen(selectedId).catch(() => []),
       getWerkbonUren(selectedId).catch(() => []),
       getWerkbonFotos(selectedId).catch(() => []),
-      getWerkbonMeerwerk(selectedId).catch(() => []),
+      getWerkbonTaken(selectedId, { soort: 'meerwerk' }).catch(() => []),
       getWerkbonNotities(selectedId).catch(() => []),
     ]).then(([w, t, m, u, f, mw, nt]) => {
       if (!alive) return;
@@ -1413,7 +1360,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
       const customer = customers.find(c => c.id === detail.customerId) || { name: detail.customerName };
       await downloadWerkbonPdf(
         bouwPdfWerkbon(detail, { uitvoerders: uitvoerderNamen }),
-        bouwPdfData({ taken, uren, materialen, notities: werkbonNotities, fotos }),
+        bouwPdfData({ taken, uren, materialen, meerwerk, notities: werkbonNotities, fotos }),
         customer,
         company,
       );
@@ -1465,20 +1412,33 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
     }
   };
 
-  const handleAddMeerwerk = async input => {
+  // Meerwerk is een taak met een vlaggetje, dus dezelfde functies — alleen een
+  // eigen lijst in de status en een eigen volgorde.
+  const handleAddMeerwerk = async omschrijving => {
     try {
-      const created = await createWerkbonMeerwerk({ werkbon_id: selectedId, ...input });
+      const created = await createWerkbonTaak({
+        werkbon_id: selectedId, omschrijving, volgorde: meerwerk.length, is_meerwerk: true,
+      });
       setMeerwerk(prev => [...prev, created]);
     } catch (e) {
       toast.error(e.message || 'Meerwerk toevoegen mislukt');
     }
   };
 
-  const handleDeleteMeerwerk = async m => {
-    if (!confirm(`Meerwerk "${m.omschrijving}" verwijderen?`)) return;
+  const handleToggleMeerwerk = async t => {
     try {
-      await deleteWerkbonMeerwerk(m.id);
-      setMeerwerk(prev => prev.filter(x => x.id !== m.id));
+      const updated = await toggleWerkbonTaak(t.id, !t.afgerond);
+      setMeerwerk(prev => prev.map(x => (x.id === t.id ? updated : x)));
+    } catch (e) {
+      toast.error(e.message || 'Bijwerken mislukt');
+    }
+  };
+
+  const handleDeleteMeerwerk = async t => {
+    if (!confirm(`Meerwerk "${t.omschrijving}" verwijderen?`)) return;
+    try {
+      await deleteWerkbonTaak(t.id);
+      setMeerwerk(prev => prev.filter(x => x.id !== t.id));
     } catch (e) {
       toast.error(e.message || 'Verwijderen mislukt');
     }
@@ -1784,7 +1744,19 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
             <MaterialenSection materialen={materialen} onAdd={handleAddMaterial} onUpdate={handleUpdateMaterial} onDelete={handleDeleteMaterial} canEdit={canEdit} />
 
             {/* Meerwerk */}
-            <MeerwerkSection meerwerk={meerwerk} onAdd={handleAddMeerwerk} onDelete={handleDeleteMeerwerk} canEdit={canEdit} />
+            <TakenSection
+              taken={meerwerk}
+              onToggle={handleToggleMeerwerk}
+              onAdd={handleAddMeerwerk}
+              onDelete={handleDeleteMeerwerk}
+              canEdit={canEdit}
+              titel="Meerwerk"
+              toonVoortgang={false}
+              uitleg="Werk dat er tijdens de klus bij kwam en niet in de oorspronkelijke opdracht zat. Staat apart op de werkbon, telt niet mee in de taakvoortgang."
+              leegTekst="Geen meerwerk."
+              plaatshouder="Wat is er extra gedaan?"
+              knopLabel="Meerwerk"
+            />
 
             {/* Notities */}
             <NotitiesSection
@@ -1868,7 +1840,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
             werkbon={detail}
             uitvoerders={uitvoerderNamen}
             onTaakToggle={handleToggleTaak}
-            detail={{ taken, uren, materialen, notities: werkbonNotities, fotos }}
+            detail={{ taken, uren, materialen, meerwerk, notities: werkbonNotities, fotos }}
             customer={customers.find(c => c.id === detail.customerId) || { name: detail.customerName }}
             company={company}
             onClose={() => setAfrondModal(false)}

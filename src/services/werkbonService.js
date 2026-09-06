@@ -74,6 +74,10 @@ const toWerkbon = row => ({
   raw: row,
 })
 
+// Meerwerk is een taak met een vlaggetje: zelfde tabel, zelfde afvinken, zelfde
+// slot na ondertekenen. Het staat alleen in een eigen blok, zodat de klant ziet
+// dat het niet in de oorspronkelijke opdracht zat. Geen prijs, geen
+// akkoordstatus — de handtekening ís het akkoord.
 const toWerkbonTaak = row => ({
   id: row.id,
   werkbonId: row.werkbon_id,
@@ -81,6 +85,7 @@ const toWerkbonTaak = row => ({
   omschrijving: row.omschrijving,
   afgerond: Boolean(row.afgerond),
   volgorde: Number(row.volgorde || 0),
+  isMeerwerk: row.is_meerwerk === true,
   raw: row,
 })
 
@@ -293,12 +298,27 @@ export async function completeWerkbon(id) {
 
 // ── WERKBON TAKEN ────────────────────────────────────────────────────────────
 
-export async function getWerkbonTaken(werkbonId) {
-  const { data, error } = await supabase
+/**
+ * Taken van een werkbon.
+ *
+ * `soort` staat bewust standaard op 'taken'. Meerwerk zit in dezelfde tabel, en
+ * een aanroeper die er niet aan denkt zou het anders stilzwijgend als gewone taak
+ * gaan tellen of tonen — precies het soort fout dat je pas maanden later ziet in
+ * een voortgangsbalk die niet klopt. Wie meerwerk wil, vraagt erom.
+ *
+ * @param {string} werkbonId
+ * @param {{soort?: 'taken'|'meerwerk'|'alles'}} [opties]
+ */
+export async function getWerkbonTaken(werkbonId, { soort = 'taken' } = {}) {
+  let query = supabase
     .from("werkbon_taken")
     .select("*")
     .eq("werkbon_id", werkbonId)
     .order("volgorde", { ascending: true })
+  if (soort === 'taken') query = query.eq("is_meerwerk", false)
+  if (soort === 'meerwerk') query = query.eq("is_meerwerk", true)
+
+  const { data, error } = await query
   if (error) throw error
   return (data || []).map(toWerkbonTaak)
 }
@@ -309,6 +329,7 @@ export async function createWerkbonTaak(input) {
     omschrijving: input.omschrijving,
     afgerond: Boolean(input.afgerond),
     volgorde: Number(input.volgorde || 0),
+    is_meerwerk: Boolean(input.is_meerwerk ?? input.isMeerwerk),
   }
   if (!base.werkbon_id) throw new Error("werkbon_id is verplicht voor een taak")
   if (!base.omschrijving) throw new Error("omschrijving is verplicht voor een taak")
@@ -326,6 +347,7 @@ export async function createWerkbonTaak(input) {
 export async function updateWerkbonTaak(id, input) {
   const updates = { ...input }
   delete updates.werkbonId
+  delete updates.isMeerwerk
   const { data, error } = await supabase
     .from("werkbon_taken")
     .update(updates)
@@ -546,68 +568,36 @@ export async function deleteWerkbonFoto(id, url) {
   if (error) throw error
 }
 
-// ── WERKBON MEERWERK ─────────────────────────────────────────────────────────
-
-const toWerkbonMeerwerk = row => ({
-  id: row.id,
-  werkbonId: row.werkbon_id,
-  companyId: row.company_id,
-  omschrijving: row.omschrijving || "",
-  prijs: Number(row.prijs || 0),
-  createdAt: row.created_at,
-})
-
-export async function getWerkbonMeerwerk(werkbonId) {
-  const { data, error } = await supabase
-    .from("werkbon_meerwerk")
-    .select("*")
-    .eq("werkbon_id", werkbonId)
-    .order("created_at", { ascending: true })
-  if (error) throw error
-  return (data || []).map(toWerkbonMeerwerk)
-}
-
-export async function createWerkbonMeerwerk(input) {
-  const base = {
-    werkbon_id: input.werkbon_id || input.werkbonId,
-    omschrijving: input.omschrijving,
-    prijs: Number(input.prijs || 0),
-  }
-  if (!base.werkbon_id) throw new Error("werkbon_id is verplicht")
-  if (!base.omschrijving) throw new Error("omschrijving is verplicht")
-  const payload = await withCompanyId(base)
-  const { data, error } = await supabase.from("werkbon_meerwerk").insert(payload).select().single()
-  if (error) throw error
-  return toWerkbonMeerwerk(data)
-}
-
-export async function deleteWerkbonMeerwerk(id) {
-  const { error } = await supabase.from("werkbon_meerwerk").delete().eq("id", id)
-  if (error) throw error
-}
+// Meerwerk heeft geen eigen tabel en geen eigen functies meer: het is een taak
+// met is_meerwerk = true. Zie getWerkbonTaken(id, { soort: 'meerwerk' }).
+// De oude werkbon_meerwerk-tabel is verwijderd in migratie 20260905130000.
 
 // ── WERKBONNEN PER PROJECT ───────────────────────────────────────────────────
 
 export async function getWerkbonnenByProject(projectId) {
   const { data, error } = await supabase
     .from("werkbonnen")
-    .select("*, customers(name), profiles(full_name), projects(name), voertuigen(naam, kleur), werkbon_taken(afgerond)")
+    .select("*, customers(name), profiles(full_name), projects(name), voertuigen(naam, kleur), werkbon_taken(afgerond, is_meerwerk)")
     .eq("project_id", projectId)
     .order("gepland_op", { ascending: true })
   if (error) throw error
   return (data || []).map(row => ({
     ...toWerkbon(row),
-    taakTotal: (row.werkbon_taken || []).length,
-    taakDone: (row.werkbon_taken || []).filter(t => t.afgerond).length,
+    // Meerwerk telt niet mee in de voortgang: dat zat niet in de opdracht, dus
+    // "3 van 5 taken" zou een verkeerd beeld geven van hoe ver de klus is.
+    taakTotal: (row.werkbon_taken || []).filter(t => !t.is_meerwerk).length,
+    taakDone: (row.werkbon_taken || []).filter(t => !t.is_meerwerk && t.afgerond).length,
   }))
 }
 
 // ── TAKEN COUNTS (batch, for list view) ─────────────────────────────────────
 
+/** Voortgang per werkbon voor de lijstweergave. Zonder meerwerk — zie hierboven. */
 export async function getAllWerkbonTakenCounts() {
   const { data, error } = await supabase
     .from("werkbon_taken")
     .select("werkbon_id, afgerond")
+    .eq("is_meerwerk", false)
   if (error) throw error
   const counts = {}
   for (const row of data || []) {

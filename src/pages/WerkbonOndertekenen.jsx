@@ -38,6 +38,7 @@ export default function WerkbonOndertekenen({ token }) {
   const [taken, setTaken] = useState([])
   const [uren, setUren] = useState([])
   const [materialen, setMaterialen] = useState([])
+  const [meerwerk, setMeerwerk] = useState([])
   const [notities, setNotities] = useState([])
   const [uitvoerders, setUitvoerders] = useState([])
   const [fotos, setFotos] = useState([])
@@ -74,7 +75,10 @@ export default function WerkbonOndertekenen({ token }) {
       if (!bon) { setError('Werkbon niet gevonden of de link is niet meer geldig.'); return }
       setWerkbon(bon)
       if (bon.ondertekend_op) setKlaar(true)
-      setTaken(t.data || [])
+      // Eén lijst uit de RPC, hier gesplitst: taken en meerwerk staan in dezelfde
+      // tabel en zijn alleen door is_meerwerk van elkaar te onderscheiden.
+      setTaken((t.data || []).filter(r => !r.is_meerwerk))
+      setMeerwerk((t.data || []).filter(r => r.is_meerwerk))
       setUren(u.data || [])
       setMaterialen(m.data || [])
       setNotities(n.data || [])
@@ -127,6 +131,7 @@ export default function WerkbonOndertekenen({ token }) {
         pauzeMinuten: u.pauze_minuten, uren: u.uren, notitie: u.notitie,
       })),
       materialen,
+      meerwerk: meerwerk.map(r => ({ omschrijving: r.omschrijving, afgerond: true })),
       notities,
       fotos,
     },
@@ -321,6 +326,26 @@ export default function WerkbonOndertekenen({ token }) {
               </span>
             </Regel>
           ))}
+        </Blok>
+      )}
+
+      {meerwerk.length > 0 && (
+        <Blok titel="Extra uitgevoerd werk">
+          <div style={{ fontSize: '.82rem', color: '#6b7280', marginBottom: 8 }}>
+            Dit werk zat niet in de oorspronkelijke opdracht.
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {meerwerk.map((mw, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, fontSize: '.9rem' }}>
+                <span style={{
+                  flexShrink: 0, width: 16, height: 16, borderRadius: '50%', marginTop: 2,
+                  background: '#0f9d58', color: '#fff', fontSize: 11, lineHeight: '16px',
+                  textAlign: 'center', fontWeight: 700,
+                }}>✓</span>
+                <span style={{ color: '#111827' }}>{mw.omschrijving}</span>
+              </div>
+            ))}
+          </div>
         </Blok>
       )}
 

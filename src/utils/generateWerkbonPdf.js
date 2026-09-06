@@ -20,6 +20,9 @@
 //   * De naam van de monteur per urenregel. Die hoort bij de loonadministratie,
 //     niet bij de klant. Wie er namens het bedrijf verantwoordelijk is, staat
 //     onder UITGEVOERD DOOR — dat is een ander gegeven.
+//   * Het bedrag bij meerwerk. Dat is een interne inschatting van de monteur,
+//     geen prijs — de prijs wordt bij het factureren bepaald. De omschrijving
+//     staat er wél op: de klant tekent dat het extra werk is uitgevoerd.
 //   * Taken die níét zijn afgevinkt. De klant tekent voor het uitgevoerde werk;
 //     een lijst met wat er nog openstaat maakt het aftekenen een onderhandeling.
 //     Openstaande punten blijven in de werkbon in de app staan.
@@ -54,7 +57,7 @@ const tijdFmt = t => (t ? String(t).slice(0, 5) : null);
  * @param {object} company  bedrijfsgegevens incl. brandingColor/logoUrl
  */
 async function buildWerkbonPdf(doc, werkbon, data, customer, company) {
-  const { taken = [], uren = [], materialen = [], notities = [], fotos = [] } = data || {};
+  const { taken = [], uren = [], materialen = [], meerwerk = [], notities = [], fotos = [] } = data || {};
   const accent = hexToRgb(company?.brandingColor);
   const accentInk = luminance(accent) > 0.62 ? C.dark : C.paper;
 
@@ -291,6 +294,33 @@ async function buildWerkbonPdf(doc, werkbon, data, customer, company) {
       doc.text(doc.splitTextToSize(m.naam || '', CW - 40)[0] || '', M, y);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); tc(C.soft);
       doc.text(`${aantalFmt(m.aantal)}${m.eenheid ? ` ${m.eenheid}` : ''}`, W - M, y, { align: 'right' });
+      y += 7.5;
+    });
+    dc(C.line); doc.setLineWidth(0.3); doc.line(M, y - 2.5, W - M, y - 2.5);
+    y += 8;
+  }
+
+  // ── EXTRA UITGEVOERD WERK ───────────────────────────────────────────────
+  // Meerwerk staat hier als omschrijving, zonder bedrag. De klant tekent dat het
+  // werk is uitgevoerd; wat het kost bepaalt het bedrijf bij het factureren. De
+  // interne inschatting van de monteur komt hier dus niet — die is geen prijs.
+  if (meerwerk.length) {
+    sectieKop('Extra uitgevoerd werk');
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); tc(C.muted);
+    ruimte(6);
+    doc.text('Dit werk zat niet in de oorspronkelijke opdracht.', M, y);
+    y += 6;
+    meerwerk.forEach((mw, i) => {
+      ruimte(9);
+      if (i > 0) scheiding();
+      // Zelfde vinkje als bij de werkzaamheden: het ís uitgevoerd.
+      fc(C.green); doc.ellipse(M + 2, y - 1.2, 1.9, 1.9, 'F');
+      dc(C.paper); doc.setLineWidth(0.45);
+      doc.line(M + 1.1, y - 1.2, M + 1.8, y - 0.4);
+      doc.line(M + 1.8, y - 0.4, M + 3.1, y - 2.2);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); tc(C.dark);
+      const regels = doc.splitTextToSize(mw.omschrijving || '', CW - 12);
+      doc.text(regels[0] || '', M + 7, y);
       y += 7.5;
     });
     dc(C.line); doc.setLineWidth(0.3); doc.line(M, y - 2.5, W - M, y - 2.5);
