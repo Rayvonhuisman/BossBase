@@ -22,7 +22,7 @@ import { listDeals } from '../services/dealService.js';
 import { listActivities } from '../services/activityService.js';
 import { getConnectionStatus, startGoogleCalendarConnect, disconnectGoogleCalendar } from '../services/googleCalendarService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
-import { werkbonDagen, tijdenOpDag } from '../utils/werkbonDagen.js';
+import { werkbonDagen, tijdenOpDag, ploegOpDag } from '../utils/werkbonDagen.js';
 import { getProjects } from '../services/projectsService.js';
 import { calcBtw, BTW_PCT_OPTIONS } from '../utils/btw.js';
 import { useToast } from '../lib/toast.jsx';
@@ -284,7 +284,10 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
         // Uitzondering: bij Groei is de agenda gedeeld → toon alles wat RLS teruggeeft.
         const uid = profile?.id;
         const mine = owner => shareAll || !uid || owner === uid;
-        const mineWerkbon = w => shareAll || !uid || (w.assignedToIds && w.assignedToIds.includes(uid)) || w.assignedTo === uid;
+        // Per dag: sta ik op díé dag in de (dag)ploeg? Wie op woensdag is
+        // weggetikt, ziet de klus op woensdag niet in zijn agenda.
+        const mijnDag = (w, dag) => shareAll || !uid || ploegOpDag(w, dag).includes(uid)
+          || (!Array.isArray(dag.medewerkerIds) && w.assignedTo === uid);
         const mineActivity = a => shareAll || !uid || (a.assignedToIds && a.assignedToIds.includes(uid)) || a.assignee === uid;
         // Werkbon-gekoppelde calendar_events verbergen: de werkbon zelf wordt
         // hieronder als (altijd actuele) synthetisch event getoond. Zo verschijnt
@@ -293,8 +296,8 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
         // Eén item per geplande dag: een klus van ma t/m vr staat op vijf dagen,
         // elk met de tijden die op die dag gelden.
         const wbEvents = wbs
-          .filter(w => w.geplandOp && w.status !== 'afgerond' && mineWerkbon(w))
-          .flatMap(w => werkbonDagen(w).map(dag => ({ w, dag, t: tijdenOpDag(w, dag) })))
+          .filter(w => w.geplandOp && w.status !== 'afgerond')
+          .flatMap(w => werkbonDagen(w).filter(dag => mijnDag(w, dag)).map(dag => ({ w, dag, t: tijdenOpDag(w, dag) })))
           .map(({ w, dag, t }) => ({
             id: `wb-${w.id}-${dag.datum}`,
             title: w.titel,

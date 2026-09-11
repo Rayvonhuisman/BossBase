@@ -8,7 +8,7 @@ import { listActivities } from '../services/activityService.js';
 import { getUrenregistratie, createUrenregel, berekenUren } from '../services/urenService.js';
 import { getTeamMembers } from '../services/notificatieService.js';
 import { PauzeKnoppen, rondAfOpVijf } from './UrenVelden.jsx';
-import { werkbonDagen } from '../utils/werkbonDagen.js';
+import { werkbonDagen, ploegOpDag } from '../utils/werkbonDagen.js';
 
 // ── Uren-herinnering-pop-up ───────────────────────────────────────────────────
 // Herinnert personeel eraan hun WERKDAG in te vullen — het getal waar de
@@ -28,7 +28,7 @@ import { werkbonDagen } from '../utils/werkbonDagen.js';
 // als er niets meer openstaat sluit de pop-up.
 //
 // "Gepland maar geen uren" leunt op de bestaande bronnen:
-//   • gepland  = werkbonnen (elke geplande dag + assigned_to_ids) ∪ activiteiten (due_at → lokale datum + assigned_to_ids)
+//   • gepland  = werkbonnen (elke geplande dag + de ploeg van die dag) ∪ activiteiten (due_at → lokale datum + assigned_to_ids)
 //   • geboekt  = werkdaguren in urenregistratie (profile_id + datum)
 // Geen parallel systeem — dezelfde list-functies die de agenda/uren-pagina ook gebruiken.
 
@@ -52,11 +52,12 @@ function computeMissingEntries(uid, werkbonnen, activities, urenRows) {
 
   const planned = new Map();
   for (const w of (werkbonnen || [])) {
-    if (!Array.isArray(w.assignedToIds) || !w.assignedToIds.includes(uid)) continue;
-    // Élke geplande dag van de werkbon telt, niet alleen de eerste: bij een klus
-    // van vijf dagen hoort bij elke dag een werkdag. Iedereen die aan de werkbon
-    // hangt, staat op al die dagen gepland — per dag toewijzen bestaat nog niet.
-    for (const { datum } of werkbonDagen(w)) {
+    // Élke geplande dag van de werkbon telt, niet alleen de eerste — maar alleen
+    // de dagen waarop deze medewerker in de (dag)ploeg staat. Wie op woensdag is
+    // weggetikt, krijgt voor woensdag geen herinnering.
+    for (const dag of werkbonDagen(w)) {
+      const { datum } = dag;
+      if (!ploegOpDag(w, dag).includes(uid)) continue;
       // Eerste werkbon van die dag levert de context.
       if (!inWindow(datum) || planned.has(datum)) continue;
       planned.set(datum, {

@@ -48,6 +48,8 @@ const toWerkbon = row => ({
       datum: d.datum,
       starttijd: d.starttijd ? String(d.starttijd).slice(0, 5) : null,
       eindtijd: d.eindtijd ? String(d.eindtijd).slice(0, 5) : null,
+      // Dagploeg: null = de hele ploeg van de werkbon, [] = niemand die dag.
+      medewerkerIds: Array.isArray(d.medewerker_ids) ? d.medewerker_ids : null,
     }))
     .sort((a, b) => a.datum.localeCompare(b.datum)),
   starttijd: row.starttijd || null,
@@ -130,21 +132,44 @@ const toWerkbonMateriaal = row => {
 // ── WERKBONNEN ───────────────────────────────────────────────────────────────
 
 const WERKBON_BASIS = "*, customers(name), profiles(full_name), projects(name), voertuigen(naam, kleur)"
-const WERKBON_SELECT = `${WERKBON_BASIS}, werkbon_dagen(id, datum, starttijd, eindtijd)`
-
-// Zolang migratie 20260911133000 (werkbon_dagen) niet gedraaid is, kent de API
-// die relatie niet en weigert hij de hele select — vóór hij iets uitvoert, dus
-// ook bij een insert of update is opnieuw proberen veilig. Dan zonder dagen:
-// elke werkbon valt terug op zijn ene gepland_op (utils/werkbonDagen.js). Zo
-// maakt de volgorde van uitrollen niet uit.
-let dagenTabel = true
+// Wat de database al kent, van nieuw naar oud:
+//   2 — dagen mét dagploeg (migratie 20260911181500, werkbon_dag_medewerkers)
+//   1 — dagen zonder dagploeg (20260911133000, werkbon_dagen)
+//   0 — geen dagen-tabel
+// Kent de API een kolom of relatie nog niet, dan weigert hij de hele select —
+// vóór hij iets uitvoert, dus ook bij een insert of update is opnieuw proberen
+// veilig. Zo maakt de volgorde van uitrollen niet uit: zonder dagploeg werkt
+// elke dag met de hele ploeg, zonder dagen valt elke werkbon terug op zijn ene
+// gepland_op (utils/werkbonDagen.js).
+let dagenStand = 2
+const selectVoor = stand =>
+  stand === 2 ? `${WERKBON_BASIS}, werkbon_dagen(id, datum, starttijd, eindtijd, medewerker_ids)`
+  : stand === 1 ? `${WERKBON_BASIS}, werkbon_dagen(id, datum, starttijd, eindtijd)`
+  : WERKBON_BASIS
+//
+// Elke aanroep houdt zijn EIGEN stand bij. Bij het laden van een pagina gaan er
+// meerdere selects tegelijk uit; lazen die de gedeelde stand, dan zag de tweede
+// foutmelding ("column werkbon_dagen_1.medewerker_ids does not exist") al stand
+// 1, matchte hij op "werkbon_dagen" en zakte alles door naar 0 — geen dagen meer,
+// en bij het volgende opslaan werden de overige dagen weggeschreven. Een fout
+// over medewerker_ids betekent daarom altijd precies "zonder dagploeg".
 async function metDagen(bouw, extra = "") {
-  if (dagenTabel) {
-    const res = await bouw(WERKBON_SELECT + extra)
-    if (!res.error || !/werkbon_dagen/i.test(res.error.message || "")) return res
-    dagenTabel = false
+  let stand = dagenStand
+  for (;;) {
+    const res = await bouw(selectVoor(stand) + extra)
+    if (!res.error || stand === 0) {
+      if (stand < dagenStand) dagenStand = stand
+      return res
+    }
+    const melding = res.error.message || ""
+    if (/medewerker_ids/i.test(melding)) {
+      if (stand !== 2) return res
+      stand = 1
+      continue
+    }
+    if (/werkbon_dagen/i.test(melding)) { stand = 0; continue }
+    return res
   }
-  return bouw(WERKBON_BASIS + extra)
 }
 
 export async function getWerkbonnen() {
@@ -173,6 +198,11 @@ export async function getWerkbonById(id) {
  * hun id en daarmee hun agenda-item.
  */
 export async function zetWerkbonDagen(werkbonId, dagen) {
+  // Een dagploeg zonder de kolom ervoor zou de RPC stil negeren. Dan liever nu
+  // zeggen dat het nog niet kan, dan dat iemand denkt dat hij is opgeslagen.
+  if (dagenStand < 2 && dagen.some(d => Array.isArray(d.medewerker_ids))) {
+    throw new Error("Per dag medewerkers kiezen werkt pas na de database-update (migratie werkbon_dag_medewerkers).")
+  }
   const { error } = await supabase.rpc("bb_werkbon_dagen_zetten", {
     p_werkbon_id: werkbonId,
     p_dagen: dagen,
@@ -327,7 +357,7 @@ export async function updateWerkbon(id, input) {
   // Een nieuwe gepland_op laat de database de dagen verschuiven (trigger). Het
   // antwoord van de update zelf ziet dat nog niet — dat leest de dagen van vóór
   // die trigger — dus dan opnieuw ophalen.
-  if ("gepland_op" in updates && dagenTabel) return getWerkbonById(id)
+  if ("gepland_op" in updates && dagenStand > 0) return getWerkbonById(id)
   return toWerkbon(data)
 }
 

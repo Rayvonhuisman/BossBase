@@ -126,7 +126,7 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
     }
     const planFout = meerdaags ? controleerPlanning(planning) : '';
     if (planFout) { toast.error(planFout); return; }
-    const dagen = meerdaags ? dagenUitPlanning(planning) : [];
+    const dagen = meerdaags ? dagenUitPlanning(planning, form.assignedToIds) : [];
     setSaving(true);
     try {
       const payload = {
@@ -242,15 +242,9 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
             disabled={saving}
             meerdaags={meerdaags}
             onUpgrade={guardFeature('planning', () => {})}
+            onTijden={t => setForm(f => ({ ...f, ...t }))}
+            ploeg={form.assignedToIds.map(id => ({ id, naam: teamMembers.find(m => m.profileId === id)?.fullName || 'Medewerker' }))}
           />
-          <div className="f">
-            <label>{meerdaags && dagenUitPlanning(planning).length > 1 ? 'Tijd (elke dag)' : 'Tijd'}</label>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <input type="time" value={form.starttijd || ''} onChange={e => set('starttijd', e.target.value)} style={{ flex: 1 }} />
-              <span style={{ color: 'var(--dl)' }}>→</span>
-              <input type="time" value={form.eindtijd || ''} onChange={e => set('eindtijd', e.target.value)} style={{ flex: 1 }} />
-            </div>
-          </div>
           <div className="f full">
             <label>Omschrijving</label>
             <NoteEditor mentions={true} value={form.omschrijving} onChange={v => set('omschrijving', v)} placeholder="Wat moet er gebeuren op locatie? Typ @ om iemand te taggen" rows={3} disabled={saving} teamMembers={teamMembers} />

@@ -3130,12 +3130,35 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .wbd-rij{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .wbd-opt{font-weight:400;color:var(--dl);font-size:11px}
 .wbd-check{display:flex;align-items:center;gap:7px;font-size:.8rem;color:var(--dm);cursor:pointer;width:fit-content}
-.wbd-extra{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
-.wbd-extra-label{font-weight:600;font-size:.78rem;color:var(--dm);margin-right:2px}
-.wbd-chip{display:inline-flex;align-items:center;gap:2px;padding:3px 3px 3px 9px;border-radius:var(--r999);background:var(--bgs);border:1px solid var(--bstrong);font-size:.78rem;color:var(--dk)}
-.wbd-chip button{border:none;background:none;cursor:pointer;color:var(--dl);font-size:15px;line-height:1;padding:0 5px}
-.wbd-extra-add{display:inline-flex;align-items:center;gap:6px}
-.wbd-extra-add input{border:1px solid var(--bstrong);border-radius:var(--r8);padding:5px 8px;font-size:.8rem;color:var(--dk);background:white}
+.wbd-tijd{display:flex;gap:6px;align-items:center}
+.wbd-tijd input{flex:1;min-width:0}
+/* Kalender: tik een dag aan of uit. */
+.wbd-kal-wrap{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}
+.wbd-kal{width:252px;flex-shrink:0;border:1px solid var(--border);border-radius:var(--r10);padding:8px;background:white}
+.wbd-kal-kop{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;font-size:.8rem;font-weight:700;color:var(--dk);text-transform:capitalize}
+.wbd-kal-kop button{border:none;background:none;cursor:pointer;color:var(--dm);font-size:16px;line-height:1;padding:3px 9px;border-radius:var(--r6)}
+.wbd-kal-kop button:hover{background:var(--bgs)}
+.wbd-kal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.wbd-kal-wd{font-size:.64rem;font-weight:700;color:var(--dl);text-align:center;padding:2px 0 3px;text-transform:uppercase}
+.wbd-kal-leeg{height:30px}
+.wbd-kal-dag{position:relative;height:30px;border:none;border-radius:7px;background:none;font-size:.78rem;color:var(--dk);cursor:pointer;font-family:inherit;padding:0}
+.wbd-kal-dag:hover:not(:disabled){background:var(--bgs)}
+.wbd-kal-dag.is-weekend{color:var(--dl)}
+.wbd-kal-dag.is-gepland{background:var(--p);color:var(--dk);font-weight:700}
+.wbd-kal-dag.is-gepland:hover:not(:disabled){background:#17c457}
+.wbd-kal-dag.is-start{box-shadow:inset 0 0 0 2px var(--dk)}
+.wbd-kal-dag.is-uit{background:repeating-linear-gradient(135deg,#f3f4f6 0 4px,#fff 4px 8px);color:var(--dl);text-decoration:line-through}
+.wbd-kal-dag.is-vandaag::after{content:'';position:absolute;bottom:3px;left:50%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--pd)}
+.wbd-kal-dag.is-gepland.is-vandaag::after{background:var(--dk)}
+.wbd-kal-dag:disabled{color:#d1d5db;cursor:default}
+.wbd-kal-uitleg{font-size:.7rem;color:var(--dl);margin-top:6px;line-height:1.35}
+.wbd-kal-wrap .wbd-lijst{flex:1 1 300px;min-width:0}
+.wbd-lijst-uitleg{font-size:.72rem;color:var(--dl);margin:-2px 0 4px;line-height:1.4}
+/* Ploeg per dag: initialen, aan = werkt die dag. */
+.wbd-ploeg{display:inline-flex;gap:3px;margin-left:8px;flex-shrink:0}
+.wbd-ploeg-chip{width:26px;height:26px;border-radius:50%;border:1px solid var(--bstrong);background:white;color:var(--dl);font-size:.62rem;font-weight:700;cursor:pointer;font-family:inherit;padding:0;text-decoration:line-through}
+.wbd-ploeg-chip.aan{background:var(--dk);border-color:var(--dk);color:var(--p);text-decoration:none}
+.wbd-dag.eigen-ploeg .wbd-dag-datum{color:#b45309}
 .wbd-fout{font-size:.78rem;color:#b42318;background:#fef3f2;border:1px solid #fecdca;border-radius:var(--r8);padding:8px 10px;line-height:1.45}
 .wbd-lijst{border:1px solid var(--border);border-radius:var(--r10);padding:8px 10px;display:flex;flex-direction:column;gap:2px;background:var(--bgs)}
 .wbd-lijst-kop{font-size:.74rem;font-weight:700;color:var(--dm);margin-bottom:4px}

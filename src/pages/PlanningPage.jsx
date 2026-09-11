@@ -12,8 +12,8 @@ import { usePermissions } from '../hooks/usePermissions.js';
 import { getWerkbonnen, createWerkbon, updateWerkbon, zetWerkbonDagen } from '../services/werkbonService.js';
 import { WerkbonDagenVelden, WerkbonLocatieVeld, useKlantAdres } from '../components/WerkbonPlanning.jsx';
 import {
-  werkbonDagen, tijdenOpDag, isIngepland, planningUitWerkbon, dagenUitPlanning, controleerPlanning,
-  legePlanning, planningLabel,
+  werkbonDagen, tijdenOpDag, ploegOpDag, isIngepland, planningUitWerkbon, dagenUitPlanning,
+  controleerPlanning, legePlanning, planningLabel,
 } from '../utils/werkbonDagen.js';
 import { getVoertuigen } from '../services/voertuigService.js';
 import { getActiveTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
@@ -663,7 +663,7 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, profile, onCl
     if (!form.titel.trim()) { toast.error('Titel is verplicht'); return; }
     const planFout = controleerPlanning(planning);
     if (planFout) { toast.error(planFout); return; }
-    const dagen = dagenUitPlanning(planning);
+    const dagen = dagenUitPlanning(planning, form.assigned_to_ids);
     setSaving(true);
     try {
       let wb = await createWerkbon({
@@ -740,16 +740,10 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, profile, onCl
             onChange={setPlanning}
             starttijd={form.starttijd}
             eindtijd={form.eindtijd}
+            onTijden={t => setForm(f => ({ ...f, ...t }))}
+            ploeg={form.assigned_to_ids.map(id => ({ id, naam: teamMembers.find(m => m.id === id)?.fullName || 'Medewerker' }))}
             disabled={saving}
           />
-          <div className="f">
-            <label>Starttijd</label>
-            <input type="time" value={form.starttijd} onChange={e => set('starttijd', e.target.value)} />
-          </div>
-          <div className="f">
-            <label>Eindtijd</label>
-            <input type="time" value={form.eindtijd} onChange={e => set('eindtijd', e.target.value)} />
-          </div>
           <AssigneeResponsibleSelect
             members={teamMembers}
             assignedIds={form.assigned_to_ids}
@@ -816,7 +810,7 @@ function DetailModal({ werkbon, teamMembers, voertuigen, profile, onClose, onUpd
   const submit = async () => {
     const planFout = controleerPlanning(planning);
     if (planFout) { toast.error(planFout); return; }
-    const dagen = dagenUitPlanning(planning);
+    const dagen = dagenUitPlanning(planning, form.assigned_to_ids);
     setSaving(true);
     try {
       const updated = await updateWerkbon(werkbon.id, {
@@ -893,16 +887,10 @@ function DetailModal({ werkbon, teamMembers, voertuigen, profile, onClose, onUpd
             onChange={setPlanning}
             starttijd={form.starttijd}
             eindtijd={form.eindtijd}
+            onTijden={t => setForm(f => ({ ...f, ...t }))}
+            ploeg={form.assigned_to_ids.map(id => ({ id, naam: teamMembers.find(m => m.id === id)?.fullName || 'Medewerker' }))}
             disabled={saving}
           />
-          <div className="f">
-            <label>Starttijd</label>
-            <input type="time" value={form.starttijd} onChange={e => set('starttijd', e.target.value)} />
-          </div>
-          <div className="f">
-            <label>Eindtijd</label>
-            <input type="time" value={form.eindtijd} onChange={e => set('eindtijd', e.target.value)} />
-          </div>
           <AssigneeResponsibleSelect
             members={teamMembers}
             assignedIds={form.assigned_to_ids}
@@ -1243,14 +1231,22 @@ export function PlanningPage({ openCustomer } = {}) {
                   {weekDays.map(date => {
                     // Een meerdaagse werkbon staat in elke kolom waar hij een dag
                     // heeft, met de tijden die op díé dag gelden.
+                    // De dagploeg bepaalt wie er die dag op staat: in de
+                    // medewerkerweergave valt de dag weg voor wie is weggetikt,
+                    // en in Totaal kleurt het blok naar de eerste van díé dag.
                     const dayWbs = colorKeyedWb.flatMap(w => {
                       const dagen = werkbonDagen(w);
                       const i = dagen.findIndex(d => d.datum === date);
                       if (i < 0) return [];
                       const t = tijdenOpDag(w, dagen[i]);
                       if (!t.starttijd) return [];
+                      const eigenPloeg = Array.isArray(dagen[i].medewerkerIds);
+                      const ploeg = ploegOpDag(w, dagen[i]);
+                      if (viewMode === 'medewerker' && eigenPloeg && !ploeg.includes(selectedMember)) return [];
                       return [{
                         ...w, starttijd: t.starttijd, eindtijd: t.eindtijd,
+                        assignedToIds: ploeg,
+                        _colorKey: viewMode === 'totaal' && eigenPloeg ? (ploeg[0] || '__none__') : w._colorKey,
                         _dagLabel: dagen.length > 1 ? `dag ${i + 1}/${dagen.length}` : '',
                       }];
                     });
