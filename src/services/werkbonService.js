@@ -132,7 +132,7 @@ const toWerkbonMateriaal = row => {
 const WERKBON_BASIS = "*, customers(name), profiles(full_name), projects(name), voertuigen(naam, kleur)"
 const WERKBON_SELECT = `${WERKBON_BASIS}, werkbon_dagen(id, datum, starttijd, eindtijd)`
 
-// Zolang migratie 20260911120000 (werkbon_dagen) niet gedraaid is, kent de API
+// Zolang migratie 20260911133000 (werkbon_dagen) niet gedraaid is, kent de API
 // die relatie niet en weigert hij de hele select — vóór hij iets uitvoert, dus
 // ook bij een insert of update is opnieuw proberen veilig. Dan zonder dagen:
 // elke werkbon valt terug op zijn ene gepland_op (utils/werkbonDagen.js). Zo
