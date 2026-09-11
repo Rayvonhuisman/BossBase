@@ -22,6 +22,9 @@ import {
   PROJECT_STATUS_OPTIONS,
 } from '../../services/projectsService.js';
 import { getWerkbonnenByProject, createWerkbon } from '../../services/werkbonService.js';
+import { getCustomer } from '../../services/customerService.js';
+import { adresRegel } from '../../components/AdresZoeker.jsx';
+import { planningLabel } from '../../utils/werkbonDagen.js';
 import { getProjectCosts, createJobCost, deleteJobCost, uploadKostenBonnen } from '../../services/jobCostService.js';
 import { calcBtw, BTW_PCT_OPTIONS } from '../../utils/btw.js';
 import { NewFactuurModal, SendFactuurMailModal } from '../FacturenPage.jsx';
@@ -833,14 +836,6 @@ function NotesTab({ notes, onAdd, onDelete }) {
 
 // ── WERKBONNEN TAB ───────────────────────────────────────────────────────────
 
-const WB_DAY   = ['zo','ma','di','wo','do','vr','za'];
-const WB_MONTH = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
-const wbShortDate = d => {
-  if (!d) return '';
-  const dt = new Date(d + 'T00:00:00');
-  if (Number.isNaN(dt.valueOf())) return d;
-  return `${WB_DAY[dt.getDay()]} ${dt.getDate()} ${WB_MONTH[dt.getMonth()]}`;
-};
 
 function WerkbonnenTab({ project, werkbonnen, onCreated, canManage, setPage }) {
   const openWerkbon = w => setPage?.('werkbonnen', { id: w.id, from: 'project', projectId: project.id, projectNaam: project.name });
@@ -854,11 +849,16 @@ function WerkbonnenTab({ project, werkbonnen, onCreated, canManage, setPage }) {
     if (!form.titel.trim()) { toast.error('Titel is verplicht'); return; }
     setSaving(true);
     try {
+      // Snel aanmaken heeft geen locatieveld: neem stil het adres van de klant
+      // van het project over. Er valt niets te overschrijven, en op de werkbon
+      // zelf is het daarna gewoon aan te passen.
+      const klant = project.customerId ? await getCustomer(project.customerId).catch(() => null) : null;
       const created = await createWerkbon({
         titel: form.titel.trim(),
         gepland_op: form.gepland_op || null,
         project_id: project.id,
         customer_id: project.customerId || null,
+        locatie: (klant && adresRegel(klant)) || null,
       });
       toast.success('Werkbon aangemaakt');
       setForm({ titel: '', gepland_op: '' });
@@ -928,7 +928,7 @@ function WerkbonnenTab({ project, werkbonnen, onCreated, canManage, setPage }) {
                     {w.titel}
                   </div>
                   <div className="lrow-sub" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {wbShortDate(w.geplandOp)}
+                    {planningLabel(w)}
                     {w.taakTotal > 0 && (
                       <>
                         <span>·</span>

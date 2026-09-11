@@ -121,7 +121,7 @@ export async function listCalendarEvents() {
 export async function createCalendarEvent(input) {
   const payload = await withCompanyId(mapCalendarEventFormToPayload(input))
   // Rechtstreeks in de agenda aangemaakt → herkomst 'zelf'. De planning-sync
-  // (upsertWerkbonEvent/upsertActivityEvent) zet expliciet 'planning'.
+  // (syncWerkbonEvents/upsertActivityEvent) zet expliciet 'planning'.
   if (payload.herkomst == null) payload.herkomst = 'zelf'
   // Persoonlijke agenda: een handmatig agenda-item hoort standaard bij de maker,
   // zodat het in zijn eigen agenda verschijnt (en niet in die van collega's).
@@ -164,10 +164,101 @@ export async function updateCalendarEventComments(id, comments) {
   return toCalendarEvent(data)
 }
 
-// Maak/werk hét calendar_event van een werkbon bij (precies één per werkbon).
-// Check eerst of er al een event bestaat met dit werkbon_id → UPDATE, anders INSERT.
-// Voorkomt dubbele agenda-items bij herhaald inplannen.
-export async function upsertWerkbonEvent({ werkbonId, title, date, time, end, customerId, description }) {
+// Agenda-items van een werkbon: één per geplande dag (calendar_events.werkbon_dag_id).
+// De werkbon zelf is de bron: deze functie leest hem opnieuw in en brengt de
+// agenda daarmee in lijn — ontbrekende dagen erbij, vervallen dagen weg, titel
+// en tijden bijgewerkt. Een dag zonder starttijd krijgt geen item; zo'n dag telt
+// op de planning ook als niet ingepland.
+//
+// Een item dat al aan de werkbon hing zonder dag (van vóór de dagen-tabel, of
+// een handmatig agenda-item waar de werkbon uit is aangemaakt) wordt overgenomen
+// door de dag op dezelfde datum. Planning-items die nergens meer bij horen gaan
+// weg; handmatige items blijven staan.
+export async function syncWerkbonEvents(werkbonId) {
+  if (!werkbonId) return
+  const { data: wb, error } = await supabase
+    .from("werkbonnen")
+    .select("id, titel, customer_id, omschrijving, assigned_to, starttijd, eindtijd, werkbon_dagen(id, datum, starttijd, eindtijd)")
+    .eq("id", werkbonId)
+    .maybeSingle()
+  // Vóór migratie werkbon_dagen: het oude gedrag, één item per werkbon.
+  if (error && /werkbon_dagen/i.test(error.message || "")) return syncEnkelWerkbonEvent(werkbonId)
+  if (error) throw error
+  if (!wb) return
+
+  const hhmm = t => (t ? String(t).slice(0, 5) : "")
+  const gewenst = (wb.werkbon_dagen || [])
+    .map(dag => ({ dag, start: hhmm(dag.starttijd) || hhmm(wb.starttijd), eind: hhmm(dag.eindtijd) || hhmm(wb.eindtijd) }))
+    .filter(x => x.start)
+
+  const { data: bestaand, error: leesFout } = await supabase
+    .from("calendar_events")
+    .select("id, werkbon_dag_id, herkomst, start_at")
+    .eq("werkbon_id", werkbonId)
+  if (leesFout) throw leesFout
+  const over = [...(bestaand || [])]
+  const pak = pred => {
+    const i = over.findIndex(pred)
+    return i < 0 ? null : over.splice(i, 1)[0]
+  }
+
+  const base = {
+    title: wb.titel || "Werkbon",
+    customer_id: wb.customer_id || null,
+    notes: wb.omschrijving || null,
+    // Agenda-item erft de eigenaar van de werkbon (persoonlijke agenda).
+    assigned_to: wb.assigned_to || null,
+  }
+  for (const { dag, start, eind } of gewenst) {
+    const times = buildEventTimes(dag.datum, start, eind)
+    const item = pak(e => e.werkbon_dag_id === dag.id)
+      || pak(e => !e.werkbon_dag_id && splitEventTime(e.start_at).date === dag.datum)
+    if (item) {
+      const { error: e } = await supabase
+        .from("calendar_events")
+        .update({ ...base, ...times, werkbon_dag_id: dag.id })
+        .eq("id", item.id)
+      if (e) throw e
+    } else {
+      const payload = await withCompanyId({
+        ...base, ...times, werkbon_id: werkbonId, werkbon_dag_id: dag.id, herkomst: "planning",
+      })
+      const { error: e } = await supabase.from("calendar_events").insert(payload)
+      if (e) throw e
+    }
+  }
+
+  const weg = over.filter(e => e.werkbon_dag_id || e.herkomst === "planning").map(e => e.id)
+  if (weg.length) {
+    const { error: e } = await supabase.from("calendar_events").delete().in("id", weg)
+    if (e) throw e
+  }
+}
+
+// Terugval zolang de database geen werkbon_dagen kent.
+async function syncEnkelWerkbonEvent(werkbonId) {
+  const { data: wb } = await supabase
+    .from("werkbonnen")
+    .select("titel, customer_id, omschrijving, gepland_op, starttijd, eindtijd")
+    .eq("id", werkbonId)
+    .maybeSingle()
+  if (!wb?.gepland_op || !wb?.starttijd) {
+    await supabase.from("calendar_events").delete().eq("werkbon_id", werkbonId)
+    return null
+  }
+  return upsertWerkbonEvent({
+    werkbonId,
+    title: wb.titel,
+    date: wb.gepland_op,
+    time: String(wb.starttijd).slice(0, 5),
+    end: wb.eindtijd ? String(wb.eindtijd).slice(0, 5) : "",
+    customerId: wb.customer_id,
+    description: wb.omschrijving,
+  })
+}
+
+// Het oude "één item per werkbon". Alleen nog voor de terugval hierboven.
+async function upsertWerkbonEvent({ werkbonId, title, date, time, end, customerId, description }) {
   if (!werkbonId) return null
   const times = buildEventTimes(date, time, end)
   // Agenda-item erft de eigenaar van de werkbon (persoonlijke agenda).
@@ -253,12 +344,6 @@ export async function upsertActivityEvent({ activiteitId, title, date, time, end
     .single()
   if (error) throw error
   return toCalendarEvent(data)
-}
-
-// Verwijder het gekoppelde calendar_event van een werkbon (bv. bij uit-plannen).
-export async function deleteWerkbonEvent(werkbonId) {
-  if (!werkbonId) return
-  await supabase.from("calendar_events").delete().eq("werkbon_id", werkbonId)
 }
 
 // Verwijder het gekoppelde calendar_event van een activiteit.

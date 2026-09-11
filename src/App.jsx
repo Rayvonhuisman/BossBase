@@ -70,6 +70,7 @@ import { getWerkbonnen } from './services/werkbonService.js';
 import { getFacturen } from './services/factuurService.js';
 import { listJobCosts } from './services/jobCostService.js';
 import { listCalendarEvents } from './services/calendarService.js';
+import { staatOpDag } from './utils/werkbonDagen.js';
 import { ActivityEditModal, NewActivityModal, NewLeadModal, ProfileModal } from './components/SharedModals.jsx';
 import { supabase } from './lib/supabase.js';
 import { listNotifications, markNotificationRead, markAllNotificationsRead } from './services/notificatieService.js';
@@ -409,7 +410,7 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
       today: dActivities.filter(a => a.dueAt?.slice(0, 10) === today && a.status !== 'completed' && a.status !== 'done').slice(0, 5),
       leads: dDeals.filter(d => d.stage === 'new_lead').slice(0, 5),
       offertes: dOffertes.filter(o => o.status === 'concept' || o.status === 'verzonden').slice(0, 3),
-      werkbonnen: dWerkbonnen.filter(w => w.geplandOp === today && w.status !== 'afgerond').slice(0, 3),
+      werkbonnen: dWerkbonnen.filter(w => staatOpDag(w, today) && w.status !== 'afgerond').slice(0, 3),
     };
   }, [dActivities, dDeals, dOffertes, dWerkbonnen]);
 

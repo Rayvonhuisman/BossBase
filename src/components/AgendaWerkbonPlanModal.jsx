@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { ModalX, NotifyMailToggle } from '../bb-shared.jsx';
 import { AssigneeResponsibleSelect } from './AssigneeResponsibleSelect.jsx';
 import { getWerkbonnen, updateWerkbon } from '../services/werkbonService.js';
-import { upsertWerkbonEvent } from '../services/calendarService.js';
+import { syncWerkbonEvents } from '../services/calendarService.js';
+import { isIngepland } from '../utils/werkbonDagen.js';
 import { getActiveTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
 import { useToast } from '../lib/toast.jsx';
 import { usePlan } from '../hooks/usePlan.js';
@@ -10,7 +11,7 @@ import { usePlan } from '../hooks/usePlan.js';
 // Werkbon inplannen vanuit de agenda — voor wie geen planningsmodule heeft.
 // Hergebruikt EXACT dezelfde inplanlogica als de planning-modals
 // (QuickPlanModal): updateWerkbon zet gepland_op/starttijd/eindtijd + toewijzing,
-// upsertWerkbonEvent maakt/werkt het gekoppelde agenda-item (herkomst 'planning').
+// syncWerkbonEvents maakt/werkt de gekoppelde agenda-items bij (herkomst 'planning').
 // Geen nieuw/parallel systeem — dezelfde service-aanroepen.
 //
 // - Solo (geen gedeelde werkruimte): geen persoon-keuze, alles op de ingelogde
@@ -54,7 +55,7 @@ export function AgendaWerkbonPlanModal({ currentUserId, currentUserName, default
       if (!alive) return;
       // Alleen nog niet ingeplande werkbonnen — zelfde definitie als de Planning:
       // een werkbon telt als ingepland zodra hij een datum én starttijd heeft.
-      const unplanned = (wbs || []).filter(w => (!w.geplandOp || !w.starttijd) && w.status !== 'afgerond');
+      const unplanned = (wbs || []).filter(w => !isIngepland(w) && w.status !== 'afgerond');
       setWerkbonnen(unplanned);
       setTeamMembers(members || []);
     }).finally(() => { if (alive) setLoading(false); });
@@ -92,18 +93,8 @@ export function AgendaWerkbonPlanModal({ currentUserId, currentUserName, default
           creatorId: currentUserId, creatorName: currentUserName,
         }).catch(() => {});
       }
-      // 3) Upsert het gekoppelde agenda-item (één per werkbon, herkomst 'planning').
-      if (date && starttijd) {
-        upsertWerkbonEvent({
-          werkbonId,
-          title: selected?.titel,
-          date,
-          time: starttijd,
-          end: eindtijd || '',
-          customerId: selected?.customerId || null,
-          description: selected?.omschrijving || '',
-        }).catch(() => {});
-      }
+      // 3) Agenda bijwerken: één item per geplande dag (herkomst 'planning').
+      syncWerkbonEvents(werkbonId).catch(() => {});
       toast.success('Werkbon ingepland');
       onScheduled?.(updated);
       onClose();

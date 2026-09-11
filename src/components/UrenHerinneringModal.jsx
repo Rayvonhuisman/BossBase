@@ -8,6 +8,7 @@ import { listActivities } from '../services/activityService.js';
 import { getUrenregistratie, createUrenregel, berekenUren } from '../services/urenService.js';
 import { getTeamMembers } from '../services/notificatieService.js';
 import { PauzeKnoppen, rondAfOpVijf } from './UrenVelden.jsx';
+import { werkbonDagen } from '../utils/werkbonDagen.js';
 
 // ── Uren-herinnering-pop-up ───────────────────────────────────────────────────
 // Herinnert personeel eraan hun WERKDAG in te vullen — het getal waar de
@@ -27,7 +28,7 @@ import { PauzeKnoppen, rondAfOpVijf } from './UrenVelden.jsx';
 // als er niets meer openstaat sluit de pop-up.
 //
 // "Gepland maar geen uren" leunt op de bestaande bronnen:
-//   • gepland  = werkbonnen (gepland_op + assigned_to_ids) ∪ activiteiten (due_at → lokale datum + assigned_to_ids)
+//   • gepland  = werkbonnen (elke geplande dag + assigned_to_ids) ∪ activiteiten (due_at → lokale datum + assigned_to_ids)
 //   • geboekt  = werkdaguren in urenregistratie (profile_id + datum)
 // Geen parallel systeem — dezelfde list-functies die de agenda/uren-pagina ook gebruiken.
 
@@ -51,19 +52,22 @@ function computeMissingEntries(uid, werkbonnen, activities, urenRows) {
 
   const planned = new Map();
   for (const w of (werkbonnen || [])) {
-    if (inWindow(w.geplandOp) && Array.isArray(w.assignedToIds) && w.assignedToIds.includes(uid)) {
-      // Eerste werkbon van die dag levert de context + tijd-voorvulling.
-      if (!planned.has(w.geplandOp)) {
-        planned.set(w.geplandOp, {
-          date: w.geplandOp,
-          werkbonId: w.id,
-          contextLabel: [w.titel, w.customerName].filter(Boolean).join(' · '),
-          // Bewust NIET de tijden van de werkbon voorvullen: dit gaat over de
-          // hele werkdag, en die begint eerder en eindigt later dan de klus.
-          start: '',
-          eind: '',
-        });
-      }
+    if (!Array.isArray(w.assignedToIds) || !w.assignedToIds.includes(uid)) continue;
+    // Élke geplande dag van de werkbon telt, niet alleen de eerste: bij een klus
+    // van vijf dagen hoort bij elke dag een werkdag. Iedereen die aan de werkbon
+    // hangt, staat op al die dagen gepland — per dag toewijzen bestaat nog niet.
+    for (const { datum } of werkbonDagen(w)) {
+      // Eerste werkbon van die dag levert de context.
+      if (!inWindow(datum) || planned.has(datum)) continue;
+      planned.set(datum, {
+        date: datum,
+        werkbonId: w.id,
+        contextLabel: [w.titel, w.customerName].filter(Boolean).join(' · '),
+        // Bewust NIET de tijden van de werkbon voorvullen: dit gaat over de
+        // hele werkdag, en die begint eerder en eindigt later dan de klus.
+        start: '',
+        eind: '',
+      });
     }
   }
   for (const a of (activities || [])) {

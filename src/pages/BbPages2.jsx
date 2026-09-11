@@ -22,6 +22,7 @@ import { listDeals } from '../services/dealService.js';
 import { listActivities } from '../services/activityService.js';
 import { getConnectionStatus, startGoogleCalendarConnect, disconnectGoogleCalendar } from '../services/googleCalendarService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
+import { werkbonDagen, tijdenOpDag } from '../utils/werkbonDagen.js';
 import { getProjects } from '../services/projectsService.js';
 import { calcBtw, BTW_PCT_OPTIONS } from '../utils/btw.js';
 import { useToast } from '../lib/toast.jsx';
@@ -289,14 +290,17 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
         // hieronder als (altijd actuele) synthetisch event getoond. Zo verschijnt
         // elk item exact één keer — gededupliceerd op werkbon_id.
         const manualEvents = data.filter(e => !e.werkbonId && mine(e.assignedTo));
+        // Eén item per geplande dag: een klus van ma t/m vr staat op vijf dagen,
+        // elk met de tijden die op die dag gelden.
         const wbEvents = wbs
           .filter(w => w.geplandOp && w.status !== 'afgerond' && mineWerkbon(w))
-          .map(w => ({
-            id: `wb-${w.id}`,
+          .flatMap(w => werkbonDagen(w).map(dag => ({ w, dag, t: tijdenOpDag(w, dag) })))
+          .map(({ w, dag, t }) => ({
+            id: `wb-${w.id}-${dag.datum}`,
             title: w.titel,
-            date: w.geplandOp,
-            time: w.starttijd || '07:00',
-            end: w.eindtijd || '',
+            date: dag.datum,
+            time: t.starttijd || '07:00',
+            end: t.eindtijd || '',
             color: '#fff7ed',
             textColor: '#d97706',
             type: 'werkbon',

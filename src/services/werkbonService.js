@@ -37,7 +37,19 @@ const toWerkbon = row => ({
   titel: row.titel || "",
   omschrijving: row.omschrijving || "",
   status: row.status || "gepland",
+  // Startdatum = de vroegste geplande dag; de database houdt hem bij.
   geplandOp: row.gepland_op || null,
+  // Alle geplande dagen (tabel werkbon_dagen), gesorteerd. starttijd/eindtijd
+  // op een dag zijn een afwijking; leeg = de tijden van de werkbon. Lees ze via
+  // utils/werkbonDagen.js — die valt terug op gepland_op als de lijst leeg is.
+  dagen: (Array.isArray(row.werkbon_dagen) ? row.werkbon_dagen : [])
+    .map(d => ({
+      id: d.id,
+      datum: d.datum,
+      starttijd: d.starttijd ? String(d.starttijd).slice(0, 5) : null,
+      eindtijd: d.eindtijd ? String(d.eindtijd).slice(0, 5) : null,
+    }))
+    .sort((a, b) => a.datum.localeCompare(b.datum)),
   starttijd: row.starttijd || null,
   eindtijd: row.eindtijd || null,
   locatie: row.locatie || "",
@@ -117,36 +129,64 @@ const toWerkbonMateriaal = row => {
 
 // ── WERKBONNEN ───────────────────────────────────────────────────────────────
 
-const WERKBON_SELECT = "*, customers(name), profiles(full_name), projects(name), voertuigen(naam, kleur)"
+const WERKBON_BASIS = "*, customers(name), profiles(full_name), projects(name), voertuigen(naam, kleur)"
+const WERKBON_SELECT = `${WERKBON_BASIS}, werkbon_dagen(id, datum, starttijd, eindtijd)`
 
-export async function getWerkbonnen() {
-  const { data, error } = await supabase
-    .from("werkbonnen")
-    .select(WERKBON_SELECT)
-    .order("gepland_op", { ascending: true })
-  if (error) throw error
-  return (data || []).map(toWerkbon)
+// Zolang migratie 20260911120000 (werkbon_dagen) niet gedraaid is, kent de API
+// die relatie niet en weigert hij de hele select — vóór hij iets uitvoert, dus
+// ook bij een insert of update is opnieuw proberen veilig. Dan zonder dagen:
+// elke werkbon valt terug op zijn ene gepland_op (utils/werkbonDagen.js). Zo
+// maakt de volgorde van uitrollen niet uit.
+let dagenTabel = true
+async function metDagen(bouw, extra = "") {
+  if (dagenTabel) {
+    const res = await bouw(WERKBON_SELECT + extra)
+    if (!res.error || !/werkbon_dagen/i.test(res.error.message || "")) return res
+    dagenTabel = false
+  }
+  return bouw(WERKBON_BASIS + extra)
 }
 
-export async function getWerkbonnenForWeek(startDate, endDate) {
-  const { data, error } = await supabase
+export async function getWerkbonnen() {
+  const { data, error } = await metDagen(sel => supabase
     .from("werkbonnen")
-    .select(WERKBON_SELECT)
-    .or(`gepland_op.gte.${startDate},gepland_op.is.null`)
-    .lte("gepland_op", endDate)
-    .order("starttijd", { ascending: true, nullsFirst: true })
+    .select(sel)
+    .order("gepland_op", { ascending: true }))
   if (error) throw error
   return (data || []).map(toWerkbon)
 }
 
 export async function getWerkbonById(id) {
-  const { data, error } = await supabase
+  const { data, error } = await metDagen(sel => supabase
     .from("werkbonnen")
-    .select(WERKBON_SELECT)
+    .select(sel)
     .eq("id", id)
-    .single()
+    .single())
   if (error) throw error
   return toWerkbon(data)
+}
+
+/**
+ * Zet de geplande dagen van een werkbon en geeft de bijgewerkte werkbon terug.
+ * `dagen` komt uit dagenUitPlanning(): [{ datum, starttijd, eindtijd }]. Een lege
+ * lijst = niet ingepland. Wat er niet in staat verdwijnt; bestaande dagen houden
+ * hun id en daarmee hun agenda-item.
+ */
+export async function zetWerkbonDagen(werkbonId, dagen) {
+  const { error } = await supabase.rpc("bb_werkbon_dagen_zetten", {
+    p_werkbon_id: werkbonId,
+    p_dagen: dagen,
+  })
+  if (error) {
+    const ontbreekt = error.code === "PGRST202" || /bb_werkbon_dagen_zetten/.test(error.message || "")
+    if (!ontbreekt) throw error
+    // Zonder de migratie gaat één dag gewoon via gepland_op; meer kan nog niet.
+    const eenDag = dagen.length <= 1 && !dagen.some(d => d.starttijd || d.eindtijd)
+    if (!eenDag) {
+      throw new Error("Meerdaagse planning werkt pas na de database-update (migratie werkbon_dagen). Plan deze werkbon voorlopig op één dag.")
+    }
+  }
+  return getWerkbonById(werkbonId)
 }
 
 // Bepaal de lijst toegewezen medewerkers + de primaire (eerste) uit de input,
@@ -203,11 +243,11 @@ export async function createWerkbon(input) {
   Object.keys(base).forEach(k => base[k] === null && delete base[k])
 
   const payload = await withCompanyId(base)
-  const { data, error } = await supabase
+  const { data, error } = await metDagen(sel => supabase
     .from("werkbonnen")
     .insert(payload)
-    .select(WERKBON_SELECT)
-    .single()
+    .select(sel)
+    .single())
   if (error) throw error
   return toWerkbon(data)
 }
@@ -254,6 +294,7 @@ export async function updateWerkbon(id, input) {
   delete updates.verstuurdNaarEmail
   delete updates.verstuurdOp
   delete updates.opSlot
+  delete updates.dagen
   delete updates.raw
 
   // Legt het startmoment vast zodra de status naar 'in_uitvoering' gaat, tenzij
@@ -261,12 +302,12 @@ export async function updateWerkbon(id, input) {
   // gebeurt hieronder pas ná de hoofdupdate, en alleen als gestart_op nog leeg is.
   const wantsStartStamp = updates.status === "in_uitvoering" && updates.gestart_op === undefined
 
-  const { data, error } = await supabase
+  const { data, error } = await metDagen(sel => supabase
     .from("werkbonnen")
     .update(updates)
     .eq("id", id)
-    .select(WERKBON_SELECT)
-    .single()
+    .select(sel)
+    .single())
   if (error) throw error
 
   // Startmoment één keer registreren — spiegelt hoe afgerond_op werkt. De
@@ -274,15 +315,19 @@ export async function updateWerkbon(id, input) {
   // overschreven (race-veilig). Bij direct afronden (in_uitvoering overgeslagen)
   // draait dit niet, dus blijft gestart_op leeg.
   if (wantsStartStamp && data && !data.gestart_op) {
-    const { data: stamped } = await supabase
+    const { data: stamped } = await metDagen(sel => supabase
       .from("werkbonnen")
       .update({ gestart_op: new Date().toISOString() })
       .eq("id", id)
       .is("gestart_op", null)
-      .select(WERKBON_SELECT)
-      .maybeSingle()
-    if (stamped) return toWerkbon(stamped)
+      .select(sel)
+      .maybeSingle())
+    if (stamped && !("gepland_op" in updates)) return toWerkbon(stamped)
   }
+  // Een nieuwe gepland_op laat de database de dagen verschuiven (trigger). Het
+  // antwoord van de update zelf ziet dat nog niet — dat leest de dagen van vóór
+  // die trigger — dus dan opnieuw ophalen.
+  if ("gepland_op" in updates && dagenTabel) return getWerkbonById(id)
   return toWerkbon(data)
 }
 
@@ -575,11 +620,11 @@ export async function deleteWerkbonFoto(id, url) {
 // ── WERKBONNEN PER PROJECT ───────────────────────────────────────────────────
 
 export async function getWerkbonnenByProject(projectId) {
-  const { data, error } = await supabase
+  const { data, error } = await metDagen(sel => supabase
     .from("werkbonnen")
-    .select("*, customers(name), profiles(full_name), projects(name), voertuigen(naam, kleur), werkbon_taken(afgerond, is_meerwerk)")
+    .select(sel)
     .eq("project_id", projectId)
-    .order("gepland_op", { ascending: true })
+    .order("gepland_op", { ascending: true }), ", werkbon_taken(afgerond, is_meerwerk)")
   if (error) throw error
   return (data || []).map(row => ({
     ...toWerkbon(row),

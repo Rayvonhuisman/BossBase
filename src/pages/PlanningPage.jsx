@@ -9,12 +9,17 @@ import { I, ModalX, NotifyMailToggle } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
-import { getWerkbonnen, createWerkbon, updateWerkbon } from '../services/werkbonService.js';
+import { getWerkbonnen, createWerkbon, updateWerkbon, zetWerkbonDagen } from '../services/werkbonService.js';
+import { WerkbonDagenVelden, WerkbonLocatieVeld, useKlantAdres } from '../components/WerkbonPlanning.jsx';
+import {
+  werkbonDagen, tijdenOpDag, isIngepland, planningUitWerkbon, dagenUitPlanning, controleerPlanning,
+  legePlanning, planningLabel,
+} from '../utils/werkbonDagen.js';
 import { getVoertuigen } from '../services/voertuigService.js';
 import { getActiveTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
-import { upsertWerkbonEvent, upsertActivityEvent, deleteWerkbonEvent, deleteActivityEvent } from '../services/calendarService.js';
+import { syncWerkbonEvents, upsertActivityEvent, deleteActivityEvent } from '../services/calendarService.js';
 import { listActivities, createActivity, buildDueAt } from '../services/activityService.js';
 import { ActivityEditModal } from '../components/SharedModals.jsx';
 import { MemberMultiSelect } from '../components/MemberMultiSelect.jsx';
@@ -155,7 +160,7 @@ function WerkbonBlock({ werkbon, color, onClick }) {
   return (
     <div
       onClick={e => { e.stopPropagation(); onClick(werkbon); }}
-      title={`${werkbon.titel}\n${fmtTime(werkbon.starttijd)}–${fmtTime(werkbon.eindtijd)}\n${werkbon.customerName || ''}`}
+      title={`${werkbon.titel}${werkbon._dagLabel ? ` (${werkbon._dagLabel})` : ''}\n${fmtTime(werkbon.starttijd)}–${fmtTime(werkbon.eindtijd)}\n${werkbon.customerName || ''}`}
       style={{
         position: 'absolute', top, left, width: w, height,
         background: color.bg,
@@ -182,7 +187,7 @@ function WerkbonBlock({ werkbon, color, onClick }) {
       </div>
       {height > 30 && (
         <div style={{ fontSize: 9, color: color.text, opacity: .75, lineHeight: 1.2 }}>
-          {fmtTime(werkbon.starttijd)}–{fmtTime(werkbon.eindtijd)}
+          {fmtTime(werkbon.starttijd)}–{fmtTime(werkbon.eindtijd)}{werkbon._dagLabel ? ` · ${werkbon._dagLabel}` : ''}
         </div>
       )}
       {height > 50 && werkbon.customerName && (
@@ -378,19 +383,9 @@ function QuickPlanModal({ werkbon, date, hour, teamMembers, profile, onClose, on
         link: 'planning', relatedType: 'werkbon', relatedId: werkbon.id,
         creatorId: profile?.id, creatorName: profile?.fullName,
       }).catch(() => {});
-      // Werk hét calendar_event van deze werkbon bij (upsert op werkbon_id) —
-      // geen nieuw event bij herhaald inplannen.
-      if (date && starttijd) {
-        upsertWerkbonEvent({
-          werkbonId: werkbon.id,
-          title: werkbon.titel,
-          date,
-          time: starttijd,
-          end: eindtijd || '',
-          customerId: werkbon.customerId || null,
-          description: werkbon.omschrijving || '',
-        }).catch(() => {});
-      }
+      // Agenda bijwerken: één item per geplande dag. Heeft de werkbon meerdere
+      // dagen, dan is hij door de nieuwe startdatum in zijn geheel verschoven.
+      syncWerkbonEvents(werkbon.id).catch(() => {});
       toast.success('Werkbon ingepland');
       onSaved(updated);
       onClose();
@@ -466,6 +461,7 @@ function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, pro
   const [notifyMail, setNotifyMail] = useState(true);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const klantAdres = useKlantAdres({ customers, locatie: form.locatie, setLocatie: v => set('locatie', v) });
 
   const werkbonnenVoorKlant = form.customer_id
     ? (werkbonnen || []).filter(w => w.customerId === form.customer_id && !w.activity_id)
@@ -568,7 +564,7 @@ function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, pro
           </div>
           <div className="f">
             <label>Klant</label>
-            <select value={form.customer_id} onChange={e => { set('customer_id', e.target.value); set('werkbon_id', ''); }}>
+            <select value={form.customer_id} onChange={e => { set('customer_id', e.target.value); set('werkbon_id', ''); klantAdres.klantGekozen(e.target.value); }}>
               <option value="">— Geen klant —</option>
               {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -600,10 +596,15 @@ function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, pro
               {voertuigen.map(v => <option key={v.id} value={v.id}>{v.naam}{v.kenteken ? ` (${v.kenteken})` : ''}</option>)}
             </select>
           </div>
-          <div className="f" style={{ gridColumn: '1 / -1' }}>
-            <label>Locatie <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(optioneel)</span></label>
-            <input value={form.locatie} onChange={e => set('locatie', e.target.value)} placeholder="Adres of omschrijving" />
-          </div>
+          <WerkbonLocatieVeld
+            style={{ gridColumn: '1 / -1' }}
+            value={form.locatie}
+            onChange={v => set('locatie', v)}
+            voorstel={klantAdres.voorstel}
+            onNeemOver={klantAdres.neemOver}
+            onHoudHuidige={klantAdres.houdHuidige}
+            disabled={saving}
+          />
           <div className="f" style={{ gridColumn: '1 / -1' }}>
             <label>Notities</label>
             <NoteEditor mentions={true} value={form.omschrijving} onChange={v => set('omschrijving', v)} rows={3}
@@ -645,12 +646,14 @@ function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, pro
 function PlanModal({ teamMembers, voertuigen, customers, projects, profile, onClose, onSaved }) {
   const toast = useToast();
   const [form, setForm] = useState({
-    titel: '', customer_id: '', project_id: '', gepland_op: toISO(new Date()),
+    titel: '', customer_id: '', project_id: '',
     starttijd: '09:00', eindtijd: '11:00', assigned_to_ids: [], verantwoordelijke_ids: [], voertuig_id: '', locatie: '', omschrijving: '',
   });
+  const [planning, setPlanning] = useState(() => legePlanning(toISO(new Date())));
   const [notifyMail, setNotifyMail] = useState(true);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const klantAdres = useKlantAdres({ customers, locatie: form.locatie, setLocatie: v => set('locatie', v) });
 
   const filteredProjects = form.customer_id
     ? projects.filter(p => p.customerId === form.customer_id)
@@ -658,13 +661,16 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, profile, onCl
 
   const submit = async () => {
     if (!form.titel.trim()) { toast.error('Titel is verplicht'); return; }
+    const planFout = controleerPlanning(planning);
+    if (planFout) { toast.error(planFout); return; }
+    const dagen = dagenUitPlanning(planning);
     setSaving(true);
     try {
-      const wb = await createWerkbon({
+      let wb = await createWerkbon({
         titel: form.titel.trim(),
         customer_id: form.customer_id || null,
         project_id: form.project_id || null,
-        gepland_op: form.gepland_op || null,
+        gepland_op: dagen[0]?.datum || null,
         starttijd: form.starttijd || null,
         eindtijd: form.eindtijd || null,
         assigned_to_ids: form.assigned_to_ids,
@@ -674,26 +680,24 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, profile, onCl
         omschrijving: form.omschrijving || null,
         status: 'gepland',
       });
+      // Dagen pas ná het aanmaken (dan is er een id). Mislukt het, dan staat de
+      // werkbon er al op de startdatum: melden en sluiten, anders levert nog
+      // eens klikken een dubbele op.
+      try {
+        wb = await zetWerkbonDagen(wb.id, dagen);
+      } catch (e) {
+        toast.error(`Werkbon aangemaakt, maar de dagen niet: ${e.message || 'onbekende fout'}`);
+      }
       // Notificeer toegewezen medewerkers (in-app + optioneel e-mail).
       notifyNewAssignees({
         userIds: form.assigned_to_ids, members: teamMembers, sendMail: notifyMail,
         type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`,
-        body: `Datum: ${form.gepland_op}${form.starttijd ? ` om ${form.starttijd}` : ''}`,
+        body: `Datum: ${planningLabel(wb)}${form.starttijd ? ` om ${form.starttijd}` : ''}`,
         link: 'planning', relatedType: 'werkbon', relatedId: wb.id,
         creatorId: profile?.id, creatorName: profile?.fullName,
       }).catch(() => {});
-      // Eén calendar_event per werkbon (upsert op werkbon_id)
-      if (form.gepland_op && form.starttijd) {
-        upsertWerkbonEvent({
-          werkbonId: wb.id,
-          title: form.titel.trim(),
-          date: form.gepland_op,
-          time: form.starttijd,
-          end: form.eindtijd || '',
-          customerId: form.customer_id || null,
-          description: form.omschrijving || '',
-        }).catch(() => {});
-      }
+      // Agenda: één item per geplande dag.
+      syncWerkbonEvents(wb.id).catch(() => {});
       toast.success('Werkbon ingepland');
       onSaved(wb);
       onClose();
@@ -718,7 +722,7 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, profile, onCl
           </div>
           <div className="f">
             <label>Klant</label>
-            <select value={form.customer_id} onChange={e => { set('customer_id', e.target.value); set('project_id', ''); }}>
+            <select value={form.customer_id} onChange={e => { set('customer_id', e.target.value); set('project_id', ''); klantAdres.klantGekozen(e.target.value); }}>
               <option value="">— Geen klant —</option>
               {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -730,10 +734,14 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, profile, onCl
               {filteredProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
-          <div className="f" style={{ gridColumn: '1 / -1' }}>
-            <label>Datum</label>
-            <input type="date" value={form.gepland_op} onChange={e => set('gepland_op', e.target.value)} />
-          </div>
+          <WerkbonDagenVelden
+            style={{ gridColumn: '1 / -1' }}
+            planning={planning}
+            onChange={setPlanning}
+            starttijd={form.starttijd}
+            eindtijd={form.eindtijd}
+            disabled={saving}
+          />
           <div className="f">
             <label>Starttijd</label>
             <input type="time" value={form.starttijd} onChange={e => set('starttijd', e.target.value)} />
@@ -759,10 +767,15 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, profile, onCl
               {voertuigen.map(v => <option key={v.id} value={v.id}>{v.naam}{v.kenteken ? ` (${v.kenteken})` : ''}</option>)}
             </select>
           </div>
-          <div className="f" style={{ gridColumn: '1 / -1' }}>
-            <label>Locatie</label>
-            <input value={form.locatie} onChange={e => set('locatie', e.target.value)} placeholder="Adres of omschrijving" />
-          </div>
+          <WerkbonLocatieVeld
+            style={{ gridColumn: '1 / -1' }}
+            value={form.locatie}
+            onChange={v => set('locatie', v)}
+            voorstel={klantAdres.voorstel}
+            onNeemOver={klantAdres.neemOver}
+            onHoudHuidige={klantAdres.houdHuidige}
+            disabled={saving}
+          />
           <div className="f" style={{ gridColumn: '1 / -1' }}>
             <label>Omschrijving</label>
             <NoteEditor mentions={true} value={form.omschrijving} onChange={v => set('omschrijving', v)} rows={3}
@@ -783,9 +796,9 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, profile, onCl
 function DetailModal({ werkbon, teamMembers, voertuigen, profile, onClose, onUpdated, openCustomer }) {
   const toast = useToast();
   const prevIds = werkbon.assignedToIds || (werkbon.assignedTo ? [werkbon.assignedTo] : []);
+  const [planning, setPlanning] = useState(() => planningUitWerkbon(werkbon));
   const [form, setForm] = useState({
     titel: werkbon.titel || '',
-    gepland_op: werkbon.geplandOp || '',
     starttijd: werkbon.starttijd || '',
     eindtijd: werkbon.eindtijd || '',
     assigned_to_ids: prevIds,
@@ -801,11 +814,14 @@ function DetailModal({ werkbon, teamMembers, voertuigen, profile, onClose, onUpd
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const submit = async () => {
+    const planFout = controleerPlanning(planning);
+    if (planFout) { toast.error(planFout); return; }
+    const dagen = dagenUitPlanning(planning);
     setSaving(true);
     try {
       const updated = await updateWerkbon(werkbon.id, {
         titel: form.titel.trim() || werkbon.titel,
-        gepland_op: form.gepland_op || null,
+        gepland_op: dagen[0]?.datum || null,
         starttijd: form.starttijd || null,
         eindtijd: form.eindtijd || null,
         assigned_to_ids: form.assigned_to_ids,
@@ -818,25 +834,19 @@ function DetailModal({ werkbon, teamMembers, voertuigen, profile, onClose, onUpd
       notifyNewAssignees({
         userIds: form.assigned_to_ids, prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail,
         type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim() || werkbon.titel}`,
-        body: form.gepland_op ? `Datum: ${form.gepland_op}${form.starttijd ? ` om ${form.starttijd}` : ''}` : undefined,
+        body: dagen.length ? `Datum: ${planningLabel({ dagen })}${form.starttijd ? ` om ${String(form.starttijd).slice(0, 5)}` : ''}` : undefined,
         link: 'planning', relatedType: 'werkbon', relatedId: werkbon.id,
         creatorId: profile?.id, creatorName: profile?.fullName,
       }).catch(() => {});
-      // Sync agenda: ingepland → upsert event, uit-gepland → event verwijderen.
-      if (form.gepland_op && form.starttijd) {
-        upsertWerkbonEvent({
-          werkbonId: werkbon.id,
-          title: form.titel.trim() || werkbon.titel,
-          date: form.gepland_op,
-          time: form.starttijd,
-          end: form.eindtijd || '',
-          customerId: werkbon.customerId || null,
-          description: werkbon.omschrijving || '',
-        }).catch(() => {});
-      } else {
-        deleteWerkbonEvent(werkbon.id).catch(() => {});
+      let vers = updated;
+      try {
+        vers = await zetWerkbonDagen(werkbon.id, dagen);
+      } catch (e) {
+        toast.error(`Opgeslagen, maar de dagen niet: ${e.message || 'onbekende fout'}`);
       }
-      onUpdated(updated);
+      // Agenda bijwerken: één item per geplande dag; niet meer ingepland = weg.
+      syncWerkbonEvents(werkbon.id).catch(() => {});
+      onUpdated(vers);
       toast.success('Opgeslagen');
       onClose();
     } catch (e) {
@@ -877,10 +887,14 @@ function DetailModal({ werkbon, teamMembers, voertuigen, profile, onClose, onUpd
               {STATUS_OPTS.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
             </select>
           </div>
-          <div className="f">
-            <label>Datum</label>
-            <input type="date" value={form.gepland_op} onChange={e => set('gepland_op', e.target.value)} />
-          </div>
+          <WerkbonDagenVelden
+            style={{ gridColumn: '1 / -1' }}
+            planning={planning}
+            onChange={setPlanning}
+            starttijd={form.starttijd}
+            eindtijd={form.eindtijd}
+            disabled={saving}
+          />
           <div className="f">
             <label>Starttijd</label>
             <input type="time" value={form.starttijd} onChange={e => set('starttijd', e.target.value)} />
@@ -906,10 +920,12 @@ function DetailModal({ werkbon, teamMembers, voertuigen, profile, onClose, onUpd
               {voertuigen.map(v => <option key={v.id} value={v.id}>{v.naam}</option>)}
             </select>
           </div>
-          <div className="f" style={{ gridColumn: '1 / -1' }}>
-            <label>Locatie</label>
-            <input value={form.locatie} onChange={e => set('locatie', e.target.value)} />
-          </div>
+          <WerkbonLocatieVeld
+            style={{ gridColumn: '1 / -1' }}
+            value={form.locatie}
+            onChange={v => set('locatie', v)}
+            disabled={saving}
+          />
         </div>
         <div className="fa" style={{ justifyContent: 'flex-end', gap: 8, paddingTop: 12 }}>
           <button className="btn btn-s" onClick={onClose} disabled={saving}>Annuleren</button>
@@ -1063,12 +1079,9 @@ export function PlanningPage({ openCustomer } = {}) {
     return activities.filter(a => (a.assignedToIds && a.assignedToIds.length) || a.assignee || !teamMembers.length);
   }, [activities, viewMode, selectedMember, teamMembers]);
 
-  // Niet-ingepland: geen geplandOp OF (totaal: geen assignedTo) OF geen starttijd
-  // Een werkbon is "ingepland" zodra hij een datum + starttijd heeft — ook
-  // zonder toegewezen medewerker (die verschijnt dan in de Totaal-tijdlijn).
-  const unplanned = useMemo(() => werkbonnen.filter(w =>
-    !w.geplandOp || !w.starttijd
-  ), [werkbonnen]);
+  // Een werkbon is "ingepland" zodra minstens één dag een datum + starttijd heeft
+  // — ook zonder toegewezen medewerker (die verschijnt dan in de Totaal-tijdlijn).
+  const unplanned = useMemo(() => werkbonnen.filter(w => !isIngepland(w)), [werkbonnen]);
 
   // Active drag werkbon
   const activeDragWb = activeId
@@ -1228,7 +1241,19 @@ export function PlanningPage({ openCustomer } = {}) {
 
                   {/* Dag-kolommen */}
                   {weekDays.map(date => {
-                    const dayWbs = colorKeyedWb.filter(w => w.geplandOp === date && w.starttijd);
+                    // Een meerdaagse werkbon staat in elke kolom waar hij een dag
+                    // heeft, met de tijden die op díé dag gelden.
+                    const dayWbs = colorKeyedWb.flatMap(w => {
+                      const dagen = werkbonDagen(w);
+                      const i = dagen.findIndex(d => d.datum === date);
+                      if (i < 0) return [];
+                      const t = tijdenOpDag(w, dagen[i]);
+                      if (!t.starttijd) return [];
+                      return [{
+                        ...w, starttijd: t.starttijd, eindtijd: t.eindtijd,
+                        _dagLabel: dagen.length > 1 ? `dag ${i + 1}/${dagen.length}` : '',
+                      }];
+                    });
                     const dayActs = filteredActivities.filter(a => a.date === date);
                     return (
                       <DayColumn
@@ -1239,7 +1264,7 @@ export function PlanningPage({ openCustomer } = {}) {
                         colorMap={colorMap}
                         isToday={date === today}
                         allowDrop
-                        onBlockClick={setDetailWb}
+                        onBlockClick={b => setDetailWb(werkbonnen.find(w => w.id === b.id) || b)}
                         onActivityClick={setSelectedActivity}
                       />
                     );

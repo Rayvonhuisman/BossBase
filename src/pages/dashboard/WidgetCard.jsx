@@ -5,6 +5,7 @@ import { activiteitTypeLabel } from '../../services/activityService.js';
 import { statusInfo } from '../../utils/statusColors.js';
 import { buildStageIndex, firstStageId } from '../../utils/pipeline.js';
 import { sumOmzetExclBtw } from '../../services/customerTotalsService.js';
+import { staatOpDag } from '../../utils/werkbonDagen.js';
 
 // ── Design tokens (BossBase widget redesign v2) ───────────────
 // CSS classes (.bb-widget, .bb-kpi, .feed-row, .chip, .pill-tabs, …)
@@ -776,7 +777,8 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
 
     // ───────── Werkbonnen vandaag ─────────
     case 'werkbonnen_today': {
-      const items = myWerkbonnen.filter(w => w.geplandOp === today || w.datum === today).slice(0, 6);
+      // Elke geplande dag telt: een klus van ma t/m vr staat ook woensdag hier.
+      const items = myWerkbonnen.filter(w => staatOpDag(w, today) || w.datum === today).slice(0, 6);
       const tone = s => statusInfo(s, 'werkbon').chip;
       const label = s => statusInfo(s, 'werkbon').label;
       if (widget.size === 'small') {

@@ -18,9 +18,14 @@ import {
   getWerkbonMaterialen, createWerkbonMateriaal, updateWerkbonMateriaal, deleteWerkbonMateriaal,
   getWerkbonFotos, uploadWerkbonFoto, deleteWerkbonFoto,
   getWerkbonNotities, addWerkbonNotitie, updateWerkbonNotitieZichtbaarheid,
-  getAllWerkbonTakenCounts, plannedStartIso,
+  getAllWerkbonTakenCounts, plannedStartIso, zetWerkbonDagen,
 } from '../services/werkbonService.js';
 import WerkbonAfrondenModal from '../components/WerkbonAfrondenModal.jsx';
+import { WerkbonDagenVelden, WerkbonLocatieVeld, useKlantAdres } from '../components/WerkbonPlanning.jsx';
+import {
+  planningUitWerkbon, dagenUitPlanning, controleerPlanning, legePlanning, planningLabel,
+} from '../utils/werkbonDagen.js';
+import { syncWerkbonEvents } from '../services/calendarService.js';
 import { downloadWerkbonPdf } from '../utils/generateWerkbonPdf.js';
 import { bouwPdfData, bouwPdfWerkbon } from '../services/werkbonOndertekenenService.js';
 import { getCurrentCompany } from '../services/profileService.js';
@@ -92,7 +97,6 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
     customer_id: werkbon?.customerId || '',
     project_id: werkbon?.projectId || '',
     omschrijving: werkbon?.omschrijving || '',
-    gepland_op: werkbon?.geplandOp || '',
     starttijd: werkbon?.starttijd ? String(werkbon.starttijd).slice(0, 5) : '',
     eindtijd: werkbon?.eindtijd ? String(werkbon.eindtijd).slice(0, 5) : '',
     locatie: werkbon?.locatie || '',
@@ -101,9 +105,13 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
     assignedToIds: werkbon?.assignedToIds || (werkbon?.assignedTo ? [werkbon.assignedTo] : []),
     verantwoordelijkeIds: werkbon?.verantwoordelijkeIds || (werkbon?.assignedTo ? [werkbon.assignedTo] : []),
   }));
+  const [planning, setPlanning] = useState(() => (werkbon ? planningUitWerkbon(werkbon) : legePlanning()));
   const [saving, setSaving] = useState(false);
   const [notifyMail, setNotifyMail] = useState(true);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const klantAdres = useKlantAdres({
+    customers, locatie: form.locatie, setLocatie: v => set('locatie', v), vragenBijWijzigen: isEdit,
+  });
 
   const submit = async () => {
     if (!form.titel.trim()) { toast.error('Titel is verplicht'); return; }
@@ -112,6 +120,9 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
       toast.error('Wijs minimaal één verantwoordelijke aan.');
       return;
     }
+    const planFout = controleerPlanning(planning);
+    if (planFout) { toast.error(planFout); return; }
+    const dagen = dagenUitPlanning(planning);
     setSaving(true);
     try {
       const payload = {
@@ -119,7 +130,7 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
         customer_id: form.customer_id || null,
         project_id: form.project_id || null,
         omschrijving: form.omschrijving || null,
-        gepland_op: form.gepland_op || null,
+        gepland_op: dagen[0]?.datum || null,
         starttijd: form.starttijd || null,
         eindtijd: form.eindtijd || null,
         locatie: form.locatie || null,
@@ -140,6 +151,15 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
         toast.success('Werkbon aangemaakt');
         notifyNewAssignees({ userIds: form.assignedToIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
       }
+      // De dagen pas ná het opslaan: een nieuwe werkbon heeft dan pas een id.
+      // Lukt dit niet, dan staat de werkbon er al wél (op de startdatum) —
+      // melden en gewoon sluiten, anders levert nog eens klikken een dubbele op.
+      try {
+        saved = await zetWerkbonDagen(saved.id, dagen);
+      } catch (e) {
+        toast.error(`Werkbon opgeslagen, maar de dagen niet: ${e.message || 'onbekende fout'}`);
+      }
+      syncWerkbonEvents(saved.id).catch(() => {});
       onSaved?.(saved);
       onClose();
     } catch (e) {
@@ -181,7 +201,7 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
           </div>
           <div className="f">
             <label>Klant</label>
-            <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)}>
+            <select value={form.customer_id} onChange={e => { set('customer_id', e.target.value); klantAdres.klantGekozen(e.target.value); }}>
               <option value="">— Geen klant —</option>
               {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -196,16 +216,25 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
               ).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
+          <WerkbonLocatieVeld
+            className="full"
+            value={form.locatie}
+            onChange={v => set('locatie', v)}
+            voorstel={klantAdres.voorstel}
+            onNeemOver={klantAdres.neemOver}
+            onHoudHuidige={klantAdres.houdHuidige}
+            disabled={saving}
+          />
+          <WerkbonDagenVelden
+            className="full"
+            planning={planning}
+            onChange={setPlanning}
+            starttijd={form.starttijd}
+            eindtijd={form.eindtijd}
+            disabled={saving}
+          />
           <div className="f">
-            <label>Locatie</label>
-            <input type="text" placeholder="Straat, huisnr, plaats" value={form.locatie} onChange={e => set('locatie', e.target.value)} />
-          </div>
-          <div className="f">
-            <label>Datum</label>
-            <input type="date" value={form.gepland_op} onChange={e => set('gepland_op', e.target.value)} />
-          </div>
-          <div className="f">
-            <label>Tijd</label>
+            <label>{dagenUitPlanning(planning).length > 1 ? 'Tijd (elke dag)' : 'Tijd'}</label>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <input type="time" value={form.starttijd || ''} onChange={e => set('starttijd', e.target.value)} style={{ flex: 1 }} />
               <span style={{ color: 'var(--dl)' }}>→</span>
@@ -262,7 +291,7 @@ function WerkbonListCard({ w, takenCount, onClick }) {
       <div className="wb2-list-card-footer">
         {w.geplandOp && (
           <span className="wb2-list-card-date">
-            {I.cal} {shortDate(w.geplandOp)}{w.starttijd ? ` · ${fmtTime(w.starttijd)}` : ''}
+            {I.cal} {planningLabel(w)}{w.starttijd ? ` · ${fmtTime(w.starttijd)}` : ''}
           </span>
         )}
         {total > 0 && (
@@ -1588,7 +1617,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
                 {(detail.geplandOp || detail.starttijd) && (
                   <div style={{ fontSize: 13, color: 'var(--dl)', display: 'flex', alignItems: 'center', gap: 5 }}>
                     {I.cal}
-                    {detail.geplandOp ? shortDate(detail.geplandOp) : ''}
+                    {detail.geplandOp ? planningLabel(detail) : ''}
                     {(detail.starttijd || detail.eindtijd)
                       ? ` · ${fmtTime(detail.starttijd) || ''}${detail.eindtijd ? ` – ${fmtTime(detail.eindtijd)}` : ''}`
                       : ''}

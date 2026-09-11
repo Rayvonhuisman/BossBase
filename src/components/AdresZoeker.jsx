@@ -27,6 +27,18 @@ const toFormFields = doc => ({
   city: doc.woonplaatsnaam || '',
 });
 
+/**
+ * Eén adresregel uit losse velden: "Industrieweg 88, 3542 AD Utrecht". Werkt
+ * voor een klant uit de database en voor wat de zoeker oplevert. Leeg als er
+ * geen straat of plaats is.
+ */
+export function adresRegel({ address, postcode, city } = {}) {
+  const straat = (address || '').trim();
+  const plaats = [formatPostcode(postcode), (city || '').trim()].filter(Boolean).join(' ');
+  if (!straat && !(city || '').trim()) return '';
+  return [straat, plaats].filter(Boolean).join(', ');
+}
+
 export default function AdresZoeker({
   onSelect,
   disabled = false,
@@ -41,6 +53,10 @@ export default function AdresZoeker({
   onChange,
   onEnter,
   onEscape,
+  // Het veld zelf is de hele adresregel ("Dam 1, 1012 JS Amsterdam"), zoals de
+  // locatie op een werkbon. Een keuze zet die complete regel in het veld.
+  volledigAdres = false,
+  hint = 'Optioneel — je kunt de velden hieronder ook zelf invullen.',
 }) {
   const controlled = value !== undefined;
   const [internal, setInternal] = useState('');
@@ -54,17 +70,15 @@ export default function AdresZoeker({
   const [active, setActive] = useState(-1);
   const boxRef = useRef(null);
   const abortRef = useRef(null);
-  // Na een keuze zetten we het zoekveld op de gekozen tekst — dat mag geen
-  // nieuwe suggest-call triggeren.
-  const skipNextRef = useRef(false);
-  // Een inline-veld start gevuld met het huidige adres; daar hoort niet meteen
-  // een dropdown bij. Pas zoeken zodra er echt getypt wordt.
-  const firstRunRef = useRef(true);
+  // Alleen zoeken als de gebruiker zelf typt. Een waarde die van buitenaf
+  // binnenkomt — het huidige adres bij openen, het adres van een net gekozen
+  // klant, de tekst na een keuze uit de lijst — hoort geen lijst open te klappen.
+  const typedRef = useRef(false);
 
   // Debounce: pas ~300ms na de laatste toetsaanslag zoeken.
   useEffect(() => {
-    if (firstRunRef.current) { firstRunRef.current = false; return; }
-    if (skipNextRef.current) { skipNextRef.current = false; return; }
+    if (!typedRef.current) { setOpen(false); return; }
+    typedRef.current = false;
     const q = (query || '').trim();
     if (q.length < 3) { setItems([]); setOpen(false); setError(''); setLoading(false); return; }
 
@@ -109,7 +123,6 @@ export default function AdresZoeker({
   const choose = async item => {
     setOpen(false);
     setItems([]);
-    skipNextRef.current = true;
     setQuery(item.weergavenaam || '');
     setLoading(true);
     setError('');
@@ -121,8 +134,11 @@ export default function AdresZoeker({
       if (!doc) throw new Error('Geen adresdetails ontvangen');
       const fields = toFormFields(doc);
       // Inline is dit veld hét adresveld, dus daar hoort alleen "Dam 1" te staan
-      // en niet de volledige weergavenaam "Dam 1, 1012JS Amsterdam".
-      if (inline) { skipNextRef.current = true; setQuery(fields.address); }
+      // en niet de volledige weergavenaam "Dam 1, 1012JS Amsterdam". Bij een
+      // volledig-adresveld juist wel alles, maar met de postcode zoals wij hem
+      // schrijven ("1012 JS").
+      if (volledigAdres) setQuery(adresRegel(fields));
+      else if (inline) setQuery(fields.address);
       onSelect?.(fields);
     } catch {
       setError('Adresdetails ophalen mislukt — je kunt het handmatig typen');
@@ -153,7 +169,7 @@ export default function AdresZoeker({
           value={query || ''}
           disabled={disabled}
           autoFocus={autoFocus}
-          onChange={e => setQuery(e.target.value)}
+          onChange={e => { typedRef.current = true; setQuery(e.target.value); }}
           onFocus={() => { if (items.length) setOpen(true); }}
           onKeyDown={onKeyDown}
           placeholder={placeholder}
@@ -186,7 +202,7 @@ export default function AdresZoeker({
       )}
 
       {!open && error && <span className="adres-zoeker-error">{error}</span>}
-      {!inline && <span className="adres-zoeker-hint">Optioneel — je kunt de velden hieronder ook zelf invullen.</span>}
+      {!inline && hint && <span className="adres-zoeker-hint">{hint}</span>}
     </div>
   );
 }
