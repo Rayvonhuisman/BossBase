@@ -192,9 +192,6 @@ export async function ssFetchAll(clientKey: string, path: string, pageSize = 500
   return all
 }
 
-// Enkele quote escapen voor OData string-literals ('  →  '')
-export const odataQuote = (s: string) => `'${String(s).replace(/'/g, "''")}'`
-
 // Zoekt de relatie voor een BossBase-klant, of maakt hem aan; schrijft
 // customers.snelstart_id terug. Gebruikt door contacten-sync én factuur-push.
 // Scopes: relaties:read + relaties:write.

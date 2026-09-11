@@ -58,6 +58,8 @@ export function isScheduledCall(body: any): boolean {
 // `klaar_op` leeg, dan is de functie halverwege afgekapt (timeout) — ook dát is
 // informatie die je wilt kunnen zien.
 
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
 /** Maximaal aantal foutregels dat we bewaren; de rest wordt samengevat. */
 const MAX_BEWAARDE_REGELS = 50
 
@@ -70,18 +72,27 @@ function kortLijst(regels: string[]): string[] {
 export async function startSyncRun(
   admin: any, companyId: string, provider: string, onderdeel: string, bron: 'cron' | 'handmatig',
 ): Promise<string | null> {
-  try {
-    const { data, error } = await admin
-      .from('accounting_sync_runs')
-      .insert({ company_id: companyId, provider, onderdeel, bron })
-      .select('id')
-      .single()
-    if (error) { console.warn('[sync-run] start niet vastgelegd:', error.message); return null }
-    return data?.id ?? null
-  } catch (e: any) {
-    console.warn('[sync-run] start niet vastgelegd:', e?.message)
-    return null
+  // Eén herkansing. Op 11-09-2026 ging deze insert onderuit op een Gateway
+  // Timeout terwijl de sync zelf gewoon slaagde: de synchronisatie draaide,
+  // maar er staat geen regel over in het overzicht. Bij een MISLUKTE sync is
+  // dat erger — dan ziet de klant niets in Meldingen terwijl er wel iets fout
+  // ging. Een korte tweede poging vangt zo'n hikje op.
+  for (let poging = 0; poging < 2; poging++) {
+    try {
+      const { data, error } = await admin
+        .from('accounting_sync_runs')
+        .insert({ company_id: companyId, provider, onderdeel, bron })
+        .select('id')
+        .single()
+      if (!error) return data?.id ?? null
+      if (poging === 0) { await sleep(500); continue }
+      console.warn('[sync-run] start niet vastgelegd:', error.message)
+    } catch (e: any) {
+      if (poging === 0) { await sleep(500); continue }
+      console.warn('[sync-run] start niet vastgelegd:', e?.message)
+    }
   }
+  return null
 }
 
 export async function eindSyncRun(
@@ -106,8 +117,6 @@ export async function eindSyncRun(
     console.warn('[sync-run] einde niet vastgelegd:', e?.message)
   }
 }
-
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
 // Loopt over alle bedrijven met een ACTIEVE Moneybird-connectie en draait
 // `perCompany` per bedrijf. De bedrijvenlijst + tokens komen UITSLUITEND uit de
