@@ -106,6 +106,10 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
     verantwoordelijkeIds: werkbon?.verantwoordelijkeIds || (werkbon?.assignedTo ? [werkbon.assignedTo] : []),
   }));
   const [planning, setPlanning] = useState(() => (werkbon ? planningUitWerkbon(werkbon) : legePlanning()));
+  // Meerdere dagen plannen hoort bij de planningsmodule (Team, of als module bij
+  // Groei) — zelfde gate als de planningspagina. Zonder module: één datum.
+  const { plan, guardFeature } = usePlanGuard();
+  const meerdaags = plan.has('planning');
   const [saving, setSaving] = useState(false);
   const [notifyMail, setNotifyMail] = useState(true);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -120,9 +124,9 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
       toast.error('Wijs minimaal één verantwoordelijke aan.');
       return;
     }
-    const planFout = controleerPlanning(planning);
+    const planFout = meerdaags ? controleerPlanning(planning) : '';
     if (planFout) { toast.error(planFout); return; }
-    const dagen = dagenUitPlanning(planning);
+    const dagen = meerdaags ? dagenUitPlanning(planning) : [];
     setSaving(true);
     try {
       const payload = {
@@ -130,7 +134,9 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
         customer_id: form.customer_id || null,
         project_id: form.project_id || null,
         omschrijving: form.omschrijving || null,
-        gepland_op: dagen[0]?.datum || null,
+        // Zonder module alleen de startdatum: de database maakt daar de ene dag
+        // van, of schuift een bestaande meerdaagse bon in zijn geheel mee.
+        gepland_op: meerdaags ? (dagen[0]?.datum || null) : (planning.startdatum || null),
         starttijd: form.starttijd || null,
         eindtijd: form.eindtijd || null,
         locatie: form.locatie || null,
@@ -154,10 +160,12 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
       // De dagen pas ná het opslaan: een nieuwe werkbon heeft dan pas een id.
       // Lukt dit niet, dan staat de werkbon er al wél (op de startdatum) —
       // melden en gewoon sluiten, anders levert nog eens klikken een dubbele op.
-      try {
-        saved = await zetWerkbonDagen(saved.id, dagen);
-      } catch (e) {
-        toast.error(`Werkbon opgeslagen, maar de dagen niet: ${e.message || 'onbekende fout'}`);
+      if (meerdaags) {
+        try {
+          saved = await zetWerkbonDagen(saved.id, dagen);
+        } catch (e) {
+          toast.error(`Werkbon opgeslagen, maar de dagen niet: ${e.message || 'onbekende fout'}`);
+        }
       }
       syncWerkbonEvents(saved.id).catch(() => {});
       onSaved?.(saved);
@@ -232,9 +240,11 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
             starttijd={form.starttijd}
             eindtijd={form.eindtijd}
             disabled={saving}
+            meerdaags={meerdaags}
+            onUpgrade={guardFeature('planning', () => {})}
           />
           <div className="f">
-            <label>{dagenUitPlanning(planning).length > 1 ? 'Tijd (elke dag)' : 'Tijd'}</label>
+            <label>{meerdaags && dagenUitPlanning(planning).length > 1 ? 'Tijd (elke dag)' : 'Tijd'}</label>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <input type="time" value={form.starttijd || ''} onChange={e => set('starttijd', e.target.value)} style={{ flex: 1 }} />
               <span style={{ color: 'var(--dl)' }}>→</span>
@@ -1796,32 +1806,35 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
               canEdit={canEditDetail}
             />
 
-            {/* Werkbon als PDF — zonder handtekening met een leeg tekenvak, zodat
-                een uitgeprinte bon ook met pen kan worden afgetekend. */}
-            <button className="btn btn-s" onClick={handleDownloadPdf} disabled={pdfBezig} type="button" style={{ width: '100%' }}>
-              {pdfBezig ? 'PDF maken…' : 'Werkbon als PDF'}
-            </button>
+            {/* Onderaan naast elkaar: PDF links, afronden rechts. */}
+            <div className="wb2-eind-acties">
+              {/* Werkbon als PDF — zonder handtekening met een leeg tekenvak, zodat
+                  een uitgeprinte bon ook met pen kan worden afgetekend. */}
+              <button className="btn btn-s" onClick={handleDownloadPdf} disabled={pdfBezig} type="button">
+                {pdfBezig ? 'PDF maken…' : 'Werkbon als PDF'}
+              </button>
 
-            {/* Afronden */}
-            {detail.status !== 'afgerond' && canEditDetail && (
-              <button className="wb2-complete-btn" onClick={requestComplete} type="button">
-                {I.check} Klus afronden
-              </button>
-            )}
-            {/* Afgerond maar nog niet getekend: alsnog laten ondertekenen. */}
-            {detail.status === 'afgerond' && !opSlot && canEditDetail && (
-              <button className="wb2-complete-btn" onClick={() => setAfrondModal(true)} type="button">
-                {I.check} Laten ondertekenen
-              </button>
-            )}
-            {opSlot && (
-              <button className="wb2-complete-btn done" disabled type="button">
-                {I.check} Ondertekend en afgerond
-                {detail.ondertekendOp
-                  ? ` · ${new Date(detail.ondertekendOp).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
-                  : ''}
-              </button>
-            )}
+              {/* Afronden */}
+              {detail.status !== 'afgerond' && canEditDetail && (
+                <button className="wb2-complete-btn" onClick={requestComplete} type="button">
+                  {I.check} Klus afronden
+                </button>
+              )}
+              {/* Afgerond maar nog niet getekend: alsnog laten ondertekenen. */}
+              {detail.status === 'afgerond' && !opSlot && canEditDetail && (
+                <button className="wb2-complete-btn" onClick={() => setAfrondModal(true)} type="button">
+                  {I.check} Laten ondertekenen
+                </button>
+              )}
+              {opSlot && (
+                <button className="wb2-complete-btn done" disabled type="button">
+                  {I.check} Ondertekend en afgerond
+                  {detail.ondertekendOp
+                    ? ` · ${new Date(detail.ondertekendOp).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                    : ''}
+                </button>
+              )}
+            </div>
           </div>
         )}
 

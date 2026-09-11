@@ -16,9 +16,41 @@ const hhmm = t => (t ? String(t).slice(0, 5) : '');
  * meer dan één dag is, verschijnt de lijst met dagen; daar kan per dag een
  * afwijkende tijd, verder geldt de standaardtijd van de werkbon.
  */
-export function WerkbonDagenVelden({ planning: p, onChange, starttijd, eindtijd, disabled = false, className = '', style }) {
+export function WerkbonDagenVelden({
+  planning: p, onChange, starttijd, eindtijd, disabled = false, className = '', style,
+  meerdaags = true, onUpgrade,
+}) {
   const [nieuweDag, setNieuweDag] = useState('');
+  // Het aantal dagen bij het openen. Zonder planningsmodule tonen we dat alleen;
+  // bij het schuiven van de startdatum mag die melding niet mee verspringen.
+  const [aantalBijOpenen] = useState(() => dagenUitPlanning(p).length);
   const set = patch => onChange({ ...p, ...patch });
+
+  // Zonder planningsmodule: één datum. Meerdere dagen (periode, losse dagen,
+  // tijden per dag) hoort bij de planningsmodule — Team, of als module bij
+  // Groei. Een werkbon die al meerdere dagen heeft (ingepland toen de module er
+  // wel was) houdt die; een andere startdatum schuift ze in zijn geheel mee.
+  if (!meerdaags) {
+    return (
+      <div className={`wbd ${className}`} style={style}>
+        <div className="f">
+          <label>{aantalBijOpenen > 1 ? 'Startdatum' : 'Datum'}</label>
+          <input type="date" value={p.startdatum} onChange={e => set({ startdatum: e.target.value })} disabled={disabled} />
+        </div>
+        {aantalBijOpenen > 1 ? (
+          <div className="wbd-slot">
+            Deze werkbon staat op {aantalBijOpenen} dagen. Een andere startdatum schuift alle dagen mee;
+            de dagen zelf aanpassen kan met de planningsmodule.
+          </div>
+        ) : (
+          <div className="wbd-slot">
+            Een klus over meerdere dagen plannen? Dat zit in de{' '}
+            <button type="button" className="wbd-link-inline" onClick={onUpgrade}>planningsmodule</button>.
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const fout = controleerPlanning(p);
   const dagen = fout ? [] : dagenUitPlanning(p);
@@ -171,6 +203,7 @@ export function WerkbonLocatieVeld({ value, onChange, voorstel, onNeemOver, onHo
   return (
     <div className={className} style={style}>
       <AdresZoeker
+        className="adres-zoeker-veld"
         label="Locatie"
         value={value || ''}
         onChange={onChange}

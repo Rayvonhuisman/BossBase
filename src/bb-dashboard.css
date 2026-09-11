@@ -1468,8 +1468,12 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .wb2-meerwerk-add input:first-child{flex:1;min-width:140px}
 
 /* ── wb2 klus afronden button ── */
-.wb2-complete-btn{width:100%;padding:18px;background:var(--p);border:1.5px solid var(--p);border-radius:14px;color:var(--dk);font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:none;filter:none;transition:all .15s ease;letter-spacing:-.01em;font-family:inherit}
-.wb2-complete-btn:hover:not(:disabled){background:var(--bg);color:var(--p);border-color:var(--p);box-shadow:none}
+/* Onderaan de werkbon: PDF en afronden naast elkaar, even groot. */
+.wb2-eind-acties{display:flex;gap:10px;align-items:stretch}
+.wb2-eind-acties > *{flex:1 1 0;min-width:0;justify-content:center;padding:9px 14px;font-size:.86rem;line-height:1.25;border-radius:var(--r10)}
+/* Afronden: donker met groene tekst — de hoofdactie, zonder dat hij de hele breedte opeist. */
+.wb2-complete-btn{background:var(--dk);border:1.5px solid var(--dk);color:var(--p);font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:none;filter:none;transition:all .15s ease;letter-spacing:-.01em;font-family:inherit;white-space:nowrap}
+.wb2-complete-btn:hover:not(:disabled){background:#262626;border-color:#262626;color:var(--p);box-shadow:none}
 .wb2-complete-btn:active:not(:disabled){transform:scale(.98)}
 .wb2-complete-btn:disabled{cursor:default}
 .wb2-complete-btn.done{background:#E8FBEF;color:#0F7A3F;box-shadow:none;font-size:14px}
@@ -3140,5 +3144,9 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .wbd-dag-tijd{color:var(--dl)}
 .wbd-dag input[type=time]{border:1px solid var(--bstrong);border-radius:var(--r6);padding:3px 6px;font-size:.8rem;background:white}
 .wbd-link{margin-left:auto;border:none;background:none;color:var(--pd);font-size:.76rem;font-weight:600;cursor:pointer;padding:2px 0}
+.wbd-slot{font-size:.76rem;color:var(--dl);line-height:1.45}
+.wbd-link-inline{border:none;background:none;padding:0;color:var(--pd);font-weight:600;font-size:inherit;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+/* Locatie op de werkbon: zelfde maat, rand en letter als de andere velden (.f input). */
+.adres-zoeker.adres-zoeker-veld .adres-zoeker-input input{padding:8px 30px 8px 32px;font-size:.85rem;border-radius:var(--r8)}
 .wb-adres-vraag{margin-top:6px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;font-size:.8rem;color:#075985;background:#F0F9FF;border:1px solid #BAE6FD;border-radius:var(--r8);padding:8px 10px;line-height:1.45}
 @media (max-width:640px){.wbd-rij{grid-template-columns:1fr}}
