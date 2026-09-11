@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import AdresZoeker, { adresRegel } from './AdresZoeker.jsx';
 import { vandaagIso } from '../lib/datumTijd.js';
 import {
-  controleerPlanning, geplandeDatums, isWeekend, korteDatum, maandNaam, periodeDatums,
-  periodeHeeftWeekend, plusDagen, wisselDag, zetStartdatum,
+  STANDAARD_TIJD, controleerPlanning, geplandeDatums, isWeekend, korteDatum, maandNaam,
+  verplaatsNaar, wisselDag,
 } from '../utils/werkbonDagen.js';
 
 // Gedeelde velden voor elk werkbonformulier (werkbonpagina, planning): de
@@ -19,7 +19,7 @@ function TijdVelden({ label, starttijd, eindtijd, onTijden, disabled }) {
     <div className="f">
       <label>{label}</label>
       <div className="wbd-tijd">
-        <input type="time" value={hhmm(starttijd)} onChange={e => onTijden?.({ starttijd: e.target.value })} disabled={disabled} aria-label="Starttijd" />
+        <input type="time" value={hhmm(starttijd)} onChange={e => onTijden?.({ starttijd: e.target.value })} disabled={disabled} aria-label="Begintijd" />
         <span className="wbd-dag-tijd">→</span>
         <input type="time" value={hhmm(eindtijd)} onChange={e => onTijden?.({ eindtijd: e.target.value })} disabled={disabled} aria-label="Eindtijd" />
       </div>
@@ -36,19 +36,14 @@ const maandVan = iso => {
 };
 
 /**
- * Eén maand, maandag eerst. Een tik op een dag voegt hem toe of haalt hem weg —
- * geen losse knop meer. Groen = gepland, gearceerd = binnen de periode maar
- * weggetikt, zwart omrand = startdatum.
+ * Eén maand, maandag eerst. De enige manier om dagen te kiezen: tik een dag aan
+ * of uit. Met `enkel` (zonder planningsmodule) kies je één dag — de dag waarop
+ * de klus begint.
  */
-function Kalender({ p, onWissel, disabled }) {
-  const [zicht, setZicht] = useState(() => maandVan(p.startdatum));
-  // Een andere startdatum via het datumveld: de kalender springt mee.
-  useEffect(() => {
-    if (p.startdatum) setZicht(maandVan(p.startdatum));
-  }, [p.startdatum]);
-
-  const gepland = new Set(geplandeDatums(p));
-  const periode = new Set(periodeDatums(p));
+function Kalender({ p, onTik, disabled, enkel = false }) {
+  const gepland = geplandeDatums(p);
+  const [zicht, setZicht] = useState(() => maandVan(gepland[0]));
+  const aan = new Set(gepland);
   const vandaag = vandaagIso();
   const aantal = new Date(zicht.j, zicht.m + 1, 0).getDate();
   const voorloop = (new Date(zicht.j, zicht.m, 1).getDay() + 6) % 7;
@@ -60,6 +55,9 @@ function Kalender({ p, onWissel, disabled }) {
     const d = new Date(z.j, z.m + n, 1);
     return { j: d.getFullYear(), m: d.getMonth() };
   });
+  const uitleg = enkel
+    ? 'Tik op de dag van de klus.'
+    : gepland.length ? 'Tik op een dag om hem toe te voegen of weg te halen.' : 'Tik de dagen van de klus aan.';
 
   return (
     <div className="wbd-kal">
@@ -72,37 +70,29 @@ function Kalender({ p, onWissel, disabled }) {
         {WEEKDAGEN.map(w => <span key={w} className="wbd-kal-wd">{w}</span>)}
         {cellen.map((iso, i) => {
           if (!iso) return <span key={`leeg-${i}`} className="wbd-kal-leeg" />;
-          const isGepland = gepland.has(iso);
-          const isStart = iso === p.startdatum;
+          const isAan = aan.has(iso);
           const klassen = [
             'wbd-kal-dag',
-            isGepland && 'is-gepland',
-            isStart && 'is-start',
-            !isGepland && periode.has(iso) && 'is-uit',
+            isAan && 'is-gepland',
             isWeekend(iso) && 'is-weekend',
             iso === vandaag && 'is-vandaag',
           ].filter(Boolean).join(' ');
-          const titel = isStart
-            ? 'Startdatum — wijzig die in het datumveld'
-            : isGepland ? `${korteDatum(iso)} weghalen` : `${korteDatum(iso)} toevoegen`;
           return (
             <button
               key={iso}
               type="button"
               className={klassen}
-              disabled={disabled || (!!p.startdatum && iso < p.startdatum)}
-              onClick={() => onWissel(iso)}
-              title={titel}
-              aria-pressed={isGepland}
+              disabled={disabled}
+              onClick={() => onTik(iso)}
+              title={enkel ? `${korteDatum(iso)} kiezen` : isAan ? `${korteDatum(iso)} weghalen` : `${korteDatum(iso)} toevoegen`}
+              aria-pressed={isAan}
             >
               {Number(iso.slice(8))}
             </button>
           );
         })}
       </div>
-      <div className="wbd-kal-uitleg">
-        {p.startdatum ? 'Tik op een dag om hem toe te voegen of weg te halen.' : 'Tik op de eerste dag van de klus.'}
-      </div>
+      <div className="wbd-kal-uitleg">{uitleg}</div>
     </div>
   );
 }
@@ -110,9 +100,8 @@ function Kalender({ p, onWissel, disabled }) {
 // ── Dagen ────────────────────────────────────────────────────────────────────
 
 /**
- * Startdatum, optioneel een einddatum (periode), de tijd en een kalender om
- * losse dagen aan of uit te tikken. Zodra het meer dan één dag is, verschijnt
- * de dagenlijst: per dag een afwijkende tijd, en per dag wie er werkt.
+ * De kalender met daaronder de tijd. Zodra het meer dan één dag is, verschijnt
+ * ernaast de dagenlijst: per dag een afwijkende tijd, en per dag wie er werkt.
  *
  * `ploeg` = de medewerkers van de werkbon als [{ id, naam }]. Standaard werkt
  * iedereen elke dag; tik iemand weg op een dag dat hij er niet is.
@@ -122,27 +111,35 @@ export function WerkbonDagenVelden({
   disabled = false, className = '', style, meerdaags = true, onUpgrade,
 }) {
   // Het aantal dagen bij het openen. Zonder planningsmodule tonen we dat alleen;
-  // bij het schuiven van de startdatum mag die melding niet mee verspringen.
+  // bij het verplaatsen van de klus mag die melding niet mee verspringen.
   const [aantalBijOpenen] = useState(() => geplandeDatums(p).length);
   const set = patch => onChange({ ...p, ...patch });
+  const datums = geplandeDatums(p);
+  const fout = controleerPlanning(p, { starttijd, eindtijd });
 
-  // Zonder planningsmodule: één datum en de tijd. Meerdere dagen, tijden per dag
+  // Eerste dag aangetikt en nog geen tijd: de gewone werkdag alvast invullen.
+  // Een dag zonder tijd valt uit de planning; zo hoeft bijna niemand iets te typen.
+  const vulTijdIn = () => {
+    if (!hhmm(starttijd) && !hhmm(eindtijd)) onTijden?.({ ...STANDAARD_TIJD });
+  };
+
+  // Zonder planningsmodule: één dag en de tijd. Meerdere dagen, tijden per dag
   // en de ploeg per dag horen bij de planningsmodule — Team, of als module bij
   // Groei. Een werkbon die al meerdere dagen heeft (ingepland toen de module er
-  // wel was) houdt die; een andere startdatum schuift ze in zijn geheel mee.
+  // wel was) houdt die; een andere startdag verplaatst de hele klus.
   if (!meerdaags) {
     return (
       <div className={`wbd ${className}`} style={style}>
-        <div className="wbd-rij">
-          <div className="f">
-            <label>{aantalBijOpenen > 1 ? 'Startdatum' : 'Datum'}</label>
-            <input type="date" value={p.startdatum} onChange={e => set({ startdatum: e.target.value })} disabled={disabled} />
+        <span className="wbd-kop">{aantalBijOpenen > 1 ? 'Startdag' : 'Dag'}</span>
+        <div className="wbd-kal-wrap">
+          <div className="wbd-kal-kolom">
+            <Kalender p={p} enkel disabled={disabled} onTik={iso => { vulTijdIn(); onChange(verplaatsNaar(p, iso)); }} />
+            <TijdVelden label="Tijd" starttijd={starttijd} eindtijd={eindtijd} onTijden={onTijden} disabled={disabled} />
           </div>
-          <TijdVelden label="Tijd" starttijd={starttijd} eindtijd={eindtijd} onTijden={onTijden} disabled={disabled} />
         </div>
         {aantalBijOpenen > 1 ? (
           <div className="wbd-slot">
-            Deze werkbon staat op {aantalBijOpenen} dagen. Een andere startdatum schuift alle dagen mee;
+            Deze werkbon staat op {aantalBijOpenen} dagen. Tik een andere startdag aan om de hele klus te verplaatsen;
             de dagen zelf aanpassen kan met de planningsmodule.
           </div>
         ) : (
@@ -151,12 +148,11 @@ export function WerkbonDagenVelden({
             <button type="button" className="wbd-link-inline" onClick={onUpgrade}>planningsmodule</button>.
           </div>
         )}
+        {fout && <div className="wbd-fout" role="alert">{fout}</div>}
       </div>
     );
   }
 
-  const fout = controleerPlanning(p);
-  const datums = fout ? [] : geplandeDatums(p);
   const meer = datums.length > 1;
   const standaard = hhmm(starttijd)
     ? `${hhmm(starttijd)}${hhmm(eindtijd) ? `–${hhmm(eindtijd)}` : ''}`
@@ -189,38 +185,19 @@ export function WerkbonDagenVelden({
 
   return (
     <div className={`wbd ${className}`} style={style}>
-      <div className="wbd-rij">
-        <div className="f">
-          <label>Startdatum</label>
-          <input type="date" value={p.startdatum} onChange={e => onChange(zetStartdatum(p, e.target.value))} disabled={disabled} />
-        </div>
-        <div className="f">
-          <label>Einddatum <span className="wbd-opt">(optioneel)</span></label>
-          <input
-            type="date" value={p.einddatum} min={p.startdatum ? plusDagen(p.startdatum, 1) : undefined}
-            onChange={e => set({ einddatum: e.target.value })}
-            disabled={disabled || !p.startdatum}
-            title={p.startdatum ? 'Laatste dag van een aaneengesloten periode' : 'Kies eerst een startdatum'}
+      <span className="wbd-kop">Dagen</span>
+      <div className="wbd-kal-wrap">
+        <div className="wbd-kal-kolom">
+          <Kalender
+            p={p}
+            disabled={disabled}
+            onTik={iso => { if (!datums.length) vulTijdIn(); onChange(wisselDag(p, iso)); }}
+          />
+          <TijdVelden
+            label={meer ? 'Tijd (elke dag)' : 'Tijd'}
+            starttijd={starttijd} eindtijd={eindtijd} onTijden={onTijden} disabled={disabled}
           />
         </div>
-      </div>
-
-      {periodeHeeftWeekend(p) && (
-        <label className="wbd-check">
-          <input type="checkbox" checked={p.weekend} onChange={e => set({ weekend: e.target.checked })} disabled={disabled} />
-          Ook op zaterdag en zondag
-        </label>
-      )}
-
-      <div className="wbd-rij">
-        <TijdVelden
-          label={meer ? 'Tijd (elke dag)' : 'Tijd'}
-          starttijd={starttijd} eindtijd={eindtijd} onTijden={onTijden} disabled={disabled}
-        />
-      </div>
-
-      <div className="wbd-kal-wrap">
-        <Kalender p={p} onWissel={iso => onChange(wisselDag(p, iso))} disabled={disabled} />
 
         {meer && (
           <div className="wbd-lijst">
@@ -238,7 +215,7 @@ export function WerkbonDagenVelden({
                   <span className="wbd-dag-datum">{korteDatum(d)}</span>
                   {af ? (
                     <>
-                      <input type="time" value={af.starttijd || ''} onChange={e => zetAfwijking(d, { starttijd: e.target.value })} disabled={disabled} aria-label={`Starttijd ${korteDatum(d)}`} />
+                      <input type="time" value={af.starttijd || ''} onChange={e => zetAfwijking(d, { starttijd: e.target.value })} disabled={disabled} aria-label={`Begintijd ${korteDatum(d)}`} />
                       <span className="wbd-dag-tijd">→</span>
                       <input type="time" value={af.eindtijd || ''} onChange={e => zetAfwijking(d, { eindtijd: e.target.value })} disabled={disabled} aria-label={`Eindtijd ${korteDatum(d)}`} />
                       <button type="button" className="wbd-link" onClick={() => wisAfwijking(d)} disabled={disabled}>standaardtijd</button>
@@ -252,18 +229,20 @@ export function WerkbonDagenVelden({
                   {ploeg.length > 0 && (
                     <span className="wbd-ploeg">
                       {ploeg.map(m => {
-                        const aan = dagPloeg(d).includes(m.id);
+                        const werkt = dagPloeg(d).includes(m.id);
                         return (
+                          // data-tip: de volledige naam, direct bij hover (een
+                          // title-tooltip komt pas na een seconde en valt weg op
+                          // touch). aria-label zegt hetzelfde voor schermlezers.
                           <button
                             key={m.id}
                             type="button"
-                            className={`wbd-ploeg-chip${aan ? ' aan' : ''}`}
+                            className={`wbd-ploeg-chip${werkt ? ' aan' : ''}`}
                             onClick={() => wisselPersoon(d, m.id)}
                             disabled={disabled}
-                            aria-pressed={aan}
-                            title={aan
-                              ? `${m.naam} werkt op ${korteDatum(d)} — tik om weg te halen`
-                              : `${m.naam} is er op ${korteDatum(d)} niet — tik om toe te voegen`}
+                            aria-pressed={werkt}
+                            aria-label={`${m.naam} ${werkt ? 'werkt' : 'werkt niet'} op ${korteDatum(d)}. Tik om te wisselen.`}
+                            data-tip={werkt ? m.naam : `${m.naam} — niet op deze dag`}
                           >
                             {initialen(m.naam)}
                           </button>

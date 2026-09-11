@@ -23,7 +23,7 @@ import {
 import WerkbonAfrondenModal from '../components/WerkbonAfrondenModal.jsx';
 import { WerkbonDagenVelden, WerkbonLocatieVeld, useKlantAdres } from '../components/WerkbonPlanning.jsx';
 import {
-  planningUitWerkbon, dagenUitPlanning, controleerPlanning, legePlanning, planningLabel,
+  planningUitWerkbon, dagenUitPlanning, controleerPlanning, legePlanning, planningLabel, geplandeDatums,
 } from '../utils/werkbonDagen.js';
 import { syncWerkbonEvents } from '../services/calendarService.js';
 import { downloadWerkbonPdf } from '../utils/generateWerkbonPdf.js';
@@ -124,7 +124,8 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
       toast.error('Wijs minimaal één verantwoordelijke aan.');
       return;
     }
-    const planFout = meerdaags ? controleerPlanning(planning) : '';
+    // Ook zonder planningsmodule: een geplande dag heeft een tijd nodig.
+    const planFout = controleerPlanning(planning, { starttijd: form.starttijd, eindtijd: form.eindtijd });
     if (planFout) { toast.error(planFout); return; }
     const dagen = meerdaags ? dagenUitPlanning(planning, form.assignedToIds) : [];
     setSaving(true);
@@ -136,7 +137,7 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
         omschrijving: form.omschrijving || null,
         // Zonder module alleen de startdatum: de database maakt daar de ene dag
         // van, of schuift een bestaande meerdaagse bon in zijn geheel mee.
-        gepland_op: meerdaags ? (dagen[0]?.datum || null) : (planning.startdatum || null),
+        gepland_op: meerdaags ? (dagen[0]?.datum || null) : (geplandeDatums(planning)[0] || null),
         starttijd: form.starttijd || null,
         eindtijd: form.eindtijd || null,
         locatie: form.locatie || null,

@@ -1,19 +1,23 @@
 // Planning van een werkbon over meerdere dagen.
 //
 // De database kent alleen losse dagen (tabel werkbon_dagen): een werkbon staat
-// op dag X als die dag in de lijst staat. Het formulier geeft twee manieren om
-// die lijst te vullen — een periode (start t/m eind) en tikken in de kalender —
-// en dit bestand vertaalt heen en terug. gepland_op op de werkbon is de vroegste
-// dag en wordt door de database bijgehouden.
+// op dag X als die dag in de lijst staat. In het formulier kies je die dagen in
+// een kalender — tik aan, tik uit. gepland_op op de werkbon is de vroegste dag
+// en wordt door de database bijgehouden.
 //
 // Tijden: de werkbon heeft één standaardtijd die voor elke dag geldt. Een dag
 // kan daarvan afwijken (starttijd/eindtijd op de dag zelf); leeg = standaard.
+// Een geplande dag heeft altijd een tijd: zonder starttijd tekent de planning
+// geen blok, en dan zou de dag stil uit beeld vallen.
 //
 // Ploeg: standaard werkt de hele ploeg van de werkbon (assigned_to_ids) elke
 // dag. Een dag kan een eigen dagploeg hebben (medewerker_ids): altijd een deel
 // van de ploeg, en leeg betekent niemand. NULL = de hele ploeg.
 
 export const MAX_DAGEN = 60;
+
+/** Wat er klaarstaat zodra je de eerste dag aantikt en er nog geen tijd is. */
+export const STANDAARD_TIJD = { starttijd: '08:00', eindtijd: '16:30' };
 
 const DAG_KORT = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
 const MAAND_KORT = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
@@ -33,10 +37,6 @@ export function plusDagen(iso, n) {
 }
 
 export const isWeekend = iso => [0, 6].includes(naarDate(iso).getDay());
-
-/** Aantal kalenderdagen van a t/m b (inclusief beide). */
-export const kalenderdagen = (a, b) =>
-  Math.round((naarDate(b) - naarDate(a)) / 86400000) + 1;
 
 /** "ma 3 nov" */
 export function korteDatum(iso) {
@@ -102,112 +102,45 @@ export function planningLabel(w) {
 
 // ── Formulier ────────────────────────────────────────────────────────────────
 // Formulierstaat:
-//   startdatum, einddatum, weekend  — de periode (einddatum en weekend optioneel)
-//   uit    [iso]                    — dagen binnen de periode die er toch niet bij horen
-//   extra  [iso]                    — dagen buiten de periode die er wél bij horen
+//   dagen     [iso]                      — de aangetikte dagen
 //   afwijkend { iso: { starttijd, eindtijd } }
-//   ploeg     { iso: [profielId] }  — alleen voor dagen met een eigen dagploeg
+//   ploeg     { iso: [profielId] }       — alleen voor dagen met een eigen dagploeg
 
-export const legePlanning = (startdatum = '') => ({
-  startdatum, einddatum: '', weekend: false, extra: [], uit: [], afwijkend: {}, ploeg: {},
-});
+export const legePlanning = (dag = '') => ({ dagen: dag ? [dag] : [], afwijkend: {}, ploeg: {} });
 
-/** De dagen van de periode: start, en t/m eind alleen ma–vr tenzij weekend. */
-export function periodeDatums(p) {
-  if (!p?.startdatum) return [];
-  const lijst = [p.startdatum];
-  if (!p.einddatum || p.einddatum <= p.startdatum || kalenderdagen(p.startdatum, p.einddatum) > MAX_DAGEN) return lijst;
-  for (let d = plusDagen(p.startdatum, 1); d <= p.einddatum; d = plusDagen(d, 1)) {
-    if (p.weekend || !isWeekend(d)) lijst.push(d);
-  }
-  return lijst;
-}
+/** De gekozen dagen, gesorteerd en zonder dubbelen. */
+export const geplandeDatums = p => [...new Set(p?.dagen || [])].filter(Boolean).sort();
 
-/**
- * Alle geplande datums: de periode min de weggetikte dagen, plus de losse dagen.
- * De startdatum hoort er altijd bij — die heb je zelf gekozen, ook op een
- * zaterdag.
- */
-export function geplandeDatums(p) {
-  if (!p?.startdatum) return [];
-  const uit = new Set(p.uit || []);
-  const set = new Set(periodeDatums(p).filter(d => d === p.startdatum || !uit.has(d)));
-  for (const d of p.extra || []) if (d && d > p.startdatum) set.add(d);
-  return [...set].sort();
-}
-
-/**
- * Een dag in de kalender aan- of uittikken. Binnen de periode wordt hij
- * "uit", daarbuiten een losse dag. Zonder startdatum wordt de eerste tik de
- * startdatum; de startdatum zelf wissel je in het datumveld, niet hier.
- */
+/** Een dag in de kalender aan- of uittikken. */
 export function wisselDag(p, iso) {
-  if (!p.startdatum) return { ...p, startdatum: iso };
-  if (iso <= p.startdatum) return p;
-  const extra = new Set(p.extra || []);
-  const uit = new Set(p.uit || []);
-  const inPeriode = periodeDatums(p).includes(iso);
-  if (geplandeDatums(p).includes(iso)) {
-    extra.delete(iso);
-    if (inPeriode) uit.add(iso);
-  } else {
-    uit.delete(iso);
-    if (!inPeriode) extra.add(iso);
-  }
-  return { ...p, extra: [...extra].sort(), uit: [...uit].sort() };
-}
-
-/** Nieuwe startdatum. Wat daarvoor ligt, valt weg; een einddatum die er niet meer na ligt ook. */
-export function zetStartdatum(p, v) {
-  return {
-    ...p,
-    startdatum: v,
-    einddatum: p.einddatum && v && p.einddatum <= v ? '' : p.einddatum,
-    extra: (p.extra || []).filter(d => !v || d > v),
-    uit: (p.uit || []).filter(d => !v || d > v),
-  };
+  const set = new Set(p.dagen || []);
+  if (set.has(iso)) set.delete(iso);
+  else set.add(iso);
+  return { ...p, dagen: [...set].sort() };
 }
 
 /**
- * Terugvertalen van opgeslagen dagen naar het formulier. Past alles binnen één
- * periode van hooguit 60 dagen, dan wordt het de periode van de eerste t/m de
- * laatste dag en worden de gaten "uit". Anders: startdatum plus losse dagen.
- * De kalender toont daarna precies wat er opgeslagen was.
+ * Zonder planningsmodule: de klus begint op deze dag. Eén dag wordt gewoon die
+ * dag; een bestaande meerdaagse bon schuift in zijn geheel mee — precies wat de
+ * database doet als alleen gepland_op verandert.
  */
+export function verplaatsNaar(p, iso) {
+  const huidig = geplandeDatums(p);
+  if (huidig.length <= 1) return { ...p, dagen: [iso] };
+  const verschil = Math.round((naarDate(iso) - naarDate(huidig[0])) / 86400000);
+  return { ...p, dagen: huidig.map(d => plusDagen(d, verschil)) };
+}
+
+/** Terugvertalen van opgeslagen dagen naar het formulier. */
 export function planningUitWerkbon(w) {
   const dagen = werkbonDagen(w);
-  if (!dagen.length) return legePlanning();
-  const datums = dagen.map(d => d.datum);
-  const start = datums[0];
-  const laatste = datums[datums.length - 1];
   const afwijkend = {};
   const ploeg = {};
   for (const d of dagen) {
     if (d.starttijd || d.eindtijd) afwijkend[d.datum] = { starttijd: tijd(d.starttijd), eindtijd: tijd(d.eindtijd) };
     if (Array.isArray(d.medewerkerIds)) ploeg[d.datum] = d.medewerkerIds;
   }
-  if (datums.length === 1) return { ...legePlanning(start), afwijkend, ploeg };
-  if (kalenderdagen(start, laatste) > MAX_DAGEN) {
-    return { ...legePlanning(start), extra: datums.slice(1), afwijkend, ploeg };
-  }
-  const weekend = datums.slice(1).some(isWeekend);
-  const set = new Set(datums);
-  const periode = periodeDatums({ startdatum: start, einddatum: laatste, weekend });
-  return {
-    startdatum: start, einddatum: laatste, weekend,
-    extra: [], uit: periode.filter(d => !set.has(d)),
-    afwijkend, ploeg,
-  };
-}
-
-/** Bevat de periode (zonder de startdag zelf) een za of zo? Dan pas tonen we het vinkje. */
-export function periodeHeeftWeekend(p) {
-  if (!p.startdatum || !p.einddatum || p.einddatum <= p.startdatum) return false;
-  if (kalenderdagen(p.startdatum, p.einddatum) > MAX_DAGEN) return false;
-  for (let d = plusDagen(p.startdatum, 1); d <= p.einddatum; d = plusDagen(d, 1)) {
-    if (isWeekend(d)) return true;
-  }
-  return false;
+  return { dagen: dagen.map(d => d.datum), afwijkend, ploeg };
 }
 
 const zelfdeSet = (a, b) => a.length === b.length && a.every(x => b.includes(x));
@@ -242,24 +175,29 @@ export function dagenUitPlanning(p, ploegIds = null) {
   });
 }
 
-/** Foutmelding voor het formulier, of '' als alles klopt. */
-export function controleerPlanning(p) {
-  if (!p) return '';
-  if (!p.startdatum && (p.einddatum || (p.extra || []).length)) {
-    return 'Kies eerst een startdatum. Een einddatum of extra dag kan niet zonder.';
+/**
+ * Foutmelding voor het formulier, of '' als alles klopt. Een geplande dag moet
+ * een tijd hebben: zonder starttijd tekent de planning geen blok.
+ */
+export function controleerPlanning(p, { starttijd, eindtijd } = {}) {
+  const datums = geplandeDatums(p);
+  if (datums.length > MAX_DAGEN) {
+    return `Een werkbon kan maximaal ${MAX_DAGEN} dagen hebben; dit zijn er ${datums.length}. Verdeel de klus over meerdere werkbonnen.`;
   }
-  if (p.einddatum && p.einddatum < p.startdatum) {
-    return 'De einddatum ligt vóór de startdatum.';
-  }
-  if (p.einddatum) {
-    const n = kalenderdagen(p.startdatum, p.einddatum);
-    if (n > MAX_DAGEN) {
-      return `Een periode mag maximaal ${MAX_DAGEN} dagen beslaan; ${korteDatum(p.startdatum)} t/m ${korteDatum(p.einddatum)} is ${n} dagen. Kies een eerdere einddatum, of verdeel de klus over meerdere werkbonnen.`;
+  if (!datums.length) return '';
+  const start = tijd(starttijd);
+  const eind = tijd(eindtijd);
+  if (!start || !eind) return 'Vul een begin- en eindtijd in. Een dag zonder tijd verschijnt niet in de planning.';
+  if (eind <= start) return 'De eindtijd moet na de begintijd liggen.';
+  if (datums.length > 1) {
+    for (const d of datums) {
+      const af = p.afwijkend?.[d];
+      if (!af) continue;
+      const s = tijd(af.starttijd);
+      const e = tijd(af.eindtijd);
+      if (!s || !e) return `Vul voor ${korteDatum(d)} een begin- en eindtijd in, of zet hem terug op de standaardtijd.`;
+      if (e <= s) return `Op ${korteDatum(d)} moet de eindtijd na de begintijd liggen.`;
     }
-  }
-  const aantal = geplandeDatums(p).length;
-  if (aantal > MAX_DAGEN) {
-    return `Een werkbon kan maximaal ${MAX_DAGEN} dagen hebben; dit zijn er ${aantal}. Verdeel de klus over meerdere werkbonnen.`;
   }
   return '';
 }

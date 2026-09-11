@@ -160,7 +160,7 @@ function WerkbonBlock({ werkbon, color, onClick }) {
   return (
     <div
       onClick={e => { e.stopPropagation(); onClick(werkbon); }}
-      title={`${werkbon.titel}${werkbon._dagLabel ? ` (${werkbon._dagLabel})` : ''}\n${fmtTime(werkbon.starttijd)}–${fmtTime(werkbon.eindtijd)}\n${werkbon.customerName || ''}`}
+      title={`${werkbon.titel}${werkbon._dagLabel ? ` (${werkbon._dagLabel})` : ''}\n${fmtTime(werkbon.starttijd)}–${fmtTime(werkbon.eindtijd)}\n${[werkbon._persoon, werkbon.customerName].filter(Boolean).join(' · ')}`}
       style={{
         position: 'absolute', top, left, width: w, height,
         background: color.bg,
@@ -190,9 +190,9 @@ function WerkbonBlock({ werkbon, color, onClick }) {
           {fmtTime(werkbon.starttijd)}–{fmtTime(werkbon.eindtijd)}{werkbon._dagLabel ? ` · ${werkbon._dagLabel}` : ''}
         </div>
       )}
-      {height > 50 && werkbon.customerName && (
+      {height > 50 && (werkbon._persoon || werkbon.customerName) && (
         <div style={{ fontSize: 9, color: color.text, opacity: .6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
-          {werkbon.customerName}
+          {[werkbon._persoon, werkbon.customerName].filter(Boolean).join(' · ')}
         </div>
       )}
     </div>
@@ -339,9 +339,11 @@ function DayColumn({ date, werkbonnen, activities = [], colorMap, isToday, allow
         <ActivityBlock key={b.id} activity={b} onClick={onActivityClick} />
       ) : (
         <WerkbonBlock
-          key={b.id}
+          key={b._blokKey || b.id}
           werkbon={b}
-          color={colorMap[b._colorKey] || entityColor(0)}
+          // Onbekende sleutel → grijs, niet de kleur van de eerste medewerker:
+          // anders ziet een fout eruit als "alles is van hem".
+          color={colorMap[b._colorKey] || UNASSIGNED_COLOR}
           onClick={onBlockClick}
         />
       ))}
@@ -661,7 +663,7 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, profile, onCl
 
   const submit = async () => {
     if (!form.titel.trim()) { toast.error('Titel is verplicht'); return; }
-    const planFout = controleerPlanning(planning);
+    const planFout = controleerPlanning(planning, { starttijd: form.starttijd, eindtijd: form.eindtijd });
     if (planFout) { toast.error(planFout); return; }
     const dagen = dagenUitPlanning(planning, form.assigned_to_ids);
     setSaving(true);
@@ -808,7 +810,7 @@ function DetailModal({ werkbon, teamMembers, voertuigen, profile, onClose, onUpd
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const submit = async () => {
-    const planFout = controleerPlanning(planning);
+    const planFout = controleerPlanning(planning, { starttijd: form.starttijd, eindtijd: form.eindtijd });
     if (planFout) { toast.error(planFout); return; }
     const dagen = dagenUitPlanning(planning, form.assigned_to_ids);
     setSaving(true);
@@ -1243,12 +1245,24 @@ export function PlanningPage({ openCustomer } = {}) {
                       const eigenPloeg = Array.isArray(dagen[i].medewerkerIds);
                       const ploeg = ploegOpDag(w, dagen[i]);
                       if (viewMode === 'medewerker' && eigenPloeg && !ploeg.includes(selectedMember)) return [];
-                      return [{
+                      const basis = {
                         ...w, starttijd: t.starttijd, eindtijd: t.eindtijd,
                         assignedToIds: ploeg,
-                        _colorKey: viewMode === 'totaal' && eigenPloeg ? (ploeg[0] || '__none__') : w._colorKey,
                         _dagLabel: dagen.length > 1 ? `dag ${i + 1}/${dagen.length}` : '',
-                      }];
+                      };
+                      if (viewMode !== 'totaal') return [{ ...basis, _blokKey: w.id }];
+                      // Totaal: één blok per medewerker, in zijn eigen kleur.
+                      // Eén blok per werkbon kreeg alleen de kleur van de
+                      // eerste medewerker — wie nooit eerste stond, was nergens
+                      // te zien, en een ploeg met één vaste eerste werd één kleur.
+                      if (!ploeg.length) return [{ ...basis, _colorKey: '__none__', _blokKey: `${w.id}-niemand` }];
+                      return ploeg.map(pid => ({
+                        ...basis,
+                        assignedToIds: [pid],
+                        _colorKey: pid,
+                        _persoon: teamMembers.find(m => m.id === pid)?.fullName || '',
+                        _blokKey: `${w.id}-${pid}`,
+                      }));
                     });
                     const dayActs = filteredActivities.filter(a => a.date === date);
                     return (
