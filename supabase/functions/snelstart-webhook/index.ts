@@ -12,6 +12,9 @@ import { makeAdminClient } from "../_shared/scheduledSync.ts"
 //   1. Wij sturen de klant naar
 //      https://web.snelstart.nl/couplings/activate/{AppShortName}
 //        ?referenceKey={company_id}&successUrl={onze url}
+//      Die URL wordt gebouwd in src/config/snelstart.js — daar staat ook de
+//      AppShortName. Verandert er iets aan deze flow, dan is dat de andere kant
+//      die mee moet.
 //   2. De klant logt in bij SnelStart en bevestigt de koppeling.
 //   3. SnelStart POST naar deze webhook:
 //        { "KoppelSleutel": string,

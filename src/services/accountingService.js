@@ -160,6 +160,22 @@ export async function saveSnelStartConnection({ clientKey }) {
   return rpcRowToStatus(data)
 }
 
+// Loskoppelen: wist de sleutel van dít bedrijf bij deze provider. Bewust een
+// eigen RPC en niet saveConnection met een lege waarde — die doet met opzet een
+// coalesce, zodat "geen secret meegegeven" nooit per ongeluk een sleutel wist.
+// Zie migratie 20260911120000.
+export async function disconnectConnection(provider = 'snelstart') {
+  const { data, error } = await supabase.rpc('disconnect_accounting_connection', { p_provider: provider })
+  if (error) throw error
+  const row = (data || [])[0]
+  return {
+    provider,
+    administrationId: row?.administration_id || '',
+    connected: !!row?.connected,
+    lastSyncedAt: row?.last_synced_at || null,
+  }
+}
+
 export async function testSnelStartConnection(clientKey) {
   const { data, error } = await supabase.functions.invoke('snelstart-test', {
     body: clientKey ? { client_key: clientKey } : {},

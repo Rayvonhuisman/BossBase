@@ -61,10 +61,67 @@ export async function getSnelStartToken(clientKey: string): Promise<string> {
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
+// ── Snelheidsregeling ───────────────────────────────────────────────────────
+// SnelStart publiceert zijn limieten niet, maar ze bestaan wel — ook op de
+// ontwikkelsleutel. Daarom een vaste pauze vóór elke call.
+//
+// Waarom die pauze blijft en niet vervangen wordt door alleen reageren op 429:
+// een sync loopt in lussen (ssFetchAll pagineert per 500, de export doet een
+// call per record). Zonder rem vuren we tientallen requests per seconde af en
+// lopen we gegárandeerd tegen de limiet aan. De rem voorkomt dat; de
+// 429-afhandeling hieronder is het vangnet voor wanneer hij toch tekortschiet.
+//
+// Wat er wél is bijgekomen: de pauze past zich aan. Na een 429 gaat hij omhoog,
+// en bij een reeks geslaagde calls zakt hij weer terug naar de basis. Zo hoeft
+// de basiswaarde niet op het slechtste geval gezet te worden.
+const BASIS_PAUZE_MS = 150
+const MAX_PAUZE_MS = 2000
+let pauzeMs = BASIS_PAUZE_MS
+let geslaagdOpEenRij = 0
+
+function verhoogPauze() {
+  pauzeMs = Math.min(MAX_PAUZE_MS, Math.max(BASIS_PAUZE_MS * 2, pauzeMs * 2))
+  geslaagdOpEenRij = 0
+}
+
+function verlaagPauzeLangzaam() {
+  if (pauzeMs <= BASIS_PAUZE_MS) return
+  // Pas na twintig schone calls een stap terug: te snel versoepelen levert een
+  // zaagtand op waarbij je om de paar seconden opnieuw tegen de limiet loopt.
+  if (++geslaagdOpEenRij >= 20) {
+    pauzeMs = Math.max(BASIS_PAUZE_MS, Math.round(pauzeMs / 2))
+    geslaagdOpEenRij = 0
+  }
+}
+
+// Een edge function heeft een wandkloklimiet, dus niet eindeloos wachten. Drie
+// pogingen met maximaal 8 seconden elk is ruim binnen de marge en vangt de
+// gewone piek af; houdt de limiet langer aan, dan is opgeven met een duidelijke
+// melding beter dan de hele run laten aflopen op een timeout.
+const MAX_429_POGINGEN = 3
+const MAX_WACHT_MS = 8000
+
+/**
+ * Hoelang wachten na een 429. Retry-After gaat vóór: dat is wat de server zélf
+ * zegt. De header mag een aantal seconden zijn of een HTTP-datum.
+ * Zonder header: exponentieel, 1s → 2s → 4s.
+ */
+function wachttijdNa429(res: Response, poging: number): number {
+  const header = res.headers.get('Retry-After')
+  if (header) {
+    const seconden = Number(header)
+    if (Number.isFinite(seconden) && seconden >= 0) return Math.min(seconden * 1000, MAX_WACHT_MS)
+    const datum = Date.parse(header)
+    if (!Number.isNaN(datum)) return Math.min(Math.max(0, datum - Date.now()), MAX_WACHT_MS)
+  }
+  return Math.min(1000 * 2 ** poging, MAX_WACHT_MS)
+}
+
 // Fetch-helper: zet beide vereiste headers, hernieuwt het token één keer bij een
-// 401 en vertaalt 403 (ontbrekende scope in de sleutel) naar een duidelijke fout.
+// 401, wacht netjes af bij een 429 en vertaalt 403 (ontbrekende scope in de
+// sleutel) naar een duidelijke fout.
 export async function ssFetch(clientKey: string, path: string, options: RequestInit = {}) {
-  await sleep(150) // rustig aan i.v.m. de (ongepubliceerde) API-limieten
+  await sleep(pauzeMs)
   const doFetch = async () => fetch(`${SNELSTART_API_BASE}${path}`, {
     ...options,
     headers: {
@@ -80,6 +137,28 @@ export async function ssFetch(clientKey: string, path: string, options: RequestI
     tokenCache.delete(clientKey)
     res = await doFetch()
   }
+
+  // ── 429: even wachten en opnieuw ──────────────────────────────────────────
+  for (let poging = 0; res.status === 429 && poging < MAX_429_POGINGEN; poging++) {
+    const wacht = wachttijdNa429(res, poging)
+    verhoogPauze()
+    console.warn(`SnelStart 429 op ${path}; ${wacht} ms wachten (poging ${poging + 1} van ${MAX_429_POGINGEN})`)
+    await sleep(wacht)
+    res = await doFetch()
+  }
+  if (res.status === 429) {
+    // Opgegeven. Een aparte, herkenbare fout zodat de aanroeper de rest van de
+    // run kan afbreken in plaats van record voor record tegen dezelfde muur te
+    // lopen — zie isRateLimit().
+    const fout: any = new Error(
+      'SnelStart geeft aan dat er te veel verzoeken zijn gedaan. De synchronisatie is gestopt en wordt bij de volgende ronde hervat.')
+    fout.status = 429
+    fout.rateLimited = true
+    throw fout
+  }
+
+  if (res.ok) verlaagPauzeLangzaam()
+
   if (!res.ok) {
     const body = await res.text().catch(() => '')
     console.error(`SnelStart API ${res.status} op ${path}: ${body.substring(0, 300)}`)
@@ -704,19 +783,40 @@ export async function forEachSnelStartCompany(
   const list = targets ?? []
   const results: Record<string, unknown>[] = []
   const errors: { company_id: string; error: string }[] = []
+  const overgeslagen: string[] = []
+  let limietBereikt = false
 
   for (const c of list) {
+    // Liep een eerder bedrijf tegen de limiet aan, dan hoeven de volgende het
+    // niet ook te proberen: de limiet hangt aan ónze abonnementssleutel en die
+    // is voor alle bedrijven dezelfde. Ze gelden daarom niet als mislukt maar
+    // als overgeslagen — de volgende ronde pakt ze op.
+    if (limietBereikt) { overgeslagen.push(c.company_id); continue }
+
     try {
       const r = await perCompany(c.company_id, c.client_key)
       results.push({ company_id: c.company_id, ...r })
     } catch (e: any) {
       console.error(`[snelstart-cron] bedrijf ${c.company_id} mislukt:`, e?.message)
       errors.push({ company_id: c.company_id, error: e?.message ?? String(e) })
+      if (e?.rateLimited) {
+        limietBereikt = true
+        console.warn('[snelstart-cron] limiet bereikt; overige bedrijven overgeslagen tot de volgende ronde')
+      }
     }
     if (betweenMs) await sleep(betweenMs)
   }
 
-  return { scheduled: true, companies: list.length, ok: results.length, failed: errors.length, results, errors }
+  return {
+    scheduled: true,
+    companies: list.length,
+    ok: results.length,
+    failed: errors.length,
+    skipped: overgeslagen.length,
+    ...(limietBereikt ? { rateLimited: true, skippedCompanies: overgeslagen } : {}),
+    results,
+    errors,
+  }
 }
 
 // ── Import: relaties uit SnelStart ──────────────────────────────────────────

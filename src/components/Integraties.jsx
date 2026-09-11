@@ -23,7 +23,11 @@
 //   verborgen     true = nog niet voor klanten (staat wél in de code)
 //   status        { actief, label }
 //   gate          null | { pill, tekst, knop, onClick } — pakket ontbreekt
-//   koppeling     { inleiding?, velden[], acties[], fout? }
+//   koppeling     { inleiding?, activatie?, velden[], acties[], fout? }
+//   activatie     null | { titel, tekst, actie, melding?, terugvalLabel? }
+//                 Eén-kliks koppelen (oAuth). Staat bovenaan; de velden eronder
+//                 vallen dan achter een terugvalknop, want dat is het pad dat je
+//                 alleen nodig hebt als de knop het niet doet.
 //   instellingen  null | { toggles[], acties[], inhoud }  (inhoud = vrije node)
 //   sync          null | { acties[], laatsteSync, toelichting?, status? }
 //   meldingen     [] | [{ toon:'fout'|'waarschuwing', titel, tekst?, items[] }]
@@ -202,6 +206,30 @@ function MeldingBlok({ melding }) {
   );
 }
 
+// ── Activatieblok ───────────────────────────────────────────────────────────
+// De aanbevolen weg naar een koppeling: één knop die de klant naar de
+// boekhoudpartij stuurt. Visueel voor op de handmatige invoer, omdat "plak hier
+// je sleutel" het uitwijkpad is en niet de bedoeling.
+function ActivatieBlok({ activatie }) {
+  if (!activatie) return null;
+  return (
+    <div style={{
+      border: '1px solid var(--pl)', background: 'var(--pll)',
+      borderRadius: 'var(--r8)', padding: '14px 16px',
+      display: 'flex', flexDirection: 'column', gap: 10,
+    }}>
+      {activatie.titel && (
+        <div style={{ fontWeight: 600, fontSize: '.88rem', color: 'var(--pd)' }}>{activatie.titel}</div>
+      )}
+      {activatie.tekst && (
+        <div style={{ fontSize: '.82rem', color: 'var(--dm)', lineHeight: 1.5 }}>{activatie.tekst}</div>
+      )}
+      {activatie.melding}
+      {activatie.actie && <ActieRij acties={[{ variant: 'p', ...activatie.actie }]} />}
+    </div>
+  );
+}
+
 function ActieRij({ acties = [], links = null }) {
   const zichtbaar = acties.filter(a => a && !a.verborgen);
   if (!zichtbaar.length && !links) return null;
@@ -292,6 +320,10 @@ function meldingTelling(meldingen = []) {
 function IntegratieDrawer({ integratie, onClose }) {
   const tabs = tabsVoor(integratie);
   const [tab, setTab] = useState(tabs[0].id);
+  // Handmatige invoer is de terugval en staat daarom dicht zolang er een
+  // activatieknop is die hetzelfde doet. Zonder die knop is er niets om achter
+  // te verbergen en staan de velden gewoon open, zoals altijd.
+  const [handmatigOpen, setHandmatigOpen] = useState(false);
   const { aantal: meldingAantal, fout: meldingFout } = meldingTelling(integratie.meldingen);
 
   // Verdwijnt de actieve tab (laatste melding weg, koppeling verbroken), val dan
@@ -308,6 +340,7 @@ function IntegratieDrawer({ integratie, onClose }) {
   }, [onClose]);
 
   const { naam, omschrijving, logo, status, gate, koppeling, instellingen, sync, meldingen } = integratie;
+  const handmatigVerborgen = !!koppeling?.activatie?.terugvalLabel && !handmatigOpen;
 
   // Via een portal naar body: de overzichtsgrid draagt de afu3-entree-animatie,
   // en die houdt met fill-mode 'both' een transform vast. Een transform maakt een
@@ -388,7 +421,21 @@ function IntegratieDrawer({ integratie, onClose }) {
                   {koppeling?.inleiding && (
                     <div style={{ fontSize: '.84rem', color: 'var(--dm)' }}>{koppeling.inleiding}</div>
                   )}
-                  {!!koppeling?.velden?.length && (
+                  <ActivatieBlok activatie={koppeling?.activatie} />
+                  {handmatigVerborgen && (
+                    <button
+                      type="button"
+                      onClick={() => setHandmatigOpen(true)}
+                      style={{
+                        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                        alignSelf: 'flex-start', fontSize: '.8rem', color: 'var(--dmu)',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      {koppeling.activatie.terugvalLabel}
+                    </button>
+                  )}
+                  {!handmatigVerborgen && !!koppeling?.velden?.length && (
                     <div className="fg">
                       {koppeling.velden.map(v => <VeldRij key={v.key} veld={v} />)}
                     </div>
@@ -401,7 +448,7 @@ function IntegratieDrawer({ integratie, onClose }) {
                       {koppeling.fout}
                     </div>
                   )}
-                  <ActieRij acties={koppeling?.acties} />
+                  {!handmatigVerborgen && <ActieRij acties={koppeling?.acties} />}
                 </>
               )}
             </div>
@@ -451,8 +498,19 @@ function IntegratieDrawer({ integratie, onClose }) {
 
 // ── Overzicht ───────────────────────────────────────────────────────────────
 
-export default function IntegratiesOverzicht({ integraties }) {
-  const [open, setOpen] = useState(null);
+export default function IntegratiesOverzicht({ integraties, initieelOpen = null }) {
+  // initieelOpen: de drawer die meteen open moet, bijvoorbeeld wanneer de klant
+  // terugkomt van een activatieflow bij de boekhoudpartij. Dan wil je het
+  // resultaat zien zonder eerst de juiste kaart te moeten aanklikken.
+  const [open, setOpen] = useState(initieelOpen);
+
+  // Ook openen als initieelOpen pas ná de eerste render een waarde krijgt: de
+  // pagina kan de retour-parameter later verwerken dan hij dit overzicht
+  // rendert, en dan zou de beginwaarde alleen nooit aanslaan. Sluiten blijft aan
+  // de gebruiker — daarom alleen openen, nooit terugzetten naar null.
+  useEffect(() => {
+    if (initieelOpen) setOpen(initieelOpen);
+  }, [initieelOpen]);
   const zichtbaar = integraties.filter(i => i && !i.verborgen);
   const actief = zichtbaar.find(i => i.id === open) || null;
 

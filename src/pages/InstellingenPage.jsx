@@ -3,6 +3,9 @@ import { I, ModalX, STAGE_COLOR_OPTIONS, stageColToHex, stageColorLabel, stageBa
 import { supabase } from '../lib/supabase.js';
 import GrootboekIndeling from '../components/GrootboekIndeling.jsx';
 import IntegratiesOverzicht from '../components/Integraties.jsx';
+import {
+  activatieBeschikbaar, bouwActivatieUrl, RETOUR_PARAM, RETOUR_WAARDE,
+} from '../config/snelstart.js';
 import { useToast } from '../lib/toast.jsx';
 import SyncBanner from '../components/SyncBanner.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -46,6 +49,7 @@ import {
   importKostenVanuitMoneybird,
   syncContactenMetMoneybird,
   saveSnelStartConnection,
+  disconnectConnection,
   controleerSnelStartAdministratie,
   testSnelStartConnection,
   importKostenVanuitSnelStart,
@@ -256,6 +260,10 @@ export function InstellingenPage() {
   // Laatste run uit accounting_sync_runs — óók die van de nachtelijke cron.
   const [ssLaatsteAutoRun, setSsLaatsteAutoRun] = useState(null);
   const [ssMeldingen, setSsMeldingen] = useState([]);
+  // Activatieflow: 'wachten' zolang de webhook de sleutel nog moet brengen,
+  // daarna 'gelukt' of 'uitgebleven'. Null = de klant komt hier niet vandaan.
+  const [ssActivatie, setSsActivatie] = useState(null);
+  const [ssLoskoppelen, setSsLoskoppelen] = useState(false);
 
   // Voertuigen
   const [voertuigen, setVoertuigen] = useState([]);
@@ -400,6 +408,66 @@ export function InstellingenPage() {
       .catch(err => toast.error(err.message || 'Laden mislukt'))
       .finally(() => setLoading(false));
   }, [canCompanySettings]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Terug van de SnelStart-activatie ───────────────────────────────────────
+  // SnelStart stuurt de koppelsleutel naar onze webhook, niet naar de browser.
+  // De klant kan dus terug zijn vóórdat de sleutel binnen is. Daarom wachten we
+  // hem af in plaats van meteen "gelukt" of "mislukt" te roepen: allebei zou een
+  // gok zijn op het moment dat de pagina laadt.
+  //
+  // Bewust twee effecten. Herkennen en wachten in één effect ging mis: het
+  // herkennen verbruikt de URL-parameter, en zodra React het effect opnieuw
+  // draait — StrictMode doet dat standaard, en een wisselende dep ook — vindt de
+  // tweede ronde niets meer terwijl de opruiming het wachten van de eerste al
+  // heeft gestopt. Resultaat: eeuwig "Bezig met koppelen...". Nu draagt de state
+  // de bedoeling, en die overleeft een herstart van het effect.
+  const ssRetourVerwerkt = useRef(false);
+
+  useEffect(() => {
+    if (ssRetourVerwerkt.current) return;
+    let params;
+    try { params = new URLSearchParams(window.location.search); } catch { return; }
+    if (params.get(RETOUR_PARAM) !== RETOUR_WAARDE) return;
+    ssRetourVerwerkt.current = true;
+
+    // Parameter meteen uit de URL: anders begint een simpele verversing de hele
+    // wachtprocedure opnieuw.
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete(RETOUR_PARAM);
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    } catch { /* URL niet beschikbaar */ }
+
+    setSsActivatie('wachten');
+  }, []);
+
+  useEffect(() => {
+    if (ssActivatie !== 'wachten' || !canCompanySettings) return;
+    let gestopt = false;
+    const tot = Date.now() + 30000;
+    let timer;
+
+    const kijk = async () => {
+      if (gestopt) return;
+      let conn = null;
+      try { conn = await getConnection('snelstart'); } catch { /* volgende poging */ }
+      if (gestopt) return;
+      if (conn?.connected) {
+        setSsConnection(conn);
+        setSsActivatie('gelukt');
+        toast.success('SnelStart is gekoppeld');
+        return;
+      }
+      // Nog niet binnen. Blijven kijken tot de tijd op is; daarna eerlijk zeggen
+      // dat we het niet weten in plaats van "mislukt" — de sleutel kán alsnog
+      // aankomen, en dan staat de koppeling er bij de volgende keer gewoon.
+      if (Date.now() >= tot) { setSsActivatie('uitgebleven'); return; }
+      timer = setTimeout(kijk, 2000);
+    };
+    timer = setTimeout(kijk, 800);
+
+    return () => { gestopt = true; clearTimeout(timer); };
+  }, [ssActivatie, canCompanySettings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (company) {
@@ -840,6 +908,39 @@ export function InstellingenPage() {
     }
   };
 
+  // Naar SnelStart om de koppeling te bevestigen. Een volledige navigatie en
+  // geen popup: SnelStart wil een eigen inlogscherm tonen, en een popup die door
+  // de browser geblokkeerd wordt is een doodlopend spoor waar de klant niets van
+  // begrijpt. Hij komt vanzelf terug op de successUrl.
+  const handleSsActiveren = () => {
+    const url = bouwActivatieUrl(company?.id);
+    if (!url) { toast.error('De SnelStart-koppeling is nog niet beschikbaar'); return; }
+    window.location.href = url;
+  };
+
+  // Loskoppelen wist alleen ónze kant. De koppelsleutel blijft geldig bij
+  // SnelStart tot de klant hem daar intrekt, en dat staat er daarom bij: anders
+  // denkt iemand dat hij klaar is terwijl de sleutel nog bruikbaar is.
+  const handleSsLoskoppelen = async () => {
+    if (!window.confirm(
+      'SnelStart loskoppelen? Er wordt niets verwijderd uit je boekhouding of uit BossBase, '
+      + 'maar er wordt niet meer gesynchroniseerd. Trek de koppeling daarna ook in bij SnelStart zelf.'
+    )) return;
+    setSsLoskoppelen(true);
+    try {
+      const conn = await disconnectConnection('snelstart');
+      setSsConnection(conn);
+      setSsForm({ clientKey: '' });
+      setSsEditing(false);
+      setSsActivatie(null);
+      toast.success('SnelStart losgekoppeld');
+    } catch (err) {
+      toast.error(err.message || 'Loskoppelen mislukt');
+    } finally {
+      setSsLoskoppelen(false);
+    }
+  };
+
   const handleSsSave = async () => {
     if (!ssForm.clientKey) {
       toast.error('Vul de koppelsleutel in');
@@ -1135,6 +1236,25 @@ export function InstellingenPage() {
     : 'Bezig met contacten synchroniseren met Moneybird';
 
 
+  // Wat de klant ziet nadat hij terugkomt van SnelStart. Drie standen, want
+  // "gelukt of mislukt" dekt de werkelijkheid niet: de sleutel komt via de
+  // webhook binnen en kan onderweg zijn.
+  const ssActivatieMelding = !ssActivatie ? null : (
+    <div style={{
+      fontSize: '.8rem', lineHeight: 1.5, borderRadius: 8, padding: '9px 12px',
+      ...(ssActivatie === 'gelukt'
+        ? { background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#15803d' }
+        : ssActivatie === 'uitgebleven'
+        ? { background: '#fffbeb', border: '1px solid #fde68a', color: '#b4820f' }
+        : { background: 'var(--bgs)', border: '1px solid var(--border)', color: 'var(--dm)' }),
+    }}>
+      {ssActivatie === 'wachten' && 'Even geduld: we wachten tot SnelStart de koppelsleutel heeft doorgegeven.'}
+      {ssActivatie === 'gelukt' && 'Gelukt. De koppeling staat klaar en synchroniseert vanaf nu automatisch.'}
+      {ssActivatie === 'uitgebleven' && 'We hebben nog geen koppelsleutel van SnelStart ontvangen. '
+        + 'Dat kan even duren. Ververs deze pagina over een minuut, of voer je koppelsleutel handmatig in.'}
+    </div>
+  );
+
   // ── Integraties ────────────────────────────────────────────────────────────
   // Eén beschrijving per koppeling; de opbouw zit in components/Integraties.jsx.
   // Wat hier staat is dus alleen wat déze integratie eigen maakt: zijn velden,
@@ -1294,18 +1414,64 @@ export function InstellingenPage() {
       } : null,
     },
 
-    // SnelStart — testfase: handmatige koppelsleutel-invoer. Eén platform-
-    // subscriptionkey leeft als edge-function secret; de klant heeft alleen zijn
-    // koppelsleutel (aan te maken op web.snelstart.nl). Na certificering vervangt
-    // de oAuth-activatielink + webhook deze invoer.
+    // SnelStart — twee wegen naar dezelfde koppeling.
+    //
+    // 1. ACTIVATIEFLOW (oAuth), zichtbaar zodra er een AppShortName is
+    //    ingevuld in config/snelstart.js. De klant bevestigt bij SnelStart en
+    //    de koppelsleutel komt via onze webhook binnen — niet via de browser.
+    // 2. HANDMATIGE INVOER, de terugval. Blijft bestaan zolang de flow zich niet
+    //    bewezen heeft: valt weg te halen zodra weg 1 aantoonbaar werkt, en niet
+    //    eerder, want dan zou een klant zonder werkende flow nergens heen kunnen.
+    //
+    // Eén platform-subscriptionkey leeft als edge-function secret; de klant heeft
+    // alleen zijn eigen koppelsleutel.
     {
       id: 'snelstart',
       naam: 'SnelStart',
       omschrijving: 'Boek facturen automatisch als verkoopboeking in SnelStart en synchroniseer klanten.',
       logo: { src: '/brand/snelstart.svg', alt: 'SnelStart' },
-      status: { actief: !!ssConnection?.connected, label: ssConnection?.connected ? 'Actief' : 'Niet gekoppeld' },
+      status: {
+        actief: !!ssConnection?.connected,
+        // 'Koppelen...' terwijl we op de webhook wachten: "Niet gekoppeld" tonen
+        // op het moment dat de klant net akkoord heeft gegeven leest als een
+        // mislukking, terwijl er niets mis is.
+        label: ssConnection?.connected ? 'Actief'
+          : ssActivatie === 'wachten' ? 'Koppelen...'
+          : 'Niet gekoppeld',
+      },
       gate: boekhoudGate,
       koppeling: {
+        // Twee gedaanten van hetzelfde blok.
+        //
+        // GEKOPPELD: geen koppelknop meer — die zou een tweede keer hetzelfde
+        // doen en dat leest als "er is iets mis". In plaats daarvan de weg
+        // eruit. Loskoppelen staat er ook zonder activatieflow, want ook een
+        // handmatig ingevoerde sleutel moet je kwijt kunnen.
+        //
+        // NIET GEKOPPELD: de koppelknop, en alleen als er een AppShortName is.
+        activatie: ssConnection?.connected ? {
+          titel: 'Gekoppeld met SnelStart',
+          tekst: 'Facturen en klanten worden automatisch bijgewerkt. '
+            + 'Loskoppelen stopt dat; er wordt niets verwijderd.',
+          melding: ssActivatieMelding,
+          actie: {
+            label: ssLoskoppelen ? 'Loskoppelen...' : 'Loskoppelen',
+            onClick: handleSsLoskoppelen,
+            disabled: ssLoskoppelen,
+            variant: 's',
+          },
+          terugvalLabel: 'Koppelsleutel handmatig aanpassen',
+        } : activatieBeschikbaar() ? {
+          titel: 'Koppelen via SnelStart',
+          tekst: 'Je gaat naar SnelStart, logt daar in en bevestigt de koppeling. Daarna kom je hier vanzelf terug.',
+          melding: ssActivatieMelding,
+          actie: {
+            label: ssActivatie === 'wachten' ? 'Bezig met koppelen...' : 'Koppel met SnelStart',
+            onClick: handleSsActiveren,
+            disabled: ssActivatie === 'wachten',
+          },
+          terugvalLabel: 'Of voer je koppelsleutel handmatig in',
+        } : null,
         velden: [{
           key: 'koppelsleutel', label: 'Koppelsleutel', type: 'password', name: 'snelstart-koppelsleutel',
           hint: 'Aan te maken in SnelStart Web (web.snelstart.nl) bij je administratie',
@@ -2593,7 +2759,7 @@ export function InstellingenPage() {
       {!loading && tab === 'abonnement' && isAdmin && <AbonnementSectie />}
 
       {!loading && tab === 'integraties' && (
-        <IntegratiesOverzicht integraties={INTEGRATIES} />
+        <IntegratiesOverzicht integraties={INTEGRATIES} initieelOpen={ssActivatie ? 'snelstart' : null} />
       )}
 
     </div>
