@@ -22,7 +22,7 @@ import { listDeals } from '../services/dealService.js';
 import { listActivities } from '../services/activityService.js';
 import { getConnectionStatus, startGoogleCalendarConnect, disconnectGoogleCalendar } from '../services/googleCalendarService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
-import { werkbonDagen, tijdenOpDag, ploegOpDag } from '../utils/werkbonDagen.js';
+import { werkbonDagen, tijdenOpDag, tijdenVoorPersoon, ploegOpDag } from '../utils/werkbonDagen.js';
 import { getProjects } from '../services/projectsService.js';
 import { calcBtw, BTW_PCT_OPTIONS } from '../utils/btw.js';
 import { useToast } from '../lib/toast.jsx';
@@ -284,10 +284,23 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
         // Uitzondering: bij Groei is de agenda gedeeld → toon alles wat RLS teruggeeft.
         const uid = profile?.id;
         const mine = owner => shareAll || !uid || owner === uid;
-        // Per dag: sta ik op díé dag in de (dag)ploeg? Wie op woensdag is
-        // weggetikt, ziet de klus op woensdag niet in zijn agenda.
-        const mijnDag = (w, dag) => shareAll || !uid || ploegOpDag(w, dag).includes(uid)
-          || (!Array.isArray(dag.medewerkerIds) && w.assignedTo === uid);
+        // Per dag en per persoon. In je eigen agenda staat de klus alleen op de
+        // dagen dat jij in de (dag)ploeg staat, en met jóuw tijd — wie 's middags
+        // werkt, ziet 13:00 en niet de 08:00 van zijn collega. In een gedeelde
+        // agenda (Groei) staat hij één keer per verschillende tijd.
+        const itemsVanDag = (w, dag) => {
+          const ploeg = ploegOpDag(w, dag);
+          const personen = shareAll || !uid
+            ? (ploeg.length ? ploeg : [null])
+            : (ploeg.includes(uid) || (!Array.isArray(dag.medewerkerIds) && w.assignedTo === uid) ? [uid] : []);
+          const perTijd = new Map();
+          for (const pid of personen) {
+            const t = pid ? tijdenVoorPersoon(w, dag, pid) : tijdenOpDag(w, dag);
+            const sleutel = `${t.starttijd}-${t.eindtijd}`;
+            if (!perTijd.has(sleutel)) perTijd.set(sleutel, { w, dag, t });
+          }
+          return [...perTijd.values()];
+        };
         const mineActivity = a => shareAll || !uid || (a.assignedToIds && a.assignedToIds.includes(uid)) || a.assignee === uid;
         // Werkbon-gekoppelde calendar_events verbergen: de werkbon zelf wordt
         // hieronder als (altijd actuele) synthetisch event getoond. Zo verschijnt
@@ -297,9 +310,9 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
         // elk met de tijden die op die dag gelden.
         const wbEvents = wbs
           .filter(w => w.geplandOp && w.status !== 'afgerond')
-          .flatMap(w => werkbonDagen(w).filter(dag => mijnDag(w, dag)).map(dag => ({ w, dag, t: tijdenOpDag(w, dag) })))
+          .flatMap(w => werkbonDagen(w).flatMap(dag => itemsVanDag(w, dag)))
           .map(({ w, dag, t }) => ({
-            id: `wb-${w.id}-${dag.datum}`,
+            id: `wb-${w.id}-${dag.datum}-${t.starttijd || ''}`,
             title: w.titel,
             date: dag.datum,
             time: t.starttijd || '07:00',

@@ -113,6 +113,11 @@ export function WerkbonDagenVelden({
   // Het aantal dagen bij het openen. Zonder planningsmodule tonen we dat alleen;
   // bij het verplaatsen van de klus mag die melding niet mee verspringen.
   const [aantalBijOpenen] = useState(() => geplandeDatums(p).length);
+  // Het invulvak "eigen tijd" dat open staat: { datum, pid } of null.
+  const [eigenTijdOpen, setEigenTijdOpen] = useState(null);
+  // Lang indrukken op de initialen = eigen tijd; de klik die daarop volgt mag
+  // de persoon dan niet ook nog aan/uit zetten.
+  const druk = useRef({ timer: null, lang: false });
   const set = patch => onChange({ ...p, ...patch });
   const datums = geplandeDatums(p);
   const fout = controleerPlanning(p, { starttijd, eindtijd });
@@ -174,14 +179,51 @@ export function WerkbonDagenVelden({
 
   // Iemand op één dag weg- of terugtikken. Is het daarna weer de hele ploeg, dan
   // vervalt de afwijking: die dag volgt dan gewoon de ploeg van de werkbon.
+  // Wie er uit gaat, verliest ook zijn eigen tijd op die dag.
   const wisselPersoon = (datum, id) => {
     const nu = dagPloeg(datum).filter(x => ploegIds.includes(x));
     const nieuw = nu.includes(id) ? nu.filter(x => x !== id) : [...nu, id];
     const rest = { ...(p.ploeg || {}) };
     if (nieuw.length === ploegIds.length && ploegIds.every(x => nieuw.includes(x))) delete rest[datum];
     else rest[datum] = nieuw;
-    set({ ploeg: rest });
+    const tijden = { ...(p.persoonTijden || {}) };
+    if (!nieuw.includes(id) && tijden[datum]?.[id]) {
+      const dag = { ...tijden[datum] };
+      delete dag[id];
+      if (Object.keys(dag).length) tijden[datum] = dag;
+      else delete tijden[datum];
+      if (eigenTijdOpen?.datum === datum && eigenTijdOpen?.pid === id) setEigenTijdOpen(null);
+    }
+    set({ ploeg: rest, persoonTijden: tijden });
   };
+
+  // Eigen tijd per persoon: een uitzondering op de tijd van de dag.
+  const dagTijd = d => ((meer && p.afwijkend?.[d]) ? p.afwijkend[d] : { starttijd: hhmm(starttijd), eindtijd: hhmm(eindtijd) });
+  const zetEigenTijd = (d, pid, patch) => set({
+    persoonTijden: {
+      ...(p.persoonTijden || {}),
+      [d]: { ...(p.persoonTijden?.[d] || {}), [pid]: { ...(p.persoonTijden?.[d]?.[pid] || {}), ...patch } },
+    },
+  });
+  const wisEigenTijd = (d, pid) => {
+    const dag = { ...(p.persoonTijden?.[d] || {}) };
+    delete dag[pid];
+    const rest = { ...(p.persoonTijden || {}) };
+    if (Object.keys(dag).length) rest[d] = dag;
+    else delete rest[d];
+    set({ persoonTijden: rest });
+  };
+  // Openen begint met de tijd van de dag: je past alleen aan wat anders is.
+  const openEigenTijd = (d, pid) => {
+    if (!p.persoonTijden?.[d]?.[pid]) zetEigenTijd(d, pid, { ...dagTijd(d) });
+    setEigenTijdOpen({ datum: d, pid });
+  };
+  const startDruk = (d, pid) => {
+    druk.current.lang = false;
+    clearTimeout(druk.current.timer);
+    druk.current.timer = setTimeout(() => { druk.current.lang = true; openEigenTijd(d, pid); }, 450);
+  };
+  const stopDruk = () => clearTimeout(druk.current.timer);
 
   return (
     <div className={`wbd ${className}`} style={style}>
@@ -199,17 +241,27 @@ export function WerkbonDagenVelden({
           />
         </div>
 
-        {meer && (
+        {/* Ook bij één dag als er twee of meer mensen op staan: daar zet je
+            een eigen tijd per persoon. */}
+        {datums.length > 0 && (meer || ploeg.length > 1) && (
           <div className="wbd-lijst">
-            <div className="wbd-lijst-kop">{datums.length} dagen gepland · standaardtijd {standaard}</div>
+            <div className="wbd-lijst-kop">
+              {meer ? `${datums.length} dagen gepland · standaardtijd ${standaard}` : `${korteDatum(datums[0])} · ${standaard}`}
+            </div>
             {ploeg.length > 0 && (
               <div className="wbd-lijst-uitleg">
-                Standaard werkt de hele ploeg elke dag. Tik iemand weg op een dag dat hij er niet is.
+                {meer
+                  ? 'Standaard werkt de hele ploeg elke dag, op dezelfde tijd. Tik iemand weg op een dag dat hij er niet is.'
+                  : 'Standaard werkt de hele ploeg op dezelfde tijd.'}
+                {' '}Rechtsklik of houd de initialen vast voor een eigen tijd.
               </div>
             )}
             {datums.map(d => {
-              const af = p.afwijkend[d];
+              const af = meer ? p.afwijkend[d] : null;
               const eigenPloeg = Array.isArray(p.ploeg?.[d]);
+              const eigenTijden = p.persoonTijden?.[d] || {};
+              const afwijkers = ploeg.filter(m => dagPloeg(d).includes(m.id) && eigenTijden[m.id]);
+              const open = eigenTijdOpen?.datum === d ? ploeg.find(m => m.id === eigenTijdOpen.pid) : null;
               return (
                 <div key={d} className={`wbd-dag${eigenPloeg ? ' eigen-ploeg' : ''}`}>
                   <span className="wbd-dag-datum">{korteDatum(d)}</span>
@@ -223,32 +275,61 @@ export function WerkbonDagenVelden({
                   ) : (
                     <>
                       <span className="wbd-dag-tijd">{standaard}</span>
-                      <button type="button" className="wbd-link" onClick={() => zetAfwijking(d, {})} disabled={disabled}>andere tijd</button>
+                      {meer && <button type="button" className="wbd-link" onClick={() => zetAfwijking(d, {})} disabled={disabled}>andere tijd</button>}
                     </>
                   )}
                   {ploeg.length > 0 && (
                     <span className="wbd-ploeg">
                       {ploeg.map(m => {
                         const werkt = dagPloeg(d).includes(m.id);
+                        const eigen = werkt ? eigenTijden[m.id] : null;
+                        const tip = `${m.naam}${eigen ? ` · ${eigen.starttijd || '?'}–${eigen.eindtijd || '?'}` : ''}${werkt ? ' · rechtsklik: eigen tijd' : ' — niet op deze dag'}`;
                         return (
-                          // data-tip: de volledige naam, direct bij hover (een
-                          // title-tooltip komt pas na een seconde en valt weg op
-                          // touch). aria-label zegt hetzelfde voor schermlezers.
+                          // Tik = aan/uit voor die dag (de standaard, snel).
+                          // Rechtsklik of lang indrukken = eigen tijd (de
+                          // uitzondering). data-tip toont direct de naam en,
+                          // als die er is, de eigen tijd; oranje ring = wijkt af.
                           <button
                             key={m.id}
                             type="button"
-                            className={`wbd-ploeg-chip${werkt ? ' aan' : ''}`}
-                            onClick={() => wisselPersoon(d, m.id)}
+                            className={`wbd-ploeg-chip${werkt ? ' aan' : ''}${eigen ? ' eigen-tijd' : ''}`}
+                            onClick={() => {
+                              if (druk.current.lang) { druk.current.lang = false; return; }
+                              wisselPersoon(d, m.id);
+                            }}
+                            onContextMenu={e => { e.preventDefault(); if (werkt && !disabled) openEigenTijd(d, m.id); }}
+                            onPointerDown={() => { if (werkt && !disabled) startDruk(d, m.id); }}
+                            onPointerUp={stopDruk}
+                            onPointerLeave={stopDruk}
                             disabled={disabled}
                             aria-pressed={werkt}
-                            aria-label={`${m.naam} ${werkt ? 'werkt' : 'werkt niet'} op ${korteDatum(d)}. Tik om te wisselen.`}
-                            data-tip={werkt ? m.naam : `${m.naam} — niet op deze dag`}
+                            aria-label={`${m.naam} ${werkt ? 'werkt' : 'werkt niet'} op ${korteDatum(d)}${eigen ? `, eigen tijd ${eigen.starttijd}–${eigen.eindtijd}` : ''}. Tik om te wisselen; rechtsklik of lang indrukken voor een eigen tijd.`}
+                            data-tip={tip}
                           >
                             {initialen(m.naam)}
                           </button>
                         );
                       })}
                     </span>
+                  )}
+                  {afwijkers.length > 0 && !open && (
+                    <div className="wbd-dag-eigen">
+                      Eigen tijd: {afwijkers.map(m => `${m.naam} ${eigenTijden[m.id].starttijd || '?'}–${eigenTijden[m.id].eindtijd || '?'}`).join(' · ')}
+                    </div>
+                  )}
+                  {open && (
+                    <div className="wbd-pt" role="group" aria-label={`Eigen tijd voor ${open.naam}`}>
+                      <div className="wbd-pt-kop">Eigen tijd voor {open.naam} · {korteDatum(d)}</div>
+                      <div className="wbd-tijd">
+                        <input type="time" value={eigenTijden[open.id]?.starttijd || ''} onChange={e => zetEigenTijd(d, open.id, { starttijd: e.target.value })} aria-label={`Begintijd ${open.naam}`} />
+                        <span className="wbd-dag-tijd">→</span>
+                        <input type="time" value={eigenTijden[open.id]?.eindtijd || ''} onChange={e => zetEigenTijd(d, open.id, { eindtijd: e.target.value })} aria-label={`Eindtijd ${open.naam}`} />
+                      </div>
+                      <div className="wbd-pt-knoppen">
+                        <button type="button" className="wbd-link" onClick={() => { wisEigenTijd(d, open.id); setEigenTijdOpen(null); }}>Zelfde tijd als de rest</button>
+                        <button type="button" className="btn btn-p btn-sm" onClick={() => setEigenTijdOpen(null)}>Klaar</button>
+                      </div>
+                    </div>
                   )}
                 </div>
               );

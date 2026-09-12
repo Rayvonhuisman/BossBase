@@ -178,25 +178,55 @@ export async function syncWerkbonEvents(werkbonId) {
   if (!werkbonId) return
   const lees = dagVelden => supabase
     .from("werkbonnen")
-    .select(`id, titel, customer_id, omschrijving, assigned_to, starttijd, eindtijd, werkbon_dagen(${dagVelden})`)
+    .select(`id, titel, customer_id, omschrijving, assigned_to, assigned_to_ids, starttijd, eindtijd, werkbon_dagen(${dagVelden})`)
     .eq("id", werkbonId)
     .maybeSingle()
-  let { data: wb, error } = await lees("id, datum, starttijd, eindtijd, medewerker_ids")
+  // Eén item per persoon per dag kan pas met migratie werkbon_dag_tijden: die
+  // brengt de eigen tijden én de unieke index op (dag, persoon). Daarvóór geldt
+  // nog "één item per dag", dus dan ook maar één item per dag.
+  let perPersoon = true
+  let { data: wb, error } = await lees("id, datum, starttijd, eindtijd, medewerker_ids, medewerker_tijden")
+  if (error && /medewerker_tijden/i.test(error.message || "")) {
+    perPersoon = false
+    ;({ data: wb, error } = await lees("id, datum, starttijd, eindtijd, medewerker_ids"))
+  }
   // Vóór migratie werkbon_dag_medewerkers: zonder dagploeg, dus de hele ploeg.
-  if (error && /medewerker_ids/i.test(error.message || "")) ({ data: wb, error } = await lees("id, datum, starttijd, eindtijd"))
+  if (error && /medewerker_ids/i.test(error.message || "")) {
+    perPersoon = false
+    ;({ data: wb, error } = await lees("id, datum, starttijd, eindtijd"))
+  }
   // Vóór migratie werkbon_dagen: het oude gedrag, één item per werkbon.
   if (error && /werkbon_dagen/i.test(error.message || "")) return syncEnkelWerkbonEvent(werkbonId)
   if (error) throw error
   if (!wb) return
 
   const hhmm = t => (t ? String(t).slice(0, 5) : "")
-  const gewenst = (wb.werkbon_dagen || [])
-    .map(dag => ({ dag, start: hhmm(dag.starttijd) || hhmm(wb.starttijd), eind: hhmm(dag.eindtijd) || hhmm(wb.eindtijd) }))
-    .filter(x => x.start)
+  const team = Array.isArray(wb.assigned_to_ids) && wb.assigned_to_ids.length
+    ? wb.assigned_to_ids : (wb.assigned_to ? [wb.assigned_to] : [])
+
+  // Wat er moet staan: per dag, en (na de migratie) per persoon in de dagploeg
+  // met díé persoon zijn tijd — eigen tijd → tijd van de dag → standaardtijd.
+  // Een dag zonder ploeg houdt één item zonder eigenaar.
+  const gewenst = []
+  for (const dag of wb.werkbon_dagen || []) {
+    const dagStart = hhmm(dag.starttijd) || hhmm(wb.starttijd)
+    const dagEind = hhmm(dag.eindtijd) || hhmm(wb.eindtijd)
+    const ploeg = Array.isArray(dag.medewerker_ids) ? dag.medewerker_ids : team
+    if (!perPersoon) {
+      if (dagStart) gewenst.push({ dag, persoon: Array.isArray(dag.medewerker_ids) ? (dag.medewerker_ids[0] || null) : (wb.assigned_to || null), start: dagStart, eind: dagEind })
+      continue
+    }
+    for (const persoon of (ploeg.length ? ploeg : [null])) {
+      const eigen = persoon ? dag.medewerker_tijden?.[persoon] : null
+      const start = hhmm(eigen?.starttijd) || dagStart
+      const eind = hhmm(eigen?.eindtijd) || dagEind
+      if (start) gewenst.push({ dag, persoon, start, eind })
+    }
+  }
 
   const { data: bestaand, error: leesFout } = await supabase
     .from("calendar_events")
-    .select("id, werkbon_dag_id, herkomst, start_at")
+    .select("id, werkbon_dag_id, assigned_to, herkomst, start_at")
     .eq("werkbon_id", werkbonId)
   if (leesFout) throw leesFout
   const over = [...(bestaand || [])]
@@ -205,39 +235,42 @@ export async function syncWerkbonEvents(werkbonId) {
     return i < 0 ? null : over.splice(i, 1)[0]
   }
 
-  const base = {
-    title: wb.titel || "Werkbon",
-    customer_id: wb.customer_id || null,
-    notes: wb.omschrijving || null,
-    // Agenda-item erft de eigenaar van de werkbon (persoonlijke agenda).
-    assigned_to: wb.assigned_to || null,
+  // Koppelen in twee rondes: eerst elk item aan precies zijn eigen (dag,
+  // persoon), pas daarna de rest opvangen. Andersom kon een los item het item
+  // van een andere persoon "inpikken" — dan verhuisden opmerkingen naar de
+  // verkeerde agenda.
+  for (const g of gewenst) {
+    g.item = pak(e => e.werkbon_dag_id === g.dag.id && (!perPersoon || e.assigned_to === g.persoon))
   }
-  for (const { dag, start, eind } of gewenst) {
-    const times = buildEventTimes(dag.datum, start, eind)
-    // Heeft de dag een eigen dagploeg, dan hoort het item bij de eerste van díé
-    // ploeg (leeg = niemand die dag); anders bij de eigenaar van de werkbon.
-    const eigenaar = Array.isArray(dag.medewerker_ids) ? (dag.medewerker_ids[0] || null) : base.assigned_to
-    const item = pak(e => e.werkbon_dag_id === dag.id)
-      || pak(e => !e.werkbon_dag_id && splitEventTime(e.start_at).date === dag.datum)
-    if (item) {
-      const { error: e } = await supabase
-        .from("calendar_events")
-        .update({ ...base, assigned_to: eigenaar, ...times, werkbon_dag_id: dag.id })
-        .eq("id", item.id)
-      if (e) throw e
-    } else {
-      const payload = await withCompanyId({
-        ...base, assigned_to: eigenaar, ...times, werkbon_id: werkbonId, werkbon_dag_id: dag.id, herkomst: "planning",
-      })
-      const { error: e } = await supabase.from("calendar_events").insert(payload)
-      if (e) throw e
-    }
+  for (const g of gewenst) {
+    if (g.item) continue
+    g.item = pak(e => e.werkbon_dag_id === g.dag.id && !gewenst.some(x => x.item?.id === e.id))
+      || pak(e => !e.werkbon_dag_id && splitEventTime(e.start_at).date === g.dag.datum)
   }
 
+  // Eerst weghalen wat nergens meer bij hoort — dan kan een insert of een
+  // verschuiving nooit op de unieke index (dag, persoon) botsen.
   const weg = over.filter(e => e.werkbon_dag_id || e.herkomst === "planning").map(e => e.id)
   if (weg.length) {
     const { error: e } = await supabase.from("calendar_events").delete().in("id", weg)
     if (e) throw e
+  }
+
+  const base = {
+    title: wb.titel || "Werkbon",
+    customer_id: wb.customer_id || null,
+    notes: wb.omschrijving || null,
+  }
+  for (const g of gewenst) {
+    const velden = { ...base, assigned_to: g.persoon, ...buildEventTimes(g.dag.datum, g.start, g.eind), werkbon_dag_id: g.dag.id }
+    if (g.item) {
+      const { error: e } = await supabase.from("calendar_events").update(velden).eq("id", g.item.id)
+      if (e) throw e
+    } else {
+      const payload = await withCompanyId({ ...velden, werkbon_id: werkbonId, herkomst: "planning" })
+      const { error: e } = await supabase.from("calendar_events").insert(payload)
+      if (e) throw e
+    }
   }
 }
 

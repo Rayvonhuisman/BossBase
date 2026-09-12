@@ -12,8 +12,8 @@ import { usePermissions } from '../hooks/usePermissions.js';
 import { getWerkbonnen, createWerkbon, updateWerkbon, zetWerkbonDagen } from '../services/werkbonService.js';
 import { WerkbonDagenVelden, WerkbonLocatieVeld, useKlantAdres } from '../components/WerkbonPlanning.jsx';
 import {
-  werkbonDagen, tijdenOpDag, ploegOpDag, isIngepland, planningUitWerkbon, dagenUitPlanning,
-  controleerPlanning, legePlanning, planningLabel,
+  werkbonDagen, tijdenOpDag, tijdenVoorPersoon, ploegOpDag, isIngepland, planningUitWerkbon,
+  dagenUitPlanning, controleerPlanning, legePlanning, planningLabel,
 } from '../utils/werkbonDagen.js';
 import { getVoertuigen } from '../services/voertuigService.js';
 import { getActiveTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
@@ -1250,19 +1250,31 @@ export function PlanningPage({ openCustomer } = {}) {
                         assignedToIds: ploeg,
                         _dagLabel: dagen.length > 1 ? `dag ${i + 1}/${dagen.length}` : '',
                       };
+                      if (viewMode === 'medewerker') {
+                        // Het blok van de gekozen medewerker, met zíjn tijd.
+                        const eigen = tijdenVoorPersoon(w, dagen[i], selectedMember);
+                        return [{ ...basis, starttijd: eigen.starttijd, eindtijd: eigen.eindtijd, _blokKey: w.id }];
+                      }
                       if (viewMode !== 'totaal') return [{ ...basis, _blokKey: w.id }];
                       // Totaal: één blok per medewerker, in zijn eigen kleur.
                       // Eén blok per werkbon kreeg alleen de kleur van de
                       // eerste medewerker — wie nooit eerste stond, was nergens
                       // te zien, en een ploeg met één vaste eerste werd één kleur.
                       if (!ploeg.length) return [{ ...basis, _colorKey: '__none__', _blokKey: `${w.id}-niemand` }];
-                      return ploeg.map(pid => ({
-                        ...basis,
-                        assignedToIds: [pid],
-                        _colorKey: pid,
-                        _persoon: teamMembers.find(m => m.id === pid)?.fullName || '',
-                        _blokKey: `${w.id}-${pid}`,
-                      }));
+                      // Elk blok met de tijd van díé medewerker: zijn eigen tijd
+                      // op die dag → de tijd van de dag → de standaardtijd.
+                      return ploeg.map(pid => {
+                        const eigen = tijdenVoorPersoon(w, dagen[i], pid);
+                        return {
+                          ...basis,
+                          starttijd: eigen.starttijd,
+                          eindtijd: eigen.eindtijd,
+                          assignedToIds: [pid],
+                          _colorKey: pid,
+                          _persoon: teamMembers.find(m => m.id === pid)?.fullName || '',
+                          _blokKey: `${w.id}-${pid}`,
+                        };
+                      });
                     });
                     const dayActs = filteredActivities.filter(a => a.date === date);
                     return (

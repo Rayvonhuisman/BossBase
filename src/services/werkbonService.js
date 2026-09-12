@@ -50,6 +50,8 @@ const toWerkbon = row => ({
       eindtijd: d.eindtijd ? String(d.eindtijd).slice(0, 5) : null,
       // Dagploeg: null = de hele ploeg van de werkbon, [] = niemand die dag.
       medewerkerIds: Array.isArray(d.medewerker_ids) ? d.medewerker_ids : null,
+      // Eigen tijd per persoon, alleen voor wie afwijkt: { profielId: { starttijd, eindtijd } }.
+      medewerkerTijden: d.medewerker_tijden && typeof d.medewerker_tijden === "object" ? d.medewerker_tijden : null,
     }))
     .sort((a, b) => a.datum.localeCompare(b.datum)),
   starttijd: row.starttijd || null,
@@ -133,6 +135,7 @@ const toWerkbonMateriaal = row => {
 
 const WERKBON_BASIS = "*, customers(name), profiles(full_name), projects(name), voertuigen(naam, kleur)"
 // Wat de database al kent, van nieuw naar oud:
+//   3 — dagen mét eigen tijden per persoon (migratie 20260912093000, werkbon_dag_tijden)
 //   2 — dagen mét dagploeg (migratie 20260911181500, werkbon_dag_medewerkers)
 //   1 — dagen zonder dagploeg (20260911133000, werkbon_dagen)
 //   0 — geen dagen-tabel
@@ -141,9 +144,10 @@ const WERKBON_BASIS = "*, customers(name), profiles(full_name), projects(name), 
 // veilig. Zo maakt de volgorde van uitrollen niet uit: zonder dagploeg werkt
 // elke dag met de hele ploeg, zonder dagen valt elke werkbon terug op zijn ene
 // gepland_op (utils/werkbonDagen.js).
-let dagenStand = 2
+let dagenStand = 3
 const selectVoor = stand =>
-  stand === 2 ? `${WERKBON_BASIS}, werkbon_dagen(id, datum, starttijd, eindtijd, medewerker_ids)`
+  stand === 3 ? `${WERKBON_BASIS}, werkbon_dagen(id, datum, starttijd, eindtijd, medewerker_ids, medewerker_tijden)`
+  : stand === 2 ? `${WERKBON_BASIS}, werkbon_dagen(id, datum, starttijd, eindtijd, medewerker_ids)`
   : stand === 1 ? `${WERKBON_BASIS}, werkbon_dagen(id, datum, starttijd, eindtijd)`
   : WERKBON_BASIS
 //
@@ -162,8 +166,13 @@ async function metDagen(bouw, extra = "") {
       return res
     }
     const melding = res.error.message || ""
+    if (/medewerker_tijden/i.test(melding)) {
+      if (stand !== 3) return res
+      stand = 2
+      continue
+    }
     if (/medewerker_ids/i.test(melding)) {
-      if (stand !== 2) return res
+      if (stand < 2) return res
       stand = 1
       continue
     }
@@ -202,6 +211,9 @@ export async function zetWerkbonDagen(werkbonId, dagen) {
   // zeggen dat het nog niet kan, dan dat iemand denkt dat hij is opgeslagen.
   if (dagenStand < 2 && dagen.some(d => Array.isArray(d.medewerker_ids))) {
     throw new Error("Per dag medewerkers kiezen werkt pas na de database-update (migratie werkbon_dag_medewerkers).")
+  }
+  if (dagenStand < 3 && dagen.some(d => d.medewerker_tijden)) {
+    throw new Error("Een eigen tijd per persoon werkt pas na de database-update (migratie werkbon_dag_tijden).")
   }
   const { error } = await supabase.rpc("bb_werkbon_dagen_zetten", {
     p_werkbon_id: werkbonId,

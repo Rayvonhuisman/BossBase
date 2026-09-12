@@ -13,6 +13,11 @@
 // Ploeg: standaard werkt de hele ploeg van de werkbon (assigned_to_ids) elke
 // dag. Een dag kan een eigen dagploeg hebben (medewerker_ids): altijd een deel
 // van de ploeg, en leeg betekent niemand. NULL = de hele ploeg.
+//
+// Tijd per persoon: iemand kan op een dag een eigen tijd hebben
+// (medewerker_tijden), bijv. de een 08:00–12:00 en de ander 13:00–17:00. De
+// tijd van iemand is: zijn eigen tijd op die dag → de tijd van die dag → de
+// standaardtijd van de werkbon. Alleen wie afwijkt staat erin.
 
 export const MAX_DAGEN = 60;
 
@@ -58,7 +63,7 @@ export const maandNaam = (jaar, maand) => `${MAAND_LANG[maand]} ${jaar}`;
 export function werkbonDagen(w) {
   if (Array.isArray(w?.dagen) && w.dagen.length) return w.dagen;
   return w?.geplandOp
-    ? [{ id: null, datum: w.geplandOp, starttijd: null, eindtijd: null, medewerkerIds: null }]
+    ? [{ id: null, datum: w.geplandOp, starttijd: null, eindtijd: null, medewerkerIds: null, medewerkerTijden: null }]
     : [];
 }
 
@@ -73,6 +78,13 @@ export const tijdenOpDag = (w, dag) => ({
 /** Wie er die dag werkt: de dagploeg als die er is, anders de hele ploeg. */
 export const ploegOpDag = (w, dag) =>
   (Array.isArray(dag?.medewerkerIds) ? dag.medewerkerIds : (w?.assignedToIds || []));
+
+/** De tijd van één persoon op een dag: zijn eigen tijd → de tijd van de dag → de standaardtijd. */
+export function tijdenVoorPersoon(w, dag, pid) {
+  const eigen = pid ? dag?.medewerkerTijden?.[pid] : null;
+  if (eigen && tijd(eigen.starttijd)) return { starttijd: tijd(eigen.starttijd), eindtijd: tijd(eigen.eindtijd) || null };
+  return tijdenOpDag(w, dag);
+}
 
 /**
  * Staat deze medewerker op die datum op de werkbon? Zonder uid: staat de
@@ -105,8 +117,9 @@ export function planningLabel(w) {
 //   dagen     [iso]                      — de aangetikte dagen
 //   afwijkend { iso: { starttijd, eindtijd } }
 //   ploeg     { iso: [profielId] }       — alleen voor dagen met een eigen dagploeg
+//   persoonTijden { iso: { profielId: { starttijd, eindtijd } } } — alleen wie afwijkt
 
-export const legePlanning = (dag = '') => ({ dagen: dag ? [dag] : [], afwijkend: {}, ploeg: {} });
+export const legePlanning = (dag = '') => ({ dagen: dag ? [dag] : [], afwijkend: {}, ploeg: {}, persoonTijden: {} });
 
 /** De gekozen dagen, gesorteerd en zonder dubbelen. */
 export const geplandeDatums = p => [...new Set(p?.dagen || [])].filter(Boolean).sort();
@@ -136,24 +149,30 @@ export function planningUitWerkbon(w) {
   const dagen = werkbonDagen(w);
   const afwijkend = {};
   const ploeg = {};
+  const persoonTijden = {};
   for (const d of dagen) {
     if (d.starttijd || d.eindtijd) afwijkend[d.datum] = { starttijd: tijd(d.starttijd), eindtijd: tijd(d.eindtijd) };
     if (Array.isArray(d.medewerkerIds)) ploeg[d.datum] = d.medewerkerIds;
+    if (d.medewerkerTijden && Object.keys(d.medewerkerTijden).length) {
+      persoonTijden[d.datum] = Object.fromEntries(Object.entries(d.medewerkerTijden)
+        .map(([pid, t]) => [pid, { starttijd: tijd(t?.starttijd), eindtijd: tijd(t?.eindtijd) }]));
+    }
   }
-  return { dagen: dagen.map(d => d.datum), afwijkend, ploeg };
+  return { dagen: dagen.map(d => d.datum), afwijkend, ploeg, persoonTijden };
 }
 
 const zelfdeSet = (a, b) => a.length === b.length && a.every(x => b.includes(x));
 
 /**
  * De dagenlijst die naar de database gaat:
- * [{ datum, starttijd, eindtijd, medewerker_ids }].
+ * [{ datum, starttijd, eindtijd, medewerker_ids, medewerker_tijden }].
  *
  * `ploegIds` is de huidige ploeg van de werkbon. Een dagploeg wordt daartegen
  * bijgesneden (wie van de ploeg af is, valt eruit), en is hij weer de hele
  * ploeg, dan gaat hij als NULL mee — zo werkt iemand die later bij de ploeg
- * komt vanzelf ook op die dag mee. Bij één dag geldt alleen de werkbon zelf:
- * geen afwijkende tijd en geen dagploeg.
+ * komt vanzelf ook op die dag mee. Eigen tijden gaan alleen mee voor wie die
+ * dag in de (dag)ploeg staat. Bij één dag is de tijd van de dag gewoon de
+ * standaardtijd; een dagploeg en eigen tijden per persoon kunnen dan wel.
  */
 export function dagenUitPlanning(p, ploegIds = null) {
   const datums = geplandeDatums(p);
@@ -162,15 +181,25 @@ export function dagenUitPlanning(p, ploegIds = null) {
   return datums.map(datum => {
     let medewerker_ids = null;
     const eigen = p.ploeg?.[datum];
-    if (!eenDag && team && Array.isArray(eigen)) {
+    if (team && Array.isArray(eigen)) {
       const binnen = eigen.filter(id => team.includes(id));
       medewerker_ids = zelfdeSet(binnen, team) ? null : binnen;
+    }
+    const dagploeg = medewerker_ids ?? team ?? [];
+    let medewerker_tijden = null;
+    const pt = p.persoonTijden?.[datum];
+    if (pt && team) {
+      const geldig = Object.entries(pt).filter(([pid, t]) => dagploeg.includes(pid) && tijd(t?.starttijd) && tijd(t?.eindtijd));
+      if (geldig.length) {
+        medewerker_tijden = Object.fromEntries(geldig.map(([pid, t]) => [pid, { starttijd: tijd(t.starttijd), eindtijd: tijd(t.eindtijd) }]));
+      }
     }
     return {
       datum,
       starttijd: (!eenDag && p.afwijkend?.[datum]?.starttijd) || null,
       eindtijd: (!eenDag && p.afwijkend?.[datum]?.eindtijd) || null,
       medewerker_ids,
+      medewerker_tijden,
     };
   });
 }
@@ -197,6 +226,14 @@ export function controleerPlanning(p, { starttijd, eindtijd } = {}) {
       const e = tijd(af.eindtijd);
       if (!s || !e) return `Vul voor ${korteDatum(d)} een begin- en eindtijd in, of zet hem terug op de standaardtijd.`;
       if (e <= s) return `Op ${korteDatum(d)} moet de eindtijd na de begintijd liggen.`;
+    }
+  }
+  for (const d of datums) {
+    for (const t of Object.values(p.persoonTijden?.[d] || {})) {
+      const s = tijd(t?.starttijd);
+      const e = tijd(t?.eindtijd);
+      if (!s || !e) return `Een eigen tijd op ${korteDatum(d)} heeft een begin- en eindtijd nodig.`;
+      if (e <= s) return `Op ${korteDatum(d)} ligt een eigen eindtijd vóór de begintijd.`;
     }
   }
   return '';
