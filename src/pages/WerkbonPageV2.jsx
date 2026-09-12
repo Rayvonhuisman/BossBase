@@ -1198,13 +1198,13 @@ function NotitiesSection({
                       Gewaarschuwd
                     </span>
                   ) : onWaarschuw ? (
-                    /* Groen zoals elke andere knop in de lijst: hier open je
-                    // alleen een venster, er gaat nog niets de deur uit. Het
-                       rood begint pas binnen dat venster, bij de knoppen die
-                       wél versturen. */
+                    /* Tekstlink en geen knop: hier open je alleen een venster,
+                       er gaat nog niets de deur uit. Het rood begint pas
+                       binnen dat venster, bij de twee knoppen die wél iets
+                       naar de klant sturen. */
                     <button
                       type="button"
-                      className="btn btn-xs btn-p"
+                      className="wb2-card-action"
                       onClick={() => setWaarschuwing(n)}
                     >
                       Waarschuwing voor klant
@@ -1213,7 +1213,7 @@ function NotitiesSection({
                   {onZichtbaarheid && (
                     <button
                       type="button"
-                      className="btn btn-xs btn-ghost"
+                      className="wb2-card-action"
                       onClick={() => onZichtbaarheid(n, !n.voorKlant)}
                     >
                       {n.voorKlant ? 'Naar intern' : 'Naar de klant'}
