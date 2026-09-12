@@ -541,7 +541,6 @@ function HoursQuickAdd({ werkbon, onSaved }) {
 function TakenSection({
   taken, onToggle, onAdd, onDelete, canEdit = true,
   titel = 'Taken', toonVoortgang = true, uitleg = null,
-  leegTekst = 'Nog geen taken — voeg de eerste hieronder toe.',
   plaatshouder = 'Nieuwe taak…', knopLabel = 'Taak',
 }) {
   const [text, setText] = useState('');
@@ -559,15 +558,14 @@ function TakenSection({
   return (
     <div className="wb2-card">
       <div className="wb2-card-hd">
-        <div className="wb2-card-hd-title">{titel} · {done} / {total}</div>
+        <div className="wb2-card-hd-title">{titel}{total > 0 ? ` · ${done} / ${total}` : ''}</div>
       </div>
       <div className="wb2-card-body">
-        {toonVoortgang && <div className="wb2-progress"><span style={{ width: `${pct}%` }} /></div>}
+        {/* Geen "nog geen taken"-melding: zolang er niets is, staat hier alleen
+            de invoerregel. Teller en voortgang verschijnen bij de eerste taak. */}
+        {toonVoortgang && total > 0 && <div className="wb2-progress"><span style={{ width: `${pct}%` }} /></div>}
         {uitleg && (
           <div style={{ fontSize: '.78rem', color: 'var(--dl)', lineHeight: 1.5, marginBottom: 8 }}>{uitleg}</div>
-        )}
-        {taken.length === 0 && (
-          <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>{leegTekst}</div>
         )}
         {taken.map(t => (
           <div key={t.id} className="wb2-taak">
@@ -1990,9 +1988,6 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
                   <HoursQuickAdd werkbon={detail} onSaved={() => { refreshUren(); setShowHoursAdd(false); }} />
                 </div>
               )}
-              {uren.length === 0 && !showHoursAdd && (
-                <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Nog geen uren geboekt op deze werkbon.</div>
-              )}
               {uren.map(u => (
                 <div key={u.id} className="wb2-uren-item" style={{ padding: '10px 16px' }}>
                   <div className="wb2-uren-ic">
@@ -2044,7 +2039,6 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
               titel="Meerwerk"
               toonVoortgang={false}
               uitleg="Werk dat er tijdens de klus bij kwam en niet in de oorspronkelijke opdracht zat. Staat apart op de werkbon, telt niet mee in de taakvoortgang."
-              leegTekst="Geen meerwerk."
               plaatshouder="Wat is er extra gedaan?"
               knopLabel="Meerwerk"
             />
