@@ -246,19 +246,20 @@ ${mailButton('Werkbon bekijken en ondertekenen', link, company?.brandingColor)}
  *
  * @returns {Promise<{email: string}>}
  */
-export async function verstuurWaarschuwing({ werkbon, notitie, constatering, gevolg, email, customer, company }) {
-  const adres = String(email || '').trim()
-  if (!adres) throw new Error('Vul een e-mailadres in')
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adres)) throw new Error('Dat is geen geldig e-mailadres')
-
+export function bouwWaarschuwingMail({ werkbon, constatering, gevolg, customer, company }) {
   const wat = String(constatering || '').trim()
   const gev = String(gevolg || '').trim()
-  if (!wat) throw new Error('Beschrijf wat je hebt geconstateerd')
-  if (!gev) throw new Error('Beschrijf wat het gevolg kan zijn — zonder gevolg is de waarschuwing niet geldig')
-
   const bedrijf = company?.name || 'ons bedrijf'
   const onderwerp = `Belangrijke constatering bij ${werkbon?.titel || 'het werk'}`
-  const accent = company?.brandingColor || undefined
+  const accent = company?.brandingColor || '#1DDB62'
+
+  // Het gevolg is optioneel. Ontbreekt het, dan valt het blok weg in plaats van
+  // leeg te blijven staan — een kop zonder inhoud leest als een fout.
+  const gevolgBlok = gev
+    ? `<p style="margin:18px 0 6px;font-weight:700;color:#0a0a0a;">Wat daarvan het gevolg kan zijn</p>
+<div style="border-left:3px solid #f59e0b;background:#fffbeb;padding:10px 14px;border-radius:4px;">
+${escapeHtml(gev).replace(/\n/g, '<br>')}</div>`
+    : ''
 
   const html = mailTemplate({
     title: onderwerp,
@@ -269,12 +270,9 @@ geconstateerd dat buiten de opdracht valt en gevolgen kan hebben. Wij zijn verpl
 hierover te informeren, zodat u kunt beslissen wat u wilt doen.</p>
 
 <p style="margin:18px 0 6px;font-weight:700;color:#0a0a0a;">Wat wij hebben geconstateerd</p>
-<div style="border-left:3px solid ${escapeHtml(accent || '#1DDB62')};background:#f9fafb;padding:10px 14px;border-radius:4px;">
+<div style="border-left:3px solid ${escapeHtml(accent)};background:#f9fafb;padding:10px 14px;border-radius:4px;">
 ${escapeHtml(wat).replace(/\n/g, '<br>')}</div>
-
-<p style="margin:18px 0 6px;font-weight:700;color:#0a0a0a;">Wat daarvan het gevolg kan zijn</p>
-<div style="border-left:3px solid #f59e0b;background:#fffbeb;padding:10px 14px;border-radius:4px;">
-${escapeHtml(gev).replace(/\n/g, '<br>')}</div>
+${gevolgBlok}
 
 <p style="margin-top:18px;">Wilt u laten weten hoe u hiermee verder wilt? U kunt op deze
 mail antwoorden.</p>
@@ -285,6 +283,24 @@ mail antwoorden.</p>
     logoUrl: company?.logoUrl,
     brandColor: company?.brandingColor,
   })
+
+  return { onderwerp, html }
+}
+
+export async function verstuurWaarschuwing({ werkbon, notitie, constatering, gevolg, email, customer, company }) {
+  const adres = String(email || '').trim()
+  if (!adres) throw new Error('Vul een e-mailadres in')
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adres)) throw new Error('Dat is geen geldig e-mailadres')
+
+  const wat = String(constatering || '').trim()
+  const gev = String(gevolg || '').trim()
+  if (!wat) throw new Error('Beschrijf wat je hebt geconstateerd')
+  // Het gevolg is bewust NIET verplicht. Het hoort er juridisch bij, maar een
+  // blokkade hier betekent dat iemand op een dak de waarschuwing helemaal niet
+  // verstuurt. Een verstuurde waarschuwing zonder gevolg is meer waard dan een
+  // die is blijven staan; de hint bij het veld doet de rest.
+
+  const { onderwerp, html } = bouwWaarschuwingMail({ werkbon, constatering: wat, gevolg: gev, customer, company })
 
   await sendEmail({ to: adres, subject: onderwerp, html })
 

@@ -28,7 +28,7 @@ import {
 import { syncWerkbonEvents } from '../services/calendarService.js';
 import { downloadWerkbonPdf } from '../utils/generateWerkbonPdf.js';
 import { AlertTriangle } from 'lucide-react';
-import { bouwPdfData, bouwPdfWerkbon, verstuurWaarschuwing } from '../services/werkbonOndertekenenService.js';
+import { bouwPdfData, bouwPdfWerkbon, verstuurWaarschuwing, bouwWaarschuwingMail } from '../services/werkbonOndertekenenService.js';
 import { getCurrentCompany } from '../services/profileService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
@@ -922,35 +922,48 @@ function FotoSection({ fotos, onUpload, onDelete, canEdit = true }) {
 // ─── WKB-WAARSCHUWING ────────────────────────────────────────────────────────
 // De wet vraagt schriftelijk én ondubbelzinnig waarschuwen, mét de gevolgen.
 // Dat zijn twee dingen, dus twee velden — en geen één vrij tekstvak met een hint
-// eronder. Wie op een dak staat typt "houtrot bij de dakkapel" en drukt op
-// versturen; de hint over gevolgen leest hij niet. Twee korte velden met een
-// label kosten minder moeite dan één veld waarin je zelf aan twee dingen moet
-// denken, en ze maken de mail en de PDF meteen goed opgebouwd.
+// eronder. Twee korte velden met een label kosten minder moeite dan één veld
+// waarin je zelf aan twee dingen moet denken, en ze maken de mail en de PDF
+// meteen goed opgebouwd.
 //
-// Het gevolg-veld heeft tikbare suggesties, want dát is het veld dat mensen
-// overslaan. Aantikken vult hem; aanpassen mag.
-const GEVOLG_SUGGESTIES = [
-  'Lekkage op termijn',
-  'De schade breidt zich uit',
-  'Ondergrond is onvoldoende draagkrachtig',
-  'Extra kosten',
-  'Het werk kan niet volgens planning af',
-  'Wij kunnen op dit onderdeel geen garantie geven',
-];
+// Het gevolg is NIET verplicht. Juridisch hoort het erbij, maar een blokkade zou
+// betekenen dat iemand op een dak de waarschuwing helemaal niet verstuurt. Een
+// verstuurde waarschuwing zonder gevolg is meer waard dan een die is blijven
+// staan; de hint onder het veld doet het werk.
+//
+// Rood, want dit is geen gewone notitie: er gaat ongevraagd een formele melding
+// naar de klant. Dezelfde kleur als de andere afwijkende acties in het
+// dashboard (#dc2626), maar gevuld in plaats van licht, omdat de knop hier de
+// hoofdactie is en niet een uitweg.
+const WAARSCHUW_ROOD = {
+  background: '#dc2626', color: '#fff', border: '1px solid #dc2626', fontWeight: 600,
+};
 
-function WaarschuwingModal({ notitie, klantEmail, klantNaam, onClose, onVerstuur }) {
+function WaarschuwingModal({ notitie, klantEmail, klantNaam, werkbon, customer, company, onClose, onVerstuur }) {
   const toast = useToast();
+  const [stap, setStap] = useState('invoer');          // invoer → voorbeeld
   const [constatering, setConstatering] = useState(notitie?.note || '');
   const [gevolg, setGevolg] = useState(notitie?.gevolg || '');
   const [email, setEmail] = useState(klantEmail || '');
   const [bezig, setBezig] = useState(false);
 
-  const voegToe = (t) => setGevolg(g => (g.trim() ? `${g.replace(/\s*$/, '')}. ${t}` : t));
+  // Het voorbeeld komt uit dezelfde functie die de échte mail bouwt. Bouwde ik
+  // hier een eigen weergave, dan zou het voorbeeld gaan afwijken zodra iemand de
+  // mail aanpast — en dan is het erger dan geen voorbeeld.
+  const voorbeeld = useMemo(() => {
+    if (stap !== 'voorbeeld') return null;
+    return bouwWaarschuwingMail({
+      werkbon, constatering: constatering.trim(), gevolg: gevolg.trim(), customer, company,
+    });
+  }, [stap, constatering, gevolg, werkbon, customer, company]);
+
+  const naarVoorbeeld = () => {
+    if (!constatering.trim()) { toast.error('Beschrijf wat je hebt geconstateerd'); return; }
+    if (!email.trim()) { toast.error('Vul een e-mailadres in'); return; }
+    setStap('voorbeeld');
+  };
 
   const versturen = async () => {
-    if (!constatering.trim()) { toast.error('Beschrijf wat je hebt geconstateerd'); return; }
-    if (!gevolg.trim()) { toast.error('Beschrijf wat het gevolg kan zijn — anders is de waarschuwing niet geldig'); return; }
-    if (!email.trim()) { toast.error('Vul een e-mailadres in'); return; }
     setBezig(true);
     try {
       await onVerstuur({ constatering: constatering.trim(), gevolg: gevolg.trim(), email: email.trim() });
@@ -963,76 +976,151 @@ function WaarschuwingModal({ notitie, klantEmail, klantNaam, onClose, onVerstuur
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 540 }} onClick={e => e.stopPropagation()}>
+    <div className="overlay" onClick={e => e.target === e.currentTarget && !bezig && onClose()}>
+      <div className="modal" style={{ maxWidth: stap === 'voorbeeld' ? 680 : 540 }}>
         <div className="modal-hd">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <AlertTriangle size={16} strokeWidth={2.2} style={{ color: '#B45309' }} />
-            <span>Waarschuwing naar de klant</span>
+          <div>
+            <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AlertTriangle size={16} strokeWidth={2.2} style={{ color: '#dc2626' }} />
+              {stap === 'voorbeeld' ? 'Zo krijgt de klant hem' : 'Waarschuwing voor klant'}
+            </div>
+            <div className="modal-sub">
+              {stap === 'voorbeeld'
+                ? 'Lees na en verstuur pas als het klopt.'
+                : 'Een formele melding op grond van de waarschuwingsplicht.'}
+            </div>
           </div>
           <ModalX onClose={onClose} />
         </div>
 
-        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{
-            fontSize: '.78rem', lineHeight: 1.55, color: '#92400E',
-            background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '9px 12px',
+        {stap === 'invoer' ? (
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{
+                fontSize: '.78rem', lineHeight: 1.55, color: '#92400E',
+                background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '9px 12px',
+              }}>
+                {klantNaam ? `${klantNaam} krijgt ` : 'De klant krijgt '}
+                een mail met deze melding. Die geldt als schriftelijke waarschuwing, en wij leggen
+                vast wanneer en waarheen hij is verstuurd.
+              </div>
+
+              <div className="f">
+                <label>Wat heb je geconstateerd?</label>
+                <textarea
+                  rows={3}
+                  value={constatering}
+                  onChange={e => setConstatering(e.target.value)}
+                  placeholder="Bijvoorbeeld: houtrot in de dakrand aan de achterzijde, over ongeveer 3 meter"
+                />
+              </div>
+
+              <div className="f">
+                <label>Wat kan daarvan het gevolg zijn?</label>
+                <textarea
+                  rows={2}
+                  value={gevolg}
+                  onChange={e => setGevolg(e.target.value)}
+                  placeholder="Bijvoorbeeld: lekkage op termijn, of het dak kan hier niet op worden gelegd"
+                />
+                <div style={{ fontSize: '.74rem', color: 'var(--dl)', marginTop: 5, lineHeight: 1.45 }}>
+                  Een waarschuwing staat juridisch sterker als hier staat wat er kan gebeuren.
+                  Leeg laten mag.
+                </div>
+              </div>
+
+              <div className="f">
+                <label>Naar welk e-mailadres?</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="klant@voorbeeld.nl"
+                />
+              </div>
+            </div>
+
+            <div className="fa">
+              <button className="btn btn-ghost" onClick={onClose}>Annuleren</button>
+              <button className="btn" style={WAARSCHUW_ROOD} onClick={naarVoorbeeld}>
+                Bekijken en versturen
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: '.8rem', color: 'var(--dmu)' }}>
+                Aan <b>{email}</b> — onderwerp: <b>{voorbeeld?.onderwerp}</b>
+              </div>
+              <iframe
+                title="Voorbeeld van de e-mail"
+                srcDoc={voorbeeld?.html || ''}
+                style={{
+                  // Meegroeien met het scherm: de modal heeft zelf een
+                  // max-height, en een vaste 420px duwde de knoppen daar
+                  // overheen op een laptopscherm.
+                  width: '100%', height: 'min(420px, 46vh)', border: '1px solid var(--border)',
+                  borderRadius: 8, background: '#fff',
+                }}
+              />
+            </div>
+            <div className="fa">
+              <button className="btn btn-ghost" onClick={() => setStap('invoer')} disabled={bezig}>Terug</button>
+              <button className="btn" style={WAARSCHUW_ROOD} onClick={versturen} disabled={bezig}>
+                {bezig ? 'Versturen...' : 'Nu versturen'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Verstuurde waarschuwingen als eigen sectie, net als de andere blokken op de
+// werkbon en in dezelfde volgorde als op de PDF. Stond eerder als ingeklemde
+// regel onder de notities, met afgekapte tekst — precies het onderdeel waar het
+// bij een discussie om draait, in het kleinste vak van de pagina.
+function WaarschuwingenSection({ notities = [] }) {
+  const verstuurd = notities.filter(n => n.voorKlant && n.verzondenOp);
+  if (!verstuurd.length) return null;
+
+  return (
+    <div className="wb2-card">
+      <div className="wb2-card-hd">
+        <div className="wb2-card-hd-title">Waarschuwingen aan de klant</div>
+        <div className="wb2-card-hd-spacer" />
+        <span className="wb2-chip-count">{verstuurd.length}</span>
+      </div>
+      <div className="wb2-card-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {verstuurd.map(n => (
+          <div key={n.id} style={{
+            background: '#FFFBEB', border: '1px solid #FDE68A', borderLeft: '3px solid #F59E0B',
+            borderRadius: 8, padding: '12px 14px',
           }}>
-            {klantNaam ? `${klantNaam} krijgt ` : 'De klant krijgt '}
-            een mail met deze melding. Die geldt als schriftelijke waarschuwing, en wij leggen
-            vast wanneer en waarheen hij is verstuurd.
-          </div>
-
-          <div className="fg">
-            <label>Wat heb je geconstateerd?</label>
-            <textarea
-              rows={3}
-              value={constatering}
-              onChange={e => setConstatering(e.target.value)}
-              placeholder="Bijvoorbeeld: houtrot in de dakrand aan de achterzijde, over ongeveer 3 meter"
-            />
-          </div>
-
-          <div className="fg">
-            <label>Wat kan daarvan het gevolg zijn?</label>
-            <textarea
-              rows={2}
-              value={gevolg}
-              onChange={e => setGevolg(e.target.value)}
-              placeholder="Zonder dit is de waarschuwing niet geldig"
-            />
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 7 }}>
-              {GEVOLG_SUGGESTIES.map(s => (
-                <button
-                  key={s}
-                  type="button"
-                  className="wb2-chip"
-                  style={{ padding: '3px 9px', fontSize: '.72rem' }}
-                  onClick={() => voegToe(s)}
-                >
-                  + {s}
-                </button>
-              ))}
+            <div style={{ fontSize: '.68rem', fontWeight: 700, color: '#92400E', letterSpacing: '.04em' }}>
+              GECONSTATEERD
+            </div>
+            <div style={{ fontSize: '.85rem', color: 'var(--dk)', lineHeight: 1.55, marginTop: 3, whiteSpace: 'pre-wrap' }}>
+              {n.note}
+            </div>
+            {n.gevolg && (
+              <>
+                <div style={{ fontSize: '.68rem', fontWeight: 700, color: '#92400E', letterSpacing: '.04em', marginTop: 9 }}>
+                  MOGELIJK GEVOLG
+                </div>
+                <div style={{ fontSize: '.85rem', color: 'var(--dk)', lineHeight: 1.55, marginTop: 3, whiteSpace: 'pre-wrap' }}>
+                  {n.gevolg}
+                </div>
+              </>
+            )}
+            <div style={{ fontSize: '.74rem', color: 'var(--dl)', marginTop: 10, fontStyle: 'italic' }}>
+              Schriftelijk gemeld op {fmtNotitieDatum(n.verzondenOp)}
+              {n.verzondenNaar ? ` aan ${n.verzondenNaar}` : ''}
             </div>
           </div>
-
-          <div className="fg">
-            <label>Naar welk e-mailadres?</label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="klant@voorbeeld.nl"
-            />
-          </div>
-        </div>
-
-        <div className="modal-ft">
-          <button className="btn btn-s" onClick={onClose} disabled={bezig}>Annuleren</button>
-          <button className="btn btn-p" onClick={versturen} disabled={bezig}>
-            {bezig ? 'Versturen...' : 'Versturen'}
-          </button>
-        </div>
+        ))}
       </div>
     </div>
   );
@@ -1040,7 +1128,7 @@ function WaarschuwingModal({ notitie, klantEmail, klantNaam, onClose, onVerstuur
 
 function NotitiesSection({
   notities = [], onAdd, onZichtbaarheid, teamMembers = [], canEdit = true,
-  onWaarschuw, klantEmail = '', klantNaam = '',
+  onWaarschuw, klantEmail = '', klantNaam = '', werkbon, customer, company,
 }) {
   const [waarschuwing, setWaarschuwing] = useState(null);
   // Twee tabs en geen vinkje bij het invoerveld: waar je typt bepaalt waar het
@@ -1119,28 +1207,23 @@ function NotitiesSection({
                   {n.note}
                 </span>
 
-                {/* Al gewaarschuwd: geen knop meer maar het bewijs. Dat is waar
-                    het bedrijf op terugvalt als er later discussie ontstaat. */}
+                {/* Al gewaarschuwd: alleen een kort merkteken. Het bewijs zelf
+                    staat volledig in de sectie "Waarschuwingen aan de klant" —
+                    hier zou het afgekapt worden en juist dát is de tekst waar
+                    het bij een discussie om gaat. */}
                 {voorKlant && n.verzondenOp ? (
-                  <span
-                    title={`Verstuurd naar ${n.verzondenNaar || 'de klant'}`}
-                    style={{
-                      flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5,
-                      background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E',
-                      borderRadius: 999, padding: '3px 9px', fontWeight: 600,
-                    }}
-                  >
+                  <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4, color: '#92400E' }}>
                     <AlertTriangle size={11} strokeWidth={2.2} />
-                    Gewaarschuwd {fmtNotitieDatum(n.verzondenOp)}
+                    Gewaarschuwd
                   </span>
                 ) : voorKlant && onWaarschuw ? (
                   <button
                     type="button"
-                    className="wb2-card-action"
-                    style={{ flexShrink: 0 }}
+                    className="btn btn-sm"
+                    style={{ ...WAARSCHUW_ROOD, flexShrink: 0, fontSize: '.72rem', padding: '3px 10px' }}
                     onClick={() => setWaarschuwing(n)}
                   >
-                    Naar klant sturen
+                    Waarschuwing voor klant
                   </button>
                 ) : null}
 
@@ -1162,6 +1245,9 @@ function NotitiesSection({
             notitie={waarschuwing}
             klantEmail={klantEmail}
             klantNaam={klantNaam}
+            werkbon={werkbon}
+            customer={customer}
+            company={company}
             onClose={() => setWaarschuwing(null)}
             onVerstuur={async velden => {
               await onWaarschuw(waarschuwing, velden);
@@ -1975,7 +2061,12 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
               onWaarschuw={handleWaarschuw}
               klantEmail={customers.find(c => c.id === detail?.customerId)?.email || ''}
               klantNaam={customers.find(c => c.id === detail?.customerId)?.name || detail?.customerName || ''}
+              werkbon={detail}
+              customer={customers.find(c => c.id === detail?.customerId) || { name: detail?.customerName }}
+              company={company}
             />
+
+            <WaarschuwingenSection notities={werkbonNotities} />
 
             {/* Onderaan naast elkaar: PDF links, afronden rechts. */}
             <div className="wb2-eind-acties">
