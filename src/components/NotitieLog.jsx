@@ -39,6 +39,12 @@ export default function NotitieLog({
   pageSize = 10,
   disabled = false,
   showClear = true,
+  // Eigen knoppen per notitie, in de voetregel van díé notitie. Krijgt het
+  // genormaliseerde item terug; de aanroeper zoekt daar zijn eigen rij bij op.
+  // Bestond eerder niet, waardoor plekken met een actie per regel een tweede
+  // lijst onder de notities zetten — met afgekapte tekst, en dus onduidelijk
+  // welke knop bij welke notitie hoorde.
+  renderActions,
 }) {
   const toast = useToast();
   const [text, setText] = useState('');
@@ -102,11 +108,14 @@ export default function NotitieLog({
                 <div style={{ fontSize: '.72rem', color: 'var(--dl)', fontWeight: 600 }}>
                   {n.authorName ? `${n.authorName} · ` : ''}{fmtNotitieDatum(n.createdAt)}
                 </div>
-                {onDelete && (
-                  <button className="btn btn-xs btn-ghost" onClick={() => onDelete(n.id)} title="Verwijderen">
-                    Verwijderen
-                  </button>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  {renderActions?.(n)}
+                  {onDelete && (
+                    <button className="btn btn-xs btn-ghost" onClick={() => onDelete(n.id)} title="Verwijderen">
+                      Verwijderen
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}

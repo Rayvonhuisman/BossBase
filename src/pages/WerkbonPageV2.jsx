@@ -1185,6 +1185,44 @@ function NotitiesSection({
             items={items}
             onAdd={text => onAdd(text, voorKlant)}
             teamMembers={teamMembers}
+            renderActions={item => {
+              const n = zichtbaar.find(x => x.id === item.id);
+              if (!n) return null;
+              return (
+                <>
+                  {voorKlant && (n.verzondenOp ? (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      fontSize: '.72rem', fontWeight: 600, color: '#92400E',
+                    }}>
+                      <AlertTriangle size={11} strokeWidth={2.2} />
+                      Gewaarschuwd
+                    </span>
+                  ) : onWaarschuw ? (
+                    /* Groen zoals elke andere knop in de lijst: hier open je
+                    // alleen een venster, er gaat nog niets de deur uit. Het
+                       rood begint pas binnen dat venster, bij de knoppen die
+                       wél versturen. */
+                    <button
+                      type="button"
+                      className="btn btn-xs btn-p"
+                      onClick={() => setWaarschuwing(n)}
+                    >
+                      Waarschuwing voor klant
+                    </button>
+                  ) : null)}
+                  {onZichtbaarheid && (
+                    <button
+                      type="button"
+                      className="btn btn-xs btn-ghost"
+                      onClick={() => onZichtbaarheid(n, !n.voorKlant)}
+                    >
+                      {n.voorKlant ? 'Naar intern' : 'Naar de klant'}
+                    </button>
+                  )}
+                </>
+              );
+            }}
             placeholder={voorKlant
               ? 'Wat moet de klant weten? Bijvoorbeeld: kraan vervangen, oude meegenomen\u2026'
               : 'Bijzonderheden, bevindingen, aandachtspunten voor de baas\u2026 Typ @ om iemand te taggen'}
@@ -1195,50 +1233,6 @@ function NotitiesSection({
             {voorKlant ? 'Nog geen notities voor de klant.' : 'Nog geen interne notities.'}
           </div>
         ) : null}
-
-        {/* Verplaatsknop per regel: een notitie belandt vaak eerst intern en
-            blijkt daarna prima voor de klant (of andersom). In de klant-tab
-            staat daar de waarschuwknop naast. */}
-        {canEdit && zichtbaar.length > 0 && onZichtbaarheid && (
-          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {zichtbaar.map(n => (
-              <div key={`verplaats-${n.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '.75rem', color: 'var(--dl)' }}>
-                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {n.note}
-                </span>
-
-                {/* Al gewaarschuwd: alleen een kort merkteken. Het bewijs zelf
-                    staat volledig in de sectie "Waarschuwingen aan de klant" —
-                    hier zou het afgekapt worden en juist dát is de tekst waar
-                    het bij een discussie om gaat. */}
-                {voorKlant && n.verzondenOp ? (
-                  <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4, color: '#92400E' }}>
-                    <AlertTriangle size={11} strokeWidth={2.2} />
-                    Gewaarschuwd
-                  </span>
-                ) : voorKlant && onWaarschuw ? (
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    style={{ ...WAARSCHUW_ROOD, flexShrink: 0, fontSize: '.72rem', padding: '3px 10px' }}
-                    onClick={() => setWaarschuwing(n)}
-                  >
-                    Waarschuwing voor klant
-                  </button>
-                ) : null}
-
-                <button
-                  type="button"
-                  className="wb2-card-action"
-                  style={{ flexShrink: 0 }}
-                  onClick={() => onZichtbaarheid(n, !n.voorKlant)}
-                >
-                  {n.voorKlant ? 'Naar intern' : 'Naar de klant'}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
 
         {waarschuwing && (
           <WaarschuwingModal
