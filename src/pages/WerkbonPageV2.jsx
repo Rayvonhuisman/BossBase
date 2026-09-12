@@ -87,7 +87,11 @@ const StatusBadge = ({ status, size }) => {
 
 // ─── NEW / EDIT WERKBON MODAL ───────────────────────────────────────────────
 
-function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSaved }) {
+// Ook gebruikt vanuit de projectkaart, zodat een werkbon daar dezelfde velden
+// en dezelfde controles krijgt (locatie, kalender, ploeg, verplichte tijden).
+// Zelfde patroon als NewFactuurModal/NewOfferteModal, die de projectkaart al
+// uit hun eigen pagina importeert.
+export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSaved }) {
   const toast = useToast();
   const { profile } = useProfile();
   const isEdit = mode === 'edit';

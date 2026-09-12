@@ -173,6 +173,53 @@ export function kostenSplitsing(kosten = []) {
   }
 }
 
+/**
+ * Inkoopwaarde van de kosten — de basis voor een brutowinst.
+ *
+ * Het verschil met kostenSplitsing: een spiegelregel van werkbonmateriaal staat
+ * met de VERKOOPprijs in job_costs.amount. Reken je daarmee, dan is de
+ * brutowinst op materiaal per definitie nul. Hier telt daarom de inkoopwaarde
+ * (aantal x inkoopprijs) zodra die bekend is.
+ *
+ * Is de inkoopprijs NIET bekend, dan valt de regel terug op de verkoopprijs en
+ * wordt hij geteld in `zonderInkoopprijs`. Bewust die kant op: terugvallen op
+ * verkoop maakt de winst te LAAG, en een te lage winst met een melding erbij is
+ * veiliger dan een te hoge. De regel weglaten zou de winst juist opblazen.
+ *
+ * @returns {{inkoopwaarde:number, overigeKosten:number, materiaalInkoop:number,
+ *            zonderInkoopprijs:number, geschatBedrag:number}}
+ */
+export function inkoopwaardeVanKosten(kosten = []) {
+  let materiaalInkoop = 0
+  let overigeKosten = 0
+  let zonderInkoopprijs = 0
+  let geschatBedrag = 0
+
+  for (const k of kosten) {
+    const verkoop = Number(k.amt ?? k.amount) || 0
+    if (!isWerkbonMateriaal(k)) { overigeKosten += verkoop; continue }
+
+    const inkoopPer = k.inkoopprijsPer ?? k.inkoopprijs_per ?? null
+    const aantal = Number(k.materiaalAantal ?? k.aantal ?? 0)
+    if (inkoopPer != null && aantal > 0) {
+      materiaalInkoop += Number(inkoopPer) * aantal
+    } else {
+      materiaalInkoop += verkoop
+      zonderInkoopprijs += 1
+      geschatBedrag += verkoop
+    }
+  }
+
+  const r = n => Math.round(n * 100) / 100
+  return {
+    inkoopwaarde: r(materiaalInkoop + overigeKosten),
+    materiaalInkoop: r(materiaalInkoop),
+    overigeKosten: r(overigeKosten),
+    zonderInkoopprijs,
+    geschatBedrag: r(geschatBedrag),
+  }
+}
+
 export const toJobCost = row => ({
   id: row.id,
   dealId: row.deal_id,
@@ -277,13 +324,37 @@ export async function getProjectCosts(projectId) {
   const orParts = [`project_id.eq.${projectId}`]
   if (werkbonIds.length) orParts.push(`werkbon_id.in.(${werkbonIds.join(",")})`)
 
-  const { data, error } = await supabase
+  // De inkoopprijs komt mee via de materiaalregel. Die staat in een aparte
+  // tabel met eigen RLS: zonder het recht 'inkoopprijzen' geeft de database hem
+  // niet terug, en dan valt de brutowinst vanzelf terug op de verkoopprijs.
+  const MET_INKOOP = "*, werkbon_materialen!werkbon_materiaal_id(aantal, werkbon_materiaal_inkoop(inkoopprijs_per))"
+  let { data, error } = await supabase
     .from("job_costs")
-    .select("*")
+    .select(MET_INKOOP)
     .or(orParts.join(","))
     .order("cost_date", { ascending: false })
+
+  // Kent de API die relatie nog niet, dan weigert hij de héle select. Terugvallen
+  // op de kale kolommen: liever kosten zonder inkoopprijs dan een lege tab.
+  if (error) {
+    ({ data, error } = await supabase
+      .from("job_costs")
+      .select("*")
+      .or(orParts.join(","))
+      .order("cost_date", { ascending: false }))
+  }
   if (error) throw error
-  return (data || []).map(toJobCost)
+
+  return (data || []).map(row => {
+    const m = Array.isArray(row.werkbon_materialen) ? row.werkbon_materialen[0] : row.werkbon_materialen
+    const inkoop = Array.isArray(m?.werkbon_materiaal_inkoop)
+      ? m.werkbon_materiaal_inkoop[0] : m?.werkbon_materiaal_inkoop
+    return {
+      ...toJobCost(row),
+      materiaalAantal: m?.aantal != null ? Number(m.aantal) : null,
+      inkoopprijsPer: inkoop?.inkoopprijs_per != null ? Number(inkoop.inkoopprijs_per) : null,
+    }
+  })
 }
 
 // Totale kosten per project (direct + via werkbon), één keer per kost-rij.

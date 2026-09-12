@@ -8,6 +8,7 @@ import { I, ModalX, NotifyMailToggle, fmt, fmt0, CostCategoryBadge } from '../..
 import { useToast } from '../../lib/toast.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
 import { usePermissions } from '../../hooks/usePermissions.js';
+import { usePlanGuard } from '../../components/PlanUpgradeModal.jsx';
 import {
   getProjectById,
   updateProject,
@@ -21,14 +22,16 @@ import {
   PROJECT_STATUS,
   PROJECT_STATUS_OPTIONS,
 } from '../../services/projectsService.js';
-import { getWerkbonnenByProject, createWerkbon } from '../../services/werkbonService.js';
-import { getCustomer } from '../../services/customerService.js';
-import { adresRegel } from '../../components/AdresZoeker.jsx';
+import { getWerkbonnenByProject } from '../../services/werkbonService.js';
 import { planningLabel } from '../../utils/werkbonDagen.js';
-import { getProjectCosts, createJobCost, deleteJobCost, uploadKostenBonnen } from '../../services/jobCostService.js';
+import {
+  getProjectCosts, createJobCost, deleteJobCost, uploadKostenBonnen,
+  kostenSplitsing, inkoopwaardeVanKosten,
+} from '../../services/jobCostService.js';
 import { calcBtw, BTW_PCT_OPTIONS } from '../../utils/btw.js';
 import { NewFactuurModal, SendFactuurMailModal } from '../FacturenPage.jsx';
 import { NewOfferteModal, SendOfferteMailModal } from '../OffertesPage.jsx';
+import { WerkbonModal } from '../WerkbonPageV2.jsx';
 import NotitieLog, { toLogItem } from '../../components/NotitieLog.jsx';
 import { getTeamMembers, notifyNewAssignees } from '../../services/notificatieService.js';
 import { statusInfo } from '../../utils/statusColors.js';
@@ -86,10 +89,27 @@ function DrawerHeader({ project, onClose, fullscreen, onToggleFullscreen }) {
   );
 }
 
-function Tabs({ tab, setTab }) {
+// Welke tabs mag deze gebruiker zien? Dezelfde rechten en pakket-eisen als de
+// losse pagina's in de zijbalk. Zonder dit was de projectkaart een achterdeur:
+// kosten, marge, facturen, offertes en werkbonnen waren er te zien én te
+// bewerken zonder het recht en zonder het pakket dat ervoor bedoeld is.
+function zichtbareTabs(can, plan) {
+  const mag = {
+    overview:   true,
+    notes:      true,
+    uren:       true,                                        // eigen uren zien mag iedereen
+    offerte:    can('offertes'),
+    facturen:   can('facturen'),
+    kosten:     can('kosten') && plan.has('kosten_nacalculatie'),
+    werkbonnen: plan.has('werkbonnen'),
+  };
+  return TABS.filter(t => mag[t.id] !== false);
+}
+
+function Tabs({ tab, setTab, tabs = TABS }) {
   return (
     <div className="tabs kk-tabs" style={{ padding: '8px 16px', borderBottom: '1px solid var(--br)' }}>
-      {TABS.map(t => (
+      {tabs.map(t => (
         <button
           key={t.id}
           className={`tab${tab === t.id ? ' active' : ''}`}
@@ -500,8 +520,9 @@ function UrenTab({ project, entries }) {
                   <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.description || <span style={{ color: 'var(--dl)' }}>(geen omschrijving)</span>}</div>
                   <div style={{ fontSize: 11, color: 'var(--dl)' }}>
                     {e.userName || 'Onbekende medewerker'}
-                    {e.billable === false && ' · niet factureerbaar'}
-                    {e.hourlyRate ? ` · €${e.hourlyRate.toLocaleString('nl-NL')}/u` : ''}
+                    {e.startTijd && e.eindTijd ? ` · ${e.startTijd}–${e.eindTijd}` : ''}
+                    {e.pauzeMinuten > 0 ? ` · ${e.pauzeMinuten} min pauze` : ''}
+                    {e.reisKm > 0 ? ` · ${e.reisKm.toLocaleString('nl-NL')} km` : ''}
                   </div>
                 </div>
                 <div style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{fmtHours(e.hours)}</div>
@@ -555,9 +576,18 @@ function KostenTab({ project, canManage }) {
   };
   useEffect(() => { if (project.id) load(); }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const totalCosts = costs.reduce((s, c) => s + (Number(c.amt) || 0), 0);
-  const omzet = Number(project.invoicedAmount || 0);
-  const winst = omzet - totalCosts;
+  // ── Brutowinst ─────────────────────────────────────────────────────────────
+  // Gefactureerd (excl. BTW) − inkoopwaarde van materiaal − overige kosten.
+  // Arbeid en reiskilometers zitten er BEWUST niet in: uren worden nergens in
+  // geld omgerekend, en een marge die de helft van de kosten negeert zonder dat
+  // te zeggen is erger dan geen marge. Vandaar de uitleg onder het getal.
+  //
+  // Excl. BTW aan beide kanten: job_costs.amount is exclusief, dus rekenen met
+  // een bedrag inclusief zou de winst structureel te laag maken.
+  const splitsing = kostenSplitsing(costs);
+  const inkoop = inkoopwaardeVanKosten(costs);
+  const omzet = Number(project.omzetExclBtw ?? project.invoicedAmount ?? 0);
+  const brutowinst = omzet - inkoop.inkoopwaarde;
 
   const submit = async () => {
     if (!Number(form.amount) || Number(form.amount) <= 0) { toast.error('Bedrag moet groter zijn dan 0'); return; }
@@ -611,18 +641,45 @@ function KostenTab({ project, canManage }) {
       <div className="card card-p" style={{ padding: 14, background: '#fafafa' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           <div>
-            <div style={labelStyle}>Gefactureerd</div>
+            <div style={labelStyle}>Gefactureerd (excl. btw)</div>
             <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(omzet)}</div>
           </div>
           <div>
-            <div style={labelStyle}>Kosten</div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(totalCosts)}</div>
+            <div style={labelStyle}>Inkoopwaarde</div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(inkoop.inkoopwaarde)}</div>
+            {splitsing.werkbonMateriaal > 0 && (
+              <div style={{ fontSize: 11, color: 'var(--dl)', marginTop: 2 }}>
+                waarvan werkbonmateriaal {fmt0(inkoop.materiaalInkoop)}
+              </div>
+            )}
           </div>
           <div>
-            <div style={labelStyle}>Winst</div>
-            <div style={{ fontWeight: 700, fontSize: 16, color: winst < 0 ? '#dc2626' : '#15A34A' }}>{fmt0(winst)}</div>
+            <div style={labelStyle}>Brutowinst</div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: brutowinst < 0 ? '#dc2626' : '#15A34A' }}>
+              {fmt0(brutowinst)}
+            </div>
           </div>
         </div>
+
+        <div style={{ fontSize: 11.5, color: 'var(--dm)', marginTop: 10, lineHeight: 1.5 }}>
+          Brutowinst is gefactureerd min de inkoopwaarde. <b>Arbeid en reiskilometers
+          zitten er niet in</b> — wat je aan uren kwijt bent is hier niet verrekend.
+        </div>
+
+        {/* Geen stil verkeerd getal: als de inkoopprijs ontbreekt is de
+            verkoopprijs gebruikt, en dan is de brutowinst een ondergrens. */}
+        {inkoop.zonderInkoopprijs > 0 && (
+          <div style={{
+            fontSize: 11.5, lineHeight: 1.5, marginTop: 8, borderRadius: 8, padding: '8px 11px',
+            background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E',
+          }}>
+            {inkoop.zonderInkoopprijs === 1
+              ? '1 materiaalregel heeft geen inkoopprijs'
+              : `${inkoop.zonderInkoopprijs} materiaalregels hebben geen inkoopprijs`}
+            {' '}({fmt0(inkoop.geschatBedrag)}). Daarvoor is de verkoopprijs gerekend, dus de
+            werkelijke brutowinst ligt hoger. Vul de inkoopprijs in op de werkbon.
+          </div>
+        )}
       </div>
 
       {canManage && (
@@ -837,39 +894,14 @@ function NotesTab({ notes, onAdd, onDelete }) {
 // ── WERKBONNEN TAB ───────────────────────────────────────────────────────────
 
 
-function WerkbonnenTab({ project, werkbonnen, onCreated, canManage, setPage }) {
+// Werkbonnen vanuit een project gaan door dezelfde modal als op de
+// werkbonpagina. Er stond hier een snelle variant met twee velden (titel +
+// datum), die stil het klantadres overnam en géén tijden vroeg — terwijl de
+// werkbonpagina die inmiddels verplicht stelt. Zo maakte het project werkbonnen
+// die de planning op een verzonnen 07:00 zette.
+function WerkbonnenTab({ project, werkbonnen, customers = [], onCreated, canManage, setPage }) {
   const openWerkbon = w => setPage?.('werkbonnen', { id: w.id, from: 'project', projectId: project.id, projectNaam: project.name });
-  const toast = useToast();
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ titel: '', gepland_op: '' });
-  const [saving, setSaving] = useState(false);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-
-  const submit = async () => {
-    if (!form.titel.trim()) { toast.error('Titel is verplicht'); return; }
-    setSaving(true);
-    try {
-      // Snel aanmaken heeft geen locatieveld: neem stil het adres van de klant
-      // van het project over. Er valt niets te overschrijven, en op de werkbon
-      // zelf is het daarna gewoon aan te passen.
-      const klant = project.customerId ? await getCustomer(project.customerId).catch(() => null) : null;
-      const created = await createWerkbon({
-        titel: form.titel.trim(),
-        gepland_op: form.gepland_op || null,
-        project_id: project.id,
-        customer_id: project.customerId || null,
-        locatie: (klant && adresRegel(klant)) || null,
-      });
-      toast.success('Werkbon aangemaakt');
-      setForm({ titel: '', gepland_op: '' });
-      setShowForm(false);
-      onCreated?.(created);
-    } catch (e) {
-      toast.error(e.message || 'Aanmaken mislukt');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -885,33 +917,20 @@ function WerkbonnenTab({ project, werkbonnen, onCreated, canManage, setPage }) {
       </div>
 
       {showForm && (
-        <div className="card card-p" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
-            <div className="f">
-              <label>Titel</label>
-              <input
-                type="text" autoFocus
-                placeholder="Bv. Installatie dakraam"
-                value={form.titel}
-                onChange={e => set('titel', e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && submit()}
-              />
-            </div>
-            <div className="f">
-              <label>Datum</label>
-              <input type="date" value={form.gepland_op} onChange={e => set('gepland_op', e.target.value)} />
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button className="btn btn-ghost btn-sm" onClick={() => setShowForm(false)} disabled={saving}>Annuleren</button>
-            <button className="btn btn-p btn-sm" onClick={submit} disabled={saving || !form.titel.trim()}>
-              {saving ? 'Aanmaken…' : 'Werkbon aanmaken'}
-            </button>
-          </div>
-        </div>
+        <WerkbonModal
+          mode="new"
+          customers={customers}
+          // Alleen dit project in de keuzelijst: je maakt hem hier voor déze
+          // klus, en hem in de modal naar een ander project kunnen verzetten is
+          // een val. Klant en project komen daarmee voorgevuld binnen.
+          projects={[{ id: project.id, name: project.name }]}
+          werkbon={{ projectId: project.id, customerId: project.customerId || '' }}
+          onClose={() => setShowForm(false)}
+          onSaved={w => { setShowForm(false); onCreated?.(w); }}
+        />
       )}
 
-      {werkbonnen.length === 0 && !showForm ? (
+      {werkbonnen.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--dl)', fontSize: 13 }}>
           Nog geen werkbonnen gekoppeld aan dit project.
         </div>
@@ -973,7 +992,14 @@ export function ProjectDetailDrawer({
   const toast = useToast();
   const { company, profile } = useProfile();
   const { can } = usePermissions();
+  const { plan } = usePlanGuard();
+  const tabs = useMemo(() => zichtbareTabs(can, plan), [can, plan]);
   const [tab, setTab] = useState('overview');
+  // Verdwijnt de openstaande tab (recht ingetrokken, pakket omlaag), val dan
+  // terug op de eerste. Anders staar je naar een leeg paneel.
+  useEffect(() => {
+    if (!tabs.some(t => t.id === tab)) setTab(tabs[0].id);
+  }, [tabs, tab]);
   const [loading, setLoading] = useState(true);
   const [project, setProject] = useState(null);
   const [entries, setEntries] = useState([]);
@@ -1088,7 +1114,7 @@ export function ProjectDetailDrawer({
           ) : (
             <>
               <DrawerHeader project={project} onClose={onClose} fullscreen={fullscreen} onToggleFullscreen={() => setFullscreen(f => !f)} />
-              <Tabs tab={tab} setTab={setTab} />
+              <Tabs tab={tab} setTab={setTab} tabs={tabs} />
 
               {tab === 'overview' && (
                 <OverviewTab
@@ -1137,6 +1163,7 @@ export function ProjectDetailDrawer({
               )}
               {tab === 'werkbonnen' && (
                 <WerkbonnenTab
+                  customers={customers}
                   project={project}
                   werkbonnen={werkbonnen}
                   setPage={setPage}

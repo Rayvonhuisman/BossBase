@@ -1,6 +1,10 @@
 import { supabase } from '../lib/supabase'
 import { withCompanyId, getCompanyId } from '../lib/currentCompany'
 import { logTijdlijnSafe } from './klantTijdlijnService'
+// Eén definitie van "gefactureerd" voor de hele app. De projectkant telde
+// hiervoor domweg alle facturen op, inclusief concepten: Badkamer renovatie
+// toonde €133,10 waar €66,55 in rekening was gebracht.
+import { sumGefactureerd, sumOmzetExclBtw } from './customerTotalsService'
 
 // =============================================================================
 // projects / uren (werkbon_uren) / project_notes  service-laag
@@ -18,7 +22,10 @@ const toProject = row => ({
   status: row.status || 'concept',
   projectValue: Number(row.project_value || 0),
   quotedHours: Number(row.quoted_hours || 0),
-  usedHoursCached: Number(row.used_hours || 0),
+  // Geen usedHours hier: die wordt live berekend uit werkbon_uren (zie
+  // getProjectHoursMap + enrichProject). De kolom projects.used_hours was een
+  // cache die niet meer werd bijgewerkt en is verwijderd in migratie
+  // 20260912140000 — hij stond vol met waarden die nergens meer op sloegen.
   startDate: row.start_date || null,
   deadline: row.deadline || null,
   ownerId: row.owner_id || null,
@@ -47,8 +54,14 @@ const toTimeEntry = (row, resolvedProjectId = null) => ({
   description: row.notitie || '',
   hours: Number(row.uren || 0),
   entryDate: row.datum,
-  billable: true,
-  hourlyRate: null,
+  // Wat er écht op een werkbonuur staat. `billable` en `hourlyRate` stonden
+  // hier hardcoded op true/null: overblijfsels uit de tijd dat uren op het
+  // project zelf werden geboekt. Die kolommen bestaan niet in werkbon_uren, dus
+  // de weergave ervan kon nooit iets tonen.
+  startTijd: row.start_tijd ? String(row.start_tijd).slice(0, 5) : null,
+  eindTijd: row.eind_tijd ? String(row.eind_tijd).slice(0, 5) : null,
+  pauzeMinuten: Number(row.pauze_minuten || 0),
+  reisKm: Number(row.reis_km || 0),
   createdAt: row.created_at,
   userName: row.profiles?.full_name || '',
   werkbonId: row.werkbon_id || null,
@@ -337,6 +350,10 @@ export async function getProjectInvoices(projectId) {
     betaaldOp: row.betaald_op || null,
     totaalExcl: Number(row.totaal_excl || 0),
     totaalIncl: Number(row.totaal_incl || 0),
+    // Nodig voor de gedeelde totaal-helpers: zonder deze twee kan
+    // isRealFactuur een creditnota niet van een gewone factuur onderscheiden.
+    isCredit: row.is_credit === true,
+    gecrediteerd: row.gecrediteerd === true,
     raw: row,
   }))
 }
@@ -370,10 +387,14 @@ export function enrichProject(project, { timeEntries = [], invoices = [], usedHo
   const remainingHours = Math.max(0, quoted - usedHours)
   const hoursPercentage = quoted > 0 ? usedHours / quoted : 0
 
-  const invoicedAmount = invoices.reduce(
-    (s, f) => s + Number(f.totaalIncl || f.totaal_incl || 0),
-    0,
-  )
+  // Gefactureerd = incl. BTW, want dat is wat de klant in rekening is gebracht;
+  // dezelfde definitie als op de klantkaart, dus zonder concepten en met
+  // creditnota's die zichzelf eraf trekken.
+  const invoicedAmount = sumGefactureerd(invoices)
+  // Omzet excl. BTW staat er apart naast. De brutowinst rekent hiermee, omdat
+  // kosten óók exclusief BTW zijn opgeslagen — anders vergelijk je twee
+  // verschillende bedragen. Zie de toelichting in customerTotalsService.
+  const omzetExclBtw = sumOmzetExclBtw(invoices)
   const value = Number(project.projectValue || 0)
   const remainingToInvoice = Math.max(0, value - invoicedAmount)
 
@@ -383,6 +404,7 @@ export function enrichProject(project, { timeEntries = [], invoices = [], usedHo
     remainingHours: Math.round(remainingHours * 100) / 100,
     hoursPercentage,
     invoicedAmount: Math.round(invoicedAmount * 100) / 100,
+    omzetExclBtw: Math.round(omzetExclBtw * 100) / 100,
     remainingToInvoice: Math.round(remainingToInvoice * 100) / 100,
   }
 }
@@ -408,7 +430,10 @@ export async function getEnrichedProjects() {
     if (!invoicesByProject[f.project_id]) invoicesByProject[f.project_id] = []
     invoicesByProject[f.project_id].push({
       totaalIncl: Number(f.totaal_incl || 0),
+      totaalExcl: Number(f.totaal_excl || 0),
       status: f.status,
+      isCredit: f.is_credit === true,
+      gecrediteerd: f.gecrediteerd === true,
     })
   }
   return projects.map(p => enrichProject(p, {
