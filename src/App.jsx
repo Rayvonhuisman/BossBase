@@ -112,32 +112,38 @@ const NAV = [
   { id: 'revenue',     label: 'Financiën',     icon: 'chart',   section: 'finance', permission: 'bedrijfsfinancien' },
   { id: 'database',    label: 'Database',      icon: 'db',      section: 'bedrijf', permission: 'database' },
   { id: 'team',        label: 'Team',          icon: 'team',    section: 'bedrijf', permission: 'team' },
-  { id: 'instellingen',label: 'Instellingen',  icon: 'settings',section: 'bedrijf', permission: 'instellingen' },
+  // Geen permission: de pagina beveiligt zichzelf (alleen "Mijn profiel" zonder
+  // het recht 'instellingen'), en iedereen moet bij zijn eigen profiel kunnen.
+  { id: 'instellingen',label: 'Instellingen',  icon: 'settings',section: 'bedrijf' },
 ];
+
+// ── Routebeveiliging, afgeleid uit NAV ──────────────────────────────────────
+// Het menu verbergt een pagina op `permission`/`feature`; deze twee lijsten
+// blokkeren de directe URL. Ze stonden hier met de hand naast NAV, en dat is
+// precies één keer te vaak vergeten: bij het toevoegen van het recht
+// 'projecten' verdween het menu-item wél en bleef /dashboard/projecten open.
+//
+// Nu komen ze uit dezelfde bron. Een nieuw recht op een NAV-regel beveiligt
+// daarmee automatisch ook de URL, en de twee kunnen niet meer uit elkaar lopen.
+const uitNav = veld => Object.fromEntries(
+  NAV.filter(n => n[veld]).map(n => [n.id, n[veld]]),
+);
 
 // Pagina's die een feature uit de abonnementsmatrix vereisen. Los van de
 // rechten: een recht zegt "mag deze gebruiker het", een feature zegt "zit het in
 // dit abonnement". Beide moeten kloppen.
-const PLAN_GATED_PAGES = {
-  planning: 'planning',
-  costs:    'kosten_nacalculatie',
-};
+const PLAN_GATED_PAGES = uitNav('feature');
 
-// Pagina's die een bepaald recht vereisen voor toegang
-const PROTECTED_PAGES = {
-  pipeline:    'verkoop',
-  projecten:   'projecten',
-  offertes:    'offertes',
-  facturen:    'facturen',
-  costs:       'kosten',
-  revenue:     'bedrijfsfinancien',
-  planning:    'planning',
-  database:    'database',
-  team:        'team',
-  // 'instellingen' is NIET beschermd: iedereen mag "Mijn profiel" beheren
-  // (incl. account verwijderen). De bedrijfs-tabs binnen Instellingen zijn
-  // zelf afgeschermd op het 'instellingen'-recht.
-};
+// Pagina's die een bepaald recht vereisen voor toegang.
+//
+// UITZONDERING — instellingen. Die pagina beveiligt zichzelf: zonder het recht
+// bestaat de tabbladenlijst alleen uit "Mijn profiel" en zijn bedrijfsprofiel,
+// templates en integraties er niet. De URL moet dus juist open blijven, want
+// iedereen moet bij zijn eigen profiel kunnen (inclusief account verwijderen).
+// Daarom heeft die regel in NAV ook geen `permission` meer: met een recht in het
+// menu was het item verborgen voor precies de mensen die er wél terecht kunnen,
+// en konden ze er alleen nog via het avatarmenu komen.
+const PROTECTED_PAGES = uitNav('permission');
 
 const SECTIONS = [
   { id: 'main',    label: 'Hoofdmenu' },
@@ -145,6 +151,38 @@ const SECTIONS = [
   { id: 'finance', label: 'Financieel' },
   { id: 'bedrijf', label: 'Bedrijf' },
 ];
+
+// ── Mobiel "Meer"-blad, ook uit NAV ─────────────────────────────────────────
+// Wat al onderin de mobiele balk staat hoeft niet nog eens in het blad.
+const MOBIELE_BALK_IDS = ['dashboard', 'pipeline', 'customers', 'activities'];
+
+// NAV plat: een groep als Relaties telt met zijn kinderen mee, want die zijn de
+// echte pagina's. Kinderen erven icoon, sectie en gates van de ouder.
+const NAV_PLAT = NAV.flatMap(n => (n.kinderen
+  ? n.kinderen.map(k => ({
+      ...k,
+      icon:       k.icon ?? n.icon,
+      section:    n.section,
+      permission: k.permission ?? n.permission,
+      feature:    k.feature ?? n.feature,
+    }))
+  : [n]));
+
+// Zelfde filters als de zijbalk. NAV bewaart een icoonnaam; het blad rendert een
+// node, vandaar de vertaling via I[].
+const MEER_GROEPEN = (can, plan) => SECTIONS
+  .map(sec => ({
+    label: sec.label,
+    items: NAV_PLAT
+      .filter(n => n.section === sec.id && !MOBIELE_BALK_IDS.includes(n.id))
+      .filter(n => !n.permission || can(n.permission))
+      .filter(n => !n.feature || plan.has(n.feature))
+      .map(n => ({ id: n.id, label: n.label, icon: I[n.icon] })),
+  }))
+  .filter(g => g.items.length > 0);
+
+// Staat de gebruiker op een pagina uit dat blad? Dan licht "Meer" op.
+const MEER_PAGE_IDS = NAV_PLAT.map(n => n.id).filter(id => !MOBIELE_BALK_IDS.includes(id));
 
 // ── SIDEBAR ──────────────────────────────────────────────────
 function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loading, onOpenProfile, badges = {}, collapsed, onToggleCollapsed }) {
@@ -821,31 +859,12 @@ function MeerMenu({ page, onNavigate, onClose, profile }) {
   const { can } = usePermissions();
   const plan = usePlan();
 
-  const financeItems = [
-    can('kosten') && plan.has('kosten_nacalculatie') && { id: 'costs', label: 'Kosten', icon: I.costs },
-    can('bedrijfsfinancien') && { id: 'revenue',  label: 'Financiën', icon: I.chart },
-    can('facturen')   && { id: 'facturen', label: 'Facturen',  icon: I.brief },
-    can('offertes')   && { id: 'offertes', label: 'Offertes',  icon: I.quotes },
-  ].filter(Boolean);
-
-  const bedrijfItems = [
-    can('team')          && { id: 'team',         label: 'Team',         icon: I.team },
-    can('instellingen')  && { id: 'instellingen', label: 'Instellingen', icon: I.settings },
-  ].filter(Boolean);
-
-  const groups = [
-    {
-      label: 'Uitvoering',
-      items: [
-        { id: 'calendar',   label: 'Agenda',     icon: I.cal },
-        can('projecten') && { id: 'projecten',  label: 'Projecten',  icon: I.projects },
-        { id: 'werkbonnen', label: 'Werkbonnen', icon: I.wo },
-        { id: 'uren',       label: 'Uren',       icon: I.hours },
-      ].filter(Boolean),
-    },
-    ...(financeItems.length > 0 ? [{ label: 'Financieel', items: financeItems }] : []),
-    ...(bedrijfItems.length > 0 ? [{ label: 'Bedrijf',   items: bedrijfItems }] : []),
-  ];
+  // Uit NAV, net als de zijbalk. Stond hier met de hand overgeschreven, en dat
+  // liep uit de pas: het blad is van 12-05-2026, Database kwam 05-06, Planning
+  // 15-06 en Materialen 24-08 — alle drie erna, en geen ervan is ooit
+  // toegevoegd. Leveranciers ontbrak net zo goed. Op mobiel waren die vier
+  // pagina's dus onbereikbaar.
+  const groups = MEER_GROEPEN(can, plan);
 
   return (
     <div className="meer-overlay open" onClick={onClose}>
@@ -882,7 +901,6 @@ function MeerMenu({ page, onNavigate, onClose, profile }) {
 }
 
 // ── MOBILE BOTTOM NAV ─────────────────────────────────────────
-const MEER_PAGE_IDS = ['calendar','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','team','instellingen'];
 
 function MobileBottomNav({ page, setPage, badges = {}, profile, can }) {
   const [showMeer, setShowMeer] = useState(false);
