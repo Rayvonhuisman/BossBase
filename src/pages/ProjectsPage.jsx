@@ -241,6 +241,9 @@ export function NewProjectModal({ onClose, onSaved, customers, deals, offertes, 
 // ── PROJECT CARD (mobile) ────────────────────────────────────────────────────
 
 function ProjectCard({ p, onOpen }) {
+  // Bedragen achter 'projectbedragen'; uren, deadline en voortgang blijven.
+  const { can } = usePermissions();
+  const magBedragen = can('projectbedragen');
   return (
     <button
       className="card card-p"
@@ -255,10 +258,12 @@ function ProjectCard({ p, onOpen }) {
         <ProjectBadge status={p.status} />
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 12 }}>
-        <div>
-          <div style={{ color: 'var(--dl)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.04em' }}>Waarde</div>
-          <div style={{ fontWeight: 600 }}>{fmt(p.projectValue)}</div>
-        </div>
+        {magBedragen && (
+          <div>
+            <div style={{ color: 'var(--dl)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.04em' }}>Waarde</div>
+            <div style={{ fontWeight: 600 }}>{fmt(p.projectValue)}</div>
+          </div>
+        )}
         <div>
           <div style={{ color: 'var(--dl)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.04em' }}>Uren</div>
           <div style={{ fontWeight: 600 }}>{fmtHours(p.usedHours)} / {fmtHours(p.quotedHours)}</div>
@@ -269,11 +274,13 @@ function ProjectCard({ p, onOpen }) {
         </div>
       </div>
       <ProgressBar pct={p.hoursPercentage} />
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
-        <div style={{ fontSize: 11, color: 'var(--dl)' }}>
-          {p.invoicedAmount > 0 ? `${fmt(p.invoicedAmount)} gefactureerd` : 'Nog niet gefactureerd'}
+      {magBedragen && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
+          <div style={{ fontSize: 11, color: 'var(--dl)' }}>
+            {p.invoicedAmount > 0 ? `${fmt(p.invoicedAmount)} gefactureerd` : 'Nog niet gefactureerd'}
+          </div>
         </div>
-      </div>
+      )}
     </button>
   );
 }
@@ -298,6 +305,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
   const { profile } = useProfile();
   const { can } = usePermissions();
   const { guardSchrijven, planModal } = usePlanGuard();
+  const magBedragen = can('projectbedragen');
   // Projecten bewerken/aanmaken: admin/planner-rol óf het 'projecten_bewerken'-recht.
   // Zien mag iedereen; RLS bepaalt welke projecten zichtbaar zijn.
   const canManage = ['admin', 'planner'].includes(profile?.role) || can('projecten_bewerken');
@@ -427,16 +435,20 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
             <div className="sc-val">{kpi.active}</div>
             <div className="sc-label">Actieve projecten</div>
           </div>
-          <div className="sc">
-            <div className="sc-top"><div className="sc-icon">{I.euro}</div></div>
-            <div className="sc-val">{fmt0(kpi.totalValue)}</div>
-            <div className="sc-label">Totale projectwaarde</div>
-          </div>
-          <div className="sc">
-            <div className="sc-top"><div className="sc-icon">{I.clock}</div></div>
-            <div className="sc-val">{fmt0(kpi.remainingToInvoice)}</div>
-            <div className="sc-label">Te factureren</div>
-          </div>
+          {magBedragen && (
+            <div className="sc">
+              <div className="sc-top"><div className="sc-icon">{I.euro}</div></div>
+              <div className="sc-val">{fmt0(kpi.totalValue)}</div>
+              <div className="sc-label">Totale projectwaarde</div>
+            </div>
+          )}
+          {magBedragen && (
+            <div className="sc">
+              <div className="sc-top"><div className="sc-icon">{I.clock}</div></div>
+              <div className="sc-val">{fmt0(kpi.remainingToInvoice)}</div>
+              <div className="sc-label">Te factureren</div>
+            </div>
+          )}
           <div className="sc">
             <div className="sc-top"><div className="sc-icon">{I.hours}</div></div>
             <div className="sc-val">{fmtHours(kpi.hours)}</div>
@@ -493,8 +505,8 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
                     <th className="th">Project</th>
                     <th className="th">Klant</th>
                     <th className="th">Status</th>
-                    <th className="th">Waarde</th>
-                    <th className="th">Gefactureerd</th>
+                    {magBedragen && <th className="th">Waarde</th>}
+                    {magBedragen && <th className="th">Gefactureerd</th>}
                     <th className="th">Uren</th>
                     <th className="th" style={{ minWidth: 110 }}>Budget</th>
                     <th className="th">Deadline</th>
@@ -523,13 +535,15 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
                           ) : null}
                         </td>
                         <td className="td"><ProjectBadge status={p.status} /></td>
-                        <td className="td" style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(p.projectValue)}</td>
-                        <td className="td" style={{ textAlign: 'right' }}>
-                          <div>{fmt(p.invoicedAmount)}</div>
-                          {p.remainingToInvoice > 0 && (
-                            <div style={{ fontSize: 11, color: '#f59e0b' }}>nog {fmt(p.remainingToInvoice)}</div>
-                          )}
-                        </td>
+                        {magBedragen && <td className="td" style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(p.projectValue)}</td>}
+                        {magBedragen && (
+                          <td className="td" style={{ textAlign: 'right' }}>
+                            <div>{fmt(p.invoicedAmount)}</div>
+                            {p.remainingToInvoice > 0 && (
+                              <div style={{ fontSize: 11, color: '#f59e0b' }}>nog {fmt(p.remainingToInvoice)}</div>
+                            )}
+                          </td>
+                        )}
                         <td className="td" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                           {fmtHours(p.usedHours)} / {fmtHours(p.quotedHours)}
                         </td>

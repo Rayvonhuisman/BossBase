@@ -125,6 +125,10 @@ function Tabs({ tab, setTab, tabs = TABS }) {
 function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
   const toast = useToast();
   const { profile } = useProfile();
+  // Bedragen op projecten horen achter 'projectbedragen'. Dat recht bestond al
+  // en beloofde dit ook, maar werd op de projectschermen nergens toegepast.
+  const { can } = usePermissions();
+  const magBedragen = can('projectbedragen');
   const [teamMembers, setTeamMembers] = useState([]);
   const [form, setForm] = useState({
     name: project.name || '',
@@ -203,10 +207,16 @@ function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
               )}
             </div>
           </div>
+          {/* Bedragen achter 'projectbedragen'. Urenstatus en deadline blijven
+              staan: een monteur mag zien hoe ver de klus is, alleen niet wat
+              hij opbrengt. */}
+          {magBedragen && (
           <div>
             <div style={labelStyle}>Budget</div>
             <div style={{ fontWeight: 600, fontSize: 13 }}>{fmt0(project.projectValue)}</div>
           </div>
+          )}
+          {magBedragen && (
           <div>
             <div style={labelStyle}>Gefactureerd</div>
             <div style={{ fontWeight: 600, fontSize: 13 }}>
@@ -216,6 +226,7 @@ function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
               )}
             </div>
           </div>
+          )}
           <div>
             <div style={labelStyle}>Deadline</div>
             <div style={{ fontWeight: 600, fontSize: 13, color: isOverdue ? '#dc2626' : 'inherit' }}>
@@ -245,10 +256,12 @@ function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
             {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
-        <div className="f">
-          <label>Projectwaarde</label>
-          <input type="number" min="0" step="0.01" value={form.project_value} onChange={e => set('project_value', e.target.value)} disabled={!canManage} />
-        </div>
+        {magBedragen && (
+          <div className="f">
+            <label>Projectwaarde</label>
+            <input type="number" min="0" step="0.01" value={form.project_value} onChange={e => set('project_value', e.target.value)} disabled={!canManage} />
+          </div>
+        )}
         <div className="f">
           <label>Begrote uren</label>
           <input type="number" min="0" step="0.5" value={form.quoted_hours} onChange={e => set('quoted_hours', e.target.value)} disabled={!canManage} />
@@ -542,6 +555,12 @@ function UrenTab({ project, entries }) {
 // kosten.
 function KostenTab({ project, canManage }) {
   const toast = useToast();
+  // De kostenregels zelf vallen onder het recht 'kosten' (dat gate't deze tab
+  // al). Gefactureerd en brutowinst zijn iets anders: dat is de opbrengst van
+  // het project, en die hoort achter 'projectbedragen'. De inkoopwaarde blijft
+  // staan — dat is wat het werk kost, niet wat het oplevert.
+  const { can } = usePermissions();
+  const magBedragen = can('projectbedragen');
   const [costs, setCosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
@@ -639,11 +658,13 @@ function KostenTab({ project, canManage }) {
   return (
     <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div className="card card-p" style={{ padding: 14, background: '#fafafa' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-          <div>
-            <div style={labelStyle}>Gefactureerd (excl. btw)</div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(omzet)}</div>
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${magBedragen ? 3 : 1}, 1fr)`, gap: 10 }}>
+          {magBedragen && (
+            <div>
+              <div style={labelStyle}>Gefactureerd (excl. btw)</div>
+              <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(omzet)}</div>
+            </div>
+          )}
           <div>
             <div style={labelStyle}>Inkoopwaarde</div>
             <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(inkoop.inkoopwaarde)}</div>
@@ -653,18 +674,22 @@ function KostenTab({ project, canManage }) {
               </div>
             )}
           </div>
-          <div>
-            <div style={labelStyle}>Brutowinst</div>
-            <div style={{ fontWeight: 700, fontSize: 16, color: brutowinst < 0 ? '#dc2626' : '#15A34A' }}>
-              {fmt0(brutowinst)}
+          {magBedragen && (
+            <div>
+              <div style={labelStyle}>Brutowinst</div>
+              <div style={{ fontWeight: 700, fontSize: 16, color: brutowinst < 0 ? '#dc2626' : '#15A34A' }}>
+                {fmt0(brutowinst)}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        <div style={{ fontSize: 11.5, color: 'var(--dm)', marginTop: 10, lineHeight: 1.5 }}>
-          Brutowinst is gefactureerd min de inkoopwaarde. <b>Arbeid en reiskilometers
-          zitten er niet in</b> — wat je aan uren kwijt bent is hier niet verrekend.
-        </div>
+        {magBedragen && (
+          <div style={{ fontSize: 11.5, color: 'var(--dm)', marginTop: 10, lineHeight: 1.5 }}>
+            Brutowinst is gefactureerd min de inkoopwaarde. <b>Arbeid en reiskilometers
+            zitten er niet in</b> — wat je aan uren kwijt bent is hier niet verrekend.
+          </div>
+        )}
 
         {/* Geen stil verkeerd getal: als de inkoopprijs ontbreekt is de
             verkoopprijs gebruikt, en dan is de brutowinst een ondergrens. */}
@@ -793,12 +818,16 @@ function KostenTab({ project, canManage }) {
 function FacturenTab({ project, invoices, openInvoice, setPage, customers, company, onNew, onRefresh }) {
   const [showNewFactuur, setShowNewFactuur] = useState(false);
   const [sendMail, setSendMail] = useState(null);
+  const { can } = usePermissions();
+  const magBedragen = can('projectbedragen');
+
   const openFactuur = f => {
     if (setPage) setPage('facturen', { id: f.id, from: 'project', projectId: project.id, projectNaam: project.name });
     else openInvoice?.(f.id);
   };
   return (
     <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {magBedragen && (
       <div className="card card-p" style={{ padding: 14, background: '#fafafa' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           <div>
@@ -817,6 +846,7 @@ function FacturenTab({ project, invoices, openInvoice, setPage, customers, compa
           </div>
         </div>
       </div>
+      )}
 
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>

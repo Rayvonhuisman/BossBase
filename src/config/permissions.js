@@ -100,8 +100,15 @@ export const WARN_ON_ENABLE = ['alles_inzien']
 // Platte lijst van alle subrechten — back-compat met bestaande consumers.
 export const AVAILABLE_PERMISSIONS = PERMISSION_GROUPS.flatMap(g => g.subs)
 
-// Standaard rechten voor nieuwe medewerkers: alles uit (least privilege).
-export const DEFAULT_MEDEWERKER_PERMISSIONS = []
+// Standaard rechten voor nieuwe medewerkers: least privilege, op één na.
+//
+// 'projecten' staat standaard AAN: een monteur moet kunnen zien bij welk
+// project zijn werkbon hoort. De database beperkt dat al tot zijn eigen
+// projecten (RLS op public.projects: toegewezen, of een werkbon erop), bewerken
+// vraagt apart om 'projecten_bewerken', en de bedragen zitten achter
+// 'projectbedragen'. Wat overblijft is de klus zelf — en een standaard die elke
+// beheerder meteen weer aanzet, is de verkeerde standaard.
+export const DEFAULT_MEDEWERKER_PERMISSIONS = ['projecten']
 
 // Alle recht-keys (voor admin of "alles aan").
 export const ALL_PERMISSION_KEYS = AVAILABLE_PERMISSIONS.map(p => p.key)
