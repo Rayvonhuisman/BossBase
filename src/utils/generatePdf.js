@@ -88,6 +88,12 @@ export const C = {
   paper:   [255, 255, 255],
   panel:   [246, 247, 250],   // #f6f7fa
   green:   [15, 157, 88],     // #0f9d58
+  // Waarschuwingen (Wkb) op de werkbon. Amber en niet rood: rood leest als een
+  // fout van de klant, terwijl dit een melding is. Donker genoeg om ook in
+  // zwart-wit op te vallen tussen de grijze panelen.
+  warnBg:   [255, 251, 235],  // #fffbeb
+  warnLine: [245, 158, 11],   // #f59e0b
+  warnInk:  [146,  94,  6],   // #925e06
 };
 
 export async function imgToBase64(url) {

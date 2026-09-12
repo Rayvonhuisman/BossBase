@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import HandtekeningCanvas from '../components/HandtekeningCanvas.jsx'
 import { getWerkbonPdfUrl, getWerkbonPdfBase64 } from '../utils/generateWerkbonPdf.js'
-import { signWerkbon, getFotosViaToken } from '../services/werkbonOndertekenenService.js'
+import { signWerkbon, getFotosViaToken, splitsKlantnotities } from '../services/werkbonOndertekenenService.js'
 
 const fmtDatum = d => {
   if (!d) return ''
@@ -132,7 +132,10 @@ export default function WerkbonOndertekenen({ token }) {
       })),
       materialen,
       meerwerk: meerwerk.map(r => ({ omschrijving: r.omschrijving, afgerond: true })),
-      notities,
+      // De RPC levert alleen klantnotities; hier nog splitsen in toelichting en
+      // verstuurde Wkb-waarschuwingen, zodat deze PDF dezelfde blokken heeft als
+      // die uit de app.
+      ...splitsKlantnotities(notities),
       fotos,
     },
     mapKlant(klant),

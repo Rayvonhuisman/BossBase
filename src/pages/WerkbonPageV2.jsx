@@ -27,7 +27,8 @@ import {
 } from '../utils/werkbonDagen.js';
 import { syncWerkbonEvents } from '../services/calendarService.js';
 import { downloadWerkbonPdf } from '../utils/generateWerkbonPdf.js';
-import { bouwPdfData, bouwPdfWerkbon } from '../services/werkbonOndertekenenService.js';
+import { AlertTriangle } from 'lucide-react';
+import { bouwPdfData, bouwPdfWerkbon, verstuurWaarschuwing } from '../services/werkbonOndertekenenService.js';
 import { getCurrentCompany } from '../services/profileService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
@@ -918,9 +919,130 @@ function FotoSection({ fotos, onUpload, onDelete, canEdit = true }) {
 
 // ─── MEERWERK SECTION ────────────────────────────────────────────────────────
 
+// ─── WKB-WAARSCHUWING ────────────────────────────────────────────────────────
+// De wet vraagt schriftelijk én ondubbelzinnig waarschuwen, mét de gevolgen.
+// Dat zijn twee dingen, dus twee velden — en geen één vrij tekstvak met een hint
+// eronder. Wie op een dak staat typt "houtrot bij de dakkapel" en drukt op
+// versturen; de hint over gevolgen leest hij niet. Twee korte velden met een
+// label kosten minder moeite dan één veld waarin je zelf aan twee dingen moet
+// denken, en ze maken de mail en de PDF meteen goed opgebouwd.
+//
+// Het gevolg-veld heeft tikbare suggesties, want dát is het veld dat mensen
+// overslaan. Aantikken vult hem; aanpassen mag.
+const GEVOLG_SUGGESTIES = [
+  'Lekkage op termijn',
+  'De schade breidt zich uit',
+  'Ondergrond is onvoldoende draagkrachtig',
+  'Extra kosten',
+  'Het werk kan niet volgens planning af',
+  'Wij kunnen op dit onderdeel geen garantie geven',
+];
+
+function WaarschuwingModal({ notitie, klantEmail, klantNaam, onClose, onVerstuur }) {
+  const toast = useToast();
+  const [constatering, setConstatering] = useState(notitie?.note || '');
+  const [gevolg, setGevolg] = useState(notitie?.gevolg || '');
+  const [email, setEmail] = useState(klantEmail || '');
+  const [bezig, setBezig] = useState(false);
+
+  const voegToe = (t) => setGevolg(g => (g.trim() ? `${g.replace(/\s*$/, '')}. ${t}` : t));
+
+  const versturen = async () => {
+    if (!constatering.trim()) { toast.error('Beschrijf wat je hebt geconstateerd'); return; }
+    if (!gevolg.trim()) { toast.error('Beschrijf wat het gevolg kan zijn — anders is de waarschuwing niet geldig'); return; }
+    if (!email.trim()) { toast.error('Vul een e-mailadres in'); return; }
+    setBezig(true);
+    try {
+      await onVerstuur({ constatering: constatering.trim(), gevolg: gevolg.trim(), email: email.trim() });
+      toast.success('Waarschuwing verstuurd en vastgelegd');
+    } catch (e) {
+      toast.error(e.message || 'Versturen mislukt');
+    } finally {
+      setBezig(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 540 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-hd">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlertTriangle size={16} strokeWidth={2.2} style={{ color: '#B45309' }} />
+            <span>Waarschuwing naar de klant</span>
+          </div>
+          <ModalX onClose={onClose} />
+        </div>
+
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{
+            fontSize: '.78rem', lineHeight: 1.55, color: '#92400E',
+            background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '9px 12px',
+          }}>
+            {klantNaam ? `${klantNaam} krijgt ` : 'De klant krijgt '}
+            een mail met deze melding. Die geldt als schriftelijke waarschuwing, en wij leggen
+            vast wanneer en waarheen hij is verstuurd.
+          </div>
+
+          <div className="fg">
+            <label>Wat heb je geconstateerd?</label>
+            <textarea
+              rows={3}
+              value={constatering}
+              onChange={e => setConstatering(e.target.value)}
+              placeholder="Bijvoorbeeld: houtrot in de dakrand aan de achterzijde, over ongeveer 3 meter"
+            />
+          </div>
+
+          <div className="fg">
+            <label>Wat kan daarvan het gevolg zijn?</label>
+            <textarea
+              rows={2}
+              value={gevolg}
+              onChange={e => setGevolg(e.target.value)}
+              placeholder="Zonder dit is de waarschuwing niet geldig"
+            />
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 7 }}>
+              {GEVOLG_SUGGESTIES.map(s => (
+                <button
+                  key={s}
+                  type="button"
+                  className="wb2-chip"
+                  style={{ padding: '3px 9px', fontSize: '.72rem' }}
+                  onClick={() => voegToe(s)}
+                >
+                  + {s}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="fg">
+            <label>Naar welk e-mailadres?</label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="klant@voorbeeld.nl"
+            />
+          </div>
+        </div>
+
+        <div className="modal-ft">
+          <button className="btn btn-s" onClick={onClose} disabled={bezig}>Annuleren</button>
+          <button className="btn btn-p" onClick={versturen} disabled={bezig}>
+            {bezig ? 'Versturen...' : 'Versturen'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NotitiesSection({
   notities = [], onAdd, onZichtbaarheid, teamMembers = [], canEdit = true,
+  onWaarschuw, klantEmail = '', klantNaam = '',
 }) {
+  const [waarschuwing, setWaarschuwing] = useState(null);
   // Twee tabs en geen vinkje bij het invoerveld: waar je typt bepaalt waar het
   // terechtkomt. Dat is de enige vorm die op een telefoon niet fout gaat — een
   // aangevinkt vakje dat je over het hoofd ziet, zet een interne opmerking op
@@ -987,14 +1109,41 @@ function NotitiesSection({
         ) : null}
 
         {/* Verplaatsknop per regel: een notitie belandt vaak eerst intern en
-            blijkt daarna prima voor de klant (of andersom). */}
+            blijkt daarna prima voor de klant (of andersom). In de klant-tab
+            staat daar de waarschuwknop naast. */}
         {canEdit && zichtbaar.length > 0 && onZichtbaarheid && (
           <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
             {zichtbaar.map(n => (
               <div key={`verplaats-${n.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '.75rem', color: 'var(--dl)' }}>
-                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {n.note}
                 </span>
+
+                {/* Al gewaarschuwd: geen knop meer maar het bewijs. Dat is waar
+                    het bedrijf op terugvalt als er later discussie ontstaat. */}
+                {voorKlant && n.verzondenOp ? (
+                  <span
+                    title={`Verstuurd naar ${n.verzondenNaar || 'de klant'}`}
+                    style={{
+                      flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5,
+                      background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E',
+                      borderRadius: 999, padding: '3px 9px', fontWeight: 600,
+                    }}
+                  >
+                    <AlertTriangle size={11} strokeWidth={2.2} />
+                    Gewaarschuwd {fmtNotitieDatum(n.verzondenOp)}
+                  </span>
+                ) : voorKlant && onWaarschuw ? (
+                  <button
+                    type="button"
+                    className="wb2-card-action"
+                    style={{ flexShrink: 0 }}
+                    onClick={() => setWaarschuwing(n)}
+                  >
+                    Naar klant sturen
+                  </button>
+                ) : null}
+
                 <button
                   type="button"
                   className="wb2-card-action"
@@ -1006,6 +1155,19 @@ function NotitiesSection({
               </div>
             ))}
           </div>
+        )}
+
+        {waarschuwing && (
+          <WaarschuwingModal
+            notitie={waarschuwing}
+            klantEmail={klantEmail}
+            klantNaam={klantNaam}
+            onClose={() => setWaarschuwing(null)}
+            onVerstuur={async velden => {
+              await onWaarschuw(waarschuwing, velden);
+              setWaarschuwing(null);
+            }}
+          />
         )}
 
         {!canEdit && items.length > 0 && (
@@ -1486,6 +1648,17 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
     toast.success(voorKlant ? 'Notitie voor de klant opgeslagen' : 'Notitie opgeslagen');
   };
 
+  // Wkb-waarschuwing versturen. De service mailt eerst en legt daarna pas de
+  // verzenddatum vast, zodat er nooit bewijs staat van iets wat niet is verstuurd.
+  const handleWaarschuw = async (notitie, { constatering, gevolg, email }) => {
+    const customer = customers.find(c => c.id === detail.customerId)
+      || { name: detail.customerName };
+    const { notitie: bij } = await verstuurWaarschuwing({
+      werkbon: detail, notitie, constatering, gevolg, email, customer, company,
+    });
+    setWerkbonNotities(list => list.map(n => (n.id === bij.id ? bij : n)));
+  };
+
   const handleNotitieZichtbaarheid = async (notitie, voorKlant) => {
     try {
       const bij = await updateWerkbonNotitieZichtbaarheid(notitie.id, voorKlant);
@@ -1799,6 +1972,9 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
               onZichtbaarheid={handleNotitieZichtbaarheid}
               teamMembers={teamMembers}
               canEdit={canEditDetail}
+              onWaarschuw={handleWaarschuw}
+              klantEmail={customers.find(c => c.id === detail?.customerId)?.email || ''}
+              klantNaam={customers.find(c => c.id === detail?.customerId)?.name || detail?.customerName || ''}
             />
 
             {/* Onderaan naast elkaar: PDF links, afronden rechts. */}

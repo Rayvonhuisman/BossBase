@@ -699,6 +699,11 @@ const toWerkbonNotitie = row => ({
   // false = interne notitie (de standaard), true = staat op de werkbon-PDF en
   // op de ondertekenpagina die de klant ziet.
   voorKlant: row.voor_klant === true,
+  // Wkb-waarschuwing: `gevolg` maakt van een constatering pas een geldige
+  // waarschuwing, `verzondenOp` is het bewijs dát er gewaarschuwd is.
+  gevolg: row.gevolg || '',
+  verzondenOp: row.waarschuwing_verzonden_op || null,
+  verzondenNaar: row.waarschuwing_verzonden_naar || '',
   authorName: row.profiles?.full_name || '',
   raw: row,
 })
@@ -744,6 +749,32 @@ export async function updateWerkbonNotitieZichtbaarheid(notitieId, voorKlant) {
   const { data, error } = await supabase
     .from('werkbon_notities')
     .update({ voor_klant: voorKlant === true, updated_at: new Date().toISOString() })
+    .eq('id', notitieId)
+    .select('*, profiles(full_name)')
+    .single()
+  if (error) throw error
+  return toWerkbonNotitie(data)
+}
+
+/**
+ * Legt vast dát en waarheen een Wkb-waarschuwing is verstuurd.
+ *
+ * Apart van het versturen zelf (dat staat in werkbonOndertekenenService, bij de
+ * andere klantmail): deze functie doet uitsluitend de vastlegging, zodat het
+ * bewijs in één statement staat en niet half kan blijven hangen als de mail
+ * onderweg misgaat.
+ */
+export async function legWaarschuwingVast(notitieId, { note, gevolg, email }) {
+  if (!notitieId) throw new Error('notitieId is verplicht')
+  const { data, error } = await supabase
+    .from('werkbon_notities')
+    .update({
+      note: (note || '').trim(),
+      gevolg: (gevolg || '').trim(),
+      waarschuwing_verzonden_op: new Date().toISOString(),
+      waarschuwing_verzonden_naar: (email || '').trim(),
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', notitieId)
     .select('*, profiles(full_name)')
     .single()

@@ -52,12 +52,13 @@ const tijdFmt = t => (t ? String(t).slice(0, 5) : null);
  *                            gestartOp, afgerondOp, ondertekendOp,
  *                            ondertekendDoorNaam, ondertekendDoorEmail,
  *                            handtekeningDataUrl | handtekeningUrl }
- * @param {object} data     { taken, uren, materialen, notities, fotos }
+ * @param {object} data     { taken, uren, materialen, notities, waarschuwingen, fotos }
  * @param {object} customer klantgegevens
  * @param {object} company  bedrijfsgegevens incl. brandingColor/logoUrl
  */
 async function buildWerkbonPdf(doc, werkbon, data, customer, company) {
-  const { taken = [], uren = [], materialen = [], meerwerk = [], notities = [], fotos = [] } = data || {};
+  const { taken = [], uren = [], materialen = [], meerwerk = [], notities = [],
+          waarschuwingen = [], fotos = [] } = data || {};
   const accent = hexToRgb(company?.brandingColor);
   const accentInk = luminance(accent) > 0.62 ? C.dark : C.paper;
 
@@ -348,6 +349,66 @@ async function buildWerkbonPdf(doc, werkbon, data, customer, company) {
       tc(C.soft); doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
       doc.text(regels, M + 11.5, eersteRegelY);
       y += blokH + (i < notities.length - 1 ? 4 : 8);
+    });
+  }
+
+  // ── WAARSCHUWINGEN AAN DE KLANT (Wkb) ───────────────────────────────────
+  // Bewust een eigen blok en niet bij de toelichting: dit is het onderdeel dat
+  // er in het opleverdossier toe doet. Het moet in één oogopslag te zien zijn
+  // dát er gewaarschuwd is, wát er is geconstateerd, wat het gevolg kan zijn en
+  // wanneer het is verstuurd. Amberkleurig kader, dus ook in zwart-wit anders
+  // dan de rest.
+  if (waarschuwingen.length) {
+    sectieKop('Waarschuwingen aan de klant');
+
+    waarschuwingen.forEach((w, i) => {
+      // Eerst het lettertype zetten, dán pas opmeten: splitTextToSize rekent met
+      // de ACTUELE instellingen. Deed ik dat andersom, dan mat hij met het font
+      // van de sectiekop en liep de tekst het kader uit.
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+      const tekstBreedte = CW - 12;      // 6 mm lucht links én rechts
+      const watRegels = doc.splitTextToSize(w.note || '', tekstBreedte);
+      const gevolgRegels = w.gevolg ? doc.splitTextToSize(w.gevolg, tekstBreedte) : [];
+      // kop + constatering + (kop + gevolg) + verzendregel
+      const blokH = 9 + watRegels.length * 4
+        + (gevolgRegels.length ? 5 + gevolgRegels.length * 4 : 0)
+        + 7;
+      ruimte(blokH + 4);
+
+      fc(C.warnBg); dc(C.warnLine); doc.setLineWidth(0.4);
+      doc.roundedRect(M, y, CW, blokH, 2.1, 2.1, 'FD');
+      // Accentbalkje links, zodat het blok ook bij een fotokopie opvalt.
+      fc(C.warnLine); doc.rect(M, y + 1, 1.4, blokH - 2, 'F');
+
+      let ly = y + 6;
+      tc(C.warnInk); doc.setFont('helvetica', 'bold'); doc.setFontSize(7);
+      doc.text('GECONSTATEERD', M + 6, ly);
+      ly += 4;
+      tc(C.dark); doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+      doc.text(watRegels, M + 6, ly);
+      ly += watRegels.length * 4;
+
+      if (gevolgRegels.length) {
+        ly += 1;
+        tc(C.warnInk); doc.setFont('helvetica', 'bold'); doc.setFontSize(7);
+        doc.text('MOGELIJK GEVOLG', M + 6, ly);
+        ly += 4;
+        tc(C.dark); doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+        doc.text(gevolgRegels, M + 6, ly);
+        ly += gevolgRegels.length * 4;
+      }
+
+      // De verzenddatum is het bewijs; zonder die regel is dit een notitie.
+      ly += 3;
+      tc(C.soft); doc.setFont('helvetica', 'italic'); doc.setFontSize(7);
+      doc.text(
+        w.verzondenOp
+          ? `Schriftelijk aan de klant gemeld op ${fmtDateTime(w.verzondenOp)}`
+          : 'Nog niet verstuurd',
+        M + 6, ly,
+      );
+
+      y += blokH + (i < waarschuwingen.length - 1 ? 4 : 8);
     });
   }
 

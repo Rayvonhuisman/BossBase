@@ -16,6 +16,7 @@ import { supabase } from '../lib/supabase'
 import { sendEmail, logSentEmail } from './emailService.js'
 import { mailTemplate, mailButton } from '../utils/mailTemplate.js'
 import { getWerkbonPdfBase64 } from '../utils/generateWerkbonPdf.js'
+import { legWaarschuwingVast } from './werkbonService.js'
 
 /** De publieke ondertekenlink van een werkbon. */
 export function werkbonSignUrl(werkbon) {
@@ -29,6 +30,31 @@ export function werkbonSignUrl(werkbon) {
  * alles weg wat de klant niet hoort te zien. Eén plek, gebruikt door de app én
  * door de publieke pagina, zodat de twee PDF's identiek zijn.
  */
+/**
+ * Splitst KLANTNOTITIES in gewone toelichting en verstuurde Wkb-waarschuwingen.
+ *
+ * Een verstuurde waarschuwing ís een klantnotitie, maar hoort niet tussen de
+ * toelichting: in het opleverdossier moet juist te zien zijn dát er gewaarschuwd
+ * is, met de verzenddatum als bewijs.
+ *
+ * Verwacht een lijst waar de interne notities al uit zijn. De app filtert daar
+ * zelf op `voorKlant`; de sign-token-RPC geeft alleen klantregels terug en levert
+ * dat veld niet eens mee. Zou deze functie zelf op voor_klant filteren, dan
+ * hield ze bij de ondertekenpagina precies niets over.
+ */
+export function splitsKlantnotities(klantnotities = []) {
+  // De app geeft camelCase door, de RPC snake_case.
+  const verzonden = n => n.verzondenOp || n.waarschuwing_verzonden_op || null;
+  return {
+    notities: klantnotities.filter(n => !verzonden(n)).map(n => ({ note: n.note })),
+    waarschuwingen: klantnotities.filter(verzonden).map(n => ({
+      note: n.note,
+      gevolg: n.gevolg || '',
+      verzondenOp: verzonden(n),
+    })),
+  };
+}
+
 export function bouwPdfData({ taken = [], uren = [], materialen = [], meerwerk = [], notities = [], fotos = [] }) {
   return {
     // Alleen afgevinkte regels: de klant tekent voor het uitgevoerde werk. Wat
@@ -62,9 +88,11 @@ export function bouwPdfData({ taken = [], uren = [], materialen = [], meerwerk =
     meerwerk: (meerwerk.length ? meerwerk : taken.filter(t => t.isMeerwerk))
       .filter(m => m.afgerond)
       .map(m => ({ omschrijving: m.omschrijving })),
-    // Alleen wat expliciet als klantnotitie is gemarkeerd.
-    notities: notities.filter(n => n.voorKlant === true || n.voor_klant === true)
-      .map(n => ({ note: n.note })),
+    // Alleen wat expliciet als klantnotitie is gemarkeerd, en daarbinnen
+    // gesplitst in gewone toelichting en verstuurde waarschuwingen.
+    ...splitsKlantnotities(
+      notities.filter(n => n.voorKlant === true || n.voor_klant === true),
+    ),
     fotos: fotos.map(f => ({ url: f.url, categorie: f.categorie || '' })),
   }
 }
@@ -202,6 +230,73 @@ ${mailButton('Werkbon bekijken en ondertekenen', link, company?.brandingColor)}
     .eq('id', werkbon.id)
 
   return { email: adres, link }
+}
+
+/**
+ * Stuurt de klant een waarschuwing volgens de Wkb en legt vast dát het is gedaan.
+ *
+ * De wet vraagt schriftelijk en ondubbelzinnig, met de gevolgen erbij. Daarom
+ * staan constatering en gevolg als twee aparte blokken in de mail: een lopende
+ * alinea waarin het gevolg ergens verstopt zit, is precies wat later ter
+ * discussie staat.
+ *
+ * Volgorde is met opzet mail-eerst-dan-vastleggen. Gaat de mail mis, dan staat
+ * er ook geen verzenddatum — beter geen bewijs dan bewijs van iets wat nooit is
+ * aangekomen.
+ *
+ * @returns {Promise<{email: string}>}
+ */
+export async function verstuurWaarschuwing({ werkbon, notitie, constatering, gevolg, email, customer, company }) {
+  const adres = String(email || '').trim()
+  if (!adres) throw new Error('Vul een e-mailadres in')
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adres)) throw new Error('Dat is geen geldig e-mailadres')
+
+  const wat = String(constatering || '').trim()
+  const gev = String(gevolg || '').trim()
+  if (!wat) throw new Error('Beschrijf wat je hebt geconstateerd')
+  if (!gev) throw new Error('Beschrijf wat het gevolg kan zijn — zonder gevolg is de waarschuwing niet geldig')
+
+  const bedrijf = company?.name || 'ons bedrijf'
+  const onderwerp = `Belangrijke constatering bij ${werkbon?.titel || 'het werk'}`
+  const accent = company?.brandingColor || undefined
+
+  const html = mailTemplate({
+    title: onderwerp,
+    preheader: 'Wij hebben iets geconstateerd dat gevolgen kan hebben',
+    body: `<p>Beste ${escapeHtml(customer?.name || 'klant')},</p>
+<p>Tijdens het werk aan <strong>${escapeHtml(werkbon?.titel || '')}</strong> hebben wij iets
+geconstateerd dat buiten de opdracht valt en gevolgen kan hebben. Wij zijn verplicht u
+hierover te informeren, zodat u kunt beslissen wat u wilt doen.</p>
+
+<p style="margin:18px 0 6px;font-weight:700;color:#0a0a0a;">Wat wij hebben geconstateerd</p>
+<div style="border-left:3px solid ${escapeHtml(accent || '#1DDB62')};background:#f9fafb;padding:10px 14px;border-radius:4px;">
+${escapeHtml(wat).replace(/\n/g, '<br>')}</div>
+
+<p style="margin:18px 0 6px;font-weight:700;color:#0a0a0a;">Wat daarvan het gevolg kan zijn</p>
+<div style="border-left:3px solid #f59e0b;background:#fffbeb;padding:10px 14px;border-radius:4px;">
+${escapeHtml(gev).replace(/\n/g, '<br>')}</div>
+
+<p style="margin-top:18px;">Wilt u laten weten hoe u hiermee verder wilt? U kunt op deze
+mail antwoorden.</p>
+<p>Met vriendelijke groet,<br>${escapeHtml(bedrijf)}</p>`,
+    footerText: 'Deze melding versturen wij op grond van onze waarschuwingsplicht '
+      + '(artikel 7:754 BW, Wet kwaliteitsborging voor het bouwen).',
+    companyName: bedrijf,
+    logoUrl: company?.logoUrl,
+    brandColor: company?.brandingColor,
+  })
+
+  await sendEmail({ to: adres, subject: onderwerp, html })
+
+  // In het mailarchief op de klantkaart, net als offertes, facturen en werkbonnen.
+  logSentEmail({
+    toEmail: adres, subject: onderwerp, bodyHtml: html,
+    relatedType: 'werkbon', relatedId: werkbon?.id,
+    customerId: werkbon?.customerId || werkbon?.customer_id || null,
+  }).catch(() => {})
+
+  const bijgewerkt = await legWaarschuwingVast(notitie.id, { note: wat, gevolg: gev, email: adres })
+  return { email: adres, notitie: bijgewerkt }
 }
 
 function escapeHtml(str) {
