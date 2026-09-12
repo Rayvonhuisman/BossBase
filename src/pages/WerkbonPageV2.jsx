@@ -691,12 +691,9 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
       </div>
       <div className="wb2-card-body">
         <div className="wb2-mat-body">
-          {materialen.length === 0 && (
-            <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', fontSize: 13 }}>
-              Nog geen materialen toegevoegd.
-            </div>
-          )}
-
+          {/* Geen "nog geen materialen"-melding: zolang er niets is, staat hier
+              alleen de invoerregel. Tabel en totaal verschijnen pas bij het
+              eerste materiaal. */}
           {isMobile ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {materialen.map(m => {
@@ -830,14 +827,16 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
           )}
         </div>
 
-        <div className="wb2-mat-foot">
-          <div className="wb2-mat-foot-add" style={{ visibility: 'hidden' }}>spacer</div>
-          <div style={{ textAlign: 'right' }}>
-            <div className="wb2-mat-foot-total-lbl">Totaal materiaal (excl. BTW)</div>
-            <div className="wb2-mat-foot-total">{fmtEur(totalEx)}</div>
-            <div style={{ fontSize: 12, color: 'var(--dl)', marginTop: 2 }}>{fmtEur(totalIncl)} incl. BTW</div>
+        {materialen.length > 0 && (
+          <div className="wb2-mat-foot">
+            <div className="wb2-mat-foot-add" style={{ visibility: 'hidden' }}>spacer</div>
+            <div style={{ textAlign: 'right' }}>
+              <div className="wb2-mat-foot-total-lbl">Totaal materiaal (excl. BTW)</div>
+              <div className="wb2-mat-foot-total">{fmtEur(totalEx)}</div>
+              <div style={{ fontSize: 12, color: 'var(--dl)', marginTop: 2 }}>{fmtEur(totalIncl)} incl. BTW</div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
