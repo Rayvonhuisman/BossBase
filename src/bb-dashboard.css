@@ -3153,7 +3153,8 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .wbd-kal-dag:disabled{color:#d1d5db;cursor:default}
 .wbd-kal-uitleg{font-size:.7rem;color:var(--dl);margin-top:6px;line-height:1.35}
 .wbd-kal-wrap .wbd-lijst{flex:1 1 300px;min-width:0}
-.wbd-lijst-uitleg{font-size:.72rem;color:var(--dl);margin:-2px 0 4px;line-height:1.4}
+/* Kop van de dagenlijst met het info-icoontje (ab-info-knop/ab-uitleg, zoals bij de modulekeuze). */
+.wbd-lijst .wbd-lijst-kop{display:flex;align-items:center;gap:2px;min-height:26px;margin-bottom:2px}
 /* Ploeg per dag: initialen, aan = werkt die dag. */
 .wbd-ploeg{display:inline-flex;gap:3px;margin-left:8px;flex-shrink:0}
 .wbd-ploeg-chip{position:relative;width:26px;height:26px;border-radius:50%;border:1px solid var(--bstrong);background:white;color:var(--dl);font-size:.62rem;font-weight:700;cursor:pointer;font-family:inherit;padding:0;text-decoration:line-through}

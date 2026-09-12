@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { Clock, RotateCcw, UserMinus, UserPlus } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Clock, Info, RotateCcw, UserMinus, UserPlus, X } from 'lucide-react';
 import AdresZoeker, { adresRegel } from './AdresZoeker.jsx';
 import ActieMenu from './ActieMenu.jsx';
 import { vandaagIso } from '../lib/datumTijd.js';
@@ -118,6 +118,15 @@ export function WerkbonDagenVelden({
   const [aantalBijOpenen] = useState(() => geplandeDatums(p).length);
   // Het invulvak "eigen tijd" dat open staat: { datum, pid } of null.
   const [eigenTijdOpen, setEigenTijdOpen] = useState(null);
+  // Uitleg bij de tijden, achter het info-icoontje. Sluit op een klik ernaast.
+  const [uitlegOpen, setUitlegOpen] = useState(false);
+  const uitlegRef = useRef(null);
+  useEffect(() => {
+    if (!uitlegOpen) return undefined;
+    const sluit = e => { if (uitlegRef.current && !uitlegRef.current.contains(e.target)) setUitlegOpen(false); };
+    document.addEventListener('mousedown', sluit);
+    return () => document.removeEventListener('mousedown', sluit);
+  }, [uitlegOpen]);
   const set = patch => onChange({ ...p, ...patch });
   const datums = geplandeDatums(p);
   const fout = controleerPlanning(p, { starttijd, eindtijd });
@@ -240,16 +249,36 @@ export function WerkbonDagenVelden({
         {datums.length > 0 && (meer || ploeg.length > 1) && (
           <div className="wbd-lijst">
             <div className="wbd-lijst-kop">
-              {meer ? `${datums.length} dagen gepland · standaardtijd ${standaard}` : `${korteDatum(datums[0])} · ${standaard}`}
+              <span>{meer ? `${datums.length} dagen gepland · standaardtijd ${standaard}` : `${korteDatum(datums[0])} · ${standaard}`}</span>
+              {/* Uitleg achter een info-icoontje — hetzelfde als bij de
+                  modulekeuze (AbonnementPage): op klik, niet op hover, want op
+                  een tablet bestaat hover niet. */}
+              {ploeg.length > 0 && (
+                <span className="ab-module-info" ref={uitlegRef}>
+                  <button
+                    type="button"
+                    className="ab-info-knop"
+                    aria-label="Hoe werken de tijden en de ploeg?"
+                    aria-expanded={uitlegOpen}
+                    onClick={() => setUitlegOpen(o => !o)}
+                  >
+                    <Info size={15} strokeWidth={2} />
+                  </button>
+                  {uitlegOpen && (
+                    <span className="ab-uitleg" role="dialog" aria-label="Tijden en ploeg">
+                      <span className="ab-uitleg-kop">
+                        Tijden en ploeg
+                        <button type="button" className="ab-uitleg-x" aria-label="Sluiten" onClick={() => setUitlegOpen(false)}><X size={13} /></button>
+                      </span>
+                      {meer
+                        ? 'Standaard werkt de hele ploeg elke dag, op dezelfde tijd.'
+                        : 'Standaard werkt de hele ploeg op dezelfde tijd.'}
+                      {' '}Klik op iemands initialen om hem van een dag af te halen of een eigen tijd te geven.
+                    </span>
+                  )}
+                </span>
+              )}
             </div>
-            {ploeg.length > 0 && (
-              <div className="wbd-lijst-uitleg">
-                {meer
-                  ? 'Standaard werkt de hele ploeg elke dag, op dezelfde tijd.'
-                  : 'Standaard werkt de hele ploeg op dezelfde tijd.'}
-                {' '}Klik op iemands initialen om hem van een dag af te halen of een eigen tijd te geven.
-              </div>
-            )}
             {datums.map(d => {
               const af = meer ? p.afwijkend[d] : null;
               const eigenPloeg = Array.isArray(p.ploeg?.[d]);
