@@ -3156,8 +3156,24 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 /* Kop van de dagenlijst met het info-icoontje (ab-info-knop/ab-uitleg, zoals bij de modulekeuze). */
 .wbd-lijst .wbd-lijst-kop{display:flex;align-items:center;gap:2px;min-height:26px;margin-bottom:2px}
 /* Ploeg per dag: initialen, aan = werkt die dag. */
-.wbd-ploeg{display:inline-flex;gap:3px;margin-left:8px;flex-shrink:0}
-.wbd-ploeg-chip{position:relative;width:26px;height:26px;border-radius:50%;border:1px solid var(--bstrong);background:white;color:var(--dl);font-size:.62rem;font-weight:700;cursor:pointer;font-family:inherit;padding:0;text-decoration:line-through}
+.wbd-ploeg{display:inline-flex;gap:3px;margin-left:auto;flex-shrink:0}
+/* De avatar is dezelfde als linksonder in de zijbalk (av av-sm av-0, of de
+   foto). De knop eromheen is onzichtbaar; "niet op deze dag" = vervaagd. */
+.wbd-ploeg-chip{position:relative;width:26px;height:26px;border-radius:50%;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;display:inline-flex}
+.wbd-ploeg-chip:not(.aan) .av{opacity:.35;filter:grayscale(1)}
+.wbd-ploeg-chip:focus-visible{outline:2px solid var(--pd);outline-offset:1px}
+.wbd-alle{border:none;background:none;color:var(--pd);font-size:.74rem;font-weight:600;cursor:pointer;padding:2px 4px;white-space:nowrap;font-family:inherit}
+.wbd-alle:hover{text-decoration:underline}
+/* Dubbel ingepland: oranje driehoekje naast de avatar, uitleg op klik (in de
+   stijl van het info-icoontje, maar rechts uitgelijnd — het staat aan de rand). */
+.wbd-persoon{display:inline-flex;align-items:center;gap:1px}
+.wbd-dubbel-knop{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;border:none;background:none;color:#d97706;cursor:pointer;border-radius:50%}
+.wbd-dubbel-knop:hover,.wbd-dubbel-knop[aria-expanded="true"]{background:#fef3c7}
+.wbd-dubbel .ab-uitleg{left:auto;right:-8px;transform:none}
+.wbd-dubbel .ab-uitleg::before{left:auto;right:12px;transform:none}
+/* Planning: hetzelfde driehoekje in het blok; de uitleg zweeft boven de tijdlijn. */
+.pl-dubbel{position:absolute;top:2px;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;padding:0;border:none;border-radius:50%;background:#fef3c7;color:#b45309;cursor:pointer;z-index:4}
+.pl-dubbel-uitleg{position:fixed;z-index:300;width:max(240px,min(290px,80vw));background:var(--dk);color:#fff;border-radius:var(--r10);padding:10px 12px;font-size:.78rem;line-height:1.5;box-shadow:0 12px 30px rgba(0,0,0,.22)}
 /* Volledige naam direct bij hover of toetsenbordfocus. */
 .wbd-ploeg-chip[data-tip]:hover::after,.wbd-ploeg-chip[data-tip]:focus-visible::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);right:0;background:var(--dk);color:#fff;font-size:.72rem;font-weight:600;padding:4px 8px;border-radius:6px;white-space:nowrap;z-index:30;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.18)}
 .wbd-kop{font-weight:600;font-size:.78rem;color:var(--dm)}
@@ -3172,7 +3188,6 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .wbd-pt-knoppen{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .wbd-pt-knoppen .wbd-link{margin-left:0}
 .wbd-kal-kolom{width:252px;flex-shrink:0;display:flex;flex-direction:column;gap:8px}
-.wbd-ploeg-chip.aan{background:var(--dk);border-color:var(--dk);color:var(--p);text-decoration:none}
 .wbd-dag.eigen-ploeg .wbd-dag-datum{color:#b45309}
 .wbd-fout{font-size:.78rem;color:#b42318;background:#fef3f2;border:1px solid #fecdca;border-radius:var(--r8);padding:8px 10px;line-height:1.45}
 .wbd-lijst{border:1px solid var(--border);border-radius:var(--r10);padding:8px 10px;display:flex;flex-direction:column;gap:2px;background:var(--bgs)}

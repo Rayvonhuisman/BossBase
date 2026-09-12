@@ -244,7 +244,7 @@ export async function getActiveTeamMembers({ includeSelf = false } = {}) {
 
   let query = supabase
     .from('profiles')
-    .select('id, full_name')
+    .select('id, full_name, avatar_url')
     .eq('company_id', companyId)
     .eq('actief', true)
     .order('full_name', { ascending: true });
@@ -259,7 +259,8 @@ export async function getActiveTeamMembers({ includeSelf = false } = {}) {
   // geen uren meer boeken op naam van een collega — zonder foutmelding, want een
   // lege dropdown ziet eruit als "er zijn geen collega's".
   return (data || [])
-    .map(r => ({ id: r.id, profileId: r.id, fullName: r.full_name || '' }))
+    // avatarUrl: dezelfde foto als linksonder in de zijbalk (leeg = initialen).
+    .map(r => ({ id: r.id, profileId: r.id, fullName: r.full_name || '', avatarUrl: r.avatar_url || '' }))
     .filter(m => m.fullName);
 }
 

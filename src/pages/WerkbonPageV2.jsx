@@ -128,7 +128,7 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
     // Ook zonder planningsmodule: een geplande dag heeft een tijd nodig.
     const planFout = controleerPlanning(planning, { starttijd: form.starttijd, eindtijd: form.eindtijd });
     if (planFout) { toast.error(planFout); return; }
-    const dagen = meerdaags ? dagenUitPlanning(planning, form.assignedToIds) : [];
+    const dagen = meerdaags ? dagenUitPlanning(planning, form.assignedToIds, { starttijd: form.starttijd, eindtijd: form.eindtijd }) : [];
     setSaving(true);
     try {
       const payload = {
@@ -245,7 +245,12 @@ function WerkbonModal({ mode, werkbon, customers, projects = [], onClose, onSave
             meerdaags={meerdaags}
             onUpgrade={guardFeature('planning', () => {})}
             onTijden={t => setForm(f => ({ ...f, ...t }))}
-            ploeg={form.assignedToIds.map(id => ({ id, naam: teamMembers.find(m => m.profileId === id)?.fullName || 'Medewerker' }))}
+            ploeg={form.assignedToIds.map(id => {
+              const m = teamMembers.find(x => x.profileId === id);
+              return { id, naam: m?.fullName || 'Medewerker', avatarUrl: m?.avatarUrl || '' };
+            })}
+            werkbonId={werkbon?.id || null}
+            activiteitId={werkbon?.raw?.activity_id || null}
           />
           <div className="f full">
             <label>Omschrijving</label>

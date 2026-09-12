@@ -1,20 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
-import { Clock, Info, RotateCcw, UserMinus, UserPlus, X } from 'lucide-react';
+import { AlertTriangle, Clock, Info, RotateCcw, UserMinus, UserPlus, X } from 'lucide-react';
 import AdresZoeker, { adresRegel } from './AdresZoeker.jsx';
 import ActieMenu from './ActieMenu.jsx';
+import { initials } from '../bb-shared.jsx';
 import { vandaagIso } from '../lib/datumTijd.js';
+import { getWerkbonnen } from '../services/werkbonService.js';
+import { listActivities } from '../services/activityService.js';
 import {
-  STANDAARD_TIJD, controleerPlanning, geplandeDatums, isWeekend, korteDatum, maandNaam,
-  verplaatsNaar, wisselDag,
+  STANDAARD_TIJD, controleerPlanning, dubbeleBoekingen, geplandeDatums, isWeekend, korteDatum,
+  maandNaam, tijdVanDag, verplaatsNaar, wisselDag,
 } from '../utils/werkbonDagen.js';
 
 // Gedeelde velden voor elk werkbonformulier (werkbonpagina, planning): de
-// geplande dagen, de tijden, de ploeg per dag en de locatie. Zie
+// geplande dagen, de tijd per dag, de ploeg per dag en de locatie. Zie
 // utils/werkbonDagen.js voor het model.
 
 const hhmm = t => (t ? String(t).slice(0, 5) : '');
 const pad = n => String(n).padStart(2, '0');
-const initialen = naam => (naam || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
 
 function TijdVelden({ label, starttijd, eindtijd, onTijden, disabled }) {
   return (
@@ -27,6 +29,14 @@ function TijdVelden({ label, starttijd, eindtijd, onTijden, disabled }) {
       </div>
     </div>
   );
+}
+
+// Zelfde avatar als linksonder in de zijbalk: de foto als die er is, anders de
+// initialen in het groene rondje (av av-0), met dezelfde initials()-helper.
+function MedewerkerAvatar({ m }) {
+  return m.avatarUrl
+    ? <img src={m.avatarUrl} alt="" className="av av-sm" style={{ objectFit: 'cover' }} />
+    : <span className="av av-sm av-0">{initials(m.naam || '?')}</span>;
 }
 
 // ── Kalender ─────────────────────────────────────────────────────────────────
@@ -102,23 +112,26 @@ function Kalender({ p, onTik, disabled, enkel = false }) {
 // ── Dagen ────────────────────────────────────────────────────────────────────
 
 /**
- * De kalender met daaronder de tijd. Zodra het meer dan één dag is, verschijnt
- * ernaast de dagenlijst: per dag een afwijkende tijd, en per dag wie er werkt.
+ * De kalender, met ernaast de gekozen dagen. Elke dag heeft zijn eigen begin-
+ * en eindtijd; een nieuwe dag neemt de tijd van de dag ervoor over, en met één
+ * knop zet je de tijd van de eerste dag op alle dagen. De tijd van de eerste dag
+ * is de tijd van de werkbon zelf (`starttijd`/`eindtijd`, via `onTijden`).
  *
- * `ploeg` = de medewerkers van de werkbon als [{ id, naam }]. Standaard werkt
- * iedereen elke dag op dezelfde tijd; een klik op iemands initialen opent het
- * acties-menu om hem van een dag af te halen of een eigen tijd te geven.
+ * `ploeg` = de medewerkers van de werkbon als [{ id, naam, avatarUrl }]. Een
+ * klik op iemands avatar opent het acties-menu om die persoon van een dag af te halen of
+ * een eigen tijd te geven.
  */
 export function WerkbonDagenVelden({
   planning: p, onChange, starttijd, eindtijd, onTijden, ploeg = [],
   disabled = false, className = '', style, meerdaags = true, onUpgrade,
+  werkbonId = null, activiteitId = null,
 }) {
   // Het aantal dagen bij het openen. Zonder planningsmodule tonen we dat alleen;
   // bij het verplaatsen van de klus mag die melding niet mee verspringen.
   const [aantalBijOpenen] = useState(() => geplandeDatums(p).length);
   // Het invulvak "eigen tijd" dat open staat: { datum, pid } of null.
   const [eigenTijdOpen, setEigenTijdOpen] = useState(null);
-  // Uitleg bij de tijden, achter het info-icoontje. Sluit op een klik ernaast.
+  // Uitleg achter het info-icoontje. Sluit op een klik ernaast.
   const [uitlegOpen, setUitlegOpen] = useState(false);
   const uitlegRef = useRef(null);
   useEffect(() => {
@@ -127,14 +140,43 @@ export function WerkbonDagenVelden({
     document.addEventListener('mousedown', sluit);
     return () => document.removeEventListener('mousedown', sluit);
   }, [uitlegOpen]);
+
+  // Dubbel ingepland: wat staat er al in de planning? Eén keer ophalen als het
+  // formulier opent — alleen met de planningsmodule, net als de rest hier.
+  const [bezetting, setBezetting] = useState({ werkbonnen: [], activiteiten: [] });
+  useEffect(() => {
+    if (!meerdaags) return undefined;
+    let actief = true;
+    Promise.all([getWerkbonnen().catch(() => []), listActivities().catch(() => [])])
+      .then(([werkbonnen, activiteiten]) => { if (actief) setBezetting({ werkbonnen, activiteiten }); });
+    return () => { actief = false; };
+  }, [meerdaags]);
+  // De waarschuwing die open staat: "<datum>|<pid>" of null. Sluit op een klik ernaast.
+  const [dubbelOpen, setDubbelOpen] = useState(null);
+  useEffect(() => {
+    if (!dubbelOpen) return undefined;
+    const sluit = e => { if (!e.target.closest?.('.wbd-dubbel')) setDubbelOpen(null); };
+    document.addEventListener('mousedown', sluit);
+    return () => document.removeEventListener('mousedown', sluit);
+  }, [dubbelOpen]);
+
   const set = patch => onChange({ ...p, ...patch });
   const datums = geplandeDatums(p);
-  const fout = controleerPlanning(p, { starttijd, eindtijd });
+  const standaard = { starttijd: hhmm(starttijd), eindtijd: hhmm(eindtijd) };
+  const fout = controleerPlanning(p, standaard);
+  const eerste = datums.length ? tijdVanDag(p, datums[0], standaard) : null;
+
+  // De tijd van de eerste dag ís de tijd van de werkbon. Wijzigt die (of wordt
+  // een andere dag de eerste), dan gaat hij mee naar het formulier — zodat alles
+  // wat alleen de werkbontijd leest (PDF, oudere schermen) blijft kloppen.
+  useEffect(() => {
+    if (!meerdaags || !eerste) return;
+    if (eerste.starttijd !== standaard.starttijd || eerste.eindtijd !== standaard.eindtijd) onTijden?.({ ...eerste });
+  }, [meerdaags, eerste?.starttijd, eerste?.eindtijd]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Eerste dag aangetikt en nog geen tijd: de gewone werkdag alvast invullen.
-  // Een dag zonder tijd valt uit de planning; zo hoeft bijna niemand iets te typen.
   const vulTijdIn = () => {
-    if (!hhmm(starttijd) && !hhmm(eindtijd)) onTijden?.({ ...STANDAARD_TIJD });
+    if (!standaard.starttijd && !standaard.eindtijd) onTijden?.({ ...STANDAARD_TIJD });
   };
 
   // Zonder planningsmodule: één dag en de tijd. Meerdere dagen, tijden per dag
@@ -168,27 +210,22 @@ export function WerkbonDagenVelden({
   }
 
   const meer = datums.length > 1;
-  const standaard = hhmm(starttijd)
-    ? `${hhmm(starttijd)}${hhmm(eindtijd) ? `–${hhmm(eindtijd)}` : ''}`
-    : 'nog geen tijd';
   const ploegIds = ploeg.map(m => m.id);
   const dagPloeg = datum => (Array.isArray(p.ploeg?.[datum]) ? p.ploeg[datum] : ploegIds);
 
-  const zetAfwijking = (datum, patch) => set({
-    afwijkend: {
-      ...p.afwijkend,
-      [datum]: { starttijd: hhmm(starttijd), eindtijd: hhmm(eindtijd), ...p.afwijkend[datum], ...patch },
-    },
+  const zetDagTijd = (d, patch) => set({
+    tijden: { ...(p.tijden || {}), [d]: { ...tijdVanDag(p, d, standaard), ...patch } },
   });
-  const wisAfwijking = datum => {
-    const rest = { ...p.afwijkend };
-    delete rest[datum];
-    set({ afwijkend: rest });
-  };
+  // Eén knop: de tijd van de eerste dag op alle dagen. Alleen zichtbaar als de
+  // tijden verschillen — anders valt er niets over te nemen.
+  const iedereenGelijk = datums.every(d => {
+    const t = tijdVanDag(p, d, standaard);
+    return t.starttijd === eerste?.starttijd && t.eindtijd === eerste?.eindtijd;
+  });
+  const voorAlleDagen = () => set({ tijden: Object.fromEntries(datums.map(d => [d, { ...eerste }])) });
 
-  // Iemand op één dag weg- of terugtikken. Is het daarna weer de hele ploeg, dan
-  // vervalt de afwijking: die dag volgt dan gewoon de ploeg van de werkbon.
-  // Wie er uit gaat, verliest ook zijn eigen tijd op die dag.
+  // Wie er uit gaat, verliest ook zijn eigen tijd op die dag. Is het daarna weer
+  // de hele ploeg, dan vervalt de afwijking: die dag volgt de ploeg van de werkbon.
   const wisselPersoon = (datum, id) => {
     const nu = dagPloeg(datum).filter(x => ploegIds.includes(x));
     const nieuw = nu.includes(id) ? nu.filter(x => x !== id) : [...nu, id];
@@ -207,7 +244,6 @@ export function WerkbonDagenVelden({
   };
 
   // Eigen tijd per persoon: een uitzondering op de tijd van de dag.
-  const dagTijd = d => ((meer && p.afwijkend?.[d]) ? p.afwijkend[d] : { starttijd: hhmm(starttijd), eindtijd: hhmm(eindtijd) });
   const zetEigenTijd = (d, pid, patch) => set({
     persoonTijden: {
       ...(p.persoonTijden || {}),
@@ -224,8 +260,17 @@ export function WerkbonDagenVelden({
   };
   // Openen begint met de tijd van de dag: je past alleen aan wat anders is.
   const openEigenTijd = (d, pid) => {
-    if (!p.persoonTijden?.[d]?.[pid]) zetEigenTijd(d, pid, { ...dagTijd(d) });
+    if (!p.persoonTijden?.[d]?.[pid]) zetEigenTijd(d, pid, { ...tijdVanDag(p, d, standaard) });
     setEigenTijdOpen({ datum: d, pid });
+  };
+
+  const tikDag = iso => {
+    let std = standaard;
+    if (!datums.length && !standaard.starttijd && !standaard.eindtijd) {
+      std = STANDAARD_TIJD;
+      onTijden?.({ ...STANDAARD_TIJD });
+    }
+    onChange(wisselDag(p, iso, std));
   };
 
   return (
@@ -233,54 +278,42 @@ export function WerkbonDagenVelden({
       <span className="wbd-kop">Dagen</span>
       <div className="wbd-kal-wrap">
         <div className="wbd-kal-kolom">
-          <Kalender
-            p={p}
-            disabled={disabled}
-            onTik={iso => { if (!datums.length) vulTijdIn(); onChange(wisselDag(p, iso)); }}
-          />
-          <TijdVelden
-            label={meer ? 'Tijd (elke dag)' : 'Tijd'}
-            starttijd={starttijd} eindtijd={eindtijd} onTijden={onTijden} disabled={disabled}
-          />
+          <Kalender p={p} disabled={disabled} onTik={tikDag} />
         </div>
 
-        {/* Ook bij één dag als er twee of meer mensen op staan: daar zet je
-            een eigen tijd per persoon. */}
-        {datums.length > 0 && (meer || ploeg.length > 1) && (
+        {datums.length > 0 && (
           <div className="wbd-lijst">
             <div className="wbd-lijst-kop">
-              <span>{meer ? `${datums.length} dagen gepland · standaardtijd ${standaard}` : `${korteDatum(datums[0])} · ${standaard}`}</span>
+              <span>{meer ? `${datums.length} dagen gepland` : '1 dag gepland'}</span>
               {/* Uitleg achter een info-icoontje — hetzelfde als bij de
                   modulekeuze (AbonnementPage): op klik, niet op hover, want op
                   een tablet bestaat hover niet. */}
-              {ploeg.length > 0 && (
-                <span className="ab-module-info" ref={uitlegRef}>
-                  <button
-                    type="button"
-                    className="ab-info-knop"
-                    aria-label="Hoe werken de tijden en de ploeg?"
-                    aria-expanded={uitlegOpen}
-                    onClick={() => setUitlegOpen(o => !o)}
-                  >
-                    <Info size={15} strokeWidth={2} />
-                  </button>
-                  {uitlegOpen && (
-                    <span className="ab-uitleg" role="dialog" aria-label="Tijden en ploeg">
-                      <span className="ab-uitleg-kop">
-                        Tijden en ploeg
-                        <button type="button" className="ab-uitleg-x" aria-label="Sluiten" onClick={() => setUitlegOpen(false)}><X size={13} /></button>
-                      </span>
-                      {meer
-                        ? 'Standaard werkt de hele ploeg elke dag, op dezelfde tijd.'
-                        : 'Standaard werkt de hele ploeg op dezelfde tijd.'}
-                      {' '}Klik op iemands initialen om hem van een dag af te halen of een eigen tijd te geven.
+              <span className="ab-module-info" ref={uitlegRef}>
+                <button
+                  type="button"
+                  className="ab-info-knop"
+                  aria-label="Hoe werken de tijden en de ploeg?"
+                  aria-expanded={uitlegOpen}
+                  onClick={() => setUitlegOpen(o => !o)}
+                >
+                  <Info size={15} strokeWidth={2} />
+                </button>
+                {uitlegOpen && (
+                  <span className="ab-uitleg" role="dialog" aria-label="Tijden en ploeg">
+                    <span className="ab-uitleg-kop">
+                      Tijden en ploeg
+                      <button type="button" className="ab-uitleg-x" aria-label="Sluiten" onClick={() => setUitlegOpen(false)}><X size={13} /></button>
                     </span>
-                  )}
-                </span>
-              )}
+                    Vul per dag de begin- en eindtijd in. Een nieuwe dag neemt de tijd van de dag ervoor over.
+                    {meer ? ' Met "voor alle dagen" zet je de tijd van de eerste dag op elke dag.' : ''}
+                    {ploeg.length > 0 ? ' Klik op iemands avatar om die persoon van een dag af te halen of een eigen tijd te geven.' : ''}
+                  </span>
+                )}
+              </span>
             </div>
-            {datums.map(d => {
-              const af = meer ? p.afwijkend[d] : null;
+
+            {datums.map((d, i) => {
+              const t = tijdVanDag(p, d, standaard);
               const eigenPloeg = Array.isArray(p.ploeg?.[d]);
               const eigenTijden = p.persoonTijden?.[d] || {};
               const afwijkers = ploeg.filter(m => dagPloeg(d).includes(m.id) && eigenTijden[m.id]);
@@ -288,18 +321,11 @@ export function WerkbonDagenVelden({
               return (
                 <div key={d} className={`wbd-dag${eigenPloeg ? ' eigen-ploeg' : ''}`}>
                   <span className="wbd-dag-datum">{korteDatum(d)}</span>
-                  {af ? (
-                    <>
-                      <input type="time" value={af.starttijd || ''} onChange={e => zetAfwijking(d, { starttijd: e.target.value })} disabled={disabled} aria-label={`Begintijd ${korteDatum(d)}`} />
-                      <span className="wbd-dag-tijd">→</span>
-                      <input type="time" value={af.eindtijd || ''} onChange={e => zetAfwijking(d, { eindtijd: e.target.value })} disabled={disabled} aria-label={`Eindtijd ${korteDatum(d)}`} />
-                      <button type="button" className="wbd-link" onClick={() => wisAfwijking(d)} disabled={disabled}>standaardtijd</button>
-                    </>
-                  ) : (
-                    <>
-                      <span className="wbd-dag-tijd">{standaard}</span>
-                      {meer && <button type="button" className="wbd-link" onClick={() => zetAfwijking(d, {})} disabled={disabled}>andere tijd</button>}
-                    </>
+                  <input type="time" value={t.starttijd} onChange={e => zetDagTijd(d, { starttijd: e.target.value })} disabled={disabled} aria-label={`Begintijd ${korteDatum(d)}`} />
+                  <span className="wbd-dag-tijd">→</span>
+                  <input type="time" value={t.eindtijd} onChange={e => zetDagTijd(d, { eindtijd: e.target.value })} disabled={disabled} aria-label={`Eindtijd ${korteDatum(d)}`} />
+                  {i === 0 && meer && !iedereenGelijk && (
+                    <button type="button" className="wbd-alle" onClick={voorAlleDagen} disabled={disabled}>voor alle dagen</button>
                   )}
                   {ploeg.length > 0 && (
                     <span className="wbd-ploeg">
@@ -307,13 +333,18 @@ export function WerkbonDagenVelden({
                         const werkt = dagPloeg(d).includes(m.id);
                         const eigen = werkt ? eigenTijden[m.id] : null;
                         const tip = `${m.naam}${eigen ? ` · ${eigen.starttijd || '?'}–${eigen.eindtijd || '?'}` : ''}${werkt ? '' : ' — niet op deze dag'}`;
+                        // Staat deze persoon op dat moment al ergens anders?
+                        const persoonTijd = eigen?.starttijd ? eigen : t;
+                        const dubbel = werkt
+                          ? dubbeleBoekingen({ ...bezetting, werkbonId, negeerActiviteitId: activiteitId, datum: d, pid: m.id, starttijd: persoonTijd.starttijd, eindtijd: persoonTijd.eindtijd })
+                          : [];
+                        const sleutel = `${d}|${m.id}`;
                         return (
-                          // Klik op de initialen = het acties-menu (hetzelfde
-                          // als bij facturen en offertes): wel/niet op deze dag,
-                          // een eigen tijd, of terug naar de standaardtijd.
-                          // Rechtsklik was niet vindbaar. Oranje ring = wijkt af.
+                          <span key={m.id} className="wbd-persoon">
+                          {/* Klik op de avatar = het acties-menu (hetzelfde als bij
+                              facturen en offertes): wel/niet op deze dag, een eigen
+                              tijd, of terug naar de tijd van de dag. */}
                           <ActieMenu
-                            key={m.id}
                             titel={`Opties voor ${m.naam}`}
                             items={[
                               {
@@ -327,7 +358,7 @@ export function WerkbonDagenVelden({
                                 onClick: () => openEigenTijd(d, m.id),
                               },
                               eigen && {
-                                label: 'Terug naar de standaardtijd',
+                                label: 'Terug naar de tijd van de dag',
                                 icon: <RotateCcw size={14} />,
                                 onClick: () => {
                                   wisEigenTijd(d, m.id);
@@ -346,10 +377,36 @@ export function WerkbonDagenVelden({
                                 aria-label={`${m.naam} ${werkt ? 'werkt' : 'werkt niet'} op ${korteDatum(d)}${eigen ? `, eigen tijd ${eigen.starttijd}–${eigen.eindtijd}` : ''}. Klik voor opties.`}
                                 data-tip={menuOpen ? undefined : tip}
                               >
-                                {initialen(m.naam)}
+                                <MedewerkerAvatar m={m} />
                               </button>
                             )}
                           />
+                          {dubbel.length > 0 && (
+                            // Oranje driehoekje: deze persoon staat op dat moment al
+                            // op iets anders. Uitleg op klik, zoals het info-icoontje.
+                            <span className="ab-module-info wbd-dubbel">
+                              <button
+                                type="button"
+                                className="wbd-dubbel-knop"
+                                aria-label={`${m.naam} staat op ${korteDatum(d)} dubbel ingepland — uitleg`}
+                                aria-expanded={dubbelOpen === sleutel}
+                                onClick={() => setDubbelOpen(o => (o === sleutel ? null : sleutel))}
+                              >
+                                <AlertTriangle size={13} strokeWidth={2.2} />
+                              </button>
+                              {dubbelOpen === sleutel && (
+                                <span className="ab-uitleg" role="dialog" aria-label="Dubbel ingepland">
+                                  <span className="ab-uitleg-kop">
+                                    Dubbel ingepland
+                                    <button type="button" className="ab-uitleg-x" aria-label="Sluiten" onClick={() => setDubbelOpen(null)}><X size={13} /></button>
+                                  </span>
+                                  {m.naam} staat op {korteDatum(d)} al ingepland: {dubbel.map(c => `${c.titel} (${c.starttijd || '?'}–${c.eindtijd || '?'})`).join(', ')}.
+                                  {' '}Met deze werkbon wordt {m.naam} op dat moment dubbel ingepland.
+                                </span>
+                              )}
+                            </span>
+                          )}
+                          </span>
                         );
                       })}
                     </span>

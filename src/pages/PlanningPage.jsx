@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Lock } from 'lucide-react';
+import { AlertTriangle, Lock, X } from 'lucide-react';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, useDroppable,
@@ -13,7 +13,7 @@ import { getWerkbonnen, createWerkbon, updateWerkbon, zetWerkbonDagen } from '..
 import { WerkbonDagenVelden, WerkbonLocatieVeld, useKlantAdres } from '../components/WerkbonPlanning.jsx';
 import {
   werkbonDagen, tijdenOpDag, tijdenVoorPersoon, ploegOpDag, isIngepland, planningUitWerkbon,
-  dagenUitPlanning, controleerPlanning, legePlanning, planningLabel,
+  dagenUitPlanning, controleerPlanning, legePlanning, planningLabel, dubbeleBoekingen,
 } from '../utils/werkbonDagen.js';
 import { getVoertuigen } from '../services/voertuigService.js';
 import { getActiveTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
@@ -149,7 +149,7 @@ function assignLanes(blocks) {
 
 // ── WERKBON BLOK (in tijdlijn) ────────────────────────────────────────────────
 
-function WerkbonBlock({ werkbon, color, onClick }) {
+function WerkbonBlock({ werkbon, color, onClick, onDubbel }) {
   const top    = timeToTopPx(werkbon.starttijd);
   const height = durationToPx(werkbon.starttijd, werkbon.eindtijd);
   const lane   = werkbon._lane || 0;
@@ -177,12 +177,26 @@ function WerkbonBlock({ werkbon, color, onClick }) {
       onMouseEnter={e => (e.currentTarget.style.filter = 'brightness(.96)')}
       onMouseLeave={e => (e.currentTarget.style.filter = '')}
     >
+      {/* Dubbel ingepland: klik = uitleg, zonder het blok zelf te openen. */}
+      {werkbon._dubbel?.length > 0 && (
+        <button
+          type="button"
+          className="pl-dubbel"
+          style={{ right: werkbon.assignedToIds && werkbon.assignedToIds.length > 1 ? 24 : 3 }}
+          aria-label="Dubbel ingepland — uitleg"
+          title="Dubbel ingepland"
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); onDubbel?.(werkbon, e); }}
+        >
+          <AlertTriangle size={10} strokeWidth={2.4} />
+        </button>
+      )}
       {werkbon.assignedToIds && werkbon.assignedToIds.length > 1 && (
         <div title={`${werkbon.assignedToIds.length} medewerkers toegewezen`} style={{ position: 'absolute', top: 2, right: 3, fontSize: 8, fontWeight: 800, color: color.text, background: color.border, borderRadius: 6, padding: '0 4px', lineHeight: 1.6 }}>
           +{werkbon.assignedToIds.length - 1}
         </div>
       )}
-      <div style={{ fontWeight: 700, fontSize: 10, color: color.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3, paddingRight: werkbon.assignedToIds && werkbon.assignedToIds.length > 1 ? 18 : 0 }}>
+      <div style={{ fontWeight: 700, fontSize: 10, color: color.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3, paddingRight: (werkbon.assignedToIds && werkbon.assignedToIds.length > 1 ? 18 : 0) + (werkbon._dubbel?.length ? 16 : 0) }}>
         {werkbon.titel}
       </div>
       {height > 30 && (
@@ -201,7 +215,7 @@ function WerkbonBlock({ werkbon, color, onClick }) {
 
 // ── ACTIVITEIT BLOK (in tijdlijn) ────────────────────────────────────────────
 
-function ActivityBlock({ activity, onClick }) {
+function ActivityBlock({ activity, onClick, onDubbel }) {
   const top    = timeToTopPx(activity.starttijd);
   const height = durationToPx(activity.starttijd, activity.eindtijd);
   const lane   = activity._lane || 0;
@@ -226,7 +240,20 @@ function ActivityBlock({ activity, onClick }) {
       onMouseEnter={e => (e.currentTarget.style.filter = 'brightness(.95)')}
       onMouseLeave={e => (e.currentTarget.style.filter = '')}
     >
-      <div style={{ fontWeight: 700, fontSize: 10, color: '#15803d', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>
+      {activity._dubbel?.length > 0 && (
+        <button
+          type="button"
+          className="pl-dubbel"
+          style={{ right: 3 }}
+          aria-label="Dubbel ingepland — uitleg"
+          title="Dubbel ingepland"
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); onDubbel?.(activity, e); }}
+        >
+          <AlertTriangle size={10} strokeWidth={2.4} />
+        </button>
+      )}
+      <div style={{ fontWeight: 700, fontSize: 10, color: '#15803d', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3, paddingRight: activity._dubbel?.length ? 16 : 0 }}>
         {activity.titel}
       </div>
       {height > 30 && (
@@ -296,7 +323,7 @@ function TimeSlotDrop({ date, hour }) {
 
 // ── TIJDLIJN KOLOM ────────────────────────────────────────────────────────────
 
-function DayColumn({ date, werkbonnen, activities = [], colorMap, isToday, allowDrop, onBlockClick, onActivityClick }) {
+function DayColumn({ date, werkbonnen, activities = [], colorMap, isToday, allowDrop, onBlockClick, onActivityClick, onDubbel }) {
   const allBlocks = useMemo(() => {
     const wbs = werkbonnen.map(w => ({ ...w, _blockType: 'werkbon' }));
     const acts = activities.map(a => ({
@@ -306,6 +333,9 @@ function DayColumn({ date, werkbonnen, activities = [], colorMap, isToday, allow
       eindtijd: a.endTime || minsToTime(timeToMins(a.time || '09:00') + 15),
       titel: a.title,
       customerName: a.customerName,
+      _datum: a._datum,
+      _persoon: a._persoon,
+      _dubbel: a._dubbel,
       _orig: a,
     }));
     return [...wbs, ...acts];
@@ -336,7 +366,7 @@ function DayColumn({ date, werkbonnen, activities = [], colorMap, isToday, allow
       {allowDrop && hours.map(h => <TimeSlotDrop key={h} date={date} hour={h} />)}
       {/* Werkbon + Activiteit blokken */}
       {withLanes.map(b => b._blockType === 'activity' ? (
-        <ActivityBlock key={b.id} activity={b} onClick={onActivityClick} />
+        <ActivityBlock key={b.id} activity={b} onClick={onActivityClick} onDubbel={onDubbel} />
       ) : (
         <WerkbonBlock
           key={b._blokKey || b.id}
@@ -345,6 +375,7 @@ function DayColumn({ date, werkbonnen, activities = [], colorMap, isToday, allow
           // anders ziet een fout eruit als "alles is van hem".
           color={colorMap[b._colorKey] || UNASSIGNED_COLOR}
           onClick={onBlockClick}
+          onDubbel={onDubbel}
         />
       ))}
     </div>
@@ -665,7 +696,7 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, profile, onCl
     if (!form.titel.trim()) { toast.error('Titel is verplicht'); return; }
     const planFout = controleerPlanning(planning, { starttijd: form.starttijd, eindtijd: form.eindtijd });
     if (planFout) { toast.error(planFout); return; }
-    const dagen = dagenUitPlanning(planning, form.assigned_to_ids);
+    const dagen = dagenUitPlanning(planning, form.assigned_to_ids, { starttijd: form.starttijd, eindtijd: form.eindtijd });
     setSaving(true);
     try {
       let wb = await createWerkbon({
@@ -743,7 +774,10 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, profile, onCl
             starttijd={form.starttijd}
             eindtijd={form.eindtijd}
             onTijden={t => setForm(f => ({ ...f, ...t }))}
-            ploeg={form.assigned_to_ids.map(id => ({ id, naam: teamMembers.find(m => m.id === id)?.fullName || 'Medewerker' }))}
+            ploeg={form.assigned_to_ids.map(id => {
+              const m = teamMembers.find(x => x.id === id);
+              return { id, naam: m?.fullName || 'Medewerker', avatarUrl: m?.avatarUrl || '' };
+            })}
             disabled={saving}
           />
           <AssigneeResponsibleSelect
@@ -812,7 +846,7 @@ function DetailModal({ werkbon, teamMembers, voertuigen, profile, onClose, onUpd
   const submit = async () => {
     const planFout = controleerPlanning(planning, { starttijd: form.starttijd, eindtijd: form.eindtijd });
     if (planFout) { toast.error(planFout); return; }
-    const dagen = dagenUitPlanning(planning, form.assigned_to_ids);
+    const dagen = dagenUitPlanning(planning, form.assigned_to_ids, { starttijd: form.starttijd, eindtijd: form.eindtijd });
     setSaving(true);
     try {
       const updated = await updateWerkbon(werkbon.id, {
@@ -890,7 +924,10 @@ function DetailModal({ werkbon, teamMembers, voertuigen, profile, onClose, onUpd
             starttijd={form.starttijd}
             eindtijd={form.eindtijd}
             onTijden={t => setForm(f => ({ ...f, ...t }))}
-            ploeg={form.assigned_to_ids.map(id => ({ id, naam: teamMembers.find(m => m.id === id)?.fullName || 'Medewerker' }))}
+            ploeg={form.assigned_to_ids.map(id => {
+              const m = teamMembers.find(x => x.id === id);
+              return { id, naam: m?.fullName || 'Medewerker', avatarUrl: m?.avatarUrl || '' };
+            })}
             disabled={saving}
           />
           <AssigneeResponsibleSelect
@@ -971,6 +1008,14 @@ export function PlanningPage({ openCustomer } = {}) {
   const [quickDrop,           setQuickDrop]           = useState(null); // { werkbon, date, hour }
   const [showUnplanned,       setShowUnplanned]       = useState(true);
   const [activeId,            setActiveId]            = useState(null);
+  // Uitleg bij een dubbel ingepland blok: { b, x, y } of null. Sluit op een klik ernaast.
+  const [dubbelInfo,          setDubbelInfo]          = useState(null);
+  useEffect(() => {
+    if (!dubbelInfo) return undefined;
+    const sluit = () => setDubbelInfo(null);
+    document.addEventListener('mousedown', sluit);
+    return () => document.removeEventListener('mousedown', sluit);
+  }, [dubbelInfo]);
 
   const weekDays = Array.from({ length: 7 }, (_, i) => toISO(addDays(weekStart, i)));
   const today = toISO(new Date());
@@ -1248,12 +1293,23 @@ export function PlanningPage({ openCustomer } = {}) {
                       const basis = {
                         ...w, starttijd: t.starttijd, eindtijd: t.eindtijd,
                         assignedToIds: ploeg,
+                        _datum: date,
                         _dagLabel: dagen.length > 1 ? `dag ${i + 1}/${dagen.length}` : '',
                       };
+                      // Staat deze medewerker op dat moment ook op iets anders?
+                      const dubbelVoor = (pid, van, tot) => dubbeleBoekingen({
+                        werkbonnen, activiteiten: activities, werkbonId: w.id,
+                        negeerActiviteitId: w.raw?.activity_id || null,
+                        datum: date, pid, starttijd: van, eindtijd: tot,
+                      });
                       if (viewMode === 'medewerker') {
                         // Het blok van de gekozen medewerker, met zíjn tijd.
                         const eigen = tijdenVoorPersoon(w, dagen[i], selectedMember);
-                        return [{ ...basis, starttijd: eigen.starttijd, eindtijd: eigen.eindtijd, _blokKey: w.id }];
+                        return [{
+                          ...basis, starttijd: eigen.starttijd, eindtijd: eigen.eindtijd, _blokKey: w.id,
+                          _persoon: teamMembers.find(m => m.id === selectedMember)?.fullName || '',
+                          _dubbel: dubbelVoor(selectedMember, eigen.starttijd, eigen.eindtijd),
+                        }];
                       }
                       if (viewMode !== 'totaal') return [{ ...basis, _blokKey: w.id }];
                       // Totaal: één blok per medewerker, in zijn eigen kleur.
@@ -1273,10 +1329,30 @@ export function PlanningPage({ openCustomer } = {}) {
                           _colorKey: pid,
                           _persoon: teamMembers.find(m => m.id === pid)?.fullName || '',
                           _blokKey: `${w.id}-${pid}`,
+                          _dubbel: dubbelVoor(pid, eigen.starttijd, eigen.eindtijd),
                         };
                       });
                     });
-                    const dayActs = filteredActivities.filter(a => a.date === date);
+                    // Activiteiten krijgen hetzelfde driehoekje: wie erop staat en
+                    // op dat moment ook op een werkbon of andere activiteit.
+                    const dayActs = filteredActivities.filter(a => a.date === date).map(a => {
+                      const ids = a.assignedToIds?.length ? a.assignedToIds : (a.assignee ? [a.assignee] : []);
+                      const eigenWb = werkbonnen.find(w => w.raw?.activity_id === a.id)?.id || null;
+                      const perPersoon = ids.map(pid => ({
+                        pid,
+                        botsingen: dubbeleBoekingen({
+                          werkbonnen, activiteiten: activities, werkbonId: eigenWb, negeerActiviteitId: a.id,
+                          datum: date, pid, starttijd: a.time, eindtijd: a.endTime,
+                        }),
+                      })).filter(x => x.botsingen.length);
+                      if (!perPersoon.length) return a;
+                      return {
+                        ...a,
+                        _datum: date,
+                        _persoon: perPersoon.map(x => teamMembers.find(m => m.id === x.pid)?.fullName || 'Medewerker').join(' en '),
+                        _dubbel: perPersoon.flatMap(x => x.botsingen),
+                      };
+                    });
                     return (
                       <DayColumn
                         key={date}
@@ -1287,6 +1363,7 @@ export function PlanningPage({ openCustomer } = {}) {
                         isToday={date === today}
                         allowDrop
                         onBlockClick={b => setDetailWb(werkbonnen.find(w => w.id === b.id) || b)}
+                        onDubbel={(b, e) => { const r = e.currentTarget.getBoundingClientRect(); setDubbelInfo({ b, x: r.left, y: r.bottom }); }}
                         onActivityClick={setSelectedActivity}
                       />
                     );
@@ -1294,6 +1371,25 @@ export function PlanningPage({ openCustomer } = {}) {
                 </div>
               </div>
             </div>
+
+            {/* Uitleg bij een dubbel ingepland blok. */}
+            {dubbelInfo && (
+              <div
+                className="pl-dubbel-uitleg"
+                role="dialog"
+                aria-label="Dubbel ingepland"
+                style={{ left: Math.max(8, Math.min(dubbelInfo.x - 20, window.innerWidth - 310)), top: dubbelInfo.y + 6 }}
+                onMouseDown={e => e.stopPropagation()}
+              >
+                <div className="ab-uitleg-kop">
+                  Dubbel ingepland
+                  <button type="button" className="ab-uitleg-x" aria-label="Sluiten" onClick={() => setDubbelInfo(null)}><X size={13} /></button>
+                </div>
+                {dubbelInfo.b._persoon || 'Deze medewerker'} staat op {fmtDayShort(dubbelInfo.b._datum)} ook ingepland:{' '}
+                {dubbelInfo.b._dubbel.map(c => `${c.titel} (${c.starttijd || '?'}–${c.eindtijd || '?'})`).join(', ')}.
+                {' '}Daardoor is {dubbelInfo.b._persoon || 'deze medewerker'} op dat moment dubbel ingepland.
+              </div>
+            )}
 
             {/* Legenda */}
             {legendItems.length > 0 && (
