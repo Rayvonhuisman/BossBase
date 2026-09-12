@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
+import { Clock, RotateCcw, UserMinus, UserPlus } from 'lucide-react';
 import AdresZoeker, { adresRegel } from './AdresZoeker.jsx';
+import ActieMenu from './ActieMenu.jsx';
 import { vandaagIso } from '../lib/datumTijd.js';
 import {
   STANDAARD_TIJD, controleerPlanning, geplandeDatums, isWeekend, korteDatum, maandNaam,
@@ -104,7 +106,8 @@ function Kalender({ p, onTik, disabled, enkel = false }) {
  * ernaast de dagenlijst: per dag een afwijkende tijd, en per dag wie er werkt.
  *
  * `ploeg` = de medewerkers van de werkbon als [{ id, naam }]. Standaard werkt
- * iedereen elke dag; tik iemand weg op een dag dat hij er niet is.
+ * iedereen elke dag op dezelfde tijd; een klik op iemands initialen opent het
+ * acties-menu om hem van een dag af te halen of een eigen tijd te geven.
  */
 export function WerkbonDagenVelden({
   planning: p, onChange, starttijd, eindtijd, onTijden, ploeg = [],
@@ -115,9 +118,6 @@ export function WerkbonDagenVelden({
   const [aantalBijOpenen] = useState(() => geplandeDatums(p).length);
   // Het invulvak "eigen tijd" dat open staat: { datum, pid } of null.
   const [eigenTijdOpen, setEigenTijdOpen] = useState(null);
-  // Lang indrukken op de initialen = eigen tijd; de klik die daarop volgt mag
-  // de persoon dan niet ook nog aan/uit zetten.
-  const druk = useRef({ timer: null, lang: false });
   const set = patch => onChange({ ...p, ...patch });
   const datums = geplandeDatums(p);
   const fout = controleerPlanning(p, { starttijd, eindtijd });
@@ -218,12 +218,6 @@ export function WerkbonDagenVelden({
     if (!p.persoonTijden?.[d]?.[pid]) zetEigenTijd(d, pid, { ...dagTijd(d) });
     setEigenTijdOpen({ datum: d, pid });
   };
-  const startDruk = (d, pid) => {
-    druk.current.lang = false;
-    clearTimeout(druk.current.timer);
-    druk.current.timer = setTimeout(() => { druk.current.lang = true; openEigenTijd(d, pid); }, 450);
-  };
-  const stopDruk = () => clearTimeout(druk.current.timer);
 
   return (
     <div className={`wbd ${className}`} style={style}>
@@ -251,9 +245,9 @@ export function WerkbonDagenVelden({
             {ploeg.length > 0 && (
               <div className="wbd-lijst-uitleg">
                 {meer
-                  ? 'Standaard werkt de hele ploeg elke dag, op dezelfde tijd. Tik iemand weg op een dag dat hij er niet is.'
+                  ? 'Standaard werkt de hele ploeg elke dag, op dezelfde tijd.'
                   : 'Standaard werkt de hele ploeg op dezelfde tijd.'}
-                {' '}Rechtsklik of houd de initialen vast voor een eigen tijd.
+                {' '}Klik op iemands initialen om hem van een dag af te halen of een eigen tijd te geven.
               </div>
             )}
             {datums.map(d => {
@@ -283,31 +277,50 @@ export function WerkbonDagenVelden({
                       {ploeg.map(m => {
                         const werkt = dagPloeg(d).includes(m.id);
                         const eigen = werkt ? eigenTijden[m.id] : null;
-                        const tip = `${m.naam}${eigen ? ` · ${eigen.starttijd || '?'}–${eigen.eindtijd || '?'}` : ''}${werkt ? ' · rechtsklik: eigen tijd' : ' — niet op deze dag'}`;
+                        const tip = `${m.naam}${eigen ? ` · ${eigen.starttijd || '?'}–${eigen.eindtijd || '?'}` : ''}${werkt ? '' : ' — niet op deze dag'}`;
                         return (
-                          // Tik = aan/uit voor die dag (de standaard, snel).
-                          // Rechtsklik of lang indrukken = eigen tijd (de
-                          // uitzondering). data-tip toont direct de naam en,
-                          // als die er is, de eigen tijd; oranje ring = wijkt af.
-                          <button
+                          // Klik op de initialen = het acties-menu (hetzelfde
+                          // als bij facturen en offertes): wel/niet op deze dag,
+                          // een eigen tijd, of terug naar de standaardtijd.
+                          // Rechtsklik was niet vindbaar. Oranje ring = wijkt af.
+                          <ActieMenu
                             key={m.id}
-                            type="button"
-                            className={`wbd-ploeg-chip${werkt ? ' aan' : ''}${eigen ? ' eigen-tijd' : ''}`}
-                            onClick={() => {
-                              if (druk.current.lang) { druk.current.lang = false; return; }
-                              wisselPersoon(d, m.id);
-                            }}
-                            onContextMenu={e => { e.preventDefault(); if (werkt && !disabled) openEigenTijd(d, m.id); }}
-                            onPointerDown={() => { if (werkt && !disabled) startDruk(d, m.id); }}
-                            onPointerUp={stopDruk}
-                            onPointerLeave={stopDruk}
-                            disabled={disabled}
-                            aria-pressed={werkt}
-                            aria-label={`${m.naam} ${werkt ? 'werkt' : 'werkt niet'} op ${korteDatum(d)}${eigen ? `, eigen tijd ${eigen.starttijd}–${eigen.eindtijd}` : ''}. Tik om te wisselen; rechtsklik of lang indrukken voor een eigen tijd.`}
-                            data-tip={tip}
-                          >
-                            {initialen(m.naam)}
-                          </button>
+                            titel={`Opties voor ${m.naam}`}
+                            items={[
+                              {
+                                label: werkt ? 'Niet op deze dag' : 'Wel op deze dag',
+                                icon: werkt ? <UserMinus size={14} /> : <UserPlus size={14} />,
+                                onClick: () => wisselPersoon(d, m.id),
+                              },
+                              werkt && {
+                                label: 'Andere tijd voor deze persoon',
+                                icon: <Clock size={14} />,
+                                onClick: () => openEigenTijd(d, m.id),
+                              },
+                              eigen && {
+                                label: 'Terug naar de standaardtijd',
+                                icon: <RotateCcw size={14} />,
+                                onClick: () => {
+                                  wisEigenTijd(d, m.id);
+                                  if (eigenTijdOpen?.datum === d && eigenTijdOpen?.pid === m.id) setEigenTijdOpen(null);
+                                },
+                              },
+                            ]}
+                            trigger={({ open: menuOpen, wissel }) => (
+                              <button
+                                type="button"
+                                className={`wbd-ploeg-chip${werkt ? ' aan' : ''}${eigen ? ' eigen-tijd' : ''}`}
+                                onClick={wissel}
+                                disabled={disabled}
+                                aria-haspopup="menu"
+                                aria-expanded={menuOpen}
+                                aria-label={`${m.naam} ${werkt ? 'werkt' : 'werkt niet'} op ${korteDatum(d)}${eigen ? `, eigen tijd ${eigen.starttijd}–${eigen.eindtijd}` : ''}. Klik voor opties.`}
+                                data-tip={menuOpen ? undefined : tip}
+                              >
+                                {initialen(m.naam)}
+                              </button>
+                            )}
+                          />
                         );
                       })}
                     </span>

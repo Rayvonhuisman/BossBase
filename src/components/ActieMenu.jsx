@@ -17,8 +17,12 @@ import { MoreVertical } from 'lucide-react';
  *               `scheiding` zet een lijn bóven het item — daarmee komen
  *               crediteren en verwijderen los van de gewone acties te staan.
  * @param knop   'icoon' (in een tabelrij) of 'knop' (op een kaart)
+ * @param trigger optioneel: ({ open, wissel }) => element. Een eigen knop in
+ *               plaats van de drie puntjes — bijvoorbeeld de initialen van een
+ *               medewerker in de werkbonplanning. `wissel` opent/sluit het menu.
+ *               Het paneel valt dan open zoals bij 'icoon': eronder.
  */
-export default function ActieMenu({ items = [], knop = 'icoon', titel = 'Meer acties', label = 'Acties' }) {
+export default function ActieMenu({ items = [], knop = 'icoon', titel = 'Meer acties', label = 'Acties', trigger = null }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -36,7 +40,9 @@ export default function ActieMenu({ items = [], knop = 'icoon', titel = 'Meer ac
 
   return (
     <div style={{ position: 'relative', display: 'inline-flex' }} ref={ref}>
-      {knop === 'icoon' ? (
+      {trigger ? (
+        trigger({ open, wissel: e => { e?.stopPropagation?.(); setOpen(o => !o); } })
+      ) : knop === 'icoon' ? (
         <button
           className="btn btn-xs btn-ghost btn-icon"
           title={titel}
