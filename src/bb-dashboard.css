@@ -3181,7 +3181,11 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
    invulvak dat opent na rechtsklik of lang indrukken. */
 .wbd-dag{flex-wrap:wrap}
 .wbd-ploeg-chip.eigen-tijd{box-shadow:0 0 0 2px #f59e0b}
-.wbd-dag-eigen{flex-basis:100%;font-size:.7rem;color:#b45309;padding:0 0 3px 84px;line-height:1.35}
+.wbd-dag-eigen{flex-basis:100%;display:flex;flex-direction:column;gap:1px;font-size:.72rem;color:var(--muted,#6b7280);padding:0 0 4px 84px;line-height:1.4}
+.wbd-dag-persoon{display:flex;gap:10px}
+.wbd-dag-persoon>span:first-child{min-width:110px}
+.wbd-dag-persoon>span:last-child{font-variant-numeric:tabular-nums}
+.wbd-dag-persoon.eigen{color:#b45309;font-weight:600}
 .wbd-pt{flex-basis:100%;margin:4px 0 6px;padding:8px 10px;border:1px solid var(--bstrong);border-radius:var(--r8);background:white;display:flex;flex-direction:column;gap:6px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
 .wbd-pt-kop{font-size:.74rem;font-weight:700;color:var(--dk)}
 .wbd-pt .wbd-tijd input{border:1px solid var(--bstrong);border-radius:var(--r6);padding:4px 6px;font-size:.8rem;background:white}

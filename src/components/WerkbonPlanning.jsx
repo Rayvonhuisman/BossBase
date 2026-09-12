@@ -412,8 +412,18 @@ export function WerkbonDagenVelden({
                     </span>
                   )}
                   {afwijkers.length > 0 && !open && (
+                    // Wijkt iemand af, dan het hele overzicht van die dag: wie werkt
+                    // er, en van hoe laat tot hoe laat — ook wie de dagtijd volgt.
                     <div className="wbd-dag-eigen">
-                      Eigen tijd: {afwijkers.map(m => `${m.naam} ${eigenTijden[m.id].starttijd || '?'}–${eigenTijden[m.id].eindtijd || '?'}`).join(' · ')}
+                      {ploeg.filter(m => dagPloeg(d).includes(m.id)).map(m => {
+                        const pt = eigenTijden[m.id] || t;
+                        return (
+                          <span key={m.id} className={`wbd-dag-persoon${eigenTijden[m.id] ? ' eigen' : ''}`}>
+                            <span>{m.naam}</span>
+                            <span>{pt.starttijd || '?'}–{pt.eindtijd || '?'}</span>
+                          </span>
+                        );
+                      })}
                     </div>
                   )}
                   {open && (
