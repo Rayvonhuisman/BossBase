@@ -102,7 +102,7 @@ const NAV = [
   { id: 'activities',  label: 'Activiteiten', icon: 'act',     section: 'main' },
   { id: 'calendar',    label: 'Agenda',        icon: 'cal',     section: 'work' },
   { id: 'planning',    label: 'Planning',      icon: 'planning',section: 'work', permission: 'planning', feature: 'planning' },
-  { id: 'projecten',   label: 'Projecten',     icon: 'projects',section: 'work' },
+  { id: 'projecten',   label: 'Projecten',     icon: 'projects',section: 'work', permission: 'projecten' },
   { id: 'werkbonnen',  label: 'Werkbonnen',    icon: 'wo',      section: 'work' },
   { id: 'materialen',  label: 'Materialen',    icon: 'box',     section: 'work' },
   { id: 'uren',        label: 'Uren',          icon: 'hours',   section: 'work' },
@@ -126,6 +126,7 @@ const PLAN_GATED_PAGES = {
 // Pagina's die een bepaald recht vereisen voor toegang
 const PROTECTED_PAGES = {
   pipeline:    'verkoop',
+  projecten:   'projecten',
   offertes:    'offertes',
   facturen:    'facturen',
   costs:       'kosten',
@@ -837,10 +838,10 @@ function MeerMenu({ page, onNavigate, onClose, profile }) {
       label: 'Uitvoering',
       items: [
         { id: 'calendar',   label: 'Agenda',     icon: I.cal },
-        { id: 'projecten',  label: 'Projecten',  icon: I.projects },
+        can('projecten') && { id: 'projecten',  label: 'Projecten',  icon: I.projects },
         { id: 'werkbonnen', label: 'Werkbonnen', icon: I.wo },
         { id: 'uren',       label: 'Uren',       icon: I.hours },
-      ],
+      ].filter(Boolean),
     },
     ...(financeItems.length > 0 ? [{ label: 'Financieel', items: financeItems }] : []),
     ...(bedrijfItems.length > 0 ? [{ label: 'Bedrijf',   items: bedrijfItems }] : []),

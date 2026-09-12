@@ -33,6 +33,9 @@ export const PERMISSION_GROUPS = [
     key: 'uitvoering',
     label: 'Uitvoering (projecten, werkbonnen, planning)',
     subs: [
+      { key: 'projecten', label: 'Projecten',
+        kort: 'De Projecten-pagina openen',
+        uitleg: 'Geeft toegang tot de Projecten-pagina. Wélke projecten iemand daar ziet regelt de database: zonder ‘Alle projecten & werkbonnen inzien’ zijn dat alleen de projecten waaraan hij is toegewezen of waarvan hij een werkbon heeft. Bewerken vraagt apart om ‘Projecten bewerken’.' },
       { key: 'projecten_bewerken', label: 'Projecten bewerken',
         kort: 'Alle projecten aanmaken en bewerken',
         uitleg: 'Projecten aanmaken en bewerken — ook projecten waar je zelf niet aan gekoppeld bent. Je eigen projecten zie je altijd, ook zonder dit recht; dit recht gaat over het wijzigen.' },
