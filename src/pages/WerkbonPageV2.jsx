@@ -610,6 +610,15 @@ function TakenSection({
 function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = true }) {
   const { can } = usePermissions();
   const magInkoop = can('inkoopprijzen');
+  // De verkoopkant hoort achter hetzelfde recht als de bedragen op projecten.
+  // De inkoopprijs was hier al afgeschermd, maar verkoopprijs, subtotaal en het
+  // totaal stonden open — terwijl de uitleg van 'projectbedragen' letterlijk
+  // "bedragen op projecten, werkbonnen en de klantkaart" noemt.
+  //
+  // Toevoegen blijft wél kunnen zonder dit recht: een monteur schrijft op wat
+  // hij verbruikt heeft. Materiaal uit de bibliotheek krijgt zijn prijs
+  // automatisch mee; vrij materiaal komt op 0 en wordt op kantoor geprijsd.
+  const magBedragen = can('projectbedragen');
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
 
   const [biblio, setBiblio] = useState([]);
@@ -681,10 +690,20 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
   const uitBiblio = r => Boolean(r.materiaalId ?? r.materiaal_id);
   const levNaam = id => leveranciers.find(l => l.id === id)?.naam || '';
 
-  // Zelfde kolomopzet als de regelitems op offertes/facturen.
-  const COLS = magInkoop
-    ? 'minmax(0,2.2fr) 62px 74px 84px 84px minmax(0,1.3fr) 96px 30px'
-    : 'minmax(0,2.4fr) 62px 74px 84px minmax(0,1.4fr) 96px 30px';
+  // Zelfde kolomopzet als de regelitems op offertes/facturen, maar opgebouwd uit
+  // de kolommen die deze gebruiker mag zien. Vier vaste varianten uitschrijven
+  // (wel/geen inkoop x wel/geen bedragen) loopt gegarandeerd een keer scheef.
+  const KOLOMMEN = [
+    'minmax(0,2.2fr)',                        // materiaal
+    '62px',                                   // aantal
+    '74px',                                   // eenheid
+    magBedragen && '84px',                    // verkoop
+    magInkoop && '84px',                      // inkoop
+    'minmax(0,1.3fr)',                        // leverancier
+    magBedragen && '96px',                    // subtotaal
+    '30px',                                   // verwijderen
+  ].filter(Boolean);
+  const COLS = KOLOMMEN.join(' ');
 
   const vastTitel = 'Ligt vast op het materiaal in de bibliotheek';
 
@@ -718,8 +737,10 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
                         onChange={e => veld(m, 'aantal', e.target.value)} />
                       <input type="text" value={m.eenheid || ''} placeholder="stuk" disabled={!canEdit}
                         onChange={e => veld(m, 'eenheid', e.target.value)} />
-                      <input type="number" min="0" step="0.01" value={m.prijsPer ?? 0} disabled={!canEdit}
-                        onChange={e => veld(m, 'prijs_per', e.target.value)} />
+                      {magBedragen && (
+                        <input type="number" min="0" step="0.01" value={m.prijsPer ?? 0} disabled={!canEdit}
+                          onChange={e => veld(m, 'prijs_per', e.target.value)} />
+                      )}
                     </div>
                     {magInkoop && (
                       vast
@@ -733,7 +754,7 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
                       : <LeverancierSelect value={m.leverancierId || ''} disabled={!canEdit} leveranciers={leveranciers}
                           onLijstGewijzigd={g => setLeveranciers(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
                           onChange={v => veld(m, 'leverancier_id', v)} />}
-                    <div style={{ textAlign: 'right', fontWeight: 600, fontSize: 13 }}>{fmtEur(sub)}</div>
+                    {magBedragen && <div style={{ textAlign: 'right', fontWeight: 600, fontSize: 13 }}>{fmtEur(sub)}</div>}
                   </div>
                 );
               })}
@@ -741,9 +762,12 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
           ) : materialen.length > 0 && (
             <div>
               <div className="wb2-mat-kop" style={{ display: 'grid', gridTemplateColumns: COLS, gap: 5 }}>
-                <span>Materiaal</span><span>Aantal</span><span>Eenheid</span><span>Verkoop</span>
+                <span>Materiaal</span><span>Aantal</span><span>Eenheid</span>
+                {magBedragen && <span>Verkoop</span>}
                 {magInkoop && <span>Inkoop</span>}
-                <span>Leverancier</span><span style={{ textAlign: 'right' }}>Subtotaal</span><span />
+                <span>Leverancier</span>
+                {magBedragen && <span style={{ textAlign: 'right' }}>Subtotaal</span>}
+                <span />
               </div>
               {materialen.map(m => {
                 const sub = m.subtotaal || m.aantal * m.prijsPer;
@@ -757,8 +781,10 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
                       onChange={e => veld(m, 'aantal', e.target.value)} style={{ minWidth: 0 }} />
                     <input type="text" value={m.eenheid || ''} placeholder="stuk" disabled={!canEdit}
                       onChange={e => veld(m, 'eenheid', e.target.value)} style={{ minWidth: 0 }} />
-                    <input type="number" min="0" step="0.01" value={m.prijsPer ?? 0} disabled={!canEdit}
-                      onChange={e => veld(m, 'prijs_per', e.target.value)} style={{ minWidth: 0 }} />
+                    {magBedragen && (
+                      <input type="number" min="0" step="0.01" value={m.prijsPer ?? 0} disabled={!canEdit}
+                        onChange={e => veld(m, 'prijs_per', e.target.value)} style={{ minWidth: 0 }} />
+                    )}
                     {magInkoop && (
                       vast
                         ? <input type="text" readOnly disabled title={vastTitel} style={{ minWidth: 0 }}
@@ -772,10 +798,12 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
                       : <LeverancierSelect value={m.leverancierId || ''} disabled={!canEdit} leveranciers={leveranciers}
                           onLijstGewijzigd={g => setLeveranciers(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
                           onChange={v => veld(m, 'leverancier_id', v)} style={{ minWidth: 0, width: '100%' }} />}
-                    <div style={{ textAlign: 'right', overflow: 'hidden' }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>{fmtEur(sub)}</div>
-                      <div style={{ fontSize: 10, color: 'var(--dl)', whiteSpace: 'nowrap' }}>{fmtEur(calcBtw(sub, pct, 'excl').incl)} incl.</div>
-                    </div>
+                    {magBedragen && (
+                      <div style={{ textAlign: 'right', overflow: 'hidden' }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>{fmtEur(sub)}</div>
+                        <div style={{ fontSize: 10, color: 'var(--dl)', whiteSpace: 'nowrap' }}>{fmtEur(calcBtw(sub, pct, 'excl').incl)} incl.</div>
+                      </div>
+                    )}
                     {canEdit
                       ? <button className="btn btn-xs btn-danger btn-icon" onClick={() => onDelete(m)} title="Verwijderen">{I.trash}</button>
                       : <div />}
@@ -807,8 +835,10 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
                   onChange={e => setForm(f => ({ ...f, aantal: e.target.value }))} style={{ minWidth: 0 }} />
                 <input type="text" value={form.eenheid} placeholder="stuk"
                   onChange={e => setForm(f => ({ ...f, eenheid: e.target.value }))} style={{ minWidth: 0 }} />
-                <input type="number" min="0" step="0.01" value={form.prijs_per} placeholder="0,00"
-                  onChange={e => setForm(f => ({ ...f, prijs_per: e.target.value }))} style={{ minWidth: 0 }} />
+                {magBedragen && (
+                  <input type="number" min="0" step="0.01" value={form.prijs_per} placeholder="0,00"
+                    onChange={e => setForm(f => ({ ...f, prijs_per: e.target.value }))} style={{ minWidth: 0 }} />
+                )}
                 {magInkoop && (
                   form.materiaal_id
                     ? <input type="text" readOnly disabled title={vastTitel} style={{ minWidth: 0 }}
@@ -823,10 +853,12 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
                       onLijstGewijzigd={g => setLeveranciers(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
                       onChange={v => setForm(f => ({ ...f, leverancier_id: v }))}
                       style={{ minWidth: 0, width: '100%' }} />}
-                <div style={{ textAlign: 'right', overflow: 'hidden' }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>{fmtEur(addSub)}</div>
-                  <div style={{ fontSize: 10, color: 'var(--dl)', whiteSpace: 'nowrap' }}>{fmtEur(calcBtw(addSub, form.btw_pct, 'excl').incl)} incl.</div>
-                </div>
+                {magBedragen && (
+                  <div style={{ textAlign: 'right', overflow: 'hidden' }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>{fmtEur(addSub)}</div>
+                    <div style={{ fontSize: 10, color: 'var(--dl)', whiteSpace: 'nowrap' }}>{fmtEur(calcBtw(addSub, form.btw_pct, 'excl').incl)} incl.</div>
+                  </div>
+                )}
                 <button onClick={submit} disabled={adding || !form.naam.trim()} className="wb2-mat-add-btn"
                   aria-label="Materiaal toevoegen" title="Toevoegen">{I.plus}</button>
               </div>
@@ -834,7 +866,7 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
           )}
         </div>
 
-        {materialen.length > 0 && (
+        {magBedragen && materialen.length > 0 && (
           <div className="wb2-mat-foot">
             <div className="wb2-mat-foot-add" style={{ visibility: 'hidden' }}>spacer</div>
             <div style={{ textAlign: 'right' }}>
@@ -1473,6 +1505,23 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
     }
   };
 
+  // Wat moet er als bedrag in de spiegel-kost staan?
+  //
+  // Een kostenregel hoort de KOSTPRIJS te dragen, dus aantal x inkoopprijs.
+  // Hier stond het verkoopsubtotaal, waardoor de brutowinst op materiaal per
+  // definitie nul was: je "betaalde" precies wat je factureerde.
+  //
+  // Is de inkoopprijs onbekend, dan valt hij terug op de verkoopprijs. Bewust
+  // die kant op: dat maakt de winst te LAAG en nooit te hoog, en op het project
+  // staat er een melding bij hoeveel regels dat betreft. Op nul zetten zou de
+  // kost stil laten verdwijnen en de winst juist opblazen.
+  const materiaalKostprijs = m => {
+    const aantal = Number(m.aantal) || 0;
+    const inkoop = m.inkoopprijsPer;
+    if (inkoop != null && aantal > 0) return Math.round(inkoop * aantal * 100) / 100;
+    return Number(m.subtotaal) || 0;
+  };
+
   const handleAddMaterial = async input => {
     try {
       const btwPct = Number(input.btw_pct ?? 21);
@@ -1482,10 +1531,11 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
       // Spiegel-kost zodat het materiaal meetelt in het project/kosten. Het
       // werkbon_materiaal_id koppelt beide → één keer geteld; project en klant
       // worden in createJobCost afgeleid van de werkbon. BTW = dezelfde keuze.
-      if (created.subtotaal > 0) {
+      const kostprijs = materiaalKostprijs(created);
+      if (kostprijs > 0) {
         createJobCost({
           description: `Materiaal: ${created.naam}`,
-          amount: created.subtotaal, // subtotaal is exclusief BTW
+          amount: kostprijs, // inkoopwaarde, exclusief BTW
           btw_percentage: btwPct,
           btw_inclusief: false,
           category: 'Materiaal',
@@ -1524,12 +1574,15 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
       await updateWerkbonMateriaal(m.id, patch);
       // Spiegel-kost meetrekken zodra bedrag of naam wijzigt, anders lopen de
       // nacalculatie en de werkbon uit elkaar.
-      if (nieuwRij.subtotaal !== m.subtotaal || nieuwRij.naam !== m.naam) {
+      // Ook meetrekken als alléén de INKOOPprijs wijzigt: die bepaalt sinds
+      // kort het bedrag, en daar keek deze controle nog niet naar.
+      const nieuweKost = materiaalKostprijs(nieuwRij);
+      if (nieuweKost !== materiaalKostprijs(m) || nieuwRij.naam !== m.naam) {
         const { data: kost } = await supabase
           .from('job_costs').select('id').eq('werkbon_materiaal_id', m.id).maybeSingle();
         if (kost?.id) {
           await updateJobCost(kost.id, {
-            amount: nieuwRij.subtotaal,
+            amount: nieuweKost,
             description: `Materiaal: ${nieuwRij.naam}`,
           }).catch(() => {});
         }
