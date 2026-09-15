@@ -68,7 +68,7 @@ import { listActivities } from './services/activityService.js';
 import { getOffertes } from './services/offerteService.js';
 import { getWerkbonnen } from './services/werkbonService.js';
 import { getFacturen } from './services/factuurService.js';
-import { listJobCosts } from './services/jobCostService.js';
+import { listJobCosts, alleenGeboekt } from './services/jobCostService.js';
 import { listCalendarEvents } from './services/calendarService.js';
 import { staatOpDag } from './utils/werkbonDagen.js';
 import { ActivityEditModal, NewActivityModal, NewLeadModal, ProfileModal } from './components/SharedModals.jsx';
@@ -1224,7 +1224,9 @@ function AppInner() {
       getWerkbonnen().catch(() => []),
       listCalendarEvents().catch(() => []),
       getFacturen().catch(() => []),
-      listJobCosts().catch(() => []),
+      // Alleen boekingen: het dashboard telt kosten van het bedrijf, en werkbon-
+      // materiaal staat daarin al als inkoopfactuur (zie alleenGeboekt).
+      listJobCosts().then(alleenGeboekt).catch(() => []),
       listLeveranciers().catch(() => []),
     ])
       .then(([cs, ds, st, acts, offs, wbs, ces, facs, jcs, levs]) => {

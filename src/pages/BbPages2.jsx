@@ -5,7 +5,7 @@ import {
   fmt, custById, Av, StatusBadge, ModalX, Logo, CostCategoryBadge,
 } from '../bb-shared.jsx';
 import { createCalendarEvent, listCalendarEvents, updateCalendarEvent } from '../services/calendarService.js';
-import { createJobCost, deleteJobCost, listJobCosts, updateJobCost, getKostenBijlageUrl, kostenPerGroep, kostenSplitsing } from '../services/jobCostService.js'
+import { createJobCost, deleteJobCost, listJobCosts, updateJobCost, getKostenBijlageUrl, kostenPerGroep, kostenSplitsing, alleenGeboekt } from '../services/jobCostService.js'
 import { listLeveranciers } from '../services/leverancierService.js'
 import LeverancierSelect from '../components/LeverancierSelect.jsx'
 import { categorieOptiesUit } from '../lib/kostenCategorieen.js';
@@ -956,7 +956,11 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-3)' }}>
             <div className="f" style={{ flex: '1 1 130px', minWidth: 0 }}>
               <label>Bedrag (excl. BTW) <Saved field="amount" /></label>
-              <input type="number" min="0" step="0.01" value={amt}
+              {/* Bij werkbonmateriaal rekent de database het bedrag zelf uit
+                  (aantal x inkoopprijs); een wijziging hier zou bij de
+                  volgende aanpassing op de werkbon weer verdwijnen. */}
+              <input type="number" min="0" step="0.01" value={amt} disabled={isWerkbonMateriaal}
+                title={isWerkbonMateriaal ? 'Volgt het materiaal op de werkbon — wijzig het daar' : undefined}
                 onChange={e => setAmt(e.target.value)} onBlur={() => save('amount', Number(amt) || 0)} />
             </div>
             <div className="f" style={{ flex: '1 1 130px', minWidth: 0 }}>
@@ -966,7 +970,8 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
             </div>
             <div className="f" style={{ flex: '1 1 90px', minWidth: 0 }}>
               <label>BTW <Saved field="btw_percentage" /></label>
-              <select value={btwPct} onChange={handleBtwChange}>
+              <select value={btwPct} onChange={handleBtwChange} disabled={isWerkbonMateriaal}
+                title={isWerkbonMateriaal ? 'Volgt het materiaal op de werkbon — wijzig het daar' : undefined}>
                 {BTW_PCT_OPTIONS.map(p => <option key={p} value={p}>{p}%</option>)}
               </select>
             </div>
@@ -1111,13 +1116,34 @@ export function CostsPage() {
     return true;
   });
   const total = filtered.reduce((s, c) => s + c.amt, 0);
-  const groepTotalen = kostenPerGroep(filtered);
+  // De categorietegels tellen alleen boekingen, zodat ze optellen tot
+  // "Geboekte kosten". Werkbonmateriaal staat apart: dat is de kostprijs van een
+  // klus, geen boeking (zie alleenGeboekt).
+  const groepTotalen = kostenPerGroep(alleenGeboekt(filtered));
   // Kosten zonder leverancier kunnen niet naar de boekhouding. Werkbonmateriaal
   // telt niet mee: die regels worden sowieso niet geëxporteerd.
   const zonderLeverancier = costs.filter(c => !c.leverancierId && !isWerkbonMateriaalKost(c));
   // Kostprijs (alles) vs boekhoudkosten (wat naar SnelStart/Moneybird gaat).
   const splitsing = kostenSplitsing(filtered);
   const cats = [...new Set(costs.map(c => c.cat))];
+  // Hier stond "Kostprijs klus": alle kosten opgeteld, ook de algemene die aan
+  // geen enkele klus hangen. Dat was geen kostprijs van iets. Wat een klus kost
+  // staat nu op het project (werkbonmateriaal + projectkosten); deze pagina is
+  // de boekhouding, dus de eerste tegel is wat er geboekt is, en de categorieën
+  // tellen daartoe op. Werkbonmateriaal krijgt een eigen tegel, en alleen als
+  // het er is — zonder het recht inkoopprijzen komen die regels niet binnen.
+  // Arbeid blijft staan zolang er oude data is; als categorie is hij niet meer
+  // te kiezen.
+  const tegels = [
+    { label: 'Geboekte kosten', val: fmt(splitsing.boekhouding), icon: I.brief,
+      sub: 'Wat naar de boekhouding gaat' },
+    { label: 'Materiaalkosten', val: fmt(groepTotalen.materiaal), icon: I.brief },
+    ...(groepTotalen.arbeid > 0 ? [{ label: 'Arbeidskosten', val: fmt(groepTotalen.arbeid), icon: I.hours }] : []),
+    { label: 'Reiskosten', val: fmt(groepTotalen.reiskosten), icon: I.map },
+    { label: 'Overige kosten', val: fmt(groepTotalen.overig), icon: I.costs },
+    ...(splitsing.werkbonMateriaal > 0 ? [{ label: 'Werkbonmateriaal', val: fmt(splitsing.werkbonMateriaal), icon: I.costs,
+      sub: 'Niet geboekt · telt in de projectmarge' }] : []),
+  ];
   return (
     <div>
       <div className="page-hd afu">
@@ -1130,21 +1156,8 @@ export function CostsPage() {
       {error && <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>}
       {/* Groepering via kostenPerGroep — hoofdletterongevoelig en met een
           vangnet-groep, zodat de tegels altijd optellen tot het totaal. */}
-      {/* Zes tegels: de eerste twee zijn de splitsing (kostprijs vs wat naar de
-          boekhouding gaat), de vier daarna zijn de categorie-verdeling en tellen
-          samen op tot de kostprijs. Arbeid blijft staan zolang er oude data is;
-          als categorie is hij niet meer te kiezen. */}
-      <div className="stats-row afu2" style={{ gridTemplateColumns: 'repeat(6,1fr)' }}>
-        {[
-          { label: 'Kostprijs klus',   val: fmt(splitsing.kostprijs),      icon: I.costs,
-            sub: 'Alle kosten, inclusief werkbonmateriaal' },
-          { label: 'Boekhoudkosten',   val: fmt(splitsing.boekhouding),    icon: I.brief,
-            sub: 'Wat naar de boekhouding gaat' },
-          { label: 'Materiaalkosten',  val: fmt(groepTotalen.materiaal),   icon: I.brief },
-          { label: 'Arbeidskosten',    val: fmt(groepTotalen.arbeid),      icon: I.hours },
-          { label: 'Reiskosten',       val: fmt(groepTotalen.reiskosten),  icon: I.map   },
-          { label: 'Overige kosten',   val: fmt(groepTotalen.overig),      icon: I.costs },
-        ].map((s, i) => (
+      <div className="stats-row afu2" style={{ gridTemplateColumns: `repeat(${tegels.length},1fr)` }}>
+        {tegels.map((s, i) => (
           <div key={i} className="sc">
             <div className="sc-top"><div className="sc-icon">{s.icon}</div></div>
             <div className="sc-val">{s.val}</div>
@@ -1159,9 +1172,9 @@ export function CostsPage() {
           border: '1px solid var(--border)', borderRadius: 'var(--r8)',
           padding: '8px 12px', marginBottom: 14,
         }}>
-          {fmt(splitsing.werkbonMateriaal)} aan werkbonmateriaal telt mee in de kostprijs van je klussen,
-          maar gaat niet naar de boekhouding — daar is de inkoopfactuur van je leverancier de kostenpost.
-          Zo wordt dezelfde inkoop niet twee keer geteld.
+          {fmt(splitsing.werkbonMateriaal)} aan werkbonmateriaal staat hier ter inzage, maar is geen boeking:
+          het telt in de marge van het project, en in de boekhouding is de inkoopfactuur van je leverancier
+          de kostenpost. Daarom zit het niet in de geboekte kosten.
         </div>
       )}
       {zonderLeverancier.length > 0 && (
@@ -1351,7 +1364,9 @@ export function RevenuePage() {
     Promise.all([listCustomers(), listJobCosts(), getFacturen(), getOffertes(), getAllFactuurRegels(), getConnection()])
       .then(([custData, costData, facturenData, offertesData, regelsData, mbConn]) => {
         setCustomers(custData);
-        setCostsData(costData);
+        // Bedrijfskosten = boekingen. Werkbonmateriaal staat daar al in als
+        // inkoopfactuur; meetellen zou dezelfde inkoop dubbel tellen.
+        setCostsData(alleenGeboekt(costData));
         setFacturen(facturenData);
         setOffertes(offertesData);
         setAllRegels(regelsData);

@@ -858,6 +858,11 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
               <option value="">Geen project</option>
               {filteredProjecten.map(p => <option key={p.id} value={p.id}>{p.name || 'Project'}</option>)}
             </select>
+            {/* Een boeking is boekhouding. De projectmarge draait op werkbon-
+                materiaal en projectkosten; anders telt de inkoop dubbel. */}
+            <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginTop: 4, lineHeight: 1.35 }}>
+              Ter referentie — telt niet mee in de projectmarge.
+            </div>
           </div>
           <div className="f">
             <label>Werkbon <span style={{ color: 'var(--dl)', fontWeight: 400 }}>(optioneel)</span></label>

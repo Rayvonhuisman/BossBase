@@ -32,6 +32,8 @@ import { bouwPdfData, bouwPdfWerkbon, verstuurWaarschuwing, bouwWaarschuwingMail
 import { getCurrentCompany } from '../services/profileService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
+import { NewCustomerModal } from '../components/SharedModals.jsx';
+import { NewProjectModal } from './ProjectsPage.jsx';
 import { berekenUren } from '../services/urenService.js';
 import {
   createWerkbonUur, getWerkbonUren, magWerkbonUrenBeheren,
@@ -39,14 +41,14 @@ import {
 import {
   PauzeKnoppen, rondAfOpVijf, Dropdown,
 } from '../components/UrenVelden.jsx';
-import { createJobCost, updateJobCost } from '../services/jobCostService.js';
-import { supabase } from '../lib/supabase';
 import { statusInfo } from '../utils/statusColors.js';
 import { calcBtw, BTW_PCT_OPTIONS } from '../utils/btw.js';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
+// Waarde van de "+ Nieuwe klant…"/"+ Nieuw project…"-optie in een keuzelijst.
+const NIEUW_OPTIE = '__nieuw__';
 
 const fmtEur = n => `€ ${Number(n || 0).toFixed(2).replace('.', ',')}`;
 
@@ -118,9 +120,59 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
   const [saving, setSaving] = useState(false);
   const [notifyMail, setNotifyMail] = useState(true);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // Klant of project aanmaken zonder de werkbon te verlaten — zelfde patroon
+  // als LeverancierSelect. Wat hier net is aangemaakt staat nog niet in de
+  // lijsten die de pagina meegaf, dus komt het er lokaal bij.
+  const { can } = usePermissions();
+  const beheerder = ['admin', 'planner'].includes(profile?.role);
+  const magKlantMaken = beheerder || can('klanten_bewerken');
+  const magProjectMaken = beheerder || can('projecten_bewerken');
+  const [snelNieuw, setSnelNieuw] = useState(null); // 'klant' | 'project'
+  const [nieuweKlanten, setNieuweKlanten] = useState([]);
+  const [nieuweProjecten, setNieuweProjecten] = useState([]);
+  const alleKlanten = [...nieuweKlanten, ...customers.filter(c => !nieuweKlanten.some(n => n.id === c.id))];
+  const alleProjecten = [...nieuweProjecten, ...projects.filter(p => !nieuweProjecten.some(n => n.id === p.id))];
+
   const klantAdres = useKlantAdres({
-    customers, locatie: form.locatie, setLocatie: v => set('locatie', v), vragenBijWijzigen: isEdit,
+    customers: alleKlanten, locatie: form.locatie, setLocatie: v => set('locatie', v), vragenBijWijzigen: isEdit,
   });
+  // Het adres van een nét aangemaakte klant pas voorstellen als hij in de
+  // lijst staat: klantGekozen zoekt hem daar op, en die is pas een render
+  // later bijgewerkt.
+  const [adresVan, setAdresVan] = useState(null);
+  useEffect(() => {
+    if (adresVan && alleKlanten.some(c => c.id === adresVan)) {
+      klantAdres.klantGekozen(adresVan);
+      setAdresVan(null);
+    }
+  }, [adresVan, nieuweKlanten]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const kiesKlant = v => {
+    if (v === NIEUW_OPTIE) { setSnelNieuw('klant'); return; }
+    set('customer_id', v);
+    klantAdres.klantGekozen(v);
+  };
+  const kiesProject = v => {
+    if (v === NIEUW_OPTIE) { setSnelNieuw('project'); return; }
+    set('project_id', v);
+  };
+  const klantGemaakt = klant => {
+    setNieuweKlanten(l => [klant, ...l]);
+    set('customer_id', klant.id);
+    setAdresVan(klant.id);
+  };
+  const projectGemaakt = project => {
+    setNieuweProjecten(l => [project, ...l]);
+    set('project_id', project.id);
+    // Project met een klant en nog geen klant op de werkbon: die meenemen.
+    const klantId = project.customerId ?? project.customer_id ?? null;
+    if (klantId && !form.customer_id) {
+      set('customer_id', klantId);
+      klantAdres.klantGekozen(klantId);
+    }
+    setSnelNieuw(null);
+  };
 
   const submit = async () => {
     if (!form.titel.trim()) { toast.error('Titel is verplicht'); return; }
@@ -184,7 +236,8 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
   };
 
   return (
-    <div className="overlay" onClick={e => e.target === e.currentTarget && !saving && onClose()}>
+    <>
+    <div className="overlay" onClick={e => e.target === e.currentTarget && !saving && !snelNieuw && onClose()}>
       <div className="modal modal-wide">
         <div className="modal-hd">
           <div>
@@ -215,18 +268,20 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
           </div>
           <div className="f">
             <label>Klant</label>
-            <select value={form.customer_id} onChange={e => { set('customer_id', e.target.value); klantAdres.klantGekozen(e.target.value); }}>
+            <select value={form.customer_id} onChange={e => kiesKlant(e.target.value)}>
               <option value="">— Geen klant —</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {magKlantMaken && <option value={NIEUW_OPTIE}>+ Nieuwe klant…</option>}
+              {alleKlanten.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="f">
             <label>Project (optioneel)</label>
-            <select value={form.project_id} onChange={e => set('project_id', e.target.value)}>
+            <select value={form.project_id} onChange={e => kiesProject(e.target.value)}>
               <option value="">— Geen project —</option>
+              {magProjectMaken && <option value={NIEUW_OPTIE}>+ Nieuw project…</option>}
               {(form.customer_id
-                ? projects.filter(p => !p.customerId || p.customerId === form.customer_id)
-                : projects
+                ? alleProjecten.filter(p => !p.customerId || p.customerId === form.customer_id)
+                : alleProjecten
               ).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
@@ -285,6 +340,22 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
         </div>
       </div>
     </div>
+    {/* Naast de werkbon, niet erin: een eigen overlay die erbovenop ligt. Een
+        klik ernaast sluit dan alleen dit venster, niet de werkbon. */}
+    {snelNieuw === 'klant' && (
+      <NewCustomerModal onClose={() => setSnelNieuw(null)} onSaved={klantGemaakt} />
+    )}
+    {snelNieuw === 'project' && (
+      <NewProjectModal
+        customers={alleKlanten}
+        deals={[]}
+        offertes={[]}
+        prefillCustomerId={form.customer_id || null}
+        onClose={() => setSnelNieuw(null)}
+        onSaved={projectGemaakt}
+      />
+    )}
+    </>
   );
 }
 
@@ -1505,57 +1576,23 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
     }
   };
 
-  // Wat moet er als bedrag in de spiegel-kost staan?
-  //
-  // Een kostenregel hoort de KOSTPRIJS te dragen, dus aantal x inkoopprijs.
-  // Hier stond het verkoopsubtotaal, waardoor de brutowinst op materiaal per
-  // definitie nul was: je "betaalde" precies wat je factureerde.
-  //
-  // Is de inkoopprijs onbekend, dan valt hij terug op de verkoopprijs. Bewust
-  // die kant op: dat maakt de winst te LAAG en nooit te hoog, en op het project
-  // staat er een melding bij hoeveel regels dat betreft. Op nul zetten zou de
-  // kost stil laten verdwijnen en de winst juist opblazen.
-  const materiaalKostprijs = m => {
-    const aantal = Number(m.aantal) || 0;
-    const inkoop = m.inkoopprijsPer;
-    if (inkoop != null && aantal > 0) return Math.round(inkoop * aantal * 100) / 100;
-    return Number(m.subtotaal) || 0;
-  };
-
+  // De kostregel in job_costs (voor de nacalculatie) maakt de database zelf aan
+  // en houdt hem bij: aantal x inkoopprijs, anders de verkoopprijs. Dat stond
+  // hier in de browser, maar die rekende met de inkoopprijs die híj kon zien —
+  // en zonder het recht inkoopprijzen is dat niets, dus zette een monteur die
+  // het aantal wijzigde de kost terug op de verkoopprijs. Zie migratie
+  // 20260915130500.
   const handleAddMaterial = async input => {
     try {
-      const btwPct = Number(input.btw_pct ?? 21);
       const created = await createWerkbonMateriaal({ werkbon_id: selectedId, ...input });
-      // BTW leeft op de gekoppelde kost; toon hem ook meteen optimistisch.
-      setMaterialen(prev => [...prev, { ...created, btwPercentage: btwPct }]);
-      // Spiegel-kost zodat het materiaal meetelt in het project/kosten. Het
-      // werkbon_materiaal_id koppelt beide → één keer geteld; project en klant
-      // worden in createJobCost afgeleid van de werkbon. BTW = dezelfde keuze.
-      const kostprijs = materiaalKostprijs(created);
-      if (kostprijs > 0) {
-        createJobCost({
-          description: `Materiaal: ${created.naam}`,
-          amount: kostprijs, // inkoopwaarde, exclusief BTW
-          btw_percentage: btwPct,
-          btw_inclusief: false,
-          category: 'Materiaal',
-          cost_date: new Date().toISOString().slice(0, 10),
-          werkbon_id: selectedId,
-          werkbon_materiaal_id: created.id,
-          // Komt uit de bibliotheek (waar leverancier verplicht is) of uit de
-          // vrije invoer. Deze spiegelregels worden niet geëxporteerd, dus leeg
-          // mag: de leveranciersplicht geldt hier niet.
-          leverancier_id: input.leverancier_id ?? created.leverancierId ?? null,
-        }).catch(() => {});
-      }
+      setMaterialen(prev => [...prev, created]);
     } catch (e) {
       toast.error(e.message || 'Materiaal toevoegen mislukt');
     }
   };
 
   // Regel bijwerken. Debounce is hier niet nodig: het zijn losse velden en de
-  // schrijfactie is klein. De spiegel-kost wordt meegetrokken zodra het bedrag
-  // verandert, anders lopen nacalculatie en werkbon uit elkaar.
+  // schrijfactie is klein. De kostregel trekt de database zelf mee.
   const handleUpdateMaterial = async (m, patch) => {
     const nieuwRij = { ...m };
     if ('naam' in patch) nieuwRij.naam = patch.naam;
@@ -1572,21 +1609,6 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
     setMaterialen(prev => prev.map(x => (x.id === m.id ? nieuwRij : x)));
     try {
       await updateWerkbonMateriaal(m.id, patch);
-      // Spiegel-kost meetrekken zodra bedrag of naam wijzigt, anders lopen de
-      // nacalculatie en de werkbon uit elkaar.
-      // Ook meetrekken als alléén de INKOOPprijs wijzigt: die bepaalt sinds
-      // kort het bedrag, en daar keek deze controle nog niet naar.
-      const nieuweKost = materiaalKostprijs(nieuwRij);
-      if (nieuweKost !== materiaalKostprijs(m) || nieuwRij.naam !== m.naam) {
-        const { data: kost } = await supabase
-          .from('job_costs').select('id').eq('werkbon_materiaal_id', m.id).maybeSingle();
-        if (kost?.id) {
-          await updateJobCost(kost.id, {
-            amount: nieuweKost,
-            description: `Materiaal: ${nieuwRij.naam}`,
-          }).catch(() => {});
-        }
-      }
     } catch (e) {
       toast.error(e.message || 'Bijwerken mislukt');
       setMaterialen(prev => prev.map(x => (x.id === m.id ? m : x)));

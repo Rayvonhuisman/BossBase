@@ -115,8 +115,6 @@ export function mapJobCostFormToPayload(input = {}) {
   return payload
 }
 
-const isMateriaal = cat => (cat || '').trim().toLowerCase() === 'materiaal'
-
 // Kostencategorieën worden met hoofdletter opgeslagen ('Materiaal', 'Inkoopfactuur',
 // 'Gereedschap', …). De KPI-tegels vergeleken op kleine letters en matchten dus
 // nooit — vandaar €0 terwijl het totaal wél klopte.
@@ -155,6 +153,18 @@ export function kostenPerGroep(kosten = []) {
 export const isWerkbonMateriaal = k => Boolean(k?.werkbonMateriaalId ?? k?.werkbon_materiaal_id)
 
 /**
+ * Alleen wat geboekt is — de boekhouding. Werkbonmateriaal eruit: dat is de
+ * kostprijs van een klus, en de inkoopfactuur van dat materiaal staat er al
+ * als boeking in. Samen tellen zou dezelfde inkoop twee keer tellen.
+ *
+ * Nodig op elke plek die kosten van het bedrijf optelt (dashboard,
+ * Financiën). De spiegelregels zijn bovendien alleen zichtbaar met het recht
+ * inkoopprijzen; zonder dit filter zou hetzelfde dashboard per gebruiker een
+ * ander bedrag tonen.
+ */
+export const alleenGeboekt = (kosten = []) => kosten.filter(k => !isWerkbonMateriaal(k))
+
+/**
  * Splitst kosten in kostprijs (alles) en boekhoudkosten (wat naar de
  * boekhouding gaat). Geeft { kostprijs, boekhouding, werkbonMateriaal }.
  */
@@ -176,10 +186,9 @@ export function kostenSplitsing(kosten = []) {
 /**
  * Inkoopwaarde van de kosten — de basis voor een brutowinst.
  *
- * Het verschil met kostenSplitsing: een spiegelregel van werkbonmateriaal staat
- * met de VERKOOPprijs in job_costs.amount. Reken je daarmee, dan is de
- * brutowinst op materiaal per definitie nul. Hier telt daarom de inkoopwaarde
- * (aantal x inkoopprijs) zodra die bekend is.
+ * De database zet het bedrag van een spiegelregel zelf op aantal x inkoopprijs
+ * (migratie 20260915130500); hier wordt dat nog eens uit de materiaalregel
+ * afgeleid, zodat ook een regel van vóór die migratie goed telt.
  *
  * Is de inkoopprijs NIET bekend, dan valt de regel terug op de verkoopprijs en
  * wordt hij geteld in `zonderInkoopprijs`. Bewust die kant op: terugvallen op
@@ -304,22 +313,16 @@ export async function deleteJobCost(id) {
 }
 
 // ── PROJECT-KOSTEN (direct + via werkbon, één keer geteld) ───────────────────
-// Werkbon → project map voor de indirecte koppeling.
-async function getWerkbonProjectMap() {
-  const { data, error } = await supabase.from("werkbonnen").select("id, project_id")
-  if (error) return {}
-  const map = {}
-  for (const w of (data || [])) if (w.project_id) map[w.id] = w.project_id
-  return map
-}
-
 // Kosten van één project: rechtstreeks (project_id) óf via een werkbon van dit
 // project. Een kost die via BEIDE routes matcht is nog steeds één rij → telt
 // dus precies één keer (geen dubbeltelling).
 export async function getProjectCosts(projectId) {
   if (!projectId) return []
-  const wbMap = await getWerkbonProjectMap()
-  const werkbonIds = Object.keys(wbMap).filter(id => wbMap[id] === projectId)
+  // Alleen de werkbonnen van dít project. Hier stond een lijst van álle
+  // werkbonnen van het bedrijf, en die kapte PostgREST stil af op 1000 rijen:
+  // bij een groot bedrijf viel het materiaal van nieuwere werkbonnen dan weg.
+  const { data: wbs } = await supabase.from("werkbonnen").select("id").eq("project_id", projectId)
+  const werkbonIds = (wbs || []).map(w => w.id)
 
   const orParts = [`project_id.eq.${projectId}`]
   if (werkbonIds.length) orParts.push(`werkbon_id.in.(${werkbonIds.join(",")})`)
@@ -357,22 +360,6 @@ export async function getProjectCosts(projectId) {
   })
 }
 
-// Totale kosten per project (direct + via werkbon), één keer per kost-rij.
-// Geeft { projectId: totaalBedrag }.
-export async function getProjectCostsMap() {
-  const [costRes, wbMap] = await Promise.all([
-    supabase.from("job_costs").select("amount, project_id, werkbon_id"),
-    getWerkbonProjectMap(),
-  ])
-  const byProject = {}
-  for (const c of (costRes.data || [])) {
-    const pid = c.project_id || wbMap[c.werkbon_id] || null
-    if (!pid) continue
-    byProject[pid] = (byProject[pid] || 0) + Number(c.amount || 0)
-  }
-  return byProject
-}
-
 export async function updateJobCost(id, input) {
   const payload = mapJobCostFormToPayload(input)
   const { data, error } = await supabase.from('job_costs').update(payload).eq('id', id).select('*').single()
@@ -385,42 +372,26 @@ export async function createJobCost(input) {
   if (!base.description) throw new Error("Omschrijving is verplicht")
   if (!(base.amount > 0)) throw new Error("Voer een geldig bedrag in")
 
-  // Werkbon-koppeling → project en klant automatisch afleiden van de werkbon
-  // (tenzij expliciet meegegeven). Zo telt een werkbon-kost mee bij het project
-  // en hangt hij aan de juiste klant.
-  let wbCompanyId = null
-  if (base.werkbon_id && (!base.project_id || !base.customer_id || (isMateriaal(base.category) && !base.werkbon_materiaal_id))) {
+  // Werkbon-koppeling → project en klant afleiden van de werkbon (tenzij
+  // expliciet meegegeven), zodat de boeking bij de juiste klant hangt. In de
+  // projectmarge telt hij niet mee: dat doen alleen het werkbonmateriaal en
+  // de projectkosten (project_kosten).
+  if (base.werkbon_id && (!base.project_id || !base.customer_id)) {
     const { data: wb } = await supabase
       .from("werkbonnen")
-      .select("project_id, customer_id, company_id")
+      .select("project_id, customer_id")
       .eq("id", base.werkbon_id)
       .maybeSingle()
     if (wb) {
       if (!base.project_id) base.project_id = wb.project_id || null
       if (!base.customer_id) base.customer_id = wb.customer_id || null
-      wbCompanyId = wb.company_id || null
     }
   }
 
-  // Materiaalkost gekoppeld aan een werkbon (en nog niet aan een materiaal):
-  // maak een spiegel-regel in werkbon_materialen zodat hij ook in de materiaal-
-  // lijst van de werkbon verschijnt. De lijst leest werkbon_materialen, de
-  // kosten lezen job_costs → elk item telt precies één keer.
-  if (base.werkbon_id && isMateriaal(base.category) && !base.werkbon_materiaal_id && wbCompanyId) {
-    const { data: mat } = await supabase
-      .from("werkbon_materialen")
-      .insert({
-        werkbon_id: base.werkbon_id,
-        company_id: wbCompanyId,
-        naam: (base.description || "Materiaal").replace(/^Materiaal:\s*/i, ""),
-        aantal: 1,
-        prijs_per: base.amount,
-        subtotaal: base.amount,
-      })
-      .select("id")
-      .single()
-    if (mat?.id) base.werkbon_materiaal_id = mat.id
-  }
+  // Een materiaalboeking op een werkbon werd hier vroeger óók als
+  // werkbonmateriaal aangemaakt. De boeking kreeg daarmee een
+  // werkbon_materiaal_id, en zo'n regel slaat de SnelStart-export over: de
+  // inkoop kwam dan nooit in de boekhouding. Een boeking blijft nu een boeking.
 
   const payload = await withCompanyId(base)
   let { data, error } = await supabase

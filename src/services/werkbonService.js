@@ -106,8 +106,6 @@ const toWerkbonTaak = row => ({
 })
 
 const toWerkbonMateriaal = row => {
-  // BTW leeft op de gekoppelde job_cost (geen apart systeem). Join geeft die mee.
-  const jc = Array.isArray(row.job_costs) ? row.job_costs[0] : row.job_costs
   return {
     id: row.id,
     werkbonId: row.werkbon_id,
@@ -126,7 +124,9 @@ const toWerkbonMateriaal = row => {
         ? row.werkbon_materiaal_inkoop[0] : row.werkbon_materiaal_inkoop
       return k?.inkoopprijs_per != null ? Number(k.inkoopprijs_per) : null
     })(),
-    btwPercentage: jc?.btw_percentage != null ? Number(jc.btw_percentage) : 21,
+    // Stond op de gekoppelde kostregel; die is afgeschermd voor wie de
+    // inkoopprijs niet mag zien, dus nu op het materiaal zelf.
+    btwPercentage: row.btw_percentage != null ? Number(row.btw_percentage) : 21,
     raw: row,
   }
 }
@@ -458,12 +458,11 @@ export async function deleteWerkbonTaak(id) {
 // ── WERKBON MATERIALEN ───────────────────────────────────────────────────────
 
 export async function getWerkbonMaterialen(werkbonId) {
-  // BTW-percentage komt van de gekoppelde job_cost (werkbon_materiaal_id).
   // De kostprijs staat in werkbon_materiaal_inkoop met eigen RLS: zonder het
   // recht inkoopprijzen komt die inbedding gewoon leeg terug.
   let { data, error } = await supabase
     .from("werkbon_materialen")
-    .select("*, job_costs!werkbon_materiaal_id(btw_percentage), werkbon_materiaal_inkoop(inkoopprijs_per)")
+    .select("*, werkbon_materiaal_inkoop(inkoopprijs_per)")
     .eq("werkbon_id", werkbonId)
     .order("created_at", { ascending: true })
   if (error && /could not find.*relationship|foreign key/i.test(error.message)) {
@@ -491,6 +490,7 @@ export async function createWerkbonMateriaal(input) {
     // gaat niet mee in deze insert — die staat in werkbon_materiaal_inkoop.
     materiaal_id: input.materiaal_id ?? input.materiaalId ?? null,
     leverancier_id: input.leverancier_id ?? input.leverancierId ?? null,
+    btw_percentage: Number(input.btw_pct ?? input.btw_percentage ?? 21),
   }
   if (!base.werkbon_id) throw new Error("werkbon_id is verplicht voor een materiaalregel")
   if (!base.naam) throw new Error("naam is verplicht voor een materiaalregel")

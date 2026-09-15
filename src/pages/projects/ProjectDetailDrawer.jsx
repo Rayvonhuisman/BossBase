@@ -1,11 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { listLeveranciers } from '../../services/leverancierService.js';
 import LeverancierSelect from '../../components/LeverancierSelect.jsx';
-import BijlageDropzone from '../../components/BijlageDropzone.jsx';
-import { categorieOptiesUit, standaardCategorieUit, bonVerplichtUit, BON_VERPLICHT_MELDING } from '../../lib/kostenCategorieen.js';
-import { useKostenCategorieen } from '../../hooks/useKostenCategorieen.js';
 import { Maximize2, Minimize2, AlertTriangle, AlertOctagon } from 'lucide-react';
-import { I, ModalX, NotifyMailToggle, fmt, fmt0, CostCategoryBadge } from '../../bb-shared.jsx';
+import { I, ModalX, NotifyMailToggle, fmt, fmt0 } from '../../bb-shared.jsx';
 import { useToast } from '../../lib/toast.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
 import { usePermissions } from '../../hooks/usePermissions.js';
@@ -25,11 +22,10 @@ import {
 } from '../../services/projectsService.js';
 import { getWerkbonnenByProject } from '../../services/werkbonService.js';
 import { planningLabel } from '../../utils/werkbonDagen.js';
+import { getProjectCosts, inkoopwaardeVanKosten, isWerkbonMateriaal } from '../../services/jobCostService.js';
 import {
-  getProjectCosts, createJobCost, deleteJobCost, uploadKostenBonnen,
-  kostenSplitsing, inkoopwaardeVanKosten,
-} from '../../services/jobCostService.js';
-import { calcBtw, BTW_PCT_OPTIONS } from '../../utils/btw.js';
+  listProjectKosten, createProjectKost, updateProjectKost, deleteProjectKost,
+} from '../../services/projectKostenService.js';
 import { NewFactuurModal, SendFactuurMailModal } from '../FacturenPage.jsx';
 import { NewOfferteModal, SendOfferteMailModal } from '../OffertesPage.jsx';
 import { WerkbonModal } from '../WerkbonPageV2.jsx';
@@ -551,116 +547,112 @@ function UrenTab({ project, entries }) {
 }
 
 // ── KOSTEN TAB ───────────────────────────────────────────────────────────────
-// Kosten van dit project: direct gekoppeld (project_id) + via werkbonnen van
-// dit project, gededupliceerd (één kost telt één keer). Winst = gefactureerd −
-// kosten.
+// Wat deze klus gekost heeft: het materiaal van de werkbonnen (op inkoopprijs)
+// plus de projectkosten die hier worden ingevoerd — steigerhuur, een gehuurde
+// hoogwerker, kosten die bij deze ene klus horen maar nooit op een werkbon
+// staan.
+//
+// Boekingen van de Kosten-pagina tellen NIET mee, ook niet met dit project
+// eraan. Dat is de boekhouding, en daar staat de inkoopfactuur van hetzelfde
+// materiaal dat al via de werkbon meetelt. Hier telde dat eerder allebei mee:
+// bij "Schilderwerk woonkamer" stond dezelfde verf er als factuur van € 420
+// én als werkbonmateriaal. Zie migratie 20260915130000.
 function KostenTab({ project, canManage }) {
   const toast = useToast();
-  // De kostenregels zelf vallen onder het recht 'kosten' (dat gate't deze tab
-  // al). Gefactureerd en brutowinst zijn iets anders: dat is de opbrengst van
-  // het project, en die hoort achter 'projectbedragen'. De inkoopwaarde blijft
-  // staan — dat is wat het werk kost, niet wat het oplevert.
+  // De kosten zelf vallen onder het recht 'kosten' (dat gate't deze tab al).
+  // Gefactureerd en brutowinst zijn de opbrengst van het project en horen
+  // achter 'projectbedragen'.
   const { can } = usePermissions();
   const magBedragen = can('projectbedragen');
-  const [costs, setCosts] = useState([]);
+  // Werkbonmateriaal staat op inkoopprijs en is daarom afgeschermd: zonder dit
+  // recht komen die regels niet eens binnen (RLS, migratie 20260915130500). Een
+  // brutowinst zonder het materiaal zou te hoog uitvallen, dus die blijft dan
+  // weg — net als de marge in de materialenbibliotheek.
+  const magInkoop = can('inkoopprijzen');
+
+  const [kosten, setKosten] = useState([]);           // job_costs rond dit project
+  const [projectKosten, setProjectKosten] = useState([]);
+  const [laadFout, setLaadFout] = useState('');
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({
-    cost_date: new Date().toISOString().slice(0, 10),
-    description: '',
-    amount: '',
-    category: '',
-    leverancier_id: '',
-    btw_mode: 'excl',
-    btw_pct: 21,
-  });
+  const [toonWinstUitleg, setToonWinstUitleg] = useState(false);
   const [leveranciers, setLeveranciers] = useState([]);
   useEffect(() => { listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(() => {}); }, []);
-  const categorieen = useKostenCategorieen();
-
-  // Categorie pas invullen zodra de lijst binnen is: de standaardcategorie kan
-  // per bedrijf anders heten of op inactief staan.
-  useEffect(() => {
-    if (!form.category && categorieen.length) {
-      setForm(f => (f.category ? f : { ...f, category: standaardCategorieUit(categorieen) }));
-    }
-  }, [categorieen]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const [bonFiles, setBonFiles] = useState([]);
-  const [toonWinstUitleg, setToonWinstUitleg] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const btwLive = calcBtw(form.amount, form.btw_pct, form.btw_mode);
 
   const load = () => {
     setLoading(true);
-    getProjectCosts(project.id).then(setCosts).catch(() => {}).finally(() => setLoading(false));
+    Promise.all([
+      getProjectCosts(project.id).catch(() => []),
+      listProjectKosten(project.id)
+        .then(r => { setLaadFout(''); return r; })
+        .catch(e => { setLaadFout(e.message || 'Laden mislukt'); return []; }),
+    ])
+      .then(([jc, pk]) => { setKosten(jc); setProjectKosten(pk); })
+      .finally(() => setLoading(false));
   };
   useEffect(() => { if (project.id) load(); }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Brutowinst ─────────────────────────────────────────────────────────────
-  // Gefactureerd (excl. BTW) − inkoopwaarde van materiaal − overige kosten.
+  // ── Kostprijs en brutowinst ────────────────────────────────────────────────
   // Arbeid en reiskilometers zitten er BEWUST niet in: uren worden nergens in
-  // geld omgerekend, en een marge die de helft van de kosten negeert zonder dat
-  // te zeggen is erger dan geen marge. Vandaar de uitleg onder het getal.
+  // geld omgerekend. Vandaar de uitleg achter het info-icoon.
   //
-  // Excl. BTW aan beide kanten: job_costs.amount is exclusief, dus rekenen met
-  // een bedrag inclusief zou de winst structureel te laag maken.
-  const splitsing = kostenSplitsing(costs);
-  const inkoop = inkoopwaardeVanKosten(costs);
+  // Excl. btw aan beide kanten: rekenen met een bedrag inclusief zou de winst
+  // structureel te laag maken.
+  const materiaal = kosten.filter(isWerkbonMateriaal);
+  const geboekt = kosten.filter(k => !isWerkbonMateriaal(k));
+  const geboektTotaal = geboekt.reduce((s, k) => s + (Number(k.amt) || 0), 0);
+  const inkoop = inkoopwaardeVanKosten(materiaal);
+  const projectKostenTotaal = Math.round(projectKosten.reduce((s, k) => s + k.bedrag, 0) * 100) / 100;
+  const kostprijs = inkoop.materiaalInkoop + projectKostenTotaal;
   const omzet = Number(project.omzetExclBtw ?? project.invoicedAmount ?? 0);
-  const brutowinst = omzet - inkoop.inkoopwaarde;
+  const brutowinst = omzet - kostprijs;
+  const toonWinst = magBedragen && magInkoop;
 
-  const submit = async () => {
-    if (!Number(form.amount) || Number(form.amount) <= 0) { toast.error('Bedrag moet groter zijn dan 0'); return; }
-    // Leverancier is verplicht: zonder relatie kan de kost niet naar de boekhouding.
-    if (!form.leverancier_id) { toast.error('Kies een leverancier'); return; }
-    // Bewijsstuk idem, behalve waar er geen factuur bestaat (reiskosten).
-    if (bonVerplichtUit(categorieen, form.category) && bonFiles.length === 0) { toast.error(BON_VERPLICHT_MELDING); return; }
-    setSaving(true);
+  // ── Projectkosten bewerken ─────────────────────────────────────────────────
+  // Zelfde werkwijze als materiaal op de werkbon: direct in beeld, de
+  // schrijfactie loopt erachteraan, en bij een fout terug naar wat er stond.
+  const voegKostToe = async form => {
     try {
-      const { excl } = calcBtw(form.amount, form.btw_pct, form.btw_mode);
-      // De bon eerst uploaden: hier is geen achtergrond-indicator zoals in de
-      // kostenmodal, en een kost die vervolgens zonder bijlage wordt opgeslagen
-      // is precies wat de verplichting moet voorkomen.
-      const bijlage_url = bonFiles.length ? JSON.stringify(await uploadKostenBonnen(bonFiles)) : null;
-      await createJobCost({
-        description: form.description || form.category,
-        amount: excl, // exclusief BTW opslaan
-        btw_percentage: form.btw_pct,
-        btw_inclusief: false,
-        category: form.category,
-        leverancier_id: form.leverancier_id,
-        cost_date: form.cost_date,
-        project_id: project.id,
-        customer_id: project.customerId || null,
-        bijlage_url,
-      });
-      setForm(f => ({ ...f, description: '', amount: '' }));
-      setBonFiles([]);
-      toast.success('Kosten toegevoegd');
-      load();
+      const nieuw = await createProjectKost(project.id, form);
+      setProjectKosten(l => [...l, nieuw]);
     } catch (e) {
       toast.error(e.message || 'Toevoegen mislukt');
-    } finally {
-      setSaving(false);
+      throw e;
     }
   };
 
-  const remove = async (id) => {
-    if (!window.confirm('Deze kostenpost verwijderen?')) return;
+  const wijzigKost = async (rij, patch) => {
+    const nieuw = { ...rij };
+    if ('naam' in patch) nieuw.naam = patch.naam;
+    if ('eenheid' in patch) nieuw.eenheid = patch.eenheid;
+    if ('aantal' in patch) nieuw.aantal = Number(patch.aantal) || 0;
+    if ('prijs_per' in patch) nieuw.prijsPer = Number(patch.prijs_per) || 0;
+    if ('leverancier_id' in patch) nieuw.leverancierId = patch.leverancier_id || null;
+    nieuw.bedrag = Math.round(nieuw.aantal * nieuw.prijsPer * 100) / 100;
+    setProjectKosten(l => l.map(x => (x.id === rij.id ? nieuw : x)));
     try {
-      const waarschuwing = await deleteJobCost(id);
-      load();
-      if (waarschuwing) toast.error(waarschuwing, { duration: 10000 });
+      await updateProjectKost(rij.id, patch);
+    } catch (e) {
+      toast.error(e.message || 'Bijwerken mislukt');
+      setProjectKosten(l => l.map(x => (x.id === rij.id ? rij : x)));
+    }
+  };
+
+  const verwijderKost = async rij => {
+    if (!window.confirm(`"${rij.naam}" verwijderen?`)) return;
+    try {
+      await deleteProjectKost(rij.id);
+      setProjectKosten(l => l.filter(x => x.id !== rij.id));
     } catch (e) {
       toast.error(e.message || 'Verwijderen mislukt');
     }
   };
 
+  const kopStijl = { fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--dl)', marginBottom: 8 };
+
   return (
     <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div className="card card-p" style={{ padding: 14, background: '#fafafa' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${magBedragen ? 3 : 1}, 1fr)`, gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${1 + (magBedragen ? 1 : 0) + (toonWinst ? 1 : 0)}, 1fr)`, gap: 10 }}>
           {magBedragen && (
             <div>
               <div style={labelStyle}>Gefactureerd (excl. btw)</div>
@@ -668,15 +660,15 @@ function KostenTab({ project, canManage }) {
             </div>
           )}
           <div>
-            <div style={labelStyle}>Inkoopwaarde</div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(inkoop.inkoopwaarde)}</div>
-            {splitsing.werkbonMateriaal > 0 && (
+            <div style={labelStyle}>{magInkoop ? 'Kostprijs' : 'Projectkosten'}</div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(magInkoop ? kostprijs : projectKostenTotaal)}</div>
+            {magInkoop && (inkoop.materiaalInkoop > 0 || projectKostenTotaal > 0) && (
               <div style={{ fontSize: 11, color: 'var(--dl)', marginTop: 2 }}>
-                waarvan werkbonmateriaal {fmt0(inkoop.materiaalInkoop)}
+                materiaal {fmt0(inkoop.materiaalInkoop)} · projectkosten {fmt0(projectKostenTotaal)}
               </div>
             )}
           </div>
-          {magBedragen && (
+          {toonWinst && (
             <div>
               <div style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 4 }}>
                 Brutowinst
@@ -701,19 +693,30 @@ function KostenTab({ project, canManage }) {
           )}
         </div>
 
-        {magBedragen && toonWinstUitleg && (
+        {toonWinst && toonWinstUitleg && (
           <div style={{
             fontSize: 11.5, color: 'var(--dm)', marginTop: 10, lineHeight: 1.5,
             background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 11px',
           }}>
-            Brutowinst is gefactureerd min de inkoopwaarde. <b>Arbeid en reiskilometers
-            zitten er niet in</b> — wat je aan uren kwijt bent is hier niet verrekend.
+            Brutowinst is gefactureerd min de kostprijs: het materiaal van de werkbonnen op inkoopprijs, plus
+            de projectkosten hieronder. <b>Arbeid en reiskilometers zitten er niet in</b> — wat je aan uren
+            kwijt bent is hier niet verrekend. Boekingen op de Kosten-pagina tellen ook niet mee: daar staat de
+            inkoopfactuur van hetzelfde materiaal.
+          </div>
+        )}
+
+        {!magInkoop && (
+          <div style={{ fontSize: 11.5, color: 'var(--dm)', marginTop: 10, lineHeight: 1.5 }}>
+            Het materiaal van de werkbonnen telt ook mee in de kostprijs, maar staat op inkoopprijs en die is
+            voor jou afgeschermd. Daarom zie je hier geen brutowinst.
           </div>
         )}
 
         {/* Geen stil verkeerd getal: als de inkoopprijs ontbreekt is de
-            verkoopprijs gebruikt, en dan is de brutowinst een ondergrens. */}
-        {inkoop.zonderInkoopprijs > 0 && (
+            verkoopprijs gebruikt, en dan is de brutowinst een ondergrens. Alleen
+            zichtbaar voor wie de inkoop mag zien — anders zou elke regel als
+            "zonder inkoopprijs" tellen terwijl hij er gewoon een heeft. */}
+        {magInkoop && inkoop.zonderInkoopprijs > 0 && (
           <div style={{
             fontSize: 11.5, lineHeight: 1.5, marginTop: 8, borderRadius: 8, padding: '8px 11px',
             background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E',
@@ -727,103 +730,198 @@ function KostenTab({ project, canManage }) {
         )}
       </div>
 
-      {canManage && (
-        <div className="card card-p" style={{ padding: 12 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--dl)', marginBottom: 8 }}>Kosten toevoegen</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            <div className="f" style={{ flex: '1 1 120px', minWidth: 0 }}>
-              <label>Datum</label>
-              <input type="date" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.cost_date} onChange={e => set('cost_date', e.target.value)} />
+      <ProjectKostenSection
+        kosten={projectKosten}
+        leveranciers={leveranciers}
+        onLeverancierBij={g => setLeveranciers(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
+        canEdit={canManage}
+        loading={loading}
+        laadFout={laadFout}
+        onAdd={voegKostToe}
+        onUpdate={wijzigKost}
+        onDelete={verwijderKost}
+      />
+
+      {magInkoop && (
+        <div>
+          <div style={kopStijl}>Werkbonmateriaal ({materiaal.length})</div>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--dl)', fontSize: 13 }}>Laden…</div>
+          ) : materiaal.length === 0 ? (
+            <div style={{ padding: '4px 0 8px', color: 'var(--dl)', fontSize: 13 }}>
+              Nog geen materiaal op de werkbonnen van dit project.
             </div>
-            <div className="f" style={{ flex: '1 1 110px', minWidth: 0 }}>
-              <label>Bedrag</label>
-              <input type="number" min="0" step="0.01" placeholder="0,00" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.amount} onChange={e => set('amount', e.target.value)} />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {materiaal.map(c => (
+                <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: '1px solid var(--br)', borderRadius: 8, background: '#fff' }}>
+                  <div style={{ minWidth: 60, fontSize: 11, color: 'var(--dl)' }}>{fmtDate(c.date)}</div>
+                  <div style={{ flex: 1, minWidth: 0, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {(c.desc || '').replace(/^Materiaal:\s*/i, '') || <span style={{ color: 'var(--dl)' }}>(geen omschrijving)</span>}
+                  </div>
+                  <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontWeight: 700 }}>{fmt(c.amt)}</div>
+                    <div style={{ fontSize: 10.5, color: c.inkoopprijsPer == null ? '#92400E' : 'var(--dl)' }}>
+                      {c.inkoopprijsPer == null ? 'op verkoopprijs' : 'inkoop, excl. btw'}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div style={{ fontSize: 11, color: 'var(--dl)' }}>Aantallen en prijzen wijzig je op de werkbon.</div>
             </div>
-            <div className="f" style={{ flex: '1 1 90px', minWidth: 0 }}>
-              <label>Ex / incl.</label>
-              <select style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.btw_mode} onChange={e => set('btw_mode', e.target.value)}>
-                <option value="excl">Excl. BTW</option>
-                <option value="incl">Incl. BTW</option>
-              </select>
-            </div>
-            <div className="f" style={{ flex: '1 1 80px', minWidth: 0 }}>
-              <label>BTW</label>
-              <select style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.btw_pct} onChange={e => set('btw_pct', Number(e.target.value))}>
-                {BTW_PCT_OPTIONS.map(p => <option key={p} value={p}>{p}%</option>)}
-              </select>
-            </div>
-            <div className="f" style={{ flex: '1 1 130px', minWidth: 0 }}>
-              <label>Categorie</label>
-              <select style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.category} onChange={e => set('category', e.target.value)}>
-                {categorieOptiesUit(categorieen, form.category).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            <div className="f" style={{ flex: '1 1 130px', minWidth: 0 }}>
-              <label>Leverancier *</label>
-              <LeverancierSelect
-                value={form.leverancier_id}
-                onChange={v => set('leverancier_id', v)}
-                leveranciers={leveranciers}
-                onLijstGewijzigd={g => setLeveranciers(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
-                verplicht
-                style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}
-              />
-            </div>
-            <div className="f" style={{ flex: '1 1 100%', minWidth: 0 }}>
-              <label>Omschrijving</label>
-              <input type="text" placeholder="Waar zijn de kosten voor?" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.description} onChange={e => set('description', e.target.value)} />
-            </div>
-            <div style={{ flex: '1 1 100%', minWidth: 0 }}>
-              <BijlageDropzone
-                files={bonFiles}
-                onChange={setBonFiles}
-                verplicht={bonVerplichtUit(categorieen, form.category)}
-                compact
-              />
-            </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-            <div style={{ fontSize: 12, color: 'var(--dl)' }}>
-              {fmt(btwLive.excl)} excl. · {fmt(btwLive.btw)} btw · <strong style={{ color: 'var(--dk)' }}>{fmt(btwLive.incl)} incl.</strong>
-            </div>
-            <button className="btn btn-p btn-sm" onClick={submit} disabled={saving}>
-              {saving ? 'Toevoegen…' : 'Kosten toevoegen'}
-            </button>
-          </div>
+          )}
         </div>
       )}
 
-      <div>
-        <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--dl)', marginBottom: 8 }}>
-          Kosten ({costs.length})
+      {/* Boekingen die aan dit project hangen worden niet stil weggelaten:
+          wie ze hier eerder zag optellen, moet kunnen zien waar ze zijn. */}
+      {!loading && geboekt.length > 0 && (
+        <div style={{ fontSize: 12, color: 'var(--dm)', lineHeight: 1.5, background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 11px' }}>
+          {geboekt.length === 1 ? '1 boeking' : `${geboekt.length} boekingen`} op de Kosten-pagina
+          {geboekt.length === 1 ? ' hangt' : ' hangen'} aan dit project ({fmt(geboektTotaal)}). Dat is de boekhouding
+          en telt niet mee in de marge: het materiaal zelf staat hierboven al via de werkbon.
+          Hoort een kost echt bij deze klus en staat hij nergens op een werkbon, zet hem dan bij de projectkosten.
         </div>
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--dl)', fontSize: 13 }}>Laden…</div>
-        ) : costs.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--dl)', fontSize: 13 }}>
-            Nog geen kosten op dit project.
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {costs.map(c => (
-              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: '1px solid var(--br)', borderRadius: 8, background: '#fff' }}>
-                <div style={{ minWidth: 60, fontSize: 11, color: 'var(--dl)' }}>{fmtDate(c.date)}</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.desc || <span style={{ color: 'var(--dl)' }}>(geen omschrijving)</span>}</div>
-                  <div style={{ marginTop: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <CostCategoryBadge category={c.cat} style={{ fontSize: 11 }} />
-                    {c.werkbonId && <span style={{ fontSize: 11, color: 'var(--dl)' }}>· via werkbon</span>}
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                  <div style={{ fontWeight: 700 }}>{fmt(c.amt)}</div>
-                  <div style={{ fontSize: 10.5, color: 'var(--dl)' }}>excl. · {c.btwPercentage ?? 21}% btw</div>
-                </div>
-                {canManage && (
-                  <button className="btn btn-xs btn-ghost btn-icon" title="Verwijderen" onClick={() => remove(c.id)}>{I.trash}</button>
-                )}
+      )}
+    </div>
+  );
+}
+
+// Invoer van projectkosten. Zelfde opzet als materiaal op de werkbon: een
+// tabel met direct bewerkbare regels en onderaan één invoerregel met een
+// plusknop. Geen keuze uit de materialenbibliotheek: die draagt een
+// inkoopprijs, en een projectkost is voor iedereen met het recht 'kosten'
+// zichtbaar — daarmee zou de afgeschermde inkoopprijs via deze weg alsnog te
+// lezen zijn. Projectkosten zijn bovendien huur en diensten, geen artikelen.
+function ProjectKostenSection({ kosten, leveranciers, onLeverancierBij, canEdit, loading, laadFout, onAdd, onUpdate, onDelete }) {
+  // De drawer is smaller dan de werkbonpagina. Onder 640px gaan leverancier,
+  // subtotaal en de knop naar een tweede regel; anders werd elk veld te smal
+  // om te lezen ("Geen le…"). Gemeten op de kaart zelf, niet op het venster:
+  // de drawer kan ook gemaximaliseerd staan.
+  const kaartRef = useRef(null);
+  const [smal, setSmal] = useState(true);
+  useEffect(() => {
+    const el = kaartRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(([e]) => setSmal(e.contentRect.width < 640));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const LEEG = { naam: '', aantal: 1, eenheid: '', prijs_per: '', leverancier_id: '' };
+  const [form, setForm] = useState(LEEG);
+  const [adding, setAdding] = useState(false);
+  const totaal = kosten.reduce((s, k) => s + k.bedrag, 0);
+  const addSub = (Number(form.aantal) || 0) * (Number(form.prijs_per) || 0);
+  const COLS = smal
+    ? 'minmax(0,1fr) 56px 64px 84px'
+    : 'minmax(0,2.2fr) 62px 74px 84px minmax(0,1.3fr) 84px 30px';
+  const rijStijl = {
+    display: 'grid', gridTemplateColumns: COLS, gap: 5, alignItems: 'center',
+    ...(smal ? { paddingBottom: 8, marginBottom: 8, borderBottom: '1px dashed var(--border)' } : { marginBottom: 5 }),
+  };
+  const levStijl = { minWidth: 0, ...(smal ? { gridColumn: 'span 2' } : null) };
+  const subStijl = { textAlign: 'right', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden' };
+
+  // Zonder de migratie bestaat de tabel nog niet. Dan geen technische
+  // foutmelding in beeld, maar wat er aan de hand is.
+  const foutTekst = !laadFout ? ''
+    : /schema cache|does not exist|project_kosten/i.test(laadFout)
+      ? 'Projectkosten zijn nog niet beschikbaar: de database-update hiervoor is nog niet uitgevoerd.'
+      : `Projectkosten konden niet worden geladen (${laadFout}).`;
+
+  const submit = async () => {
+    if (!form.naam.trim()) return;
+    setAdding(true);
+    try {
+      await onAdd(form);
+      setForm(LEEG);
+    } catch { /* melding komt van onAdd; invoer blijft staan */ } finally {
+      setAdding(false);
+    }
+  };
+
+  const veld = (r, k, v) => onUpdate(r, { [k]: v });
+  // De omschrijving pas bij verlaten opslaan: leegmaken om opnieuw te typen
+  // zou anders tussendoor een lege naam wegschrijven, en die weigert de database.
+  const naamKlaar = (r, v) => {
+    const naam = v.trim();
+    if (naam && naam !== r.naam) veld(r, 'naam', naam);
+  };
+
+  const levSelect = (value, onChange, disabled) => (
+    <LeverancierSelect value={value || ''} disabled={disabled} leveranciers={leveranciers}
+      onLijstGewijzigd={onLeverancierBij} onChange={onChange} style={{ minWidth: 0, width: '100%' }} />
+  );
+
+  return (
+    <div className="wb2-card" ref={kaartRef}>
+      <div className="wb2-card-hd">
+        <div className="wb2-card-hd-title">Projectkosten</div>
+      </div>
+      <div className="wb2-card-body">
+        <div className="wb2-mat-body">
+          {!kosten.length && (
+            <div style={{ fontSize: 12, color: 'var(--dl)', lineHeight: 1.5, marginBottom: canEdit ? 10 : 0 }}>
+              {foutTekst || 'Kosten die bij deze klus horen maar niet op een werkbon staan, zoals steigerhuur of een gehuurde hoogwerker. Bedragen exclusief btw.'}
+            </div>
+          )}
+
+          {kosten.length > 0 && (
+            <div>
+              <div className="wb2-mat-kop" style={{ display: 'grid', gridTemplateColumns: COLS, gap: 5 }}>
+                <span>Omschrijving</span><span>Aantal</span><span>Eenheid</span><span>Kostprijs</span>
+                {!smal && <><span>Leverancier</span><span style={{ textAlign: 'right' }}>Subtotaal</span><span /></>}
               </div>
-            ))}
+              {kosten.map(k => (
+                <div key={k.id} className="wb2-mat-rij" style={rijStijl}>
+                  <input type="text" defaultValue={k.naam} disabled={!canEdit} style={{ minWidth: 0 }}
+                    onBlur={e => naamKlaar(k, e.target.value)} />
+                  <input type="number" min="0" step="0.01" value={k.aantal} disabled={!canEdit} style={{ minWidth: 0 }}
+                    onChange={e => veld(k, 'aantal', e.target.value)} />
+                  <input type="text" value={k.eenheid} placeholder="stuk" disabled={!canEdit} style={{ minWidth: 0 }}
+                    onChange={e => veld(k, 'eenheid', e.target.value)} />
+                  <input type="number" min="0" step="0.01" value={k.prijsPer} disabled={!canEdit} style={{ minWidth: 0 }}
+                    title="Kostprijs per eenheid, excl. btw" onChange={e => veld(k, 'prijs_per', e.target.value)} />
+                  <div style={levStijl}>{levSelect(k.leverancierId, v => veld(k, 'leverancier_id', v), !canEdit)}</div>
+                  <div style={subStijl}>{fmt(k.bedrag)}</div>
+                  {canEdit
+                    ? <button className="btn btn-xs btn-danger btn-icon" onClick={() => onDelete(k)} title="Verwijderen" style={{ justifySelf: 'end' }}>{I.trash}</button>
+                    : <div />}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {canEdit && !loading && (
+            <div className="wb2-mat-rij" style={{ borderTop: kosten.length && !smal ? '1px solid var(--border)' : 'none', paddingTop: kosten.length && !smal ? 10 : 0, marginTop: kosten.length && !smal ? 6 : 0 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: COLS, gap: 5, alignItems: 'center' }}>
+                <input type="text" placeholder="Bijv. steigerhuur" value={form.naam} style={{ minWidth: 0 }}
+                  onChange={e => setForm(f => ({ ...f, naam: e.target.value }))}
+                  onKeyDown={e => { if (e.key === 'Enter') submit(); }} />
+                <input type="number" min="0" step="0.01" value={form.aantal} placeholder="1" style={{ minWidth: 0 }}
+                  onChange={e => setForm(f => ({ ...f, aantal: e.target.value }))} />
+                <input type="text" value={form.eenheid} placeholder="stuk" style={{ minWidth: 0 }}
+                  onChange={e => setForm(f => ({ ...f, eenheid: e.target.value }))} />
+                <input type="number" min="0" step="0.01" value={form.prijs_per} placeholder="0,00" style={{ minWidth: 0 }}
+                  title="Kostprijs per eenheid, excl. btw"
+                  onChange={e => setForm(f => ({ ...f, prijs_per: e.target.value }))} />
+                <div style={levStijl}>{levSelect(form.leverancier_id, v => setForm(f => ({ ...f, leverancier_id: v })), false)}</div>
+                <div style={subStijl}>{fmt(addSub)}</div>
+                <button onClick={submit} disabled={adding || !form.naam.trim()} className="wb2-mat-add-btn"
+                  aria-label="Projectkost toevoegen" title="Toevoegen" style={{ justifySelf: 'end' }}>{I.plus}</button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {kosten.length > 0 && (
+          <div className="wb2-mat-foot">
+            <div className="wb2-mat-foot-add" style={{ visibility: 'hidden' }}>spacer</div>
+            <div style={{ textAlign: 'right' }}>
+              <div className="wb2-mat-foot-total-lbl">Totaal projectkosten (excl. BTW)</div>
+              <div className="wb2-mat-foot-total">{fmt(totaal)}</div>
+            </div>
           </div>
         )}
       </div>
