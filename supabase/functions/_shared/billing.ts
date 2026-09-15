@@ -404,12 +404,15 @@ export async function stuurBossBaseMail(
   subject: string,
   html: string,
   replyTo?: string,
+  // Resend-formaat: { filename, content } met content als base64.
+  attachments?: { filename: string; content: string }[],
 ): Promise<string | null> {
   const apiKey = Deno.env.get('RESEND_API_KEY')
   const fromEmail = Deno.env.get('RESEND_FROM_EMAIL') || 'noreply@bossbase.nl'
   if (!apiKey) { console.warn('RESEND_API_KEY niet ingesteld — mail overgeslagen'); return null }
   const payload: Record<string, unknown> = { from: `BossBase <${fromEmail}>`, to, subject, html }
   if (replyTo) payload.reply_to = replyTo
+  if (attachments?.length) payload.attachments = attachments
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },

@@ -49,6 +49,7 @@ import { usePlan } from './hooks/usePlan.js';
 import { ReadOnlyBanner } from './components/ReadOnly.jsx';
 import { CheckoutTerugkeer } from './components/CheckoutTerugkeer.jsx';
 import { BossChat, BOSS_BEGROETING } from './components/BossChat.jsx';
+import { MeldKnop } from './components/Meldpunt.jsx';
 import { featureLabel } from './lib/features.js';
 import { clearCompanyId, setCompanyId } from './lib/currentCompany.js';
 import { ToastProvider, useToast } from './lib/toast.jsx';
@@ -601,6 +602,7 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
             de meldingen. Stond hij eerst binnen .tb-anchor, en die is alleen
             position:relative zonder flex — daar stapelen de knoppen verticaal,
             waardoor Boss bóven de bel belandde in plaats van ernaast. */}
+        <MeldKnop pagina={pageMeta.title} />
         <BossKnop onClick={onOpenBoss} />
         <div className="tb-anchor">
           <button className="ib" title="Meldingen" onClick={() => setOpenMenu(m => m === 'notif' ? null : 'notif')}>
