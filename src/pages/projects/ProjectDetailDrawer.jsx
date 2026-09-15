@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listLeveranciers } from '../../services/leverancierService.js';
 import LeverancierSelect from '../../components/LeverancierSelect.jsx';
+import BijlageDropzone from '../../components/BijlageDropzone.jsx';
 import { categorieOptiesUit, standaardCategorieUit, bonVerplichtUit, BON_VERPLICHT_MELDING } from '../../lib/kostenCategorieen.js';
 import { useKostenCategorieen } from '../../hooks/useKostenCategorieen.js';
 import { Maximize2, Minimize2, AlertTriangle, AlertOctagon } from 'lucide-react';
@@ -585,6 +586,7 @@ function KostenTab({ project, canManage }) {
   }, [categorieen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [bonFiles, setBonFiles] = useState([]);
+  const [toonWinstUitleg, setToonWinstUitleg] = useState(false);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const btwLive = calcBtw(form.amount, form.btw_pct, form.btw_mode);
@@ -676,7 +678,22 @@ function KostenTab({ project, canManage }) {
           </div>
           {magBedragen && (
             <div>
-              <div style={labelStyle}>Brutowinst</div>
+              <div style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 4 }}>
+                Brutowinst
+                <button
+                  type="button"
+                  aria-label="Uitleg over brutowinst"
+                  aria-expanded={toonWinstUitleg}
+                  title="Wat zit er in de brutowinst?"
+                  onClick={() => setToonWinstUitleg(v => !v)}
+                  style={{
+                    background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex',
+                    color: toonWinstUitleg ? 'var(--p)' : 'var(--dl)',
+                  }}
+                >
+                  {I.info}
+                </button>
+              </div>
               <div style={{ fontWeight: 700, fontSize: 16, color: brutowinst < 0 ? '#dc2626' : '#15A34A' }}>
                 {fmt0(brutowinst)}
               </div>
@@ -684,8 +701,11 @@ function KostenTab({ project, canManage }) {
           )}
         </div>
 
-        {magBedragen && (
-          <div style={{ fontSize: 11.5, color: 'var(--dm)', marginTop: 10, lineHeight: 1.5 }}>
+        {magBedragen && toonWinstUitleg && (
+          <div style={{
+            fontSize: 11.5, color: 'var(--dm)', marginTop: 10, lineHeight: 1.5,
+            background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 11px',
+          }}>
             Brutowinst is gefactureerd min de inkoopwaarde. <b>Arbeid en reiskilometers
             zitten er niet in</b> — wat je aan uren kwijt bent is hier niet verrekend.
           </div>
@@ -753,14 +773,12 @@ function KostenTab({ project, canManage }) {
               <label>Omschrijving</label>
               <input type="text" placeholder="Waar zijn de kosten voor?" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} value={form.description} onChange={e => set('description', e.target.value)} />
             </div>
-            <div className="f" style={{ flex: '1 1 100%', minWidth: 0 }}>
-              <label>Factuur of bon{bonVerplichtUit(categorieen, form.category) ? ' *' : ''}</label>
-              <input
-                type="file"
-                accept="image/jpeg,image/png,application/pdf"
-                multiple
-                style={{ width: '100%', minWidth: 0, boxSizing: 'border-box', fontSize: 12 }}
-                onChange={e => setBonFiles(Array.from(e.target.files))}
+            <div style={{ flex: '1 1 100%', minWidth: 0 }}>
+              <BijlageDropzone
+                files={bonFiles}
+                onChange={setBonFiles}
+                verplicht={bonVerplichtUit(categorieen, form.category)}
+                compact
               />
             </div>
           </div>
