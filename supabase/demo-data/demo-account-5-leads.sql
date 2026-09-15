@@ -5,7 +5,7 @@
 -- WAT DIT SCRIPT DOET:
 --   • Voegt 5 demo-leads toe aan het bestaande demo-account
 --   • Alle data binnen dezelfde company_id (geen nieuwe tenant/company)
---   • Vult: customers, deals, activities, calendar_events, notes,
+--   • Vult: customers, deals, activities, calendar_events, deal_notities,
 --           job_costs, offertes, offerte_items, werkbonnen, werkbon_taken,
 --           werkbon_materialen, urenregistratie
 --
@@ -344,8 +344,10 @@ BEGIN
   -- 5. NOTITIES
   -- ══════════════════════════════════════════════════════════════════════════
 
-  INSERT INTO notes (company_id, customer_id, deal_id, body, author)
-  VALUES
+  -- Deal-notities: de schrijver blijft leeg (demo). customer_id en author staan
+  -- nog in de rijen hieronder maar worden niet gebruikt.
+  INSERT INTO deal_notities (company_id, deal_id, note)
+  SELECT v.company_id, v.deal_id, v.body FROM (VALUES
     (cid, klant_jansen, deal_badkamer,
      'Demo Notitie Klant wil oplevering binnen 4 weken. Tegels en sanitair al gekozen bij bouwmarkt in Demo Amersfoort. Afvoer moet worden verplaatst.',
      'Demo Account'),
@@ -360,7 +362,8 @@ BEGIN
      'Demo Account'),
     (cid, klant_peters, deal_keuken,
      'Demo Notitie Klant wil extra stopcontact links van de spoelbak. Elektriciën inplannen voor aanpassing groepenkast.',
-     'Demo Account');
+     'Demo Account')
+  ) AS v(company_id, customer_id, deal_id, body, author);
 
   RAISE NOTICE '✓ 5 notities aangemaakt';
 
@@ -668,7 +671,7 @@ UNION ALL
 SELECT 'calendar_events',  count(*) FROM calendar_events
   WHERE company_id = '8131d2e8-4190-4b5e-8ff2-c0c5aac68aca' AND title       LIKE 'Demo%'
 UNION ALL
-SELECT 'notes',            count(*) FROM notes
+SELECT 'deal_notities',            count(*) FROM deal_notities
   WHERE company_id = '8131d2e8-4190-4b5e-8ff2-c0c5aac68aca' AND body        LIKE 'Demo%'
 UNION ALL
 SELECT 'job_costs',        count(*) FROM job_costs

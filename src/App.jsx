@@ -152,38 +152,6 @@ const SECTIONS = [
   { id: 'bedrijf', label: 'Bedrijf' },
 ];
 
-// ── Mobiel "Meer"-blad, ook uit NAV ─────────────────────────────────────────
-// Wat al onderin de mobiele balk staat hoeft niet nog eens in het blad.
-const MOBIELE_BALK_IDS = ['dashboard', 'pipeline', 'customers', 'activities'];
-
-// NAV plat: een groep als Relaties telt met zijn kinderen mee, want die zijn de
-// echte pagina's. Kinderen erven icoon, sectie en gates van de ouder.
-const NAV_PLAT = NAV.flatMap(n => (n.kinderen
-  ? n.kinderen.map(k => ({
-      ...k,
-      icon:       k.icon ?? n.icon,
-      section:    n.section,
-      permission: k.permission ?? n.permission,
-      feature:    k.feature ?? n.feature,
-    }))
-  : [n]));
-
-// Zelfde filters als de zijbalk. NAV bewaart een icoonnaam; het blad rendert een
-// node, vandaar de vertaling via I[].
-const MEER_GROEPEN = (can, plan) => SECTIONS
-  .map(sec => ({
-    label: sec.label,
-    items: NAV_PLAT
-      .filter(n => n.section === sec.id && !MOBIELE_BALK_IDS.includes(n.id))
-      .filter(n => !n.permission || can(n.permission))
-      .filter(n => !n.feature || plan.has(n.feature))
-      .map(n => ({ id: n.id, label: n.label, icon: I[n.icon] })),
-  }))
-  .filter(g => g.items.length > 0);
-
-// Staat de gebruiker op een pagina uit dat blad? Dan licht "Meer" op.
-const MEER_PAGE_IDS = NAV_PLAT.map(n => n.id).filter(id => !MOBIELE_BALK_IDS.includes(id));
-
 // ── SIDEBAR ──────────────────────────────────────────────────
 function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loading, onOpenProfile, badges = {}, collapsed, onToggleCollapsed }) {
   const { can } = usePermissions();
@@ -850,103 +818,6 @@ function CalEventDrawer({ eventId, onClose, setPage, openCustomer, openDeal }) {
           <CalendarEventDetailDrawer eventId={eventId} onClose={onClose} setPage={setPage} openCustomer={openCustomer} openDeal={openDeal} />
         </div>
       </div>
-    </>
-  );
-}
-
-// ── MOBILE MEER MENU ─────────────────────────────────────────
-function MeerMenu({ page, onNavigate, onClose, profile }) {
-  const { can } = usePermissions();
-  const plan = usePlan();
-
-  // Uit NAV, net als de zijbalk. Stond hier met de hand overgeschreven, en dat
-  // liep uit de pas: het blad is van 12-05-2026, Database kwam 05-06, Planning
-  // 15-06 en Materialen 24-08 — alle drie erna, en geen ervan is ooit
-  // toegevoegd. Leveranciers ontbrak net zo goed. Op mobiel waren die vier
-  // pagina's dus onbereikbaar.
-  const groups = MEER_GROEPEN(can, plan);
-
-  return (
-    <div className="meer-overlay open" onClick={onClose}>
-      <div className="meer-sheet" onClick={e => e.stopPropagation()}>
-        <div className="meer-grabber">
-          <div className="meer-grabber-bar" />
-        </div>
-        {groups.map(g => (
-          <div key={g.label}>
-            <div className="meer-section-label">{g.label}</div>
-            <div className="meer-section-card">
-              {g.items.map(item => {
-                const isActive = page === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    className="meer-row"
-                    style={isActive ? { background: '#f0fdf4', color: '#15A34A' } : {}}
-                    onClick={() => onNavigate(item.id)}
-                  >
-                    <span className="meer-row-icon" style={isActive ? { background: '#dcfce7', color: '#15A34A' } : {}}>{item.icon}</span>
-                    <span className="meer-row-label" style={isActive ? { color: '#15A34A', fontWeight: 700 } : {}}>{item.label}</span>
-                    <span className="meer-row-chev">{I.chev_r}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-        <div style={{ height: 8 }} />
-      </div>
-    </div>
-  );
-}
-
-// ── MOBILE BOTTOM NAV ─────────────────────────────────────────
-
-function MobileBottomNav({ page, setPage, badges = {}, profile, can }) {
-  const [showMeer, setShowMeer] = useState(false);
-  const isOnMeerPage = MEER_PAGE_IDS.includes(page);
-
-  const items = [
-    { id: 'dashboard',  label: 'Dashboard',    icon: I.dash },
-    { id: 'pipeline',   label: 'Pipeline',     icon: I.pipe,  badge: badges.pipeline, permission: 'verkoop' },
-    { id: 'customers',  label: 'Klanten',      icon: I.cust },
-    { id: 'activities', label: 'Activiteiten', icon: I.act,   badge: badges.activities },
-    { id: 'meer',       label: 'Meer',         icon: I.meer },
-  ].filter(it => !it.permission || !can || can(it.permission));
-
-  const go = id => { setPage(id); setShowMeer(false); };
-
-  return (
-    <>
-      <nav className="bnav" aria-label="Mobiele navigatie">
-        {items.map(item => {
-          const isActive = item.id === 'meer'
-            ? (isOnMeerPage || showMeer)
-            : page === item.id;
-          return (
-            <button
-              key={item.id}
-              className={`bnav-item${isActive ? ' active' : ''}`}
-              onClick={() => item.id === 'meer' ? setShowMeer(v => !v) : go(item.id)}
-              aria-label={item.label}
-            >
-              {item.badge > 0 && (
-                <span className="bnav-badge">{item.badge > 99 ? '99+' : item.badge}</span>
-              )}
-              {item.icon}
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
-      </nav>
-      {showMeer && (
-        <MeerMenu
-          page={page}
-          onNavigate={go}
-          onClose={() => setShowMeer(false)}
-          profile={profile}
-        />
-      )}
     </>
   );
 }
@@ -1777,13 +1648,6 @@ function AppInner() {
           setGesprekId={setBossGesprekId}
         />
 
-        <MobileBottomNav
-          page={page}
-          setPage={navigatePage}
-          badges={sidebarBadges}
-          profile={profile}
-          can={(p) => profile?.role === 'admin' || (profile?.role === 'planner' && p === 'planning') || (userPermissions || []).includes(p)}
-        />
 
         {drawerCust !== null && page !== 'customers' && (
           <CustomerDrawer

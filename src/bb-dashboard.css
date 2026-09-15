@@ -1383,9 +1383,6 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .wb2-empty-sub{font-size:14px;color:var(--dl);margin-top:6px;max-width:380px;line-height:1.5}
 .wb2-empty-actions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap;justify-content:center}
 
-/* Mobile sticky action bar ------------------------------------- */
-.wb2-sticky-bar{display:none}
-
 /* Modal (new/edit) — leverages existing .overlay/.modal so just light
    per-screen tweaks here */
 .wb2-modal-fg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -1410,13 +1407,6 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
   .wb2-row-right{flex-direction:column;align-items:flex-end;gap:6px}
   .wb2-modal-fg{grid-template-columns:1fr}
   .wb2-modal-fg .full{grid-column:1}
-  /* Sticky action bar appears on mobile when a werkbon is selected */
-  .wb2-sticky-bar{display:flex;position:fixed;left:8px;right:8px;bottom:calc(72px + env(safe-area-inset-bottom,0px));z-index:80;background:#fff;border:1px solid var(--br);border-radius:14px;padding:8px;gap:6px;box-shadow:0 18px 40px -10px rgba(14,20,17,.18)}
-  .wb2-sticky-tile{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border-radius:10px;background:#fff;border:1px solid var(--br);font-family:inherit;font-weight:600;font-size:11px;color:var(--dk);cursor:pointer}
-  .wb2-sticky-tile.accent{background:var(--p);border:1.5px solid var(--p);color:var(--dk);box-shadow:none;filter:none}
-  .wb2-sticky-tile-ic{width:28px;height:28px;border-radius:8px;background:#E8FBEF;color:#0F7A3F;display:grid;place-items:center}
-  .wb2-sticky-tile.accent .wb2-sticky-tile-ic{background:rgba(14,20,17,.1);color:#0A2912}
-  .wb2-page.has-selection .content-bottom-pad{height:calc(96px + env(safe-area-inset-bottom,0px))}
 }
 @media(max-width:480px){
   .wb2-stats{grid-template-columns:1fr 1fr}

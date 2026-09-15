@@ -30,7 +30,7 @@ DROP POLICY IF EXISTS readonly_activities          ON public.activities;
 DROP POLICY IF EXISTS readonly_projects            ON public.projects;
 DROP POLICY IF EXISTS readonly_urenregistratie     ON public.urenregistratie;
 DROP POLICY IF EXISTS readonly_job_costs           ON public.job_costs;
-DROP POLICY IF EXISTS readonly_notes               ON public.notes;
+DROP POLICY IF EXISTS readonly_deal_notities       ON public.deal_notities;
 DROP POLICY IF EXISTS readonly_project_notes       ON public.project_notes;
 DROP POLICY IF EXISTS readonly_activiteit_notities ON public.activiteit_notities;
 DROP POLICY IF EXISTS readonly_werkbon_notities    ON public.werkbon_notities;

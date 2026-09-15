@@ -264,8 +264,10 @@ BEGIN
     (cid, deal_devries, 'Demo Onderaannemer schuurwerk kantoor De Vries',            450.00, 'arbeid',      '2026-05-19');
 
   -- ── 9. NOTITIES ─────────────────────────────────────────────────────────────
-  INSERT INTO notes (company_id, customer_id, deal_id, body, author)
-  VALUES
+  -- Deal-notities: de schrijver blijft leeg (demo). customer_id en author staan
+  -- nog in de rijen hieronder maar worden niet gebruikt.
+  INSERT INTO deal_notities (company_id, deal_id, note)
+  SELECT v.company_id, v.deal_id, v.body FROM (VALUES
     (cid, klant_jansen, deal_jansen1,
      'Demo: Klant geeft voorkeur aan matte lak in neutrale kleur. Kleurkeuze wordt per e-mail bevestigd na ontvangst staalkaart.',
      'Demo Gebruiker'),
@@ -274,7 +276,8 @@ BEGIN
      'Demo Gebruiker'),
     (cid, klant_jansen, deal_jansen2,
      'Demo: Factuur verstuurd op 14 mei 2026. Betaaltermijn 14 dagen. Klant heeft telefonisch bevestigd tevreden te zijn met het eindresultaat.',
-     'Demo Gebruiker');
+     'Demo Gebruiker')
+  ) AS v(company_id, customer_id, deal_id, body, author);
 
   RAISE NOTICE '✓ Fase 1 Demo Schilderbedrijf aangemaakt:';
   RAISE NOTICE '  - 3 klanten (Jansen, VVE Parkwijk, De Vries BV)';
@@ -307,6 +310,6 @@ UNION ALL
 SELECT 'job_costs', count(*) FROM job_costs
   WHERE company_id = '8131d2e8-4190-4b5e-8ff2-c0c5aac68aca' AND description LIKE 'Demo%'
 UNION ALL
-SELECT 'notes', count(*) FROM notes
+SELECT 'deal_notities', count(*) FROM deal_notities
   WHERE company_id = '8131d2e8-4190-4b5e-8ff2-c0c5aac68aca' AND body LIKE 'Demo%'
 ORDER BY tabel;

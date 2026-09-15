@@ -14,7 +14,6 @@ import NotitieLog, { toLogItem } from '../components/NotitieLog.jsx';
 import { getTeamMembers, createMentionNotifications } from '../services/notificatieService.js';
 import { updateContactInMoneybird } from '../services/accountingService.js';
 import { buildDueAt, createActivity, listActivities, updateActivity } from '../services/activityService.js';
-import { createNote, listNotes } from '../services/noteService.js';
 import { listJobCosts } from '../services/jobCostService.js';
 import { listDeals } from '../services/dealService.js';
 import { getOffertesByCustomer } from '../services/offerteService.js';
@@ -55,17 +54,14 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   const [tab, setTab] = useState(initialTab || 'overview');
   const [c, setCustomer] = useState(null);
   const [cActs, setActs] = useState([]);
-  const [cNotes, setNotes] = useState([]);
   const [cCosts, setCosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editingField, setEditingField] = useState(null);
   const [fieldDraft, setFieldDraft] = useState('');
   const [savingField, setSavingField] = useState(false);
-  const [noteText, setNoteText] = useState('');
   const [activityTitle, setActivityTitle] = useState('');
   const [savingActivity, setSavingActivity] = useState(false);
-  const [savingNote, setSavingNote] = useState(false);
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [showCostModal, setShowCostModal] = useState(false);
   const [selectedAct, setSelectedAct] = useState(null);
@@ -147,20 +143,19 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
     let alive = true;
     setLoading(true);
     Promise.all([
-      getCustomer(custId), listActivities(), listNotes(custId), listJobCosts(),
+      getCustomer(custId), listActivities(), listJobCosts(),
       getOffertesByCustomer(custId).catch(() => []),
       getFacturenByCustomer(custId).catch(() => []),
       getProjectsByCustomer(custId).catch(() => []),
       getKlantNotities(custId).catch(() => []),
       getTijdlijnByCustomer(custId).catch(() => []),
     ])
-    .then(([customer, activities, notes, costs, offertes, facturen, projecten, notities, tl]) => {
+    .then(([customer, activities, costs, offertes, facturen, projecten, notities, tl]) => {
       if (!alive) return;
       setCustomer(customer);
       setKlantNotities(notities);
       setTijdlijn(tl);
       setActs(activities.filter(a => a.custId === custId));
-      setNotes(notes);
       setCosts(costs.filter(x => x.custId === custId || x.customerId === custId));
       setOffertes(offertes);
       setFacturen(facturen);
@@ -236,20 +231,6 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
       toast.error(err.message || 'Activiteit opslaan mislukt');
     } finally {
       setSavingActivity(false);
-    }
-  };
-  const addNote = async () => {
-    if (!noteText.trim()) return;
-    setSavingNote(true);
-    try {
-      const created = await createNote({ customer_id: c.id, body: noteText });
-      setNotes(n => [created, ...n]);
-      setNoteText('');
-      toast.success('Notitie toegevoegd');
-    } catch (err) {
-      toast.error(err.message || 'Notitie opslaan mislukt');
-    } finally {
-      setSavingNote(false);
     }
   };
   const reloadActivities = async () => {

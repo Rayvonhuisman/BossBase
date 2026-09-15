@@ -276,8 +276,10 @@ BEGIN
      'Demo Dakkapelframe en dakpannen inkoop Van den Berg',       2354.00, 'materiaal',  '2026-04-10');
 
   -- ── 9. NOTITIES ─────────────────────────────────────────────────────────────
-  INSERT INTO notes (company_id, customer_id, deal_id, body, author)
-  VALUES
+  -- Deal-notities: de schrijver blijft leeg (demo). customer_id en author staan
+  -- nog in de rijen hieronder maar worden niet gebruikt.
+  INSERT INTO deal_notities (company_id, deal_id, note)
+  SELECT v.company_id, v.deal_id, v.body FROM (VALUES
     (cid, klant_vandenberg, deal_badkamer,
      'Demo: Klant wil douche i.p.v. bad. Voorkeur voor inloopdouche met regendouche. Tegel kleur: lichte grijstint. Budget flexibel tot €11.000 incl. btw.',
      'Demo Gebruiker'),
@@ -289,7 +291,8 @@ BEGIN
      'Demo Gebruiker'),
     (cid, klant_vandenberg, deal_dakkapel,
      'Demo: Dakkapel succesvol opgeleverd op 14 april. Factuur DEMO-F002 betaald op 28 april. Klant heeft positieve review gegeven.',
-     'Demo Gebruiker');
+     'Demo Gebruiker')
+  ) AS v(company_id, customer_id, deal_id, body, author);
 
   RAISE NOTICE '✓ Fase 2 Demo Aannemer aangemaakt:';
   RAISE NOTICE '  - 3 klanten (Van den Berg, Woonplus, Supermarkt Holding)';
@@ -322,6 +325,6 @@ UNION ALL
 SELECT 'job_costs', count(*) FROM job_costs
   WHERE company_id = '8131d2e8-4190-4b5e-8ff2-c0c5aac68aca' AND description LIKE 'Demo%'
 UNION ALL
-SELECT 'notes', count(*) FROM notes
+SELECT 'deal_notities', count(*) FROM deal_notities
   WHERE company_id = '8131d2e8-4190-4b5e-8ff2-c0c5aac68aca' AND body LIKE 'Demo%'
 ORDER BY tabel;

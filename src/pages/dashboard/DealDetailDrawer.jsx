@@ -5,7 +5,7 @@ import { useToast } from '../../lib/toast.jsx';
 import { listDeals, listPipelineStages, updateDeal } from '../../services/dealService.js';
 import { listActivities } from '../../services/activityService.js';
 import { getOffertes } from '../../services/offerteService.js';
-import { listNotes, createNote } from '../../services/noteService.js';
+import { getDealNotities, addDealNotitie, deleteDealNotitie } from '../../services/dealNotitieService.js';
 import { listJobCosts } from '../../services/jobCostService.js';
 import { getWerkbonnen } from '../../services/werkbonService.js';
 import NotitieLog, { toLogItem } from '../../components/NotitieLog.jsx';
@@ -73,7 +73,7 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
       listPipelineStages().catch(() => []),
       listActivities().catch(() => []),
       getOffertes().catch(() => []),
-      listNotes().catch(() => []),
+      getDealNotities(dealId).catch(() => []),
       listJobCosts().catch(() => []),
       getWerkbonnen().catch(() => []),
     ]).then(([deals, st, a, o, n, jc, w]) => {
@@ -83,7 +83,7 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
       setStages(st);
       setActs(a.filter(x => x.dealId === dealId));
       setOffs(o.filter(x => x.dealId === dealId));
-      setNotes(n.filter(x => x.dealId === dealId));
+      setNotes(n);
       setCosts(jc.filter(x => x.dealId === dealId));
       setWbs(w.filter(x => x.dealId === dealId));
       if (d) setForm({ title: d.title || '', value: d.value || 0, stageId: d.stage || '', nextAct: d.nextAct || '', assignedTo: d.assignedTo || '', priority: d.priority || 'med' });
@@ -139,10 +139,20 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
   // alleen de insert, fouten gooien we door.
   const addNote = async body => {
     if (!deal) return;
-    const created = await createNote({ customer_id: deal.custId || null, deal_id: deal.id, body });
+    const created = await addDealNotitie(deal.id, body);
     setNotes(ns => [created, ...ns]);
     if (profile?.id) {
       createMentionNotifications({ text: body, relatedType: 'deal', relatedId: deal.id, link: 'pipeline', creatorId: profile.id, creatorName: profile.fullName, contextName: deal.title }).catch(() => {});
+    }
+  };
+
+  const removeNote = async id => {
+    if (!window.confirm('Notitie verwijderen?')) return;
+    try {
+      await deleteDealNotitie(id);
+      setNotes(ns => ns.filter(n => n.id !== id));
+    } catch (e) {
+      toast.error(e.message || 'Verwijderen mislukt');
     }
   };
 
@@ -296,8 +306,20 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
       {/* Notities */}
       <Section title={`Notities (${notes.length})`}>
         <NotitieLog
-          items={notes.map(n => toLogItem({ id: n.id, body: n.body, authorName: n.author, createdAt: n.createdAt }))}
+          items={notes.map(n => toLogItem({ id: n.id, body: n.note, authorName: n.authorName || 'Onbekend', createdAt: n.createdAt }))}
           onAdd={addNote}
+          // Verwijderen per notitie, alleen waar het mag: de schrijver, een
+          // admin of een planner. De database dwingt hetzelfde af; hier alleen
+          // om geen knop te tonen die daarna faalt.
+          renderActions={item => {
+            const n = notes.find(x => x.id === item.id);
+            const mag = n && (n.createdBy === profile?.id || ['admin', 'planner'].includes(profile?.role));
+            return mag ? (
+              <button className="btn btn-xs btn-ghost" onClick={() => removeNote(n.id)} title="Verwijderen">
+                Verwijderen
+              </button>
+            ) : null;
+          }}
           teamMembers={teamMembers}
           placeholder="Nieuwe notitie… Typ @ om iemand te taggen"
         />

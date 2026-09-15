@@ -274,7 +274,8 @@ BEGIN
        VALUES (%L, %L, current_date, 4)$q$, c, u)), false);
 
   PERFORM pg_temp.check('notitie toevoegen geblokkeerd', pg_temp.lukt(format(
-    $q$INSERT INTO public.notes (company_id, content) VALUES (%L, 'RO-TEST notitie')$q$, c)), false);
+    $q$INSERT INTO public.deal_notities (company_id, deal_id, note)
+       SELECT %L, id, 'RO-TEST notitie' FROM public.deals WHERE company_id = %L LIMIT 1$q$, c, c)), false);
 
   PERFORM pg_temp.check('kosten toevoegen geblokkeerd', pg_temp.lukt(format(
     $q$INSERT INTO public.job_costs (company_id, description, amount) VALUES (%L, 'RO-TEST kosten', 50)$q$, c)), false);

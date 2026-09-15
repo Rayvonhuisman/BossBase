@@ -8,7 +8,8 @@ import { getTeamMembers } from '../services/notificatieService.js';
 // klaar voor de volgende.
 //
 // Bewust presentatie-only: elke plek houdt zijn eigen opslag (klant_tijdlijn,
-// notes, project_notes, comments-jsonb) en geeft die door via `items` + `onAdd`.
+// deal_notities, project_notes, werkbon_notities, …) en geeft die door via
+// `items` + `onAdd`.
 // Zo kan één component alle plekken bedienen zonder dat het datamodel gelijk
 // hoeft te zijn.
 //
