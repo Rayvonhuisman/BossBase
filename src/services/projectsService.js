@@ -237,46 +237,64 @@ export async function deleteProject(projectId) {
 
 // Map werkbon → project, zodat we uren die via een werkbon zijn geboekt kunnen
 // toewijzen aan het project van die werkbon.
-async function getWerkbonProjectMap() {
-  const { data, error } = await supabase.from('werkbonnen').select('id, project_id')
-  if (error) return {}
-  const map = {}
-  for (const w of (data || [])) if (w.project_id) map[w.id] = w.project_id
-  return map
+// PostgREST geeft per verzoek hooguit een vast aantal rijen (standaard 1000) en
+// meldt NIET dat er meer waren. Dat gaf een stille fout: een project met meer
+// urenregels kreeg te weinig uren in de nacalculatie. Hier wordt doorgevraagd
+// tot het aantal dat de database opgeeft binnen is — onafhankelijk van waar de
+// grens precies ligt. maakQuery moet een select met { count: 'exact' } geven.
+async function alleRijen(maakQuery) {
+  const rijen = []
+  let totaal = Infinity
+  while (rijen.length < totaal) {
+    const { data, error, count } = await maakQuery().range(rijen.length, rijen.length + 999)
+    if (error) throw error
+    if (count != null) totaal = count
+    if (!data?.length) break
+    rijen.push(...data)
+  }
+  return rijen
 }
 
-// Uren van één project: rechtstreeks (project_id) óf via een werkbon van dit
-// project (werkbonnen.project_id = projectId).
+// Uren van één project: alles op de werkbonnen van dit project. Gefilterd via
+// de join, niet via een lijst van alle werkbonnen — die liep tegen dezelfde
+// rijengrens aan.
 export async function getTimeEntries(projectId) {
   if (!projectId) return []
-  const wbMap = await getWerkbonProjectMap()
-  const werkbonIds = Object.keys(wbMap).filter(id => wbMap[id] === projectId)
-  if (!werkbonIds.length) return []
-
-  const { data, error } = await supabase
-    .from('werkbon_uren')
-    .select('*, profiles(full_name)')
-    .in('werkbon_id', werkbonIds)
-    .order('datum', { ascending: false })
-    .order('created_at', { ascending: false })
-  if (error) return []
-  return (data || []).map(r => toTimeEntry(r, projectId))
+  try {
+    const rijen = await alleRijen(() => supabase
+      .from('werkbon_uren')
+      .select('*, profiles(full_name), werkbonnen!inner(project_id)', { count: 'exact' })
+      .eq('werkbonnen.project_id', projectId)
+      .order('datum', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true }))
+    return rijen.map(r => toTimeEntry(r, projectId))
+  } catch {
+    return []
+  }
 }
 
-// Totaal geregistreerde uren per project (direct + via werkbon), voor de
-// project-lijst (nacalculatie). Geeft { projectId: totaalUren }.
+// Totaal geregistreerde uren per project, voor de projectlijst (nacalculatie).
+// Opgeteld in de database (migratie 20260915140000): één waarde terug, dus geen
+// rijengrens. Geeft { projectId: totaalUren }.
 export async function getProjectHoursMap() {
-  const [urenRes, wbMap] = await Promise.all([
-    supabase.from('werkbon_uren').select('uren, werkbon_id'),
-    getWerkbonProjectMap(),
-  ])
-  const byProject = {}
-  for (const u of (urenRes.data || [])) {
-    const pid = wbMap[u.werkbon_id] || null
-    if (!pid) continue
-    byProject[pid] = (byProject[pid] || 0) + Number(u.uren || 0)
+  const { data, error } = await supabase.rpc('bb_uren_per_project')
+  if (!error) {
+    return Object.fromEntries(Object.entries(data || {}).map(([pid, uren]) => [pid, Number(uren) || 0]))
   }
-  return byProject
+  // Terugval zolang de functie er nog niet is: alle regels ophalen en hier
+  // optellen. Trager, maar volledig — liever dat dan stil te weinig uren.
+  const rijen = await alleRijen(() => supabase
+    .from('werkbon_uren')
+    .select('uren, werkbonnen!inner(project_id)', { count: 'exact' })
+    .not('werkbonnen.project_id', 'is', null)
+    .order('id', { ascending: true }))
+  const perProject = {}
+  for (const r of rijen) {
+    const pid = r.werkbonnen?.project_id
+    if (pid) perProject[pid] = (perProject[pid] || 0) + Number(r.uren || 0)
+  }
+  return perProject
 }
 
 // Uren op een project worden niet meer hier geboekt maar op de werkbon: de

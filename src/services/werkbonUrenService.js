@@ -144,22 +144,5 @@ export async function deleteWerkbonUur(id) {
   if (error) throw error
 }
 
-/**
- * Uren per project, via de werkbonnen van dat project. Voedt de nacalculatie —
- * die draait uitsluitend op werkbonuren; werkdaguren tellen er niet in mee.
- * @returns {Promise<Record<string, number>>} projectId → uren
- */
-export async function getUrenPerProject() {
-  const { data, error } = await supabase
-    .from('werkbon_uren')
-    .select('uren, werkbonnen!inner(project_id)')
-    .not('werkbonnen.project_id', 'is', null)
-  if (error) return {}
-  const perProject = {}
-  for (const r of (data || [])) {
-    const pid = r.werkbonnen?.project_id
-    if (!pid) continue
-    perProject[pid] = (perProject[pid] || 0) + Number(r.uren || 0)
-  }
-  return perProject
-}
+// Uren per project voor de nacalculatie: zie getProjectHoursMap in
+// projectsService (opgeteld in de database, zonder rijengrens).
