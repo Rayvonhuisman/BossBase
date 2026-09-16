@@ -869,6 +869,20 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
 
 // ── SEND EMAIL MODAL ─────────────────────────────────────────────────────────
 
+// Zonder digitale handtekening (Starter) is er geen ondertekenlink. De placeholder
+// werd dan vervangen door een lege string, maar de zin eromheen bleef staan: de
+// klant las "Via onderstaande link kunt u digitaal ondertekenen:" met daaronder
+// niets. Daarom gaat hier zowel de placeholder weg als elke regel die over
+// ondertekenen gaat — die regel heeft zonder link geen betekenis meer.
+function zonderOndertekenTekst(html) {
+  const zonderBlokken = String(html || '').replace(
+    /<(p|div)\b[^>]*>[\s\S]*?<\/\1>/gi,
+    blok => (/\{\{\s*(?:link|knop)\s*\}\}/i.test(blok) || /onderteken/i.test(blok) ? '' : blok),
+  );
+  // Staat de placeholder los in de tekst (geen blok eromheen), dan alleen die weg.
+  return zonderBlokken.replace(/\{\{\s*(?:link|knop)\s*\}\}/gi, '');
+}
+
 export function SendOfferteMailModal({ offerte, customers, company, onClose, onSent }) {
   const toast = useToast();
   // Digitale handtekening is een feature (Groei+). Zonder die feature gaat de
@@ -909,7 +923,10 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
           : kanOndertekenen
             ? `Beste ${vars.klant_naam},\n\nHierbij sturen wij u offerte ${offerte.nummer} toe.\n\nVia onderstaande knop kunt u de offerte bekijken en digitaal ondertekenen:\n{{link}}\n\nHeeft u vragen? Neem gerust contact met ons op.\n\nMet vriendelijke groet,\n${company?.name || ''}`
             : `Beste ${vars.klant_naam},\n\nHierbij sturen wij u offerte ${offerte.nummer} toe als bijlage.\n\nHeeft u vragen? Neem gerust contact met ons op.\n\nMet vriendelijke groet,\n${company?.name || ''}`;
-        setForm({ to: customer?.email || '', subject: sub, body: tpl ? rawBody : plainToEditorHtml(rawBody) });
+        const body = tpl ? rawBody : plainToEditorHtml(rawBody);
+        // Wat je in de composer ziet is wat de klant krijgt: zonder ondertekenlink
+        // halen we de belofte er meteen uit, niet pas bij verzenden.
+        setForm({ to: customer?.email || '', subject: sub, body: kanOndertekenen ? body : zonderOndertekenTekst(body) });
       })
       .catch(() => setForm({ to: customer?.email || '', subject: `Offerte ${offerte.nummer}`, body: '' }))
       .finally(() => setLoading(false));
@@ -934,7 +951,9 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
         : offerte.sign_token
           ? mailButton('Offerte bekijken & ondertekenen', signLink, company?.brandingColor)
           : signLink;
-      const bodyForSend = form.body.replace(/\{\{\s*(?:link|knop)\s*\}\}/gi, knop);
+      const bodyForSend = kanOndertekenen
+        ? form.body.replace(/\{\{\s*(?:link|knop)\s*\}\}/gi, knop)
+        : zonderOndertekenTekst(form.body);
       // Zakelijke mail: wikkel de body in de centrale template met bedrijfslogo
       // + bedrijfskleur (variant 1), consistent met alle mails.
       const wrappedHtml = mailTemplate({
@@ -974,9 +993,14 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
           <div style={{ padding: '32px', textAlign: 'center', color: 'var(--dl)' }}>Template laden…</div>
         ) : (
           <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ background: 'var(--pll)', borderRadius: 8, padding: '10px 14px', fontSize: '.82rem', color: 'var(--dm)' }}>
-              Ondertekeningslink: <span style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{signLink}</span>
-            </div>
+            {/* Zonder digitale handtekening weigert sign-offerte het ondertekenen.
+                Die link hier tóch tonen wekt de indruk dat hij werkt — zelfde
+                loze belofte als de zin in de mailtekst hierboven. */}
+            {kanOndertekenen && (
+              <div style={{ background: 'var(--pll)', borderRadius: 8, padding: '10px 14px', fontSize: '.82rem', color: 'var(--dm)' }}>
+                Ondertekeningslink: <span style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{signLink}</span>
+              </div>
+            )}
             <div className="f"><label>Aan</label><input value={form.to} onChange={e => setForm(f => ({ ...f, to: e.target.value }))} placeholder="emailadres@klant.nl" /></div>
             <div className="f"><label>Onderwerp</label><input value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} /></div>
             <div className="f">

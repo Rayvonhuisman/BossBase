@@ -46,6 +46,10 @@ export default function OfferteSigneren({ token }) {
   const [form, setForm] = useState({ name: '', email: '' })
   const [signing, setSigning] = useState(false)
   const [done, setDone] = useState(false)
+  // Meldt de server dat een bevestigingsmail niet is verstuurd, dan zeggen we dat
+  // op het bedanktscherm. Anders staat er "u ontvangt een bevestiging" terwijl
+  // die nooit komt, en wacht de klant op post die er niet is.
+  const [mailFout, setMailFout] = useState('')
   const [superseded, setSuperseded] = useState(false)
   const [hasSignature, setHasSignature] = useState(false)
   const [pdfLoading, setPdfLoading] = useState(false)
@@ -224,6 +228,10 @@ export default function OfferteSigneren({ token }) {
       // is gelukt, maar de gebruiker mag weten dat er iets niet is bijgewerkt.
       if (Array.isArray(result?.warnings) && result.warnings.length) {
         console.warn('[offerte ondertekenen] server meldde:', result.warnings.join(' · '))
+        // Alleen de mailwaarschuwingen zijn iets voor de klant; een mislukte
+        // tijdlijnregel is ons probleem, niet het zijne.
+        const mailWaarschuwingen = result.warnings.filter(w => /mail/i.test(w))
+        if (mailWaarschuwingen.length) setMailFout(mailWaarschuwingen.join(' · '))
       }
     } catch (err) {
       alert('Er is iets misgegaan: ' + err.message)
@@ -310,8 +318,19 @@ export default function OfferteSigneren({ token }) {
               Bedankt! Uw handtekening is ontvangen.
             </div>
             <div style={{ color: '#6b7280', fontSize: '.95rem' }}>
-              Offerte <strong>{offerte?.nummer}</strong> is ondertekend. U ontvangt een bevestiging per e-mail.
+              Offerte <strong>{offerte?.nummer}</strong> is ondertekend.
+              {mailFout ? '' : ' U ontvangt een bevestiging per e-mail.'}
             </div>
+            {mailFout && (
+              <div style={{
+                marginTop: 16, padding: '12px 14px', borderRadius: 10, textAlign: 'left',
+                background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e',
+                fontSize: '.88rem', lineHeight: 1.55,
+              }}>
+                De bevestigingsmail kon niet worden verstuurd. Uw handtekening is wél vastgelegd.
+                Wilt u een bevestiging op papier of per mail? Neem dan contact op met {company?.name || 'het bedrijf'}.
+              </div>
+            )}
           </div>
         </div>
       </div>

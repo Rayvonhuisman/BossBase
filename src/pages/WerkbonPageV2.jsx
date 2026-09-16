@@ -1679,7 +1679,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
   };
 
   // Uitkomst van de afrondmodal. Drie wegen, zie de kop van die component.
-  const handleAfrondKlaar = async ({ ondertekend, gemaild, email, zonderHandtekening }) => {
+  const handleAfrondKlaar = async ({ ondertekend, gemaild, email, zonderHandtekening, resultaat }) => {
     if (ondertekend) {
       // De edge function heeft de bon al bijgewerkt en op slot gezet; opnieuw
       // ophalen is de enige manier om de UI daarmee gelijk te krijgen.
@@ -1689,7 +1689,16 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
         setWerkbonnen(prev => prev.map(w => (w.id === vers.id ? vers : w)));
       }
       setAfrondModal(false);
-      toast.success('Ondertekend en afgerond. De klant heeft de bon per mail gekregen.');
+      // sign-werkbon meldt per mail of Resend hem heeft aangenomen. Die melding
+      // werd hier genegeerd, waardoor het scherm "de klant heeft de bon per mail
+      // gekregen" beloofde terwijl er niets verstuurd was. Beloof alleen wat er
+      // echt is gebeurd.
+      const waarschuwingen = Array.isArray(resultaat?.warnings) ? resultaat.warnings : [];
+      if (waarschuwingen.length) {
+        toast.error(`Ondertekend en afgerond, maar: ${waarschuwingen.join(' · ')}`);
+      } else {
+        toast.success('Ondertekend en afgerond. De klant heeft de bon per mail gekregen.');
+      }
       return;
     }
     if (gemaild) {

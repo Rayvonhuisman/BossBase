@@ -65,8 +65,11 @@ const ALL_TEMPLATE_CONFIGS = [
   { type: 'offerte', label: 'Offerte', vars: ['klant_naam','bedrijfsnaam','offerte_nummer','totaal_bedrag','vervaldatum','link'], showAutoToggle: false, showAutoDagen: false },
   { type: 'offerte_geaccepteerd', label: 'Offerte geaccepteerd', vars: ['klant_naam','bedrijfsnaam','offerte_nummer'], showAutoToggle: true, showAutoDagen: false },
   { type: 'factuur', label: 'Factuur', vars: ['klant_naam','bedrijfsnaam','factuur_nummer','totaal_bedrag','vervaldatum','betaalinstructie'], showAutoToggle: false, showAutoDagen: false },
-  { type: 'herinnering_1', label: 'Herinnering 1', vars: ['klant_naam','bedrijfsnaam','factuur_nummer','totaal_bedrag','vervaldatum'], showAutoToggle: true, showAutoDagen: true, dagenLabel: 'dagen na vervaldatum' },
-  { type: 'herinnering_2', label: 'Herinnering 2', vars: ['klant_naam','bedrijfsnaam','factuur_nummer','totaal_bedrag','vervaldatum'], showAutoToggle: true, showAutoDagen: true, dagenLabel: 'dagen na vervaldatum' },
+  // feature: automatisch verzenden hangt aan een pakket. De cron (check-herinneringen)
+  // slaat bedrijven zonder die feature over, dus zonder deze gate zou Instellingen
+  // "Automatisch verzenden aan" tonen terwijl er nooit een herinnering uitgaat.
+  { type: 'herinnering_1', label: 'Herinnering 1', vars: ['klant_naam','bedrijfsnaam','factuur_nummer','totaal_bedrag','vervaldatum'], showAutoToggle: true, showAutoDagen: true, dagenLabel: 'dagen na vervaldatum', feature: 'betaalherinneringen' },
+  { type: 'herinnering_2', label: 'Herinnering 2', vars: ['klant_naam','bedrijfsnaam','factuur_nummer','totaal_bedrag','vervaldatum'], showAutoToggle: true, showAutoDagen: true, dagenLabel: 'dagen na vervaldatum', feature: 'betaalherinneringen' },
   { type: 'aanvraag_ontvangen', label: 'Aanvraag ontvangen', vars: ['klant_naam','bedrijfsnaam'], showAutoToggle: true, showAutoDagen: false },
   { type: 'welkom', label: 'Welkom', vars: ['klant_naam','bedrijfsnaam'], showAutoToggle: false, showAutoDagen: false },
   { type: 'afspraak_bevestiging', label: 'Afspraak bevestiging', vars: ['klant_naam','bedrijfsnaam','afspraak_datum','afspraak_tijd'], showAutoToggle: true, showAutoDagen: false },
@@ -2233,6 +2236,13 @@ export function InstellingenPage() {
             );
             // Custom templates get a generic config
             const cfg = stdCfg || { label: t.name || t.type, vars: ['klant_naam', 'bedrijfsnaam'], showAutoToggle: false, showAutoDagen: false };
+            // Zit automatisch verzenden in dit pakket? Zo niet, dan tonen we de
+            // schakelaar niet: hij zou aan kunnen staan terwijl de cron dit
+            // bedrijf overslaat.
+            const autoBeschikbaar = !cfg.feature || plan.has(cfg.feature);
+            const autoPakket = cfg.feature
+              ? (plan.needsFor(cfg.feature) === 'groei' ? 'Groei en Team' : `${tierLabel(plan.needsFor(cfg.feature))} en hoger`)
+              : '';
             const form = templateForms[t.id] || { onderwerp: t.onderwerp, body: plainToEditorHtml(t.body || ''), actief: t.actief, auto_versturen: false, auto_dagen: 7 };
             const saving = savingTemplate[t.id] || false;
             return (
@@ -2242,8 +2252,10 @@ export function InstellingenPage() {
                   <div>
                     <div className="card-title" style={{ fontSize: '.95rem' }}>{cfg.label}</div>
                     {cfg.showAutoToggle && (
-                      <div style={{ fontSize: '.75rem', color: form.auto_versturen ? '#15A34A' : 'var(--dl)', marginTop: 2 }}>
-                        {form.auto_versturen ? 'Automatisch verzenden aan' : 'Automatisch verzenden uit'}
+                      <div style={{ fontSize: '.75rem', color: autoBeschikbaar && form.auto_versturen ? '#15A34A' : 'var(--dl)', marginTop: 2 }}>
+                        {!autoBeschikbaar
+                          ? `Automatisch verzenden zit in ${autoPakket}`
+                          : form.auto_versturen ? 'Automatisch verzenden aan' : 'Automatisch verzenden uit'}
                       </div>
                     )}
                   </div>
@@ -2287,8 +2299,29 @@ export function InstellingenPage() {
                     />
                   </div>
 
+                  {/* Zonder de feature géén schakelaar: de cron slaat dit bedrijf
+                      over, dus "aan" zetten zou een belofte zijn die niemand
+                      waarmaakt. De template zelf blijft gewoon bewerkbaar en
+                      handmatig versturen kan ook zonder pakket. */}
+                  {cfg.showAutoToggle && !autoBeschikbaar && (
+                    <div className="f s2">
+                      <label>Automatisch verzenden</label>
+                      <div style={{ border: '1px solid var(--bstrong)', borderRadius: 'var(--r8)', maxWidth: 500, padding: '11px 14px', background: 'var(--bgs)', fontSize: '.85rem', color: 'var(--dm)', lineHeight: 1.55 }}>
+                        Automatisch versturen zit in <strong>{autoPakket}</strong>. Handmatig versturen kan gewoon,
+                        vanaf de factuur.
+                        <div style={{ marginTop: 8 }}>
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            onClick={() => gaNaarAbonnement(null, { soort: 'feature', key: cfg.feature })}
+                          >
+                            Bekijk pakketten
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {/* Auto-versturen sectie */}
-                  {cfg.showAutoToggle && (
+                  {cfg.showAutoToggle && autoBeschikbaar && (
                     <div className="f s2">
                       <label>Automatisch verzenden</label>
                       <div style={{ border: '1px solid var(--bstrong)', borderRadius: 'var(--r8)', overflow: 'hidden', maxWidth: 500 }}>

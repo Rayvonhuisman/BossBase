@@ -252,17 +252,20 @@ Datum en tijd: ${esc(new Date(nu).toLocaleString('nl-NL'))}</p>
     }
 
     // ── Tijdlijn op de klantkaart ────────────────────────────────────────────
+    // supabase-js GOOIT niet bij een databasefout; het geeft { error } terug. Een
+    // try/catch hieromheen kan dus nooit vuren: mislukte de insert (RLS, kolom,
+    // constraint), dan verdween dat spoorloos en werd zelfs de warning niet gezet.
+    // Zelfde reparatie als in sign-offerte: de fout uit de return lezen.
     if (werkbon.customer_id) {
-      try {
-        await admin.from('klant_tijdlijn').insert({
-          customer_id: werkbon.customer_id,
-          company_id: werkbon.company_id,
-          type: 'werkbon_ondertekend',
-          omschrijving: `Werkbon ${werkbon.nummer || ''} ondertekend door ${name}`,
-          aangemaakt_op: nu,
-          meta: { nummer: werkbon.nummer, signed_by: name, signed_by_email: email },
-        })
-      } catch { warnings.push('Tijdlijnregel schrijven mislukt') }
+      const { error: tijdlijnErr } = await admin.from('klant_tijdlijn').insert({
+        customer_id: werkbon.customer_id,
+        company_id: werkbon.company_id,
+        type: 'werkbon_ondertekend',
+        omschrijving: `Werkbon ${werkbon.nummer || ''} ondertekend door ${name}`,
+        aangemaakt_op: nu,
+        meta: { nummer: werkbon.nummer, signed_by: name, signed_by_email: email },
+      })
+      if (tijdlijnErr) warnings.push(`Tijdlijnregel schrijven mislukt: ${tijdlijnErr.message}`)
     }
 
     const antwoord: Record<string, unknown> = {
