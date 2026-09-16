@@ -3,6 +3,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
+import { logMailFout } from '../_shared/mailFout.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -110,6 +111,12 @@ serve(async (req) => {
     const resendData = await resendRes.json()
     if (!resendRes.ok) {
       console.error('[request-password-reset] Resend fout:', resendData)
+      await logMailFout({
+        soort: 'wachtwoord_reset',
+        ontvanger: email,
+        fout: String(resendData?.message || `Resend gaf status ${resendRes.status}`),
+        bron: 'request-password-reset',
+      })
       throw new Error(resendData.message || 'Mail versturen mislukt')
     }
 

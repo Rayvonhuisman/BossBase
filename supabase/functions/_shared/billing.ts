@@ -8,6 +8,7 @@
 
 export { stripeFetch, verifyStripeSignature, appOrigin } from './stripe.ts'
 import { stripeFetch } from './stripe.ts'
+import { logMailFout } from './mailFout.ts'
 
 // ── PRIJS-IDS UIT DE OMGEVING ────────────────────────────────────────────────
 // Nooit hardcoden: test- en live-mode hebben andere ids, en prijzen wijzigen
@@ -406,10 +407,16 @@ export async function stuurBossBaseMail(
   replyTo?: string,
   // Resend-formaat: { filename, content } met content als base64.
   attachments?: { filename: string; content: string }[],
+  // Alleen om een mislukking herkenbaar vast te leggen in mail_fouten.
+  soort = 'bossbase_mail',
 ): Promise<string | null> {
   const apiKey = Deno.env.get('RESEND_API_KEY')
   const fromEmail = Deno.env.get('RESEND_FROM_EMAIL') || 'noreply@bossbase.nl'
-  if (!apiKey) { console.warn('RESEND_API_KEY niet ingesteld — mail overgeslagen'); return null }
+  if (!apiKey) {
+    console.warn('RESEND_API_KEY niet ingesteld — mail overgeslagen')
+    await logMailFout({ soort, ontvanger: to, fout: 'RESEND_API_KEY niet ingesteld', bron: 'stuurBossBaseMail' })
+    return null
+  }
   const payload: Record<string, unknown> = { from: `BossBase <${fromEmail}>`, to, subject, html }
   if (replyTo) payload.reply_to = replyTo
   if (attachments?.length) payload.attachments = attachments
@@ -419,7 +426,18 @@ export async function stuurBossBaseMail(
     body: JSON.stringify(payload),
   })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) { console.warn('Resend-fout:', data?.message ?? res.status); return null }
+  if (!res.ok) {
+    console.warn('Resend-fout:', data?.message ?? res.status)
+    // Deze mails gaan vanuit webhooks en crons: niemand ziet hier een foutmelding,
+    // dus zonder deze regel verdween een mislukte welkomst- of meldpuntmail geruisloos.
+    await logMailFout({
+      soort,
+      ontvanger: to,
+      fout: String(data?.message ?? `Resend gaf status ${res.status}`),
+      bron: 'stuurBossBaseMail',
+    })
+    return null
+  }
   return data?.id ?? null
 }
 

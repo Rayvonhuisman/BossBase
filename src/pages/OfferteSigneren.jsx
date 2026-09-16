@@ -179,6 +179,7 @@ export default function OfferteSigneren({ token }) {
 
       // Genereer ondertekende PDF (nieuwe opmaak) vóór de edge function call
       let signedPdfBase64 = null
+      let pdfFout = null
       try {
         const signedAtPreview = new Date().toISOString()
         const mappedOfferte = {
@@ -207,6 +208,7 @@ export default function OfferteSigneren({ token }) {
           mappedOfferte, mappedItems, mapKlantForPdf(klant), mapCompanyForPdf(company))
       } catch (pdfErr) {
         console.warn('Ondertekend PDF genereren mislukt:', pdfErr.message)
+        pdfFout = pdfErr.message || String(pdfErr)
       }
 
       const result = await signOfferte({
@@ -215,6 +217,7 @@ export default function OfferteSigneren({ token }) {
         email: form.email,
         signatureDataUrl: dataUrl,
         signedPdfBase64,
+        pdfFout,
       })
       setDone(true)
 

@@ -39,17 +39,8 @@ async function pushNotifications(notifications) {
   }
 }
 
-export async function createNotification(input) {
-  await pushNotifications([{
-    user_id: input.userId,
-    type: input.type,
-    title: input.title,
-    body: input.body || null,
-    link: input.link || null,
-    related_type: input.relatedType || null,
-    related_id: input.relatedId || null,
-  }]);
-}
+// (createNotification stond hier: nergens aangeroepen sinds hij is toegevoegd.
+// Alle schermen gebruiken createMentionNotifications of notifyNewAssignees.)
 
 export async function listNotifications() {
   const { data, error } = await supabase

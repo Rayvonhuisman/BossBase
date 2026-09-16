@@ -433,3 +433,24 @@ export async function deleteOfferteItemsByOfferteId(offerteId) {
   const { error } = await supabase.from("offerte_items").delete().eq("offerte_id", offerteId)
   if (error) throw error
 }
+
+// ── ONDERTEKENDE PDF OPHALEN ─────────────────────────────────────────────────
+//
+// De bucket `signed-offertes` is privé en heeft geen enkele policy: alleen de
+// service-role komt erbij. Vandaar een edge function, die controleert dat de
+// offerte van jouw bedrijf is en dan een tijdelijke link teruggeeft.
+//
+// Let op: `offerte.signedPdfUrl` uit de database is voor oudere offertes een
+// dode publieke link. Gebruik altijd deze functie, nooit die kolom rechtstreeks.
+export async function getOndertekendePdfUrl(offerteId) {
+  const { data, error } = await supabase.functions.invoke('offerte-pdf-url', {
+    body: { offerte_id: offerteId },
+  })
+  if (error) {
+    let melding = null
+    try { const b = await error.context?.json(); if (b?.error) melding = b.error } catch { /* geen json */ }
+    throw new Error(melding || 'De ondertekende PDF kon niet worden opgehaald.')
+  }
+  if (!data?.url) throw new Error(data?.error || 'Er is geen ondertekende PDF bewaard bij deze offerte.')
+  return data.url
+}

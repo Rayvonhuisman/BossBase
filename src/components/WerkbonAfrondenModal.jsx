@@ -80,6 +80,7 @@ export default function WerkbonAfrondenModal({
       // PDF mét handtekening, hier in de browser. Mislukt dat, dan gaat het
       // tekenen door: de handtekening in de database is het bewijsstuk.
       let pdfBase64 = null;
+      let pdfFout = null;
       try {
         pdfBase64 = await getWerkbonPdfBase64(...pdfArgs({
           ondertekendOp: new Date().toISOString(),
@@ -89,6 +90,7 @@ export default function WerkbonAfrondenModal({
         }));
       } catch (e) {
         console.warn('[werkbon] PDF met handtekening mislukt:', e.message);
+        pdfFout = e.message || String(e);
       }
 
       const res = await signWerkbon({
@@ -97,6 +99,7 @@ export default function WerkbonAfrondenModal({
         email: email.trim(),
         signatureDataUrl: dataUrl,
         signedPdfBase64: pdfBase64,
+        pdfFout,
       });
       onKlaar?.({ ondertekend: true, resultaat: res });
     } catch (e) {

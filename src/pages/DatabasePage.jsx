@@ -10,7 +10,7 @@ import { useUrlTab } from '../hooks/useUrlTab.js';
 import { listCustomers, deleteCustomer } from '../services/customerService.js';
 import { sumGefactureerd, sumBetaald, sumOpenstaand } from '../services/customerTotalsService.js';
 import { getFacturen, getFactuurRegels, FACTUUR_STATUS_OPTIONS } from '../services/factuurService.js';
-import { getOffertes, getOfferteItems, OFFERTE_STATUS_OPTIONS } from '../services/offerteService.js';
+import { getOffertes, getOfferteItems, getOndertekendePdfUrl, OFFERTE_STATUS_OPTIONS } from '../services/offerteService.js';
 import { getOffertePdfBase64, getFactuurPdfBase64 } from '../utils/generatePdf.js';
 import { getProjects, PROJECT_STATUS, PROJECT_STATUS_OPTIONS } from '../services/projectsService.js';
 import { statusInfo } from '../utils/statusColors.js';
@@ -979,32 +979,38 @@ export function DatabasePage({ openCustomer }) {
     );
     if (pairs.length === 0) { toast.error('Geen getekende offertes gevonden voor de selectie'); return; }
     const zip = new JSZip();
+    const mislukt = [];
+    let gelukt = 0;
     setBulkDownloadProgress({ current: 0, total: pairs.length, label: 'getekende offertes' });
     try {
       for (let i = 0; i < pairs.length; i++) {
         const { offerte, customer } = pairs[i];
         setBulkDownloadProgress({ current: i + 1, total: pairs.length, label: 'getekende offertes' });
         const filename = `GetekendOfferte-${slugify(offerte.nummer)}-${slugify(customer.name)}.pdf`;
-        // Probeer eerst de opgeslagen getekende PDF op te halen; val terug op gegenereerde PDF
-        let added = false;
-        if (offerte.signedPdfUrl) {
-          try {
-            const resp = await fetch(offerte.signedPdfUrl);
-            if (resp.ok) {
-              const buf = await resp.arrayBuffer();
-              zip.file(filename, buf);
-              added = true;
-            }
-          } catch { /* val terug op gegenereerde PDF */ }
-        }
-        if (!added) {
-          const items = await getOfferteItems(offerte.id);
-          const b64 = await getOffertePdfBase64(offerte, items, customer, company);
-          zip.file(filename, b64, { base64: true });
+        // Uitsluitend het ECHTE getekende exemplaar. Hier viel de code stil terug
+        // op een opnieuw gegenereerde PDF zonder handtekening — precies het
+        // document dat je nodig hebt als een klant zegt niets getekend te hebben.
+        // Lukt het niet, dan zeggen we dat, en zit die offerte niet in de zip.
+        try {
+          const url = await getOndertekendePdfUrl(offerte.id);
+          const resp = await fetch(url);
+          if (!resp.ok) throw new Error(`downloaden mislukt (${resp.status})`);
+          zip.file(filename, await resp.arrayBuffer());
+          gelukt += 1;
+        } catch (e) {
+          mislukt.push(`${offerte.nummer}: ${e.message || 'onbekende fout'}`);
         }
       }
+      if (gelukt === 0) {
+        toast.error(`Geen enkele getekende offerte kon worden opgehaald. ${mislukt[0] || ''}`);
+        return;
+      }
       await triggerZipDownload(zip, `BossBase-getekende-offertes-${TODAY}.zip`);
-      toast.success(`${pairs.length} getekende offerte${pairs.length !== 1 ? 's' : ''} gedownload`);
+      if (mislukt.length) {
+        toast.error(`${gelukt} van ${pairs.length} gedownload. Niet gelukt: ${mislukt.slice(0, 3).join(' · ')}${mislukt.length > 3 ? ` en nog ${mislukt.length - 3}` : ''}`);
+      } else {
+        toast.success(`${gelukt} getekende offerte${gelukt !== 1 ? 's' : ''} gedownload`);
+      }
     } catch (err) { toast.error('Download mislukt: ' + (err.message || '')); }
     finally { setBulkDownloadProgress(null); }
   };

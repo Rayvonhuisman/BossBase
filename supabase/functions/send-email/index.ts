@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { logMailFout } from '../_shared/mailFout.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -122,7 +123,9 @@ serve(async (req) => {
     }
 
     // ── Verzenden ─────────────────────────────────────────────────────────────
-    const { to, subject, html, from_name, reply_to, attachments } = await req.json()
+    // `soort`, `company_id` en de gerelateerde verwijzing zijn optioneel en dienen
+    // alleen om een MISLUKTE mail herkenbaar vast te leggen in mail_fouten.
+    const { to, subject, html, from_name, reply_to, attachments, soort, company_id, gerelateerd_type, gerelateerd_id } = await req.json()
 
     if (!to || !subject || !html) {
       return json({ success: false, error: 'to, subject en html zijn verplicht' }, 400)
@@ -157,11 +160,24 @@ serve(async (req) => {
     const data = await res.json()
 
     if (!res.ok) {
+      const melding = data.message || `Resend gaf status ${res.status}`
+      await logMailFout({
+        soort: soort || 'onbekend',
+        ontvanger: String(to),
+        companyId: company_id || null,
+        bedrijfNaam: label,
+        fout: String(melding),
+        bron: 'send-email',
+        gerelateerdType: gerelateerd_type || null,
+        gerelateerdId: gerelateerd_id || null,
+      })
       return json({ success: false, error: data.message || 'Resend fout' }, res.status)
     }
 
     return json({ success: true, message_id: data.id })
   } catch (err) {
+    // Netwerkfout of onverwachte uitzondering: ook dát is post die niet aankwam.
+    await logMailFout({ soort: 'onbekend', ontvanger: null, fout: String(err), bron: 'send-email' })
     return json({ success: false, error: String(err) }, 500)
   }
 })

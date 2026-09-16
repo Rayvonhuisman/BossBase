@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
+import { logMailFout } from '../_shared/mailFout.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -54,7 +55,19 @@ serve(async (req) => {
   const warnings: string[] = []
 
   try {
-    const { sign_token, name, email, signature_data_url, signed_pdf_base64 } = await req.json()
+    const { sign_token, name, email, signature_data_url, signed_pdf_base64, pdf_fout } = await req.json()
+
+    // De ondertekende PDF wordt in de browser van de klant gemaakt. Mislukte dat,
+    // dan gingen beide mails zonder bijlage weg en wist niemand ervan: er werd
+    // niets opgeslagen en het scherm zei gewoon "u ontvangt een bevestiging".
+    if (pdf_fout) {
+      await logMailFout({
+        soort: 'ondertekende_pdf_offerte',
+        ontvanger: email ?? null,
+        fout: String(pdf_fout).slice(0, 500),
+        bron: 'sign-offerte',
+      })
+    }
 
     if (!sign_token || !name || !email || !signature_data_url) {
       return new Response(JSON.stringify({ success: false, error: 'Verplichte velden ontbreken' }), {
@@ -185,19 +198,28 @@ serve(async (req) => {
 
     // ── STAP 5: PDF verwerken (frontend-gegenereerde PDF uploaden) ────────────
     const pdfFilename = `offerte-${offerte.nummer}-ondertekend.pdf`
+    // Met bedrijfsmap ervoor: het offertenummer is alleen bínnen een bedrijf uniek,
+    // dus twee bedrijven met BB-150 overschreven elkaars ondertekende exemplaar.
+    const pdfPad = `${offerte.company_id}/${pdfFilename}`
 
     if (signed_pdf_base64) {
       try {
         const pdfBytes = base64ToBytes(signed_pdf_base64)
         const { error: pdfUploadErr } = await admin.storage
           .from('signed-offertes')
-          .upload(pdfFilename, pdfBytes, { contentType: 'application/pdf', upsert: true })
+          .upload(pdfPad, pdfBytes, { contentType: 'application/pdf', upsert: true })
 
         if (pdfUploadErr) {
           warnings.push(`PDF upload mislukt (signed-offertes): ${pdfUploadErr.message}`)
         } else {
-          const { data: pdfPublicUrlData } = admin.storage.from('signed-offertes').getPublicUrl(pdfFilename)
-          const signedPdfUrl = pdfPublicUrlData?.publicUrl || null
+          // De bucket is PRIVÉ. getPublicUrl leverde hier een dode link op ("Bucket
+          // not found", HTTP 400), waardoor de bulk-download in de app stilletjes
+          // een opnieuw gegenereerde PDF zónder handtekening teruggaf. Zelfde
+          // oplossing als in sign-werkbon: een ondertekende URL met lange looptijd.
+          const { data: pdfSigned } = await admin.storage
+            .from('signed-offertes')
+            .createSignedUrl(pdfPad, 60 * 60 * 24 * 365 * 10)
+          const signedPdfUrl = pdfSigned?.signedUrl || null
           if (signedPdfUrl) {
             const { error: urlUpdateErr } = await admin.from('offertes')
               .update({ signed_pdf_url: signedPdfUrl })
@@ -228,22 +250,78 @@ serve(async (req) => {
         : undefined
 
       // 1) KLANT-bevestiging — bedrijfsbranding, reply-to naar het bedrijf.
-      const klantHtml = mailTemplate({
-        title: `Offerte ${offerte.nummer} ondertekend`,
-        preheader: `Bedankt voor het ondertekenen van offerte ${offerte.nummer}`,
-        body: `<p>Beste ${esc(name)},</p>
+      // ── Tekst van de klantbevestiging ────────────────────────────────────
+      // Eerst de template die het bedrijf zelf beheert in Instellingen
+      // ('offerte_geaccepteerd'). Die was nooit aangesloten: een bedrijf paste hem
+      // aan en de klant kreeg onveranderd onze vaste tekst. Staat de template op
+      // inactief of is hij leeg, dan blijft die vaste tekst de terugval.
+      const { data: klantRij } = offerte.customer_id
+        ? await admin.from('customers').select('name').eq('id', offerte.customer_id).maybeSingle()
+        : { data: null }
+      // {{klant_naam}}: de klant zoals hij in de administratie staat; valt terug op
+      // de naam die de ondertekenaar zelf invulde.
+      const klantNaam = (klantRij?.name as string) || name
+
+      const { data: tpl } = await admin
+        .from('email_templates')
+        .select('onderwerp, body, body_html')
+        .eq('company_id', offerte.company_id)
+        .eq('type', 'offerte_geaccepteerd')
+        .eq('actief', true)
+        .maybeSingle()
+
+      const variabelen: Record<string, string> = {
+        klant_naam: klantNaam,
+        bedrijfsnaam,
+        offerte_nummer: String(offerte.nummer ?? ''),
+        totaal_bedrag: totaalFmt,
+      }
+      // In HTML worden de wáárden ge-escaped; in het onderwerp (platte tekst) niet.
+      const vulIn = (tekst: string, alsHtml: boolean) =>
+        String(tekst || '').replace(/\{\{(\w+)\}\}/g, (_m, sleutel) => {
+          const waarde = variabelen[sleutel]
+          if (waarde == null) return `{{${sleutel}}}`
+          return alsHtml ? esc(waarde) : waarde
+        })
+      // De template staat als platte tekst met regeleindes in de database, tenzij
+      // hij in de editor is bewerkt — dan is het al HTML.
+      const naarHtml = (tekst: string) => {
+        const ruw = String(tekst || '')
+        if (/<[a-z][\s\S]*>/i.test(ruw)) return ruw
+        return esc(ruw).split(/\n{2,}/).map(alinea => `<p>${alinea.replace(/\n/g, '<br>')}</p>`).join('')
+      }
+
+      const templateTekst = (tpl?.body_html as string)?.trim() || (tpl?.body as string)?.trim() || ''
+      const klantTekstHtml = templateTekst
+        // De bijlagezin hoort niet in de template thuis (die weet niet of er een
+        // PDF is), dus die plakken we eronder wanneer hij er daadwerkelijk is.
+        ? vulIn(naarHtml(templateTekst), true) + (hasPdf ? '<p>In de bijlage vindt u de ondertekende offerte.</p>' : '')
+        : `<p>Beste ${esc(name)},</p>
 <p>Bedankt voor het ondertekenen van offerte <strong>${esc(offerte.nummer)}</strong>.</p>
 ${omschrijving ? `<p>Omschrijving: ${esc(omschrijving)}</p>` : ''}
 <p>Totaal: <strong>${esc(totaalFmt)}</strong></p>
 ${hasPdf ? '<p>In de bijlage vindt u de ondertekende offerte.</p>' : ''}
 <p>We nemen zo snel mogelijk contact met u op.</p>
-<p>Met vriendelijke groet,<br>${esc(bedrijfsnaam)}</p>`,
+<p>Met vriendelijke groet,<br>${esc(bedrijfsnaam)}</p>`
+
+      const klantOnderwerp = (tpl?.onderwerp as string)?.trim()
+        ? vulIn(tpl.onderwerp as string, false)
+        : `Bevestiging: offerte ${offerte.nummer} ondertekend`
+
+      const klantHtml = mailTemplate({
+        title: `Offerte ${offerte.nummer} ondertekend`,
+        preheader: `Bedankt voor het ondertekenen van offerte ${offerte.nummer}`,
+        body: klantTekstHtml,
         companyName: bedrijfsnaam,
         logoUrl,
         brandColor,
       })
       const klantBody: Record<string, unknown> = {
-        to: email, subject: `Bevestiging: offerte ${offerte.nummer} ondertekend`, html: klantHtml, from_name: bedrijfsnaam,
+        to: email, subject: klantOnderwerp, html: klantHtml, from_name: bedrijfsnaam,
+        soort: 'ondertekenbevestiging_klant',
+        company_id: offerte.company_id,
+        gerelateerd_type: 'offerte',
+        gerelateerd_id: offerte.id,
       }
       if (bedrijfEmail) klantBody.reply_to = bedrijfEmail
       if (attachments) klantBody.attachments = attachments
@@ -266,6 +344,13 @@ ${hasPdf ? '<p>De ondertekende offerte is als bijlage toegevoegd.</p>' : ''}`,
         })
         const bedrijfBody: Record<string, unknown> = {
           to: bedrijfEmail, subject: `Offerte ${offerte.nummer} ondertekend door ${name}`, html: bedrijfHtml, from_name: bedrijfsnaam,
+          // Antwoorden gingen naar noreply@bossbase.nl en las dus niemand. Wie op
+          // deze melding reageert, wil de klant bereiken.
+          reply_to: email,
+          soort: 'ondertekenbevestiging_bedrijf',
+          company_id: offerte.company_id,
+          gerelateerd_type: 'offerte',
+          gerelateerd_id: offerte.id,
         }
         if (attachments) bedrijfBody.attachments = attachments
         if (!(await sendViaEdge(supabaseUrl, serviceKey, bedrijfBody))) warnings.push('Notificatiemail naar bedrijf mislukt')

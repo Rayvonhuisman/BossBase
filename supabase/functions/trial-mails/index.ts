@@ -32,11 +32,13 @@ const json = (body: unknown, status = 200) =>
     status, headers: { ...CORS, 'Content-Type': 'application/json' },
   })
 
+import { logMailFout } from '../_shared/mailFout.ts'
+
 // Rechtstreeks naar Resend, net als check-herinneringen. Niet via send-email:
 // die functie eist een ingelogde gebruiker of het interne secret, en weigert
 // bovendien post van een read-only account — precies de bedrijven die mail 15
 // en 30 moeten krijgen.
-async function verstuur(to: string, subject: string, html: string): Promise<string | null> {
+async function verstuur(to: string, subject: string, html: string, soort = 'trial'): Promise<string | null> {
   const apiKey = Deno.env.get('RESEND_API_KEY')
   const fromEmail = Deno.env.get('RESEND_FROM_EMAIL') || 'noreply@bossbase.nl'
   if (!apiKey) { console.warn('RESEND_API_KEY niet ingesteld — mail overgeslagen'); return null }
@@ -53,7 +55,18 @@ async function verstuur(to: string, subject: string, html: string): Promise<stri
     }),
   })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) { console.warn('Resend-fout:', data?.message ?? res.status); return null }
+  if (!res.ok) {
+    console.warn('Resend-fout:', data?.message ?? res.status)
+    // Vastleggen: deze mails gaan vanuit een cron, dus er is niemand die een
+    // foutmelding op zijn scherm krijgt.
+    await logMailFout({
+      soort,
+      ontvanger: to,
+      fout: String(data?.message ?? `Resend gaf status ${res.status}`),
+      bron: 'trial-mails',
+    })
+    return null
+  }
   return data?.id ?? null
 }
 
@@ -111,7 +124,7 @@ serve(async (req) => {
           trialEindigt: overMorgen,
           appUrl,
         })
-        const id = await verstuur(internAdres, `[dag ${nummer}] ${m.subject}`, m.html)
+        const id = await verstuur(internAdres, `[dag ${nummer}] ${m.subject}`, m.html, `trial_${nummer}_bekijk`)
         if (id) { uitslag.verstuurd++; uitslag.details.push(`dag ${nummer} → ${internAdres}`) }
         else    { uitslag.mislukt++;   uitslag.details.push(`dag ${nummer} MISLUKT`) }
       }
@@ -143,7 +156,7 @@ serve(async (req) => {
         appUrl,
       })
 
-      const messageId = await verstuur(k.naar, m.subject, m.html)
+      const messageId = await verstuur(k.naar, m.subject, m.html, `trial_${k.mail}`)
       if (messageId) {
         await db.rpc('bb_trial_mail_verstuurd', {
           p_company_id: k.company_id, p_mail: k.mail, p_message_id: messageId,

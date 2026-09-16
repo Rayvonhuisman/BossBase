@@ -6,6 +6,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
 import { hashVerificationCode } from '../_shared/hashCode.ts'
+import { logMailFout } from '../_shared/mailFout.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -107,6 +108,12 @@ serve(async (req) => {
     const resendData = await resendRes.json()
     if (!resendRes.ok) {
       console.error('[request-verification-code] Resend fout:', resendData)
+      await logMailFout({
+        soort: 'verificatiecode',
+        ontvanger: email,
+        fout: String(resendData?.message || `Resend gaf status ${resendRes.status}`),
+        bron: 'request-verification-code',
+      })
       throw new Error(resendData.message || 'Mail versturen mislukt')
     }
 

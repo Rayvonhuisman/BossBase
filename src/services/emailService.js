@@ -157,42 +157,18 @@ export async function triggerAutoEmail(type, vars, toEmail, companyId, relatedTy
   }
 }
 
-// ── MAIL TEMPLATE UPSERT (voor nieuwe companies) ─────────────────────────────
-
-export async function ensureMailTemplates(companyId) {
-  const defaults = [
-    {
-      company_id: companyId,
-      type: 'offerte',
-      name: 'Offerte verstuurd',
-      onderwerp: 'Offerte {{offerte_nummer}} van {{bedrijfsnaam}}',
-      body: 'Beste {{klant_naam}},\n\nHierbij ontvangt u offerte {{offerte_nummer}}.\n\nMet vriendelijke groet,\n{{bedrijfsnaam}}',
-      body_html: '<p>Beste {{klant_naam}},</p><p>Hierbij ontvangt u offerte <strong>{{offerte_nummer}}</strong>.</p><p><a href="{{link}}" style="display:inline-block;background:#1DDB62;color:#ffffff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Offerte bekijken &amp; ondertekenen</a></p><p>Met vriendelijke groet,<br>{{bedrijfsnaam}}</p>',
-      is_default: true,
-      actief: true,
-    },
-    {
-      company_id: companyId,
-      type: 'factuur',
-      name: 'Factuur verstuurd',
-      onderwerp: 'Factuur {{factuur_nummer}} van {{bedrijfsnaam}}',
-      body: 'Beste {{klant_naam}},\n\nBijgaand ontvangt u factuur {{factuur_nummer}}.\n\nMet vriendelijke groet,\n{{bedrijfsnaam}}',
-      body_html: '<p>Beste {{klant_naam}},</p><p>Bijgaand ontvangt u factuur <strong>{{factuur_nummer}}</strong>.</p><p>Met vriendelijke groet,<br>{{bedrijfsnaam}}</p>',
-      is_default: true,
-      actief: true,
-    },
-  ]
-
-  for (const tpl of defaults) {
-    await supabase.from('email_templates').upsert(tpl, { onConflict: 'company_id,type', ignoreDuplicates: false })
-  }
-}
-
 // ── SIGN-OFFERTE VIA EDGE FUNCTION ──────────────────────────────────────────
+//
+// (Hier stond ensureMailTemplates: een tweede, onvolledige versie van de
+// standaardtemplates die nooit werd aangeroepen. De database doet dit al met
+// seed_default_email_templates, en die kent alle types.)
 
-export async function signOfferte({ signToken, name, email, signatureDataUrl, signedPdfBase64 }) {
+export async function signOfferte({ signToken, name, email, signatureDataUrl, signedPdfBase64, pdfFout }) {
   const body = { sign_token: signToken, name, email, signature_data_url: signatureDataUrl }
   if (signedPdfBase64) body.signed_pdf_base64 = signedPdfBase64
+  // Lukte het maken van de ondertekende PDF niet, dan gaat de reden mee zodat de
+  // server dat kan vastleggen — anders verdwijnt het in de console van de klant.
+  if (pdfFout) body.pdf_fout = String(pdfFout).slice(0, 500)
   const { data, error } = await supabase.functions.invoke('sign-offerte', { body })
   if (error) {
     // Haal de werkelijke foutmelding op uit de response body

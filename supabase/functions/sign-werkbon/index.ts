@@ -16,6 +16,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
+import { logMailFout } from '../_shared/mailFout.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -80,7 +81,18 @@ serve(async (req) => {
 
   try {
     const payload = await req.json()
-    const { action, sign_token, name, email, signature_data_url, signed_pdf_base64 } = payload
+    const { action, sign_token, name, email, signature_data_url, signed_pdf_base64, pdf_fout } = payload
+
+    // De ondertekende PDF wordt in de browser van de klant gemaakt. Lukte dat niet,
+    // dan gaan de mails zonder bijlage en merkte niemand het. Leg dat vast.
+    if (pdf_fout) {
+      await logMailFout({
+        soort: 'ondertekende_pdf_werkbon',
+        ontvanger: email ?? null,
+        fout: String(pdf_fout).slice(0, 500),
+        bron: 'sign-werkbon',
+      })
+    }
 
     if (!sign_token) return json({ success: false, error: 'sign_token ontbreekt' }, 400)
 

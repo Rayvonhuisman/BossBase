@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
 import { lokaleDatum, lokaleTijd, langeDatumNl, lokaalNaarUtc, voegDagenToe } from '../_shared/datumTijd.ts'
+import { logMailFout } from '../_shared/mailFout.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -39,17 +40,35 @@ function fmtCurrency(n: number): string {
   return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(n)
 }
 
-async function sendMail(to: string, subject: string, html: string, fromName: string) {
+// `soort` en `companyId` dienen alleen om een mislukking herkenbaar vast te
+// leggen: deze functie draait vanuit de cron, dus er is geen scherm waar een
+// fout op kan verschijnen.
+async function sendMail(
+  to: string, subject: string, html: string, fromName: string,
+  soort = 'herinnering', companyId: string | null = null,
+) {
   const apiKey = Deno.env.get('RESEND_API_KEY')
   const fromEmail = Deno.env.get('RESEND_FROM_EMAIL') || 'noreply@bossbase.nl'
-  if (!apiKey) { console.warn('RESEND_API_KEY niet ingesteld'); return null }
+  if (!apiKey) {
+    console.warn('RESEND_API_KEY niet ingesteld')
+    await logMailFout({ soort, ontvanger: to, companyId, bedrijfNaam: fromName, fout: 'RESEND_API_KEY niet ingesteld', bron: 'check-herinneringen' })
+    return null
+  }
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ from: `${fromName} <${fromEmail}>`, to, subject, html }),
   })
-  const data = await res.json()
-  return res.ok ? data.id : null
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    await logMailFout({
+      soort, ontvanger: to, companyId, bedrijfNaam: fromName,
+      fout: String(data?.message ?? `Resend gaf status ${res.status}`),
+      bron: 'check-herinneringen',
+    })
+    return null
+  }
+  return data.id
 }
 
 serve(async (req) => {
