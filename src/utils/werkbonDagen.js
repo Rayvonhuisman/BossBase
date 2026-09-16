@@ -194,6 +194,41 @@ export function planningUitWerkbon(w) {
   return { dagen: dagen.map(d => d.datum), tijden, ploeg, persoonTijden };
 }
 
+/**
+ * Eén blok in de planning op een nieuwe tijd zetten. Geeft terug wat er naar de
+ * database moet: `dagen` (voor zetWerkbonDagen) en `standaard` (de tijd van de
+ * werkbon zelf, die gelijk is aan die van de eerste dag).
+ *
+ * Met `pid`: alleen die persoon op die dag krijgt een eigen tijd. De rest van
+ * de ploeg en de andere dagen blijven staan — een blok verslepen mag nooit
+ * ongemerkt de hele ploeg verzetten. Komt de nieuwe tijd weer gelijk aan die
+ * van de dag, dan vervalt de eigen tijd, zodat er geen afwijkingen blijven
+ * hangen die niets meer afwijken.
+ *
+ * Zonder `pid` (blok zonder medewerker, of de voertuigweergave): alleen de tijd
+ * van díé datum. Loopt via dezelfde vertaling als het werkbonformulier, zodat
+ * een verschuiving van dag 1 — waarvan de tijd de standaardtijd ís — de andere
+ * dagen niet meeneemt: die houden hun tijd als eigen dagtijd.
+ */
+export function verzetTijd(w, datum, pid, nieuw) {
+  const p = planningUitWerkbon(w);
+  if (!p.dagen.includes(datum)) throw new Error('Deze dag staat niet (meer) op de werkbon. Ververs de planning.');
+  const t = { starttijd: tijd(nieuw.starttijd), eindtijd: tijd(nieuw.eindtijd) };
+
+  if (pid) {
+    const dagTijd = tijdVanDag(p, datum);
+    const eigen = { ...(p.persoonTijden[datum] || {}) };
+    if (t.starttijd === dagTijd.starttijd && t.eindtijd === dagTijd.eindtijd) delete eigen[pid];
+    else eigen[pid] = t;
+    p.persoonTijden = { ...p.persoonTijden, [datum]: eigen };
+  } else {
+    p.tijden = { ...p.tijden, [datum]: t };
+  }
+
+  const standaard = tijdVanDag(p, geplandeDatums(p)[0], { starttijd: w.starttijd, eindtijd: w.eindtijd });
+  return { dagen: dagenUitPlanning(p, w.assignedToIds || [], standaard), standaard };
+}
+
 const zelfdeSet = (a, b) => a.length === b.length && a.every(x => b.includes(x));
 
 /**

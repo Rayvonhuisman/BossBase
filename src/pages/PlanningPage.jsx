@@ -9,18 +9,21 @@ import { I, ModalX, NotifyMailToggle } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
-import { getWerkbonnen, createWerkbon, updateWerkbon, zetWerkbonDagen } from '../services/werkbonService.js';
+import { getWerkbonnen, getWerkbonById, createWerkbon, updateWerkbon, zetWerkbonDagen } from '../services/werkbonService.js';
 import { WerkbonDagenVelden, WerkbonLocatieVeld, useKlantAdres } from '../components/WerkbonPlanning.jsx';
 import {
   werkbonDagen, tijdenOpDag, tijdenVoorPersoon, ploegOpDag, isIngepland, planningUitWerkbon,
-  dagenUitPlanning, controleerPlanning, legePlanning, planningLabel, dubbeleBoekingen,
+  dagenUitPlanning, controleerPlanning, legePlanning, planningLabel, dubbeleBoekingen, verzetTijd,
 } from '../utils/werkbonDagen.js';
+import { useBlokSlepen } from '../hooks/useBlokSlepen.js';
+import { useUrlTab } from '../hooks/useUrlTab.js';
+import { usePlanGuard } from '../components/PlanUpgradeModal.jsx';
 import { getVoertuigen } from '../services/voertuigService.js';
 import { getActiveTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
 import { syncWerkbonEvents, upsertActivityEvent, deleteActivityEvent } from '../services/calendarService.js';
-import { listActivities, createActivity, buildDueAt } from '../services/activityService.js';
+import { listActivities, createActivity, updateActivity, buildDueAt } from '../services/activityService.js';
 import { ActivityEditModal } from '../components/SharedModals.jsx';
 import { MemberMultiSelect } from '../components/MemberMultiSelect.jsx';
 import { AssigneeResponsibleSelect } from '../components/AssigneeResponsibleSelect.jsx';
@@ -37,6 +40,9 @@ const PX_PER_HOUR = 64;
 const TIMELINE_H  = TOTAL_HOURS * PX_PER_HOUR; // 832px
 const TIME_COL_W  = 52;
 const DAY_COL_W   = 'minmax(110px, 1fr)';
+// Smalste dagkolom die nog leesbaar is; bepaalt vanaf wanneer de tijdlijn
+// horizontaal schuift in plaats van de kolommen plat te drukken.
+const MIN_DAY_COL_PX = 110;
 const LEGEND_W    = 170;
 
 // ── WEEK HELPERS ──────────────────────────────────────────────────────────────
@@ -62,6 +68,11 @@ function fmtWeekRange(monday) {
   if (monday.getMonth() === sunday.getMonth())
     return `${monday.getDate()}–${sunday.getDate()} ${NL_MONTHS[monday.getMonth()]} ${monday.getFullYear()}`;
   return `${monday.getDate()} ${NL_MONTHS[monday.getMonth()]} – ${sunday.getDate()} ${NL_MONTHS[sunday.getMonth()]} ${sunday.getFullYear()}`;
+}
+
+// "maandag 22 juni 2026" — de kop boven de dagweergave.
+function fmtDagLang(d) {
+  return d.toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 function fmtDayShort(isoDate) {
@@ -148,35 +159,104 @@ function assignLanes(blocks) {
 }
 
 // ── WERKBON BLOK (in tijdlijn) ────────────────────────────────────────────────
+// `sleep` = { mag, label, slotReden, onVerzet }. Met mag: verslepen verschuift
+// de tijd, de boven- en onderrand verzetten begin of eind (useBlokSlepen).
 
-function WerkbonBlock({ werkbon, color, onClick, onDubbel }) {
+const SLEEP_MIN = HOUR_START * 60;
+const SLEEP_MAX = HOUR_END * 60;
+
+function SleepRanden({ kleur }) {
+  // Alleen voor de muiscursor en als zichtbaar handvat; welke rand je pakt,
+  // rekent useBlokSlepen uit de positie van de klik.
+  const rand = { position: 'absolute', left: 0, right: 0, height: 6, cursor: 'ns-resize', zIndex: 2 };
+  return (
+    <>
+      <div aria-hidden style={{ ...rand, top: 0 }} />
+      <div aria-hidden style={{ ...rand, bottom: 0 }}>
+        <div style={{ width: 16, height: 2, borderRadius: 1, background: kleur, opacity: .45, margin: '2px auto 0' }} />
+      </div>
+    </>
+  );
+}
+
+function SleepTijd({ voorlopig, label, kleur }) {
+  return (
+    <div style={{
+      position: 'absolute', left: 3, right: 3, top: 2, zIndex: 4, pointerEvents: 'none',
+      background: '#fff', border: `1px solid ${kleur}`, borderRadius: 4, padding: '1px 4px',
+      fontSize: 10, fontWeight: 800, color: 'var(--dk)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      boxShadow: '0 1px 3px rgba(0,0,0,.12)',
+    }}>
+      {minsToTime(voorlopig.start)}–{minsToTime(voorlopig.eind)}
+      {label && <span style={{ fontWeight: 600, color: 'var(--dl)' }}> · {label}</span>}
+    </div>
+  );
+}
+
+// `doel` is wat er bij het opslaan wordt doorgegeven. Voor een werkbon is dat
+// het blok zelf (dat weet welke dag en welke medewerker het toont); voor een
+// activiteit de activiteit eronder — het blok heeft een eigen id (act:<id>),
+// en daarmee kon de activiteit niet bijgewerkt worden.
+function useSleepVoorBlok(blok, sleep, doel = blok) {
+  const start = timeToMins(blok.starttijd);
+  const eind = blok.eindtijd ? timeToMins(blok.eindtijd) : start + 60;
+  return useBlokSlepen({
+    start, eind,
+    pxPerMin: PX_PER_HOUR / 60,
+    // Een blok dat buiten de zichtbare uren begint of eindigt, springt niet naar binnen.
+    min: Math.min(SLEEP_MIN, start),
+    max: Math.max(SLEEP_MAX, eind),
+    uit: !sleep?.mag,
+    onKlaar: t => sleep.onVerzet(doel, t),
+  });
+}
+
+function WerkbonBlock({ werkbon: blok, color, onClick, onDubbel, sleep }) {
+  const { elRef, voorlopig, bezig, handlers } = useSleepVoorBlok(blok, sleep);
+  const werkbon = voorlopig
+    ? { ...blok, starttijd: minsToTime(voorlopig.start), eindtijd: minsToTime(voorlopig.eind) }
+    : blok;
   const top    = timeToTopPx(werkbon.starttijd);
   const height = durationToPx(werkbon.starttijd, werkbon.eindtijd);
   const lane   = werkbon._lane || 0;
   const total  = werkbon._totalLanes || 1;
   const w      = `${100 / total}%`;
   const left   = `${(lane / total) * 100}%`;
+  const mag    = !!sleep?.mag;
 
   return (
     <div
-      onClick={e => { e.stopPropagation(); onClick(werkbon); }}
-      title={`${werkbon.titel}${werkbon._dagLabel ? ` (${werkbon._dagLabel})` : ''}\n${fmtTime(werkbon.starttijd)}–${fmtTime(werkbon.eindtijd)}\n${[werkbon._persoon, werkbon.customerName].filter(Boolean).join(' · ')}`}
+      ref={elRef}
+      {...handlers}
+      onClick={e => { e.stopPropagation(); onClick(blok); }}
+      title={`${werkbon.titel}${werkbon._dagLabel ? ` (${werkbon._dagLabel})` : ''}\n${fmtTime(werkbon.starttijd)}–${fmtTime(werkbon.eindtijd)}\n${[werkbon._persoon, werkbon.customerName].filter(Boolean).join(' · ')}${sleep?.slotReden ? `\n${sleep.slotReden}` : mag ? '\nSlepen verschuift de tijd, de rand verzet begin of eind' : ''}`}
       style={{
         position: 'absolute', top, left, width: w, height,
         background: color.bg,
         borderLeft: `3px solid ${color.bar}`,
-        border: `1px solid ${color.border}`,
+        border: `1px solid ${voorlopig ? color.bar : color.border}`,
         borderRadius: 4,
         padding: '3px 5px 2px',
         overflow: 'hidden',
-        cursor: 'pointer',
+        cursor: mag ? (voorlopig ? 'grabbing' : 'grab') : 'pointer',
         boxSizing: 'border-box',
-        zIndex: 3,
-        transition: 'filter .1s',
+        zIndex: voorlopig ? 6 : 3,
+        boxShadow: voorlopig ? '0 4px 12px rgba(0,0,0,.18)' : 'none',
+        opacity: bezig ? .75 : 1,
+        userSelect: mag ? 'none' : undefined,
+        WebkitUserSelect: mag ? 'none' : undefined,
+        WebkitTouchCallout: mag ? 'none' : undefined,
+        transition: voorlopig ? 'none' : 'filter .1s',
       }}
       onMouseEnter={e => (e.currentTarget.style.filter = 'brightness(.96)')}
       onMouseLeave={e => (e.currentTarget.style.filter = '')}
     >
+      {mag && !voorlopig && <SleepRanden kleur={color.bar} />}
+      {voorlopig && <SleepTijd voorlopig={voorlopig} label={sleep.label} kleur={color.bar} />}
+      {sleep?.slotReden && (
+        <Lock size={9} strokeWidth={2.4} aria-label={sleep.slotReden}
+          style={{ position: 'absolute', bottom: 3, right: 3, color: color.text, opacity: .6 }} />
+      )}
       {/* Dubbel ingepland: klik = uitleg, zonder het blok zelf te openen. */}
       {werkbon._dubbel?.length > 0 && (
         <button
@@ -186,6 +266,7 @@ function WerkbonBlock({ werkbon, color, onClick, onDubbel }) {
           aria-label="Dubbel ingepland — uitleg"
           title="Dubbel ingepland"
           onMouseDown={e => e.stopPropagation()}
+          onPointerDown={e => e.stopPropagation()}
           onClick={e => { e.stopPropagation(); onDubbel?.(werkbon, e); }}
         >
           <AlertTriangle size={10} strokeWidth={2.4} />
@@ -215,31 +296,47 @@ function WerkbonBlock({ werkbon, color, onClick, onDubbel }) {
 
 // ── ACTIVITEIT BLOK (in tijdlijn) ────────────────────────────────────────────
 
-function ActivityBlock({ activity, onClick, onDubbel }) {
+const ACTIVITEIT_KLEUR = '#1DDB62';
+
+function ActivityBlock({ activity: blok, onClick, onDubbel, sleep }) {
+  const { elRef, voorlopig, bezig, handlers } = useSleepVoorBlok(blok, sleep, blok._orig || blok);
+  const activity = voorlopig
+    ? { ...blok, starttijd: minsToTime(voorlopig.start), eindtijd: minsToTime(voorlopig.eind) }
+    : blok;
   const top    = timeToTopPx(activity.starttijd);
   const height = durationToPx(activity.starttijd, activity.eindtijd);
   const lane   = activity._lane || 0;
   const total  = activity._totalLanes || 1;
+  const mag    = !!sleep?.mag;
 
   return (
     <div
-      onClick={e => { e.stopPropagation(); onClick && onClick(activity._orig); }}
-      title={`${activity.titel}\n${fmtTime(activity.starttijd)}–${fmtTime(activity.eindtijd)}\n${activity.customerName || ''}`}
+      ref={elRef}
+      {...handlers}
+      onClick={e => { e.stopPropagation(); onClick && onClick(blok._orig); }}
+      title={`${activity.titel}\n${fmtTime(activity.starttijd)}–${fmtTime(activity.eindtijd)}\n${activity.customerName || ''}${mag ? '\nSlepen verschuift de tijd, de rand verzet begin of eind' : ''}`}
       style={{
         position: 'absolute',
         top, left: `${(lane / total) * 100}%`,
         width: `${100 / total}%`, height,
         background: 'rgba(29,219,98,.14)',
-        borderLeft: '3px solid #1DDB62',
-        border: '1px solid rgba(29,219,98,.35)',
+        borderLeft: `3px solid ${ACTIVITEIT_KLEUR}`,
+        border: `1px solid ${voorlopig ? ACTIVITEIT_KLEUR : 'rgba(29,219,98,.35)'}`,
         borderRadius: 4, padding: '3px 5px 2px',
-        overflow: 'hidden', cursor: 'pointer',
-        boxSizing: 'border-box', zIndex: 3,
-        transition: 'filter .1s',
+        overflow: 'hidden', cursor: mag ? (voorlopig ? 'grabbing' : 'grab') : 'pointer',
+        boxSizing: 'border-box', zIndex: voorlopig ? 6 : 3,
+        boxShadow: voorlopig ? '0 4px 12px rgba(0,0,0,.18)' : 'none',
+        opacity: bezig ? .75 : 1,
+        userSelect: mag ? 'none' : undefined,
+        WebkitUserSelect: mag ? 'none' : undefined,
+        WebkitTouchCallout: mag ? 'none' : undefined,
+        transition: voorlopig ? 'none' : 'filter .1s',
       }}
       onMouseEnter={e => (e.currentTarget.style.filter = 'brightness(.95)')}
       onMouseLeave={e => (e.currentTarget.style.filter = '')}
     >
+      {mag && !voorlopig && <SleepRanden kleur={ACTIVITEIT_KLEUR} />}
+      {voorlopig && <SleepTijd voorlopig={voorlopig} label={sleep.label} kleur={ACTIVITEIT_KLEUR} />}
       {activity._dubbel?.length > 0 && (
         <button
           type="button"
@@ -248,6 +345,7 @@ function ActivityBlock({ activity, onClick, onDubbel }) {
           aria-label="Dubbel ingepland — uitleg"
           title="Dubbel ingepland"
           onMouseDown={e => e.stopPropagation()}
+          onPointerDown={e => e.stopPropagation()}
           onClick={e => { e.stopPropagation(); onDubbel?.(activity, e); }}
         >
           <AlertTriangle size={10} strokeWidth={2.4} />
@@ -323,14 +421,20 @@ function TimeSlotDrop({ date, hour }) {
 
 // ── TIJDLIJN KOLOM ────────────────────────────────────────────────────────────
 
-function DayColumn({ date, werkbonnen, activities = [], colorMap, isToday, allowDrop, onBlockClick, onActivityClick, onDubbel }) {
+function DayColumn({
+  date, werkbonnen, activities = [], colorMap, isToday, allowDrop, onBlockClick, onActivityClick, onDubbel,
+  sleepVoorWerkbon, onWerkbonVerzet, magActiviteitSlepen, onActiviteitVerzet,
+}) {
   const allBlocks = useMemo(() => {
     const wbs = werkbonnen.map(w => ({ ...w, _blockType: 'werkbon' }));
     const acts = activities.map(a => ({
       _blockType: 'activity',
       id: `act:${a.id}`,
       starttijd: a.time || '09:00',
-      eindtijd: a.endTime || minsToTime(timeToMins(a.time || '09:00') + 15),
+      // Zonder eindtijd duurt een activiteit een uur — dat is ook wat het
+      // agenda-item krijgt (buildEventTimes). Stond hier een kwartier, dan gaf
+      // het blok een kortere klus weer dan er in de agenda staat.
+      eindtijd: a.endTime || minsToTime(timeToMins(a.time || '09:00') + 60),
       titel: a.title,
       customerName: a.customerName,
       _datum: a._datum,
@@ -366,7 +470,10 @@ function DayColumn({ date, werkbonnen, activities = [], colorMap, isToday, allow
       {allowDrop && hours.map(h => <TimeSlotDrop key={h} date={date} hour={h} />)}
       {/* Werkbon + Activiteit blokken */}
       {withLanes.map(b => b._blockType === 'activity' ? (
-        <ActivityBlock key={b.id} activity={b} onClick={onActivityClick} onDubbel={onDubbel} />
+        <ActivityBlock
+          key={b.id} activity={b} onClick={onActivityClick} onDubbel={onDubbel}
+          sleep={{ mag: !!magActiviteitSlepen, label: 'hele activiteit', onVerzet: onActiviteitVerzet }}
+        />
       ) : (
         <WerkbonBlock
           key={b._blokKey || b.id}
@@ -376,6 +483,7 @@ function DayColumn({ date, werkbonnen, activities = [], colorMap, isToday, allow
           color={colorMap[b._colorKey] || UNASSIGNED_COLOR}
           onClick={onBlockClick}
           onDubbel={onDubbel}
+          sleep={{ ...(sleepVoorWerkbon?.(b) || { mag: false }), onVerzet: onWerkbonVerzet }}
         />
       ))}
     </div>
@@ -965,11 +1073,30 @@ function DetailModal({ werkbon, teamMembers, voertuigen, profile, onClose, onUpd
 
 // ── LEGENDA ───────────────────────────────────────────────────────────────────
 
-function Legend({ items }) {
+// Dicht geeft de legenda zijn breedte terug aan de planning — op een telefoon
+// scheelt dat een halve kolom. De keuze blijft per browser bewaard.
+function Legend({ items, open, onToggle }) {
   if (!items.length) return null;
+  if (!open) {
+    return (
+      <div style={{ flexShrink: 0, paddingLeft: 8 }}>
+        <button type="button" className="btn btn-s btn-sm" onClick={onToggle}
+          aria-expanded={false} title="Legenda tonen"
+          style={{ whiteSpace: 'nowrap' }}>
+          {I.chev_l} Legenda
+        </button>
+      </div>
+    );
+  }
   return (
     <div style={{ width: LEGEND_W, flexShrink: 0, paddingLeft: 14 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>Legenda</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em' }}>Legenda</span>
+        <button type="button" onClick={onToggle} aria-expanded aria-label="Legenda verbergen" title="Legenda verbergen"
+          style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl)', display: 'inline-flex', padding: 2 }}>
+          <X size={13} />
+        </button>
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
         {items.map(it => (
           <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -982,15 +1109,31 @@ function Legend({ items }) {
   );
 }
 
+const LEGENDA_SLEUTEL = 'bb.planning.legenda';
+
 // ── PLANNING PAGE ─────────────────────────────────────────────────────────────
 
 export function PlanningPage({ openCustomer } = {}) {
   const toast = useToast();
   const { profile } = useProfile();
   const { can } = usePermissions();
+  const { plan } = usePlanGuard();
 
   const timelineScrollRef = useRef(null);
-  const [weekStart,      setWeekStart]      = useState(() => getMonday());
+  // Dag of week, net als de agenda: in de URL (?zicht=), zodat verversen je
+  // weergave niet omgooit. `anker` is de dag waar je staat; de weekweergave
+  // toont de week waarin die dag valt.
+  const [zicht, setZicht] = useUrlTab('week', { param: 'zicht', validIds: ['dag', 'week'] });
+  const [anker, setAnker] = useState(() => new Date());
+  const weekStart = getMonday(anker);
+  // Legenda open of dicht — per browser onthouden.
+  const [legendaOpen, setLegendaOpen] = useState(() => {
+    try { return window.localStorage.getItem(LEGENDA_SLEUTEL) !== 'dicht'; } catch { return true; }
+  });
+  const wisselLegenda = () => setLegendaOpen(v => {
+    try { window.localStorage.setItem(LEGENDA_SLEUTEL, v ? 'dicht' : 'open'); } catch { /* geen opslag beschikbaar */ }
+    return !v;
+  });
   const [viewMode,       setViewMode]       = useState('totaal'); // totaal | medewerker | voertuig
   const [selectedMember, setSelectedMember] = useState('');
   const [selectedVehicle,setSelectedVehicle]= useState('');
@@ -1017,8 +1160,12 @@ export function PlanningPage({ openCustomer } = {}) {
     return () => document.removeEventListener('mousedown', sluit);
   }, [dubbelInfo]);
 
-  const weekDays = Array.from({ length: 7 }, (_, i) => toISO(addDays(weekStart, i)));
+  // Welke dagen er in beeld staan: één dag, of de hele week.
+  const zichtbareDagen = zicht === 'dag'
+    ? [toISO(anker)]
+    : Array.from({ length: 7 }, (_, i) => toISO(addDays(weekStart, i)));
   const today = toISO(new Date());
+  const stap = n => setAnker(a => addDays(a, zicht === 'dag' ? n : n * 7));
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -1139,6 +1286,84 @@ export function PlanningPage({ openCustomer } = {}) {
     setQuickDrop({ werkbon: wb, date, hour });
   };
 
+  // ── BLOKKEN VERSLEPEN ──────────────────────────────────────────────────────
+  // Achter dezelfde planning-gate als de rest van deze pagina. Een werkbonblok
+  // mag verslepen wie de werkbon mag bewerken — dezelfde rechten als de
+  // database (werkbonnen_update/werkbon_dagen_update). Een ondertekende werkbon
+  // staat op slot; dat dwingt de database ook af (migratie 20260915150000).
+  // Verzetten hoort bij het planning-recht. Wie alleen op de werkbon staat —
+  // ook de verantwoordelijke — mag zijn eigen planning niet verschuiven.
+  // Dezelfde regel staat in de database (migratie 20260916091000), dus de UI
+  // verbergt niets wat de server wél zou toestaan.
+  const magSlepen = plan.has('planning') && can('planning');
+
+  const sleepVoorWerkbon = b => {
+    const w = werkbonnen.find(x => x.id === b.id);
+    if (!w) return { mag: false };
+    if (w.ondertekendOp) return { mag: false, slotReden: 'Ondertekend — de tijden staan op slot' };
+    if (!magSlepen) return { mag: false };
+    // Een blok met een persoon verzet alleen díé persoon op díé dag; de rest van
+    // de ploeg blijft staan (zie verzetTijd). Dat staat er tijdens het slepen bij.
+    return { mag: true, label: b._pid ? `alleen ${b._persoon || 'deze medewerker'}` : 'deze dag' };
+  };
+
+  const magActiviteitSlepen = magSlepen;
+
+  const verzetWerkbon = async (b, { start, eind }) => {
+    const w = werkbonnen.find(x => x.id === b.id);
+    try {
+      if (!w) throw new Error('Werkbon niet gevonden. Ververs de planning.');
+      const { dagen, standaard } = verzetTijd(w, b._datum, b._pid || null, {
+        starttijd: minsToTime(start), eindtijd: minsToTime(eind),
+      });
+      // Eerst de dagen, dan pas de standaardtijd. Die laatste verandert alleen
+      // als de dagtijd van dag 1 verschuift; de andere dagen hebben dan al hun
+      // eigen tijd. Mislukt de tweede stap, dan staat alles nog op de oude tijd
+      // in plaats van half verschoven.
+      let vers = await zetWerkbonDagen(w.id, dagen);
+      if (standaard.starttijd !== fmtTime(w.starttijd) || standaard.eindtijd !== fmtTime(w.eindtijd)) {
+        await updateWerkbon(w.id, { starttijd: standaard.starttijd || null, eindtijd: standaard.eindtijd || null });
+        vers = await getWerkbonById(w.id);
+      }
+      setWerkbonnen(prev => prev.map(x => (x.id === w.id ? vers : x)));
+      // Agenda-items per dag en per persoon volgen de werkbon.
+      try {
+        await syncWerkbonEvents(w.id);
+      } catch (e) {
+        toast.error(`Tijd opgeslagen, maar de agenda is niet bijgewerkt: ${e.message || 'onbekende fout'}`);
+      }
+    } catch (e) {
+      toast.error(e.message || 'Tijd aanpassen mislukt');
+      throw e;
+    }
+  };
+
+  const verzetActiviteit = async (a, { start, eind, modus }) => {
+    try {
+      // Verplaatsen laat de duur met rust. Een activiteit zonder eindtijd duurt
+      // in de agenda een uur; die kreeg bij het verschuiven een eindtijd van een
+      // kwartier, en dan kromp het agenda-item mee. Alleen rekken zet een eindtijd.
+      const eindtijd = modus === 'verplaats' && !a.endTime ? undefined : minsToTime(eind);
+      const updated = await updateActivity(a.id, {
+        date: a.date, time: minsToTime(start),
+        ...(eindtijd === undefined ? {} : { endTime: eindtijd }),
+      });
+      setActivities(prev => prev.map(x => (x.id === updated.id ? updated : x)));
+      // Zelfde als na het activiteitenvenster: het agenda-item bestaat of komt er.
+      try {
+        await upsertActivityEvent({
+          activiteitId: updated.id, title: updated.title, date: updated.date, time: updated.time,
+          end: updated.endTime || '', customerId: updated.custId || null, location: updated.location || null,
+        });
+      } catch (e) {
+        toast.error(`Tijd opgeslagen, maar de agenda is niet bijgewerkt: ${e.message || 'onbekende fout'}`);
+      }
+    } catch (e) {
+      toast.error(e.message || 'Tijd aanpassen mislukt');
+      throw e;
+    }
+  };
+
   // Scroll de tijdlijn bij laden naar 07:00 (= bovenkant).
   useEffect(() => {
     if (!loading && timelineScrollRef.current) timelineScrollRef.current.scrollTop = 0;
@@ -1164,12 +1389,18 @@ export function PlanningPage({ openCustomer } = {}) {
       <div className="page-hd afu">
         <div>
           <h1>Planning</h1>
-          <p>{fmtWeekRange(weekStart)}</p>
+          <p>{zicht === 'dag' ? fmtDagLang(anker) : fmtWeekRange(weekStart)}</p>
         </div>
         <div className="page-hd-actions">
-          <button className="btn btn-s btn-sm" onClick={() => setWeekStart(w => addDays(w, -7))}>{I.chev_l}</button>
-          <button className="btn btn-s btn-sm" onClick={() => setWeekStart(getMonday())}>Deze week</button>
-          <button className="btn btn-s btn-sm" onClick={() => setWeekStart(w => addDays(w, 7))}>{I.chev_r}</button>
+          {/* Zelfde bediening als de agenda: vorige, vandaag, volgende, dan de weergave. */}
+          <button className="btn btn-s btn-sm" onClick={() => stap(-1)} aria-label={zicht === 'dag' ? 'Vorige dag' : 'Vorige week'}>{I.chev_l}</button>
+          <button className="btn btn-s btn-sm" onClick={() => setAnker(new Date())}>Vandaag</button>
+          <button className="btn btn-s btn-sm" onClick={() => stap(1)} aria-label={zicht === 'dag' ? 'Volgende dag' : 'Volgende week'}>{I.chev_r}</button>
+          <div className="tabs">
+            {[['dag', 'Dag'], ['week', 'Week']].map(([v, l]) => (
+              <button key={v} className={`tab${zicht === v ? ' active' : ''}`} onClick={() => setZicht(v)}>{l}</button>
+            ))}
+          </div>
           <div className="tabs" style={{ marginLeft: 8 }}>
             {[['totaal','Totaal'],['medewerker','Medewerker'],['voertuig','Voertuig']].map(([v, l]) => (
               <button key={v} className={`tab${viewMode === v ? ' active' : ''}`} onClick={() => setViewMode(v)}>{l}</button>
@@ -1230,15 +1461,21 @@ export function PlanningPage({ openCustomer } = {}) {
           <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start' }}>
             {/* Tijdlijn + kolommen */}
             <div className="card" style={{ flex: 1, padding: 0, overflow: 'hidden', minWidth: 0 }}>
+              {/* Dagkoppen en tijdlijn schuiven samen horizontaal: op een
+                  telefoon past een hele week niet, en dan moet elke dagkop
+                  boven zijn eigen kolom blijven staan. In de dagweergave is er
+                  één kolom en valt er niets te schuiven. */}
+              <div style={{ overflowX: 'auto' }}>
+              <div style={{ minWidth: TIME_COL_W + zichtbareDagen.length * MIN_DAY_COL_PX }}>
               {/* Dag-header */}
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: `${TIME_COL_W}px repeat(7, ${DAY_COL_W})`,
-                position: 'sticky', top: 0, zIndex: 10, background: '#fff',
+                gridTemplateColumns: `${TIME_COL_W}px repeat(${zichtbareDagen.length}, ${DAY_COL_W})`,
+                background: '#fff',
                 borderBottom: '2px solid var(--border)',
               }}>
                 <div style={{ borderRight: '1px solid var(--border)', padding: '8px 6px' }} />
-                {weekDays.map(date => {
+                {zichtbareDagen.map(date => {
                   const isToday = date === today;
                   return (
                     <div key={date} style={{
@@ -1259,7 +1496,7 @@ export function PlanningPage({ openCustomer } = {}) {
               <div ref={timelineScrollRef} style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 280px)', paddingTop: 10 }}>
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: `${TIME_COL_W}px repeat(7, ${DAY_COL_W})`,
+                  gridTemplateColumns: `${TIME_COL_W}px repeat(${zichtbareDagen.length}, ${DAY_COL_W})`,
                 }}>
                   {/* Tijdlabels */}
                   <div style={{ position: 'relative', height: TIMELINE_H, borderRight: '1px solid var(--border)' }}>
@@ -1275,7 +1512,7 @@ export function PlanningPage({ openCustomer } = {}) {
                   </div>
 
                   {/* Dag-kolommen */}
-                  {weekDays.map(date => {
+                  {zichtbareDagen.map(date => {
                     // Een meerdaagse werkbon staat in elke kolom waar hij een dag
                     // heeft, met de tijden die op díé dag gelden.
                     // De dagploeg bepaalt wie er die dag op staat: in de
@@ -1306,17 +1543,17 @@ export function PlanningPage({ openCustomer } = {}) {
                         // Het blok van de gekozen medewerker, met zíjn tijd.
                         const eigen = tijdenVoorPersoon(w, dagen[i], selectedMember);
                         return [{
-                          ...basis, starttijd: eigen.starttijd, eindtijd: eigen.eindtijd, _blokKey: w.id,
+                          ...basis, starttijd: eigen.starttijd, eindtijd: eigen.eindtijd, _blokKey: w.id, _pid: selectedMember,
                           _persoon: teamMembers.find(m => m.id === selectedMember)?.fullName || '',
                           _dubbel: dubbelVoor(selectedMember, eigen.starttijd, eigen.eindtijd),
                         }];
                       }
-                      if (viewMode !== 'totaal') return [{ ...basis, _blokKey: w.id }];
+                      if (viewMode !== 'totaal') return [{ ...basis, _blokKey: w.id, _pid: null }];
                       // Totaal: één blok per medewerker, in zijn eigen kleur.
                       // Eén blok per werkbon kreeg alleen de kleur van de
                       // eerste medewerker — wie nooit eerste stond, was nergens
                       // te zien, en een ploeg met één vaste eerste werd één kleur.
-                      if (!ploeg.length) return [{ ...basis, _colorKey: '__none__', _blokKey: `${w.id}-niemand` }];
+                      if (!ploeg.length) return [{ ...basis, _colorKey: '__none__', _blokKey: `${w.id}-niemand`, _pid: null }];
                       // Elk blok met de tijd van díé medewerker: zijn eigen tijd
                       // op die dag → de tijd van de dag → de standaardtijd.
                       return ploeg.map(pid => {
@@ -1329,6 +1566,7 @@ export function PlanningPage({ openCustomer } = {}) {
                           _colorKey: pid,
                           _persoon: teamMembers.find(m => m.id === pid)?.fullName || '',
                           _blokKey: `${w.id}-${pid}`,
+                          _pid: pid,
                           _dubbel: dubbelVoor(pid, eigen.starttijd, eigen.eindtijd),
                         };
                       });
@@ -1365,10 +1603,16 @@ export function PlanningPage({ openCustomer } = {}) {
                         onBlockClick={b => setDetailWb(werkbonnen.find(w => w.id === b.id) || b)}
                         onDubbel={(b, e) => { const r = e.currentTarget.getBoundingClientRect(); setDubbelInfo({ b, x: r.left, y: r.bottom }); }}
                         onActivityClick={setSelectedActivity}
+                        sleepVoorWerkbon={sleepVoorWerkbon}
+                        onWerkbonVerzet={verzetWerkbon}
+                        magActiviteitSlepen={magActiviteitSlepen}
+                        onActiviteitVerzet={verzetActiviteit}
                       />
                     );
                   })}
                 </div>
+              </div>
+              </div>
               </div>
             </div>
 
@@ -1393,7 +1637,7 @@ export function PlanningPage({ openCustomer } = {}) {
 
             {/* Legenda */}
             {legendItems.length > 0 && (
-              <Legend items={legendItems} />
+              <Legend items={legendItems} open={legendaOpen} onToggle={wisselLegenda} />
             )}
           </div>
 
