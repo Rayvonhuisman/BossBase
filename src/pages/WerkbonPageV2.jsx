@@ -12,6 +12,7 @@ import { NoteEditor, renderNote } from '../components/NoteEditor.jsx';
 import NotitieLog, { toLogItem, fmtNotitieDatum } from '../components/NotitieLog.jsx';
 import { AssigneeResponsibleSelect } from '../components/AssigneeResponsibleSelect.jsx';
 import { getTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
+import { htmlToPlain } from '../lib/noteFormat.js';
 import {
   getWerkbonnen, getWerkbonById, createWerkbon, updateWerkbon,
   getWerkbonTaken, createWerkbonTaak, toggleWerkbonTaak, deleteWerkbonTaak,
@@ -22,6 +23,8 @@ import {
 } from '../services/werkbonService.js';
 import WerkbonAfrondenModal from '../components/WerkbonAfrondenModal.jsx';
 import { WerkbonDagenVelden, WerkbonLocatieVeld, useKlantAdres } from '../components/WerkbonPlanning.jsx';
+import { MijnVoertuig, useWerkbonVoertuigen } from '../components/WerkbonVoertuigen.jsx';
+import { voertuigPlanningUitWerkbon } from '../utils/voertuigDagen.js';
 import {
   planningUitWerkbon, dagenUitPlanning, controleerPlanning, legePlanning, planningLabel, geplandeDatums,
 } from '../utils/werkbonDagen.js';
@@ -112,11 +115,12 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
     assignedToIds: werkbon?.assignedToIds || (werkbon?.assignedTo ? [werkbon.assignedTo] : []),
     verantwoordelijkeIds: werkbon?.verantwoordelijkeIds || (werkbon?.assignedTo ? [werkbon.assignedTo] : []),
   }));
-  const [planning, setPlanning] = useState(() => (werkbon ? planningUitWerkbon(werkbon) : legePlanning()));
+  const [planning, setPlanning] = useState(() => (werkbon ? { ...planningUitWerkbon(werkbon), ...voertuigPlanningUitWerkbon(werkbon) } : legePlanning()));
   // Meerdere dagen plannen hoort bij de planningsmodule (Team, of als module bij
   // Groei) — zelfde gate als de planningspagina. Zonder module: één datum.
   const { plan, guardFeature } = usePlanGuard();
   const meerdaags = plan.has('planning');
+  const voertuig = useWerkbonVoertuigen({ werkbon, meerdaags });
   const [saving, setSaving] = useState(false);
   const [notifyMail, setNotifyMail] = useState(true);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -184,9 +188,18 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
     // Ook zonder planningsmodule: een geplande dag heeft een tijd nodig.
     const planFout = controleerPlanning(planning, { starttijd: form.starttijd, eindtijd: form.eindtijd });
     if (planFout) { toast.error(planFout); return; }
-    const dagen = meerdaags ? dagenUitPlanning(planning, form.assignedToIds, { starttijd: form.starttijd, eindtijd: form.eindtijd }) : [];
+    const naamVan = id => teamMembers.find(m => m.profileId === id)?.fullName;
+    const standaardTijd = { starttijd: form.starttijd, eindtijd: form.eindtijd };
+    const voertuigFout = voertuig.controleer(planning, form.assignedToIds, naamVan, standaardTijd);
+    if (voertuigFout) { toast.error(voertuigFout); return; }
+    const dagen = meerdaags ? voertuig.dagen(dagenUitPlanning(planning, form.assignedToIds, standaardTijd), planning, form.assignedToIds, naamVan, standaardTijd) : [];
     setSaving(true);
     try {
+      // Een "lege" editor levert nog HTML op (<div><br></div>), dus kijk naar de
+      // platte tekst. Een notitie die alleen uit een @-vermelding bestaat telt wel.
+      const interneNotitie = (htmlToPlain(form.notes) || /bb-mention/.test(form.notes || ''))
+        ? form.notes
+        : '';
       const payload = {
         titel: form.titel.trim(),
         customer_id: form.customer_id || null,
@@ -198,13 +211,16 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
         starttijd: form.starttijd || null,
         eindtijd: form.eindtijd || null,
         locatie: form.locatie || null,
-        notes: form.notes || null,
+        // `notes` zit bewust NIET in de payload van een nieuwe werkbon: die tekst
+        // gaat naar het notitielog (zie hieronder). Bij bewerken blijft de oude
+        // kolom wél werken, want bestaande werkbonnen houden hun tekst daar.
         assigned_to_ids: form.assignedToIds,
         verantwoordelijke_ids: form.verantwoordelijkeIds,
+        ...voertuig.payload,
       };
       let saved;
       if (isEdit) {
-        saved = await updateWerkbon(werkbon.id, { ...payload, status: form.status });
+        saved = await updateWerkbon(werkbon.id, { ...payload, notes: form.notes || null, status: form.status });
         toast.success('Werkbon bijgewerkt');
         // Diff t.o.v. de volledige vorige toewijzing (assigned_to_ids), zodat al
         // gekoppelde collega's niet opnieuw gemaild worden.
@@ -212,6 +228,17 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
         notifyNewAssignees({ userIds: form.assignedToIds, prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
       } else {
         saved = await createWerkbon(payload);
+        // De notitie uit het aanmaakvenster wordt de eerste interne logregel.
+        // Stond hij in werkbonnen.notes, dan verscheen hij als losse gele balk
+        // bovenaan terwijl het log "Intern 0" zei — hij leek dan kwijt.
+        // voor_klant = false: niet op de PDF, niet op de ondertekenpagina.
+        if (interneNotitie) {
+          try {
+            await addWerkbonNotitie(saved.id, interneNotitie, false);
+          } catch (e) {
+            toast.error(`Werkbon opgeslagen, maar de notitie niet: ${e.message || 'onbekende fout'}`);
+          }
+        }
         toast.success('Werkbon aangemaakt');
         notifyNewAssignees({ userIds: form.assignedToIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
       }
@@ -310,15 +337,27 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
             })}
             werkbonId={werkbon?.id || null}
             activiteitId={werkbon?.raw?.activity_id || null}
+            {...voertuig.veldProps}
           />
           <div className="f full">
             <label>Omschrijving</label>
             <NoteEditor mentions={true} value={form.omschrijving} onChange={v => set('omschrijving', v)} placeholder="Wat moet er gebeuren op locatie? Typ @ om iemand te taggen" rows={3} disabled={saving} teamMembers={teamMembers} />
           </div>
-          <div className="f full">
-            <label>Interne notities</label>
-            <NoteEditor mentions={true} value={form.notes} onChange={v => set('notes', v)} placeholder="Bv. klant heeft hond, deur dicht houden… Typ @ om iemand te taggen" rows={2} disabled={saving} teamMembers={teamMembers} />
-          </div>
+          {/* Bij een NIEUWE werkbon wordt dit de eerste regel in het notitielog.
+              Bij BEWERKEN tonen we het veld alleen als er nog tekst in de oude
+              kolom staat: anders zou je bij het bewerken opnieuw een tweede plek
+              vullen naast het log. */}
+          {(!isEdit || htmlToPlain(werkbon?.notes || '')) && (
+            <div className="f full">
+              <label>{isEdit ? 'Interne notitie (oud veld)' : 'Interne notitie'}</label>
+              <div style={{ fontSize: '.72rem', color: 'var(--dl)', margin: '-2px 0 4px' }}>
+                {isEdit
+                  ? 'Deze tekst staat los van het notitielog op de werkbon.'
+                  : 'Komt in het notitielog te staan, alleen voor collega’s. Niet op de werkbon-PDF en niet bij de klant.'}
+              </div>
+              <NoteEditor mentions={true} value={form.notes} onChange={v => set('notes', v)} placeholder="Bv. klant heeft hond, deur dicht houden… Typ @ om iemand te taggen" rows={2} disabled={saving} teamMembers={teamMembers} />
+            </div>
+          )}
           {teamMembers.length > 0 && (
             <AssigneeResponsibleSelect
               members={teamMembers}
@@ -331,6 +370,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
               <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />
             </AssigneeResponsibleSelect>
           )}
+          {voertuig.kiezer(saving)}
         </div>
         <div className="fa">
           <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Annuleren</button>
@@ -1971,6 +2011,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
                       : ''}
                   </div>
                 )}
+                <MijnVoertuig werkbon={detail} />
               </div>
             </div>
 
