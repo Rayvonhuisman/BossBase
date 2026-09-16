@@ -139,7 +139,7 @@ const toWerkbonMateriaal = row => {
 // ── WERKBONNEN ───────────────────────────────────────────────────────────────
 
 // Geen voertuigen(...)-relatie meer: die liep via het oude werkbonnen.voertuig_id
-// (weg in migratie 20260916130000). Voertuigen staan nu per werkbon en per dag.
+// (weg in migratie 20260916180000). Voertuigen staan nu per werkbon en per dag.
 const WERKBON_BASIS = "*, customers(name), profiles(full_name), projects(name)"
 // Wat de database al kent, van nieuw naar oud:
 //   4 — dagen mét voertuigen (migratie 20260916120000, voertuigen_per_dag)

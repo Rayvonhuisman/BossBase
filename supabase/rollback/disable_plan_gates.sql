@@ -22,7 +22,7 @@
 --     Draai daarvoor het blok "Abonnement: aparte triggers" uit die migratie
 --     opnieuw (het is los te draaien).
 --   • plan_matrix maakt ook de oude trg_werkbon_voertuig_feature weer aan, op de
---     kolom werkbonnen.voertuig_id. Is migratie 20260916130000 (oude
+--     kolom werkbonnen.voertuig_id. Is migratie 20260916180000 (oude
 --     voertuigkolommen weg) gedraaid, dan bestaat die kolom niet meer en faalt
 --     elke wijziging van een werkbon. Haal hem daarna meteen weg:
 --       drop trigger if exists trg_werkbon_voertuig_feature on public.werkbonnen;
@@ -50,7 +50,7 @@ DROP POLICY IF EXISTS plan_feature_rechten_update      ON public.user_permission
 DROP POLICY IF EXISTS plan_feature_rechten_delete      ON public.user_permissions;
 
 -- ── Feature-gates (triggers die een fout opgooien) ───────────────────────────
-DROP TRIGGER IF EXISTS trg_werkbon_voertuig_feature ON public.werkbonnen;          -- oud, tot 20260916130000
+DROP TRIGGER IF EXISTS trg_werkbon_voertuig_feature ON public.werkbonnen;          -- oud, tot 20260916180000
 DROP TRIGGER IF EXISTS trg_werkbon_voertuigen_feature ON public.werkbonnen;
 DROP TRIGGER IF EXISTS trg_werkbon_dag_voertuigen_feature ON public.werkbon_dagen;
 DROP TRIGGER IF EXISTS trg_accounting_feature       ON public.accounting_connections;

@@ -1,7 +1,7 @@
 -- Oude voertuigkolommen weg: werkbonnen.voertuig_id en activities.voertuig_id.
 --
 -- ── LET OP: volgorde ────────────────────────────────────────────────────────
--- Dit bestand heet bewust .sql.pending, zodat `supabase db push` het overslaat.
+-- Dit bestand stond als .sql.pending, zodat `supabase db push` het oversloeg.
 -- De frontend van vóór 20260916120000 leest werkbonnen met de relatie
 -- voertuigen(naam, kleur) — die loopt via werkbonnen.voertuig_id. Staat die
 -- frontend nog live als deze migratie draait, dan faalt ELKE werkbon-select.
@@ -9,8 +9,12 @@
 -- Uitrollen:
 --   1. 20260916120000_voertuigen_per_dag.sql (via db push)
 --   2. frontend naar main, Vercel-build klaar en live
---   3. dit bestand hernoemen naar .sql, db push --dry-run, db push
+--   3. dit bestand (stond als .sql.pending) actief maken, db push --dry-run, db push
 --   4. npm run migratie:check -- werkbonnen activities
+--
+-- Heette eerst 20260916130000. Hernoemd naar 180000 omdat 20260916170000
+-- (mailfouten) eerder in productie stond; zo klopt de volgorde van de bestanden
+-- met de volgorde waarin ze gedraaid zijn.
 --
 -- ── Waarom ──────────────────────────────────────────────────────────────────
 -- Een werkbon had één voertuig (voertuig_id). Sinds 20260916120000 staan
