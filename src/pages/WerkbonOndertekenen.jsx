@@ -44,6 +44,9 @@ export default function WerkbonOndertekenen({ token }) {
   const [fotos, setFotos] = useState([])
   const [company, setCompany] = useState(null)
   const [klant, setKlant] = useState(null)
+  // Kon de ondertekende PDF niet in deze browser gemaakt worden? Dan belooft het
+  // bedanktscherm geen bijlage die er niet is; het bedrijf maakt hem alsnog.
+  const [pdfOntbrak, setPdfOntbrak] = useState(false)
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -174,6 +177,7 @@ export default function WerkbonOndertekenen({ token }) {
       // naar de edge function. Mislukt dat, dan gaat het tekenen gewoon door —
       // de handtekening in de database is het bewijs, de PDF is de weergave.
       let pdfBase64 = null
+      let pdfFout = null
       try {
         pdfBase64 = await getWerkbonPdfBase64(...pdfArgs({
           ondertekendOp: new Date().toISOString(),
@@ -183,6 +187,10 @@ export default function WerkbonOndertekenen({ token }) {
         }))
       } catch (e) {
         console.warn('Ondertekende PDF maken mislukt:', e.message)
+        // De reden gaat mee naar de server: daar wordt hij vastgelegd en maakt
+        // het bedrijf de bon alsnog zodra het de werkbon opent. Anders verdween
+        // dit in de console van de klant en merkte niemand het.
+        pdfFout = e.message || String(e)
       }
 
       const resultaat = await signWerkbon({
@@ -191,7 +199,9 @@ export default function WerkbonOndertekenen({ token }) {
         email: form.email.trim(),
         signatureDataUrl: dataUrl,
         signedPdfBase64: pdfBase64,
+        pdfFout,
       })
+      setPdfOntbrak(!pdfBase64)
       setOndertekening({
         op: resultaat?.ondertekend_op || new Date().toISOString(),
         naam: form.name.trim(),
@@ -237,8 +247,10 @@ export default function WerkbonOndertekenen({ token }) {
             Bedankt! Uw handtekening is ontvangen.
           </div>
           <div style={{ color: '#6b7280', fontSize: '.95rem' }}>
-            Werkbon <strong>{werkbon?.nummer}</strong> is afgetekend. U ontvangt een bevestiging per e-mail,
-            met de werkbon als bijlage.
+            Werkbon <strong>{werkbon?.nummer}</strong> is afgetekend.
+            {pdfOntbrak
+              ? ' U ontvangt een bevestiging per e-mail; de werkbon zelf sturen we zo snel mogelijk na.'
+              : ' U ontvangt een bevestiging per e-mail, met de werkbon als bijlage.'}
           </div>
         </div>
         <button onClick={bekijkPdf} disabled={pdfBezig} style={st.pdfKnop}>

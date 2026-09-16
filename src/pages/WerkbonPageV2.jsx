@@ -13,6 +13,7 @@ import NotitieLog, { toLogItem, fmtNotitieDatum } from '../components/NotitieLog
 import { AssigneeResponsibleSelect } from '../components/AssigneeResponsibleSelect.jsx';
 import { getTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
 import { htmlToPlain } from '../lib/noteFormat.js';
+import { mistGetekendePdf, stuurGetekendePdfNa } from '../services/getekendePdfService.js';
 import {
   getWerkbonnen, getWerkbonById, createWerkbon, updateWerkbon,
   getWerkbonTaken, createWerkbonTaak, toggleWerkbonTaak, deleteWerkbonTaak,
@@ -32,6 +33,7 @@ import { syncWerkbonEvents } from '../services/calendarService.js';
 import { downloadWerkbonPdf } from '../utils/generateWerkbonPdf.js';
 import { AlertTriangle } from 'lucide-react';
 import { bouwPdfData, bouwPdfWerkbon, verstuurWaarschuwing, bouwWaarschuwingMail } from '../services/werkbonOndertekenenService.js';
+import { getWerkbonPdfBase64 } from '../utils/generateWerkbonPdf.js';
 import { getCurrentCompany } from '../services/profileService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
@@ -1460,6 +1462,16 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
   const [company, setCompany] = useState(null);
   const [pdfBezig, setPdfBezig] = useState(false);
 
+  // ── Vangnet: getekend, maar de PDF ontbreekt ──────────────────────────────
+  // De ondertekende bon wordt in de browser van de KLANT gemaakt, tijdens het
+  // tekenen. Mislukt dat, dan is de handtekening wél vastgelegd maar het
+  // document niet, en gingen de bevestigingsmails zonder bijlage weg. Zodra
+  // iemand van het bedrijf de werkbon opent, maken we hem alsnog met dezelfde
+  // opmaakcode en stuurt de server de bijlage na. Openen twee mensen tegelijk,
+  // dan wint er precies één: de server claimt via de update die de link zet.
+  const [pdfHerstel, setPdfHerstel] = useState(null); // null | 'bezig' | 'klaar' | 'fout'
+  const pdfHerstelVoorId = useRef(null);
+
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
 
@@ -1566,6 +1578,36 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
       .map(id => teamMembers.find(m => m.profileId === id)?.fullName)
       .filter(Boolean);
   }, [detail, teamMembers]);
+
+  // Getekend, maar de PDF ontbreekt? Dan maken we hem hier alsnog. Pas als het
+  // detail én de onderdelen geladen zijn, anders komt er een lege bon uit. Per
+  // werkbon één poging, ook als de gegevens daarna nog een keer binnenkomen.
+  useEffect(() => {
+    if (!detail || detailLoading) return;
+    if (!mistGetekendePdf(detail.ondertekendOp, detail.ondertekendePdfUrl)) return;
+    if (pdfHerstelVoorId.current === detail.id) return;
+    pdfHerstelVoorId.current = detail.id;
+
+    let alive = true;
+    (async () => {
+      setPdfHerstel('bezig');
+      try {
+        const customer = customers.find(c => c.id === detail.customerId) || { name: detail.customerName };
+        const pdfBase64 = await getWerkbonPdfBase64(
+          bouwPdfWerkbon(detail, { uitvoerders: uitvoerderNamen }),
+          bouwPdfData({ taken, uren, materialen, meerwerk, notities: werkbonNotities, fotos }),
+          customer,
+          company,
+        );
+        await stuurGetekendePdfNa({ soort: 'werkbon', id: detail.id, pdfBase64 });
+        if (alive) setPdfHerstel('klaar');
+      } catch (e) {
+        console.warn('[werkbon] getekende PDF alsnog maken mislukt:', e.message);
+        if (alive) setPdfHerstel('fout');
+      }
+    })();
+    return () => { alive = false; };
+  }, [detail, detailLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Werkbon-specifiek bewerk-recht op het geopende detail: beheer (admin/planner)
   // óf verantwoordelijke van juist deze werkbon. Alleen dan zijn bewerk-acties
@@ -2052,7 +2094,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
                       {' · '}Uren, taken en materiaal staan op slot. Een correctie loopt via een nieuwe werkbon.
                     </div>
                   </div>
-                  {detail.ondertekendePdfUrl && (
+                  {detail.ondertekendePdfUrl ? (
                     <a
                       className="wb2-card-action"
                       href={detail.ondertekendePdfUrl}
@@ -2062,6 +2104,16 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
                     >
                       Ondertekende bon
                     </a>
+                  ) : (
+                    // Getekend, maar het bestand ontbreekt: de PDF wordt in de
+                    // browser van de klant gemaakt en dat kan mislukken. Zeg het,
+                    // en maak hem alsnog (zie het herstel-effect hierboven).
+                    <span style={{ flexShrink: 0, fontSize: 12, color: '#b45309', textAlign: 'right', maxWidth: 210, lineHeight: 1.45 }}>
+                      {pdfHerstel === 'bezig' && 'Getekende bon wordt alsnog gemaakt…'}
+                      {pdfHerstel === 'klaar' && 'Bon alsnog opgeslagen en nagestuurd. Ververs om hem te openen.'}
+                      {pdfHerstel === 'fout' && 'Getekende bon ontbreekt; maken lukte niet. Open de werkbon opnieuw.'}
+                      {!pdfHerstel && 'Getekend, PDF ontbreekt'}
+                    </span>
                   )}
                 </div>
               </div>

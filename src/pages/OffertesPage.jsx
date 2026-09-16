@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Download, MoreVertical, Send, CheckCircle2, Copy } from 'lucide-react';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
@@ -18,6 +18,7 @@ import { listCustomers } from '../services/customerService.js';
 import { listDeals } from '../services/dealService.js';
 import { NewFactuurModal, SendFactuurMailModal } from './FacturenPage.jsx';
 import { generateOffertePdf, previewOffertePdf, getOffertePdfBase64 } from '../utils/generatePdf.js';
+import { mistGetekendePdf, stuurGetekendePdfNa } from '../services/getekendePdfService.js';
 import { buildCompanySnapshot, companyForDocument, isOfferteFullyLocked, isOfferteRevisable } from '../utils/documentSnapshot.js';
 import { getMailTemplate, sendEmail, substituteVars, substituteVarsHtml, logSentEmail } from '../services/emailService.js';
 import { mailTemplate, mailButton } from '../utils/mailTemplate.js';
@@ -656,6 +657,37 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
   const customerName = offerte.customerName || customers.find(c => c.id == offerte.customerId)?.name || '';
   const [pdfLoading, setPdfLoading] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
+
+  // ── Vangnet: getekend, maar de PDF ontbreekt ──────────────────────────────
+  // Die PDF wordt in de browser van de KLANT gemaakt, tijdens het tekenen.
+  // Mislukt dat, dan is de handtekening wél vastgelegd maar het document niet,
+  // en gingen de bevestigingsmails zonder bijlage weg. Zodra iemand van het
+  // bedrijf de offerte opent, maken we hem alsnog met dezelfde opmaakcode en
+  // stuurt de server de bijlage na. Openen twee mensen tegelijk, dan wint er
+  // precies één: de server claimt via de update die de link zet.
+  const [herstel, setHerstel] = useState(null); // null | 'bezig' | 'klaar' | 'fout'
+  const pdfOntbreekt = mistGetekendePdf(offerte.signedAt, offerte.signedPdfUrl);
+  const herstelGestart = useRef(false);
+  useEffect(() => {
+    if (!pdfOntbreekt || herstelGestart.current) return;
+    herstelGestart.current = true;
+    (async () => {
+      setHerstel('bezig');
+      try {
+        const customer = customers.find(c => String(c.id) === String(offerte.customerId));
+        const regels = await getOfferteItems(offerte.id);
+        const pdfBase64 = await getOffertePdfBase64(offerte, regels, customer, companyForDocument(offerte, company));
+        await stuurGetekendePdfNa({ soort: 'offerte', id: offerte.id, pdfBase64 });
+        // Ook 'bestond_al' is klaar: een collega was ons voor, het bestand is er.
+        // Geen `alive`-vlag: die hield de melding op "bezig" hangen zodra de
+        // component opnieuw werd opgebouwd, terwijl de server al klaar was.
+        setHerstel('klaar');
+      } catch (e) {
+        console.warn('[offerte] getekende PDF alsnog maken mislukt:', e.message);
+        setHerstel('fout');
+      }
+    })();
+  }, [pdfOntbreekt]); // eslint-disable-line react-hooks/exhaustive-deps
   // De echte offerteregels. Hier stond een samenvatting op basis van de oude
   // kolommen (arbeidsuren/materiaalkosten/reiskosten/marge); die zijn bij
   // offertes met regelitems leeg, waardoor er "0u × €55 / €0 / 25%" stond.
@@ -824,15 +856,26 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
           {offerte.signedAt && (
             <div style={{
               display: 'flex', alignItems: 'center', gap: 10,
-              background: '#f0fdf4', border: '1px solid #bbf7d0',
+              background: pdfOntbreekt ? '#fffbeb' : '#f0fdf4',
+              border: `1px solid ${pdfOntbreekt ? '#fde68a' : '#bbf7d0'}`,
               borderRadius: 8, padding: '10px 14px',
             }}>
-              <CheckCircle2 size={16} style={{ color: '#15803d', flexShrink: 0 }} />
+              <CheckCircle2 size={16} style={{ color: pdfOntbreekt ? '#b45309' : '#15803d', flexShrink: 0 }} />
               <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#15803d' }}>Ondertekend</div>
-                <div style={{ fontSize: 11, color: '#166534' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: pdfOntbreekt ? '#b45309' : '#15803d' }}>
+                  {pdfOntbreekt ? 'Getekend, PDF ontbreekt' : 'Ondertekend'}
+                </div>
+                <div style={{ fontSize: 11, color: pdfOntbreekt ? '#92400e' : '#166534' }}>
                   {offerte.signedByName} · {new Date(offerte.signedAt).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </div>
+                {pdfOntbreekt && (
+                  <div style={{ fontSize: 11, color: '#92400e', marginTop: 3, lineHeight: 1.5 }}>
+                    {herstel === 'bezig' && 'Het getekende bestand wordt alsnog gemaakt…'}
+                    {herstel === 'klaar' && 'Gelukt — het bestand is opgeslagen en als bijlage nagestuurd. Ververs om hem te openen.'}
+                    {herstel === 'fout' && 'Het bestand kon niet alsnog gemaakt worden. Open de offerte opnieuw om het nog eens te proberen.'}
+                    {!herstel && 'De handtekening is vastgelegd; alleen het PDF-bestand ontbreekt.'}
+                  </div>
+                )}
               </div>
             </div>
           )}

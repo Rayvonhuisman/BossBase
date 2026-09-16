@@ -185,7 +185,11 @@ serve(async (req) => {
     let pdfUrl: string | null = null
     if (signed_pdf_base64) {
       try {
-        const bestand = `werkbon-${werkbon.nummer || werkbon.id}-ondertekend.pdf`
+        // Map per bedrijf: een werkbonnummer is alleen BINNEN een bedrijf uniek.
+        // WB-001 bestaat bij vier bedrijven, en die overschreven in de wortel van
+        // de bucket elkaars ondertekende exemplaar — precies het bewijsstuk dat
+        // je nodig hebt als een klant zegt niets getekend te hebben.
+        const bestand = `${werkbon.company_id}/werkbon-${werkbon.nummer || werkbon.id}-ondertekend.pdf`
         const { error: upErr } = await admin.storage
           .from('signed-werkbonnen')
           .upload(bestand, base64ToBytes(signed_pdf_base64), { contentType: 'application/pdf', upsert: true })
