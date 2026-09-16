@@ -33,7 +33,8 @@ const toWerkbon = row => ({
   // Verantwoordelijken (subset van de gekoppelde medewerkers) die de werkbon
   // mogen bewerken. Leeg = alleen admin/planner beheert de bon.
   verantwoordelijkeIds: Array.isArray(row.verantwoordelijke_ids) ? row.verantwoordelijke_ids : [],
-  voertuigId: row.voertuig_id || null,
+  // Voertuigen van de werkbon; per dag een deel ervan (dag.voertuigIds). Zie utils/voertuigDagen.js.
+  voertuigIds: Array.isArray(row.voertuig_ids) ? row.voertuig_ids : [],
   titel: row.titel || "",
   omschrijving: row.omschrijving || "",
   status: row.status || "gepland",
@@ -52,6 +53,12 @@ const toWerkbon = row => ({
       medewerkerIds: Array.isArray(d.medewerker_ids) ? d.medewerker_ids : null,
       // Eigen tijd per persoon, alleen voor wie afwijkt: { profielId: { starttijd, eindtijd } }.
       medewerkerTijden: d.medewerker_tijden && typeof d.medewerker_tijden === "object" ? d.medewerker_tijden : null,
+      // Voertuigen op deze dag: null = alle voertuigen van de werkbon.
+      voertuigIds: Array.isArray(d.voertuig_ids) ? d.voertuig_ids : null,
+      // Eigen tijd per voertuig, alleen afwijkers: { voertuigId: { starttijd, eindtijd } }.
+      voertuigTijden: d.voertuig_tijden && typeof d.voertuig_tijden === "object" ? d.voertuig_tijden : null,
+      // Wie in welk voertuig zit: { profielId: voertuigId }.
+      medewerkerVoertuig: d.medewerker_voertuig && typeof d.medewerker_voertuig === "object" ? d.medewerker_voertuig : null,
     }))
     .sort((a, b) => a.datum.localeCompare(b.datum)),
   starttijd: row.starttijd || null,
@@ -85,8 +92,6 @@ const toWerkbon = row => ({
   customerName: row.customers?.name || "",
   assignedName: row.profiles?.full_name || "",
   projectName: row.projects?.name || "",
-  voertuigNaam: row.voertuigen?.naam || "",
-  voertuigKleur: row.voertuigen?.kleur || "",
   raw: row,
 })
 
@@ -133,8 +138,11 @@ const toWerkbonMateriaal = row => {
 
 // ── WERKBONNEN ───────────────────────────────────────────────────────────────
 
-const WERKBON_BASIS = "*, customers(name), profiles(full_name), projects(name), voertuigen(naam, kleur)"
+// Geen voertuigen(...)-relatie meer: die liep via het oude werkbonnen.voertuig_id
+// (weg in migratie 20260916130000). Voertuigen staan nu per werkbon en per dag.
+const WERKBON_BASIS = "*, customers(name), profiles(full_name), projects(name)"
 // Wat de database al kent, van nieuw naar oud:
+//   4 — dagen mét voertuigen (migratie 20260916120000, voertuigen_per_dag)
 //   3 — dagen mét eigen tijden per persoon (migratie 20260912093000, werkbon_dag_tijden)
 //   2 — dagen mét dagploeg (migratie 20260911181500, werkbon_dag_medewerkers)
 //   1 — dagen zonder dagploeg (20260911133000, werkbon_dagen)
@@ -144,9 +152,10 @@ const WERKBON_BASIS = "*, customers(name), profiles(full_name), projects(name), 
 // veilig. Zo maakt de volgorde van uitrollen niet uit: zonder dagploeg werkt
 // elke dag met de hele ploeg, zonder dagen valt elke werkbon terug op zijn ene
 // gepland_op (utils/werkbonDagen.js).
-let dagenStand = 3
+let dagenStand = 4
 const selectVoor = stand =>
-  stand === 3 ? `${WERKBON_BASIS}, werkbon_dagen(id, datum, starttijd, eindtijd, medewerker_ids, medewerker_tijden)`
+  stand === 4 ? `${WERKBON_BASIS}, werkbon_dagen(id, datum, starttijd, eindtijd, medewerker_ids, medewerker_tijden, voertuig_ids, voertuig_tijden, medewerker_voertuig)`
+  : stand === 3 ? `${WERKBON_BASIS}, werkbon_dagen(id, datum, starttijd, eindtijd, medewerker_ids, medewerker_tijden)`
   : stand === 2 ? `${WERKBON_BASIS}, werkbon_dagen(id, datum, starttijd, eindtijd, medewerker_ids)`
   : stand === 1 ? `${WERKBON_BASIS}, werkbon_dagen(id, datum, starttijd, eindtijd)`
   : WERKBON_BASIS
@@ -166,6 +175,11 @@ async function metDagen(bouw, extra = "") {
       return res
     }
     const melding = res.error.message || ""
+    if (/voertuig_ids|voertuig_tijden|medewerker_voertuig/i.test(melding)) {
+      if (stand !== 4) return res
+      stand = 3
+      continue
+    }
     if (/medewerker_tijden/i.test(melding)) {
       if (stand !== 3) return res
       stand = 2
@@ -179,6 +193,24 @@ async function metDagen(bouw, extra = "") {
     if (/werkbon_dagen/i.test(melding)) { stand = 0; continue }
     return res
   }
+}
+
+/**
+ * Kent de database de voertuigen per dag (migratie voertuigen_per_dag)? Pas
+ * betrouwbaar nadat er werkbonnen zijn opgehaald; tot die tijd gaan we uit van
+ * ja, zoals bij de andere standen.
+ */
+export const databaseKentVoertuigen = () => dagenStand >= 4
+
+// Zonder de kolom weigert de API de hele insert of update. Een lege lijst laten
+// we dan weg; een gekozen voertuig niet, want dat zou stil verdwijnen.
+function zonderOnbekendeVoertuigen(payload) {
+  if (dagenStand >= 4 || !("voertuig_ids" in payload)) return payload
+  if (payload.voertuig_ids?.length) {
+    throw new Error("Voertuigen inplannen werkt pas na de database-update (migratie voertuigen_per_dag).")
+  }
+  const { voertuig_ids: _weg, ...rest } = payload
+  return rest
 }
 
 export async function getWerkbonnen() {
@@ -214,6 +246,9 @@ export async function zetWerkbonDagen(werkbonId, dagen) {
   }
   if (dagenStand < 3 && dagen.some(d => d.medewerker_tijden)) {
     throw new Error("Een eigen tijd per persoon werkt pas na de database-update (migratie werkbon_dag_tijden).")
+  }
+  if (dagenStand < 4 && dagen.some(d => d.voertuig_ids || d.voertuig_tijden || d.medewerker_voertuig)) {
+    throw new Error("Voertuigen per dag inplannen werkt pas na de database-update (migratie voertuigen_per_dag).")
   }
   const { error } = await supabase.rpc("bb_werkbon_dagen_zetten", {
     p_werkbon_id: werkbonId,
@@ -271,7 +306,8 @@ export async function createWerkbon(input) {
     assigned_to: primary,
     assigned_to_ids: assigneeIds,
     verantwoordelijke_ids: verantwoordelijkeIds,
-    voertuig_id: input.voertuig_id || input.voertuigId || null,
+    // Alleen meesturen als het formulier voertuigen kent; anders de standaard (geen).
+    ...(Array.isArray(input.voertuig_ids) ? { voertuig_ids: input.voertuig_ids } : {}),
     titel: input.titel,
     omschrijving: input.omschrijving || null,
     status: input.status || "gepland",
@@ -284,7 +320,7 @@ export async function createWerkbon(input) {
   if (!base.titel) throw new Error("titel is verplicht voor een werkbon")
   Object.keys(base).forEach(k => base[k] === null && delete base[k])
 
-  const payload = await withCompanyId(base)
+  const payload = zonderOnbekendeVoertuigen(await withCompanyId(base))
   const { data, error } = await metDagen(sel => supabase
     .from("werkbonnen")
     .insert(payload)
@@ -319,6 +355,7 @@ export async function updateWerkbon(id, input) {
   delete updates.projectId
   delete updates.assignedTo
   delete updates.voertuigId
+  delete updates.voertuigIds
   delete updates.geplandOp
   delete updates.customerName
   delete updates.assignedName
@@ -346,7 +383,7 @@ export async function updateWerkbon(id, input) {
 
   const { data, error } = await metDagen(sel => supabase
     .from("werkbonnen")
-    .update(updates)
+    .update(zonderOnbekendeVoertuigen(updates))
     .eq("id", id)
     .select(sel)
     .single())

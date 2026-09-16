@@ -3167,6 +3167,18 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 /* Volledige naam direct bij hover of toetsenbordfocus. */
 .wbd-ploeg-chip[data-tip]:hover::after,.wbd-ploeg-chip[data-tip]:focus-visible::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);right:0;background:var(--dk);color:#fff;font-size:.72rem;font-weight:600;padding:4px 8px;border-radius:6px;white-space:nowrap;z-index:30;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.18)}
 .wbd-kop{font-weight:600;font-size:.78rem;color:var(--dm)}
+/* Voertuigen per dag (utils/voertuigDagen.js): chips onder de ploeg, zelfde menu. */
+.wbd-voertuigen{flex-basis:100%;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px;padding:0 0 4px}
+.wbd-voertuig-chip{position:relative;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:999px;border:1px solid var(--bstrong);background:#fff;font-size:.72rem;font-weight:600;color:var(--dk);cursor:pointer;font-family:inherit;white-space:nowrap;font-variant-numeric:tabular-nums}
+.wbd-voertuig-chip:not(.aan){color:var(--dl);border-style:dashed;background:transparent}
+.wbd-voertuig-chip:not(.aan) .wbd-voertuig-kleur{opacity:.35}
+.wbd-voertuig-chip.eigen-tijd{box-shadow:0 0 0 2px #f59e0b}
+.wbd-voertuig-chip:focus-visible{outline:2px solid var(--pd);outline-offset:1px}
+.wbd-voertuig-kleur{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.wbd-voertuig-stip{position:absolute;right:-1px;bottom:-1px;width:10px;height:10px;border-radius:50%;border:2px solid #fff}
+.wbd-voertuig-chip[data-tip]:hover::after,.wbd-voertuig-chip[data-tip]:focus-visible::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);right:0;background:var(--dk);color:#fff;font-size:.72rem;font-weight:600;padding:4px 8px;border-radius:6px;white-space:nowrap;z-index:30;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.18)}
+.wbd-melding{display:block}
+.wbd-melding+.wbd-melding,.ab-uitleg>.wbd-melding:not(:nth-child(2)){margin-top:6px}
 /* Eigen tijd per persoon: oranje ring om de initialen, regel eronder, en het
    invulvak dat opent na rechtsklik of lang indrukken. */
 .wbd-dag{flex-wrap:wrap}

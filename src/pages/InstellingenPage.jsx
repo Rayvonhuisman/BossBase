@@ -271,7 +271,7 @@ export function InstellingenPage() {
   // Voertuigen
   const [voertuigen, setVoertuigen] = useState([]);
   const [showVoertuigForm, setShowVoertuigForm] = useState(false);
-  const [newVoertuigForm, setNewVoertuigForm] = useState({ naam: '', kenteken: '', kleur: '#1DDB62' });
+  const [newVoertuigForm, setNewVoertuigForm] = useState({ naam: '', kenteken: '', zitplaatsen: '', kleur: '#1DDB62' });
   const [savingVoertuig, setSavingVoertuig] = useState(false);
   const [editingVoertuigId, setEditingVoertuigId] = useState(null);
   const [editingVoertuigForm, setEditingVoertuigForm] = useState({});
@@ -2709,18 +2709,22 @@ export function InstellingenPage() {
                   <label>Kenteken</label>
                   <input placeholder="AB-123-C" value={newVoertuigForm.kenteken} onChange={e => setNewVoertuigForm(f => ({ ...f, kenteken: e.target.value }))} />
                 </div>
+                <div className="f" style={{ flex: '0 0 110px' }}>
+                  <label>Zitplaatsen</label>
+                  <input type="number" min="1" max="99" inputMode="numeric" placeholder="Geen limiet" value={newVoertuigForm.zitplaatsen} onChange={e => setNewVoertuigForm(f => ({ ...f, zitplaatsen: e.target.value }))} />
+                </div>
                 <div className="f" style={{ flex: '0 0 80px' }}>
                   <label>Kleur</label>
                   <input type="color" value={newVoertuigForm.kleur} onChange={e => setNewVoertuigForm(f => ({ ...f, kleur: e.target.value }))} style={{ height: 38, padding: 4, cursor: 'pointer' }} />
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <button className="btn btn-s btn-sm" onClick={() => { setShowVoertuigForm(false); setNewVoertuigForm({ naam: '', kenteken: '', kleur: '#1DDB62' }); }}>Annuleren</button>
+                  <button className="btn btn-s btn-sm" onClick={() => { setShowVoertuigForm(false); setNewVoertuigForm({ naam: '', kenteken: '', zitplaatsen: '', kleur: '#1DDB62' }); }}>Annuleren</button>
                   <button className="btn btn-p btn-sm" disabled={savingVoertuig || !newVoertuigForm.naam.trim()} onClick={async () => {
                     setSavingVoertuig(true);
                     try {
                       const v = await createVoertuig(newVoertuigForm);
                       setVoertuigen(prev => [...prev, v]);
-                      setNewVoertuigForm({ naam: '', kenteken: '', kleur: '#1DDB62' });
+                      setNewVoertuigForm({ naam: '', kenteken: '', zitplaatsen: '', kleur: '#1DDB62' });
                       setShowVoertuigForm(false);
                       toast.success('Voertuig toegevoegd');
                     } catch (e) { toast.error(e.message || 'Opslaan mislukt'); }
@@ -2734,7 +2738,7 @@ export function InstellingenPage() {
               <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--dl)', fontSize: 13 }}>Nog geen voertuigen toegevoegd.</div>
             ) : (
               <table className="dt" style={{ width: '100%' }}>
-                <thead><tr><th>Naam</th><th>Kenteken</th><th>Kleur</th><th>Status</th><th style={{ width: 80 }}></th></tr></thead>
+                <thead><tr><th>Naam</th><th>Kenteken</th><th title="Inclusief de bestuurder">Zitplaatsen</th><th>Kleur</th><th>Status</th><th style={{ width: 80 }}></th></tr></thead>
                 <tbody>
                   {voertuigen.map(v => (
                     <tr key={v.id}>
@@ -2747,6 +2751,11 @@ export function InstellingenPage() {
                         {editingVoertuigId === v.id ? (
                           <input value={editingVoertuigForm.kenteken} onChange={e => setEditingVoertuigForm(f => ({ ...f, kenteken: e.target.value }))} style={{ width: '100%' }} />
                         ) : v.kenteken || ''}
+                      </td>
+                      <td>
+                        {editingVoertuigId === v.id ? (
+                          <input type="number" min="1" max="99" inputMode="numeric" placeholder="Geen limiet" value={editingVoertuigForm.zitplaatsen ?? ''} onChange={e => setEditingVoertuigForm(f => ({ ...f, zitplaatsen: e.target.value }))} style={{ width: 90 }} />
+                        ) : (v.zitplaatsen ?? <span style={{ color: 'var(--dl)' }}>Geen limiet</span>)}
                       </td>
                       <td>
                         {editingVoertuigId === v.id ? (
@@ -2771,7 +2780,7 @@ export function InstellingenPage() {
                           </div>
                         ) : (
                           <div style={{ display: 'flex', gap: 4 }}>
-                            <button className="btn-icon" title="Bewerken" onClick={() => { setEditingVoertuigId(v.id); setEditingVoertuigForm({ naam: v.naam, kenteken: v.kenteken, kleur: v.kleur, actief: v.actief }); }}>{I.edit}</button>
+                            <button className="btn-icon" title="Bewerken" onClick={() => { setEditingVoertuigId(v.id); setEditingVoertuigForm({ naam: v.naam, kenteken: v.kenteken, zitplaatsen: v.zitplaatsen ?? '', kleur: v.kleur, actief: v.actief }); }}>{I.edit}</button>
                             <button className="btn-icon" title="Verwijderen" onClick={async () => {
                               if (!confirm(`Voertuig "${v.naam}" verwijderen?`)) return;
                               try { await deleteVoertuig(v.id); setVoertuigen(prev => prev.filter(x => x.id !== v.id)); toast.success('Verwijderd'); }

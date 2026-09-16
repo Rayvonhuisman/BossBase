@@ -23,6 +23,8 @@ import { listActivities } from '../services/activityService.js';
 import { getConnectionStatus, startGoogleCalendarConnect, disconnectGoogleCalendar } from '../services/googleCalendarService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
 import { werkbonDagen, tijdenOpDag, tijdenVoorPersoon, ploegOpDag } from '../utils/werkbonDagen.js';
+import { voertuigVanPersoon } from '../utils/voertuigDagen.js';
+import { getVoertuigen } from '../services/voertuigService.js';
 import { getProjects } from '../services/projectsService.js';
 import { calcBtw, BTW_PCT_OPTIONS } from '../utils/btw.js';
 import { useToast } from '../lib/toast.jsx';
@@ -125,7 +127,7 @@ function AgendaEventBlock({ ev, onClick, startUur = AG_HOUR_START_DEFAULT }) {
     <div
       onClick={e => { e.stopPropagation(); onClick(ev); }}
       data-herkomst={ev.herkomst || 'zelf'}
-      title={`${ev.title}\n${agFmtTime(ev.time)}${ev.end ? `–${agFmtTime(ev.end)}` : ''}\n${ev.customerName || ''}`}
+      title={`${ev.title}\n${agFmtTime(ev.time)}${ev.end ? `–${agFmtTime(ev.end)}` : ''}${ev.voertuig ? `\n${ev.voertuig}` : ''}\n${ev.customerName || ''}`}
       style={{
         position: 'absolute', top, left: `${(lane / total) * 100}%`, width: `${100 / total}%`, height,
         background: bg, borderLeft: `3px solid ${txt}`, border: `1px solid ${txt}33`,
@@ -138,7 +140,7 @@ function AgendaEventBlock({ ev, onClick, startUur = AG_HOUR_START_DEFAULT }) {
       <div style={{ fontWeight: 700, fontSize: 10, color: txt, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>{ev.title}</div>
       {height > 30 && (
         <div style={{ fontSize: 9, color: txt, opacity: .75, lineHeight: 1.2 }}>
-          {agFmtTime(ev.time)}{ev.end ? `–${agFmtTime(ev.end)}` : ''}
+          {agFmtTime(ev.time)}{ev.end ? `–${agFmtTime(ev.end)}` : ''}{ev.voertuig ? ` · ${ev.voertuig}` : ''}
         </div>
       )}
       {height > 50 && ev.customerName && (
@@ -232,6 +234,8 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
   // rollen-en-rechten-bedrijven zien hun eigen items. Dezelfde matrix bepaalt
   // server-side de RLS (bb_gedeelde_werkruimte), dus UI en server lopen gelijk.
   const shareAll = plan.has('gedeelde_werkruimte');
+  // Voertuigen: in je eigen agenda staat bij een klus in welk voertuig je zit.
+  const metVoertuigen = plan.has('voertuigen');
   // Werkbon inplannen vanuit de agenda is bedoeld voor wie géén planningsmodule
   // heeft. Met de planningsmodule plan je daar in.
   const canPlanFromAgenda = !plan.has('planning');
@@ -275,8 +279,11 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
 
   React.useEffect(() => {
     setLoading(true);
-    Promise.all([listCalendarEvents(), listCustomers(), listActivities(), getWerkbonnen().catch(() => [])])
-      .then(([data, custData, actData, wbs]) => {
+    Promise.all([
+      listCalendarEvents(), listCustomers(), listActivities(), getWerkbonnen().catch(() => []),
+      metVoertuigen ? getVoertuigen({ inclusiefInactief: true }).catch(() => []) : [],
+    ])
+      .then(([data, custData, actData, wbs, voertuigen]) => {
         // Persoonlijke agenda: IEDEREEN (medewerker én admin/planner) ziet hier
         // alleen ZIJN EIGEN toegewezen items, niet die van collega's. Voor een
         // medewerker filtert RLS al server-side; voor admin/planner (die via RLS
@@ -297,7 +304,11 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
           for (const pid of personen) {
             const t = pid ? tijdenVoorPersoon(w, dag, pid) : tijdenOpDag(w, dag);
             const sleutel = `${t.starttijd}-${t.eindtijd}`;
-            if (!perTijd.has(sleutel)) perTijd.set(sleutel, { w, dag, t });
+            // Het voertuig alleen bij je eigen item: in een gedeelde agenda kan
+            // één item voor meer mensen gelden, met elk een ander voertuig.
+            const vid = pid && pid === uid ? voertuigVanPersoon(w, dag, pid) : null;
+            const voertuig = vid ? voertuigen.find(v => v.id === vid)?.naam || null : null;
+            if (!perTijd.has(sleutel)) perTijd.set(sleutel, { w, dag, t, voertuig });
           }
           return [...perTijd.values()];
         };
@@ -311,7 +322,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
         const wbEvents = wbs
           .filter(w => w.geplandOp && w.status !== 'afgerond')
           .flatMap(w => werkbonDagen(w).flatMap(dag => itemsVanDag(w, dag)))
-          .map(({ w, dag, t }) => ({
+          .map(({ w, dag, t, voertuig }) => ({
             id: `wb-${w.id}-${dag.datum}-${t.starttijd || ''}`,
             title: w.titel,
             date: dag.datum,
@@ -323,6 +334,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
             werkbonId: w.id,
             customerName: w.customerName,
             locatie: w.locatie,
+            voertuig,
           }));
         setEvents([...manualEvents, ...wbEvents]);
         setCustomers(custData);
@@ -331,7 +343,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
       })
       .catch(err => setError(err.message || 'Agenda laden is mislukt.'))
       .finally(() => setLoading(false));
-  }, [refreshKey, shareAll]);
+  }, [refreshKey, shareAll, metVoertuigen]);
 
   // Deep-open a specific activity requested from the dashboard agenda widget
   React.useEffect(() => {

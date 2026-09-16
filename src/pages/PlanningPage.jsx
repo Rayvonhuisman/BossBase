@@ -19,6 +19,11 @@ import { useBlokSlepen } from '../hooks/useBlokSlepen.js';
 import { useUrlTab } from '../hooks/useUrlTab.js';
 import { usePlanGuard } from '../components/PlanUpgradeModal.jsx';
 import { getVoertuigen } from '../services/voertuigService.js';
+import { useWerkbonVoertuigen } from '../components/WerkbonVoertuigen.jsx';
+import {
+  bezettingVanVoertuig, ctxVoorWerkbon, koppelingVanDag, voertuigDubbel, voertuigenOpDag, voertuigenVanDag,
+  voertuigPlanningUitWerkbon, voertuigTijd, voertuigWaarschuwingen,
+} from '../utils/voertuigDagen.js';
 import { getActiveTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
@@ -223,13 +228,14 @@ function WerkbonBlock({ werkbon: blok, color, onClick, onDubbel, sleep }) {
   const w      = `${100 / total}%`;
   const left   = `${(lane / total) * 100}%`;
   const mag    = !!sleep?.mag;
+  const waarschuwing = werkbon._dubbel?.length > 0 || werkbon._meldingen?.length > 0;
 
   return (
     <div
       ref={elRef}
       {...handlers}
       onClick={e => { e.stopPropagation(); onClick(blok); }}
-      title={`${werkbon.titel}${werkbon._dagLabel ? ` (${werkbon._dagLabel})` : ''}\n${fmtTime(werkbon.starttijd)}–${fmtTime(werkbon.eindtijd)}\n${[werkbon._persoon, werkbon.customerName].filter(Boolean).join(' · ')}${sleep?.slotReden ? `\n${sleep.slotReden}` : mag ? '\nSlepen verschuift de tijd, de rand verzet begin of eind' : ''}`}
+      title={`${werkbon.titel}${werkbon._dagLabel ? ` (${werkbon._dagLabel})` : ''}\n${fmtTime(werkbon.starttijd)}–${fmtTime(werkbon.eindtijd)}\n${[werkbon._persoon, werkbon._voertuig, werkbon.customerName].filter(Boolean).join(' · ')}${sleep?.slotReden ? `\n${sleep.slotReden}` : mag ? '\nSlepen verschuift de tijd, de rand verzet begin of eind' : ''}`}
       style={{
         position: 'absolute', top, left, width: w, height,
         background: color.bg,
@@ -257,14 +263,15 @@ function WerkbonBlock({ werkbon: blok, color, onClick, onDubbel, sleep }) {
         <Lock size={9} strokeWidth={2.4} aria-label={sleep.slotReden}
           style={{ position: 'absolute', bottom: 3, right: 3, color: color.text, opacity: .6 }} />
       )}
-      {/* Dubbel ingepland: klik = uitleg, zonder het blok zelf te openen. */}
-      {werkbon._dubbel?.length > 0 && (
+      {/* Dubbel ingepland, of een voertuig klopt niet: klik = uitleg, zonder
+          het blok zelf te openen. */}
+      {waarschuwing && (
         <button
           type="button"
           className="pl-dubbel"
           style={{ right: werkbon.assignedToIds && werkbon.assignedToIds.length > 1 ? 24 : 3 }}
-          aria-label="Dubbel ingepland — uitleg"
-          title="Dubbel ingepland"
+          aria-label={`${werkbon._dubbel?.length ? 'Dubbel ingepland' : 'Klopt niet'} — uitleg`}
+          title={werkbon._dubbel?.length ? 'Dubbel ingepland' : 'Klopt niet'}
           onMouseDown={e => e.stopPropagation()}
           onPointerDown={e => e.stopPropagation()}
           onClick={e => { e.stopPropagation(); onDubbel?.(werkbon, e); }}
@@ -277,7 +284,7 @@ function WerkbonBlock({ werkbon: blok, color, onClick, onDubbel, sleep }) {
           +{werkbon.assignedToIds.length - 1}
         </div>
       )}
-      <div style={{ fontWeight: 700, fontSize: 10, color: color.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3, paddingRight: (werkbon.assignedToIds && werkbon.assignedToIds.length > 1 ? 18 : 0) + (werkbon._dubbel?.length ? 16 : 0) }}>
+      <div style={{ fontWeight: 700, fontSize: 10, color: color.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3, paddingRight: (werkbon.assignedToIds && werkbon.assignedToIds.length > 1 ? 18 : 0) + (waarschuwing ? 16 : 0) }}>
         {werkbon.titel}
       </div>
       {height > 30 && (
@@ -285,9 +292,9 @@ function WerkbonBlock({ werkbon: blok, color, onClick, onDubbel, sleep }) {
           {fmtTime(werkbon.starttijd)}–{fmtTime(werkbon.eindtijd)}{werkbon._dagLabel ? ` · ${werkbon._dagLabel}` : ''}
         </div>
       )}
-      {height > 50 && (werkbon._persoon || werkbon.customerName) && (
+      {height > 50 && (werkbon._persoon || werkbon._voertuig || werkbon.customerName) && (
         <div style={{ fontSize: 9, color: color.text, opacity: .6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
-          {[werkbon._persoon, werkbon.customerName].filter(Boolean).join(' · ')}
+          {[werkbon._persoon, werkbon._voertuig, werkbon.customerName].filter(Boolean).join(' · ')}
         </div>
       )}
     </div>
@@ -589,12 +596,12 @@ const ACT_TYPES = [
   { value: 'follow',label: 'Overig'      },
 ];
 
-function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, profile, onClose, onSaved }) {
+function PlanActivityModal({ teamMembers, customers, werkbonnen, profile, onClose, onSaved }) {
   const toast = useToast();
   const [form, setForm] = useState({
     titel: '', type: 'task', customer_id: '',
     datum: toISO(new Date()), starttijd: '09:00', eindtijd: '09:15',
-    assigned_to_ids: [], voertuig_id: '', locatie: '', omschrijving: '',
+    assigned_to_ids: [], locatie: '', omschrijving: '',
     werkbon_id: '',
   });
   const [eindtijdManual, setEindtijdManual] = useState(false);
@@ -622,7 +629,6 @@ function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, pro
         end_time: form.eindtijd || null,
         assigned_to_ids: form.assigned_to_ids,
         location: form.locatie || null,
-        voertuig_id: form.voertuig_id || null,
         notes: form.omschrijving || null,
       });
 
@@ -663,7 +669,6 @@ function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, pro
           starttijd: form.starttijd || null,
           eindtijd: form.eindtijd || null,
           assigned_to_ids: form.assigned_to_ids,
-          voertuig_id: form.voertuig_id || null,
           locatie: form.locatie || null,
           omschrijving: form.omschrijving || null,
           status: 'gepland',
@@ -725,17 +730,12 @@ function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, pro
             <label>Eindtijd <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(optioneel)</span></label>
             <input type="time" value={form.eindtijd} onChange={e => { setEindtijdManual(true); set('eindtijd', e.target.value); }} />
           </div>
-          <div className="f">
+          {/* Geen voertuig bij een activiteit: voertuigen worden ingepland op de
+              dagen van een werkbon (migratie 20260916120000). */}
+          <div className="f" style={{ gridColumn: '1 / -1' }}>
             <label>Medewerkers <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(meerdere mogelijk)</span></label>
             <MemberMultiSelect members={teamMembers} value={form.assigned_to_ids} onChange={ids => set('assigned_to_ids', ids)} />
             <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />
-          </div>
-          <div className="f">
-            <label>Voertuig <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(optioneel)</span></label>
-            <select value={form.voertuig_id} onChange={e => set('voertuig_id', e.target.value)}>
-              <option value="">— Geen voertuig —</option>
-              {voertuigen.map(v => <option key={v.id} value={v.id}>{v.naam}{v.kenteken ? ` (${v.kenteken})` : ''}</option>)}
-            </select>
           </div>
           <WerkbonLocatieVeld
             style={{ gridColumn: '1 / -1' }}
@@ -784,12 +784,13 @@ function PlanActivityModal({ teamMembers, voertuigen, customers, werkbonnen, pro
 
 // ── WERKBON INPLANNEN MODAL ───────────────────────────────────────────────────
 
-function PlanModal({ teamMembers, voertuigen, customers, projects, profile, onClose, onSaved }) {
+function PlanModal({ teamMembers, customers, projects, profile, onClose, onSaved }) {
   const toast = useToast();
   const [form, setForm] = useState({
     titel: '', customer_id: '', project_id: '',
-    starttijd: '09:00', eindtijd: '11:00', assigned_to_ids: [], verantwoordelijke_ids: [], voertuig_id: '', locatie: '', omschrijving: '',
+    starttijd: '09:00', eindtijd: '11:00', assigned_to_ids: [], verantwoordelijke_ids: [], locatie: '', omschrijving: '',
   });
+  const voertuig = useWerkbonVoertuigen({ meerdaags: true });
   const [planning, setPlanning] = useState(() => legePlanning(toISO(new Date())));
   const [notifyMail, setNotifyMail] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -804,7 +805,11 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, profile, onCl
     if (!form.titel.trim()) { toast.error('Titel is verplicht'); return; }
     const planFout = controleerPlanning(planning, { starttijd: form.starttijd, eindtijd: form.eindtijd });
     if (planFout) { toast.error(planFout); return; }
-    const dagen = dagenUitPlanning(planning, form.assigned_to_ids, { starttijd: form.starttijd, eindtijd: form.eindtijd });
+    const standaard = { starttijd: form.starttijd, eindtijd: form.eindtijd };
+    const naamVan = id => teamMembers.find(m => m.id === id)?.fullName;
+    const voertuigFout = voertuig.controleer(planning, form.assigned_to_ids, naamVan, standaard);
+    if (voertuigFout) { toast.error(voertuigFout); return; }
+    const dagen = voertuig.dagen(dagenUitPlanning(planning, form.assigned_to_ids, standaard), planning, form.assigned_to_ids, naamVan, standaard);
     setSaving(true);
     try {
       let wb = await createWerkbon({
@@ -816,7 +821,7 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, profile, onCl
         eindtijd: form.eindtijd || null,
         assigned_to_ids: form.assigned_to_ids,
         verantwoordelijke_ids: form.verantwoordelijke_ids,
-        voertuig_id: form.voertuig_id || null,
+        ...voertuig.payload,
         locatie: form.locatie || null,
         omschrijving: form.omschrijving || null,
         status: 'gepland',
@@ -887,6 +892,7 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, profile, onCl
               return { id, naam: m?.fullName || 'Medewerker', avatarUrl: m?.avatarUrl || '' };
             })}
             disabled={saving}
+            {...voertuig.veldProps}
           />
           <AssigneeResponsibleSelect
             members={teamMembers}
@@ -898,13 +904,7 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, profile, onCl
           >
             <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />
           </AssigneeResponsibleSelect>
-          <div className="f">
-            <label>Voertuig</label>
-            <select value={form.voertuig_id} onChange={e => set('voertuig_id', e.target.value)}>
-              <option value="">— Geen voertuig —</option>
-              {voertuigen.map(v => <option key={v.id} value={v.id}>{v.naam}{v.kenteken ? ` (${v.kenteken})` : ''}</option>)}
-            </select>
-          </div>
+          {voertuig.kiezer(saving, { gridColumn: '1 / -1' })}
           <WerkbonLocatieVeld
             style={{ gridColumn: '1 / -1' }}
             value={form.locatie}
@@ -931,10 +931,11 @@ function PlanModal({ teamMembers, voertuigen, customers, projects, profile, onCl
 
 // ── WERKBON DETAIL MODAL ──────────────────────────────────────────────────────
 
-function DetailModal({ werkbon, teamMembers, voertuigen, profile, onClose, onUpdated, openCustomer }) {
+function DetailModal({ werkbon, teamMembers, profile, onClose, onUpdated, openCustomer }) {
   const toast = useToast();
   const prevIds = werkbon.assignedToIds || (werkbon.assignedTo ? [werkbon.assignedTo] : []);
-  const [planning, setPlanning] = useState(() => planningUitWerkbon(werkbon));
+  const [planning, setPlanning] = useState(() => ({ ...planningUitWerkbon(werkbon), ...voertuigPlanningUitWerkbon(werkbon) }));
+  const voertuig = useWerkbonVoertuigen({ werkbon, meerdaags: true });
   const [form, setForm] = useState({
     titel: werkbon.titel || '',
     starttijd: werkbon.starttijd || '',
@@ -943,7 +944,6 @@ function DetailModal({ werkbon, teamMembers, voertuigen, profile, onClose, onUpd
     verantwoordelijke_ids: (werkbon.verantwoordelijkeIds && werkbon.verantwoordelijkeIds.length)
       ? werkbon.verantwoordelijkeIds
       : (prevIds[0] ? [prevIds[0]] : []),
-    voertuig_id: werkbon.voertuigId || '',
     locatie: werkbon.locatie || '',
     status: werkbon.status || 'gepland',
   });
@@ -954,7 +954,11 @@ function DetailModal({ werkbon, teamMembers, voertuigen, profile, onClose, onUpd
   const submit = async () => {
     const planFout = controleerPlanning(planning, { starttijd: form.starttijd, eindtijd: form.eindtijd });
     if (planFout) { toast.error(planFout); return; }
-    const dagen = dagenUitPlanning(planning, form.assigned_to_ids, { starttijd: form.starttijd, eindtijd: form.eindtijd });
+    const standaard = { starttijd: form.starttijd, eindtijd: form.eindtijd };
+    const naamVan = id => teamMembers.find(m => m.id === id)?.fullName;
+    const voertuigFout = voertuig.controleer(planning, form.assigned_to_ids, naamVan, standaard);
+    if (voertuigFout) { toast.error(voertuigFout); return; }
+    const dagen = voertuig.dagen(dagenUitPlanning(planning, form.assigned_to_ids, standaard), planning, form.assigned_to_ids, naamVan, standaard);
     setSaving(true);
     try {
       const updated = await updateWerkbon(werkbon.id, {
@@ -964,7 +968,7 @@ function DetailModal({ werkbon, teamMembers, voertuigen, profile, onClose, onUpd
         eindtijd: form.eindtijd || null,
         assigned_to_ids: form.assigned_to_ids,
         verantwoordelijke_ids: form.verantwoordelijke_ids,
-        voertuig_id: form.voertuig_id || null,
+        ...voertuig.payload,
         locatie: form.locatie || null,
         status: form.status,
       });
@@ -1037,6 +1041,8 @@ function DetailModal({ werkbon, teamMembers, voertuigen, profile, onClose, onUpd
               return { id, naam: m?.fullName || 'Medewerker', avatarUrl: m?.avatarUrl || '' };
             })}
             disabled={saving}
+            werkbonId={werkbon.id}
+            {...voertuig.veldProps}
           />
           <AssigneeResponsibleSelect
             members={teamMembers}
@@ -1048,13 +1054,7 @@ function DetailModal({ werkbon, teamMembers, voertuigen, profile, onClose, onUpd
           >
             <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />
           </AssigneeResponsibleSelect>
-          <div className="f">
-            <label>Voertuig</label>
-            <select value={form.voertuig_id} onChange={e => set('voertuig_id', e.target.value)}>
-              <option value="">— Geen —</option>
-              {voertuigen.map(v => <option key={v.id} value={v.id}>{v.naam}</option>)}
-            </select>
-          </div>
+          {voertuig.kiezer(saving, { gridColumn: '1 / -1' })}
           <WerkbonLocatieVeld
             style={{ gridColumn: '1 / -1' }}
             value={form.locatie}
@@ -1172,17 +1172,15 @@ export function PlanningPage({ openCustomer } = {}) {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [wbs, members, voerts, custs, projs, acts] = await Promise.all([
+      const [wbs, members, custs, projs, acts] = await Promise.all([
         getWerkbonnen(),
         getActiveTeamMembers({ includeSelf: true }).catch(() => []),
-        getVoertuigen().catch(() => []),
         listCustomers().catch(() => []),
         getProjects().catch(() => []),
         listActivities().catch(() => []),
       ]);
       setWerkbonnen(wbs);
       setTeamMembers(members);
-      setVoertuigen(voerts);
       setCustomers(custs);
       setProjects(projs);
       setActivities(acts);
@@ -1199,9 +1197,35 @@ export function PlanningPage({ openCustomer } = {}) {
   useEffect(() => {
     if (teamMembers.length && !selectedMember) setSelectedMember(teamMembers[0]?.id || '');
   }, [teamMembers]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Voertuigen alleen met het abonnement. Los van loadData, want de stand van
+  // het abonnement kan nét na het laden van de pagina binnenkomen. Inactieve
+  // voertuigen doen mee: ze kunnen nog op een werkbon staan.
+  const metVoertuigen = plan.has('voertuigen');
   useEffect(() => {
-    if (voertuigen.length && !selectedVehicle) setSelectedVehicle(voertuigen[0]?.id || '');
-  }, [voertuigen]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!metVoertuigen) { setVoertuigen([]); return undefined; }
+    let bezig = true;
+    getVoertuigen({ inclusiefInactief: true }).then(l => { if (bezig) setVoertuigen(l); }).catch(() => {});
+    return () => { bezig = false; };
+  }, [metVoertuigen]);
+  const actieveVoertuigen = useMemo(() => voertuigen.filter(v => v.actief), [voertuigen]);
+  useEffect(() => {
+    if (actieveVoertuigen.length && !selectedVehicle) setSelectedVehicle(actieveVoertuigen[0]?.id || '');
+  }, [actieveVoertuigen]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!metVoertuigen && viewMode === 'voertuig') setViewMode('totaal');
+  }, [metVoertuigen, viewMode]);
+
+  // Per werkbon met voertuigen: de regels uit utils/voertuigDagen.js op de
+  // opgeslagen stand, voor het voertuig op een blok en de waarschuwingen.
+  const voertuigCtx = useMemo(() => {
+    const kaart = new Map();
+    if (!metVoertuigen || !voertuigen.length) return kaart;
+    const naamVan = id => teamMembers.find(m => m.id === id)?.fullName;
+    for (const w of werkbonnen) {
+      if (w.voertuigIds?.length) kaart.set(w.id, ctxVoorWerkbon(w, voertuigen, naamVan));
+    }
+    return kaart;
+  }, [metVoertuigen, voertuigen, werkbonnen, teamMembers]);
 
   // ── KLEUR MAPS ─────────────────────────────────────────────────────────────
 
@@ -1241,7 +1265,7 @@ export function PlanningPage({ openCustomer } = {}) {
 
   const filteredWb = useMemo(() => {
     if (viewMode === 'medewerker') return werkbonnen.filter(w => (w.assignedToIds && w.assignedToIds.includes(selectedMember)) || w.assignedTo === selectedMember);
-    if (viewMode === 'voertuig')   return werkbonnen.filter(w => w.voertuigId === selectedVehicle);
+    if (viewMode === 'voertuig')   return werkbonnen.filter(w => werkbonDagen(w).some(d => voertuigenOpDag(w, d).includes(selectedVehicle)));
     return werkbonnen;
   }, [werkbonnen, viewMode, selectedMember, selectedVehicle]);
 
@@ -1301,7 +1325,9 @@ export function PlanningPage({ openCustomer } = {}) {
     const w = werkbonnen.find(x => x.id === b.id);
     if (!w) return { mag: false };
     if (w.ondertekendOp) return { mag: false, slotReden: 'Ondertekend — de tijden staan op slot' };
-    if (!magSlepen) return { mag: false };
+    // In de voertuigweergave niet slepen: de tijd van een voertuig pas je aan
+    // in de werkbon, waar je ook ziet wie erin zit.
+    if (!magSlepen || b._voertuigBlok) return { mag: false };
     // Een blok met een persoon verzet alleen díé persoon op díé dag; de rest van
     // de ploeg blijft staan (zie verzetTijd). Dat staat er tijdens het slepen bij.
     return { mag: true, label: b._pid ? `alleen ${b._persoon || 'deze medewerker'}` : 'deze dag' };
@@ -1402,7 +1428,7 @@ export function PlanningPage({ openCustomer } = {}) {
             ))}
           </div>
           <div className="tabs" style={{ marginLeft: 8 }}>
-            {[['totaal','Totaal'],['medewerker','Medewerker'],['voertuig','Voertuig']].map(([v, l]) => (
+            {[['totaal','Totaal'],['medewerker','Medewerker'], ...(metVoertuigen ? [['voertuig','Voertuig']] : [])].map(([v, l]) => (
               <button key={v} className={`tab${viewMode === v ? ' active' : ''}`} onClick={() => setViewMode(v)}>{l}</button>
             ))}
           </div>
@@ -1413,10 +1439,10 @@ export function PlanningPage({ openCustomer } = {}) {
               {teamMembers.map(m => <option key={m.id} value={m.id}>{m.fullName}</option>)}
             </select>
           )}
-          {viewMode === 'voertuig' && voertuigen.length > 0 && (
+          {viewMode === 'voertuig' && actieveVoertuigen.length > 0 && (
             <select value={selectedVehicle} onChange={e => setSelectedVehicle(e.target.value)}
               style={{ fontSize: 13, padding: '5px 10px', borderRadius: 8, border: '1px solid var(--border)', background: '#fff', cursor: 'pointer', fontWeight: 600 }}>
-              {voertuigen.map(v => <option key={v.id} value={v.id}>{v.naam}</option>)}
+              {actieveVoertuigen.map(v => <option key={v.id} value={v.id}>{v.naam}{v.kenteken ? ` (${v.kenteken})` : ''}</option>)}
             </select>
           )}
           <button className="btn btn-s btn-sm" onClick={() => setShowPlanModal(true)}>
@@ -1539,13 +1565,37 @@ export function PlanningPage({ openCustomer } = {}) {
                         negeerActiviteitId: w.raw?.activity_id || null,
                         datum: date, pid, starttijd: van, eindtijd: tot,
                       });
+                      // Voertuigen van deze werkbon op deze dag (alleen met het abonnement).
+                      const vctx = voertuigCtx.get(w.id);
+                      const koppeling = vctx ? koppelingVanDag(vctx, date) : {};
+                      const meldingen = vctx ? voertuigWaarschuwingen(vctx, date) : { perPersoon: {}, perVoertuig: {} };
+                      const voertuigVan = pid => vctx?.voertuigen.find(v => v.id === koppeling[pid])?.naam || '';
+                      if (viewMode === 'voertuig') {
+                        // Het blok van het gekozen voertuig, met zíjn tijd en wie erin zit.
+                        if (!vctx || !voertuigenVanDag(vctx, date).includes(selectedVehicle)) return [];
+                        const v = vctx.voertuigen.find(x => x.id === selectedVehicle);
+                        const vt = voertuigTijd(vctx, date, selectedVehicle);
+                        const inVoertuig = Object.keys(koppeling).filter(pid => koppeling[pid] === selectedVehicle);
+                        const namen = inVoertuig.map(pid => teamMembers.find(m => m.id === pid)?.fullName || 'Medewerker').join(', ');
+                        const bezetting = v.zitplaatsen ? `${bezettingVanVoertuig(vctx, date, selectedVehicle)}/${v.zitplaatsen}` : '';
+                        return [{
+                          ...basis, starttijd: vt.starttijd, eindtijd: vt.eindtijd,
+                          _blokKey: `${w.id}-${selectedVehicle}`, _pid: null, _voertuigBlok: true,
+                          _persoon: [namen, bezetting].filter(Boolean).join(' · '),
+                          _onderwerp: v.naam,
+                          _dubbel: voertuigDubbel({ werkbonnen, werkbonId: w.id, datum: date, vid: selectedVehicle, starttijd: vt.starttijd, eindtijd: vt.eindtijd }),
+                          _meldingen: [...(meldingen.perVoertuig[selectedVehicle] || []), ...inVoertuig.flatMap(pid => meldingen.perPersoon[pid] || [])],
+                        }];
+                      }
                       if (viewMode === 'medewerker') {
                         // Het blok van de gekozen medewerker, met zíjn tijd.
                         const eigen = tijdenVoorPersoon(w, dagen[i], selectedMember);
                         return [{
                           ...basis, starttijd: eigen.starttijd, eindtijd: eigen.eindtijd, _blokKey: w.id, _pid: selectedMember,
                           _persoon: teamMembers.find(m => m.id === selectedMember)?.fullName || '',
+                          _voertuig: voertuigVan(selectedMember),
                           _dubbel: dubbelVoor(selectedMember, eigen.starttijd, eigen.eindtijd),
+                          _meldingen: meldingen.perPersoon[selectedMember] || [],
                         }];
                       }
                       if (viewMode !== 'totaal') return [{ ...basis, _blokKey: w.id, _pid: null }];
@@ -1565,9 +1615,11 @@ export function PlanningPage({ openCustomer } = {}) {
                           assignedToIds: [pid],
                           _colorKey: pid,
                           _persoon: teamMembers.find(m => m.id === pid)?.fullName || '',
+                          _voertuig: voertuigVan(pid),
                           _blokKey: `${w.id}-${pid}`,
                           _pid: pid,
                           _dubbel: dubbelVoor(pid, eigen.starttijd, eigen.eindtijd),
+                          _meldingen: meldingen.perPersoon[pid] || [],
                         };
                       });
                     });
@@ -1616,24 +1668,36 @@ export function PlanningPage({ openCustomer } = {}) {
               </div>
             </div>
 
-            {/* Uitleg bij een dubbel ingepland blok. */}
-            {dubbelInfo && (
-              <div
-                className="pl-dubbel-uitleg"
-                role="dialog"
-                aria-label="Dubbel ingepland"
-                style={{ left: Math.max(8, Math.min(dubbelInfo.x - 20, window.innerWidth - 310)), top: dubbelInfo.y + 6 }}
-                onMouseDown={e => e.stopPropagation()}
-              >
-                <div className="ab-uitleg-kop">
-                  Dubbel ingepland
-                  <button type="button" className="ab-uitleg-x" aria-label="Sluiten" onClick={() => setDubbelInfo(null)}><X size={13} /></button>
+            {/* Uitleg bij een blok met een driehoekje: dubbel ingepland, of een
+                voertuig klopt niet. Alleen de melding; aanpassen doe je in de werkbon. */}
+            {dubbelInfo && (() => {
+              const b = dubbelInfo.b;
+              const wie = b._onderwerp || b._persoon;
+              return (
+                <div
+                  className="pl-dubbel-uitleg"
+                  role="dialog"
+                  aria-label={b._dubbel?.length ? 'Dubbel ingepland' : 'Klopt niet'}
+                  style={{ left: Math.max(8, Math.min(dubbelInfo.x - 20, window.innerWidth - 310)), top: dubbelInfo.y + 6 }}
+                  onMouseDown={e => e.stopPropagation()}
+                >
+                  <div className="ab-uitleg-kop">
+                    {b._dubbel?.length ? 'Dubbel ingepland' : 'Klopt niet'}
+                    <button type="button" className="ab-uitleg-x" aria-label="Sluiten" onClick={() => setDubbelInfo(null)}><X size={13} /></button>
+                  </div>
+                  {b._dubbel?.length > 0 && (
+                    <>
+                      {wie || 'Deze medewerker'} staat op {fmtDayShort(b._datum)} ook ingepland:{' '}
+                      {b._dubbel.map(c => `${c.titel} (${c.starttijd || '?'}–${c.eindtijd || '?'})`).join(', ')}.
+                      {' '}Daardoor is {wie || 'deze medewerker'} op dat moment dubbel ingepland.
+                    </>
+                  )}
+                  {(b._meldingen || []).map((t, j) => (
+                    <div key={t} style={{ marginTop: j === 0 && !b._dubbel?.length ? 0 : 6 }}>{t}</div>
+                  ))}
                 </div>
-                {dubbelInfo.b._persoon || 'Deze medewerker'} staat op {fmtDayShort(dubbelInfo.b._datum)} ook ingepland:{' '}
-                {dubbelInfo.b._dubbel.map(c => `${c.titel} (${c.starttijd || '?'}–${c.eindtijd || '?'})`).join(', ')}.
-                {' '}Daardoor is {dubbelInfo.b._persoon || 'deze medewerker'} op dat moment dubbel ingepland.
-              </div>
-            )}
+              );
+            })()}
 
             {/* Legenda */}
             {legendItems.length > 0 && (
@@ -1655,7 +1719,7 @@ export function PlanningPage({ openCustomer } = {}) {
       {/* ── MODALS ── */}
       {showPlanModal && (
         <PlanModal
-          teamMembers={teamMembers} voertuigen={voertuigen}
+          teamMembers={teamMembers}
           customers={customers} projects={projects} profile={profile}
           onClose={() => setShowPlanModal(false)}
           onSaved={wb => setWerkbonnen(prev => [wb, ...prev])}
@@ -1665,7 +1729,6 @@ export function PlanningPage({ openCustomer } = {}) {
       {showPlanActivityModal && (
         <PlanActivityModal
           teamMembers={teamMembers}
-          voertuigen={voertuigen}
           customers={customers}
           werkbonnen={werkbonnen}
           profile={profile}
@@ -1723,7 +1786,6 @@ export function PlanningPage({ openCustomer } = {}) {
         <DetailModal
           werkbon={detailWb}
           teamMembers={teamMembers}
-          voertuigen={voertuigen}
           profile={profile}
           onClose={() => setDetailWb(null)}
           onUpdated={updated => {

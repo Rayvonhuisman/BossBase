@@ -16,7 +16,17 @@
 --   supabase db query --linked -f supabase/rollback/disable_plan_gates.sql
 --
 -- Terugzetten: draai migratie 20260728120000_plan_matrix.sql opnieuw; die maakt
--- alle policies en triggers idempotent opnieuw aan.
+-- alle policies en triggers idempotent opnieuw aan. Twee uitzonderingen:
+--   • De voertuig-gates staan sinds 20260916120000_voertuigen_per_dag.sql in
+--     trg_werkbon_voertuigen_feature en trg_werkbon_dag_voertuigen_feature.
+--     Draai daarvoor het blok "Abonnement: aparte triggers" uit die migratie
+--     opnieuw (het is los te draaien).
+--   • plan_matrix maakt ook de oude trg_werkbon_voertuig_feature weer aan, op de
+--     kolom werkbonnen.voertuig_id. Is migratie 20260916130000 (oude
+--     voertuigkolommen weg) gedraaid, dan bestaat die kolom niet meer en faalt
+--     elke wijziging van een werkbon. Haal hem daarna meteen weg:
+--       drop trigger if exists trg_werkbon_voertuig_feature on public.werkbonnen;
+--       drop function if exists public.bb_check_werkbon_voertuig();
 -- =============================================================================
 
 BEGIN;
@@ -40,11 +50,16 @@ DROP POLICY IF EXISTS plan_feature_rechten_update      ON public.user_permission
 DROP POLICY IF EXISTS plan_feature_rechten_delete      ON public.user_permissions;
 
 -- ── Feature-gates (triggers die een fout opgooien) ───────────────────────────
-DROP TRIGGER IF EXISTS trg_werkbon_voertuig_feature ON public.werkbonnen;
+DROP TRIGGER IF EXISTS trg_werkbon_voertuig_feature ON public.werkbonnen;          -- oud, tot 20260916130000
+DROP TRIGGER IF EXISTS trg_werkbon_voertuigen_feature ON public.werkbonnen;
+DROP TRIGGER IF EXISTS trg_werkbon_dag_voertuigen_feature ON public.werkbon_dagen;
 DROP TRIGGER IF EXISTS trg_accounting_feature       ON public.accounting_connections;
 DROP TRIGGER IF EXISTS trg_herinnering_feature      ON public.facturen;
 DROP TRIGGER IF EXISTS trg_handtekening_feature     ON public.offertes;
 
+-- De overige voertuigtriggers (bb_werkbon_voertuigen, bb_werkbon_dag_voertuigen)
+-- blijven WEL staan: dat zijn geen abonnements-gates maar de regels voor
+-- koppelen en zitplaatsen, die voor iedereen gelden.
 -- De verbruikstriggers blijven WEL staan: die blokkeren niets, ze tellen alleen.
 -- Zo loopt de teller door en klopt de stand nog als je de gates weer aanzet.
 
@@ -58,6 +73,7 @@ SELECT
     WHERE schemaname = 'public' AND policyname LIKE 'plan\_feature\_%'
       AND permissive = 'RESTRICTIVE')                                 AS feature_gates,
   (SELECT count(*) FROM pg_trigger
-    WHERE tgname IN ('trg_werkbon_voertuig_feature', 'trg_accounting_feature',
+    WHERE tgname IN ('trg_werkbon_voertuig_feature', 'trg_werkbon_voertuigen_feature',
+                     'trg_werkbon_dag_voertuigen_feature', 'trg_accounting_feature',
                      'trg_herinnering_feature', 'trg_handtekening_feature'))
                                                                       AS feature_triggers;
