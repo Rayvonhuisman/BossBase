@@ -96,7 +96,9 @@ export async function markDealLost(dealId, stageId, reason, note) {
   const noteTxt = (note || "").trim()
   const { data, error } = await supabase
     .from("deals")
-    .update({ stage_id: stageId, lost_reason })
+    // status mee: zonder dit bleef een verloren deal op 'open' staan en telde
+    // hij mee als lopende omzet in dashboard en rapportage.
+    .update({ stage_id: stageId, lost_reason, status: 'lost' })
     .eq("id", dealId)
     .select("*, customers!deals_customer_id_fkey(*)")
     .single()

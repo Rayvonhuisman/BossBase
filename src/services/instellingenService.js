@@ -254,6 +254,38 @@ export async function deletePipelineStage(id) {
   if (error) throw error
 }
 
+// ── PIPELINE-KOPPELING ───────────────────────────────────────────────────────
+// Welke fase hoort bij welk moment in de uitvoering. Gekoppeld op fase-ID, dus
+// hernoemen breekt niets. Wordt een gekoppelde fase verwijderd, dan zet de
+// database stage_id op NULL (ON DELETE SET NULL) en toont Instellingen dat het
+// moment niet meer gekoppeld is.
+export const PIPELINE_MOMENTEN = [
+  { key: 'gepland',       label: 'Werkbon gepland',    uitleg: 'Zodra een werkbon voor dit project is ingepland.' },
+  { key: 'in_uitvoering', label: 'Klus gestart',       uitleg: 'Zodra iemand op "Start klus" drukt.' },
+  { key: 'afgerond',      label: 'Klus afgerond',      uitleg: 'Zodra alle werkbonnen van het project afgerond zijn.' },
+  { key: 'gefactureerd',  label: 'Factuur verstuurd',  uitleg: 'Zodra een factuur voor dit project is verstuurd.' },
+  { key: 'betaald',       label: 'Factuur betaald',    uitleg: 'Zodra de factuur als betaald is gemarkeerd.' },
+]
+
+export async function getPipelineKoppelingen() {
+  const { data, error } = await supabase
+    .from("pipeline_koppelingen")
+    .select("moment, stage_id")
+  if (error) throw error
+  const map = {}
+  ;(data || []).forEach(r => { map[r.moment] = r.stage_id || null })
+  return map
+}
+
+export async function setPipelineKoppeling(moment, stageId) {
+  const payload = await withCompanyId({ moment, stage_id: stageId || null, updated_at: new Date().toISOString() })
+  const { error } = await supabase
+    .from("pipeline_koppelingen")
+    .upsert(payload, { onConflict: "company_id,moment" })
+  if (error) throw error
+  return { moment, stageId: stageId || null }
+}
+
 /**
  * Herordent alle pipeline-stages in één keer.
  * @param {Array<{id: string, position: number}>} stages

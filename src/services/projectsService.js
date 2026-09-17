@@ -19,7 +19,7 @@ const toProject = row => ({
   offerteId: row.offerte_id,
   name: row.name || '',
   description: row.description || '',
-  status: row.status || 'concept',
+  status: row.status || 'gepland',
   projectValue: Number(row.project_value || 0),
   quotedHours: Number(row.quoted_hours || 0),
   // Geen usedHours hier: die wordt live berekend uit werkbon_uren (zie
@@ -89,14 +89,14 @@ const stripUndef = obj => {
 }
 
 // Project status-labels (Nederlands) en kleur
+// Drie statussen, gelijk aan die van de werkbon. De status van een project wordt
+// niet getypt maar AFGELEID uit zijn werkbonnen (trigger
+// bb_project_status_bijwerken): in uitvoering zodra er één gestart is, afgerond
+// als ze allemaal afgerond zijn. De database dwingt de drie waarden af.
 export const PROJECT_STATUS = {
-  concept:          { label: 'Concept',          col: 'b-gray' },
-  offerte_akkoord:  { label: 'Offerte akkoord',  col: 'b-accepted' },
-  lopend:           { label: 'Lopend',           col: 'b-progress' },
-  wachten_op_klant: { label: 'Wachten op klant', col: 'b-orange' },
-  te_factureren:    { label: 'Te factureren',    col: 'b-blue' },
-  afgerond:         { label: 'Afgerond',         col: 'b-done' },
-  risico:           { label: 'Risico',           col: 'b-lost' },
+  gepland:       { label: 'Gepland',       col: 'b-planned' },
+  in_uitvoering: { label: 'In uitvoering', col: 'b-progress' },
+  afgerond:      { label: 'Afgerond',      col: 'b-done' },
 }
 
 export const PROJECT_STATUS_OPTIONS = Object.entries(PROJECT_STATUS).map(([id, v]) => ({ id, label: v.label }))
@@ -142,7 +142,7 @@ export async function createProject(input) {
   const base = stripUndef({
     name,
     description: input.description || null,
-    status: input.status || 'concept',
+    status: input.status || 'gepland',
     customer_id: input.customer_id || input.customerId || null,
     deal_id: input.deal_id || input.dealId || null,
     offerte_id: input.offerte_id || input.offerteId || null,
@@ -362,7 +362,7 @@ export async function getProjectInvoices(projectId) {
     customerId: row.customer_id,
     projectId: row.project_id,
     nummer: row.nummer || '',
-    status: row.status || 'concept',
+    status: row.status || 'gepland',
     factuurdatum: row.factuurdatum || null,
     vervaldatum: row.vervaldatum || null,
     betaaldOp: row.betaald_op || null,

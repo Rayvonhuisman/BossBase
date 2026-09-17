@@ -18,7 +18,6 @@ import {
   getProjectInvoices,
   enrichProject,
   PROJECT_STATUS,
-  PROJECT_STATUS_OPTIONS,
 } from '../../services/projectsService.js';
 import { getWerkbonnenByProject } from '../../services/werkbonService.js';
 import { planningLabel } from '../../utils/werkbonDagen.js';
@@ -242,9 +241,14 @@ function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
         </div>
         <div className="f">
           <label>Status</label>
-          <select value={form.status} onChange={e => set('status', e.target.value)} disabled={!canManage}>
-            {PROJECT_STATUS_OPTIONS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-          </select>
+          {/* Afgeleid uit de werkbonnen, niet zelf te kiezen: in uitvoering
+              zodra er één gestart is, afgerond als ze allemaal klaar zijn. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 38 }}>
+            <span className={`badge ${PROJECT_STATUS[form.status]?.col || 'b-gray'}`}>
+              {PROJECT_STATUS[form.status]?.label || form.status}
+            </span>
+            <span style={{ fontSize: '.72rem', color: 'var(--dl)' }}>volgt de werkbonnen</span>
+          </div>
         </div>
         <div className="f">
           <label>Klant</label>

@@ -7,8 +7,6 @@ import { usePlanGuard } from '../components/PlanUpgradeModal.jsx';
 import {
   getEnrichedProjects,
   createProject,
-  PROJECT_STATUS,
-  PROJECT_STATUS_OPTIONS,
 } from '../services/projectsService.js';
 import { listCustomers } from '../services/customerService.js';
 import { listDeals } from '../services/dealService.js';
@@ -164,12 +162,8 @@ export function NewProjectModal({ onClose, onSaved, customers, deals, offertes, 
               {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
-          <div className="f">
-            <label>Status</label>
-            <select value={form.status} onChange={e => set('status', e.target.value)}>
-              {PROJECT_STATUS_OPTIONS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-            </select>
-          </div>
+          {/* Geen statuskeuze meer: de status volgt de werkbonnen van het
+              project (gepland → in uitvoering → afgerond). */}
           <div className="f">
             <label>Project</label>
             <select value={form.deal_id} onChange={e => set('deal_id', e.target.value)}>
@@ -317,7 +311,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
   const [deals, setDeals] = useState([]);
   const [offertes, setOffertes] = useState([]);
 
-  const [statusFilter, setStatusFilter] = useState('all'); // all | concept | lopend | te_factureren | afgerond
+  const [statusFilter, setStatusFilter] = useState('all'); // all | gepland | in_uitvoering | afgerond
   const [invoiceFilter, setInvoiceFilter] = useState('all'); // all | unbilled | billed
   const [search, setSearch] = useState('');
 
@@ -358,12 +352,10 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
   // ── FILTERS ───────────────────────────────────────────────────────────────
 
   const filterTabs = useMemo(() => ([
-    { value: 'all',              label: 'Alle' },
-    { value: 'concept',          label: 'Concept' },
-    { value: 'lopend',           label: 'Lopend' },
-    { value: 'wachten_op_klant', label: 'Wachten op klant' },
-    { value: 'te_factureren',    label: 'Te factureren' },
-    { value: 'afgerond',         label: 'Afgerond' },
+    { value: 'all',           label: 'Alle' },
+    { value: 'gepland',       label: 'Gepland' },
+    { value: 'in_uitvoering', label: 'In uitvoering' },
+    { value: 'afgerond',      label: 'Afgerond' },
   ]), []);
 
   const filtered = useMemo(() => {

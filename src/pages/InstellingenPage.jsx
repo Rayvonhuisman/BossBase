@@ -26,6 +26,9 @@ import {
   createEmailTemplate,
   deleteEmailTemplate,
   getPipelineStages,
+  getPipelineKoppelingen,
+  setPipelineKoppeling,
+  PIPELINE_MOMENTEN,
   createPipelineStage,
   updatePipelineStage,
   deletePipelineStage,
@@ -216,6 +219,10 @@ export function InstellingenPage() {
 
   // Pipeline stages
   const [stages, setStages] = useState([]);
+  // Moment → stage_id. Een moment zonder fase is niet gekoppeld; dat kan doordat
+  // de gekoppelde fase is verwijderd (de database zet stage_id dan op NULL).
+  const [koppelingen, setKoppelingen] = useState({});
+  useEffect(() => { getPipelineKoppelingen().then(setKoppelingen).catch(() => {}); }, []);
   const [showNewStage, setShowNewStage] = useState(false);
   const [newStageForm, setNewStageForm] = useState({ name: '', color_class: DEFAULT_STAGE_COLOR });
   const [savingStage, setSavingStage] = useState(false);
@@ -716,13 +723,38 @@ export function InstellingenPage() {
   };
 
   const handleDeleteStage = async (id) => {
-    if (!window.confirm('Fase verwijderen? Dit kan niet ongedaan worden gemaakt.')) return;
+    // Hangt er een moment aan deze fase, zeg dat dan vóór het verwijderen — de
+    // database zet stage_id daarna op NULL en dat moment duwt de deal niet meer.
+    const geraakt = PIPELINE_MOMENTEN.filter(m => koppelingen[m.key] === id).map(m => m.label);
+    const kop = geraakt.length
+      ? `Let op: deze fase is gekoppeld aan ${geraakt.join(' en ')}. Die koppeling vervalt.\n\n`
+      : '';
+    if (!window.confirm(`${kop}Fase verwijderen? Dit kan niet ongedaan worden gemaakt.`)) return;
     try {
       await deletePipelineStage(id);
       setStages(s => s.filter(st => st.id !== id));
-      toast.success('Fase verwijderd');
+      setKoppelingen(k => {
+        const next = { ...k };
+        PIPELINE_MOMENTEN.forEach(m => { if (next[m.key] === id) next[m.key] = null; });
+        return next;
+      });
+      toast.success(geraakt.length
+        ? `Fase verwijderd — koppeling voor ${geraakt.join(' en ')} vervallen`
+        : 'Fase verwijderd');
     } catch (err) {
       toast.error(err.message || 'Verwijderen mislukt');
+    }
+  };
+
+  const handleKoppeling = async (moment, stageId) => {
+    const vorige = koppelingen[moment] ?? null;
+    setKoppelingen(k => ({ ...k, [moment]: stageId || null }));
+    try {
+      await setPipelineKoppeling(moment, stageId || null);
+      toast.success('Koppeling opgeslagen');
+    } catch (err) {
+      setKoppelingen(k => ({ ...k, [moment]: vorige }));
+      toast.error(err.message || 'Koppeling opslaan mislukt');
     }
   };
 
@@ -2467,6 +2499,52 @@ export function InstellingenPage() {
 
       {!loading && tab === 'pipeline' && (
         <div className="afu3" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="tw">
+            <div className="tw-hd">
+              <div className="card-title">Automatische koppeling</div>
+            </div>
+            <div style={{ fontSize: '.8rem', color: 'var(--dm)', padding: '4px 0 10px', lineHeight: 1.5 }}>
+              De pipeline volgt de uitvoering: kies per moment welke fase erbij hoort.
+              De koppeling ligt op de fase zelf, dus hernoemen verandert niets.
+              Een deal schuift alleen vooruit, nooit terug, en handmatig verslepen
+              verandert het project niet.
+            </div>
+            <table className="dt">
+              <thead>
+                <tr><th>Moment</th><th style={{ width: 280 }}>Pipelinefase</th></tr>
+              </thead>
+              <tbody>
+                {PIPELINE_MOMENTEN.map(m => {
+                  const waarde = koppelingen[m.key] || '';
+                  const bestaat = !!waarde && stages.some(s => s.id === waarde);
+                  return (
+                    <tr key={m.key}>
+                      <td>
+                        <div style={{ fontWeight: 500 }}>{m.label}</div>
+                        <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginTop: 1 }}>{m.uitleg}</div>
+                      </td>
+                      <td>
+                        <select
+                          value={bestaat ? waarde : ''}
+                          disabled={!isAdmin}
+                          onChange={e => handleKoppeling(m.key, e.target.value)}
+                          style={{ width: '100%' }}
+                        >
+                          <option value="">— Niet gekoppeld —</option>
+                          {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                        {!bestaat && (
+                          <div style={{ fontSize: '.72rem', color: '#b45309', marginTop: 4 }}>
+                            Niet gekoppeld — dit moment verschuift de deal niet.
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
           <div className="tw">
             <div className="tw-hd">
               <div className="card-title">Pipelinefasen</div>
