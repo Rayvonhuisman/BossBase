@@ -2219,6 +2219,19 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
                 <div className="wb2-card-hd-title">
                   Planning{planningRegels.length ? ` · ${planningRegels.length} ${planningRegels.length === 1 ? 'dag' : 'dagen'}` : ''}
                 </div>
+                {/* Aanpassen loopt door hetzelfde venster als "Bewerken": dagen,
+                    personeel en bussen zitten daar al bij elkaar, dus geen tweede
+                    plek die hetzelfde half doet. Alleen met planning-recht, en
+                    niet meer zodra de klant getekend heeft — dan ligt de bon
+                    vast, en de database weigert een wijziging sowieso. */}
+                {can('planning') && !opSlot && (
+                  <>
+                    <div className="wb2-card-hd-spacer" />
+                    <button className="wb2-card-action" type="button" onClick={() => setEditWerkbon(detail)}>
+                      Planning aanpassen
+                    </button>
+                  </>
+                )}
               </div>
               <div className="wb2-card-body">
                 {planningRegels.length === 0 ? (
