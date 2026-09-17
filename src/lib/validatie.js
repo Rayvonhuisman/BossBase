@@ -9,7 +9,9 @@
 // Alle drie zijn tolerant voor spaties en punten, en accepteren een lege waarde:
 // deze velden zijn optioneel.
 
-const schoon = v => String(v || '').replace(/[\s.\-]/g, '').toUpperCase();
+// Het streepje staat achteraan in de tekenklasse en hoeft daar niet ontsnapt te
+// worden; met de backslash gaf ESLint terecht no-useless-escape.
+const schoon = v => String(v || '').replace(/[\s.-]/g, '').toUpperCase();
 
 // Elfproef: som van cijfer × positiegewicht moet deelbaar zijn door 11.
 function elfproef(cijfers, gewichten) {

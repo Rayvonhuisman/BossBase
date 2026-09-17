@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Truck } from 'lucide-react';
-import { MemberMultiSelect } from './MemberMultiSelect.jsx';
 import { getVoertuigen } from '../services/voertuigService.js';
 import { databaseKentVoertuigen } from '../services/werkbonService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { useProfile } from '../lib/profileContext.jsx';
 import { vandaagIso } from '../lib/datumTijd.js';
 import { korteDatum } from '../utils/werkbonDagen.js';
+import { WerkbonVoertuigenBlok } from './WerkbonVoertuigenBlok.jsx';
 import {
   controleerVoertuigen, metVoertuigen, voertuigPlanningUitWerkbon, voertuigenVoorPersoon,
 } from '../utils/voertuigDagen.js';
@@ -34,9 +34,12 @@ function useVoertuigenLijst(actief) {
 /**
  * Voor een werkbonformulier:
  *   const voertuig = useWerkbonVoertuigen({ werkbon, meerdaags });
- *   <WerkbonDagenVelden {...voertuig.veldProps} />   — chips per dag, koppelen
- *   {voertuig.kiezer(saving, style)}                 — voertuigen van de werkbon
+ *   {voertuig.blok({ planning, onChange, ploeg, standaard, werkbonId, disabled })}
  *   voertuig.controleer(...) / voertuig.dagen(...) / voertuig.payload bij opslaan
+ *
+ * Eén blok onder de medewerkers: bus kiezen, per dag inplannen, wie er meerijdt
+ * en de meldingen. Eerder stonden de bussen als chips tussen de dagen en
+ * koppelde je iemand via zijn avatar — dat was te veel op één rij.
  *
  * Zolang de voertuigen nog niet geladen zijn, doet het formulier alsof er geen
  * voertuigen zijn en stuurt het ook niets mee — anders zou opslaan in die
@@ -58,39 +61,28 @@ export function useWerkbonVoertuigen({ werkbon = null, meerdaags = true }) {
   });
 
   return {
-    veldProps: klaar ? { metVoertuigen: true, voertuigen: gekozen } : {},
     payload: klaar ? { voertuig_ids: gekozen.map(v => v.id) } : {},
     dagen: (dagen, planning, ploegIds, naamVan, standaard) =>
       (klaar ? metVoertuigen(dagen, ctx(planning, ploegIds, naamVan, standaard)) : dagen),
     controleer: (planning, ploegIds, naamVan, standaard) =>
       (klaar ? controleerVoertuigen(ctx(planning, ploegIds, naamVan, standaard), origineel) : ''),
-    kiezer: (disabled, style) => (klaar ? <VoertuigenKiezer alle={alle} ids={ids} onChange={setIds} disabled={disabled} style={style} /> : null),
-  };
-}
-
-function VoertuigenKiezer({ alle, ids, onChange, disabled, style }) {
-  // Een inactief voertuig blijft zichtbaar zolang het op deze werkbon staat.
-  const keuze = alle.filter(v => v.actief || ids.includes(v.id));
-  return (
-    <div className="f full" style={style}>
-      <label>Voertuigen <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(meerdere mogelijk)</span></label>
-      {keuze.length ? (
-        <MemberMultiSelect
-          members={keuze.map(v => ({ id: v.id, fullName: v.zitplaatsen ? `${v.naam} · ${v.zitplaatsen} ${v.zitplaatsen === 1 ? 'plek' : 'plekken'}` : v.naam }))}
-          value={ids}
+    blok: ({ planning, onChange, ploeg = [], standaard, werkbonId = null, disabled = false, style, className = '' }) =>
+      (klaar ? (
+        <WerkbonVoertuigenBlok
+          planning={planning}
           onChange={onChange}
+          alle={alle.filter(v => v.actief || ids.includes(v.id))}
+          ids={ids}
+          onIds={setIds}
+          ploeg={ploeg}
+          standaard={standaard}
+          werkbonId={werkbonId}
           disabled={disabled}
+          style={style}
+          className={className}
         />
-      ) : (
-        <div style={{ fontSize: 12, color: 'var(--dl)' }}>Nog geen voertuigen. Voeg ze toe bij Instellingen → Voertuigen.</div>
-      )}
-      {ids.length > 0 && (
-        <div style={{ fontSize: 11.5, color: 'var(--dl)', marginTop: 6, lineHeight: 1.5 }}>
-          Per dag zet je bij Dagen een voertuig aan of uit, en via iemands avatar zet je die persoon in een voertuig.
-        </div>
-      )}
-    </div>
-  );
+      ) : null),
+  };
 }
 
 const tijdTekst = r => (r.starttijd && r.eindtijd ? ` · ${r.starttijd}–${r.eindtijd}` : '');

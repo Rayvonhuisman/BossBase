@@ -2926,7 +2926,12 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .adres-zoeker{display:flex;flex-direction:column;gap:5px;position:relative}
 .adres-zoeker label{font-weight:600;font-size:.78rem;color:var(--dm)}
 .adres-zoeker-input{position:relative;display:flex;align-items:center}
-.adres-zoeker .adres-zoeker-input input{width:100%;border:1px solid var(--bstrong);border-radius:var(--r8);padding:11px 34px 11px 32px;font-size:16px;color:var(--dk);background:white;outline:none;font-family:inherit;transition:all .15s ease;-webkit-appearance:none;appearance:none}
+/* Eén maat voor alle formulierplekken (klant, leverancier, werkbon): zelfde
+   hoogte, letter en padding als een gewoon .f input ernaast. Stond eerder op
+   11px/16px, waardoor de zoeker in de klant- en leveranciersmodals een kop
+   groter was dan de velden eronder; de werkbon had toen een eigen klasse nodig
+   om het recht te trekken. Die klasse is niet meer nodig. */
+.adres-zoeker .adres-zoeker-input input{width:100%;border:1px solid var(--bstrong);border-radius:var(--r8);padding:8px 30px 8px 32px;font-size:.85rem;color:var(--dk);background:white;outline:none;font-family:inherit;transition:all .15s ease;-webkit-appearance:none;appearance:none}
 .adres-zoeker-input input:focus{border-color:var(--p);box-shadow:0 0 0 3px rgba(29,219,98,.14)}
 .adres-zoeker-input input::-webkit-search-cancel-button{-webkit-appearance:none}
 .adres-zoeker-icon{position:absolute;left:10px;color:var(--dl);pointer-events:none}
@@ -2939,6 +2944,8 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .adres-zoeker-error{font-size:.75rem;color:#b45309}
 .adres-zoeker-hint{font-size:.72rem;color:var(--dl)}
 @media (max-width:767px){
+  /* Op telefoon voorkomt 16px dat iOS inzoomt bij focus. */
+  .adres-zoeker .adres-zoeker-input input{font-size:16px;padding:10px 32px 10px 32px}
   .adres-zoeker-list{max-height:min(45vh,260px)}
   .adres-zoeker-list li{padding:13px 12px;min-height:48px;font-size:.88rem}
 }
@@ -3205,8 +3212,9 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .wbd-link{margin-left:auto;border:none;background:none;color:var(--pd);font-size:.76rem;font-weight:600;cursor:pointer;padding:2px 0}
 .wbd-slot{font-size:.76rem;color:var(--dl);line-height:1.45}
 .wbd-link-inline{border:none;background:none;padding:0;color:var(--pd);font-weight:600;font-size:inherit;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
-/* Locatie op de werkbon: zelfde maat, rand en letter als de andere velden (.f input). */
-.adres-zoeker.adres-zoeker-veld .adres-zoeker-input input{padding:8px 30px 8px 32px;font-size:.85rem;border-radius:var(--r8)}
+/* De maat van de locatiezoeker op de werkbon is nu de standaard voor élke
+   adreszoeker (zie .adres-zoeker .adres-zoeker-input input hierboven), dus hier
+   staat niets meer apart. */
 .wb-adres-vraag{margin-top:6px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;font-size:.8rem;color:#075985;background:#F0F9FF;border:1px solid #BAE6FD;border-radius:var(--r8);padding:8px 10px;line-height:1.45}
 @media (max-width:640px){.wbd-rij{grid-template-columns:1fr}}
 
@@ -3248,3 +3256,70 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .meld-klaar-tekst{margin:8px auto 0;max-width:380px;font-size:.87rem;color:var(--dm);line-height:1.55}
 .meld-klaar-actie{margin:12px 0 0;display:inline-flex;align-items:center;gap:6px;font-size:.83rem;font-weight:600;color:var(--pd)}
 @media(max-width:480px){.meld-soort{grid-template-columns:1fr}}
+
+/* ── Voertuigen op een werkbon: één blok, per bus een kaart ──────────────────
+   Eerder stonden de bussen als chips tussen de dagen en koppelde je iemand via
+   zijn avatar. Nu staat per bus bij elkaar: welke dagen hij meerijdt, hoe laat,
+   wie erin zitten en wat er niet klopt. */
+.wbv{display:flex;flex-direction:column;gap:6px}
+.wbv-leeg{display:flex;align-items:center;gap:6px;font-size:.76rem;color:var(--dl);padding:2px 0}
+.wbv-kaart{border:1px solid var(--border);border-radius:var(--r10);background:#fff;overflow:hidden}
+.wbv-kaart.heeft-melding{border-color:#fcd34d}
+.wbv-kaart+.wbv-kaart{margin-top:6px}
+.wbv-kaart-kop{display:flex;align-items:center;gap:8px;width:100%;padding:9px 11px;border:none;background:var(--bgs);cursor:pointer;font-family:inherit;text-align:left}
+.wbv-kaart-kop:hover{background:#f1f3f1}
+.wbv-naam{font-size:.82rem;font-weight:700;color:var(--dk)}
+.wbv-plekken,.wbv-dagen{font-size:.72rem;color:var(--dl)}
+.wbv-dagen{margin-left:auto}
+.wbv-waarschuwing{color:#d97706;flex-shrink:0}
+.wbv-pijl{font-size:.7rem;color:var(--dl);width:12px;text-align:center}
+.wbv-dagen-lijst{padding:4px 11px 9px}
+.wbv-dag{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #f0f2f0;font-size:.78rem}
+.wbv-dag:first-child{border-top:none}
+.wbv-mee{display:inline-flex;align-items:center;gap:6px;cursor:pointer;min-width:104px}
+.wbv-dag-datum{font-weight:600;color:var(--dk)}
+.wbv-niet-mee{font-size:.74rem;color:var(--dl)}
+.wbv-tijd{font-variant-numeric:tabular-nums;color:var(--dm);min-width:88px}
+.wbv-bezetting{font-size:.74rem;font-weight:700;color:var(--dm);background:var(--bgs);border-radius:999px;padding:1px 8px;font-variant-numeric:tabular-nums}
+.wbv-bezetting.vol{background:#fef3c7;color:#b45309}
+.wbv-inzittenden{display:inline-flex;flex-wrap:wrap;align-items:center;gap:5px;margin-left:auto}
+.wbv-inzittende{display:inline-flex;align-items:center;gap:4px;background:var(--bgs);border:1px solid var(--border);border-radius:999px;padding:1px 4px 1px 2px;font-size:.72rem;color:var(--dk)}
+.wbv-inzittende button{border:none;background:none;padding:0 2px;cursor:pointer;color:var(--dl);display:inline-flex}
+.wbv-inzittende button:hover{color:#b42318}
+.wbv-toevoegen{display:inline-flex;align-items:center;gap:4px;border:1px dashed var(--bstrong);background:none;border-radius:999px;padding:2px 9px;font-size:.72rem;font-weight:600;color:var(--dm);cursor:pointer;font-family:inherit}
+.wbv-toevoegen:hover:not(:disabled){border-color:var(--pd);color:var(--pd)}
+.wbv-kies{flex-basis:100%;margin:4px 0 6px;padding:8px 10px;border:1px solid var(--bstrong);border-radius:var(--r8);background:#fff;display:flex;flex-direction:column;gap:4px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+.wbv-kandidaat{display:flex;align-items:center;gap:8px;width:100%;padding:4px 6px;border:none;border-radius:var(--r6);background:none;cursor:pointer;font-family:inherit;text-align:left}
+.wbv-kandidaat:hover:not(:disabled){background:var(--bgs)}
+.wbv-kandidaat:disabled{cursor:default;opacity:.85}
+.wbv-kandidaat.zit{background:#eefbf2}
+.wbv-kandidaat-naam{font-size:.78rem;color:var(--dk);font-weight:600}
+.wbv-kandidaat-info{font-size:.72rem;color:var(--dl);margin-left:auto;text-align:right}
+.wbv-kandidaat-info.waarom{color:#b45309}
+.wbv-meldingen{display:flex;flex-direction:column;gap:3px;margin-top:6px;padding:7px 9px;border-radius:var(--r8);background:#fffbeb;border:1px solid #fde68a;font-size:.74rem;color:#92400e;line-height:1.45}
+.wbv-meldingen span{display:flex;align-items:flex-start;gap:5px}
+.wbv-meldingen svg{flex-shrink:0;margin-top:2px}
+
+/* ── Klantkaart: tabbalk zonder scrollbalk ───────────────────────────────────
+   De tabs pasten niet altijd en de balk ging dan horizontaal scrollen — een
+   tab die je niet ziet, vind je niet. Wat niet past gaat nu in een ⋯-menu aan
+   het eind; Overzicht staat altijd vooraan en de actieve tab is altijd zichtbaar. */
+.kk-tabs{flex-wrap:nowrap;overflow:hidden}
+.kk-tabs-meer{padding:6px 9px !important;display:inline-flex;align-items:center;gap:4px}
+.kk-tabs-meer.heeft-actieve{background:var(--p) !important;color:var(--dk) !important;border-color:var(--p) !important}
+.kk-meer-paneel{position:absolute;top:calc(100% + 4px);right:0;z-index:60;min-width:172px;background:#fff;border:1px solid var(--bstrong);border-radius:var(--r10);box-shadow:0 12px 30px rgba(0,0,0,.14);padding:4px;display:flex;flex-direction:column}
+.kk-meer-item{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:none;background:none;border-radius:var(--r6);font-family:inherit;font-size:12.5px;font-weight:600;color:var(--dk);cursor:pointer;text-align:left;white-space:nowrap}
+.kk-meer-item:hover{background:var(--bgs)}
+.kk-meer-item.actief{background:var(--pll);color:var(--pd)}
+/* Klantkaart: klikbare bloktitel op het overzicht — opent het bijbehorende tabblad. */
+.kk-blok-titel{display:inline-flex;align-items:center;gap:5px;background:none;border:none;padding:0;font-family:inherit;font-weight:700;font-size:.9rem;color:var(--dk);cursor:pointer}
+.kk-blok-titel:hover{color:var(--pd)}
+.kk-blok-titel .kk-pijl{opacity:0;transition:opacity .12s ease}
+.kk-blok-titel:hover .kk-pijl{opacity:1}
+/* Planningsregels op de klantkaart (overzicht en het tabblad Planning). */
+.kk-planregel{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:.83rem}
+.kk-planregel:last-child{border-bottom:none}
+.kk-plan-datum{font-weight:700;color:var(--dk);min-width:92px;font-variant-numeric:tabular-nums}
+.kk-plan-tijd{color:var(--dm);font-variant-numeric:tabular-nums;min-width:96px}
+.kk-plan-wie{color:var(--dl);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kk-leeg{display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px 0;color:#9ca3af;font-size:.84rem}

@@ -11,7 +11,10 @@ import { usePlanGuard } from '../components/PlanUpgradeModal.jsx';
 import { NoteEditor, renderNote } from '../components/NoteEditor.jsx';
 import NotitieLog, { toLogItem, fmtNotitieDatum } from '../components/NotitieLog.jsx';
 import { AssigneeResponsibleSelect } from '../components/AssigneeResponsibleSelect.jsx';
-import { getTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
+import {
+  getTeamMembers, notifyNewAssignees, notifyNieuweVerantwoordelijken, createMentionNotifications,
+  meldPlanningWijziging,
+} from '../services/notificatieService.js';
 import { htmlToPlain } from '../lib/noteFormat.js';
 import { mistGetekendePdf, stuurGetekendePdfNa } from '../services/getekendePdfService.js';
 import {
@@ -223,11 +226,39 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
       let saved;
       if (isEdit) {
         saved = await updateWerkbon(werkbon.id, { ...payload, notes: form.notes || null, status: form.status });
-        toast.success('Werkbon bijgewerkt');
+        // De meldingen staan bewust VÓÓR de bevestiging in beeld: post naar een
+        // collega mag nooit afhangen van of er een toast lukt.
         // Diff t.o.v. de volledige vorige toewijzing (assigned_to_ids), zodat al
         // gekoppelde collega's niet opnieuw gemaild worden.
         const prevIds = werkbon?.assignedToIds || (werkbon?.assignedTo ? [werkbon.assignedTo] : []);
-        notifyNewAssignees({ userIds: form.assignedToIds, prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
+        const prevVerantw = werkbon?.verantwoordelijkeIds || [];
+        const nieuweVerantw = form.verantwoordelijkeIds.filter(id => !prevVerantw.includes(id));
+        // Wie tegelijk gekoppeld én verantwoordelijk wordt, krijgt alleen de
+        // zwaardere melding: twee berichten voor één handeling leest als spam.
+        notifyNewAssignees({ userIds: form.assignedToIds.filter(id => !nieuweVerantw.includes(id)), prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
+        // Verantwoordelijk worden telt apart: dat viel eerder door de diff als je
+        // al gekoppeld was.
+        notifyNieuweVerantwoordelijken({ userIds: form.verantwoordelijkeIds, prevUserIds: prevVerantw, members: teamMembers, sendMail: notifyMail, titel: form.titel.trim(), relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
+        // Een dag of tijd verzetten telt hier net zo zwaar als slepen in de
+        // planning: wie blijft staan hoort de oude én de nieuwe tijd. Dit venster
+        // deed dat niet, dus een tijdwijziging vanaf de werkbon bleef stil.
+        const kortTijd = t => (t ? String(t).slice(0, 5) : '');
+        const oudPlan = { datum: werkbon?.geplandOp || null, start: kortTijd(werkbon?.starttijd), eind: kortTijd(werkbon?.eindtijd) };
+        const nieuwPlan = { datum: payload.gepland_op, start: kortTijd(payload.starttijd), eind: kortTijd(payload.eindtijd) };
+        const planVerschoven = oudPlan.datum !== nieuwPlan.datum || oudPlan.start !== nieuwPlan.start || oudPlan.eind !== nieuwPlan.eind;
+        const werkbonKern = { id: werkbon.id, nummer: werkbon.nummer, titel: form.titel.trim(), customerName: werkbon.customerName };
+        // Wie nieuw gekoppeld wordt, krijgt al "je bent toegewezen"; die hoeft niet
+        // ook nog te horen dat er iets verschoof. Alleen de blijvers dus.
+        const blijvers = form.assignedToIds.filter(id => prevIds.includes(id));
+        if (planVerschoven && blijvers.length && (oudPlan.datum || nieuwPlan.datum)) {
+          meldPlanningWijziging({ userIds: blijvers, soort: oudPlan.datum ? 'verzet' : 'ingepland', werkbon: werkbonKern, oud: oudPlan, nieuw: nieuwPlan, creatorId: profile?.id }).catch(() => {});
+        }
+        // Van de werkbon afgehaald worden hoorde je tot nu toe van niemand.
+        const eraf = prevIds.filter(id => !form.assignedToIds.includes(id));
+        if (eraf.length) {
+          meldPlanningWijziging({ userIds: eraf, soort: 'afgehaald', werkbon: werkbonKern, oud: oudPlan, creatorId: profile?.id }).catch(() => {});
+        }
+        toast.success('Werkbon bijgewerkt');
       } else {
         saved = await createWerkbon(payload);
         // De notitie uit het aanmaakvenster wordt de eerste interne logregel.
@@ -242,7 +273,10 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
           }
         }
         toast.success('Werkbon aangemaakt');
-        notifyNewAssignees({ userIds: form.assignedToIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
+        // Zelfde verdeling als bij bewerken: verantwoordelijk zijn is de zwaardere
+        // melding, dus wie dat wordt krijgt niet óók nog "je bent toegewezen".
+        notifyNewAssignees({ userIds: form.assignedToIds.filter(id => !form.verantwoordelijkeIds.includes(id)), members: teamMembers, sendMail: notifyMail, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
+        notifyNieuweVerantwoordelijken({ userIds: form.verantwoordelijkeIds, members: teamMembers, sendMail: notifyMail, titel: form.titel.trim(), relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
       }
       // De dagen pas ná het opslaan: een nieuwe werkbon heeft dan pas een id.
       // Lukt dit niet, dan staat de werkbon er al wél (op de startdatum) —
@@ -339,8 +373,31 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
             })}
             werkbonId={werkbon?.id || null}
             activiteitId={werkbon?.raw?.activity_id || null}
-            {...voertuig.veldProps}
           />
+          {teamMembers.length > 0 && (
+            <AssigneeResponsibleSelect
+              members={teamMembers}
+              assignedIds={form.assignedToIds}
+              verantwoordelijkeIds={form.verantwoordelijkeIds}
+              disabled={saving}
+              fieldClassName="f full"
+              onChange={({ assignedIds, verantwoordelijkeIds }) => setForm(f => ({ ...f, assignedToIds: assignedIds, verantwoordelijkeIds }))}
+            >
+              <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />
+            </AssigneeResponsibleSelect>
+          )}
+          {voertuig.blok({
+            planning,
+            onChange: setPlanning,
+            ploeg: form.assignedToIds.map(id => {
+              const m = teamMembers.find(x => x.profileId === id);
+              return { id, naam: m?.fullName || 'Medewerker', avatarUrl: m?.avatarUrl || '' };
+            }),
+            standaard: { starttijd: form.starttijd, eindtijd: form.eindtijd },
+            werkbonId: werkbon?.id || null,
+            disabled: saving,
+            className: 'full',
+          })}
           <div className="f full">
             <label>Omschrijving</label>
             <NoteEditor mentions={true} value={form.omschrijving} onChange={v => set('omschrijving', v)} placeholder="Wat moet er gebeuren op locatie? Typ @ om iemand te taggen" rows={3} disabled={saving} teamMembers={teamMembers} />
@@ -360,19 +417,6 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
               <NoteEditor mentions={true} value={form.notes} onChange={v => set('notes', v)} placeholder="Bv. klant heeft hond, deur dicht houden… Typ @ om iemand te taggen" rows={2} disabled={saving} teamMembers={teamMembers} />
             </div>
           )}
-          {teamMembers.length > 0 && (
-            <AssigneeResponsibleSelect
-              members={teamMembers}
-              assignedIds={form.assignedToIds}
-              verantwoordelijkeIds={form.verantwoordelijkeIds}
-              disabled={saving}
-              fieldClassName="f full"
-              onChange={({ assignedIds, verantwoordelijkeIds }) => setForm(f => ({ ...f, assignedToIds: assignedIds, verantwoordelijkeIds }))}
-            >
-              <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />
-            </AssigneeResponsibleSelect>
-          )}
-          {voertuig.kiezer(saving)}
         </div>
         <div className="fa">
           <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Annuleren</button>
@@ -1898,6 +1942,17 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
     const created = await addWerkbonNotitie(detail.id, text, voorKlant);
     setWerkbonNotities(list => [created, ...list]);
     toast.success(voorKlant ? 'Notitie voor de klant opgeslagen' : 'Notitie opgeslagen');
+    // Het veld nodigt uit om te taggen ("Typ @ om iemand te taggen"), maar de
+    // getagde collega hoorde hier niets: deze aanroep ontbrak.
+    createMentionNotifications({
+      text,
+      relatedType: 'werkbon',
+      relatedId: detail.id,
+      link: 'werkbonnen',
+      creatorId: profile?.id,
+      creatorName: profile?.fullName,
+      contextName: detail.titel || `werkbon ${detail.nummer || ''}`.trim(),
+    }).catch(e => console.warn('[werkbon] mention-melding mislukt:', e?.message));
   };
 
   // Wkb-waarschuwing versturen. De service mailt eerst en legt daarna pas de

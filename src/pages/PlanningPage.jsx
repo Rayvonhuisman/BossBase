@@ -24,7 +24,10 @@ import {
   bezettingVanVoertuig, ctxVoorWerkbon, koppelingVanDag, voertuigDubbel, voertuigenOpDag, voertuigenVanDag,
   voertuigPlanningUitWerkbon, voertuigTijd, voertuigWaarschuwingen,
 } from '../utils/voertuigDagen.js';
-import { getActiveTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
+import {
+  getActiveTeamMembers, notifyNewAssignees, notifyNieuweVerantwoordelijken,
+  meldPlanningWijziging, createMentionNotifications,
+} from '../services/notificatieService.js';
 import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
 import { syncWerkbonEvents, upsertActivityEvent, deleteActivityEvent } from '../services/calendarService.js';
@@ -524,13 +527,35 @@ function QuickPlanModal({ werkbon, date, hour, teamMembers, profile, onClose, on
         verantwoordelijke_ids: verantwoordelijkeIds,
       });
       // Notificeer nieuw toegewezen medewerkers (in-app + optioneel e-mail).
+      // Wie tegelijk verantwoordelijk wordt, krijgt alleen díe (zwaardere) melding.
+      const prevVerantw = werkbon.verantwoordelijkeIds || [];
+      const nieuweVerantw = verantwoordelijkeIds.filter(id => !prevVerantw.includes(id));
       notifyNewAssignees({
-        userIds: assignedToIds, prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail,
+        userIds: assignedToIds.filter(id => !nieuweVerantw.includes(id)), prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail,
         type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${werkbon.titel}`,
         body: `Datum: ${date}${starttijd ? ` om ${starttijd}` : ''}`,
         link: 'planning', relatedType: 'werkbon', relatedId: werkbon.id,
         creatorId: profile?.id, creatorName: profile?.fullName,
       }).catch(() => {});
+      notifyNieuweVerantwoordelijken({
+        userIds: verantwoordelijkeIds, prevUserIds: prevVerantw, members: teamMembers, sendMail: notifyMail,
+        titel: werkbon.titel, link: 'planning', relatedId: werkbon.id,
+        creatorId: profile?.id, creatorName: profile?.fullName,
+      }).catch(() => {});
+      // Wie al op de bon stond en blijft staan, hoort dat de dag/tijd verschuift.
+      const blijvers = assignedToIds.filter(id => prevIds.includes(id));
+      if (blijvers.length && (werkbon.geplandOp !== date || fmtTime(werkbon.starttijd) !== starttijd)) {
+        meldPlanningWijziging({
+          // Stond de bon nog nergens, dan is dit geen verzetting maar een eerste
+          // inplanning. "Planning gewijzigd … was niet ingepland" leest als een
+          // wijziging die je gemist zou hebben; dat klopt niet.
+          userIds: blijvers, soort: werkbon.geplandOp ? 'verzet' : 'ingepland',
+          werkbon: { id: werkbon.id, nummer: werkbon.nummer, titel: werkbon.titel, customerName: werkbon.customerName },
+          oud: { datum: werkbon.geplandOp, start: fmtTime(werkbon.starttijd), eind: fmtTime(werkbon.eindtijd) },
+          nieuw: { datum: date, start: starttijd, eind: eindtijd },
+          creatorId: profile?.id,
+        }).catch(() => {});
+      }
       // Agenda bijwerken: één item per geplande dag. Heeft de werkbon meerdere
       // dagen, dan is hij door de nieuwe startdatum in zijn geheel verschoven.
       syncWerkbonEvents(werkbon.id).catch(() => {});
@@ -834,13 +859,25 @@ function PlanModal({ teamMembers, customers, projects, profile, onClose, onSaved
       } catch (e) {
         toast.error(`Werkbon aangemaakt, maar de dagen niet: ${e.message || 'onbekende fout'}`);
       }
-      // Notificeer toegewezen medewerkers (in-app + optioneel e-mail).
+      // Notificeer toegewezen medewerkers (in-app + optioneel e-mail). Wie
+      // tegelijk verantwoordelijk wordt, krijgt alleen díe zwaardere melding.
       notifyNewAssignees({
-        userIds: form.assigned_to_ids, members: teamMembers, sendMail: notifyMail,
+        userIds: form.assigned_to_ids.filter(id => !form.verantwoordelijke_ids.includes(id)),
+        members: teamMembers, sendMail: notifyMail,
         type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`,
         body: `Datum: ${planningLabel(wb)}${form.starttijd ? ` om ${form.starttijd}` : ''}`,
         link: 'planning', relatedType: 'werkbon', relatedId: wb.id,
         creatorId: profile?.id, creatorName: profile?.fullName,
+      }).catch(() => {});
+      notifyNieuweVerantwoordelijken({
+        userIds: form.verantwoordelijke_ids, members: teamMembers, sendMail: notifyMail,
+        titel: form.titel.trim(), link: 'planning', relatedId: wb.id,
+        creatorId: profile?.id, creatorName: profile?.fullName,
+      }).catch(() => {});
+      // Het omschrijvingsveld nodigt uit om te taggen; dat leverde niemand iets op.
+      createMentionNotifications({
+        text: form.omschrijving, relatedType: 'werkbon', relatedId: wb.id, link: 'planning',
+        creatorId: profile?.id, creatorName: profile?.fullName, contextName: form.titel.trim(),
       }).catch(() => {});
       // Agenda: één item per geplande dag.
       syncWerkbonEvents(wb.id).catch(() => {});
@@ -892,7 +929,6 @@ function PlanModal({ teamMembers, customers, projects, profile, onClose, onSaved
               return { id, naam: m?.fullName || 'Medewerker', avatarUrl: m?.avatarUrl || '' };
             })}
             disabled={saving}
-            {...voertuig.veldProps}
           />
           <AssigneeResponsibleSelect
             members={teamMembers}
@@ -904,7 +940,18 @@ function PlanModal({ teamMembers, customers, projects, profile, onClose, onSaved
           >
             <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />
           </AssigneeResponsibleSelect>
-          {voertuig.kiezer(saving, { gridColumn: '1 / -1' })}
+          {voertuig.blok({
+            planning,
+            onChange: setPlanning,
+            ploeg: form.assigned_to_ids.map(id => {
+              const m = teamMembers.find(x => x.id === id);
+              return { id, naam: m?.fullName || 'Medewerker', avatarUrl: m?.avatarUrl || '' };
+            }),
+            standaard: { starttijd: form.starttijd, eindtijd: form.eindtijd },
+            werkbonId: null,
+            disabled: saving,
+            style: { gridColumn: '1 / -1' },
+          })}
           <WerkbonLocatieVeld
             style={{ gridColumn: '1 / -1' }}
             value={form.locatie}
@@ -972,13 +1019,81 @@ function DetailModal({ werkbon, teamMembers, profile, onClose, onUpdated, openCu
         locatie: form.locatie || null,
         status: form.status,
       });
-      // Notificeer nieuw toegewezen medewerkers (in-app + optioneel e-mail).
+      // ── Wie moet wát horen? ────────────────────────────────────────────────
+      // Vier verschillende gebeurtenissen kunnen hier tegelijk ontstaan, en ze
+      // moeten uit elkaar gehouden worden: erbij gekomen, verantwoordelijk
+      // gemaakt, eraf gehaald, of blijven staan terwijl de dag/tijd verschuift.
+      const prevVerantw = werkbon.verantwoordelijkeIds || [];
+      const nieuweVerantw = form.verantwoordelijke_ids.filter(id => !prevVerantw.includes(id));
+      const eraf = prevIds.filter(id => !form.assigned_to_ids.includes(id));
+      const blijvers = form.assigned_to_ids.filter(id => prevIds.includes(id));
+      const nieuweDatum = dagen[0]?.datum || null;
+      const nieuweStart = form.starttijd || null;
+      const verschoven = nieuweDatum !== (werkbon.geplandOp || null)
+        || fmtTime(nieuweStart) !== fmtTime(werkbon.starttijd);
+      const bonInfo = { id: werkbon.id, nummer: werkbon.nummer, titel: form.titel.trim() || werkbon.titel, customerName: werkbon.customerName };
+
+      // Wie tegelijk verantwoordelijk wordt, krijgt alleen díe zwaardere melding.
       notifyNewAssignees({
-        userIds: form.assigned_to_ids, prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail,
+        userIds: form.assigned_to_ids.filter(id => !nieuweVerantw.includes(id)), prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail,
         type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim() || werkbon.titel}`,
         body: dagen.length ? `Datum: ${planningLabel({ dagen })}${form.starttijd ? ` om ${String(form.starttijd).slice(0, 5)}` : ''}` : undefined,
         link: 'planning', relatedType: 'werkbon', relatedId: werkbon.id,
         creatorId: profile?.id, creatorName: profile?.fullName,
+      }).catch(() => {});
+      notifyNieuweVerantwoordelijken({
+        userIds: form.verantwoordelijke_ids, prevUserIds: prevVerantw, members: teamMembers, sendMail: notifyMail,
+        titel: form.titel.trim() || werkbon.titel, link: 'planning', relatedId: werkbon.id,
+        creatorId: profile?.id, creatorName: profile?.fullName,
+      }).catch(() => {});
+      // Van de bon af gehaald: dat hoorde je tot nu toe helemaal niet.
+      if (eraf.length) {
+        meldPlanningWijziging({
+          userIds: eraf, soort: 'afgehaald', werkbon: bonInfo,
+          oud: { datum: werkbon.geplandOp, start: fmtTime(werkbon.starttijd), eind: fmtTime(werkbon.eindtijd) },
+          creatorId: profile?.id,
+        }).catch(() => {});
+      }
+      // Blijft staan, maar op een andere dag of tijd.
+      if (blijvers.length && verschoven) {
+        meldPlanningWijziging({
+          userIds: blijvers, soort: 'verzet', werkbon: bonInfo,
+          oud: { datum: werkbon.geplandOp, start: fmtTime(werkbon.starttijd), eind: fmtTime(werkbon.eindtijd) },
+          nieuw: { datum: nieuweDatum, start: fmtTime(nieuweStart), eind: fmtTime(form.eindtijd) },
+          creatorId: profile?.id,
+        }).catch(() => {});
+      }
+      // Per DAG: bij een meerdaagse klus kan iemand die al op de bon staat er een
+      // dag bij krijgen of er eentje kwijtraken. Dat viel buiten de diff hierboven,
+      // want zijn koppeling aan de werkbon verandert niet.
+      // medewerkerIds/medewerker_ids: null = de hele ploeg die dag, [] = niemand.
+      const dagenVan = (lijst, id, ploeg) => (lijst || [])
+        .filter(d => {
+          const ids = d.medewerkerIds ?? d.medewerker_ids;
+          return ids == null ? ploeg.includes(id) : ids.includes(id);
+        })
+        .map(d => ({ datum: d.datum, start: fmtTime(d.starttijd), eind: fmtTime(d.eindtijd) }));
+
+      for (const uid of blijvers) {
+        const oudeDagen = dagenVan(werkbon.dagen, uid, prevIds);
+        const nieuweDagen = dagenVan(dagen, uid, form.assigned_to_ids);
+        const erbij = nieuweDagen.filter(d => !oudeDagen.some(o => o.datum === d.datum));
+        const kwijt = oudeDagen.filter(o => !nieuweDagen.some(d => d.datum === o.datum));
+        for (const d of erbij) {
+          meldPlanningWijziging({
+            userIds: [uid], soort: 'ingepland', werkbon: bonInfo, nieuw: d, creatorId: profile?.id,
+          }).catch(() => {});
+        }
+        for (const d of kwijt) {
+          meldPlanningWijziging({
+            userIds: [uid], soort: 'afgehaald', werkbon: bonInfo, oud: d, creatorId: profile?.id,
+          }).catch(() => {});
+        }
+      }
+      // Taggen in de omschrijving leverde niemand een melding op.
+      createMentionNotifications({
+        text: form.omschrijving, relatedType: 'werkbon', relatedId: werkbon.id, link: 'planning',
+        creatorId: profile?.id, creatorName: profile?.fullName, contextName: form.titel.trim() || werkbon.titel,
       }).catch(() => {});
       let vers = updated;
       try {
@@ -1042,7 +1157,6 @@ function DetailModal({ werkbon, teamMembers, profile, onClose, onUpdated, openCu
             })}
             disabled={saving}
             werkbonId={werkbon.id}
-            {...voertuig.veldProps}
           />
           <AssigneeResponsibleSelect
             members={teamMembers}
@@ -1054,7 +1168,18 @@ function DetailModal({ werkbon, teamMembers, profile, onClose, onUpdated, openCu
           >
             <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />
           </AssigneeResponsibleSelect>
-          {voertuig.kiezer(saving, { gridColumn: '1 / -1' })}
+          {voertuig.blok({
+            planning,
+            onChange: setPlanning,
+            ploeg: form.assigned_to_ids.map(id => {
+              const m = teamMembers.find(x => x.id === id);
+              return { id, naam: m?.fullName || 'Medewerker', avatarUrl: m?.avatarUrl || '' };
+            }),
+            standaard: { starttijd: form.starttijd, eindtijd: form.eindtijd },
+            werkbonId: werkbon.id,
+            disabled: saving,
+            style: { gridColumn: '1 / -1' },
+          })}
           <WerkbonLocatieVeld
             style={{ gridColumn: '1 / -1' }}
             value={form.locatie}
@@ -1352,6 +1477,18 @@ export function PlanningPage({ openCustomer } = {}) {
         vers = await getWerkbonById(w.id);
       }
       setWerkbonnen(prev => prev.map(x => (x.id === w.id ? vers : x)));
+      // Slepen en rekken komen hier allebei uit. De medewerker hoort het meteen
+      // in de app; de mail gaat mee in de dagelijkse samenvatting, zodat drie
+      // keer heen en weer schuiven niet drie mails oplevert.
+      // Een blok met een persoon verzet alleen díé persoon; anders de hele ploeg.
+      const betrokkenen = b._pid ? [b._pid] : (w.assignedToIds || (w.assignedTo ? [w.assignedTo] : []));
+      meldPlanningWijziging({
+        userIds: betrokkenen, soort: 'verzet',
+        werkbon: { id: w.id, nummer: w.nummer, titel: w.titel, customerName: w.customerName },
+        oud: { datum: b._datum, start: fmtTime(b.start ?? w.starttijd), eind: fmtTime(b.eind ?? w.eindtijd) },
+        nieuw: { datum: b._datum, start: minsToTime(start), eind: minsToTime(eind) },
+        creatorId: profile?.id,
+      }).catch(() => {});
       // Agenda-items per dag en per persoon volgen de werkbon.
       try {
         await syncWerkbonEvents(w.id);
@@ -1375,6 +1512,16 @@ export function PlanningPage({ openCustomer } = {}) {
         ...(eindtijd === undefined ? {} : { endTime: eindtijd }),
       });
       setActivities(prev => prev.map(x => (x.id === updated.id ? updated : x)));
+      // Ook bij een activiteit hoort de toegewezen collega te weten dat zijn tijd
+      // verschuift. Zelfde route als bij werkbonnen: melding nu, mail 's avonds.
+      const betrokkenen = updated.assignedToIds || (updated.assignee ? [updated.assignee] : []);
+      meldPlanningWijziging({
+        userIds: betrokkenen, soort: 'verzet',
+        werkbon: { id: updated.id, nummer: null, titel: updated.title, customerName: updated.customerName },
+        oud: { datum: a.date, start: fmtTime(a.time), eind: fmtTime(a.endTime) },
+        nieuw: { datum: updated.date, start: fmtTime(updated.time), eind: fmtTime(updated.endTime) },
+        creatorId: profile?.id,
+      }).catch(() => {});
       // Zelfde als na het activiteitenvenster: het agenda-item bestaat of komt er.
       try {
         await upsertActivityEvent({

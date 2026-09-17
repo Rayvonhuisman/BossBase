@@ -1,20 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Check, Clock, Info, Minus, Plus, RotateCcw, Truck, UserMinus, UserPlus, X } from 'lucide-react';
+import { AlertTriangle, Clock, Info, RotateCcw, UserMinus, UserPlus, X } from 'lucide-react';
 import AdresZoeker, { adresRegel } from './AdresZoeker.jsx';
 import ActieMenu from './ActieMenu.jsx';
 import { initials } from '../bb-shared.jsx';
 import { vandaagIso } from '../lib/datumTijd.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
 import { listActivities } from '../services/activityService.js';
-import { useToast } from '../lib/toast.jsx';
 import {
   STANDAARD_TIJD, controleerPlanning, dubbeleBoekingen, geplandeDatums, isWeekend, korteDatum,
   maandNaam, tijdVanDag, verplaatsNaar, wisselDag,
 } from '../utils/werkbonDagen.js';
-import {
-  bezettingVanVoertuig, koppelingVanDag, magKoppelen, voertuigDubbel, voertuigenVanDag, voertuigTijd,
-  voertuigWaarschuwingen,
-} from '../utils/voertuigDagen.js';
 
 // Gedeelde velden voor elk werkbonformulier (werkbonpagina, planning): de
 // geplande dagen, de tijd per dag, de ploeg per dag en de locatie. Zie
@@ -160,24 +155,20 @@ function Kalender({ p, onTik, disabled, enkel = false }) {
  * klik op iemands avatar opent het acties-menu om die persoon van een dag af te halen of
  * een eigen tijd te geven.
  *
- * `voertuigen` = de voertuigen van de werkbon als [{ id, naam, kleur, zitplaatsen }].
- * Alleen met `metVoertuigen` (abonnement): dan staan ze per dag als chips onder
- * de ploeg, met hetzelfde menu, en koppel je iemand via zijn avatar aan een
- * voertuig. Zie utils/voertuigDagen.js.
+ * Voertuigen staan NIET meer hier: die hebben een eigen blok onder de
+ * medewerkers (WerkbonVoertuigenBlok). Wat hier blijft is het opruimen — gaat
+ * een dag of een persoon eruit, dan vervalt ook zijn plek in een bus.
  */
 export function WerkbonDagenVelden({
   planning: p, onChange, starttijd, eindtijd, onTijden, ploeg = [],
   disabled = false, className = '', style, meerdaags = true, onUpgrade,
-  werkbonId = null, activiteitId = null, voertuigen = [], metVoertuigen = false,
+  werkbonId = null, activiteitId = null,
 }) {
-  const toast = useToast();
   // Het aantal dagen bij het openen. Zonder planningsmodule tonen we dat alleen;
   // bij het verplaatsen van de klus mag die melding niet mee verspringen.
   const [aantalBijOpenen] = useState(() => geplandeDatums(p).length);
   // Het invulvak "eigen tijd" dat open staat: { datum, pid } of null.
   const [eigenTijdOpen, setEigenTijdOpen] = useState(null);
-  // Hetzelfde voor een voertuig: { datum, vid } of null.
-  const [voertuigTijdOpen, setVoertuigTijdOpen] = useState(null);
   // Uitleg achter het info-icoontje. Sluit op een klik ernaast.
   const [uitlegOpen, setUitlegOpen] = useState(false);
   const uitlegRef = useRef(null);
@@ -315,83 +306,7 @@ export function WerkbonDagenVelden({
   // Openen begint met de tijd van de dag: je past alleen aan wat anders is.
   const openEigenTijd = (d, pid) => {
     if (!p.persoonTijden?.[d]?.[pid]) zetEigenTijd(d, pid, { ...tijdVanDag(p, d, standaard) });
-    setVoertuigTijdOpen(null);
     setEigenTijdOpen({ datum: d, pid });
-  };
-
-  // ── Voertuigen ──
-  const namen = Object.fromEntries(ploeg.map(m => [m.id, m.naam]));
-  const vctx = metVoertuigen && voertuigen.length
-    ? { p, standaard, ploegIds, voertuigen, naamVan: id => namen[id] || 'Medewerker' }
-    : null;
-
-  // Voertuig op een dag aan of uit. Gaat hij eruit, dan ook zijn eigen tijd en
-  // wie erin zat. Weer alle voertuigen = de dag volgt de werkbon.
-  const wisselVoertuig = (datum, vid) => {
-    const alle = voertuigen.map(v => v.id);
-    const nu = voertuigenVanDag(vctx, datum);
-    const nieuw = nu.includes(vid) ? nu.filter(x => x !== vid) : [...nu, vid];
-    const patch = {
-      voertuigen: nieuw.length === alle.length && alle.every(x => nieuw.includes(x))
-        ? zetDag(p.voertuigen, datum, null)
-        : { ...(p.voertuigen || {}), [datum]: nieuw },
-    };
-    if (!nieuw.includes(vid)) {
-      const tijden = { ...(p.voertuigTijden?.[datum] || {}) };
-      delete tijden[vid];
-      patch.voertuigTijden = zetDag(p.voertuigTijden, datum, tijden);
-      const koppeling = { ...(p.koppeling?.[datum] || {}) };
-      Object.keys(koppeling).forEach(pid => { if (koppeling[pid] === vid) delete koppeling[pid]; });
-      patch.koppeling = zetDag(p.koppeling, datum, koppeling);
-      if (voertuigTijdOpen?.datum === datum && voertuigTijdOpen?.vid === vid) setVoertuigTijdOpen(null);
-    }
-    set(patch);
-  };
-
-  const zetVoertuigTijd = (d, vid, patch) => set({
-    voertuigTijden: {
-      ...(p.voertuigTijden || {}),
-      [d]: { ...(p.voertuigTijden?.[d] || {}), [vid]: { ...(p.voertuigTijden?.[d]?.[vid] || {}), ...patch } },
-    },
-  });
-  const wisVoertuigTijd = (d, vid) => {
-    const dag = { ...(p.voertuigTijden?.[d] || {}) };
-    delete dag[vid];
-    set({ voertuigTijden: zetDag(p.voertuigTijden, d, dag) });
-  };
-  const openVoertuigTijd = (d, vid) => {
-    if (!p.voertuigTijden?.[d]?.[vid]) zetVoertuigTijd(d, vid, { ...tijdVanDag(p, d, standaard) });
-    setEigenTijdOpen(null);
-    setVoertuigTijdOpen({ datum: d, vid });
-  };
-
-  // Iemand in een voertuig zetten (of eruit, met vid = null). Past het niet —
-  // buiten de tijd van het voertuig, of vol op dat moment — dan gebeurt er
-  // niets en zegt de melding waarom.
-  const koppel = (d, pid, vid) => {
-    if (vid) {
-      const melding = magKoppelen(vctx, d, pid, vid);
-      if (melding) { toast.error(melding); return; }
-    }
-    const dag = { ...(p.koppeling?.[d] || {}) };
-    if (vid) dag[pid] = vid;
-    else delete dag[pid];
-    set({ koppeling: zetDag(p.koppeling, d, dag) });
-  };
-
-  // Hetzelfde voertuig op elke dag waarop die persoon en dat voertuig er zijn.
-  // Dagen waarop het niet past worden overgeslagen, en de melding noemt ze.
-  const koppelOpAlleDagen = (pid, vid) => {
-    let koppeling = p.koppeling || {};
-    const overgeslagen = [];
-    for (const d of datums) {
-      if (!dagPloeg(d).includes(pid) || !voertuigenVanDag(vctx, d).includes(vid) || koppeling[d]?.[pid] === vid) continue;
-      const melding = magKoppelen({ ...vctx, p: { ...p, koppeling } }, d, pid, vid);
-      if (melding) { overgeslagen.push(`${korteDatum(d)}: ${melding}`); continue; }
-      koppeling = { ...koppeling, [d]: { ...(koppeling[d] || {}), [pid]: vid } };
-    }
-    set({ koppeling });
-    if (overgeslagen.length) toast.error(`Niet op elke dag gelukt. ${overgeslagen.join(' ')}`);
   };
 
   const tikDag = iso => {
@@ -405,15 +320,6 @@ export function WerkbonDagenVelden({
       // Dag weg: ook de voertuigen van die dag.
       for (const sleutel of ['voertuigen', 'voertuigTijden', 'koppeling']) {
         if (volgende[sleutel]?.[iso]) volgende[sleutel] = zetDag(volgende[sleutel], iso, null);
-      }
-    } else if (vctx) {
-      // Nieuwe dag: wie er de dag ervoor in een voertuig zat, zit er weer in —
-      // voor zover het op de nieuwe dag past.
-      const bron = datums.filter(d => d < iso).pop() || datums.find(d => d > iso);
-      for (const [pid, vid] of Object.entries(bron ? koppelingVanDag(vctx, bron) : {})) {
-        const ctxNu = { ...vctx, p: volgende };
-        if (!voertuigenVanDag(ctxNu, iso).includes(vid) || magKoppelen(ctxNu, iso, pid, vid)) continue;
-        volgende.koppeling = { ...(volgende.koppeling || {}), [iso]: { ...(volgende.koppeling?.[iso] || {}), [pid]: vid } };
       }
     }
     onChange(volgende);
@@ -453,7 +359,6 @@ export function WerkbonDagenVelden({
                     Vul per dag de begin- en eindtijd in. Een nieuwe dag neemt de tijd van de dag ervoor over.
                     {meer ? ' Met "voor alle dagen" zet je de tijd van de eerste dag op elke dag.' : ''}
                     {ploeg.length > 0 ? ' Klik op iemands avatar om die persoon van een dag af te halen of een eigen tijd te geven.' : ''}
-                    {vctx ? ' Voertuigen werken hetzelfde. Via iemands avatar zet je die persoon in een voertuig.' : ''}
                   </span>
                 )}
               </span>
@@ -465,11 +370,6 @@ export function WerkbonDagenVelden({
               const eigenTijden = p.persoonTijden?.[d] || {};
               const afwijkers = ploeg.filter(m => dagPloeg(d).includes(m.id) && eigenTijden[m.id]);
               const open = eigenTijdOpen?.datum === d ? ploeg.find(m => m.id === eigenTijdOpen.pid) : null;
-              const openV = vctx && voertuigTijdOpen?.datum === d ? voertuigen.find(v => v.id === voertuigTijdOpen.vid) : null;
-              const dagVoertuigen = vctx ? voertuigenVanDag(vctx, d) : [];
-              const koppelingDag = vctx ? koppelingVanDag(vctx, d) : {};
-              const waarschuwing = vctx ? voertuigWaarschuwingen(vctx, d) : { perPersoon: {}, perVoertuig: {} };
-              const voertuigVan = pid => voertuigen.find(v => v.id === koppelingDag[pid]) || null;
               return (
                 <div key={d} className={`wbd-dag${eigenPloeg ? ' eigen-ploeg' : ''}`}>
                   <span className="wbd-dag-datum">{korteDatum(d)}</span>
@@ -484,9 +384,7 @@ export function WerkbonDagenVelden({
                       {ploeg.map(m => {
                         const werkt = dagPloeg(d).includes(m.id);
                         const eigen = werkt ? eigenTijden[m.id] : null;
-                        const inVoertuig = werkt ? voertuigVan(m.id) : null;
-                        const tip = `${m.naam}${eigen ? ` · ${eigen.starttijd || '?'}–${eigen.eindtijd || '?'}` : ''}${inVoertuig ? ` · ${inVoertuig.naam}` : ''}${werkt ? '' : ' — niet op deze dag'}`;
-                        const voertuigMeldingen = werkt ? (waarschuwing.perPersoon[m.id] || []) : [];
+                        const tip = `${m.naam}${eigen ? ` · ${eigen.starttijd || '?'}–${eigen.eindtijd || '?'}` : ''}${werkt ? '' : ' — niet op deze dag'}`;
                         // Staat deze persoon op dat moment al ergens anders?
                         const persoonTijd = eigen?.starttijd ? eigen : t;
                         const dubbel = werkt
@@ -519,27 +417,6 @@ export function WerkbonDagenVelden({
                                   if (eigenTijdOpen?.datum === d && eigenTijdOpen?.pid === m.id) setEigenTijdOpen(null);
                                 },
                               },
-                              // Voertuig kiezen: alleen de voertuigen van die dag.
-                              ...(werkt ? dagVoertuigen : []).map((vid, j) => {
-                                const v = voertuigen.find(x => x.id === vid);
-                                const zit = inVoertuig?.id === vid;
-                                return {
-                                  label: `In ${v.naam}`,
-                                  icon: zit ? <Check size={14} /> : <Truck size={14} />,
-                                  onClick: () => { if (!zit) koppel(d, m.id, vid); },
-                                  scheiding: j === 0,
-                                };
-                              }),
-                              inVoertuig && {
-                                label: 'Geen voertuig',
-                                icon: <X size={14} />,
-                                onClick: () => koppel(d, m.id, null),
-                              },
-                              inVoertuig && meer && {
-                                label: `Op alle dagen in ${inVoertuig.naam}`,
-                                icon: <Truck size={14} />,
-                                onClick: () => koppelOpAlleDagen(m.id, inVoertuig.id),
-                              },
                             ]}
                             trigger={({ open: menuOpen, wissel }) => (
                               <button
@@ -553,11 +430,10 @@ export function WerkbonDagenVelden({
                                 data-tip={menuOpen ? undefined : tip}
                               >
                                 <MedewerkerAvatar m={m} />
-                                {inVoertuig && <span className="wbd-voertuig-stip" style={{ background: inVoertuig.kleur }} />}
                               </button>
                             )}
                           />
-                          {(dubbel.length > 0 || voertuigMeldingen.length > 0) && (
+                          {dubbel.length > 0 && (
                             // Oranje driehoekje: deze persoon staat op dat moment al
                             // op iets anders, of past niet in zijn voertuig. Uitleg
                             // op klik, zoals het info-icoontje.
@@ -565,8 +441,8 @@ export function WerkbonDagenVelden({
                               sleutel={sleutel}
                               open={dubbelOpen}
                               onWissel={setDubbelOpen}
-                              kop={dubbel.length ? 'Dubbel ingepland' : 'Klopt niet'}
-                              label={`${m.naam} op ${korteDatum(d)}: ${dubbel.length ? 'dubbel ingepland' : 'klopt niet'} — uitleg`}
+                              kop="Dubbel ingepland"
+                              label={`${m.naam} op ${korteDatum(d)}: dubbel ingepland — uitleg`}
                             >
                               {dubbel.length > 0 && (
                                 <>
@@ -574,7 +450,6 @@ export function WerkbonDagenVelden({
                                   {' '}Met deze werkbon wordt {m.naam} op dat moment dubbel ingepland.
                                 </>
                               )}
-                              {voertuigMeldingen.map(t => <span key={t} className="wbd-melding">{t}</span>)}
                             </Driehoek>
                           )}
                           </span>
@@ -582,112 +457,19 @@ export function WerkbonDagenVelden({
                       })}
                     </span>
                   )}
-                  {vctx && (
-                    // Voertuigen van de werkbon, per dag. Zelfde bediening als de
-                    // ploeg: klik voor het menu (wel/niet op deze dag, eigen tijd).
-                    <div className="wbd-voertuigen">
-                      {voertuigen.map(v => {
-                        const aan = dagVoertuigen.includes(v.id);
-                        const vt = voertuigTijd(vctx, d, v.id);
-                        const eigenV = aan && p.voertuigTijden?.[d]?.[v.id]
-                          && (vt.starttijd !== t.starttijd || vt.eindtijd !== t.eindtijd);
-                        const bezet = aan ? bezettingVanVoertuig(vctx, d, v.id) : 0;
-                        const label = aan && v.zitplaatsen ? `${v.naam} · ${bezet}/${v.zitplaatsen}` : aan && bezet ? `${v.naam} · ${bezet}` : v.naam;
-                        const dubbelV = aan
-                          ? voertuigDubbel({ werkbonnen: bezetting.werkbonnen, werkbonId, datum: d, vid: v.id, starttijd: vt.starttijd, eindtijd: vt.eindtijd })
-                          : [];
-                        const meldingen = aan ? (waarschuwing.perVoertuig[v.id] || []) : [];
-                        const sleutel = `v|${d}|${v.id}`;
-                        return (
-                          <span key={v.id} className="wbd-persoon">
-                            <ActieMenu
-                              titel={`Opties voor ${v.naam}`}
-                              items={[
-                                {
-                                  label: aan ? 'Niet op deze dag' : 'Wel op deze dag',
-                                  icon: aan ? <Minus size={14} /> : <Plus size={14} />,
-                                  onClick: () => wisselVoertuig(d, v.id),
-                                },
-                                aan && {
-                                  label: 'Andere tijd voor dit voertuig',
-                                  icon: <Clock size={14} />,
-                                  onClick: () => openVoertuigTijd(d, v.id),
-                                },
-                                eigenV && {
-                                  label: 'Terug naar de tijd van de dag',
-                                  icon: <RotateCcw size={14} />,
-                                  onClick: () => {
-                                    wisVoertuigTijd(d, v.id);
-                                    if (voertuigTijdOpen?.datum === d && voertuigTijdOpen?.vid === v.id) setVoertuigTijdOpen(null);
-                                  },
-                                },
-                              ]}
-                              trigger={({ open: menuOpen, wissel }) => (
-                                <button
-                                  type="button"
-                                  className={`wbd-voertuig-chip${aan ? ' aan' : ''}${eigenV ? ' eigen-tijd' : ''}`}
-                                  onClick={wissel}
-                                  disabled={disabled}
-                                  aria-haspopup="menu"
-                                  aria-expanded={menuOpen}
-                                  aria-label={`${v.naam} ${aan ? `staat op ${korteDatum(d)}` : `staat niet op ${korteDatum(d)}`}. Klik voor opties.`}
-                                  data-tip={menuOpen ? undefined : `${v.naam} · ${aan ? `${vt.starttijd || '?'}–${vt.eindtijd || '?'}` : 'niet op deze dag'}`}
-                                >
-                                  <span className="wbd-voertuig-kleur" style={{ background: v.kleur }} />
-                                  {label}
-                                </button>
-                              )}
-                            />
-                            {(dubbelV.length > 0 || meldingen.length > 0) && (
-                              <Driehoek
-                                sleutel={sleutel}
-                                open={dubbelOpen}
-                                onWissel={setDubbelOpen}
-                                kop={dubbelV.length ? 'Dubbel ingepland' : 'Klopt niet'}
-                                label={`${v.naam} op ${korteDatum(d)}: ${dubbelV.length ? 'dubbel ingepland' : 'klopt niet'} — uitleg`}
-                              >
-                                {dubbelV.length > 0 && (
-                                  <>
-                                    {v.naam} staat op {korteDatum(d)} al ingepland: {dubbelV.map(c => `${c.titel} (${c.starttijd}–${c.eindtijd})`).join(', ')}.
-                                    {' '}Met deze werkbon staat {v.naam} op dat moment dubbel ingepland.
-                                  </>
-                                )}
-                                {meldingen.map(tekst => <span key={tekst} className="wbd-melding">{tekst}</span>)}
-                              </Driehoek>
-                            )}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  )}
                   {afwijkers.length > 0 && !open && (
                     // Wijkt iemand af, dan het hele overzicht van die dag: wie werkt
                     // er, en van hoe laat tot hoe laat — ook wie de dagtijd volgt.
                     <div className="wbd-dag-eigen">
                       {ploeg.filter(m => dagPloeg(d).includes(m.id)).map(m => {
                         const pt = eigenTijden[m.id] || t;
-                        const inVoertuig = voertuigVan(m.id);
                         return (
                           <span key={m.id} className={`wbd-dag-persoon${eigenTijden[m.id] ? ' eigen' : ''}`}>
                             <span>{m.naam}</span>
-                            <span>{pt.starttijd || '?'}–{pt.eindtijd || '?'}{inVoertuig ? ` · ${inVoertuig.naam}` : ''}</span>
+                            <span>{pt.starttijd || '?'}–{pt.eindtijd || '?'}</span>
                           </span>
                         );
                       })}
-                    </div>
-                  )}
-                  {openV && (
-                    <div className="wbd-pt" role="group" aria-label={`Eigen tijd voor ${openV.naam}`}>
-                      <div className="wbd-pt-kop">Eigen tijd voor {openV.naam} · {korteDatum(d)}</div>
-                      <div className="wbd-tijd">
-                        <input type="time" value={p.voertuigTijden?.[d]?.[openV.id]?.starttijd || ''} onChange={e => zetVoertuigTijd(d, openV.id, { starttijd: e.target.value })} aria-label={`Begintijd ${openV.naam}`} />
-                        <span className="wbd-dag-tijd">→</span>
-                        <input type="time" value={p.voertuigTijden?.[d]?.[openV.id]?.eindtijd || ''} onChange={e => zetVoertuigTijd(d, openV.id, { eindtijd: e.target.value })} aria-label={`Eindtijd ${openV.naam}`} />
-                      </div>
-                      <div className="wbd-pt-knoppen">
-                        <button type="button" className="wbd-link" onClick={() => { wisVoertuigTijd(d, openV.id); setVoertuigTijdOpen(null); }}>Zelfde tijd als de dag</button>
-                        <button type="button" className="btn btn-p btn-sm" onClick={() => setVoertuigTijdOpen(null)}>Klaar</button>
-                      </div>
                     </div>
                   )}
                   {open && (
@@ -761,7 +543,6 @@ export function WerkbonLocatieVeld({ value, onChange, voorstel, onNeemOver, onHo
   return (
     <div className={className} style={style}>
       <AdresZoeker
-        className="adres-zoeker-veld"
         label="Locatie"
         value={value || ''}
         onChange={onChange}

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import SyncIndicator from '../components/SyncIndicator.jsx';
 import DOMPurify from 'dompurify';
-import { Bold, Calendar, Check, Edit2, Euro, FileText, Folder, Italic, List, ListOrdered, Maximize2, Minimize2, PenLine, Plus, RotateCcw, ShoppingCart, Sparkles, Underline, User, Wrench, X } from 'lucide-react';
+import { Bold, Calendar, Check, Edit2, Euro, FileText, Folder, Italic, List, ListOrdered, Maximize2, Minimize2, MoreHorizontal, PenLine, Plus, RotateCcw, ShoppingCart, Sparkles, Underline, User, Wrench, X } from 'lucide-react';
 import {
   I, CUSTOMERS_DATA, DEALS, ACTIVITIES_DATA, QUOTES_DATA, COSTS_DATA,
   fmt, custById, stageLabel, stageCol, Av, StatusBadge, ModalX, CostCategoryBadge,
@@ -19,6 +19,11 @@ import { listDeals } from '../services/dealService.js';
 import { getOffertesByCustomer } from '../services/offerteService.js';
 import { getFacturenByCustomer } from '../services/factuurService.js';
 import { getProjectsByCustomer } from '../services/projectsService.js';
+import { getWerkbonnen } from '../services/werkbonService.js';
+import { listPipelineStages } from '../services/dealService.js';
+import { buildStageIndex, dealCategory } from '../utils/pipeline.js';
+import { korteDatum, ploegOpDag, tijdenOpDag, werkbonDagen } from '../utils/werkbonDagen.js';
+import { WerkbonModal } from './WerkbonPageV2.jsx';
 import { NewOfferteModal, OfferteBadge } from './OffertesPage.jsx';
 import { NewFactuurModal, FactuurBadge } from './FacturenPage.jsx';
 import { NewProjectModal, ProjectBadge } from './ProjectsPage.jsx';
@@ -49,6 +54,139 @@ const fmtRowDate = d => {
 
 
 // ── CUSTOMER DETAIL DRAWER ───────────────────────────────────
+// De tabbalk van de klantkaart. Hij scrollde horizontaal als de tabs niet
+// pasten, en een tab die je niet ziet vind je niet. Nu meet hij hoeveel er
+// passen; de rest gaat in een ⋯-menu. Overzicht staat altijd vooraan en het
+// actieve tabblad blijft altijd zichtbaar — komt dat uit het menu, dan ruilt
+// het met de laatste die nog paste.
+function KlantTabbalk({ tabs, labels, actief, onKies }) {
+  const wrapRef = useRef(null);
+  const [past, setPast] = useState(tabs.length);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Meten na ELKE render, niet alleen bij een resize-melding: de klantkaart
+  // wisselt van breedte als je hem maximaliseert, en dan kwam de melding te
+  // laat of niet — de balk hield het aantal van de smalle stand vast.
+  useLayoutEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return undefined;
+    const meet = () => {
+      // Meet op een onzichtbare kopie: zo weten we de échte breedte van elke
+      // tab, ook die nu in het menu zitten.
+      const meter = el.querySelector('.kk-tabs-meter');
+      if (!meter) return;
+      const breedtes = [...meter.children].map(k => k.getBoundingClientRect().width + 2);
+      const ruimte = el.getBoundingClientRect().width - 8;
+      const menuBreedte = 44;
+      let som = 0;
+      let aantal = 0;
+      for (let i = 0; i < breedtes.length; i++) {
+        som += breedtes[i];
+        const restVolgt = i < breedtes.length - 1;
+        if (som + (restVolgt ? menuBreedte : 0) > ruimte) break;
+        aantal++;
+      }
+      setPast(Math.max(1, aantal));
+    };
+    meet();
+    // Nog een meting in de volgende frame: direct na een wissel van breedte is
+    // de nieuwe lay-out soms nog niet doorgerekend.
+    const frame = requestAnimationFrame(meet);
+    if (typeof ResizeObserver === 'undefined') return () => cancelAnimationFrame(frame);
+    const ro = new ResizeObserver(meet);
+    ro.observe(el);
+    return () => { cancelAnimationFrame(frame); ro.disconnect(); };
+  });
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const sluit = e => { if (!e.target.closest?.('.kk-tabs-meer-wrap')) setMenuOpen(false); };
+    document.addEventListener('mousedown', sluit);
+    return () => document.removeEventListener('mousedown', sluit);
+  }, [menuOpen]);
+
+  let zichtbaar = tabs.slice(0, past);
+  let verborgen = tabs.slice(past);
+  // Actief tabblad in het menu? Ruil het met de laatste zichtbare, behalve
+  // Overzicht — die blijft vooraan staan.
+  if (verborgen.includes(actief) && zichtbaar.length > 1) {
+    const ruil = zichtbaar[zichtbaar.length - 1];
+    zichtbaar = [...zichtbaar.slice(0, -1), actief];
+    verborgen = [ruil, ...verborgen.filter(t => t !== actief)];
+  }
+
+  return (
+    <div className="kk-tabs-wrap" ref={wrapRef} style={{ position: 'relative' }}>
+      {/* Onzichtbare meetstrook met alle tabs op ware grootte. */}
+      <div className="tabs kk-tabs kk-tabs-meter" aria-hidden style={{ position: 'absolute', visibility: 'hidden', pointerEvents: 'none', top: 0, left: 0 }}>
+        {tabs.map(t => <button key={t} className="tab" tabIndex={-1}>{labels[t]}</button>)}
+      </div>
+      <div className="tabs kk-tabs" style={{ marginBottom: 16 }}>
+        {zichtbaar.map(t => (
+          <button
+            key={t}
+            className={`tab${actief === t ? ' active' : ''}`}
+            onClick={() => onKies(t)}
+            aria-label={t === 'klantgegevens' ? 'Klantgegevens' : undefined}
+            title={t === 'klantgegevens' ? 'Klantgegevens' : undefined}
+          >
+            {labels[t]}
+          </button>
+        ))}
+        {verborgen.length > 0 && (
+          <span className="kk-tabs-meer-wrap" style={{ position: 'relative', display: 'inline-flex' }}>
+            <button
+              type="button"
+              className={`tab kk-tabs-meer${verborgen.includes(actief) ? ' heeft-actieve' : ''}`}
+              onClick={e => { e.stopPropagation(); setMenuOpen(o => !o); }}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              aria-label={`Nog ${verborgen.length} tabbladen`}
+              title="Meer tabbladen"
+            >
+              <MoreHorizontal size={15} />
+            </button>
+            {menuOpen && (
+              <div className="kk-meer-paneel" role="menu">
+                {verborgen.map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    role="menuitem"
+                    className={`kk-meer-item${actief === t ? ' actief' : ''}`}
+                    onClick={() => { onKies(t); setMenuOpen(false); }}
+                  >
+                    {labels[t]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Alle geplande dagen van een reeks werkbonnen, op datum gesorteerd. Eén regel
+// per dag: wat er die dag staat, hoe laat, en wie erop staan.
+function planRegels(werkbonnen, naamVan) {
+  return werkbonnen
+    .flatMap(w => werkbonDagen(w).map(dag => {
+      const t = tijdenOpDag(w, dag);
+      return {
+        sleutel: `${w.id}-${dag.datum}`,
+        werkbon: w,
+        datum: dag.datum,
+        starttijd: t.starttijd,
+        eindtijd: t.eindtijd,
+        wie: ploegOpDag(w, dag).map(naamVan).filter(Boolean),
+      };
+    }))
+    .filter(r => r.datum)
+    .sort((a, b) => a.datum.localeCompare(b.datum));
+}
+
 export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   const toast = useToast();
   const [tab, setTab] = useState(initialTab || 'overview');
@@ -68,6 +206,10 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   const [cOffertes, setOffertes] = useState([]);
   const [cFacturen, setFacturen] = useState([]);
   const [cProjecten, setProjecten] = useState([]);
+  const [cWerkbonnen, setCWerkbonnen] = useState([]);
+  const [cDealsLijst, setCDeals] = useState([]);
+  const [stages, setStages] = useState([]);
+  const [showNewWerkbon, setShowNewWerkbon] = useState(false);
   const [showNewOfferte, setShowNewOfferte] = useState(false);
   const [showNewFactuur, setShowNewFactuur] = useState(false);
   const [showNewProject, setShowNewProject] = useState(false);
@@ -89,7 +231,6 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   const [expandedEmailId, setExpandedEmailId] = useState(null);
   const { company, profile } = useProfile();
   const { can } = usePermissions();
-  const tabsRef   = useRef(null);
 
   useEffect(() => {
     const el = document.querySelector('.sb');
@@ -149,8 +290,11 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
       getProjectsByCustomer(custId).catch(() => []),
       getKlantNotities(custId).catch(() => []),
       getTijdlijnByCustomer(custId).catch(() => []),
+      getWerkbonnen().catch(() => []),
+      listDeals().catch(() => []),
+      listPipelineStages().catch(() => []),
     ])
-    .then(([customer, activities, costs, offertes, facturen, projecten, notities, tl]) => {
+    .then(([customer, activities, costs, offertes, facturen, projecten, notities, tl, werkbonnen, deals, pipelineStages]) => {
       if (!alive) return;
       setCustomer(customer);
       setKlantNotities(notities);
@@ -160,6 +304,9 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
       setOffertes(offertes);
       setFacturen(facturen);
       setProjecten(projecten);
+      setCWerkbonnen(werkbonnen.filter(w => w.customerId === custId));
+      setCDeals(deals.filter(d => d.custId === custId));
+      setStages(pipelineStages);
       setError('');
     })
     .catch(err => alive && setError(err.message || 'Klant laden is mislukt.'))
@@ -172,7 +319,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   // Moet vóór early returns staan (Rules of Hooks)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    const validTabs = ['overview','notities', can('offertes') && 'quotes', can('facturen') && 'facturen', can('kosten') && 'costs', 'projecten','timeline','emails','klantgegevens'].filter(Boolean);
+    const validTabs = ['overview','planning','werkbonnen','notities', can('offertes') && 'quotes', can('facturen') && 'facturen', can('kosten') && 'costs', 'projecten','timeline','emails','klantgegevens'].filter(Boolean);
     if (tab !== 'overview' && !validTabs.includes(tab)) setTab('overview');
   }, []);
 
@@ -180,7 +327,32 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   if (error) return <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>;
   if (!c) return null;
 
-  const cDeals  = [];
+  // De actieve deal: de lopende aanvraag van deze klant. Gewonnen, betaalde en
+  // verloren deals tellen niet mee; van de rest de nieuwste. Zonder lopende deal
+  // valt hij terug op de nieuwste, zodat het blok niet leeg blijft als alles al
+  // is afgerond.
+  const stageIndex = buildStageIndex(stages);
+  const opDatum = (a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+  const cDeals = [...cDealsLijst].sort(opDatum);
+  const actieveDeal = cDeals.find(d => dealCategory(d, stageIndex) === 'open') || cDeals[0] || null;
+  // Werkbonnen bij die deal; heeft de deal er geen, dan die van de klant zelf.
+  const dealWerkbonnen = actieveDeal ? cWerkbonnen.filter(w => w.dealId === actieveDeal.id) : [];
+  const planWerkbonnen = dealWerkbonnen.length ? dealWerkbonnen : cWerkbonnen;
+  const naamVan = id => teamMembers.find(m => m.id === id || m.profileId === id)?.fullName || '';
+  const planningRegels = planRegels(planWerkbonnen, naamVan);
+  const komendeRegels = planningRegels.filter(r => r.datum >= new Date().toISOString().slice(0, 10));
+  const alleRegels = planRegels(cWerkbonnen, naamVan);
+  const vandaagIso = new Date().toISOString().slice(0, 10);
+  // Aanvraagtekst: voorlopig wat de deal erover zegt. Eén plek, zodat de echte
+  // aanvraagdata later alleen hier hoeft te worden aangesloten.
+  const aanvraag = actieveDeal
+    ? {
+        titel: actieveDeal.title,
+        tekst: actieveDeal.raw?.description || actieveDeal.raw?.notes || '',
+        fase: stageIndex.get(actieveDeal.stage)?.label || '',
+        waarde: actieveDeal.value || 0,
+      }
+    : null;
   const cQuotes = [];
   // Zelfde definitie als de klantenlijst, Financiën en de database-export.
   const { total: totalGefactureerd, paid: totalBetaald } = customerTotals({ facturen: cFacturen });
@@ -248,9 +420,11 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
 
   // De klantgegevens-tab toont het label alleen als de tabbalk de ruimte heeft;
   // anders valt hij terug op alleen het icoon. Zie .kk-tab-label in bb-dashboard.css.
-  const TAB_LABELS = { overview: 'Overzicht', notities: 'Notities', quotes: 'Offertes', facturen: 'Facturen', costs: 'Kosten', projecten: 'Projecten', timeline: 'Tijdlijn', emails: 'E-mails', klantgegevens: <><User size={13} /><span className="kk-tab-label">Gegevens</span></> };
+  const TAB_LABELS = { overview: 'Overzicht', planning: 'Planning', werkbonnen: 'Werkbonnen', notities: 'Notities', quotes: 'Offertes', facturen: 'Facturen', costs: 'Kosten', projecten: 'Projecten', timeline: 'Tijdlijn', emails: 'E-mails', klantgegevens: <><User size={13} /><span className="kk-tab-label">Gegevens</span></> };
   const TABS = [
     'overview',
+    'planning',
+    'werkbonnen',
     'notities',
     can('offertes')  && 'quotes',
     can('facturen')  && 'facturen',
@@ -478,31 +652,72 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
       )}
 
       {/* Tabs */}
-      <div className="kk-tabs-wrap">
-        <div className="tabs kk-tabs" ref={tabsRef} style={{ marginBottom: 16 }}>
-          {TABS.map(t => (
-            <button
-              key={t}
-              className={`tab${tab === t ? ' active' : ''}`}
-              onClick={() => setTab(t)}
-              // Alleen de klantgegevens-tab kan tot alleen-icoon terugvallen; die
-              // heeft dus een vaste naam nodig los van de zichtbare tekst.
-              aria-label={t === 'klantgegevens' ? 'Klantgegevens' : undefined}
-              title={t === 'klantgegevens' ? 'Klantgegevens' : undefined}
-            >
-              {TAB_LABELS[t]}
-            </button>
-          ))}
-        </div>
-      </div>
+      <KlantTabbalk tabs={TABS} labels={TAB_LABELS} actief={tab} onKies={setTab} />
 
       {/* Overview */}
       {tab === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Aanvraag: wat de klant gevraagd heeft. Voorlopig uit de deal;
+              zodra de echte aanvraagdata er is, hoeft alleen `aanvraag`
+              hierboven te worden gevuld. */}
+          <div className="card card-p">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <button type="button" className="kk-blok-titel" onClick={() => setPage?.('pipeline')}>
+                Aanvraag <span className="kk-pijl">→</span>
+              </button>
+              {aanvraag?.fase && <span className="badge b-gray">{aanvraag.fase}</span>}
+            </div>
+            {aanvraag ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ fontWeight: 600, fontSize: '.88rem', color: 'var(--dk)' }}>{aanvraag.titel}</div>
+                {aanvraag.tekst
+                  ? <div style={{ fontSize: '.83rem', color: 'var(--dm)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{aanvraag.tekst}</div>
+                  : <div style={{ fontSize: '.83rem', color: 'var(--dl)' }}>Geen omschrijving bij deze aanvraag.</div>}
+                {aanvraag.waarde > 0 && (
+                  <div style={{ fontSize: '.8rem', color: 'var(--dl)' }}>Verwachte waarde: <strong style={{ color: 'var(--dk)' }}>{fmt(aanvraag.waarde)}</strong></div>
+                )}
+              </div>
+            ) : (
+              <div className="kk-leeg">Nog geen aanvraag voor deze klant.</div>
+            )}
+          </div>
+
+          {/* Planning van de werkbon(nen) bij deze aanvraag. */}
+          <div className="card card-p">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <button type="button" className="kk-blok-titel" onClick={() => setTab('planning')}>
+                Planning <span className="kk-pijl">→</span>
+              </button>
+              {planningRegels.length > 0 && (
+                <button className="btn-plus" onClick={guardSchrijven('Een werkbon inplannen', () => setShowNewWerkbon(true))}>{I.plus}</button>
+              )}
+            </div>
+            {komendeRegels.length === 0 && planningRegels.length === 0 ? (
+              <div className="kk-leeg">
+                <span>Nog niets ingepland voor deze klant.</span>
+                <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een werkbon inplannen', () => setShowNewWerkbon(true))}>
+                  {I.plus} Werkbon inplannen
+                </button>
+              </div>
+            ) : (
+              <div>
+                {(komendeRegels.length ? komendeRegels : planningRegels).slice(0, 4).map(r => (
+                  <div key={r.sleutel} className="kk-planregel" style={{ cursor: 'pointer' }}
+                    onClick={() => setPage?.('werkbonnen', { id: r.werkbon.id })}>
+                    <span className="kk-plan-datum">{korteDatum(r.datum)}</span>
+                    <span className="kk-plan-tijd">{r.starttijd ? `${r.starttijd}–${r.eindtijd || '?'}` : 'geen tijd'}</span>
+                    <span className="kk-plan-wie">{r.wie.length ? r.wie.join(', ') : 'niemand toegewezen'}</span>
+                    <StatusBadge status={r.werkbon.status} domain="werkbon" />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Notities blok */}
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Notities</div>
+              <button type="button" className="kk-blok-titel" onClick={() => setTab('notities')}>Notities <span className="kk-pijl">→</span></button>
             </div>
             <NoteEditor
               mentions={true}
@@ -563,7 +778,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
           {/* Offertes */}
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Offertes</div>
+              <button type="button" className="kk-blok-titel" onClick={() => setTab('quotes')}>Offertes <span className="kk-pijl">→</span></button>
               <button onClick={guardLimiet('offertes', () => setShowNewOfferte(true))} className="btn-plus">{I.plus}</button>
             </div>
             {cOffertes.length === 0 && <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Geen offertes</div>}
@@ -584,7 +799,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
           {/* Facturen */}
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Facturen</div>
+              <button type="button" className="kk-blok-titel" onClick={() => setTab('facturen')}>Facturen <span className="kk-pijl">→</span></button>
               <button onClick={guardLimiet('facturen', () => setShowNewFactuur(true))} className="btn-plus">{I.plus}</button>
             </div>
             {cFacturen.length === 0 && <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Geen facturen</div>}
@@ -605,7 +820,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
           {/* Projecten */}
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Projecten</div>
+              <button type="button" className="kk-blok-titel" onClick={() => setTab('projecten')}>Projecten <span className="kk-pijl">→</span></button>
               <button onClick={guardSchrijven('Een project aanmaken', () => setShowNewProject(true))} className="btn-plus">{I.plus}</button>
             </div>
             {cProjecten.length === 0 && <div style={{ textAlign: 'center', width: '100%', padding: '24px 0', color: '#9ca3af', display: 'block' }}>Geen projecten</div>}
@@ -804,6 +1019,73 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
                 ))}
               </div>
             )}
+        </div>
+      )}
+
+      {/* Planning tab: alle geplande dagen van alle werkbonnen van deze klant. */}
+      {tab === 'planning' && (
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--br)' }}>
+            <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Geplande dagen ({alleRegels.length})</div>
+            <button className="btn btn-s btn-sm" onClick={guardSchrijven('Een werkbon inplannen', () => setShowNewWerkbon(true))}>
+              {I.plus} Werkbon inplannen
+            </button>
+          </div>
+          {alleRegels.length === 0 ? (
+            <div className="kk-leeg" style={{ padding: '30px 0' }}>
+              <span>Nog niets ingepland voor deze klant.</span>
+              <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een werkbon inplannen', () => setShowNewWerkbon(true))}>
+                {I.plus} Werkbon inplannen
+              </button>
+            </div>
+          ) : (
+            <div style={{ padding: '2px 16px 10px' }}>
+              {alleRegels.map(r => (
+                <div key={r.sleutel} className="kk-planregel" style={{ cursor: 'pointer', opacity: r.datum < vandaagIso ? .6 : 1 }}
+                  onClick={() => setPage?.('werkbonnen', { id: r.werkbon.id })}>
+                  <span className="kk-plan-datum">{korteDatum(r.datum)}</span>
+                  <span className="kk-plan-tijd">{r.starttijd ? `${r.starttijd}–${r.eindtijd || '?'}` : 'geen tijd'}</span>
+                  <span className="kk-plan-wie">{r.werkbon.titel}{r.wie.length ? ` · ${r.wie.join(', ')}` : ''}</span>
+                  <StatusBadge status={r.werkbon.status} domain="werkbon" />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Werkbonnen tab: alle werkbonnen van deze klant. */}
+      {tab === 'werkbonnen' && (
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--br)' }}>
+            <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Werkbonnen ({cWerkbonnen.length})</div>
+            <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een werkbon aanmaken', () => setShowNewWerkbon(true))}>
+              {I.plus} Nieuwe werkbon
+            </button>
+          </div>
+          {cWerkbonnen.length === 0 ? (
+            <div className="kk-leeg" style={{ padding: '30px 0' }}>
+              <span>Deze klant heeft nog geen werkbonnen.</span>
+              <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een werkbon aanmaken', () => setShowNewWerkbon(true))}>
+                {I.plus} Nieuwe werkbon
+              </button>
+            </div>
+          ) : (
+            [...cWerkbonnen]
+              .sort((a, b) => String(b.geplandOp || '').localeCompare(String(a.geplandOp || '')))
+              .map(w => (
+                <div key={w.id} className="kk-row" onClick={() => setPage?.('werkbonnen', { id: w.id })}>
+                  <div className="kk-row-left">
+                    <div className="kk-row-title">{w.titel || 'Werkbon'}</div>
+                    <div className="kk-row-sub">{w.nummer || 'geen nummer'}{w.locatie ? ` · ${w.locatie}` : ''}</div>
+                  </div>
+                  <div className="kk-row-right">
+                    <StatusBadge status={w.status} domain="werkbon" />
+                    <span className="kk-row-date">{w.geplandOp ? korteDatum(w.geplandOp) : 'niet ingepland'}</span>
+                  </div>
+                </div>
+              ))
+          )}
         </div>
       )}
 
@@ -1068,6 +1350,20 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
           prefill={{ customer_id: c.id }}
           onClose={() => setShowNewFactuur(false)}
           onSaved={saved => { setFacturen(fs => [saved, ...fs]); setShowNewFactuur(false); }}
+        />
+      )}
+      {showNewWerkbon && (
+        <WerkbonModal
+          mode="new"
+          werkbon={{ customerId: c.id }}
+          customers={[c]}
+          projects={cProjecten}
+          onClose={() => setShowNewWerkbon(false)}
+          onSaved={saved => {
+            setCWerkbonnen(list => [saved, ...list]);
+            setShowNewWerkbon(false);
+            setTab('planning');
+          }}
         />
       )}
       {planModal}
