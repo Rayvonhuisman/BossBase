@@ -179,14 +179,38 @@ serve(async (req) => {
       .eq('actief', true)
       .eq('auto_versturen', true)
 
+    // Testbedrijven sturen geen klantpost. In testdata kunnen echte adressen
+    // staan, en dan krijgt een echte klant een herinnering voor een afspraak die
+    // niet bestaat. Eén filter hier dekt beide takken hieronder (activiteiten én
+    // agenda), omdat allebei op tplByCompany afgaan.
+    const { data: testBedrijven, error: testErr } = await db
+      .from('companies')
+      .select('id')
+      .eq('is_testbedrijf', true)
+    if (testErr) {
+      // Veilig falen: weten we niet wie een testbedrijf is, dan gaan er GEEN
+      // afspraakherinneringen uit. Liever een gemiste herinnering dan post naar
+      // een echte klant vanuit testdata. De fout is zichtbaar in mail_fouten.
+      await logMailFout({
+        soort: 'afspraak_herinnering', ontvanger: null, companyId: null, bedrijfNaam: 'BossBase',
+        fout: `Testbedrijven ophalen mislukt, afspraakherinneringen overgeslagen: ${testErr.message}`,
+        bron: 'check-herinneringen',
+      })
+      results.errors.push(`companies.is_testbedrijf: ${testErr.message}`)
+    }
+    const testIds = new Set((testBedrijven || []).map((c: any) => c.id))
+
     const tplByCompany = new Map<string, any>()
     let minDagen = Infinity
     let maxDagen = 0
-    for (const t of (afsprTpls || [])) {
-      const d = (t.auto_dagen ?? 1)
-      tplByCompany.set(t.company_id, t)
-      if (d < minDagen) minDagen = d
-      if (d > maxDagen) maxDagen = d
+    if (!testErr) {
+      for (const t of (afsprTpls || [])) {
+        if (testIds.has(t.company_id)) continue
+        const d = (t.auto_dagen ?? 1)
+        tplByCompany.set(t.company_id, t)
+        if (d < minDagen) minDagen = d
+        if (d > maxDagen) maxDagen = d
+      }
     }
 
     // Alleen zoeken als er minstens één bedrijf een actieve+auto_versturen template heeft.
