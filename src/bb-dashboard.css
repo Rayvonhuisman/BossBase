@@ -401,7 +401,11 @@ ul{list-style:none}
 .tab:hover:not(.active){color:var(--dk)}
 
 /* Klantkaart — compacte scrollbare tabbladen */
-.kk-tabs{width:100%;overflow-x:auto;background:white !important;scrollbar-width:none}
+/* Geen overflow meer: de balk meet zelf hoeveel tabs passen en stopt de rest in
+   het ⋯-menu, dus scrollen is niet nodig. Met overflow werd dat menu — een
+   absoluut paneel binnen de balk — juist afgeknipt, waardoor het leek alsof de
+   drie puntjes niets deden. */
+.kk-tabs{width:100%;overflow:visible;background:white !important;scrollbar-width:none}
 .kk-tabs::-webkit-scrollbar{display:none}
 /* Tabs in de dashboard-knopstijl: inactief licht met subtiele border,
    actief plat groen (var(--p)) met zwarte tekst (var(--dk)) — geen glow/ring. */
@@ -3314,8 +3318,12 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
    De tabs pasten niet altijd en de balk ging dan horizontaal scrollen — een
    tab die je niet ziet, vind je niet. Wat niet past gaat nu in een ⋯-menu aan
    het eind; Overzicht staat altijd vooraan en de actieve tab is altijd zichtbaar. */
-.kk-tabs{flex-wrap:nowrap;overflow:hidden}
+.kk-tabs{flex-wrap:nowrap}
 .kk-tabs-meer{padding:6px 9px !important;display:inline-flex;align-items:center;gap:4px}
+/* In het ⋯-menu is er altijd ruimte voor het woord. Zonder dit bleef de
+   Gegevens-tab een lege regel: zijn label zit achter .kk-tab-label, dat alleen
+   verschijnt als de tabbalk zelf breed genoeg is. */
+.kk-meer-item .kk-tab-label{display:inline !important;margin-left:5px}
 .kk-tabs-meer.heeft-actieve{background:var(--p) !important;color:var(--dk) !important;border-color:var(--p) !important}
 .kk-meer-paneel{position:absolute;top:calc(100% + 4px);right:0;z-index:60;min-width:172px;background:#fff;border:1px solid var(--bstrong);border-radius:var(--r10);box-shadow:0 12px 30px rgba(0,0,0,.14);padding:4px;display:flex;flex-direction:column}
 .kk-meer-item{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:none;background:none;border-radius:var(--r6);font-family:inherit;font-size:12.5px;font-weight:600;color:var(--dk);cursor:pointer;text-align:left;white-space:nowrap}
@@ -3327,6 +3335,12 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .kk-blok-titel .kk-pijl{opacity:0;transition:opacity .12s ease}
 .kk-blok-titel:hover .kk-pijl{opacity:1}
 /* Planningsregels op de klantkaart (overzicht en het tabblad Planning). */
+/* Planningregels in de Projecten-opmaak (variant="lrow"): de datum staat rechts
+   en houdt de gewone tekstkleur — .lrow-date is standaard grijs, en juist dat
+   grijs was de klacht over de planningregels. */
+.lrow-plan-blok{display:flex;flex-direction:column;gap:4px}
+.lrow-plan-datum{color:var(--dk);font-weight:700;font-variant-numeric:tabular-nums}
+.lrow-plan-blok .kk-plan-bus{padding:0 0 2px 12px}
 .kk-planblok{border-bottom:1px solid var(--border)}
 .kk-planblok:last-child{border-bottom:none}
 .kk-planregel{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:.83rem}
@@ -3339,6 +3353,8 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
    de werkbondagen. */
 .kk-plan-los{display:inline-block;margin-right:6px;padding:1px 6px;border-radius:999px;background:var(--bgs);border:1px solid var(--br);font-size:.68rem;font-weight:700;color:var(--dm);vertical-align:1px}
 .kk-plan-datum{font-weight:700;color:var(--dk);min-width:92px;font-variant-numeric:tabular-nums}
-.kk-plan-tijd{color:var(--dm);font-variant-numeric:tabular-nums;min-width:96px}
-.kk-plan-wie{color:var(--dl);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Tijd en namen op de gewone tekstkleur: ze stonden op de hinttint (--dl) en de
+   middentint, waardoor een planningregel als geheel grijs oogde naast de datum. */
+.kk-plan-tijd{color:var(--dk);font-variant-numeric:tabular-nums;min-width:96px}
+.kk-plan-wie{color:var(--dk);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kk-leeg{display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px 0;color:#9ca3af;font-size:.84rem}

@@ -89,10 +89,14 @@ function busRegels(r, voertuigen) {
  *   toonTitel zet de werkbontitel voor de namen — nodig zodra er meerdere
  *             werkbonnen door elkaar staan, overbodig op de werkbon zelf
  */
-export function PlanningRegels({ regels, onOpen, vandaag, toonTitel = false }) {
+export function PlanningRegels({ regels, onOpen, vandaag, toonTitel = false, variant = 'kk' }) {
   const plan = usePlan();
   const bussenAan = plan.has('voertuigen');
   const voertuigen = useVoertuigenLijst(bussenAan);
+  // 'lrow' geeft dezelfde rij-opmaak als het tabblad Projecten (losse kaartjes
+  // met rand). Alleen het planning-tabblad van de klantkaart vraagt erom; het
+  // overzichtsblok en de werkbonpagina houden de compacte 'kk'-regels.
+  const alsRij = variant === 'lrow';
 
   return (
     <>
@@ -102,27 +106,47 @@ export function PlanningRegels({ regels, onOpen, vandaag, toonTitel = false }) {
         // Een los item draagt zijn eigen titel; bij een werkbon staat de titel er
         // alleen bij als er meer werkbonnen door elkaar staan.
         const omschrijving = los ? r.titel : (toonTitel ? r.werkbon.titel : null);
+        const tijd = r.starttijd ? `${r.starttijd}${r.eindtijd ? `–${r.eindtijd}` : ''}` : 'geen tijd';
+        const wie = r.wie.length ? r.wie.join(', ') : (los ? null : 'niemand toegewezen');
+        const badge = (
+          <StatusBadge
+            status={los ? r.activiteit.status : r.werkbon.status}
+            domain={los ? 'activiteit' : 'werkbon'}
+          />
+        );
         return (
-          <div key={r.sleutel} className="kk-planblok" style={{ opacity: vandaag && r.datum < vandaag ? .6 : 1 }}>
+          <div key={r.sleutel} className={alsRij ? 'lrow-plan-blok' : 'kk-planblok'} style={{ opacity: vandaag && r.datum < vandaag ? .6 : 1 }}>
+            {alsRij ? (
+              <div
+                className="lrow"
+                style={{ cursor: onOpen ? 'pointer' : 'default' }}
+                onClick={onOpen ? () => onOpen(r) : undefined}
+              >
+                <div className="lrow-main">
+                  <div className="lrow-title">
+                    {los && <span className="kk-plan-los">Los item</span>}
+                    {[omschrijving, wie].filter(Boolean).join(' · ') || 'Ingepland'}
+                  </div>
+                  <div className="lrow-sub">{tijd}</div>
+                </div>
+                {badge}
+                <span className="lrow-date lrow-plan-datum">{korteDatum(r.datum)}</span>
+              </div>
+            ) : (
             <div
               className="kk-planregel"
               style={{ cursor: onOpen ? 'pointer' : 'default' }}
               onClick={onOpen ? () => onOpen(r) : undefined}
             >
               <span className="kk-plan-datum">{korteDatum(r.datum)}</span>
-              <span className="kk-plan-tijd">
-                {r.starttijd ? `${r.starttijd}${r.eindtijd ? `–${r.eindtijd}` : ''}` : 'geen tijd'}
-              </span>
+              <span className="kk-plan-tijd">{tijd}</span>
               <span className="kk-plan-wie">
                 {los && <span className="kk-plan-los">Los item</span>}
-                {[omschrijving, r.wie.length ? r.wie.join(', ') : (los ? null : 'niemand toegewezen')]
-                  .filter(Boolean).join(' · ')}
+                {[omschrijving, wie].filter(Boolean).join(' · ')}
               </span>
-              <StatusBadge
-                status={los ? r.activiteit.status : r.werkbon.status}
-                domain={los ? 'activiteit' : 'werkbon'}
-              />
+              {badge}
             </div>
+            )}
             {bussen.map(b => (
               <div key={b.vid} className="kk-plan-bus">
                 <Truck size={12} />

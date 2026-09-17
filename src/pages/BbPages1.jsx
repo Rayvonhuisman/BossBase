@@ -469,14 +469,14 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   const TABS = [
     'overview',
     'planning',
+    'projecten',
     'werkbonnen',
     'notities',
     can('offertes')  && 'quotes',
     can('facturen')  && 'facturen',
     can('kosten')    && 'costs',
-    'projecten',
-    'timeline',
     'emails',
+    'timeline',
     'klantgegevens',
   ].filter(Boolean);
 
@@ -1062,73 +1062,66 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
         </div>
       )}
 
-      {/* Planning tab: alle geplande dagen van alle werkbonnen van deze klant. */}
+      {/* Planning tab: alle geplande dagen van alle werkbonnen van deze klant.
+          Zelfde opmaak als het tabblad Projecten: kop met lsec-hd en losse
+          rijen, geen kaartomhulsel. */}
       {tab === 'planning' && (
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--br)' }}>
-            <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Ingepland ({alleRegels.length})</div>
+        <div>
+          <div className="lsec-hd">
+            <div className="lsec-title">Ingepland ({alleRegels.length})</div>
             {planKeuze((onClick, label) => (
               <button className="btn btn-s btn-sm" onClick={onClick}>{I.plus} {label}</button>
             ))}
           </div>
-          {alleRegels.length === 0 ? (
-            <div className="kk-leeg" style={{ padding: '30px 0' }}>
-              <span>Nog niets ingepland voor deze klant.</span>
-              {planKeuze((onClick, label) => (
-                <button className="btn btn-p btn-sm" onClick={onClick}>{I.plus} {label}</button>
-              ))}
-            </div>
-          ) : (
-            <div style={{ padding: '2px 16px 10px' }}>
-              <PlanningRegels
-                regels={alleRegels}
-                onOpen={openRegel}
-                vandaag={vandaagIso}
-                toonTitel
-              />
-            </div>
-          )}
+          {alleRegels.length === 0
+            ? <div className="lsec-empty">Nog niets ingepland voor deze klant</div>
+            : (
+              <div className="lrows">
+                <PlanningRegels
+                  regels={alleRegels}
+                  onOpen={openRegel}
+                  vandaag={vandaagIso}
+                  toonTitel
+                  variant="lrow"
+                />
+              </div>
+            )}
         </div>
       )}
 
-      {/* Werkbonnen tab: alle werkbonnen van deze klant. */}
+      {/* Werkbonnen tab: alle werkbonnen van deze klant. Zelfde opmaak als het
+          tabblad Projecten: kop met lsec-hd en losse rijen in lrows/lrow, geen
+          kaartomhulsel. */}
       {tab === 'werkbonnen' && (
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--br)' }}>
-            <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Werkbonnen ({cWerkbonnen.length})</div>
+        <div>
+          <div className="lsec-hd">
+            <div className="lsec-title">Werkbonnen ({cWerkbonnen.length})</div>
             {/* Alleen admin en planner: de database weigert een werkbon van een
                 andere rol (policy werkbonnen_insert). */}
             {magWerkbonInplannen && (
-              <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een werkbon aanmaken', () => setShowNewWerkbon(true))}>
+              <button className="btn btn-s btn-sm" onClick={guardSchrijven('Een werkbon aanmaken', () => setShowNewWerkbon(true))}>
                 {I.plus} Nieuwe werkbon
               </button>
             )}
           </div>
-          {cWerkbonnen.length === 0 ? (
-            <div className="kk-leeg" style={{ padding: '30px 0' }}>
-              <span>Deze klant heeft nog geen werkbonnen.</span>
-              {magWerkbonInplannen && (
-                <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een werkbon aanmaken', () => setShowNewWerkbon(true))}>
-                  {I.plus} Nieuwe werkbon
-                </button>
-              )}
-            </div>
-          ) : (
-            [...cWerkbonnen]
-              .sort((a, b) => String(b.geplandOp || '').localeCompare(String(a.geplandOp || '')))
-              .map(w => (
-                <div key={w.id} className="kk-row" onClick={() => setPage?.('werkbonnen', { id: w.id })}>
-                  <div className="kk-row-left">
-                    <div className="kk-row-title">{w.titel || 'Werkbon'}</div>
-                    <div className="kk-row-sub">{w.nummer || 'geen nummer'}{w.locatie ? ` · ${w.locatie}` : ''}</div>
-                  </div>
-                  <div className="kk-row-right">
-                    <StatusBadge status={w.status} domain="werkbon" />
-                    <span className="kk-row-date">{w.geplandOp ? korteDatum(w.geplandOp) : 'niet ingepland'}</span>
-                  </div>
-                </div>
-              ))
-          )}
+          {cWerkbonnen.length === 0
+            ? <div className="lsec-empty">Geen werkbonnen</div>
+            : (
+              <div className="lrows">
+                {[...cWerkbonnen]
+                  .sort((a, b) => String(b.geplandOp || '').localeCompare(String(a.geplandOp || '')))
+                  .map(w => (
+                    <div key={w.id} className="lrow" onClick={() => setPage?.('werkbonnen', { id: w.id })}>
+                      <div className="lrow-main">
+                        <div className="lrow-title">{w.titel || 'Werkbon'}</div>
+                        <div className="lrow-sub">{w.nummer || 'geen nummer'}{w.locatie ? ` · ${w.locatie}` : ''}</div>
+                      </div>
+                      <StatusBadge status={w.status} domain="werkbon" />
+                      <span className="lrow-date">{w.geplandOp ? korteDatum(w.geplandOp) : 'niet ingepland'}</span>
+                    </div>
+                  ))}
+              </div>
+            )}
         </div>
       )}
 

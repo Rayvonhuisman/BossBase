@@ -2507,7 +2507,7 @@ export function InstellingenPage() {
                 de kaartrand. De details zitten achter het info-icoon. */}
             <div style={{
               fontSize: '.8rem', color: 'var(--dm)', padding: '10px 18px 12px', lineHeight: 1.5,
-              display: 'flex', alignItems: 'flex-start', gap: 6, maxWidth: 660,
+              display: 'flex', alignItems: 'center', gap: 6,
             }}>
               <span>
                 Je deals schuiven automatisch mee met je werk. Kies hieronder bij elk moment
