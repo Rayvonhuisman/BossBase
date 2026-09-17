@@ -75,7 +75,10 @@ serve(async (req) => {
       const { data: prof } = await admin
         .from('profiles').select('full_name').eq('id', userId).maybeSingle()
       const { data: bedrijf } = await admin
-        .from('companies').select('name, email, logo_url, branding_color').eq('id', companyId).maybeSingle()
+        // Alleen naam (voor mail_fouten) en e-mail (voor reply-to): logo en
+        // huisstijlkleur zijn hier niet meer nodig sinds deze mail als BossBase
+        // uitgaat.
+        .from('companies').select('name, email').eq('id', companyId).maybeSingle()
 
       const naar = authUser?.user?.email
       const bedrijfsnaam = (bedrijf?.name as string) || 'BossBase'
@@ -106,9 +109,11 @@ serve(async (req) => {
                <p>Er ${aantal === 1 ? 'is' : 'zijn'} vandaag ${aantal} wijziging${aantal === 1 ? '' : 'en'} in je planning doorgevoerd:</p>
                <ul style="padding-left:18px;margin:12px 0">${rijen.map(regel).join('')}</ul>
                <p style="color:#6b7280;font-size:13px">Kijk in BossBase onder Planning voor je volledige week.</p>`,
-        companyName: bedrijfsnaam,
-        logoUrl: (bedrijf?.logo_url as string) || undefined,
-        brandColor: (bedrijf?.branding_color as string) || undefined,
+        // Bewust GEEN companyName/logoUrl/brandColor: dit is post van BossBase
+        // aan een medewerker, niet van het bedrijf aan een klant. Zonder
+        // companyName kiest mailTemplate vanzelf de BossBase-variant (officieel
+        // logo, BossBase-groen). De bedrijfsnaam blijft hierboven wel staan voor
+        // mail_fouten.
       })
 
       const res = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
@@ -122,7 +127,7 @@ serve(async (req) => {
           to: naar,
           subject: `Je planning is gewijzigd (${aantal} wijziging${aantal === 1 ? '' : 'en'})`,
           html,
-          from_name: bedrijfsnaam,
+          from_name: 'BossBase',
           reply_to: bedrijf?.email || undefined,
           soort: 'planning_samenvatting',
           company_id: companyId,

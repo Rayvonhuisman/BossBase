@@ -142,7 +142,18 @@ serve(async (req) => {
         .select('name, reply_to_email, email')
         .eq('id', companyId)
         .maybeSingle()
-      const fromName = co?.name || 'BossBase'
+      // Interne post komt van BossBase, niet van het bedrijf. De huisstijl van
+      // een bedrijf is voor communicatie naar HUN klanten; een monteur die "je
+      // bent getagd" of "je bent ingepland" krijgt, hoort te zien dat het
+      // systeem dat stuurt. De HTML deed dit al goed (mailTemplate zonder
+      // companyName = BossBase-variant); alleen de afzendernaam liep nog mee.
+      const fromName = 'BossBase'
+      // De echte bedrijfsnaam blijft wél nodig: die gaat naar mail_fouten, zodat
+      // daar leesbaar staat bij welk bedrijf de post is blijven liggen.
+      const bedrijfsnaam = co?.name || 'onbekend bedrijf'
+      // Reply-to blijft het bedrijfsadres: dat is routering, geen huisstijl.
+      // Antwoordt een medewerker, dan komt dat bij zijn werkgever terecht en
+      // niet op noreply@bossbase.nl.
       const replyTo  = co?.reply_to_email || co?.email || null
 
       for (const job of mailJobs) {
@@ -153,7 +164,7 @@ serve(async (req) => {
             // en niemand wist dat de collega niets in zijn inbox kreeg.
             await logMailFout({
               soort: job.soort || 'collega_melding',
-              ontvanger: null, companyId, bedrijfNaam: fromName,
+              ontvanger: null, companyId, bedrijfNaam: bedrijfsnaam,
               fout: `Geen e-mailadres bekend voor gebruiker ${job.userId}`,
               bron: 'create-notification',
             })

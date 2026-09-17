@@ -201,15 +201,16 @@ serve(async (req) => {
         preheader: `De ontbrekende bijlage bij ${cfg.label} ${rij.nummer} is aangevuld`,
         body: `<p>Bij het ondertekenen van ${cfg.label} <strong>${esc(rij.nummer)}</strong> kon de PDF niet in de browser van de klant gemaakt worden, waardoor de bevestiging zonder bijlage wegging.</p>
 <p>Het document is nu alsnog gemaakt en opgeslagen; de klant heeft de bijlage per mail nagestuurd gekregen. Hij staat ook in BossBase bij de ${cfg.label}.</p>`,
-        companyName: bedrijfsnaam,
-        logoUrl: (bedrijf?.logo_url as string) || undefined,
-        brandColor: (bedrijf?.branding_color as string) || undefined,
+        // Interne melding aan het bedrijf zelf: BossBase-stijl, dus bewust geen
+        // companyName/logo/kleur. Zonder companyName kiest mailTemplate vanzelf
+        // de BossBase-variant. De klantmail hierboven houdt wél de eigen
+        // huisstijl — die is voor hún klant, deze is systeempost.
       })
       const ok = await stuurMail(supabaseUrl, serviceKey, {
         to: bedrijf.email,
         subject: `Ondertekende ${cfg.label} ${rij.nummer}: bijlage aangevuld`,
         html,
-        from_name: bedrijfsnaam,
+        from_name: 'BossBase',
         reply_to: klantEmail || undefined,
         attachments: bijlagen,
         soort: `nazending_${soort}_bedrijf`,

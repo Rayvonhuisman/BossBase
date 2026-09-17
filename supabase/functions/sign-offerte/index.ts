@@ -327,8 +327,10 @@ ${hasPdf ? '<p>In de bijlage vindt u de ondertekende offerte.</p>' : ''}
       if (attachments) klantBody.attachments = attachments
       if (!(await sendViaEdge(supabaseUrl, serviceKey, klantBody))) warnings.push('Bevestigingsmail naar klant mislukt')
 
-      // 2) BEDRIJF-notificatie — óók bedrijfsbranding (interne melding naar het
-      //    bedrijf zelf, in hun eigen huisstijl).
+      // 2) BEDRIJF-notificatie — BossBase-stijl. Dit is systeempost aan de
+      //    ondernemer zelf ("je offerte is ondertekend"), geen communicatie naar
+      //    zijn klant. De eigen huisstijl blijft voorbehouden aan de klantmail
+      //    hierboven; zie ook sign-werkbon, dat het al zo deed.
       if (bedrijfEmail) {
         const bedrijfHtml = mailTemplate({
           title: `Offerte ${offerte.nummer} ondertekend`,
@@ -338,12 +340,9 @@ ${hasPdf ? '<p>In de bijlage vindt u de ondertekende offerte.</p>' : ''}
 Datum en tijd: ${esc(signedAtFmt)}<br>
 Totaal: <strong>${esc(totaalFmt)}</strong></p>
 ${hasPdf ? '<p>De ondertekende offerte is als bijlage toegevoegd.</p>' : ''}`,
-          companyName: bedrijfsnaam,
-          logoUrl,
-          brandColor,
         })
         const bedrijfBody: Record<string, unknown> = {
-          to: bedrijfEmail, subject: `Offerte ${offerte.nummer} ondertekend door ${name}`, html: bedrijfHtml, from_name: bedrijfsnaam,
+          to: bedrijfEmail, subject: `Offerte ${offerte.nummer} ondertekend door ${name}`, html: bedrijfHtml, from_name: 'BossBase',
           // Antwoorden gingen naar noreply@bossbase.nl en las dus niemand. Wie op
           // deze melding reageert, wil de klant bereiken.
           reply_to: email,
