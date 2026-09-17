@@ -3335,6 +3335,9 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .kk-plan-bus{display:flex;align-items:center;gap:6px;padding:0 0 8px 102px;font-size:.78rem;color:var(--dl);line-height:1.4}
 .kk-plan-bus svg{flex-shrink:0;opacity:.7}
 .kk-plan-bus span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Los item: een activiteit die niet aan een werkbon hangt, herkenbaar tussen
+   de werkbondagen. */
+.kk-plan-los{display:inline-block;margin-right:6px;padding:1px 6px;border-radius:999px;background:var(--bgs);border:1px solid var(--br);font-size:.68rem;font-weight:700;color:var(--dm);vertical-align:1px}
 .kk-plan-datum{font-weight:700;color:var(--dk);min-width:92px;font-variant-numeric:tabular-nums}
 .kk-plan-tijd{color:var(--dm);font-variant-numeric:tabular-nums;min-width:96px}
 .kk-plan-wie{color:var(--dl);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

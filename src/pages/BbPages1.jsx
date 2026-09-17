@@ -23,7 +23,7 @@ import { getWerkbonnen } from '../services/werkbonService.js';
 import { listPipelineStages } from '../services/dealService.js';
 import { buildStageIndex, dealCategory } from '../utils/pipeline.js';
 import { korteDatum } from '../utils/werkbonDagen.js';
-import { PlanningRegels, planRegels } from '../components/PlanningBlok.jsx';
+import { PlanningRegels, losseRegels, planRegels, samenOpDatum } from '../components/PlanningBlok.jsx';
 import { WerkbonModal } from './WerkbonPageV2.jsx';
 import { NewOfferteModal, OfferteBadge } from './OffertesPage.jsx';
 import { NewFactuurModal, FactuurBadge } from './FacturenPage.jsx';
@@ -358,15 +358,20 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   const naamVan = id => teamMembers.find(m => m.id === id || m.profileId === id)?.fullName || '';
   // Wat mag deze gebruiker inplannen?
   //
-  // Werkbon: de database laat alleen admin en planner invoegen (policy
-  // werkbonnen_insert toetst profiles.role). Iemand met alleen het
-  // planning-recht loopt dus tegen een RLS-fout aan; die knop tonen we niet.
+  // Werkbon: hetzelfde recht dat de database toetst sinds migratie
+  // 20260918110000 — 'planning' of 'werkbonnen_bewerken'. can() geeft een admin
+  // alles en rekent de oude rol 'planner' mee, net als bb_has_permission, dus
+  // knop en policy zeggen nu hetzelfde.
   // Los item (activiteit): elke gebruiker van het bedrijf mag die invoegen.
   // Abonnement: werkbonnen en activiteiten zitten in elk pakket — ze hebben
   // geen feature in de navigatie — dus hier geen plan.has-gate. Een meekijk-
   // abonnement wordt door guardSchrijven afgevangen.
-  const magWerkbonInplannen = isAdmin || profile?.role === 'planner';
+  const magWerkbonInplannen = can('planning') || can('werkbonnen_bewerken');
   const magLosItemInplannen = !!profile;
+  // Een regel opent waar hij thuishoort: de werkbon, of het losse item zelf.
+  const openRegel = r => (r.soort === 'los'
+    ? setSelectedAct(r.activiteit)
+    : setPage?.('werkbonnen', { id: r.werkbon.id }));
   const planKeuze = knop => (
     <PlanKeuze
       magWerkbon={magWerkbonInplannen}
@@ -376,9 +381,12 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
       knop={knop}
     />
   );
-  const planningRegels = planRegels(planWerkbonnen, naamVan);
+  // Losse items (activiteiten van deze klant) staan tussen de werkbondagen, op
+  // datum: voor de klant is het één agenda, ongeacht waar het vandaan komt.
+  const losRegels = losseRegels(cActs);
+  const planningRegels = samenOpDatum(planRegels(planWerkbonnen, naamVan), losRegels);
   const komendeRegels = planningRegels.filter(r => r.datum >= new Date().toISOString().slice(0, 10));
-  const alleRegels = planRegels(cWerkbonnen, naamVan);
+  const alleRegels = samenOpDatum(planRegels(cWerkbonnen, naamVan), losRegels);
   const vandaagIso = new Date().toISOString().slice(0, 10);
   // Aanvraagtekst: voorlopig wat de deal erover zegt. Eén plek, zodat de echte
   // aanvraagdata later alleen hier hoeft te worden aangesloten.
@@ -740,7 +748,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
               <div>
                 <PlanningRegels
                   regels={(komendeRegels.length ? komendeRegels : planningRegels).slice(0, 4)}
-                  onOpen={r => setPage?.('werkbonnen', { id: r.werkbon.id })}
+                  onOpen={openRegel}
                 />
               </div>
             )}
@@ -1058,7 +1066,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
       {tab === 'planning' && (
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--br)' }}>
-            <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Geplande dagen ({alleRegels.length})</div>
+            <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Ingepland ({alleRegels.length})</div>
             {planKeuze((onClick, label) => (
               <button className="btn btn-s btn-sm" onClick={onClick}>{I.plus} {label}</button>
             ))}
@@ -1074,7 +1082,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
             <div style={{ padding: '2px 16px 10px' }}>
               <PlanningRegels
                 regels={alleRegels}
-                onOpen={r => setPage?.('werkbonnen', { id: r.werkbon.id })}
+                onOpen={openRegel}
                 vandaag={vandaagIso}
                 toonTitel
               />
