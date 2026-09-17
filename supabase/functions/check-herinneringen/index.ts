@@ -198,13 +198,23 @@ serve(async (req) => {
       const windowStart = lokaalNaarUtc(addDagen(minDagen), '00:00')!.toISOString()
       const windowEnd = new Date(lokaalNaarUtc(addDagen(maxDagen + 1), '00:00')!.getTime() - 1).toISOString()
 
-      const { data: activiteiten } = await db
+      const { data: activiteiten, error: actErr } = await db
         .from('activities')
         .select('*, customers(name, email), companies:company_id(name, email, logo_url, branding_color)')
         .eq('type', 'visit')
         .gte('due_at', windowStart)
         .lte('due_at', windowEnd)
         .eq('completed', false)
+      // supabase-js GOOIT niet bij een databasefout; die komt terug in `error`.
+      // Zonder deze controle bleef de lijst leeg en ging er geruisloos niets uit
+      // — niemand zou ooit zien dat er herinneringen zijn blijven liggen.
+      if (actErr) {
+        await logMailFout({
+          soort: 'afspraak_herinnering', ontvanger: null, companyId: null, bedrijfNaam: 'BossBase',
+          fout: `Afspraken ophalen mislukt: ${actErr.message}`, bron: 'check-herinneringen',
+        })
+        results.errors.push(`activities: ${actErr.message}`)
+      }
 
       for (const act of (activiteiten || [])) {
         if (!act.customers?.email) continue
@@ -242,9 +252,77 @@ serve(async (req) => {
           ? substituteVarsHtml(tpl.body_html, vars)
           : plainTextToHtml(substituteVars(tpl.body, vars))
         const html = mailTemplate({ title: subject, body: innerBody, companyName: company.name, logoUrl: company.logo_url || undefined, brandColor: company.branding_color || undefined })
-        const msgId = await sendMail(act.customers.email, subject, html, company.name)
+        const msgId = await sendMail(act.customers.email, subject, html, company.name, 'afspraak_herinnering', act.company_id)
         if (msgId !== null) {
           await db.from('sent_emails').insert({ company_id: act.company_id, to_email: act.customers.email, subject, related_type: 'activity', related_id: act.id, customer_id: act.customer_id, appointment_id: act.id, status: 'sent' })
+          results.afspraken++
+        }
+      }
+
+      // ── Afspraken uit de agenda ─────────────────────────────────────────────
+      // Hier zat het gat. Deze herinnering keek uitsluitend naar activiteiten van
+      // het type 'visit', terwijl de meeste klantafspraken in de agenda staan
+      // (calendar_events). Die tabel werd nooit bekeken, en daarom is er sinds
+      // de invoering geen enkele afspraakherinnering verstuurd.
+      //
+      // Niet meenemen: agenda-items uit een werkbon (dat is uitvoering, geen
+      // afspraak mét de klant) en items die aan een activiteit hangen, want die
+      // zijn hierboven al afgehandeld — anders krijgt de klant twee mails.
+      const { data: agenda, error: agendaErr } = await db
+        .from('calendar_events')
+        .select('*, customers(name, email), companies:company_id(name, email, logo_url, branding_color)')
+        .gte('start_at', windowStart)
+        .lte('start_at', windowEnd)
+        .is('werkbon_id', null)
+        .is('activiteit_id', null)
+        .not('customer_id', 'is', null)
+      if (agendaErr) {
+        await logMailFout({
+          soort: 'afspraak_herinnering', ontvanger: null, companyId: null, bedrijfNaam: 'BossBase',
+          fout: `Agenda-afspraken ophalen mislukt: ${agendaErr.message}`, bron: 'check-herinneringen',
+        })
+        results.errors.push(`calendar_events: ${agendaErr.message}`)
+      }
+
+      for (const ev of (agenda || [])) {
+        if (!ev.customers?.email) continue
+        const company = ev.companies
+        if (!company) continue
+
+        const tpl = tplByCompany.get(ev.company_id)
+        if (!tpl) continue
+
+        // Zelfde EXACT-dag match als hierboven: precies over auto_dagen dagen.
+        const autoDagen = (tpl.auto_dagen ?? 1)
+        if (lokaleDatum(ev.start_at) !== addDagen(autoDagen)) continue
+
+        // Zelfde idempotentie: één rij in sent_emails per afspraak. appointment_id
+        // heeft geen foreign key, dus een calendar_event-id kan er net zo goed in.
+        const { count } = await db
+          .from('sent_emails')
+          .select('id', { count: 'exact', head: true })
+          .eq('appointment_id', ev.id)
+          .eq('company_id', ev.company_id)
+
+        if (count && count > 0) continue
+
+        const start = new Date(ev.start_at)
+        const vars = {
+          klant_naam: ev.customers.name || 'klant',
+          bedrijfsnaam: company.name || 'ons bedrijf',
+          afspraak_datum: langeDatumNl(start),
+          afspraak_tijd: lokaleTijd(start),
+        }
+
+        const subject = substituteVars(tpl.onderwerp, vars)
+        const innerBody = tpl.body_html
+          ? substituteVarsHtml(tpl.body_html, vars)
+          : plainTextToHtml(substituteVars(tpl.body, vars))
+        // Naar de KLANT, dus in de huisstijl van het bedrijf.
+        const html = mailTemplate({ title: subject, body: innerBody, companyName: company.name, logoUrl: company.logo_url || undefined, brandColor: company.branding_color || undefined })
+        const msgId = await sendMail(ev.customers.email, subject, html, company.name, 'afspraak_herinnering', ev.company_id)
+        if (msgId !== null) {
+          await db.from('sent_emails').insert({ company_id: ev.company_id, to_email: ev.customers.email, subject, related_type: 'calendar_event', related_id: ev.id, customer_id: ev.customer_id, appointment_id: ev.id, status: 'sent' })
           results.afspraken++
         }
       }
