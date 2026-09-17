@@ -32,10 +32,35 @@ const toNotification = row => ({
 async function pushNotifications(notifications) {
   const list = (notifications || []).filter(Boolean);
   if (!list.length) return;
+
+  let fout = null;
   try {
-    await supabase.functions.invoke('create-notification', { body: { notifications: list } });
+    // LET OP: invoke gooit NIET bij een 4xx/5xx. Een stukgelopen edge function
+    // komt terug in `error`; wie alleen een try/catch zet, mist precies dat
+    // geval en denkt dat de melding is aangekomen.
+    const { error } = await supabase.functions.invoke('create-notification', { body: { notifications: list } });
+    if (error) fout = error.message || String(error);
   } catch (e) {
-    if (import.meta.env.DEV) console.warn('[notificatie] edge insert mislukt', e?.message);
+    fout = e?.message || String(e);
+  }
+  if (!fout) return;
+
+  console.warn('[notificatie] create-notification mislukt:', fout);
+  // Een melding die niet aankomt is post die blijft liggen; die hoort in
+  // mail_fouten, niet alleen in een console die niemand openheeft staan. De
+  // RPC loopt over PostgREST — juist als de edge functions het laten afweten.
+  try {
+    await supabase.rpc('meld_mail_fout', {
+      p_soort: `notificatie_${list[0]?.type || 'onbekend'}`,
+      p_fout: `create-notification mislukt voor ${list.length} melding(en): ${fout}`,
+      p_bron: 'pushNotifications',
+      p_gerelateerd_type: list[0]?.related_type || null,
+      p_gerelateerd_id: list[0]?.related_id || null,
+    });
+  } catch (e) {
+    // Laatste redmiddel: lukt ook dit niet, dan is er niets meer over om het in
+    // te schrijven. Wel luid in de console, niet stil zoals voorheen.
+    console.error('[notificatie] fout kon niet worden vastgelegd:', e?.message);
   }
 }
 
