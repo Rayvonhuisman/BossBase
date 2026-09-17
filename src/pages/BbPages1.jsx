@@ -1264,7 +1264,10 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
                       ? <iframe
                           className="bb-mailframe"
                           title={`Voorbeeld van de e-mail: ${m.subject || 'zonder onderwerp'}`}
-                          sandbox=""
+                          // Alleen wat nodig is om een link in een nieuw tabblad
+                          // te openen. Géén allow-scripts, allow-forms of
+                          // allow-same-origin: de mail blijft afgeschermd.
+                          sandbox="allow-popups allow-popups-to-escape-sandbox"
                           srcDoc={mailVoorbeeldDocument(DOMPurify.sanitize(m.body_html))}
                         />
                       : <div style={{ color: 'var(--dl)', fontSize: '.82rem', fontStyle: 'italic' }}>Inhoud niet beschikbaar voor oudere e-mails</div>

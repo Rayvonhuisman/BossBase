@@ -16,6 +16,14 @@
 const RESET = `
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Links openen in een nieuw tabblad. Zonder dit proberen ze binnen het
+       frame te navigeren, en dat blokkeert de sandbox — er gebeurt dan niets.
+       De iframe krijgt daarom allow-popups (anders mag het frame helemaal geen
+       venster openen) en allow-popups-to-escape-sandbox (anders erft het nieuwe
+       tabblad de afscherming en laadt de pagina daar kapot). Scripts,
+       formulieren, same-origin en navigatie van de omliggende pagina blijven
+       geblokkeerd. -->
+  <base target="_blank">
   <style>
     html, body {
       margin: 0;
