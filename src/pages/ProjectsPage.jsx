@@ -36,23 +36,6 @@ export function ProjectBadge({ status }) {
   return <span className={s.className}>{s.label}</span>;
 }
 
-// Slanke progress bar (uren-budget). Kleur volgt het uren-percentage zelf.
-function ProgressBar({ pct }) {
-  const ratio = Math.max(0, Math.min(1.2, Number(pct) || 0));
-  const display = Math.min(1, ratio);
-  const color = ratio > 1 ? '#dc2626' : ratio >= 0.8 ? '#f59e0b' : '#1DDB62';
-  return (
-    <div style={{ width: '100%', height: 6, background: '#f3f4f6', borderRadius: 999, overflow: 'hidden', position: 'relative' }}>
-      <div style={{ width: `${display * 100}%`, height: '100%', background: color, borderRadius: 999, transition: 'width .3s ease' }} />
-      {ratio > 1 && (
-        <div style={{ position: 'absolute', top: 0, right: 0, fontSize: 9, fontWeight: 700, color: '#dc2626', padding: '0 4px' }}>
-          {Math.round(ratio * 100)}%
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── NEW PROJECT MODAL ────────────────────────────────────────────────────────
 
 export function NewProjectModal({ onClose, onSaved, customers, deals, offertes, prefillCustomerId = null }) {
@@ -267,7 +250,6 @@ function ProjectCard({ p, onOpen }) {
           <div style={{ fontWeight: 600 }}>{fmtDate(p.deadline)}</div>
         </div>
       </div>
-      <ProgressBar pct={p.hoursPercentage} />
       {magBedragen && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
           <div style={{ fontSize: 11, color: 'var(--dl)' }}>
@@ -500,7 +482,6 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
                     {magBedragen && <th className="th">Waarde</th>}
                     {magBedragen && <th className="th">Gefactureerd</th>}
                     <th className="th">Uren</th>
-                    <th className="th" style={{ minWidth: 110 }}>Budget</th>
                     <th className="th">Deadline</th>
                     <th className="th">Acties</th>
                   </tr>
@@ -538,9 +519,6 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
                         )}
                         <td className="td" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                           {fmtHours(p.usedHours)} / {fmtHours(p.quotedHours)}
-                        </td>
-                        <td className="td">
-                          <ProgressBar pct={p.hoursPercentage} />
                         </td>
                         <td className="td" style={{ color: isOverdue ? '#dc2626' : 'inherit', whiteSpace: 'nowrap' }}>
                           {fmtDate(p.deadline)}

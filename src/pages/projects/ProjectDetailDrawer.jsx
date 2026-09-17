@@ -482,14 +482,6 @@ function UrenTab({ project, entries }) {
           </div>
         </div>
         <div style={{ marginTop: 10 }}>
-          <div style={{ width: '100%', height: 8, background: '#e7e9ec', borderRadius: 999, overflow: 'hidden' }}>
-            <div style={{
-              width: `${Math.min(1, pct) * 100}%`,
-              height: '100%',
-              background: warningTone === 'risk' ? '#dc2626' : warningTone === 'warning' ? '#f59e0b' : '#1DDB62',
-              borderRadius: 999,
-            }} />
-          </div>
           {warningTone === 'warning' && (
             <div style={{ color: '#b45309', fontSize: 12, marginTop: 6, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
               <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
