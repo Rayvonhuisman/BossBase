@@ -154,7 +154,7 @@ const SECTIONS = [
 ];
 
 // ── SIDEBAR ──────────────────────────────────────────────────
-function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loading, onOpenProfile, badges = {}, collapsed, onToggleCollapsed }) {
+function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, company, loading, onOpenProfile, badges = {}, collapsed, onToggleCollapsed }) {
   const { can } = usePermissions();
   const plan = usePlan();
   // Handmatig open/dicht geklapte navigatiegroepen. Niet gezet = volg de
@@ -163,8 +163,16 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, loadin
   const go = id => { setPage(id); onClose(); };
   const initials = profileInitials(profile, user);
   const name = displayName(profile, user);
-  const roleLabel = profile?.role
-    ? `${profile.role.charAt(0).toUpperCase() + profile.role.slice(1)} · BossBase`
+  // Achter de rol hoort het bedrijf waar je nu in werkt, niet de naam van de
+  // software: "Admin · Dakdekker Niels". Hier stond 'BossBase' hardgecodeerd,
+  // dus elk bedrijf zag dezelfde regel. Laadt de bedrijfsnaam nog, dan alleen de
+  // rol — beter een halve regel dan een verkeerde.
+  const bedrijfsnaam = company?.name || '';
+  const rolNaam = profile?.role
+    ? profile.role.charAt(0).toUpperCase() + profile.role.slice(1)
+    : '';
+  const roleLabel = rolNaam
+    ? (bedrijfsnaam ? `${rolNaam} · ${bedrijfsnaam}` : rolNaam)
     : 'Profiel openen';
   const navRef = useRef(null);
   useEffect(() => {
@@ -1569,6 +1577,7 @@ function AppInner() {
           onLogout={handleLogout}
           profile={profile}
           user={user}
+          company={company}
           loading={profileLoading}
           onOpenProfile={() => setOpenProfile(true)}
           badges={sidebarBadges}

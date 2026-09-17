@@ -3358,3 +3358,13 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .kk-plan-tijd{color:var(--dk);font-variant-numeric:tabular-nums;min-width:96px}
 .kk-plan-wie{color:var(--dk);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kk-leeg{display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px 0;color:#9ca3af;font-size:.84rem}
+
+/* Mailvoorbeeld op de klantkaart (tabblad E-mails). Een verstuurde mail is een
+   compleet HTML-document met eigen <style>-regels die `body`, `table` en `p`
+   rechtstreeks aanspreken; in de pagina zelf herschrijven die de klantkaart.
+   Vandaar een iframe: eigen document, eigen opmaak, niets lekt naar buiten.
+   Vaste hoogte met een eigen scrollbalk, zodat een lange mail het paneel niet
+   oprekt. De breedte volgt het paneel, dus ook op half scherm en tablet. */
+.bb-mailframe{display:block;width:100%;height:420px;border:0;background:#fff;border-radius:var(--r8)}
+@media(max-width:900px){.bb-mailframe{height:320px}}
+@media(max-width:640px){.bb-mailframe{height:260px}}
