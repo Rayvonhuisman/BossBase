@@ -645,8 +645,11 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
                     }
                     close();
                     if (n.link) {
-                      const parts = n.link.split('/');
-                      if (parts[0]) navigatePage(parts[0]);
+                      // 'werkbonnen' of 'werkbonnen/<id>'. Het id werd tot nu toe
+                      // weggegooid, waardoor je op de lijst belandde; met id
+                      // opent de pagina meteen het item zelf.
+                      const [pagina, id] = n.link.split('/');
+                      if (pagina) navigatePage(pagina, id ? { id } : undefined);
                     }
                   };
                   const ago = (() => {
@@ -866,7 +869,19 @@ function AppInner() {
 
   const [drawerDeal, setDrawerDeal] = useState(null);
   const [drawerCalEvent, setDrawerCalEvent] = useState(null);
-  const [navIntent,  setNavIntent]  = useState(null);
+  // Een knop in een collega-mail linkt naar /dashboard/<pagina>?open=<id>. Dat
+  // id wordt hier meteen een navigatie-intentie, zodat de pagina zijn eigen
+  // detailvenster opent (preOpenWerkbonId en verwanten). Zonder deze ingang kwam
+  // je op de lijstpagina uit en moest je het item alsnog zelf opzoeken.
+  const [navIntent,  setNavIntent]  = useState(() => {
+    try {
+      const path = window.location.pathname;
+      if (!path.startsWith('/dashboard/')) return null;
+      const sub = path.slice('/dashboard/'.length).split('/')[0];
+      const id = new URLSearchParams(window.location.search).get('open');
+      return id ? { page: sub, id } : null;
+    } catch { return null; }
+  });
   // Geselecteerde leverancier in de split-weergave (spiegel van drawerCust).
   const [drawerLev,  setDrawerLev]  = useState(null);
   // Terug-naar-klant context: { page, klantId, klantNaam }. Blijft staan tot je

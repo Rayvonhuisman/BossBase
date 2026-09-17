@@ -151,12 +151,15 @@ serve(async (req) => {
       // De echte bedrijfsnaam blijft wél nodig: die gaat naar mail_fouten, zodat
       // daar leesbaar staat bij welk bedrijf de post is blijven liggen.
       const bedrijfsnaam = co?.name || 'onbekend bedrijf'
-      // Reply-to = degene die tagde of toewees. Wie antwoordt op "je bent
-      // getagd" wil die collega bereiken, niet de algemene bedrijfsmailbox en
-      // zeker niet noreply@bossbase.nl. Het adres komt uit de JWT van de
-      // aanroeper, dus het kan niet door de client worden opgegeven.
-      // Is er geen afzender bekend (systeempost), dan het bedrijfsadres.
-      const replyTo  = user.email || co?.reply_to_email || co?.email || null
+      // Reply-to = het bedrijfsadres, bewust NIET het adres van degene die tagde
+      // of toewees. Gemeten: een medewerker kan de adressen van collega's
+      // nergens in de app zien — company_members geeft hem alleen zijn eigen
+      // regel (RLS: profile_id = auth.uid() of admin), profiles heeft niet eens
+      // een e-mailkolom, en de medewerkerkiezer haalt alleen naam en avatar op.
+      // Het adres van de afzender in de header zetten zou dus een gegeven
+      // prijsgeven dat de ontvanger via het scherm niet kan opvragen.
+      // Reageren gaat daarom in de app: de mail heeft daar een knop voor.
+      const replyTo  = co?.reply_to_email || co?.email || null
 
       for (const job of mailJobs) {
         try {

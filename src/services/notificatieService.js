@@ -99,7 +99,18 @@ export async function markAllNotificationsRead() {
 function toAbsoluteUrl(link) {
   if (!link) return undefined
   if (link.startsWith('http')) return link
-  return `https://www.bossbase.nl/${link.replace(/^\//, '')}`
+  // De app luistert uitsluitend op /dashboard/<pagina>. Een pad zonder dat
+  // voorvoegsel valt in App.jsx door naar de marketingsite
+  // (`if (!route.startsWith('/dashboard')) navigate('/')`), dus knoppen in
+  // collega-mails kwamen op de landingspagina uit in plaats van bij het item.
+  //
+  // `link` is 'werkbonnen' of 'werkbonnen/<id>'. Het id wordt ?open=<id>, dat
+  // App.jsx omzet in een navigatie-intentie waarmee de pagina zijn eigen
+  // detailvenster opent (preOpenWerkbonId en verwanten).
+  const schoon = link.replace(/^\//, '')
+  const [pagina, id] = schoon.split('/')
+  const basis = `https://www.bossbase.nl/dashboard/${pagina}`
+  return id ? `${basis}?open=${encodeURIComponent(id)}` : basis
 }
 
 // ── MENTION HELPERS ──────────────────────────────────────────────────────────
@@ -158,6 +169,10 @@ export async function createMentionNotifications({ text, relatedType, relatedId,
 
   const plain = stripMentions(text).slice(0, 120);
 
+  // Met een id opent de knop (en de melding in de belbalk) het item zelf, zodat
+  // je meteen bij de notitie uitkomt in plaats van op een lijstpagina.
+  const diepeLink = link && relatedId ? `${link}/${relatedId}` : link;
+
   const notifRows = [];
   for (const { name, userId } of mentions) {
     // Bewust GEEN self-skip: wie zichzelf tagt krijgt óók een melding + mail.
@@ -172,15 +187,18 @@ export async function createMentionNotifications({ text, relatedType, relatedId,
              <blockquote style="margin:12px 0;padding:12px 16px;background:#f9fafb;border-left:3px solid #1DDB62;border-radius:4px;color:#374151;">
                ${esc(plain)}
              </blockquote>`,
-      buttonText: link ? 'Bekijk notitie' : undefined,
-      buttonUrl: toAbsoluteUrl(link),
+      // Antwoorden per mail kan niet: de reply-to is de bedrijfsmailbox, omdat
+      // het adres van de collega die tagde nergens in de app te zien is. De knop
+      // brengt je daarom naar de notitie zelf, waar je wél kunt reageren.
+      buttonText: link ? 'Reageer in BossBase' : undefined,
+      buttonUrl: toAbsoluteUrl(diepeLink),
     });
     notifRows.push({
       user_id: userId,
       type: 'mention',
       title: `${creatorName || 'Iemand'} heeft je getagd${contextName ? ` bij ${contextName}` : ''}`,
       body: plain || null,
-      link: link || null,
+      link: diepeLink || null,
       related_type: relatedType || null,
       related_id: relatedId || null,
       email: { subject: `${creatorName || 'Collega'} heeft je getagd in een notitie`, html },
