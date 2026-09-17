@@ -97,6 +97,23 @@ serve(async (req) => {
       return json({ success: false, error: 'Je kunt je eigen account hier niet wijzigen' }, 400)
     }
 
+    // De eigenaar van het account is beschermd: een andere admin kan hem niet
+    // deactiveren of verwijderen. Verwijderen kan sowieso niet zolang hij
+    // eigenaar is — de database blokkeert dat ook (bb_profiel_bewaken), dit is
+    // de nette melding ervoor.
+    if (pid && targetCompany) {
+      const { data: bedrijf } = await admin
+        .from('companies').select('eigenaar_id').eq('id', targetCompany).maybeSingle()
+      if (bedrijf?.eigenaar_id && pid === bedrijf.eigenaar_id) {
+        if (action === 'delete') {
+          return json({ success: false, error: 'De eigenaar van het account kan niet worden verwijderd. Draag eerst het eigenaarschap over.' }, 409)
+        }
+        if (caller.id !== bedrijf.eigenaar_id) {
+          return json({ success: false, error: 'De eigenaar van het account kan alleen door de eigenaar zelf worden aangepast.' }, 403)
+        }
+      }
+    }
+
     // Bescherm de laatste actieve beheerder: een bedrijf mag niet zonder admin
     // komen te zitten (anders is niemand meer in staat het team te beheren).
     if (pid && (action === 'deactivate' || action === 'delete')) {

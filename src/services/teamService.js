@@ -220,14 +220,49 @@ export async function updateTeamMember(id, input) {
   if ("fullName" in input) updates.full_name = input.fullName
   if ("hoursPerWeek" in input) updates.hours_per_week = input.hoursPerWeek
 
+  // Achter één id zitten twee soorten rijen: een openstaande uitnodiging leeft
+  // in company_members, een echt teamlid in profiles (zie getTeamMembers). Een
+  // blinde update op company_members raakte voor echte teamleden nul rijen —
+  // .single() gaf dan een fout en de rol veranderde nooit.
+  const { data: uitnodiging } = await supabase
+    .from("company_members").select("id").eq("id", id).maybeSingle()
+
+  if (uitnodiging) {
+    const { data, error } = await supabase
+      .from("company_members")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single()
+    if (error) throw error
+    return toTeamMember(data)
+  }
+
+  // Echt teamlid. Rol en naam staan op profiles en zijn daar niet rechtstreeks
+  // te schrijven: RLS laat alleen je eigen profiel toe, en de trigger
+  // protect_profile_privileges draait een rolwijziging van een `authenticated`
+  // gebruiker stilzwijgend terug. De RPC doet het namens de database en bewaakt
+  // daarbij de eigenaar en de laatste beheerder.
+  const { data, error } = await supabase.rpc("bb_teamlid_bijwerken", {
+    p_profile_id: id,
+    p_rol: updates.role ?? null,
+    p_naam: "full_name" in updates ? updates.full_name : null,
+    p_telefoon: "phone" in updates ? updates.phone : null,
+    p_uren: "hours_per_week" in updates ? Number(updates.hours_per_week) : null,
+  })
+  if (error) throw new Error(error.message || "Opslaan mislukt")
+  return profileToMember(data)
+}
+
+// Wie is de eigenaar van het bedrijf? Nodig om de Team-pagina te laten zien
+// welk teamlid beschermd is. Null als er (nog) geen eigenaar is vastgelegd.
+export async function getEigenaarId() {
+  const companyId = await getCompanyId()
+  if (!companyId) return null
   const { data, error } = await supabase
-    .from("company_members")
-    .update(updates)
-    .eq("id", id)
-    .select()
-    .single()
-  if (error) throw error
-  return toTeamMember(data)
+    .from("companies").select("eigenaar_id").eq("id", companyId).maybeSingle()
+  if (error) return null
+  return data?.eigenaar_id || null
 }
 
 // ── STATUS WIJZIGEN ──────────────────────────────────────────────────────────

@@ -10,6 +10,7 @@ import {
   activateTeamMember,
   deactivateTeamMember,
   deleteTeamMember,
+  getEigenaarId,
 } from '../services/teamService.js';
 import { uploadTeamMemberAvatar, removeTeamMemberAvatar } from '../services/avatarService.js';
 import { AvatarUpload } from '../components/AvatarUpload.jsx';
@@ -132,7 +133,7 @@ function InviteModal({ onClose, onSaved }) {
   );
 }
 
-function EditModal({ member, onClose, onSaved }) {
+function EditModal({ member, rolVergrendeld, rolReden, onClose, onSaved }) {
   const toast = useToast();
   const { startUpload } = useUploads();
   const [form, setForm] = useState({
@@ -148,9 +149,15 @@ function EditModal({ member, onClose, onSaved }) {
   const submit = async () => {
     setSaving(true);
     try {
-      const result = await updateTeamMember(member.id, form);
+      // Een vergrendelde rol sturen we niet mee: de server zou hem weigeren en
+      // dan mislukt ook het opslaan van de naam.
+      const payload = { ...form };
+      if (rolVergrendeld) delete payload.role;
+      const result = await updateTeamMember(member.id, payload);
       toast.success('Teamlid bijgewerkt');
-      onSaved?.({ ...result, avatarUrl: avatarUrl || result.avatarUrl });
+      // Op member beginnen, want het profiel kent geen e-mail/uren — anders
+      // vallen die uit de rij zodra je opslaat.
+      onSaved?.({ ...member, ...result, avatarUrl: avatarUrl || result.avatarUrl });
       onClose();
     } catch (err) {
       toast.error(err.message || 'Opslaan mislukt');
@@ -219,10 +226,21 @@ function EditModal({ member, onClose, onSaved }) {
           </div>
           <div className="f">
             <label>Rol</label>
-            <select value={form.role} onChange={e => set('role', e.target.value)}>
+            <select
+              value={form.role}
+              disabled={rolVergrendeld}
+              onChange={e => set('role', e.target.value)}
+              title={rolReden || undefined}
+            >
               <option value="medewerker">Medewerker</option>
               <option value="admin">Admin</option>
+              {form.role === 'planner' && <option value="planner">Planner</option>}
             </select>
+            {rolVergrendeld && rolReden && (
+              <div style={{ fontSize: '.75rem', color: 'var(--dl)', marginTop: 4, lineHeight: 1.4 }}>
+                {rolReden}
+              </div>
+            )}
           </div>
           <div className="f">
             <label>Uren per week</label>
@@ -427,6 +445,7 @@ export function TeamPage() {
   const [showInvite, setShowInvite] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
   const [permsMember, setPermsMember] = useState(null);
+  const [eigenaarId, setEigenaarId] = useState(null);
   // Gebruikerslimiet + rollen&rechten uit de centrale matrix. Server-side dwingt
   // een restrictive policy op company_members (limiet) en user_permissions
   // (feature) hetzelfde af.
@@ -434,8 +453,8 @@ export function TeamPage() {
 
   useEffect(() => {
     setLoading(true);
-    getTeamMembers()
-      .then(data => setMembers(data))
+    Promise.all([getTeamMembers(), getEigenaarId()])
+      .then(([data, eigenaar]) => { setMembers(data); setEigenaarId(eigenaar); })
       .catch(err => toast.error(err.message || 'Laden mislukt'))
       .finally(() => setLoading(false));
   }, []);
@@ -469,6 +488,21 @@ export function TeamPage() {
     } catch (err) {
       toast.error(err.message || 'Verwijderen mislukt');
     }
+  };
+
+  // Twee teamleden zijn beschermd, en het scherm zegt dat vooraf in plaats van
+  // pas na een mislukte poging. De database en delete-team-member dwingen
+  // hetzelfde af; dit is de uitleg, niet de beveiliging.
+  const actieveAdmins = members.filter(m => m.role === 'admin' && m.status === 'actief');
+  const isEigenaar = m => !!eigenaarId && m.profileId === eigenaarId;
+  const isLaatsteAdmin = m => m.role === 'admin' && m.status === 'actief' && actieveAdmins.length === 1;
+  const ikBenEigenaar = !!eigenaarId && profile?.id === eigenaarId;
+  const EIGENAAR_REDEN = 'De eigenaar van het account kan alleen door de eigenaar zelf worden aangepast.';
+  const LAATSTE_ADMIN_REDEN = 'Dit is de laatste beheerder van het bedrijf. Wijs eerst een andere beheerder aan.';
+  const rolInfo = m => {
+    if (isEigenaar(m) && !ikBenEigenaar) return { vergrendeld: true, reden: EIGENAAR_REDEN };
+    if (isLaatsteAdmin(m)) return { vergrendeld: true, reden: LAATSTE_ADMIN_REDEN };
+    return { vergrendeld: false, reden: '' };
   };
 
   const totalCount = members.length;
@@ -576,7 +610,12 @@ export function TeamPage() {
                       </div>
                     </div>
                   </td>
-                  <td>{roleBadge(member.role)}</td>
+                  <td>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      {roleBadge(member.role)}
+                      {isEigenaar(member) && <span className="badge b-green" title="Eigenaar van het account">Eigenaar</span>}
+                    </span>
+                  </td>
                   <td>{statusBadge(member.status, member)}</td>
                   <td style={{ color: 'var(--dmu)', fontSize: '.83rem' }}>{member.email}</td>
                   <td style={{ color: 'var(--dm)' }}>{member.hoursPerWeek > 0 ? `${member.hoursPerWeek}u` : ''}</td>
@@ -602,11 +641,17 @@ export function TeamPage() {
                         )}
                         {member.profileId && member.profileId === profile?.id ? (
                           <span style={{ fontSize: '.78rem', color: 'var(--dl)' }}>Jij</span>
+                        ) : isEigenaar(member) ? (
+                          <span style={{ fontSize: '.78rem', color: 'var(--dl)' }} title={EIGENAAR_REDEN}>
+                            Beschermd
+                          </span>
                         ) : (
                           <>
                             {member.status === 'actief' ? (
                               <button
                                 className="btn btn-ghost btn-sm"
+                                disabled={isLaatsteAdmin(member)}
+                                title={isLaatsteAdmin(member) ? LAATSTE_ADMIN_REDEN : undefined}
                                 onClick={() => handleDeactivate(member)}
                               >
                                 Deactiveren
@@ -621,6 +666,8 @@ export function TeamPage() {
                             )}
                             <button
                               className="btn btn-danger btn-sm"
+                              disabled={isLaatsteAdmin(member)}
+                              title={isLaatsteAdmin(member) ? LAATSTE_ADMIN_REDEN : 'Verwijderen'}
                               onClick={() => handleDelete(member)}
                             >
                               {I.trash}
@@ -647,6 +694,8 @@ export function TeamPage() {
       {editingMember && (
         <EditModal
           member={editingMember}
+          rolVergrendeld={rolInfo(editingMember).vergrendeld}
+          rolReden={rolInfo(editingMember).reden}
           onClose={() => setEditingMember(null)}
           onSaved={updated => setMembers(ms => ms.map(m => m.id === updated.id ? updated : m))}
         />
