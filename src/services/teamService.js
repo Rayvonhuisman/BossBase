@@ -27,13 +27,19 @@ const toTeamMember = row => ({
 
 // Een profiel-rij naar het teamlid-model. Echte teamleden leven in `profiles`
 // (zelfde bron als de rest van de app); company_members is voor veel bedrijven
-// leeg en bevat alleen nog openstaande uitnodigingen. E-mail/uren staan niet op
-// profiles en zijn client-side niet leesbaar uit auth.users → blijven leeg.
-const profileToMember = p => ({
+// leeg en bevat alleen nog openstaande uitnodigingen.
+//
+// Het e-mailadres staat niet op profiles (die tabel heeft die kolom niet) en is
+// client-side niet leesbaar uit auth.users. Het komt daarom uit de bijbehorende
+// company_members-rij, die als tweede argument meekomt. Wie die rij mág zien
+// bepaalt de RLS op company_members: een admin krijgt alle rijen, een
+// medewerker alleen zijn eigen. Dit geeft dus niemand meer inzicht dan hij al
+// had — er is geen extra rechtencontrole voor nodig.
+const profileToMember = (p, lid = null) => ({
   id: p.id,
   companyId: p.company_id,
   profileId: p.id,
-  email: "",
+  email: lid?.email || "",
   fullName: p.full_name || "",
   phone: "",
   role: p.role || "medewerker",
@@ -56,7 +62,7 @@ export async function getTeamMembers() {
   // (company_members zonder profile_id) tonen we daarnaast; geaccepteerde leden
   // verschijnen via hun profiel, dus die company_members-rijen sluiten we uit
   // om dubbelingen te voorkomen.
-  const [profilesRes, invitesRes] = await Promise.all([
+  const [profilesRes, invitesRes, ledenRes, sessieRes] = await Promise.all([
     supabase
       .from("profiles")
       .select("id, company_id, full_name, role, actief, avatar_url, created_at")
@@ -68,11 +74,34 @@ export async function getTeamMembers() {
       .eq("company_id", companyId)
       .is("profile_id", null)
       .order("created_at", { ascending: true }),
+    // De adressen van geaccepteerde teamleden. Die stonden nergens in beeld: de
+    // lijst wordt op `profiles` gebouwd en daar bestaat geen e-mailkolom. De RLS
+    // op company_members beslist wie wat terugkrijgt (admin alles, medewerker
+    // alleen zichzelf), dus hier is geen eigen rechtencontrole nodig.
+    supabase
+      .from("company_members")
+      .select("profile_id, email")
+      .eq("company_id", companyId)
+      .not("profile_id", "is", null),
+    // De eigenaar heeft meestal géén company_members-rij — die ontstaat pas bij
+    // een uitnodiging. Zijn adres komt daarom uit de eigen sessie; dat is per
+    // definitie je eigen adres en zegt niets over collega's.
+    supabase.auth.getUser(),
   ])
   if (profilesRes.error) throw profilesRes.error
   if (invitesRes.error) throw invitesRes.error
+  // Bewust geen throw: lukt dit niet, dan is de teamlijst compleet maar zonder
+  // adressen. Dat is beter dan een pagina die helemaal niet laadt.
+  if (ledenRes.error) console.warn("[team] e-mailadressen niet geladen:", ledenRes.error.message)
 
-  const realMembers = (profilesRes.data || []).map(profileToMember)
+  const ledenOpProfiel = new Map((ledenRes.data || []).map(l => [l.profile_id, l]))
+  const eigenId = sessieRes?.data?.user?.id
+  const eigenMail = sessieRes?.data?.user?.email
+
+  const realMembers = (profilesRes.data || []).map(p => profileToMember(
+    p,
+    ledenOpProfiel.get(p.id) || (p.id === eigenId ? { email: eigenMail } : null),
+  ))
   const pendingInvites = (invitesRes.data || []).map(toTeamMember)
   return [...realMembers, ...pendingInvites]
 }
