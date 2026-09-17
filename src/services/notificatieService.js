@@ -221,6 +221,102 @@ export async function notifyNewAssignees({ userIds = [], prevUserIds = [], membe
   }));
 }
 
+// ── VERANTWOORDELIJK GEMAAKT ─────────────────────────────────────────────────
+// Apart van "gekoppeld": de verantwoordelijke draagt de werkbon. Wie al gekoppeld
+// was en daarna verantwoordelijk wordt, viel door de diff van notifyNewAssignees
+// en kreeg dus niets — precies de persoon die het moet weten.
+export async function notifyNieuweVerantwoordelijken({
+  userIds = [], prevUserIds = [], members = [], sendMail = true,
+  titel, link = 'werkbonnen', relatedType = 'werkbon', relatedId, creatorId, creatorName,
+}) {
+  const prev = new Set((prevUserIds || []).filter(Boolean));
+  const fresh = [...new Set((userIds || []).filter(Boolean))].filter(id => !prev.has(id) && id !== creatorId);
+  if (!fresh.length) return;
+
+  const rows = fresh.map(uid => {
+    const naam = (members || []).find(m => m.id === uid)?.fullName;
+    const rij = {
+      user_id: uid,
+      type: 'verantwoordelijke_werkbon',
+      title: `Je bent verantwoordelijk voor ${titel}`,
+      body: 'Jij bent het aanspreekpunt voor deze werkbon.',
+      link,
+      related_type: relatedType,
+      related_id: relatedId || null,
+    };
+    if (sendMail) {
+      rij.email = {
+        subject: `Je bent verantwoordelijk voor ${titel}`,
+        html: mailTemplate({
+          title: 'Je bent verantwoordelijk gemaakt',
+          preheader: `${titel}: jij bent het aanspreekpunt`,
+          body: `<p>Hoi ${esc(naam || 'collega')},</p>
+                 <p><strong>${esc(creatorName || 'Een collega')}</strong> heeft jou verantwoordelijk gemaakt voor <strong>${esc(titel)}</strong>.</p>
+                 <p>Dat betekent dat jij deze werkbon mag bewerken en er het aanspreekpunt voor bent.</p>`,
+          buttonText: 'Bekijk de werkbon',
+          buttonUrl: toAbsoluteUrl(link),
+        }),
+      };
+    }
+    return rij;
+  });
+
+  await pushNotifications(rows);
+}
+
+// ── PLANNING GEWIJZIGD ───────────────────────────────────────────────────────
+// De melding in de app gaat meteen; de MAIL gaat bewust niet direct de deur uit.
+// Tijdens het puzzelen schuift een planner een blok soms drie keer heen en weer,
+// en dan wil je geen drie mails. De wijziging wordt hier verzameld; een cron
+// stuurt 's avonds één samenvatting per medewerker (planning-samenvatting).
+export async function meldPlanningWijziging({
+  userIds = [], soort, werkbon = {}, oud = {}, nieuw = {}, creatorId,
+}) {
+  const ontvangers = [...new Set((userIds || []).filter(Boolean))].filter(id => id !== creatorId);
+  if (!ontvangers.length) return;
+
+  const companyId = await getCompanyId();
+  if (!companyId) return;
+
+  const omschrijf = (d, s) => (d ? `${d}${s ? ` om ${String(s).slice(0, 5)}` : ''}` : 'niet ingepland');
+  const titelTekst = soort === 'afgehaald'
+    ? `Je staat niet meer op ${werkbon.titel || 'een klus'}`
+    : soort === 'ingepland'
+      ? `Ingepland: ${werkbon.titel || 'een klus'}`
+      : `Planning gewijzigd: ${werkbon.titel || 'een klus'}`;
+  const bodyTekst = soort === 'afgehaald'
+    ? `Was: ${omschrijf(oud.datum, oud.start)}`
+    : `Was ${omschrijf(oud.datum, oud.start)}, wordt ${omschrijf(nieuw.datum, nieuw.start)}`;
+
+  await pushNotifications(ontvangers.map(uid => ({
+    user_id: uid,
+    type: 'planning_wijziging',
+    title: titelTekst,
+    body: bodyTekst,
+    link: 'planning',
+    related_type: 'werkbon',
+    related_id: werkbon.id || null,
+    // Geen `email`: die gaat gebundeld mee in de dagelijkse samenvatting.
+  })));
+
+  const { error } = await supabase.from('planning_wijzigingen').insert(ontvangers.map(uid => ({
+    company_id: companyId,
+    user_id: uid,
+    werkbon_id: werkbon.id || null,
+    werkbon_nummer: werkbon.nummer || null,
+    titel: werkbon.titel || null,
+    klant: werkbon.customerName || null,
+    soort,
+    oude_datum: oud.datum || null,
+    oude_start: oud.start || null,
+    oude_eind: oud.eind || null,
+    nieuwe_datum: nieuw.datum || null,
+    nieuwe_start: nieuw.start || null,
+    nieuwe_eind: nieuw.eind || null,
+  })));
+  if (error) console.warn('[planning] wijziging niet vastgelegd voor de samenvatting:', error.message);
+}
+
 // ── TEAM MEMBERS HELPER ──────────────────────────────────────────────────────
 // Eén bron voor "actieve teamleden": dropdowns, @mentions, planning-rijen,
 // toewijzingen. Gedeactiveerde (actief=false) én verwijderde (rij weg) profielen

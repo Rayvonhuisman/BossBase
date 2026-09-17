@@ -1050,6 +1050,17 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
     const created = await addActiviteitNotitie(activity.id, text);
     setActiviteitNotities(list => [created, ...list]);
     toast.success('Notitie opgeslagen');
+    // Taggen in het notitielog gaf geen melding: alleen het notes-veld bij het
+    // aanmaken/bewerken van de activiteit deed dat wél.
+    createMentionNotifications({
+      text,
+      relatedType: 'activiteit',
+      relatedId: activity.id,
+      link: 'activities',
+      creatorId: profile?.id,
+      creatorName: profile?.fullName,
+      contextName: activity.title,
+    }).catch(e => console.warn('[activiteit] mention-melding mislukt:', e?.message));
   };
 
   // Google Calendar per-activity sync state (read-only display + manual retry).

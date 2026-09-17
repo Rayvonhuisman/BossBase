@@ -19,7 +19,8 @@ import NotitieLog, { toLogItem } from '../components/NotitieLog.jsx';
 import Tijdlijn from '../components/Tijdlijn.jsx';
 import SyncIndicator from '../components/SyncIndicator.jsx';
 import AdresZoeker from '../components/AdresZoeker.jsx';
-import { getTeamMembers } from '../services/notificatieService.js';
+import { getTeamMembers, createMentionNotifications } from '../services/notificatieService.js';
+import { useProfile } from '../lib/profileContext.jsx';
 import { getLeverancier, updateLeverancier } from '../services/leverancierService.js';
 import {
   getTijdlijnByLeverancier, getLeverancierNotities,
@@ -31,6 +32,8 @@ import { mailTemplate } from '../utils/mailTemplate.js';
 
 export default function LeverancierPage({ leverancierId, onClose }) {
   const toast = useToast();
+  // Wie tagt er? Nodig voor de melding aan de getagde collega.
+  const { profile } = useProfile();
   const { can } = usePermissions();
   const tabsRef = useRef(null);
 
@@ -160,6 +163,16 @@ export default function LeverancierPage({ leverancierId, onClose }) {
     const created = await addLeverancierNotitie(l.id, text);
     setNotities(list => [created, ...list]);
     setTijdlijn(list => [created, ...list]);
+    // Taggen werd hier wel aangeboden maar leverde niemand een melding op.
+    createMentionNotifications({
+      text,
+      relatedType: 'leverancier',
+      relatedId: l.id,
+      link: 'leveranciers',
+      creatorId: profile?.id,
+      creatorName: profile?.fullName,
+      contextName: l.naam,
+    }).catch(e => console.warn('[leverancier] mention-melding mislukt:', e?.message));
   };
 
   const verstuurMail = async () => {

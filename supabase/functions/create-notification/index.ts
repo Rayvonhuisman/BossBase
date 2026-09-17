@@ -13,6 +13,7 @@
 // uitlezen. Verzenden gebeurt via de bestaande send-email edge function.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { logMailFout } from '../_shared/mailFout.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -122,7 +123,9 @@ serve(async (req) => {
       })
       const email = n.email
       if (email && typeof email.subject === 'string' && typeof email.html === 'string' && email.subject && email.html) {
-        mailJobs.push({ userId: n.user_id, subject: email.subject, html: email.html })
+        // `soort` reist mee zodat een mislukte mail herkenbaar in mail_fouten
+        // komt: 'mention', 'toewijzing_werkbon', 'planning_verzet', …
+        mailJobs.push({ userId: n.user_id, subject: email.subject, html: email.html, soort: String(n.type || 'collega_melding') })
       }
     }
 
@@ -145,12 +148,32 @@ serve(async (req) => {
       for (const job of mailJobs) {
         try {
           const to = await resolveRecipientEmail(admin, job.userId, companyId)
-          if (!to) continue // geen adres bekend → stil overslaan (in-app blijft staan)
+          if (!to) {
+            // Gebeurde eerder stil: de in-app melding stond er wel, de mail niet,
+            // en niemand wist dat de collega niets in zijn inbox kreeg.
+            await logMailFout({
+              soort: job.soort || 'collega_melding',
+              ontvanger: null, companyId, bedrijfNaam: fromName,
+              fout: `Geen e-mailadres bekend voor gebruiker ${job.userId}`,
+              bron: 'create-notification',
+            })
+            continue
+          }
           const body: Record<string, unknown> = { to, subject: job.subject, html: job.html, from_name: fromName }
           if (replyTo) body.reply_to = replyTo
+          body.soort = job.soort || 'collega_melding'
+          body.company_id = companyId
           const ok = await sendViaEdge(supabaseUrl, serviceKey, body)
           if (ok) emailed++
-        } catch { /* best-effort per mail */ }
+          // Mislukt hij, dan legt send-email dat zelf vast in mail_fouten.
+        } catch (e) {
+          await logMailFout({
+            soort: job.soort || 'collega_melding',
+            ontvanger: null, companyId, bedrijfNaam: fromName,
+            fout: String((e as Error)?.message || e),
+            bron: 'create-notification',
+          })
+        }
       }
     }
 

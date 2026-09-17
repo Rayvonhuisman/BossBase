@@ -30,7 +30,7 @@ import { NewFactuurModal, SendFactuurMailModal } from '../FacturenPage.jsx';
 import { NewOfferteModal, SendOfferteMailModal } from '../OffertesPage.jsx';
 import { WerkbonModal } from '../WerkbonPageV2.jsx';
 import NotitieLog, { toLogItem } from '../../components/NotitieLog.jsx';
-import { getTeamMembers, notifyNewAssignees } from '../../services/notificatieService.js';
+import { getTeamMembers, notifyNewAssignees, createMentionNotifications } from '../../services/notificatieService.js';
 import { statusInfo } from '../../utils/statusColors.js';
 
 const TABS = [
@@ -1226,6 +1226,16 @@ export function ProjectDetailDrawer({
   const handleAddNote = async text => {
     const n = await addProjectNote(projectId, text);
     setNotes(prev => [n, ...prev]);
+    // Het veld nodigt uit tot taggen; de getagde collega kreeg tot nu toe niets.
+    createMentionNotifications({
+      text,
+      relatedType: 'project',
+      relatedId: projectId,
+      link: 'projecten',
+      creatorId: profile?.id,
+      creatorName: profile?.fullName,
+      contextName: project?.name || project?.naam || 'een project',
+    }).catch(e => console.warn('[project] mention-melding mislukt:', e?.message));
   };
 
   const handleDeleteNote = async id => {
