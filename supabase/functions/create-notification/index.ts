@@ -151,10 +151,12 @@ serve(async (req) => {
       // De echte bedrijfsnaam blijft wél nodig: die gaat naar mail_fouten, zodat
       // daar leesbaar staat bij welk bedrijf de post is blijven liggen.
       const bedrijfsnaam = co?.name || 'onbekend bedrijf'
-      // Reply-to blijft het bedrijfsadres: dat is routering, geen huisstijl.
-      // Antwoordt een medewerker, dan komt dat bij zijn werkgever terecht en
-      // niet op noreply@bossbase.nl.
-      const replyTo  = co?.reply_to_email || co?.email || null
+      // Reply-to = degene die tagde of toewees. Wie antwoordt op "je bent
+      // getagd" wil die collega bereiken, niet de algemene bedrijfsmailbox en
+      // zeker niet noreply@bossbase.nl. Het adres komt uit de JWT van de
+      // aanroeper, dus het kan niet door de client worden opgegeven.
+      // Is er geen afzender bekend (systeempost), dan het bedrijfsadres.
+      const replyTo  = user.email || co?.reply_to_email || co?.email || null
 
       for (const job of mailJobs) {
         try {
