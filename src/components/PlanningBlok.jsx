@@ -1,6 +1,6 @@
 import { Truck } from 'lucide-react';
 import { StatusBadge } from '../bb-shared.jsx';
-import { korteDatum, ploegOpDag, tijdenOpDag, werkbonDagen } from '../utils/werkbonDagen.js';
+import { korteDatum, ploegOpDag, tijdenOpDag, tijdenVoorPersoon, werkbonDagen } from '../utils/werkbonDagen.js';
 import { tijdVanVoertuig, voertuigVanPersoon, voertuigenOpDag } from '../utils/voertuigDagen.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { useVoertuigenLijst } from './WerkbonVoertuigen.jsx';
@@ -25,11 +25,23 @@ export function planRegels(werkbonnen, naamVan) {
   return werkbonnen
     .flatMap(w => werkbonDagen(w).map(dag => {
       const t = tijdenOpDag(w, dag);
+      // Wie een eigen tijd heeft op die dag (medewerker_tijden), krijgt die
+      // achter zijn naam. Zonder dit toonde het blok alleen de dagtijd, en dan
+      // zag je een verzette persoonsbaan uit de planning hier niet terug.
+      const wie = ploegOpDag(w, dag).map(pid => {
+        const naam = naamVan(pid);
+        if (!naam) return null;
+        const eigen = tijdenVoorPersoon(w, dag, pid);
+        const afwijkend = eigen.starttijd !== t.starttijd || eigen.eindtijd !== t.eindtijd;
+        return afwijkend && eigen.starttijd
+          ? `${naam} (${eigen.starttijd}${eigen.eindtijd ? `–${eigen.eindtijd}` : ''})`
+          : naam;
+      }).filter(Boolean);
       return {
         sleutel: `${w.id}-${dag.datum}`, soort: 'werkbon',
         werkbon: w, dag, naamVan, datum: dag.datum,
         starttijd: t.starttijd, eindtijd: t.eindtijd,
-        wie: ploegOpDag(w, dag).map(naamVan).filter(Boolean),
+        wie,
       };
     }))
     .filter(r => r.datum)
@@ -89,7 +101,7 @@ function busRegels(r, voertuigen) {
  *   toonTitel zet de werkbontitel voor de namen — nodig zodra er meerdere
  *             werkbonnen door elkaar staan, overbodig op de werkbon zelf
  */
-export function PlanningRegels({ regels, onOpen, vandaag, toonTitel = false, variant = 'kk' }) {
+export function PlanningRegels({ regels, onOpen, vandaag, toonTitel = false, variant = 'kk', toonStatus = true }) {
   const plan = usePlan();
   const bussenAan = plan.has('voertuigen');
   const voertuigen = useVoertuigenLijst(bussenAan);
@@ -108,12 +120,14 @@ export function PlanningRegels({ regels, onOpen, vandaag, toonTitel = false, var
         const omschrijving = los ? r.titel : (toonTitel ? r.werkbon.titel : null);
         const tijd = r.starttijd ? `${r.starttijd}${r.eindtijd ? `–${r.eindtijd}` : ''}` : 'geen tijd';
         const wie = r.wie.length ? r.wie.join(', ') : (los ? null : 'niemand toegewezen');
-        const badge = (
+        // Staat er al een status bij de rij eromheen (zoals in het project bij
+        // de werkbon zelf), dan is een tweede badge per dag alleen ruis.
+        const badge = toonStatus ? (
           <StatusBadge
             status={los ? r.activiteit.status : r.werkbon.status}
             domain={los ? 'activiteit' : 'werkbon'}
           />
-        );
+        ) : null;
         return (
           <div key={r.sleutel} className={alsRij ? 'lrow-plan-blok' : 'kk-planblok'} style={{ opacity: vandaag && r.datum < vandaag ? .6 : 1 }}>
             {alsRij ? (

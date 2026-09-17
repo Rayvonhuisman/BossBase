@@ -1220,7 +1220,7 @@ const LEGENDA_SLEUTEL = 'bb.planning.legenda';
 
 export function PlanningPage({ openCustomer } = {}) {
   const toast = useToast();
-  const { profile } = useProfile();
+  const { profile, bumpRefresh } = useProfile();
   const { can } = usePermissions();
   const { plan } = usePlanGuard();
 
@@ -1457,6 +1457,10 @@ export function PlanningPage({ openCustomer } = {}) {
         vers = await getWerkbonById(w.id);
       }
       setWerkbonnen(prev => prev.map(x => (x.id === w.id ? vers : x)));
+      // De werkbonpagina, de klantkaart en het project lezen dezelfde
+      // werkbon_dagen, maar hebben hun eigen kopie in geheugen. Zonder dit sein
+      // blijven ze de oude dag en tijd tonen tot je ze opnieuw opent.
+      bumpRefresh?.();
       // Slepen en rekken komen hier allebei uit. De medewerker hoort het meteen
       // in de app; de mail gaat mee in de dagelijkse samenvatting, zodat drie
       // keer heen en weer schuiven niet drie mails oplevert.
@@ -1492,6 +1496,7 @@ export function PlanningPage({ openCustomer } = {}) {
         ...(eindtijd === undefined ? {} : { endTime: eindtijd }),
       });
       setActivities(prev => prev.map(x => (x.id === updated.id ? updated : x)));
+      bumpRefresh?.();
       // Ook bij een activiteit hoort de toegewezen collega te weten dat zijn tijd
       // verschuift. Zelfde route als bij werkbonnen: melding nu, mail 's avonds.
       const betrokkenen = updated.assignedToIds || (updated.assignee ? [updated.assignee] : []);
@@ -1849,7 +1854,7 @@ export function PlanningPage({ openCustomer } = {}) {
           teamMembers={teamMembers}
           customers={customers} projects={projects} profile={profile}
           onClose={() => setShowPlanModal(false)}
-          onSaved={wb => setWerkbonnen(prev => [wb, ...prev])}
+          onSaved={wb => { setWerkbonnen(prev => [wb, ...prev]); bumpRefresh?.(); }}
         />
       )}
 
@@ -1860,7 +1865,7 @@ export function PlanningPage({ openCustomer } = {}) {
           werkbonnen={werkbonnen}
           profile={profile}
           onClose={() => setShowPlanActivityModal(false)}
-          onSaved={act => setActivities(prev => [act, ...prev])}
+          onSaved={act => { setActivities(prev => [act, ...prev]); bumpRefresh?.(); }}
         />
       )}
 
@@ -1905,6 +1910,9 @@ export function PlanningPage({ openCustomer } = {}) {
           onSaved={updated => {
             setWerkbonnen(prev => prev.map(w => w.id === updated.id ? updated : w));
             setQuickDrop(null);
+            // Een werkbon naar een andere dag slepen komt hier uit, niet in
+            // verzetWerkbon. Dus ook hier de andere schermen bijwerken.
+            bumpRefresh?.();
           }}
         />
       )}
@@ -1918,6 +1926,7 @@ export function PlanningPage({ openCustomer } = {}) {
           onUpdated={updated => {
             setWerkbonnen(prev => prev.map(w => w.id === updated.id ? updated : w));
             setDetailWb(null);
+            bumpRefresh?.();
           }}
           openCustomer={openCustomer}
         />

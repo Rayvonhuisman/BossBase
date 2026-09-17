@@ -21,6 +21,7 @@ import {
 } from '../../services/projectsService.js';
 import { getWerkbonnenByProject } from '../../services/werkbonService.js';
 import { planningLabel } from '../../utils/werkbonDagen.js';
+import { PlanningRegels, planRegels } from '../../components/PlanningBlok.jsx';
 import { getProjectCosts, inkoopwaardeVanKosten, isWerkbonMateriaal } from '../../services/jobCostService.js';
 import {
   listProjectKosten, createProjectKost, updateProjectKost, deleteProjectKost,
@@ -1042,6 +1043,12 @@ function NotesTab({ notes, onAdd, onDelete }) {
 // werkbonpagina die inmiddels verplicht stelt. Zo maakte het project werkbonnen
 // die de planning op een verzonnen 07:00 zette.
 function WerkbonnenTab({ project, werkbonnen, customers = [], onCreated, canManage, setPage }) {
+  // Teamleden voor de namen onder een werkbon. Ze worden hier geladen en niet
+  // door drie lagen doorgegeven: dit is de enige plek in de drawer die ze nodig
+  // heeft.
+  const [teamLeden, setTeamLeden] = useState([]);
+  useEffect(() => { getTeamMembers().then(setTeamLeden).catch(() => {}); }, []);
+  const naamVan = id => teamLeden.find(m => m.id === id || m.profileId === id)?.fullName || '';
   const openWerkbon = w => setPage?.('werkbonnen', { id: w.id, from: 'project', projectId: project.id, projectNaam: project.name });
   const [showForm, setShowForm] = useState(false);
 
@@ -1100,6 +1107,11 @@ function WerkbonnenTab({ project, werkbonnen, customers = [], onCreated, canMana
                       </>
                     )}
                   </div>
+                  {/* Dezelfde geplande dagen als op de werkbon en de klantkaart,
+                      uit hetzelfde component: dag, tijd en wie erop staat (met
+                      een eigen tijd als die afwijkt). planningLabel hierboven
+                      vat alleen de periode samen. */}
+                  <PlanningRegels regels={planRegels([w], naamVan)} toonStatus={false} />
                 </div>
                 {(() => { const s = statusInfo(w.status, 'werkbon'); return (
                   <span style={{
@@ -1132,7 +1144,7 @@ export function ProjectDetailDrawer({
   setPage,
 }) {
   const toast = useToast();
-  const { company, profile } = useProfile();
+  const { company, profile, refreshKey } = useProfile();
   const { can } = usePermissions();
   const { plan } = usePlanGuard();
   const tabs = useMemo(() => zichtbareTabs(can, plan), [can, plan]);
@@ -1191,7 +1203,9 @@ export function ProjectDetailDrawer({
     }
   };
 
-  useEffect(() => { if (projectId) loadAll(); }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Ook op refreshKey: verzet iemand de werkbon in de planning, dan hoort dit
+  // project de nieuwe dag te tonen zonder dat je de drawer opnieuw opent.
+  useEffect(() => { if (projectId) loadAll(); }, [projectId, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Bewerken: admin/planner-rol óf het 'projecten_bewerken'-recht. Zien mag
   // iedereen; de form-velden worden uitgeschakeld zonder bewerkrecht en RLS

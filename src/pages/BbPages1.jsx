@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import SyncIndicator from '../components/SyncIndicator.jsx';
 import DOMPurify from 'dompurify';
+import { mailVoorbeeldDocument } from '../utils/mailFrame.js';
 import { Bold, Calendar, Check, Edit2, Euro, FileText, Folder, Italic, List, ListOrdered, Maximize2, Minimize2, MoreHorizontal, PenLine, Plus, RotateCcw, ShoppingCart, Sparkles, Underline, User, Wrench, X } from 'lucide-react';
 import {
   I, CUSTOMERS_DATA, DEALS, ACTIVITIES_DATA, QUOTES_DATA, COSTS_DATA,
@@ -246,7 +247,11 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   const [emailForm, setEmailForm] = useState({ to: '', templateId: '', subject: '', body: '' });
   const [emailSending, setEmailSending] = useState(false);
   const [expandedEmailId, setExpandedEmailId] = useState(null);
-  const { company, profile } = useProfile();
+  // refreshKey: gaat omhoog zodra er elders iets verandert aan een werkbon of
+  // activiteit van deze klant (verslepen in de planning bijvoorbeeld). Zonder
+  // die sleutel in het laadeffect hieronder blijft de klantkaart op zijn oude
+  // kopie staan en toont het Planning-blok de vorige dag en tijd.
+  const { company, profile, refreshKey } = useProfile();
   const { can, isAdmin } = usePermissions();
 
   useEffect(() => {
@@ -329,7 +334,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
     .catch(err => alive && setError(err.message || 'Klant laden is mislukt.'))
     .finally(() => alive && setLoading(false));
     return () => { alive = false; };
-  }, [custId]);
+  }, [custId, refreshKey]);
 
   useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
 
@@ -1252,7 +1257,16 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
                     padding: '14px 16px', background: 'white',
                   }}>
                     {m.body_html
-                      ? <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(m.body_html) }} className="bb-notitie-content" style={{ fontSize: '.85rem', lineHeight: 1.7, color: 'var(--dk)' }} />
+                      // In een eigen document, niet in de pagina: de mail brengt
+                      // eigen <style>-regels mee die anders de klantkaart
+                      // herschrijven. sandbox="" houdt scripts en navigatie
+                      // tegen; DOMPurify blijft ervoor staan als tweede slot.
+                      ? <iframe
+                          className="bb-mailframe"
+                          title={`Voorbeeld van de e-mail: ${m.subject || 'zonder onderwerp'}`}
+                          sandbox=""
+                          srcDoc={mailVoorbeeldDocument(DOMPurify.sanitize(m.body_html))}
+                        />
                       : <div style={{ color: 'var(--dl)', fontSize: '.82rem', fontStyle: 'italic' }}>Inhoud niet beschikbaar voor oudere e-mails</div>
                     }
                     <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>

@@ -1467,7 +1467,10 @@ function NotitiesSection({
 
 export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCustomer, backKlant, onBackKlant } = {}) {
   const toast = useToast();
-  const { profile } = useProfile();
+  // refreshKey: wordt opgehoogd zodra er elders iets aan een werkbon verandert
+  // (bijvoorbeeld verslepen in de planning). Zonder die sleutel in de effecten
+  // hieronder blijft een al geopende werkbon op zijn oude tijden staan.
+  const { profile, refreshKey } = useProfile();
   const { can } = usePermissions();
   const { startUpload } = useUploads();
   const { guardSchrijven, planModal } = usePlanGuard();
@@ -1546,7 +1549,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
     }
   };
 
-  useEffect(() => { loadList(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadList(); }, [refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Teamleden voor @ tagging in de notities-sectie van het werkbon-detail.
   useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
@@ -1596,7 +1599,9 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
       }));
     }).finally(() => { if (alive) setDetailLoading(false); });
     return () => { alive = false; };
-  }, [selectedId]);
+    // refreshKey hoort erbij: zonder die sleutel herlaadt dezelfde werkbon niet
+    // nadat hij elders is verzet, en zie je de oude dag en tijd.
+  }, [selectedId, refreshKey]);
 
   const openDetail = id => { setSelectedId(id); setView('detail'); };
   const goBack = () => setView('list');
