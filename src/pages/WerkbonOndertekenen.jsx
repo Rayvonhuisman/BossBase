@@ -13,6 +13,9 @@ import { supabase } from '../lib/supabase.js'
 import HandtekeningCanvas from '../components/HandtekeningCanvas.jsx'
 import { getWerkbonPdfUrl, getWerkbonPdfBase64 } from '../utils/generateWerkbonPdf.js'
 import { signWerkbon, getFotosViaToken, splitsKlantnotities } from '../services/werkbonOndertekenenService.js'
+// De omschrijving komt uit de notitie-editor en is HTML; zonder omzetting leest
+// de klant hier de tags. Zelfde behandeling als in de PDF.
+import { htmlToPdfText } from '../lib/noteFormat.js'
 
 const fmtDatum = d => {
   if (!d) return ''
@@ -284,7 +287,7 @@ export default function WerkbonOndertekenen({ token }) {
       {(werkbon.omschrijving || werkbon.titel) && (
         <Blok titel="Uitgevoerd werk">
           <div style={{ fontSize: '.9rem', color: '#374151', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-            {werkbon.omschrijving || werkbon.titel}
+            {htmlToPdfText(werkbon.omschrijving) || werkbon.titel}
           </div>
         </Blok>
       )}
@@ -369,7 +372,7 @@ export default function WerkbonOndertekenen({ token }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {notities.map((n, i) => (
               <div key={i} style={{ background: '#f9fafb', borderRadius: 8, padding: '11px 13px', fontSize: '.88rem', color: '#374151', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                {n.note}
+                {htmlToPdfText(n.note)}
               </div>
             ))}
           </div>

@@ -35,6 +35,9 @@ import {
   loadJsPDF, hexToRgb, luminance, fmtDate, fmtDateTime, imgToBase64,
   bereidAfbeeldingVoor, C,
 } from './generatePdf.js';
+// Omschrijving en klantnotities komen uit de notitie-editor en zijn dus HTML.
+// Zonder deze omzetting stonden de tags letterlijk in de PDF.
+import { htmlToPdfText } from '../lib/noteFormat.js';
 
 const W = 210, M = 16, CW = W - 2 * M;
 const PAGE_BOTTOM = 272; // onder deze y past niets meer; footer staat op 282
@@ -206,7 +209,7 @@ async function buildWerkbonPdf(doc, werkbon, data, customer, company) {
   const scheiding = () => { dc(C.line); doc.setLineWidth(0.3); doc.line(M, y - 3, W - M, y - 3); };
 
   // ── UITGEVOERD WERK ─────────────────────────────────────────────────────
-  const werkTekst = werkbon?.omschrijving || werkbon?.titel || '';
+  const werkTekst = htmlToPdfText(werkbon?.omschrijving) || werkbon?.titel || '';
   if (werkTekst) {
     sectieKop('Uitgevoerd werk');
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9); tc(C.soft);
@@ -335,7 +338,7 @@ async function buildWerkbonPdf(doc, werkbon, data, customer, company) {
   if (notities.length) {
     sectieKop('Toelichting');
     notities.forEach((n, i) => {
-      const tekst = n.note || n.body || '';
+      const tekst = htmlToPdfText(n.note || n.body || '');
       if (!tekst) return;
       const regels = doc.splitTextToSize(tekst, CW - 22);
       const blokH = Math.max(13, regels.length * 4 + 10);
@@ -367,8 +370,8 @@ async function buildWerkbonPdf(doc, werkbon, data, customer, company) {
       // van de sectiekop en liep de tekst het kader uit.
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
       const tekstBreedte = CW - 12;      // 6 mm lucht links én rechts
-      const watRegels = doc.splitTextToSize(w.note || '', tekstBreedte);
-      const gevolgRegels = w.gevolg ? doc.splitTextToSize(w.gevolg, tekstBreedte) : [];
+      const watRegels = doc.splitTextToSize(htmlToPdfText(w.note) || '', tekstBreedte);
+      const gevolgRegels = w.gevolg ? doc.splitTextToSize(htmlToPdfText(w.gevolg), tekstBreedte) : [];
       // kop + constatering + (kop + gevolg) + verzendregel
       const blokH = 9 + watRegels.length * 4
         + (gevolgRegels.length ? 5 + gevolgRegels.length * 4 : 0)
