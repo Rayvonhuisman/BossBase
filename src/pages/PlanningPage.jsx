@@ -630,7 +630,6 @@ function PlanActivityModal({ teamMembers, customers, werkbonnen, profile, onClos
     werkbon_id: '',
   });
   const [eindtijdManual, setEindtijdManual] = useState(false);
-  const [maakWerkbon, setMaakWerkbon] = useState(false);
   const [notifyMail, setNotifyMail] = useState(true);
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -681,25 +680,12 @@ function PlanActivityModal({ teamMembers, customers, werkbonnen, profile, onClos
         creatorId: profile?.id, creatorName: profile?.fullName,
       }).catch(() => {});
 
-      // Bestaande werkbon koppelen
+      // Een bestaande werkbon koppelen mag hier; een werkbon AANMAKEN bewust
+      // niet. Daarvoor staat de knop "Werkbon inplannen" ernaast: twee knoppen,
+      // twee duidelijke wegen. Het aanmaken liep hier bovendien buiten de
+      // rechtencheck om en een mislukking verdween stil in de catch.
       if (form.werkbon_id) {
         supabase.from('werkbonnen').update({ activity_id: created.id }).eq('id', form.werkbon_id).then(() => {}).catch(() => {});
-      }
-      // Nieuwe werkbon aanmaken en koppelen
-      if (maakWerkbon && !form.werkbon_id) {
-        createWerkbon({
-          titel: form.titel.trim(),
-          customer_id: form.customer_id || null,
-          gepland_op: form.datum,
-          starttijd: form.starttijd || null,
-          eindtijd: form.eindtijd || null,
-          assigned_to_ids: form.assigned_to_ids,
-          locatie: form.locatie || null,
-          omschrijving: form.omschrijving || null,
-          status: 'gepland',
-        }).then(wb => {
-          if (wb?.id) supabase.from('werkbonnen').update({ activity_id: created.id }).eq('id', wb.id).catch(() => {});
-        }).catch(() => {});
       }
 
       toast.success('Activiteit ingepland');
@@ -781,7 +767,7 @@ function PlanActivityModal({ teamMembers, customers, werkbonnen, profile, onClos
           <div className="f" style={{ gridColumn: '1 / -1', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
             <label style={{ marginBottom: 6 }}>Werkbon koppelen <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(optioneel)</span></label>
             {werkbonnenVoorKlant.length > 0 ? (
-              <select value={form.werkbon_id} onChange={e => { set('werkbon_id', e.target.value); if (e.target.value) setMaakWerkbon(false); }}>
+              <select value={form.werkbon_id} onChange={e => set('werkbon_id', e.target.value)}>
                 <option value="">— Geen werkbon —</option>
                 {werkbonnenVoorKlant.map(w => <option key={w.id} value={w.id}>{w.titel}</option>)}
               </select>
@@ -789,12 +775,6 @@ function PlanActivityModal({ teamMembers, customers, werkbonnen, profile, onClos
               <div style={{ fontSize: 12, color: 'var(--dl)', marginBottom: 6 }}>Geen openstaande werkbonnen voor deze klant.</div>
             ) : (
               <div style={{ fontSize: 12, color: 'var(--dl)', marginBottom: 6 }}>Selecteer eerst een klant om werkbonnen te tonen.</div>
-            )}
-            {!form.werkbon_id && (
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 13, cursor: 'pointer' }}>
-                <input type="checkbox" checked={maakWerkbon} onChange={e => setMaakWerkbon(e.target.checked)} />
-                Nieuwe werkbon aanmaken en koppelen
-              </label>
             )}
           </div>
         </div>
