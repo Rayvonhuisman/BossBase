@@ -113,6 +113,29 @@ function toAbsoluteUrl(link) {
   return id ? `${basis}?open=${encodeURIComponent(id)}` : basis
 }
 
+// Welke pagina's kunnen één item openen? Alleen deze hebben in App.jsx een
+// preOpen…Id dat op de navigatie-intentie luistert. Voor de rest — customers,
+// leveranciers, materialen, planning — heeft een id in de link geen zin: de
+// pagina doet er niets mee, en dan beloven we iets wat niet gebeurt.
+const DETAILPAGINA = {
+  werkbon:    'werkbonnen',
+  activiteit: 'activities',
+  project:    'projecten',
+  offerte:    'offertes',
+  factuur:    'facturen',
+}
+
+// Bouwt 'werkbonnen/<id>' uit het SOORT item, niet uit `link`. Een toewijzing
+// die vanuit de planning wordt gemaakt heeft link 'planning', maar gaat over een
+// werkbon; zonder deze vertaling kwam je op de planning uit in plaats van bij de
+// werkbon zelf. Kan de doelpagina geen item openen, dan blijft de link staan.
+function diepeLinkVoor(link, relatedType, relatedId) {
+  if (!relatedId) return link
+  const pagina = DETAILPAGINA[relatedType]
+  if (!pagina) return link
+  return `${pagina}/${relatedId}`
+}
+
 // ── MENTION HELPERS ──────────────────────────────────────────────────────────
 
 // Parse mentions from text → [{ name, userId }]. Herkent ZOWEL de legacy
@@ -171,7 +194,7 @@ export async function createMentionNotifications({ text, relatedType, relatedId,
 
   // Met een id opent de knop (en de melding in de belbalk) het item zelf, zodat
   // je meteen bij de notitie uitkomt in plaats van op een lijstpagina.
-  const diepeLink = link && relatedId ? `${link}/${relatedId}` : link;
+  const diepeLink = diepeLinkVoor(link, relatedType, relatedId);
 
   const notifRows = [];
   for (const { name, userId } of mentions) {
@@ -220,12 +243,16 @@ export async function createAssignmentNotification({ assignedToUserId, assignedT
   const companyId = await getCompanyId();
   if (!companyId) return;
 
+  // Een toewijzing gaat altijd over één item; met het id erbij opent de knop dat
+  // item meteen, in plaats van de lijstpagina waar je het nog moest opzoeken.
+  const diepeLink = diepeLinkVoor(link, relatedType, relatedId);
+
   const notif = {
     user_id: assignedToUserId,
     type,
     title,
     body: body || null,
-    link: link || null,
+    link: diepeLink || null,
     related_type: relatedType || null,
     related_id: relatedId || null,
   };
@@ -239,7 +266,7 @@ export async function createAssignmentNotification({ assignedToUserId, assignedT
              <p><strong>${esc(creatorName || 'Een collega')}</strong> heeft je toegewezen aan: <strong>${esc(itemName)}</strong></p>
              ${body ? `<p style="color:#555;">${esc(body)}</p>` : ''}`,
       buttonText: link ? 'Bekijk details' : undefined,
-      buttonUrl: toAbsoluteUrl(link),
+      buttonUrl: toAbsoluteUrl(diepeLink),
     });
     notif.email = { subject: `Nieuwe toewijzing: ${itemName}`, html };
   }
@@ -276,6 +303,10 @@ export async function notifyNieuweVerantwoordelijken({
   const fresh = [...new Set((userIds || []).filter(Boolean))].filter(id => !prev.has(id) && id !== creatorId);
   if (!fresh.length) return;
 
+  // Ook hier het id mee: verantwoordelijk worden gaat over één werkbon, dus de
+  // knop hoort die werkbon te openen en niet de lijst.
+  const diepeLink = diepeLinkVoor(link, relatedType, relatedId);
+
   const rows = fresh.map(uid => {
     const naam = (members || []).find(m => m.id === uid)?.fullName;
     const rij = {
@@ -283,7 +314,7 @@ export async function notifyNieuweVerantwoordelijken({
       type: 'verantwoordelijke_werkbon',
       title: `Je bent verantwoordelijk voor ${titel}`,
       body: 'Jij bent het aanspreekpunt voor deze werkbon.',
-      link,
+      link: diepeLink,
       related_type: relatedType,
       related_id: relatedId || null,
     };
@@ -297,7 +328,7 @@ export async function notifyNieuweVerantwoordelijken({
                  <p><strong>${esc(creatorName || 'Een collega')}</strong> heeft jou verantwoordelijk gemaakt voor <strong>${esc(titel)}</strong>.</p>
                  <p>Dat betekent dat jij deze werkbon mag bewerken en er het aanspreekpunt voor bent.</p>`,
           buttonText: 'Bekijk de werkbon',
-          buttonUrl: toAbsoluteUrl(link),
+          buttonUrl: toAbsoluteUrl(diepeLink),
         }),
       };
     }
