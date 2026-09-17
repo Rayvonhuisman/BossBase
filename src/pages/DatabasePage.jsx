@@ -254,9 +254,9 @@ function FilterBar({ quickTab, setQuickTab, searchQuery, setSearchQuery, filters
   ];
   const stadOptions = [{ value: '', label: 'Alle steden' }, ...stadsUniek.map(s => ({ value: s, label: s }))];
   // Uit PROJECT_STATUS_OPTIONS — dezelfde bron als de projectenpagina. Stond hier
-  // eerder handmatig, met 'in_uitvoering' (bestaat niet; heet 'lopend') en twee
-  // statussen die de app nooit wegschrijft. Een klant met een lopend project gaf
-  // daardoor 0 resultaten.
+  // eerder handmatig, met statussen die de app niet wegschreef; een klant met een
+  // lopend project gaf daardoor 0 resultaten. Sinds de statussen zijn
+  // teruggebracht tot gepland / in uitvoering / afgerond volgt deze lijst vanzelf.
   const projectStatusOptions = [
     { value: '', label: 'Alle statussen' },
     ...PROJECT_STATUS_OPTIONS.map(s => ({ value: s.id, label: s.label })),

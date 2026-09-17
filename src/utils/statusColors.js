@@ -28,18 +28,16 @@ export const STATUS_TONES = {
 // Per domein: genormaliseerde status-key → [tone, NL-label]. Varianten/spellingen
 // van dezelfde status wijzen naar dezelfde tone + hetzelfde label.
 const DOMAINS = {
-  // PROJECT — Lopend = oranje, Afgerond = groen, Geannuleerd = rood, Concept = grijs.
+  // PROJECT — dezelfde drie als de werkbon, want de projectstatus wordt uit de
+  // werkbonnen afgeleid. De oude statussen (concept, offerte akkoord, wachten op
+  // klant, te factureren, risico) bestaan niet meer: de database dwingt met een
+  // check-constraint af dat het er drie zijn. `lopend` stond hier als label bij
+  // in_uitvoering, waardoor de badge "Lopend" zei terwijl het filter ernaast
+  // "In uitvoering" zei.
   project: {
-    concept:          ['gray',   'Concept'],
-    offerte_akkoord:  ['blue',   'Offerte akkoord'],
-    lopend:           ['orange', 'Lopend'],
-    in_uitvoering:    ['orange', 'Lopend'],
-    wachten_op_klant: ['orange', 'Wachten op klant'],
-    te_factureren:    ['blue',   'Te factureren'],
-    afgerond:         ['green',  'Afgerond'],
-    gepauzeerd:       ['gray',   'Gepauzeerd'],
-    geannuleerd:      ['red',    'Geannuleerd'],
-    risico:           ['red',    'Risico'],
+    gepland:       ['blue',   'Gepland'],
+    in_uitvoering: ['orange', 'In uitvoering'],
+    afgerond:      ['green',  'Afgerond'],
   },
   // FACTUUR — Concept = grijs, Verzonden/Open = blauw, Betaald = groen, Te laat = rood.
   factuur: {
