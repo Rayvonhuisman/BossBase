@@ -28,6 +28,7 @@ import {
 import WerkbonAfrondenModal from '../components/WerkbonAfrondenModal.jsx';
 import { WerkbonDagenVelden, WerkbonLocatieVeld, useKlantAdres } from '../components/WerkbonPlanning.jsx';
 import { MijnVoertuig, useWerkbonVoertuigen } from '../components/WerkbonVoertuigen.jsx';
+import { PlanningRegels, planRegels } from '../components/PlanningBlok.jsx';
 import { voertuigPlanningUitWerkbon } from '../utils/voertuigDagen.js';
 import {
   planningUitWerkbon, dagenUitPlanning, controleerPlanning, legePlanning, planningLabel, geplandeDatums,
@@ -1550,6 +1551,12 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
   // Teamleden voor @ tagging in de notities-sectie van het werkbon-detail.
   useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
 
+  // Geplande dagen van deze werkbon, voor het Planning-blok in het detail.
+  // Zelfde regels als in de klantkaart, alleen dan van één werkbon.
+  const planningRegels = useMemo(() => (
+    detail ? planRegels([detail], id => teamMembers.find(m => m.id === id || m.profileId === id)?.fullName || '') : []
+  ), [detail, teamMembers]);
+
   // Bedrijfsgegevens voor de werkbon-PDF (logo, huisstijlkleur, adres).
   useEffect(() => { getCurrentCompany().then(setCompany).catch(() => {}); }, []);
 
@@ -2204,6 +2211,23 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
                 </div>
               </div>
             )}
+
+            {/* Planning: dezelfde regels als het Planning-blok in de klantkaart,
+                zodat een geplande dag er overal hetzelfde uitziet. */}
+            <div className="wb2-card">
+              <div className="wb2-card-hd">
+                <div className="wb2-card-hd-title">
+                  Planning{planningRegels.length ? ` · ${planningRegels.length} ${planningRegels.length === 1 ? 'dag' : 'dagen'}` : ''}
+                </div>
+              </div>
+              <div className="wb2-card-body">
+                {planningRegels.length === 0 ? (
+                  <div className="kk-leeg" style={{ padding: '6px 0' }}><span>Deze werkbon staat nog niet ingepland.</span></div>
+                ) : (
+                  <PlanningRegels regels={planningRegels} vandaag={TODAY()} />
+                )}
+              </div>
+            </div>
 
             {/* Taken */}
             <TakenSection taken={taken} onToggle={handleToggleTaak} onAdd={handleAddTaak} onDelete={handleDeleteTaak} canEdit={canEdit} />

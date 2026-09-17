@@ -18,7 +18,7 @@ import {
 // Alles alleen met plan.has('voertuigen') — en met de planningsmodule, want
 // voertuigen per dag hangen aan de dagen. De database dwingt hetzelfde af.
 
-function useVoertuigenLijst(actief) {
+export function useVoertuigenLijst(actief) {
   const [lijst, setLijst] = useState(null);
   useEffect(() => {
     if (!actief) return undefined;

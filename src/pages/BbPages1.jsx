@@ -22,7 +22,8 @@ import { getProjectsByCustomer } from '../services/projectsService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
 import { listPipelineStages } from '../services/dealService.js';
 import { buildStageIndex, dealCategory } from '../utils/pipeline.js';
-import { korteDatum, ploegOpDag, tijdenOpDag, werkbonDagen } from '../utils/werkbonDagen.js';
+import { korteDatum } from '../utils/werkbonDagen.js';
+import { PlanningRegels, planRegels } from '../components/PlanningBlok.jsx';
 import { WerkbonModal } from './WerkbonPageV2.jsx';
 import { NewOfferteModal, OfferteBadge } from './OffertesPage.jsx';
 import { NewFactuurModal, FactuurBadge } from './FacturenPage.jsx';
@@ -168,23 +169,39 @@ function KlantTabbalk({ tabs, labels, actief, onKies }) {
   );
 }
 
-// Alle geplande dagen van een reeks werkbonnen, op datum gesorteerd. Eén regel
-// per dag: wat er die dag staat, hoe laat, en wie erop staan.
-function planRegels(werkbonnen, naamVan) {
-  return werkbonnen
-    .flatMap(w => werkbonDagen(w).map(dag => {
-      const t = tijdenOpDag(w, dag);
-      return {
-        sleutel: `${w.id}-${dag.datum}`,
-        werkbon: w,
-        datum: dag.datum,
-        starttijd: t.starttijd,
-        eindtijd: t.eindtijd,
-        wie: ploegOpDag(w, dag).map(naamVan).filter(Boolean),
-      };
-    }))
-    .filter(r => r.datum)
-    .sort((a, b) => a.datum.localeCompare(b.datum));
+// Plusje bij Planning: kiezen tussen een werkbon en een los item (activiteit,
+// niet aan een werkbon gekoppeld). Toont alleen wat mag, en helemaal niets als
+// geen van beide mag. Mag er maar één ding, dan doet het plusje dat meteen —
+// een menu met één regel is alleen maar een extra klik.
+function PlanKeuze({ magWerkbon, magLosItem, onWerkbon, onLosItem, knop }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const buiten = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', buiten);
+    return () => document.removeEventListener('mousedown', buiten);
+  }, [open]);
+
+  if (!magWerkbon && !magLosItem) return null;
+  const direct = !magLosItem ? onWerkbon : (!magWerkbon ? onLosItem : null);
+  const label = !magLosItem ? 'Werkbon inplannen' : (!magWerkbon ? 'Los item inplannen' : 'Inplannen');
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      {knop(direct || (() => setOpen(v => !v)), label)}
+      {open && !direct && (
+        <div className="kk-meer-paneel">
+          <button type="button" className="kk-meer-item" onClick={() => { setOpen(false); onWerkbon(); }}>
+            Werkbon inplannen
+          </button>
+          <button type="button" className="kk-meer-item" onClick={() => { setOpen(false); onLosItem(); }}>
+            Los item inplannen
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function CustomerPage({ custId, initialTab, onClose, setPage }) {
@@ -230,7 +247,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   const [emailSending, setEmailSending] = useState(false);
   const [expandedEmailId, setExpandedEmailId] = useState(null);
   const { company, profile } = useProfile();
-  const { can } = usePermissions();
+  const { can, isAdmin } = usePermissions();
 
   useEffect(() => {
     const el = document.querySelector('.sb');
@@ -339,6 +356,26 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
   const dealWerkbonnen = actieveDeal ? cWerkbonnen.filter(w => w.dealId === actieveDeal.id) : [];
   const planWerkbonnen = dealWerkbonnen.length ? dealWerkbonnen : cWerkbonnen;
   const naamVan = id => teamMembers.find(m => m.id === id || m.profileId === id)?.fullName || '';
+  // Wat mag deze gebruiker inplannen?
+  //
+  // Werkbon: de database laat alleen admin en planner invoegen (policy
+  // werkbonnen_insert toetst profiles.role). Iemand met alleen het
+  // planning-recht loopt dus tegen een RLS-fout aan; die knop tonen we niet.
+  // Los item (activiteit): elke gebruiker van het bedrijf mag die invoegen.
+  // Abonnement: werkbonnen en activiteiten zitten in elk pakket — ze hebben
+  // geen feature in de navigatie — dus hier geen plan.has-gate. Een meekijk-
+  // abonnement wordt door guardSchrijven afgevangen.
+  const magWerkbonInplannen = isAdmin || profile?.role === 'planner';
+  const magLosItemInplannen = !!profile;
+  const planKeuze = knop => (
+    <PlanKeuze
+      magWerkbon={magWerkbonInplannen}
+      magLosItem={magLosItemInplannen}
+      onWerkbon={guardSchrijven('Een werkbon aanmaken', () => setShowNewWerkbon(true))}
+      onLosItem={guardSchrijven('Een activiteit inplannen', () => setShowActivityModal(true))}
+      knop={knop}
+    />
+  );
   const planningRegels = planRegels(planWerkbonnen, naamVan);
   const komendeRegels = planningRegels.filter(r => r.datum >= new Date().toISOString().slice(0, 10));
   const alleRegels = planRegels(cWerkbonnen, naamVan);
@@ -688,28 +725,23 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
               <button type="button" className="kk-blok-titel" onClick={() => setTab('planning')}>
                 Planning <span className="kk-pijl">→</span>
               </button>
-              {planningRegels.length > 0 && (
-                <button className="btn-plus" onClick={guardSchrijven('Een werkbon inplannen', () => setShowNewWerkbon(true))}>{I.plus}</button>
-              )}
+              {planningRegels.length > 0 && planKeuze((onClick, label) => (
+                <button className="btn-plus" title={label} onClick={onClick}>{I.plus}</button>
+              ))}
             </div>
             {komendeRegels.length === 0 && planningRegels.length === 0 ? (
               <div className="kk-leeg">
                 <span>Nog niets ingepland voor deze klant.</span>
-                <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een werkbon inplannen', () => setShowNewWerkbon(true))}>
-                  {I.plus} Werkbon inplannen
-                </button>
+                {planKeuze((onClick, label) => (
+                  <button className="btn btn-p btn-sm" onClick={onClick}>{I.plus} {label}</button>
+                ))}
               </div>
             ) : (
               <div>
-                {(komendeRegels.length ? komendeRegels : planningRegels).slice(0, 4).map(r => (
-                  <div key={r.sleutel} className="kk-planregel" style={{ cursor: 'pointer' }}
-                    onClick={() => setPage?.('werkbonnen', { id: r.werkbon.id })}>
-                    <span className="kk-plan-datum">{korteDatum(r.datum)}</span>
-                    <span className="kk-plan-tijd">{r.starttijd ? `${r.starttijd}–${r.eindtijd || '?'}` : 'geen tijd'}</span>
-                    <span className="kk-plan-wie">{r.wie.length ? r.wie.join(', ') : 'niemand toegewezen'}</span>
-                    <StatusBadge status={r.werkbon.status} domain="werkbon" />
-                  </div>
-                ))}
+                <PlanningRegels
+                  regels={(komendeRegels.length ? komendeRegels : planningRegels).slice(0, 4)}
+                  onOpen={r => setPage?.('werkbonnen', { id: r.werkbon.id })}
+                />
               </div>
             )}
           </div>
@@ -1027,28 +1059,25 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--br)' }}>
             <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Geplande dagen ({alleRegels.length})</div>
-            <button className="btn btn-s btn-sm" onClick={guardSchrijven('Een werkbon inplannen', () => setShowNewWerkbon(true))}>
-              {I.plus} Werkbon inplannen
-            </button>
+            {planKeuze((onClick, label) => (
+              <button className="btn btn-s btn-sm" onClick={onClick}>{I.plus} {label}</button>
+            ))}
           </div>
           {alleRegels.length === 0 ? (
             <div className="kk-leeg" style={{ padding: '30px 0' }}>
               <span>Nog niets ingepland voor deze klant.</span>
-              <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een werkbon inplannen', () => setShowNewWerkbon(true))}>
-                {I.plus} Werkbon inplannen
-              </button>
+              {planKeuze((onClick, label) => (
+                <button className="btn btn-p btn-sm" onClick={onClick}>{I.plus} {label}</button>
+              ))}
             </div>
           ) : (
             <div style={{ padding: '2px 16px 10px' }}>
-              {alleRegels.map(r => (
-                <div key={r.sleutel} className="kk-planregel" style={{ cursor: 'pointer', opacity: r.datum < vandaagIso ? .6 : 1 }}
-                  onClick={() => setPage?.('werkbonnen', { id: r.werkbon.id })}>
-                  <span className="kk-plan-datum">{korteDatum(r.datum)}</span>
-                  <span className="kk-plan-tijd">{r.starttijd ? `${r.starttijd}–${r.eindtijd || '?'}` : 'geen tijd'}</span>
-                  <span className="kk-plan-wie">{r.werkbon.titel}{r.wie.length ? ` · ${r.wie.join(', ')}` : ''}</span>
-                  <StatusBadge status={r.werkbon.status} domain="werkbon" />
-                </div>
-              ))}
+              <PlanningRegels
+                regels={alleRegels}
+                onOpen={r => setPage?.('werkbonnen', { id: r.werkbon.id })}
+                vandaag={vandaagIso}
+                toonTitel
+              />
             </div>
           )}
         </div>
@@ -1059,16 +1088,22 @@ export function CustomerPage({ custId, initialTab, onClose, setPage }) {
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--br)' }}>
             <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Werkbonnen ({cWerkbonnen.length})</div>
-            <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een werkbon aanmaken', () => setShowNewWerkbon(true))}>
-              {I.plus} Nieuwe werkbon
-            </button>
+            {/* Alleen admin en planner: de database weigert een werkbon van een
+                andere rol (policy werkbonnen_insert). */}
+            {magWerkbonInplannen && (
+              <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een werkbon aanmaken', () => setShowNewWerkbon(true))}>
+                {I.plus} Nieuwe werkbon
+              </button>
+            )}
           </div>
           {cWerkbonnen.length === 0 ? (
             <div className="kk-leeg" style={{ padding: '30px 0' }}>
               <span>Deze klant heeft nog geen werkbonnen.</span>
-              <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een werkbon aanmaken', () => setShowNewWerkbon(true))}>
-                {I.plus} Nieuwe werkbon
-              </button>
+              {magWerkbonInplannen && (
+                <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een werkbon aanmaken', () => setShowNewWerkbon(true))}>
+                  {I.plus} Nieuwe werkbon
+                </button>
+              )}
             </div>
           ) : (
             [...cWerkbonnen]
