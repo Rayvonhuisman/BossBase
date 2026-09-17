@@ -2503,11 +2503,24 @@ export function InstellingenPage() {
             <div className="tw-hd">
               <div className="card-title">Automatische koppeling</div>
             </div>
-            <div style={{ fontSize: '.8rem', color: 'var(--dm)', padding: '4px 0 10px', lineHeight: 1.5 }}>
-              De pipeline volgt de uitvoering: kies per moment welke fase erbij hoort.
-              De koppeling ligt op de fase zelf, dus hernoemen verandert niets.
-              Een deal schuift alleen vooruit, nooit terug, en handmatig verslepen
-              verandert het project niet.
+            {/* Zelfde zijmarge als .tw-hd (18px), anders plakt de tekst tegen
+                de kaartrand. De details zitten achter het info-icoon. */}
+            <div style={{
+              fontSize: '.8rem', color: 'var(--dm)', padding: '10px 18px 12px', lineHeight: 1.5,
+              display: 'flex', alignItems: 'flex-start', gap: 6, maxWidth: 660,
+            }}>
+              <span>
+                Je deals schuiven automatisch mee met je werk. Kies hieronder bij elk moment
+                in welke fase de deal moet komen.
+              </span>
+              <button
+                type="button"
+                className="bb-info"
+                aria-label="Meer uitleg over de automatische koppeling"
+                data-tip="Een deal gaat alleen vooruit, nooit terug. Een fase hernoemen verandert niets. Een deal zelf verslepen verandert het project of de werkbon niet."
+              >
+                {I.info}
+              </button>
             </div>
             <table className="dt">
               <thead>
