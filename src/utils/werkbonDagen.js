@@ -88,6 +88,44 @@ export function tijdenVoorPersoon(w, dag, pid) {
   return tijdenOpDag(w, dag);
 }
 
+const vroegste = lijst => lijst.reduce((m, t) => (m && m <= t ? m : t), null);
+const laatste = lijst => lijst.reduce((m, t) => (m && m >= t ? m : t), null);
+
+/**
+ * Het venster van een dag zóals je het toont: heeft de dag een eigen tijd, dan
+ * die; anders van de vroegste start tot het laatste eind van wie er die dag
+ * werkt.
+ *
+ * Bestaat naast tijdenOpDag en vervangt die niet. tijdenOpDag geeft de tijd die
+ * GELDT (met terugval op de werkbon) en daar rekenen de planning, de agenda en
+ * de voertuigen mee. Maar tonen deed hij iets misleidends: zodra iedereen een
+ * eigen tijd had, stond er nog steeds de werkbontijd — 08:00–16:30 terwijl er
+ * niemand meer op dat moment werkte.
+ */
+export function dagVenster(w, dag) {
+  if (tijd(dag?.starttijd)) {
+    return { starttijd: tijd(dag.starttijd), eindtijd: tijd(dag.eindtijd) || null };
+  }
+  const tijden = ploegOpDag(w, dag).map(pid => tijdenVoorPersoon(w, dag, pid)).filter(t => t.starttijd);
+  if (!tijden.length) return tijdenOpDag(w, dag);
+  return {
+    starttijd: vroegste(tijden.map(t => t.starttijd)),
+    eindtijd: laatste(tijden.map(t => t.eindtijd).filter(Boolean)),
+  };
+}
+
+/** Hetzelfde venster over alle dagen samen: voor de kopregel van een werkbon. */
+export function werkbonVenster(w) {
+  const vensters = werkbonDagen(w).map(d => dagVenster(w, d)).filter(v => v.starttijd);
+  if (!vensters.length) {
+    return { starttijd: tijd(w?.starttijd) || null, eindtijd: tijd(w?.eindtijd) || null };
+  }
+  return {
+    starttijd: vroegste(vensters.map(v => v.starttijd)),
+    eindtijd: laatste(vensters.map(v => v.eindtijd).filter(Boolean)),
+  };
+}
+
 /**
  * Staat deze medewerker op die datum op de werkbon? Zonder uid: staat de
  * werkbon die dag gepland. De oude enkele assigned_to telt mee zolang er geen

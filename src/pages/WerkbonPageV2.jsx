@@ -32,6 +32,7 @@ import { PlanningRegels, planRegels } from '../components/PlanningBlok.jsx';
 import { voertuigPlanningUitWerkbon } from '../utils/voertuigDagen.js';
 import {
   planningUitWerkbon, dagenUitPlanning, controleerPlanning, legePlanning, planningLabel, geplandeDatums,
+  werkbonVenster,
 } from '../utils/werkbonDagen.js';
 import { syncWerkbonEvents } from '../services/calendarService.js';
 import { downloadWerkbonPdf } from '../utils/generateWerkbonPdf.js';
@@ -464,7 +465,9 @@ function WerkbonListCard({ w, takenCount, onClick }) {
       <div className="wb2-list-card-footer">
         {w.geplandOp && (
           <span className="wb2-list-card-date">
-            {I.cal} {planningLabel(w)}{w.starttijd ? ` · ${fmtTime(w.starttijd)}` : ''}
+            {/* Zelfde venster als in het detail, anders zegt de lijst 08:00
+                terwijl de werkbon zelf 09:00 toont. */}
+            {I.cal} {planningLabel(w)}{werkbonVenster(w).starttijd ? ` · ${werkbonVenster(w).starttijd}` : ''}
           </span>
         )}
         {total > 0 && (
@@ -2111,15 +2114,23 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
                     {I.map} {detail.locatie}
                   </div>
                 )}
-                {(detail.geplandOp || detail.starttijd) && (
-                  <div style={{ fontSize: 13, color: 'var(--dl)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                    {I.cal}
-                    {detail.geplandOp ? planningLabel(detail) : ''}
-                    {(detail.starttijd || detail.eindtijd)
-                      ? ` · ${fmtTime(detail.starttijd) || ''}${detail.eindtijd ? ` – ${fmtTime(detail.eindtijd)}` : ''}`
-                      : ''}
-                  </div>
-                )}
+                {(detail.geplandOp || detail.starttijd) && (() => {
+                  // Niet de vaste werkbontijd, maar het venster waarop er echt
+                  // gewerkt wordt: vroegste start tot laatste eind over alle
+                  // dagen. Verzet iemand in de planning zijn tijd, dan schuift
+                  // deze regel mee; met de werkbontijd stond hier een tijd die
+                  // niemand meer werkte.
+                  const venster = werkbonVenster(detail);
+                  return (
+                    <div style={{ fontSize: 13, color: 'var(--dl)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                      {I.cal}
+                      {detail.geplandOp ? planningLabel(detail) : ''}
+                      {venster.starttijd
+                        ? ` · ${venster.starttijd}${venster.eindtijd ? ` – ${venster.eindtijd}` : ''}`
+                        : ''}
+                    </div>
+                  );
+                })()}
                 <MijnVoertuig werkbon={detail} />
               </div>
             </div>

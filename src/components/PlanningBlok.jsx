@@ -1,6 +1,6 @@
 import { Truck } from 'lucide-react';
 import { StatusBadge } from '../bb-shared.jsx';
-import { korteDatum, ploegOpDag, tijdenOpDag, tijdenVoorPersoon, werkbonDagen } from '../utils/werkbonDagen.js';
+import { dagVenster, korteDatum, ploegOpDag, tijdenVoorPersoon, werkbonDagen } from '../utils/werkbonDagen.js';
 import { tijdVanVoertuig, voertuigVanPersoon, voertuigenOpDag } from '../utils/voertuigDagen.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { useVoertuigenLijst } from './WerkbonVoertuigen.jsx';
@@ -24,7 +24,10 @@ const tijd = t => (t ? String(t).slice(0, 5) : '');
 export function planRegels(werkbonnen, naamVan) {
   return werkbonnen
     .flatMap(w => werkbonDagen(w).map(dag => {
-      const t = tijdenOpDag(w, dag);
+      // Het venster van de dag: de dagtijd, of anders van de vroegste start tot
+      // het laatste eind van wie er werkt. Niet de werkbontijd, want die werkt
+      // niemand meer zodra er eigen tijden zijn.
+      const t = dagVenster(w, dag);
       // Wie een eigen tijd heeft op die dag (medewerker_tijden), krijgt die
       // achter zijn naam. Zonder dit toonde het blok alleen de dagtijd, en dan
       // zag je een verzette persoonsbaan uit de planning hier niet terug.
