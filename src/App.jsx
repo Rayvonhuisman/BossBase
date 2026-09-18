@@ -1303,17 +1303,20 @@ function AppInner() {
   const clearNavIntent = () => setNavIntent(null);
   // Terug-navigatie: naar de klantkaart óf naar het projectdetail, afhankelijk
   // van de bewaarde context (kind). Ontvangt de hele backCtx van de pagina.
+  // De terugpijl in de app gebruikt dezelfde geschiedenis als de browserknop en
+  // het terugswipen: één weg terug, dus altijd precies naar de vorige weergave.
+  //
+  // backCtx blijft bestaan, maar alleen nog voor het LABEL ("Terug naar Jansen").
+  // De bestemming komt niet meer uit die context: via drie stappen binnengekomen
+  // betekende dat je in één klap helemaal terugsprong, langs alles heen wat je
+  // onderweg had geopend.
   const goBack = (ctx) => {
-    if (!ctx) return;
+    if (window.history.state?.bbDiep) { window.history.back(); return; }
+    // Geen eigen stap (verse tab, gedeelde link): dan maar de bekende plek.
+    if (!ctx) { gaNaar({ page }); return; }
     setBackCtx(null);
-    if (ctx.kind === 'project' && ctx.projectId) {
-      navigatePage('projecten', { id: ctx.projectId });
-      return;
-    }
-    if (ctx.klantId) {
-      navigatePage('customers');
-      openCustomer(ctx.klantId);
-    }
+    if (ctx.kind === 'project' && ctx.projectId) { gaNaar({ page: 'projecten', itemId: ctx.projectId }); return; }
+    if (ctx.klantId) gaNaar({ page: 'customers', klant: ctx.klantId });
   };
   const handleLogout = async () => {
     try {

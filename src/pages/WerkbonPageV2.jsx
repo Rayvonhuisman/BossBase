@@ -2064,7 +2064,9 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
     return (
       <div className="wb2-page">
         <div className="wb2-head">
-          <button className="wb2-detail-back" onClick={backKlant ? () => onBackKlant?.(backKlant) : goBack} type="button">
+          {/* Beide varianten gaan één stap terug in de geschiedenis; alleen het
+              label verschilt. Zo doet de pijl hetzelfde als de browserknop. */}
+          <button className="wb2-detail-back" onClick={() => (backKlant && onBackKlant ? onBackKlant(backKlant) : goBack())} type="button">
             {backKlant ? `← Terug naar ${backKlant.klantNaam}` : '← Werkbonnen'}
           </button>
           <div className="wb2-head-spacer" />
