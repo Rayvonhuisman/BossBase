@@ -2273,7 +2273,10 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
                 {planningRegels.length === 0 ? (
                   <div className="kk-leeg" style={{ padding: '6px 0' }}><span>Deze werkbon staat nog niet ingepland.</span></div>
                 ) : (
-                  <PlanningRegels regels={planningRegels} vandaag={TODAY()} />
+                  // Geen status per dag: alle regels horen bij déze werkbon, dus
+                  // het zou de badge bovenaan herhalen — en die herhaling klopt
+                  // niet meer zodra de geplande dag voorbij is.
+                  <PlanningRegels regels={planningRegels} vandaag={TODAY()} toonStatus={false} />
                 )}
               </div>
             </div>
