@@ -5,7 +5,7 @@ import { databaseKentVoertuigen } from '../services/werkbonService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { useProfile } from '../lib/profileContext.jsx';
 import { vandaagIso } from '../lib/datumTijd.js';
-import { korteDatum } from '../utils/werkbonDagen.js';
+import { korteDatum, ploegOpDag, plusDagen, tijdenVoorPersoon, werkbonDagen } from '../utils/werkbonDagen.js';
 import { WerkbonVoertuigenBlok } from './WerkbonVoertuigenBlok.jsx';
 import {
   controleerVoertuigen, metVoertuigen, voertuigPlanningUitWerkbon, voertuigenVoorPersoon,
@@ -88,6 +88,78 @@ export function useWerkbonVoertuigen({ werkbon = null, meerdaags = true }) {
 const tijdTekst = r => (r.starttijd && r.eindtijd ? ` · ${r.starttijd}–${r.eindtijd}` : '');
 
 /**
+ * De eerstvolgende dag waarop JIJ op deze werkbon staat: vandaag, anders morgen
+ * of later. Dagen die geweest zijn tellen niet mee. Null als je er niet op staat.
+ * Eén plek, want zowel de melding als MijnVoertuig hangt ervan af.
+ */
+function mijnEerstvolgendeDag(werkbon, mij) {
+  if (!mij) return null;
+  const vandaag = vandaagIso();
+  return werkbonDagen(werkbon)
+    .filter(d => d.datum && d.datum >= vandaag && ploegOpDag(werkbon, d).includes(mij))
+    .sort((a, b) => a.datum.localeCompare(b.datum))[0] || null;
+}
+
+/**
+ * "Jij bent vandaag ingepland van 08:00 tot 16:30, met Bus 2, samen met Tim."
+ *
+ * Staat bovenaan de werkbon, boven Bel klant / Route / Start klus: wie de bon
+ * opent wil eerst weten of híj vandaag moet komen, en pas daarna de rest.
+ *
+ * Alleen zichtbaar als je zelf in de ploeg van die dag staat. Een planner die
+ * meekijkt ziet niets extra's — die leest de planning al in het blok eronder,
+ * en een melding die niet over jou gaat is ruis.
+ *
+ * Getoond wordt de EERSTVOLGENDE dag waarop je staat: vandaag als het vandaag
+ * is, anders morgen of later. Zo zie je 's avonds dat je morgen om 07:00 wordt
+ * verwacht. Dagen die geweest zijn tellen niet mee.
+ *
+ * De tijd is jóuw tijd: je eigen tijd op die dag, anders de tijd van de dag,
+ * anders die van de werkbon (tijdenVoorPersoon). Dezelfde volgorde als overal.
+ */
+export function MijnPlanningMelding({ werkbon }) {
+  const plan = usePlan();
+  const { profile } = useProfile();
+  const voertuigenAan = plan.has('voertuigen') && (werkbon?.voertuigIds?.length || 0) > 0;
+  const alle = useVoertuigenLijst(voertuigenAan);
+
+  const mij = profile?.id;
+  const dag = mijnEerstvolgendeDag(werkbon, mij);
+  if (!dag) return null;
+  const vandaag = vandaagIso();
+
+  const { starttijd, eindtijd } = tijdenVoorPersoon(werkbon, dag, mij);
+  const wanneer = dag.datum === vandaag
+    ? 'vandaag'
+    : dag.datum === plusDagen(vandaag, 1) ? 'morgen' : `op ${korteDatum(dag.datum)}`;
+
+  // Jouw voertuig op díé dag. Zit je nergens in, dan noemen we geen bus: dat is
+  // aan de planner, niet iets om hier te verzinnen.
+  const eigenVoertuig = (voertuigenVoorPersoon(werkbon, mij) || []).find(r => r.datum === dag.datum);
+  const voertuigNaam = eigenVoertuig && Array.isArray(alle)
+    ? (() => {
+        const v = alle.find(x => x.id === eigenVoertuig.vid);
+        return v ? `${v.naam}${v.kenteken ? ` (${v.kenteken})` : ''}` : null;
+      })()
+    : null;
+
+  // Met wie je die dag bent ingepland; jezelf niet meegeteld.
+  const collegas = ploegOpDag(werkbon, dag).filter(id => id !== mij).length;
+
+  return (
+    <div className="wb2-mijn-planning" role="status">
+      <span className="wb2-mijn-planning-ic"><Truck size={15} /></span>
+      <span>
+        <strong>Jij bent {wanneer} ingepland</strong>
+        {starttijd ? ` van ${starttijd}${eindtijd ? ` tot ${eindtijd}` : ''}` : ''}
+        {voertuigNaam ? ` · ${voertuigNaam}` : ''}
+        {collegas > 0 ? ` · samen met ${collegas} ${collegas === 1 ? 'collega' : 'collega’s'}` : ''}
+      </span>
+    </div>
+  );
+}
+
+/**
  * Op de werkbon: in welk voertuig zit ik? Wie niet gekoppeld is (of kantoor),
  * ziet welke voertuigen er op de werkbon staan.
  */
@@ -97,6 +169,9 @@ export function MijnVoertuig({ werkbon, style }) {
   const aan = plan.has('voertuigen') && (werkbon?.voertuigIds?.length || 0) > 0;
   const alle = useVoertuigenLijst(aan);
   if (!aan || !alle?.length) return null;
+  // Staat de planningsmelding er al ("Jij bent vandaag ingepland · Bus 2"), dan
+  // zegt deze regel hetzelfde nog een keer. Alleen tonen als die er niet is.
+  if (mijnEerstvolgendeDag(werkbon, profile?.id)) return null;
 
   const naam = vid => {
     const v = alle.find(x => x.id === vid);

@@ -1492,6 +1492,14 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .wb2-cust-link:hover{text-decoration:underline}
 .wb2-detail-back{display:inline-flex;align-items:center;gap:6px;color:var(--dl);font-size:13px;font-weight:600;cursor:pointer;background:none;border:0;padding:0;font-family:inherit;transition:color .12s}
 .wb2-detail-back:hover{color:var(--dk)}
+/* "Jij bent vandaag ingepland van 08:00 tot 16:30 · Bus 2" — boven de
+   actieknoppen. Eigen vlak en groen: wie de bon opent wil eerst weten of hij
+   vandaag moet komen; de grijze detailregels eronder leest hij pas daarna. */
+.wb2-mijn-planning{display:flex;align-items:flex-start;gap:8px;margin-bottom:12px;padding:10px 14px;border-radius:var(--r10);background:var(--pll);border:1px solid #bbf7d0;color:var(--pd);font-size:13px;line-height:1.5}
+.wb2-mijn-planning strong{color:var(--pd);font-weight:700}
+.wb2-mijn-planning-ic{display:flex;flex-shrink:0;margin-top:1px}
+@media (max-width:767px){.wb2-mijn-planning{font-size:13.5px;padding:11px 14px}}
+
 .wb2-action-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .wb2-action-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:14px 10px;background:#fff;border:1px solid var(--br);border-radius:12px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;color:var(--dk);transition:all .15s;text-align:center}
 .wb2-action-btn:hover:not(:disabled){background:var(--bgs);border-color:#cfd3cf}

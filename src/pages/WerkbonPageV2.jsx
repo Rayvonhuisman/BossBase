@@ -27,7 +27,7 @@ import {
 } from '../services/werkbonService.js';
 import WerkbonAfrondenModal from '../components/WerkbonAfrondenModal.jsx';
 import { WerkbonDagenVelden, WerkbonLocatieVeld, useKlantAdres } from '../components/WerkbonPlanning.jsx';
-import { MijnVoertuig, useWerkbonVoertuigen } from '../components/WerkbonVoertuigen.jsx';
+import { MijnVoertuig, MijnPlanningMelding, useWerkbonVoertuigen } from '../components/WerkbonVoertuigen.jsx';
 import { PlanningRegels, planRegels } from '../components/PlanningBlok.jsx';
 import { voertuigPlanningUitWerkbon } from '../utils/voertuigDagen.js';
 import {
@@ -2151,9 +2151,15 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
                     </div>
                   );
                 })()}
+                {/* Staat de werkbon op jouw naam, dan vertelt de melding hieronder
+                    al welk voertuig je hebt; anders tonen we de voertuigen van de
+                    werkbon. Zo staat het er nooit twee keer. */}
                 <MijnVoertuig werkbon={detail} />
               </div>
             </div>
+
+            {/* Jouw eigen planning: wanneer word JIJ hier verwacht, en waarmee. */}
+            <MijnPlanningMelding werkbon={detail} />
 
             {/* 3 action buttons */}
             <div className="wb2-action-row">
