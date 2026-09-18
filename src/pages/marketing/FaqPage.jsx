@@ -228,8 +228,8 @@ export default function FaqPage({ navigate }) {
               <Reveal stagger>
                 <div className="contact-cards">
                   {[
-                    { icon: I.mail,   title: "E-mail ons", desc: "hallo@bossbase.nl", sub: "Reactie binnen 1 werkdag", href: "mailto:hallo@bossbase.nl" },
-                    { icon: I.phone,  title: "Bel ons",    desc: "085 - 060 70 80",   sub: "Ma–Vr 09:00–17:00",       href: "tel:+31850607080" },
+                    { icon: I.mail,   title: "E-mail ons", desc: "info@bossbase.nl", sub: "Reactie binnen 1 werkdag", href: "mailto:info@bossbase.nl" },
+                    { icon: I.phone,  title: "Bel ons",    desc: "06 - 4200 5889",   sub: "Ma–Vr 09:00–17:00",       href: "tel:+31642005889" },
                   ].map(c => (
                     <a key={c.title} href={c.href} className="contact-card">
                       <div className="cc-icon">{c.icon}</div>

@@ -3,6 +3,7 @@ import { I, ModalX, STAGE_COLOR_OPTIONS, stageColToHex, stageColorLabel, stageBa
 import { supabase } from '../lib/supabase.js';
 import GrootboekIndeling from '../components/GrootboekIndeling.jsx';
 import IntegratiesOverzicht from '../components/Integraties.jsx';
+import { isDemo } from '../lib/supabase.js';
 import {
   activatieBeschikbaar, bouwActivatieUrl, RETOUR_PARAM, RETOUR_WAARDE,
 } from '../config/snelstart.js';
@@ -145,7 +146,12 @@ const VASTE_WERKWIJZE = (
 );
 
 // Alle mogelijke tab-ids (permissie-onafhankelijk) — weert onbekende ?tab=-waarden.
-const SETTINGS_TAB_IDS = ['profiel', 'bedrijf', 'standaard', 'templates', 'pipeline', 'voertuigen', 'abonnement', 'integraties'];
+// In de demo zonder 'integraties': een koppeling met Moneybird, SnelStart of
+// Google vraagt een echte verbinding en kan daar dus niets doen. Een tabblad dat
+// alleen maar knoppen toont die niets uitvoeren, wekt in een demo twijfel in
+// plaats van vertrouwen. In de echte app blijft het gewoon staan.
+const SETTINGS_TAB_IDS = ['profiel', 'bedrijf', 'standaard', 'templates', 'pipeline', 'voertuigen', 'abonnement',
+  ...(isDemo ? [] : ['integraties'])];
 
 
 export function InstellingenPage() {
@@ -1187,7 +1193,7 @@ export function InstellingenPage() {
       // Abonnement is voorbehouden aan de eigenaar/admin — een aparte gate
       // naast het rechtensysteem, want dit gaat over geld en niet over werk.
       ...(isAdmin ? [{ id: 'abonnement', label: 'Abonnement' }] : []),
-      { id: 'integraties', label: 'Integraties' },
+      ...(isDemo ? [] : [{ id: 'integraties', label: 'Integraties' }]),
     ] : []),
   ];
 

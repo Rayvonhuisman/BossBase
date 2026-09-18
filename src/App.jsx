@@ -39,7 +39,8 @@ import IndustriesPage from './pages/marketing/IndustriesPage.jsx';
 import AboutPage from './pages/marketing/AboutPage.jsx';
 import ContactPage from './pages/marketing/ContactPage.jsx';
 import FaqPage from './pages/marketing/FaqPage.jsx';
-import DemoPage from './pages/DemoPage.jsx';
+import DemoMobiel from './demo/DemoMobiel.jsx';
+import DemoBalk from './demo/DemoBalk.jsx';
 import { SuperAdminPage } from './pages/SuperAdminPage.jsx';
 import { createMissingProfile, getSession, logout, onAuthStateChange } from './services/authService.js';
 import { getCurrentUserContext } from './services/profileService.js';
@@ -1020,7 +1021,7 @@ function AppInner() {
 
     const { data } = onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
-      if (!nextSession && window.location.pathname.startsWith('/dashboard')) {
+      if (!nextSession && window.location.pathname.startsWith(BASISPAD)) {
         navigate('/login', true);
       }
     });
@@ -1474,15 +1475,15 @@ function AppInner() {
           </div>
         ) : <LeveranciersPage openLeverancier={openLeverancier} />;
       case 'materialen': return <MaterialenPage />;
-      case 'activities': return <ActivitiesPageV2 openCustomer={openCustomer} preOpenActivityId={navIntent?.page === 'activities' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
+      case 'activities': return <ActivitiesPageV2 openCustomer={openCustomer} preOpenActivityId={itemId} onItemOpen={id => gaNaar({ page: 'activities', itemId: id })} onItemClose={() => sluitTerug(null, { page: 'activities' })} onNavConsumed={clearNavIntent} />;
       case 'calendar':   return <CalendarPage openCustomer={openCustomer} openCalendarEvent={openCalendarEvent} setPage={navigatePage} preOpenActivityId={navIntent?.page === 'calendar' ? navIntent.id : null} onNavConsumed={clearNavIntent} />;
       case 'planning':   return <PlanningPage openCustomer={openCustomer} />;
       case 'costs':       return <CostsPage />;
       case 'revenue':     return <RevenuePage />;
-      case 'facturen':    return <FacturenPage openCustomer={openCustomer} preOpenFactuurId={navIntent?.page === 'facturen' ? navIntent.id : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'facturen' ? backCtx : null} onBackKlant={goBack} />;
-      case 'offertes':    return <OffertesPage openCustomer={openCustomer} preOpenOfferteId={navIntent?.page === 'offertes' ? navIntent.id : null} preFillDealId={navIntent?.page === 'offertes' ? navIntent.dealId : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'offertes' ? backCtx : null} onBackKlant={goBack} />;
-      case 'projecten':   return <ProjectsPage openCustomer={openCustomer} openInvoice={openInvoice} setPage={navigatePage} preOpenProjectId={navIntent?.page === 'projecten' ? navIntent.id : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'projecten' ? backCtx : null} onBackKlant={goBack} />;
-      case 'werkbonnen':  return <WerkbonPage preOpenWerkbonId={navIntent?.page === 'werkbonnen' ? navIntent.id : null} onNavConsumed={clearNavIntent} setPage={navigatePage} openCustomer={openCustomer} backKlant={backCtx?.page === 'werkbonnen' ? backCtx : null} onBackKlant={goBack} />;
+      case 'facturen':    return <FacturenPage openCustomer={openCustomer} preOpenFactuurId={itemId} onItemOpen={id => gaNaar({ page: 'facturen', itemId: id })} onItemClose={() => sluitTerug(null, { page: 'facturen' })} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'facturen' ? backCtx : null} onBackKlant={goBack} />;
+      case 'offertes':    return <OffertesPage openCustomer={openCustomer} preOpenOfferteId={itemId} onItemOpen={id => gaNaar({ page: 'offertes', itemId: id })} onItemClose={() => sluitTerug(null, { page: 'offertes' })} preFillDealId={navIntent?.page === 'offertes' ? navIntent.dealId : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'offertes' ? backCtx : null} onBackKlant={goBack} />;
+      case 'projecten':   return <ProjectsPage openCustomer={openCustomer} openInvoice={openInvoice} setPage={navigatePage} preOpenProjectId={itemId} onItemOpen={id => gaNaar({ page: 'projecten', itemId: id })} onItemClose={() => sluitTerug(null, { page: 'projecten' })} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'projecten' ? backCtx : null} onBackKlant={goBack} />;
+      case 'werkbonnen':  return <WerkbonPage preOpenWerkbonId={itemId} onItemOpen={id => gaNaar({ page: 'werkbonnen', itemId: id })} onItemClose={() => sluitTerug(null, { page: 'werkbonnen' })} onNavConsumed={clearNavIntent} setPage={navigatePage} openCustomer={openCustomer} backKlant={backCtx?.page === 'werkbonnen' ? backCtx : null} onBackKlant={goBack} />;
       case 'uren':        return <UrenPage navigatePage={navigatePage} />;
       case 'database':    return <DatabasePage openCustomer={openCustomer} />;
       case 'team':        return <TeamPage />;
@@ -1523,9 +1524,10 @@ function AppInner() {
     return <FaqPage navigate={navigate} isAuthenticated={Boolean(session)} />;
   }
 
-  if (route === '/demo') {
-    return <DemoPage navigate={navigate} isAuthenticated={Boolean(session)} />;
-  }
+  // /demo heeft hier bewust GEEN eigen pagina meer. De demo is het echte
+  // portaal: de route valt door naar dezelfde shell als /dashboard, met
+  // BASISPAD op '/demo' en een nep-datalaag eronder. Zo blijft de demo vanzelf
+  // gelijk aan het product in plaats van een nabouw die uit de pas loopt.
 
   if (route === '/cookieverklaring') {
     return <CookieverklaringPage navigate={navigate} />;
@@ -1546,7 +1548,11 @@ function AppInner() {
   }
 
   if (route === '/login') {
-    if (session) {
+    // In de demo is er ALTIJD een (nep)sessie. Zonder deze uitzondering wordt
+    // een bezoeker die wil inloggen of een proefaccount wil starten meteen
+    // teruggestuurd naar /dashboard — geen demo-pad, dus daarna door naar de
+    // marketingsite. De belangrijkste knop van de demo deed daardoor niets.
+    if (session && !isDemo) {
       navigate('/dashboard', true);
       return null;
     }
@@ -1564,7 +1570,8 @@ function AppInner() {
   }
 
   if (route === '/register') {
-    if (session) {
+    // Zie /login hierboven: de demo-sessie mag het aanmelden niet blokkeren.
+    if (session && !isDemo) {
       navigate('/dashboard', true);
       return null;
     }
@@ -1669,6 +1676,11 @@ function AppInner() {
   // download-scherm i.p.v. de dashboard-shell. Login/registratie/verificatie
   // (hierboven), de ondertekenpagina en de marketingsite blijven mobiel werken.
   if (isMobile) {
+    // Het echte dashboard is op telefoon geblokkeerd (daar is de losse app
+    // voor). De demo hoort daar niet onder te vallen: een bezoeker op zijn
+    // telefoon moet het product juist kunnen zien. Hij krijgt een mobiele
+    // weergave op dezelfde nepdata — geen geperst dashboard.
+    if (isDemo) return <DemoMobiel navigate={navigate} />;
     return <MobileBlock onLogout={handleLogout} />;
   }
 
@@ -1677,6 +1689,7 @@ function AppInner() {
   return (
     <ProfileContext.Provider value={profileApi}>
       <DataContext.Provider value={dataApi}>
+      {isDemo && <DemoBalk navigate={navigate} />}
       <div className="shell">
         <Sidebar
           page={page}

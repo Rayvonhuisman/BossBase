@@ -140,7 +140,7 @@ export default function ContactPage({ navigate }) {
                     <div className="ci-icon">{I.mail}</div>
                     <div>
                       <div className="ci-title">E-mail</div>
-                      <a href="mailto:hallo@bossbase.nl" className="ci-link">hallo@bossbase.nl</a>
+                      <a href="mailto:info@bossbase.nl" className="ci-link">info@bossbase.nl</a>
                       <div className="ci-sub">Reactie binnen één werkdag</div>
                     </div>
                   </div>
@@ -148,7 +148,7 @@ export default function ContactPage({ navigate }) {
                     <div className="ci-icon">{I.phone}</div>
                     <div>
                       <div className="ci-title">Telefoon</div>
-                      <div className="ci-val">085 - 060 70 80</div>
+                      <div className="ci-val">06 - 4200 5889</div>
                       <div className="ci-sub">Ma–Vr · 09:00 – 17:00</div>
                     </div>
                   </div>
@@ -156,8 +156,8 @@ export default function ContactPage({ navigate }) {
                     <div className="ci-icon">{I.mapPin}</div>
                     <div>
                       <div className="ci-title">Adres</div>
-                      <div className="ci-val">Herengracht 182</div>
-                      <div className="ci-sub">1016 BR Amsterdam</div>
+                      <div className="ci-val">Sodalietdreef 6</div>
+                      <div className="ci-sub">Emmen</div>
                     </div>
                   </div>
                   <div>
@@ -219,8 +219,8 @@ export default function ContactPage({ navigate }) {
             <Reveal stagger>
               <div className="contact-cards choreo-body">
                 {[
-                  { icon: I.mail,     title: "E-mail",   desc: "hallo@bossbase.nl",  sub: "Reactie binnen 1 werkdag", href: "mailto:hallo@bossbase.nl" },
-                  { icon: I.phone,    title: "Telefoon", desc: "085 - 060 70 80",    sub: "Ma–Vr 09:00–17:00",        href: "tel:+31850607080" },
+                  { icon: I.mail,     title: "E-mail",   desc: "info@bossbase.nl",  sub: "Reactie binnen 1 werkdag", href: "mailto:info@bossbase.nl" },
+                  { icon: I.phone,    title: "Telefoon", desc: "06 - 4200 5889",    sub: "Ma–Vr 09:00–17:00",        href: "tel:+31642005889" },
                 ].map(c => (
                   <a key={c.title} href={c.href} className="contact-card">
                     <div className="cc-icon">{c.icon}</div>
