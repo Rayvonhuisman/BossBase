@@ -476,6 +476,7 @@ export function DatabasePage({ openCustomer }) {
 
   const [filters, setFilters]             = useState(EMPTY_FILTERS);
   // Status-tab in de URL (?tab=…) — blijft behouden bij refresh/terugkeer.
+  // Snelfilter op dezelfde lijst: bewust zonder geschiedenisstap (zie useUrlTab).
   const [quickTab, setQuickTab]           = useUrlTab('alle', { validIds: ['alle', 'lopend_project'] });
   const [searchQuery, setSearchQuery]     = useState('');
   const [segments, setSegments]           = useState(() => {

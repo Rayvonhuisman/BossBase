@@ -244,7 +244,9 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
   // mag alleen de eigenaar bewerken.
   const mayEditEvent = ev => can('planning') || (ev?.herkomst !== 'planning' && ev?.assignedTo === profile?.id);
   // Agenda-weergave (Dag/Week/Maand) in de URL (?tab=…) — blijft behouden bij refresh.
-  const [view, setView] = useUrlTab('week', { validIds: ['day', 'week', 'month'] });
+  // Dag/week/maand is een weergave: wisselen zet een stap, zodat terug in de
+  // browser naar de vorige stand gaat.
+  const [view, setView] = useUrlTab('week', { validIds: ['day', 'week', 'month'], stap: true });
   // Monday of the visible week. Lazy initializer → on every fresh mount the
   // Agenda opens on the *current* week (no stale week is carried over).
   const [weekStart, setWeekStart] = useState(() => getStartOfWeek(new Date()));

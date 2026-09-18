@@ -702,6 +702,8 @@ export function UrenPageV2({ navigatePage } = {}) {
   const [error, setError] = useState('');
 
   // Periode-tab in de URL (?tab=…) — blijft behouden bij refresh/terugkeer.
+  // Filter over dezelfde lijst, geen aparte weergave: bewust zonder
+  // geschiedenisstap (zie useUrlTab).
   const [periodType, setPeriodType] = useUrlTab('alles', { validIds: ['alles', 'dag', 'week', 'maand'] });
   const [anchor, setAnchor] = useState(() => new Date());
   const [employee, setEmployee] = useState('all');

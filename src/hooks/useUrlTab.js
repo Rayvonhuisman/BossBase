@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 // ── useUrlTab ─────────────────────────────────────────────────────────────────
 // Houdt de actieve tab in de URL (?<param>=<id>) zodat een refresh of een externe
@@ -17,7 +17,18 @@ import { useState, useCallback } from 'react';
 // Vervangt 1-op-1 een `useState` voor de actieve tab; de setter blijft op
 // dezelfde manier aanroepbaar (setTab(id)). Optioneel `validIds` weert
 // onbekende ?tab=-waarden (val dan terug op de default).
-export function useUrlTab(defaultId, { param = 'tab', validIds = null } = {}) {
+//
+// `stap: true` maakt er een geschiedenisstap van (pushState), zodat terug in de
+// browser naar het vorige tabblad gaat. Dat hoort bij een WEERGAVE: de
+// dag/week-stand van planning en agenda, en de tabbladen van Instellingen.
+// Een FILTER hoort dat juist niet te doen — anders moet je vijf keer terug om
+// een lijst te verlaten waar je alleen wat in hebt zitten filteren. Standaard
+// blijft daarom replaceState.
+//
+// Bij een stap luistert de hook ook naar popstate: terug/vooruit zet dan de
+// juiste tab terug. Zonder stap is dat niet nodig, want de URL verandert dan
+// binnen dezelfde geschiedenis-entry.
+export function useUrlTab(defaultId, { param = 'tab', validIds = null, stap = false } = {}) {
   const [tab, setTabState] = useState(() => {
     try {
       const v = new URLSearchParams(window.location.search).get(param);
@@ -33,9 +44,26 @@ export function useUrlTab(defaultId, { param = 'tab', validIds = null } = {}) {
       // Default-tab → laat de URL schoon (geen ?tab=). Anders zet de tab erin.
       if (id == null || id === defaultId) url.searchParams.delete(param);
       else url.searchParams.set(param, id);
-      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+      const pad = url.pathname + url.search + url.hash;
+      if (stap) window.history.pushState({ bbDiep: true }, '', pad);
+      else window.history.replaceState(window.history.state, '', pad);
     } catch { /* URL niet beschikbaar — sla het URL-schrijven over */ }
-  }, [param, defaultId]);
+  }, [param, defaultId, stap]);
+
+  // Terug/vooruit in de browser moet het tabblad meenemen. Alleen nodig als de
+  // wissel een eigen geschiedenis-entry heeft.
+  useEffect(() => {
+    if (!stap) return undefined;
+    const onPop = () => {
+      try {
+        const v = new URLSearchParams(window.location.search).get(param);
+        if (v && (!validIds || validIds.includes(v))) setTabState(v);
+        else setTabState(defaultId);
+      } catch { /* niets te lezen */ }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [stap, param, defaultId, validIds]);
 
   return [tab, setTab];
 }

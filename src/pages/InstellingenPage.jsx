@@ -170,7 +170,8 @@ export function InstellingenPage() {
   // landt. Bij terugkeer uit de Stripe-onboarding zet de return-URL een
   // De actieve tab staat in de URL (?tab=<id>). Zo landt de Stripe-return
   // (…/dashboard/instellingen?tab=integraties) meteen op de Integraties-tab.
-  const [tab, setTab] = useUrlTab('profiel', { validIds: SETTINGS_TAB_IDS });
+  // Een instellingen-tabblad is een eigen weergave: wisselen is een stap terug waard.
+  const [tab, setTab] = useUrlTab('profiel', { validIds: SETTINGS_TAB_IDS, stap: true });
   const [loading, setLoading] = useState(true);
 
   // Eigen profiel — naam bewerken
@@ -217,7 +218,8 @@ export function InstellingenPage() {
   const [savingTemplate, setSavingTemplate] = useState({});
   // Sub-tab binnen E-mailtemplates — ook in de URL (?sub=…) zodat een refresh
   // op hetzelfde template-type blijft.
-  const [activeTemplateType, setActiveTemplateType] = useUrlTab('offerte', { param: 'sub' });
+  // Het gekozen template is ook een weergave binnen de tab: een stap waard.
+  const [activeTemplateType, setActiveTemplateType] = useUrlTab('offerte', { param: 'sub', stap: true });
   const bodyRef = useRef(null);
   const newBodyRef = useRef(null);
   const [showNewTemplate, setShowNewTemplate] = useState(false);

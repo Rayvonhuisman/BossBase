@@ -149,6 +149,8 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onItemOpen, 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   // Actieve filter-tab in de URL (?tab=…) — blijft behouden bij refresh/terugkeer.
+  // Bewust géén geschiedenisstap: dit is een filter, geen weergave. Anders moet
+  // je vijf keer terug om een lijst te verlaten waarin je wat hebt gefilterd.
   const [filter, setFilter] = useUrlTab('all', { validIds: ['all', 'open', 'today', 'overdue', 'done'] });
   const [dateFilter, setDateFilter] = useState('');
   const [memberFilter, setMemberFilter] = useState('all');

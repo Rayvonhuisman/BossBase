@@ -1228,7 +1228,9 @@ export function PlanningPage({ openCustomer } = {}) {
   // Dag of week, net als de agenda: in de URL (?zicht=), zodat verversen je
   // weergave niet omgooit. `anker` is de dag waar je staat; de weekweergave
   // toont de week waarin die dag valt.
-  const [zicht, setZicht] = useUrlTab('week', { param: 'zicht', validIds: ['dag', 'week'] });
+  // Dag of week is een weergave, geen filter: wisselen is een stap, dus terug
+  // brengt je naar de stand waar je vandaan kwam.
+  const [zicht, setZicht] = useUrlTab('week', { param: 'zicht', validIds: ['dag', 'week'], stap: true });
   const [anker, setAnker] = useState(() => new Date());
   const weekStart = getMonday(anker);
   // Legenda open of dicht — per browser onthouden.
