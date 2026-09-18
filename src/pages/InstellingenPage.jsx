@@ -53,6 +53,7 @@ import {
   syncContactenMetMoneybird,
   saveSnelStartConnection,
   disconnectConnection,
+  getSnelStartReferentie,
   controleerSnelStartAdministratie,
   testSnelStartConnection,
   importKostenVanuitSnelStart,
@@ -947,8 +948,15 @@ export function InstellingenPage() {
   // geen popup: SnelStart wil een eigen inlogscherm tonen, en een popup die door
   // de browser geblokkeerd wordt is een doodlopend spoor waar de klant niets van
   // begrijpt. Hij komt vanzelf terug op de successUrl.
-  const handleSsActiveren = () => {
-    const url = bouwActivatieUrl(company?.id);
+  const handleSsActiveren = async () => {
+    let referentie;
+    try {
+      referentie = await getSnelStartReferentie();
+    } catch (err) {
+      toast.error(err.message || 'De SnelStart-koppeling kon niet worden gestart');
+      return;
+    }
+    const url = bouwActivatieUrl(referentie);
     if (!url) { toast.error('De SnelStart-koppeling is nog niet beschikbaar'); return; }
     window.location.href = url;
   };

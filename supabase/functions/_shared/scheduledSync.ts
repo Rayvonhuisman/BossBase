@@ -23,7 +23,7 @@ export function makeAdminClient() {
 
 // Constant-time string-vergelijking, zodat de cron_secret niet via response-
 // timing kan lekken.
-function timingSafeEqual(a: string, b: string): boolean {
+export function timingSafeEqual(a: string, b: string): boolean {
   if (typeof a !== 'string' || typeof b !== 'string') return false
   const enc = new TextEncoder()
   const ab = enc.encode(a)

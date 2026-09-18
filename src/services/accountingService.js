@@ -160,6 +160,15 @@ export async function saveSnelStartConnection({ clientKey }) {
   return rpcRowToStatus(data)
 }
 
+// De referentiesleutel voor de SnelStart-activatielink. Per bedrijf vast en
+// alleen voor admins; de webhook koppelt de binnenkomende sleutel hieraan aan
+// het bedrijf. Zie migratie 20260918140000.
+export async function getSnelStartReferentie() {
+  const { data, error } = await supabase.rpc('snelstart_referentie')
+  if (error) throw error
+  return data
+}
+
 // Loskoppelen: wist de sleutel van dít bedrijf bij deze provider. Bewust een
 // eigen RPC en niet saveConnection met een lege waarde — die doet met opzet een
 // coalesce, zodat "geen secret meegegeven" nooit per ongeluk een sleutel wist.

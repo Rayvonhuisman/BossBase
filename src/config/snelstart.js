@@ -12,7 +12,10 @@
 //
 // Hoe de flow loopt (developer portal → "oAuth Authenticatie voor
 // productiekoppelingen", en zie ook de kop van supabase/functions/snelstart-webhook):
-//   1. Wij sturen de klant naar de activatie-URL met referenceKey = company_id.
+//   1. Wij sturen de klant naar de activatie-URL met referenceKey = de
+//      referentiesleutel van het bedrijf (RPC snelstart_referentie). Bewust niet
+//      het company_id: dat is geen geheim, en wie het kent zou zijn eigen
+//      SnelStart-administratie aan een ander bedrijf kunnen hangen.
 //   2. De klant logt in bij SnelStart en bevestigt de koppeling.
 //   3. SnelStart POST de koppelsleutel naar onze webhook — niet naar de browser.
 //   4. De browser komt terug op successUrl. De sleutel kan op dat moment nog
@@ -47,13 +50,13 @@ export function bouwRetourUrl(origin = window.location.origin) {
 
 /**
  * De activatie-URL voor één bedrijf, of null als de flow nog niet aan staat.
- * referenceKey is ons company_id: daarmee weet de webhook straks bij wie de
- * binnenkomende koppelsleutel hoort.
+ * referenceKey is de referentiesleutel uit snelstart_referentie(): daaraan
+ * herkent de webhook bij wie de binnenkomende koppelsleutel hoort.
  */
-export function bouwActivatieUrl(companyId, { origin } = {}) {
-  if (!activatieBeschikbaar() || !companyId) return null;
+export function bouwActivatieUrl(referenceKey, { origin } = {}) {
+  if (!activatieBeschikbaar() || !referenceKey) return null;
   const url = new URL(`${ACTIVATIE_BASIS}/${encodeURIComponent(SNELSTART_APP_SHORTNAME)}`);
-  url.searchParams.set('referenceKey', companyId);
+  url.searchParams.set('referenceKey', referenceKey);
   url.searchParams.set('successUrl', bouwRetourUrl(origin));
   return url.toString();
 }
