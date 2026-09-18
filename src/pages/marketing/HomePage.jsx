@@ -50,7 +50,7 @@ function CardOmzet() {
   return (
     <div style={{ width: 204 }}>
       <div className="fc-label">Omzet deze maand</div>
-      <div className="fc-amount" style={{ fontSize: 19 }}>€ 12.400</div>
+      <div className="fc-amount" style={{ fontSize: 19 }}>€ 24.900</div>
       <svg width="168" height="44" viewBox="0 0 168 44" fill="none" aria-hidden="true" style={{ display: "block", marginTop: 6 }}>
         <path d="M2 38 32 30 62 33 92 20 122 23 152 8 166 10" stroke="#1DDB62" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
         <path d="M2 38 32 30 62 33 92 20 122 23 152 8 166 10 166 44 2 44Z" fill="rgba(29,219,98,0.12)" />
@@ -273,9 +273,9 @@ function FeatureVisualOmzet() {
   return (
     <div style={{ display: "grid", gap: 10 }} aria-hidden="true">
       {[
-        ["Binnen",     "€ 41.900", "var(--p)"],
-        ["Openstaand", "€ 8.440",  "var(--warning, #f59e0b)"],
-        ["Verwacht",   "€ 14.050", "var(--dl)"],
+        ["Binnen",     "€ 24.900", "var(--p)"],
+        ["Openstaand", "€ 36.050", "var(--warning, #f59e0b)"],
+        ["Verwacht",   "€ 41.250", "var(--dl)"],
       ].map(([lbl, val, c]) => (
         <div className="mini-card" key={lbl} style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ width: 10, height: 10, borderRadius: "50%", background: c, flex: "none" }} />
@@ -459,35 +459,39 @@ function DemoStats({ items }) {
   )
 }
 
+// Eén vakbedrijf door alle schermen heen: een schildersbedrijf, met klussen en
+// bedragen die bij dat vak horen. Zelfde klanten in de pipeline, de agenda en
+// de klantenlijst, zodat het aanvoelt als één bedrijf in plaats van losse
+// voorbeelden per tabblad.
 const OFFERTES_DEMO = [
-  ["#2026-121", "Familie Bakker — badkamer",      "€ 4.850", "geaccepteerd"],
-  ["#2026-120", "Visser B.V. — dakkapel",         "€ 7.200", "verstuurd"],
-  ["#2026-119", "De Wit — kozijnen schilderen",   "€ 2.150", "concept"],
-  ["#2026-117", "VvE Lindenhof — trappenhuis",    "€ 5.600", "betaald"],
-  ["#2026-112", "Jansen — tuinrenovatie",         "€ 3.380", "te laat"],
+  ["#2026-041", "VvE Parkflat — 24 balkons",        "€ 28.400", "verstuurd"],
+  ["#2026-038", "Bouwhof — binnenwerk 12 woningen", "€ 41.250", "geaccepteerd"],
+  ["#2026-044", "Molenaar — houtrot en schilderwerk", "€ 7.650", "verstuurd"],
+  ["#2026-036", "Zorggroep — trappenhuis",          "€ 12.900", "betaald"],
+  ["#2026-031", "Fam. Visser — dakkapel schilderen", "€ 2.200", "te laat"],
 ]
 
 const PIPELINE_DEMO = [
-  ["Nieuwe lead", [["Dakkapel plaatsen", "Utrecht · via website", "€ —"], ["Schutting vervangen", "Amersfoort · via mail", "€ —"]]],
-  ["Offerte",     [["Visser B.V. — dakkapel", "Verstuurd 3 dgn geleden", "€ 7.200"], ["De Wit — kozijnen", "Concept", "€ 2.150"]]],
-  ["Akkoord",     [["Fam. Bakker — badkamer", "Start ma 15 jun", "€ 4.850"]]],
-  ["Afgerond",    [["VvE Lindenhof", "Factuur betaald", "€ 5.600"], ["Smit — gevelreiniging", "Factuur verstuurd", "€ 1.240"]]],
+  ["Nieuwe aanvraag", [["Gemeente — 3 gymzalen", "Zwolle · via website", "€ 19.800"], ["Fam. Jansen — kozijnen", "Hattem · via mail", "€ —"]]],
+  ["Offerte uit",     [["VvE Parkflat — 24 balkons", "Verstuurd 6 dgn geleden", "€ 28.400"], ["Molenaar — houtrot", "Verstuurd", "€ 7.650"]]],
+  ["Akkoord",         [["Bouwhof — 12 woningen", "Start maandag", "€ 41.250"]]],
+  ["In uitvoering",   [["Zorggroep — gangen", "Week 2 van 3", "€ 33.900"], ["Fam. Jansen — voorgevel", "Vandaag bezig", "€ 4.850"]]],
 ]
 
 const AGENDA_DEMO = [
-  ["Ma 8",  [["08:00", "Fam. Bakker — badkamer slopen",     "green"], ["13:30", "Offerte opnemen — Dakkapel Utrecht", "blue"]]],
-  ["Di 9",  [["08:00", "Fam. Bakker — leidingwerk",         "green"], ["16:00", "Materiaal halen — Bouwmaat",          "amber"]]],
-  ["Wo 10", [["08:00", "Fam. Bakker — tegelen",             "green"]]],
-  ["Do 11", [["09:00", "De Lange — buitenschilderwerk",     "blue"],  ["15:00", "Nacalculatie VvE Lindenhof",           "amber"]]],
-  ["Vr 12", [["08:30", "De Lange — buitenschilderwerk",     "blue"]]],
+  ["Ma",  [["07:30", "Zorggroep — gangen 2e verdieping", "green"], ["13:30", "Inmeten balkons VvE Parkflat", "blue"]]],
+  ["Di",  [["07:00", "Bouwhof — woning 3 t/m 6",         "green"], ["16:00", "Verf halen — groothandel",     "amber"]]],
+  ["Wo",  [["07:00", "Bouwhof — woning 3 t/m 6",         "green"]]],
+  ["Do",  [["08:00", "Fam. Jansen — kozijnen voorgevel", "blue"],  ["15:00", "Nacalculatie Zorggroep",       "amber"]]],
+  ["Vr",  [["08:30", "Fam. Jansen — kozijnen voorgevel", "blue"]]],
 ]
 
 const KLANTEN_DEMO = [
-  ["Familie Bakker",       "Particulier · Amersfoort", "2 klussen",           "€ 6.950"],
-  ["Visser B.V.",          "Bedrijf · Utrecht",        "1 offerte open",      "€ 7.200"],
-  ["VvE Lindenhof",        "VvE · Amersfoort",         "3 klussen",           "€ 14.380"],
-  ["De Wit",               "Particulier · Leusden",    "1 concept",           "€ 2.150"],
-  ["Aannemer Kortenhoef",  "Aannemer · Hilversum",     "Vaste opdrachtgever", "€ 22.600"],
+  ["VvE Parkflat Assendorp", "VvE · Zwolle",          "Offerte open",        "€ 28.400"],
+  ["Bouwhof Projecten BV",   "Aannemer · Kampen",     "12 woningen",         "€ 41.250"],
+  ["Zorggroep IJssel-Vecht", "Bedrijf · Zwolle",      "Vaste opdrachtgever", "€ 33.900"],
+  ["Familie Jansen",         "Particulier · Hattem",  "1 klus",              "€ 4.850"],
+  ["Gemeente Zwolle",        "Overheid · Zwolle",     "Aanvraag",            "€ 19.800"],
 ]
 
 const OMZET_MAANDEN = [
@@ -514,18 +518,52 @@ function OfferteTable({ rows, toast }) {
   )
 }
 
+// Wat er vandaag op de planning staat. In het echte dashboard is dit de eerste
+// blik van de ochtend, dus die hoort hier ook te staan — een tabel alleen geeft
+// niet het gevoel van "mijn dag staat klaar".
+const VANDAAG_DEMO = [
+  ["07:30 – 16:00", "Zorggroep — gangen 2e verdieping", "Wouter, Tim", "Bus 1"],
+  ["08:00 – 15:00", "Fam. Jansen — kozijnen voorgevel", "Iris",        "Bus 2"],
+]
+
 function ScreenDashboard({ toast }) {
   return (
     <div>
       <div className="demo-h">
-        <h3>Goedemorgen, Mark</h3>
+        <h3>Goedemorgen, Sander</h3>
         <button className="btn btn-p" onClick={toast}>+ Nieuwe klus</button>
       </div>
       <DemoStats items={[
-        ["Openstaande offertes", "€ 9.350", "2 wachten op akkoord"],
-        ["Deze week gepland",    "4 klussen", "Ma t/m vr"],
-        ["Omzet deze maand",    "€ 12.400", "+18% t.o.v. mei"],
+        ["Openstaand", "€ 36.050", "3 facturen"],
+        ["Deze week gepland", "5 klussen", "2 bussen onderweg"],
+        ["Omzet deze maand", "€ 24.900", "+18% t.o.v. vorige maand"],
       ]} />
+
+      <div className="demo-card" style={{ overflow: "hidden", marginBottom: 18 }}>
+        <div style={{
+          padding: "11px 16px", borderBottom: "1px solid var(--border)",
+          fontSize: 11.5, fontWeight: 600, letterSpacing: "0.05em",
+          textTransform: "uppercase", color: "var(--dl)",
+        }}>Vandaag op de planning</div>
+        {VANDAAG_DEMO.map(([tijd, klus, wie, bus]) => (
+          <div
+            key={klus}
+            onClick={toast}
+            style={{
+              display: "flex", alignItems: "center", gap: 14, cursor: "pointer",
+              padding: "12px 16px", borderBottom: "1px solid var(--border)",
+            }}
+          >
+            <span style={{ width: 3, alignSelf: "stretch", borderRadius: 3, background: "var(--p)", flex: "none" }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, color: "var(--dk)" }}>{klus}</div>
+              <div style={{ fontSize: 13, color: "var(--dmu)" }}>{tijd} · {wie}</div>
+            </div>
+            <span className="badge badge-concept" style={{ flex: "none" }}>{bus}</span>
+          </div>
+        ))}
+      </div>
+
       <OfferteTable rows={OFFERTES_DEMO.slice(0, 4)} toast={toast} />
     </div>
   )
@@ -564,7 +602,7 @@ function ScreenOffertes({ toast }) {
         <button className="btn btn-p" onClick={toast}>+ Nieuwe offerte</button>
       </div>
       <DemoStats items={[
-        ["Geaccepteerd dit kwartaal", "€ 18.230", "7 offertes"],
+        ["Geaccepteerd dit kwartaal", "€ 54.150", "7 offertes"],
         ["Acceptatiegraad",           "68%",       "Boven gemiddeld"],
       ]} />
       <OfferteTable rows={OFFERTES_DEMO} toast={toast} />
@@ -633,9 +671,9 @@ function ScreenOmzet({ toast }) {
         <button className="btn btn-s" onClick={toast} style={{ padding: "9px 16px", fontSize: 14 }}>Exporteren</button>
       </div>
       <DemoStats items={[
-        ["Binnen",     "€ 41.900", "Betaalde facturen"],
-        ["Openstaand", "€ 8.440",  "3 facturen"],
-        ["Verwacht",   "€ 14.050", "Geaccepteerde offertes"],
+        ["Binnen",     "€ 24.900", "Betaalde facturen"],
+        ["Openstaand", "€ 36.050", "3 facturen"],
+        ["Verwacht",   "€ 41.250", "Geaccepteerde offertes"],
       ]} />
       <div className="demo-card">
         <div className="omzet-chart">
