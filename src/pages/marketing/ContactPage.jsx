@@ -157,7 +157,7 @@ export default function ContactPage({ navigate }) {
                     <div>
                       <div className="ci-title">Adres</div>
                       <div className="ci-val">Sodalietdreef 6</div>
-                      <div className="ci-sub">Emmen</div>
+                      <div className="ci-sub">7828 CR Emmen</div>
                     </div>
                   </div>
                   <div>
