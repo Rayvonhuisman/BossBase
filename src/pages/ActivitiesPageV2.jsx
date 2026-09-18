@@ -135,7 +135,10 @@ function getMemberName(userId, teamMembers, fallbackName = '') {
 }
 
 // ─── Page ───────────────────────────────────────────────────────────────────
-export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsumed }) {
+// preOpenActivityId komt uit de URL (/activities/<id>) en is leidend: terug in
+// de browser sluit de activiteit, vooruit opent hem weer. onItemOpen/onItemClose
+// zetten de geschiedenisstap; zonder die props werkt de pagina op eigen state.
+export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onItemOpen, onItemClose, onNavConsumed }) {
   const toast = useToast();
   const { refreshKey, bumpRefresh } = useProfile();
   const { guardSchrijven, planModal } = usePlanGuard();
@@ -168,14 +171,24 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
       .finally(() => setLoading(false));
   }, [refreshKey]);
 
+  // Openen loopt via de URL zodra de pagina gekoppeld is; de rijen geven het
+  // hele object door, dus hier pakken we het id eruit.
+  const openActiviteit = a => (onItemOpen ? onItemOpen(a.id) : setSelected(a));
+
+  // De URL bepaalt welke activiteit open staat; het object komt uit de geladen
+  // lijst. Geen id meer in de URL betekent sluiten.
   useEffect(() => {
-    if (!preOpenActivityId || loading) return;
+    if (!preOpenActivityId) {
+      if (onItemOpen) setSelected(null);
+      return;
+    }
+    if (loading) return;
     const a = acts.find(x => x.id === preOpenActivityId);
     if (a) {
       setSelected(a);
       onNavConsumed && onNavConsumed();
     }
-  }, [preOpenActivityId, loading, acts, onNavConsumed]);
+  }, [preOpenActivityId, loading, acts, onNavConsumed, onItemOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Unieke toegewezen medewerkers als { id, name } objecten voor de filterdropdown
   const assignees = useMemo(() => {
@@ -371,7 +384,7 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
         <section className="act2-listwrap">
           <div className="act2-list">
             {filtered.map(a => (
-              <Row key={a.id} a={a} openCustomer={openCustomer} onSelect={setSelected} onMark={markDone} teamMembers={teamMembers} />
+              <Row key={a.id} a={a} openCustomer={openCustomer} onSelect={openActiviteit} onMark={markDone} teamMembers={teamMembers} />
             ))}
           </div>
         </section>
@@ -389,7 +402,7 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onNavConsume
                 </div>
                 <div className="act2-list">
                   {items.map(a => (
-                    <Row key={a.id} a={a} openCustomer={openCustomer} onSelect={setSelected} onMark={markDone} teamMembers={teamMembers} />
+                    <Row key={a.id} a={a} openCustomer={openCustomer} onSelect={openActiviteit} onMark={markDone} teamMembers={teamMembers} />
                   ))}
                 </div>
               </div>

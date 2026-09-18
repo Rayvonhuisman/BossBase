@@ -1468,7 +1468,10 @@ function NotitiesSection({
 
 // ─── MAIN PAGE ──────────────────────────────────────────────────────────────
 
-export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCustomer, backKlant, onBackKlant } = {}) {
+// preOpenWerkbonId komt uit de URL (/werkbonnen/<id>) en is leidend: terug in de
+// browser sluit het detail, vooruit opent het weer. onItemOpen/onItemClose
+// zetten de geschiedenisstap; zonder die props werkt de pagina op eigen state.
+export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNavConsumed, setPage, openCustomer, backKlant, onBackKlant } = {}) {
   const toast = useToast();
   // refreshKey: wordt opgehoogd zodra er elders iets aan een werkbon verandert
   // (bijvoorbeeld verslepen in de planning). Zonder die sleutel in de effecten
@@ -1566,13 +1569,20 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
   // Bedrijfsgegevens voor de werkbon-PDF (logo, huisstijlkleur, adres).
   useEffect(() => { getCurrentCompany().then(setCompany).catch(() => {}); }, []);
 
+  // De URL bepaalt of het detail open staat. Geen id meer in de URL (terug in de
+  // browser) betekent: terug naar de lijst.
   useEffect(() => {
-    if (!preOpenWerkbonId || loading) return;
-    if (werkbonnen.some(w => w.id === preOpenWerkbonId)) {
-      openDetail(preOpenWerkbonId);
-      onNavConsumed?.();
+    if (!onItemOpen) {
+      // Niet gekoppeld: oude gedrag, eenmalig openen via de navigatie-intentie.
+      if (!preOpenWerkbonId || loading) return;
+      if (werkbonnen.some(w => w.id === preOpenWerkbonId)) {
+        setSelectedId(preOpenWerkbonId); setView('detail'); onNavConsumed?.();
+      }
+      return;
     }
-  }, [preOpenWerkbonId, loading, werkbonnen]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (preOpenWerkbonId) { setSelectedId(preOpenWerkbonId); setView('detail'); }
+    else { setSelectedId(null); setView('list'); }
+  }, [preOpenWerkbonId, loading, werkbonnen, onItemOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!selectedId) { setDetail(null); setWerkbonNotities([]); return; }
@@ -1606,8 +1616,16 @@ export function WerkbonPageV2({ preOpenWerkbonId, onNavConsumed, setPage, openCu
     // nadat hij elders is verzet, en zie je de oude dag en tijd.
   }, [selectedId, refreshKey]);
 
-  const openDetail = id => { setSelectedId(id); setView('detail'); };
-  const goBack = () => setView('list');
+  // Openen en sluiten lopen via de URL zodra de pagina gekoppeld is; de lokale
+  // state volgt dan de URL (zie het effect op preOpenWerkbonId hierboven).
+  const openDetail = id => {
+    if (onItemOpen) { onItemOpen(id); return; }
+    setSelectedId(id); setView('detail');
+  };
+  const goBack = () => {
+    if (onItemClose) { onItemClose(); return; }
+    setView('list');
+  };
 
   // ── DERIVED ─────────────────────────────────────────────────────────────
 

@@ -1068,7 +1068,10 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
 
 // ── FACTUREN PAGE ─────────────────────────────────────────────────────────────
 
-export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, backKlant, onBackKlant }) {
+// preOpenFactuurId komt uit de URL (/facturen/<id>) en is leidend: terug in de
+// browser sluit de factuur, vooruit opent hem weer. onItemOpen/onItemClose
+// zetten de geschiedenisstap; zonder die props werkt de pagina op eigen state.
+export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onItemClose, onNavConsumed, backKlant, onBackKlant }) {
   const toast = useToast();
   const { profile, company } = useProfile();
   const canManage = profile?.role === 'admin' || profile?.role === 'planner';
@@ -1105,15 +1108,21 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
 
   useEffect(() => { load(); }, []);
 
-  // Deep-open: open de factuur-weergave wanneer we vanuit een klantkaart komen.
+  // De URL bepaalt welke factuur open staat. Het object komt uit de geladen
+  // lijst, dus openen kan pas als die binnen is; verdwijnt het id uit de URL
+  // (terug in de browser), dan sluit de weergave.
   useEffect(() => {
-    if (!preOpenFactuurId || loading) return;
+    if (!preOpenFactuurId) {
+      if (onItemOpen) setViewFactuur(null);
+      return;
+    }
+    if (loading) return;
     const f = facturen.find(x => x.id === preOpenFactuurId);
     if (f) {
       setViewFactuur(f);
       onNavConsumed?.();
     }
-  }, [preOpenFactuurId, loading, facturen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [preOpenFactuurId, loading, facturen, onItemOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const today = TODAY();
   const thisMonth = THIS_MONTH();
@@ -1166,7 +1175,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
     const geimporteerd = isGeimporteerdeFactuur(f);
     const verlopen = isVerlopen(f);
     return [
-      { label: 'Factuur bekijken', icon: I.eye, onClick: () => setViewFactuur(f) },
+      { label: 'Factuur bekijken', icon: I.eye, onClick: () => (onItemOpen ? onItemOpen(f.id) : setViewFactuur(f)) },
       canManage && !geimporteerd && {
         label: 'Verstuur per mail', icon: I.send,
         onClick: () => setSendMailFactuur({ factuur: f, templateType: 'factuur' }),
@@ -1323,7 +1332,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
                   return (
                     <tr
                       key={f.id}
-                      onClick={() => setViewFactuur(f)}
+                      onClick={() => (onItemOpen ? onItemOpen(f.id) : setViewFactuur(f))}
                       style={{ cursor: 'pointer' }}
                       title="Factuur openen"
                     >
@@ -1407,7 +1416,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onNavConsumed, ba
         <ViewFactuurModal
           factuur={viewFactuur}
           customers={customers}
-          onClose={() => setViewFactuur(null)}
+          onClose={() => (onItemClose ? onItemClose() : setViewFactuur(null))}
           onRefresh={load}
           onSendMail={(f, type) => { setSendMailFactuur({ factuur: f, templateType: type || 'factuur' }); setViewFactuur(null); }}
           onEdit={f => setEditFactuur(f)}

@@ -276,7 +276,11 @@ function EmptyState({ icon, title, subtitle, action }) {
 
 // ── MAIN PAGE ────────────────────────────────────────────────────────────────
 
-export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjectId, onNavConsumed, backKlant, onBackKlant } = {}) {
+// preOpenProjectId komt uit de URL (/projecten/<id>): die is leidend, zodat
+// terug en vooruit in de browser het juiste project openen en sluiten.
+// onItemOpen/onItemClose zetten de geschiedenisstap; zonder die props valt de
+// pagina terug op eigen state (bijvoorbeeld in een test of los gebruik).
+export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjectId, onItemOpen, onItemClose, onNavConsumed, backKlant, onBackKlant } = {}) {
   const toast = useToast();
   const { profile } = useProfile();
   const { can } = usePermissions();
@@ -298,7 +302,13 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
   const [search, setSearch] = useState('');
 
   const [showNew, setShowNew] = useState(false);
-  const [openProjectId, setOpenProjectId] = useState(null);
+  const [eigenProjectId, setEigenProjectId] = useState(null);
+  // De URL wint; alleen zonder koppeling houdt de pagina het zelf bij.
+  const openProjectId = onItemOpen ? (preOpenProjectId || null) : eigenProjectId;
+  const setOpenProjectId = id => {
+    if (id) { onItemOpen ? onItemOpen(id) : setEigenProjectId(id); }
+    else { onItemClose ? onItemClose() : setEigenProjectId(null); }
+  };
 
   const load = async () => {
     setLoading(true);

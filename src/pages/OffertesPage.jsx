@@ -1065,7 +1065,10 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
 
 // ── OFFERTES PAGE ────────────────────────────────────────────────────────────
 
-export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, onNavConsumed, backKlant, onBackKlant }) {
+// preOpenOfferteId komt uit de URL (/offertes/<id>) en is leidend: terug in de
+// browser sluit de offerte, vooruit opent hem weer. onItemOpen/onItemClose
+// zetten de geschiedenisstap; zonder die props werkt de pagina op eigen state.
+export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onItemClose, preFillDealId, onNavConsumed, backKlant, onBackKlant }) {
   const toast = useToast();
   const { profile, company } = useProfile();
   const canManageOffertes = profile?.role === 'admin' || profile?.role === 'planner';
@@ -1098,9 +1101,15 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
 
   useEffect(() => { load(); }, []);
 
-  // Deep-open a specific offerte requested from the dashboard
+  // De URL bepaalt welke offerte open staat. Het object komt uit de geladen
+  // lijst, dus openen kan pas als die binnen is; verdwijnt het id uit de URL
+  // (terug in de browser), dan sluit de weergave.
   useEffect(() => {
-    if (!preOpenOfferteId || loading) return;
+    if (!preOpenOfferteId) {
+      if (onItemOpen) setViewOfferte(null);
+      return;
+    }
+    if (loading) return;
     const o = offertes.find(x => x.id === preOpenOfferteId);
     if (o) {
       setViewOfferte(o);
@@ -1108,7 +1117,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
     } else if (import.meta.env.DEV) {
       console.warn('[bb:dashboard] offerte niet gevonden voor deep-open:', preOpenOfferteId);
     }
-  }, [preOpenOfferteId, loading, offertes]);
+  }, [preOpenOfferteId, loading, offertes, onItemOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-open nieuw offerte modal met deal vooringevuld (vanuit pipeline/deal drawer)
   useEffect(() => {
@@ -1154,7 +1163,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
   const rijActies = o => {
     const isConceptOfferte = o.status === 'concept';
     return [
-      { label: 'Offerte bekijken', icon: I.eye, onClick: () => setViewOfferte(o) },
+      { label: 'Offerte bekijken', icon: I.eye, onClick: () => (onItemOpen ? onItemOpen(o.id) : setViewOfferte(o)) },
       canManageOffertes && {
         label: 'Verstuur per mail', icon: I.send, onClick: () => setSendMailOfferte(o),
       },
@@ -1335,7 +1344,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
                 {filtered.map(o => {
                   const customerName = o.customerName || customers.find(c => c.id == o.customerId)?.name || '';
                   return (
-                    <tr key={o.id} onClick={() => setViewOfferte(o)} style={{ cursor: 'pointer' }} title="Offerte openen">
+                    <tr key={o.id} onClick={() => (onItemOpen ? onItemOpen(o.id) : setViewOfferte(o))} style={{ cursor: 'pointer' }} title="Offerte openen">
                       <td className="td">
                         <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: 13 }}>{o.nummer}</span>
                       </td>
@@ -1396,7 +1405,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, preFillDealId, on
         <ViewOfferteModal
           offerte={viewOfferte}
           customers={customers}
-          onClose={() => setViewOfferte(null)}
+          onClose={() => (onItemClose ? onItemClose() : setViewOfferte(null))}
           onMaakFactuur={handleMaakFactuur}
           onSendMail={o => setSendMailOfferte(o)}
           onCopy={o => setCopySource(o)}
