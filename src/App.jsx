@@ -75,10 +75,15 @@ import { staatOpDag } from './utils/werkbonDagen.js';
 import { ActivityEditModal, NewActivityModal, NewLeadModal, ProfileModal } from './components/SharedModals.jsx';
 import { supabase } from './lib/supabase.js';
 import { listNotifications, markNotificationRead, markAllNotificationsRead } from './services/notificatieService.js';
+import { isDemo } from './lib/supabase.js';
+import { DEMO_SESSION, DEMO_USER, DEMO_PROFILE, DEMO_COMPANY, DEMO_PLAN_STATUS, DEMO_PERMISSIONS } from './demo/demoSessie.js';
 
 // Basispad van de app-shell. Eén constante, zodat het pad op één plek staat in
 // plaats van verspreid door de routerlogica.
-const BASISPAD = '/dashboard';
+// Het voorbeeldscherm op de homepage laadt de echte app onder /demo in een
+// kader. Eén constante in plaats van overal een aparte tak: elke plek die het
+// pad leest of schrijft gebruikt deze waarde.
+const BASISPAD = isDemo ? '/demo' : '/dashboard';
 
 // De URL is de bron van waarheid voor wat er open staat. Zie lib/route.js.
 
@@ -872,8 +877,10 @@ function AppInner() {
   const [route,      setRoute]      = useState(() => window.location.pathname || '/');
   // Het geopende detail dat in het pad staat (/werkbonnen/<id>, /projecten/<id>, …).
   const [itemId,     setItemId]     = useState(() => leesRoute(BASISPAD).itemId);
-  const [session,    setSession]    = useState(null);
-  const [authReady,  setAuthReady]  = useState(false);
+  // In het voorbeeldscherm is er geen login: de sessie staat er meteen, zodat
+  // de shell niet naar /login stuurt en de gedeelde fetch direct mag draaien.
+  const [session,    setSession]    = useState(isDemo ? DEMO_SESSION : null);
+  const [authReady,  setAuthReady]  = useState(isDemo);
   // De URL bepaalt wat je ziet: pagina, geopend item en tabblad. Zie lib/route.js.
   const [page,       setPage]       = useState(() => leesRoute(BASISPAD).page);
   const [sbOpen,     setSbOpen]     = useState(false);
@@ -908,16 +915,19 @@ function AppInner() {
   // Terug-naar-klant context: { page, klantId, klantNaam }. Blijft staan tot je
   // ergens anders heen navigeert of op "Terug" klikt (niet gewist door navIntent).
   const [backCtx,    setBackCtx]    = useState(null);
-  const [user,       setUser]       = useState(null);
-  const [profile,    setProfile]    = useState(null);
-  const [company,    setCompany]    = useState(null);
+  // Gebruiker, bedrijf en rechten staan in het voorbeeldscherm meteen klaar:
+  // er is geen auth-flow die ze kan vullen, en zonder deze waarden blijft de
+  // shell op een skelet hangen of valt het halve menu weg.
+  const [user,       setUser]       = useState(isDemo ? DEMO_USER : null);
+  const [profile,    setProfile]    = useState(isDemo ? DEMO_PROFILE : null);
+  const [company,    setCompany]    = useState(isDemo ? DEMO_COMPANY : null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError,   setProfileError]   = useState(null);
-  const [userPermissions, setUserPermissions] = useState([]);
-  const [permissionsLoaded, setPermissionsLoaded] = useState(false);
+  const [userPermissions, setUserPermissions] = useState(isDemo ? DEMO_PERMISSIONS : []);
+  const [permissionsLoaded, setPermissionsLoaded] = useState(isDemo);
   // Abonnementsstand (features, modules, limieten + huidige stand). Komt uit
   // get_plan_status() — dezelfde bron die de server-side RLS gebruikt.
-  const [planStatus, setPlanStatus] = useState(null);
+  const [planStatus, setPlanStatus] = useState(isDemo ? DEMO_PLAN_STATUS : null);
   const [repairing,  setRepairing]  = useState(false);
   const [openProfile, setOpenProfile] = useState(false);
   const [globalLeadModal, setGlobalLeadModal] = useState(false);
@@ -1196,7 +1206,7 @@ function AppInner() {
     setRoute(nextPath);
     // Reset scroll when entering a public marketing page so each route
     // starts at the top, mirroring real multi-page navigation.
-    const PUBLIC = ['/', '/functies', '/prijzen', '/voor-wie', '/over-ons', '/over', '/contact', '/faq', '/login', '/register', '/betaald', '/betaling-geannuleerd'];
+    const PUBLIC = ['/', '/functies', '/prijzen', '/voor-wie', '/over-ons', '/over', '/contact', '/faq', '/demo', '/login', '/register', '/betaald', '/betaling-geannuleerd'];
     if (changed && PUBLIC.includes(nextPath)) {
       window.scrollTo({ top: 0, left: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
     }
@@ -1662,7 +1672,11 @@ function AppInner() {
   // Mobiel: het dashboard is verplaatst naar een aparte app → toon het
   // download-scherm i.p.v. de dashboard-shell. Login/registratie/verificatie
   // (hierboven), de ondertekenpagina en de marketingsite blijven mobiel werken.
-  if (isMobile) {
+  if (isMobile && !isDemo) {
+    // Het echte dashboard is op telefoon geblokkeerd; daar is de losse app
+    // voor. Het voorbeeldscherm op de homepage laadt de app in een kader van
+    // 1280px, dus daarbinnen geldt die blokkade niet — anders zou een bezoeker
+    // op zijn telefoon het downloadscherm in het kader zien staan.
     return <MobileBlock onLogout={handleLogout} />;
   }
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { Star } from "lucide-react"
 import { Nav, Footer, ScrollLine, Reveal, Wordmark, I, initChoreo, useReducedMotion, useScrollY } from "./MktShared"
 import { tierLabel, tierPrice, extraUserLabel, EXTRA_USER_PRICE } from "../../lib/tiers.js"
+import PortaalKader from "../../demo/PortaalKader.jsx"
 
 /* ── Float cards (Variant D) ── */
 function CardOfferte() {
@@ -708,6 +709,22 @@ function DemoSection() {
     timerRef.current = setTimeout(() => setToastOn(false), 1800)
   }, [])
   useEffect(() => () => clearTimeout(timerRef.current), [])
+
+  // Op desktop en tablet laadt de ECHTE app in een kader, zodat elk tabblad een
+  // exacte kopie van die pagina toont in plaats van een nabouw. Op telefoon kan
+  // dat niet: het portaal is voor een groot scherm gebouwd en zou daar tot
+  // onleesbaar formaat teruggeschaald worden. Daar blijven de nagebouwde
+  // schermen staan — die zijn juist voor dat formaat gemaakt.
+  const [breed, setBreed] = useState(
+    () => typeof window === "undefined" || window.innerWidth >= 768
+  )
+  useEffect(() => {
+    const meet = () => setBreed(window.innerWidth >= 768)
+    meet()
+    window.addEventListener("resize", meet)
+    return () => window.removeEventListener("resize", meet)
+  }, [])
+
   const Screen = SCREEN_COMPONENTS[active]
   return (
     <div className="section" id="demo" style={{ scrollMarginTop: 80 }}>
@@ -718,26 +735,28 @@ function DemoSection() {
           <p>Zo werkt BossBase van binnen. Navigeer vrij rond — dit voorbeeld slaat niets op.</p>
         </div></Reveal>
         <Reveal>
-          <div className="demo-wrap choreo-body" style={{ position: "relative" }}>
-            <span className="demo-tag">Voorbeeld</span>
-            <nav className="demo-sidebar" aria-label="Demo navigatie">
-              <span className="wordmark on-dark" style={{ padding: "6px 12px 18px", display: "block", fontSize: 18 }}>
-                <span className="b1">Boss</span>Base
-              </span>
-              {DEMO_SCREENS.map(([key, label, icon]) => (
-                <button
-                  key={key}
-                  className={`demo-nav-item${active === key ? " active" : ""}`}
-                  onClick={() => setActive(key)}
-                  aria-current={active === key ? "page" : undefined}
-                >
-                  {icon} {label}
-                </button>
-              ))}
-            </nav>
-            <div className="demo-main"><Screen toast={toast} /></div>
-            <div className={`demo-toast${toastOn ? " show" : ""}`} role="status">Dit is een demo</div>
-          </div>
+          {breed ? <PortaalKader /> : (
+            <div className="demo-wrap choreo-body" style={{ position: "relative" }}>
+              <span className="demo-tag">Voorbeeld</span>
+              <nav className="demo-sidebar" aria-label="Demo navigatie">
+                <span className="wordmark on-dark" style={{ padding: "6px 12px 18px", display: "block", fontSize: 18 }}>
+                  <span className="b1">Boss</span>Base
+                </span>
+                {DEMO_SCREENS.map(([key, label, icon]) => (
+                  <button
+                    key={key}
+                    className={`demo-nav-item${active === key ? " active" : ""}`}
+                    onClick={() => setActive(key)}
+                    aria-current={active === key ? "page" : undefined}
+                  >
+                    {icon} {label}
+                  </button>
+                ))}
+              </nav>
+              <div className="demo-main"><Screen toast={toast} /></div>
+              <div className={`demo-toast${toastOn ? " show" : ""}`} role="status">Dit is een demo</div>
+            </div>
+          )}
         </Reveal>
       </div>
     </div>
