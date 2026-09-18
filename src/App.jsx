@@ -10,6 +10,7 @@ import WerkbonOndertekenen from './pages/WerkbonOndertekenen.jsx';
 import { DashboardHome } from './pages/dashboard/DashboardHome.jsx';
 import { Pipeline } from './pages/BbDashboard.jsx';
 import { DealDetailDrawer } from './pages/dashboard/DealDetailDrawer.jsx';
+import { leesRoute, bouwRoute } from './lib/route.js';
 import AbonnementPage from './pages/AbonnementPage.jsx';
 import { CalendarEventDetailDrawer } from './pages/dashboard/CalendarEventDetailDrawer.jsx';
 import { PageErrorBoundary } from './components/PageErrorBoundary.jsx';
@@ -75,6 +76,16 @@ import { staatOpDag } from './utils/werkbonDagen.js';
 import { ActivityEditModal, NewActivityModal, NewLeadModal, ProfileModal } from './components/SharedModals.jsx';
 import { supabase } from './lib/supabase.js';
 import { listNotifications, markNotificationRead, markAllNotificationsRead } from './services/notificatieService.js';
+import { isDemo } from './lib/supabase.js';
+import { DEMO_SESSION, DEMO_USER, DEMO_PROFILE, DEMO_COMPANY, DEMO_PLAN_STATUS, DEMO_PERMISSIONS } from './demo/demoSessie.js';
+
+// De demo draait dezelfde shell en dezelfde pagina's, alleen onder /demo in
+// plaats van /dashboard. Eén constante in plaats van acht losse demo-takken:
+// overal waar het pad gelezen of geschreven wordt, telt deze waarde.
+const BASISPAD = isDemo ? '/demo' : '/dashboard';
+
+// De URL is de bron van waarheid voor wat er open staat. Zie lib/route.js.
+
 
 // Timing-debug voor de auth/permissie-laadvolgorde. Standaard uit; aanzetten
 // met `localStorage.setItem('bb_debug_auth','1')` + hard refresh om de volgorde
@@ -794,13 +805,19 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
 }
 
 // ── CUSTOMER DRAWER ──────────────────────────────────────────
-function CustomerDrawer({ custId, initialTab, onClose, setPage }) {
+function CustomerDrawer({ custId, initialTab, onClose, setPage, onTabChange }) {
   return (
     <>
       <div className="drawer-overlay" onClick={onClose} />
       <div className="drawer">
         <div className="drawer-body">
-          <CustomerPage custId={custId} initialTab={initialTab} onClose={onClose} setPage={setPage} />
+          <CustomerPage
+            custId={custId}
+            initialTab={initialTab}
+            onTabChange={onTabChange}
+            onClose={onClose}
+            setPage={setPage}
+          />
         </div>
       </div>
     </>
@@ -857,26 +874,28 @@ function AppInner() {
   const toast = useToast();
   const isMobile = useIsMobile();
   const [route,      setRoute]      = useState(() => window.location.pathname || '/');
-  const [session,    setSession]    = useState(null);
-  const [authReady,  setAuthReady]  = useState(false);
-  const [page,       setPage]       = useState(() => {
-    const path = window.location.pathname;
-    if (path.startsWith('/dashboard/')) {
-      const sub = path.slice('/dashboard/'.length).split('/')[0];
-      const VALID = ['pipeline','customers','leveranciers','materialen','activities','calendar','planning','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','database','team','instellingen','abonnement'];
-      if (VALID.includes(sub)) return sub;
-    }
-    return 'dashboard';
-  });
+  // Het geopende detail dat in het pad staat (/werkbonnen/<id>, /projecten/<id>, …).
+  const [itemId,     setItemId]     = useState(() => leesRoute(BASISPAD).itemId);
+  // In de demo is er geen login: de sessie staat er meteen, zodat de shell niet
+  // naar /login stuurt en de gedeelde fetch direct mag draaien.
+  const [session,    setSession]    = useState(isDemo ? DEMO_SESSION : null);
+  const [authReady,  setAuthReady]  = useState(isDemo);
+  // De URL bepaalt wat je ziet: pagina, geopend item en tabblad. Zie lib/route.js.
+  const [page,       setPage]       = useState(() => leesRoute(BASISPAD).page);
   const [sbOpen,     setSbOpen]     = useState(false);
   const [sbCollapsed, setSbCollapsed] = useState(() => {
     try { return localStorage.getItem('bb.sidebarCollapsed') === '1'; }
     catch { return false; }
   });
-  const [drawerCust, setDrawerCust] = useState(null); // { id, tab? }
+  // Drawers komen uit de query (?klant=&tab=, ?deal=, ?lev=, ?agenda=), zodat een
+  // herladen of gedeelde URL exact dezelfde weergave opent.
+  const [drawerCust, setDrawerCust] = useState(() => {
+    const r = leesRoute(BASISPAD);
+    return r.klant ? { id: r.klant, tab: r.tab || undefined } : null;
+  }); // { id, tab? }
 
-  const [drawerDeal, setDrawerDeal] = useState(null);
-  const [drawerCalEvent, setDrawerCalEvent] = useState(null);
+  const [drawerDeal, setDrawerDeal] = useState(() => leesRoute(BASISPAD).deal);
+  const [drawerCalEvent, setDrawerCalEvent] = useState(() => leesRoute(BASISPAD).agenda);
   // Een knop in een collega-mail linkt naar /dashboard/<pagina>?open=<id>. Dat
   // id wordt hier meteen een navigatie-intentie, zodat de pagina zijn eigen
   // detailvenster opent (preOpenWerkbonId en verwanten). Zonder deze ingang kwam
@@ -884,27 +903,30 @@ function AppInner() {
   const [navIntent,  setNavIntent]  = useState(() => {
     try {
       const path = window.location.pathname;
-      if (!path.startsWith('/dashboard/')) return null;
-      const sub = path.slice('/dashboard/'.length).split('/')[0];
+      if (!path.startsWith(`${BASISPAD}/`)) return null;
+      const sub = path.slice(`${BASISPAD}/`.length).split('/')[0];
       const id = new URLSearchParams(window.location.search).get('open');
       return id ? { page: sub, id } : null;
     } catch { return null; }
   });
   // Geselecteerde leverancier in de split-weergave (spiegel van drawerCust).
-  const [drawerLev,  setDrawerLev]  = useState(null);
+  const [drawerLev,  setDrawerLev]  = useState(() => leesRoute(BASISPAD).lev);
   // Terug-naar-klant context: { page, klantId, klantNaam }. Blijft staan tot je
   // ergens anders heen navigeert of op "Terug" klikt (niet gewist door navIntent).
   const [backCtx,    setBackCtx]    = useState(null);
-  const [user,       setUser]       = useState(null);
-  const [profile,    setProfile]    = useState(null);
-  const [company,    setCompany]    = useState(null);
+  // Demo: gebruiker, bedrijf en rechten staan meteen klaar. Er is geen auth-flow
+  // die ze kan vullen, en zonder deze waarden blijft de shell op een skelet
+  // hangen of valt het halve menu weg.
+  const [user,       setUser]       = useState(isDemo ? DEMO_USER : null);
+  const [profile,    setProfile]    = useState(isDemo ? DEMO_PROFILE : null);
+  const [company,    setCompany]    = useState(isDemo ? DEMO_COMPANY : null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError,   setProfileError]   = useState(null);
-  const [userPermissions, setUserPermissions] = useState([]);
-  const [permissionsLoaded, setPermissionsLoaded] = useState(false);
+  const [userPermissions, setUserPermissions] = useState(isDemo ? DEMO_PERMISSIONS : []);
+  const [permissionsLoaded, setPermissionsLoaded] = useState(isDemo);
   // Abonnementsstand (features, modules, limieten + huidige stand). Komt uit
   // get_plan_status() — dezelfde bron die de server-side RLS gebruikt.
-  const [planStatus, setPlanStatus] = useState(null);
+  const [planStatus, setPlanStatus] = useState(isDemo ? DEMO_PLAN_STATUS : null);
   const [repairing,  setRepairing]  = useState(false);
   const [openProfile, setOpenProfile] = useState(false);
   const [globalLeadModal, setGlobalLeadModal] = useState(false);
@@ -955,16 +977,34 @@ function AppInner() {
     };
   }, [profile, user, profileLoading]);
 
+  // Terug/vooruit in de browser herstelt de héle weergave: pagina, geopend item,
+  // drawer, tabblad en scrollpositie. Alles komt uit de URL, dus een gedeelde of
+  // herladen link geeft exact hetzelfde beeld.
   useEffect(() => {
+    // Zelf de scroll herstellen; de browser mikt ernaast omdat de lijst pas ná
+    // het laden van de gegevens zijn hoogte krijgt.
+    try { if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual'; } catch { /* niet blokkerend */ }
+
     const onPop = () => {
       const path = window.location.pathname;
       setRoute(path || '/');
-      if (path.startsWith('/dashboard/')) {
-        const sub = path.slice('/dashboard/'.length).split('/')[0];
-        const VALID = ['pipeline','customers','leveranciers','materialen','activities','calendar','planning','projecten','werkbonnen','uren','costs','revenue','facturen','offertes','database','team','instellingen','abonnement'];
-        setPage(VALID.includes(sub) ? sub : 'dashboard');
-      } else if (path === '/dashboard') {
-        setPage('dashboard');
+      if (!path.startsWith(BASISPAD)) return;
+
+      const r = leesRoute(BASISPAD);
+      setPage(r.page);
+      setItemId(r.itemId);
+      setDrawerCust(r.klant ? { id: r.klant, tab: r.tab || undefined } : null);
+      setDrawerDeal(r.deal);
+      setDrawerLev(r.lev);
+      setDrawerCalEvent(r.agenda);
+      // Bewaarde scrollpositie van deze geschiedenis-entry terugzetten. Het
+      // venster scrollt niet — .content doet dat — dus die zoeken we op.
+      const top = window.history.state?.bbScroll;
+      if (typeof top === 'number') {
+        requestAnimationFrame(() => {
+          const el = document.querySelector('.content');
+          if (el) el.scrollTop = top;
+        });
       }
     };
     window.addEventListener('popstate', onPop);
@@ -1171,25 +1211,79 @@ function AppInner() {
     }
   };
 
+  // ── Navigatie met geschiedenis ────────────────────────────────────────────
+  // Elke weergave is een stap: openen pusht, sluiten gaat terug. Voor het pushen
+  // leggen we de scrollpositie van de huidige entry vast, zodat terug niet
+  // alleen de juiste weergave maar ook de juiste plek in de lijst teruggeeft.
+  const gaNaar = useCallback((opties, { replace = false } = {}) => {
+    const pad = bouwRoute(BASISPAD, { bewaarQuery: window.location.search, ...opties });
+    if (pad === window.location.pathname + window.location.search) return;
+    try {
+      if (!replace) {
+        const el = document.querySelector('.content');
+        window.history.replaceState({ ...(window.history.state || {}), bbScroll: el ? el.scrollTop : 0 }, '');
+      }
+      // bbDiep markeert een entry die we zelf hebben gepusht. Alleen dán is
+      // teruggaan zinvol; bij een verse tab of een gedeelde link is er niets
+      // om naar terug te keren en valt sluiten terug op de pagina eronder.
+      window.history[replace ? 'replaceState' : 'pushState']({ bbDiep: !replace }, '', pad);
+    } catch { /* niet blokkerend */ }
+    setRoute(window.location.pathname);
+    const r = leesRoute(BASISPAD);
+    setPage(r.page);
+    setItemId(r.itemId);
+    setDrawerCust(r.klant ? { id: r.klant, tab: r.tab || undefined } : null);
+    setDrawerDeal(r.deal);
+    setDrawerLev(r.lev);
+    setDrawerCalEvent(r.agenda);
+  }, []);
+
+  // Sluiten is teruggaan, zodat de app-knoppen dezelfde geschiedenis gebruiken
+  // als de browserknop en het terugswipen. Is er niets om naar terug te gaan
+  // (verse tab, gedeelde link), dan vallen we terug op de pagina eronder.
+  // `soort` is de queryparameter van de drawer die sluit (klant/deal/agenda/lev).
+  //
+  // Staat die niet meer in de URL, dan is de drawer al gesloten doordat er
+  // ergens heen genavigeerd is — verschillende drawers doen `onClose()` en
+  // daarna `setPage(...)`. Terugspringen zou dan de zojuist geopende weergave
+  // weer ongedaan maken; precies dat gebeurde bij het openen van een werkbon
+  // vanuit de klantkaart. Alleen een échte sluitactie gaat terug.
+  const sluitTerug = useCallback((soort, terugval) => {
+    const r = leesRoute(BASISPAD);
+    if (soort && !r[soort]) return;
+    if (window.history.state?.bbDiep) { window.history.back(); return; }
+    gaNaar(terugval);
+  }, [gaNaar]);
+
+  // Oude deep-link uit collega-mails: /<basis>/<pagina>?open=<id>. Eenmalig
+  // doorsturen naar de nieuwe vorm, zonder extra stap in de geschiedenis.
+  useEffect(() => {
+    const r = leesRoute(BASISPAD);
+    if (!r.open) return;
+    const isPad = ['werkbonnen', 'projecten', 'offertes', 'facturen', 'activities'].includes(r.page);
+    gaNaar(isPad ? { page: r.page, itemId: r.open } : { page: r.page, klant: r.open }, { replace: true });
+  }, [gaNaar]);
+
   // Customer / deal / calendar-event drawers are mutually exclusive
-  const openCustomer     = (id, tab) => { setDrawerDeal(null); setDrawerCalEvent(null); setDrawerCust(tab ? { id, tab } : id); };
-  const closeCustomer    = () => setDrawerCust(null);
-  const openDeal         = id => { setDrawerCust(null); setDrawerCalEvent(null); setDrawerDeal(id); };
-  const closeDeal        = () => setDrawerDeal(null);
+  const openCustomer     = (id, tab) => gaNaar({ page, itemId, klant: id, tab: tab || null });
+  const closeCustomer    = () => sluitTerug('klant', { page, itemId });
+  const openDeal         = id => gaNaar({ page, itemId, deal: id });
+  const closeDeal        = () => sluitTerug('deal', { page, itemId });
   // Facturen worden geopend in de echte Facturen-module (/dashboard/facturen),
   // consistent met de klantkaart en projecten — geen aparte factuur-drawer meer.
   const openInvoice      = id => navigatePage('facturen', { id });
-  const openLeverancier  = id => setDrawerLev(id);
-  const openCalendarEvent = id => { setDrawerCust(null); setDrawerDeal(null); setDrawerCalEvent(id); };
-  const closeCalEvent    = () => setDrawerCalEvent(null);
+  const openLeverancier  = id => gaNaar({ page, itemId, lev: id });
+  const openCalendarEvent = id => gaNaar({ page, itemId, agenda: id });
+  // Ook na het verwijderen van een agenda-item: dat item staat dan niet meer in
+  // de URL, dus dit sluit zonder terugsprong.
+  const closeCalEvent    = () => sluitTerug('agenda', { page, itemId });
   // Optional deep-open intent: { page, id } so a target page can open a
   // specific record via its own existing modal. Cleared once consumed.
   const navigatePage  = (p, intent) => {
-    setPage(p);
-    const pagePath = p === 'dashboard' ? '/dashboard' : `/dashboard/${p}`;
-    if (window.location.pathname !== pagePath) {
-      window.history.pushState({}, '', pagePath);
-    }
+    // Een paginawissel is een nieuwe stap; een detail-id gaat mee in het pad
+    // zodat /werkbonnen/<id> deelbaar is en terug de lijst teruggeeft.
+    const inPad = ['werkbonnen', 'projecten', 'offertes', 'facturen', 'activities'].includes(p);
+    gaNaar({ page: p, itemId: inPad && intent?.id ? intent.id : null });
     const hasIntent = intent && (intent.id || intent.dealId);
     setNavIntent(hasIntent ? { page: p, ...intent } : null);
     // Bewaar terug-context: vanuit een klantkaart óf vanuit een projectdetail.
@@ -1200,9 +1294,10 @@ function AppInner() {
     } else {
       setBackCtx(null);
     }
-    closeCustomer();
-    closeDeal();
-    closeCalEvent();
+    // Geen close-aanroepen meer: die doen sinds de geschiedenis-omzetting een
+    // history.back(), en dan sprong je na het openen van een item meteen weer
+    // terug. gaNaar() heeft de drawers hierboven al gezet op basis van de
+    // nieuwe URL (die geen ?klant= of ?deal= meer bevat).
   };
   const clearNavIntent = () => setNavIntent(null);
   // Terug-navigatie: naar de klantkaart óf naar het projectdetail, afhankelijk
@@ -1357,7 +1452,13 @@ function AppInner() {
               <CustomersPage openCustomer={openCustomer} />
             </div>
             <div className="cust-split-panel">
-              <CustomerPage custId={drawerCust?.id ?? drawerCust} initialTab={drawerCust?.tab} onClose={closeCustomer} setPage={navigatePage} />
+              <CustomerPage
+                custId={drawerCust?.id ?? drawerCust}
+                initialTab={drawerCust?.tab}
+                onTabChange={t => gaNaar({ page, itemId, klant: drawerCust?.id ?? drawerCust, tab: t })}
+                onClose={closeCustomer}
+                setPage={navigatePage}
+              />
             </div>
           </div>
         ) : <CustomersPage openCustomer={openCustomer} />;
@@ -1524,7 +1625,7 @@ function AppInner() {
     return null;
   }
 
-  if (!route.startsWith('/dashboard')) {
+  if (!route.startsWith(BASISPAD)) {
     navigate('/', true);
     return null;
   }
@@ -1689,6 +1790,7 @@ function AppInner() {
           <CustomerDrawer
             custId={drawerCust?.id ?? drawerCust}
             initialTab={drawerCust?.tab}
+            onTabChange={t => gaNaar({ page, itemId, klant: drawerCust?.id ?? drawerCust, tab: t })}
             onClose={closeCustomer}
             setPage={navigatePage}
           />

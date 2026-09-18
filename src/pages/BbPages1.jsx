@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import SyncIndicator from '../components/SyncIndicator.jsx';
 import DOMPurify from 'dompurify';
 import { mailVoorbeeldDocument } from '../utils/mailFrame.js';
@@ -205,9 +205,17 @@ function PlanKeuze({ magWerkbon, magLosItem, onWerkbon, onLosItem, knop }) {
   );
 }
 
-export function CustomerPage({ custId, initialTab, onClose, setPage }) {
+export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange }) {
   const toast = useToast();
-  const [tab, setTab] = useState(initialTab || 'overview');
+  // Het tabblad staat in de URL (?tab=). Komt het van buiten, dan is dát de
+  // bron van waarheid en meldt setTab de wissel terug — zo wordt elke tabwissel
+  // een stap in de geschiedenis en brengt terug je naar het vorige tabblad.
+  const [lokaleTab, setLokaleTab] = useState(initialTab || 'overview');
+  const tab = onTabChange ? (initialTab || 'overview') : lokaleTab;
+  const setTab = useCallback(id => {
+    if (onTabChange) onTabChange(id);
+    else setLokaleTab(id);
+  }, [onTabChange]);
   const [c, setCustomer] = useState(null);
   const [cActs, setActs] = useState([]);
   const [cCosts, setCosts] = useState([]);
