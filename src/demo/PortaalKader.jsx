@@ -51,37 +51,61 @@ export default function PortaalKader() {
     <div className="demo-wrap choreo-body" style={{ display: 'block', minHeight: 0, overflow: 'hidden' }}>
       <span className="demo-tag">Voorbeeld</span>
 
+      {/* Eigen opmaak, bewust NIET de klasse demo-nav-item: die is gemaakt voor
+          een verticale zijbalk en vult een actief item met een groen vlak over
+          de volle hoogte. Horizontaal levert dat een groene balk op. */}
       <nav
         aria-label="Voorbeeldschermen"
         style={{
-          display: 'flex', gap: 2, overflowX: 'auto', background: 'var(--dk)',
+          display: 'flex', gap: 4, overflowX: 'auto', background: '#0D0D0D',
           padding: '0 10px', scrollbarWidth: 'none',
         }}
       >
-        {PAGINAS.map(([id, label]) => (
-          <button
-            key={id}
-            onClick={() => setPagina(id)}
-            aria-current={pagina === id ? 'page' : undefined}
-            className={`demo-nav-item${pagina === id ? ' active' : ''}`}
-            style={{ flex: 'none', borderLeft: 0, borderRadius: 0 }}
-          >
-            {label}
-          </button>
-        ))}
+        {PAGINAS.map(([id, label]) => {
+          const actief = pagina === id;
+          return (
+            <button
+              key={id}
+              onClick={() => setPagina(id)}
+              aria-current={actief ? 'page' : undefined}
+              style={{
+                flex: 'none',
+                border: 0,
+                background: 'none',
+                borderBottom: `2px solid ${actief ? '#1DDB62' : 'transparent'}`,
+                color: actief ? '#fff' : 'rgba(255,255,255,.6)',
+                font: 'inherit',
+                fontSize: 13.5,
+                fontWeight: actief ? 700 : 500,
+                padding: '11px 12px 9px',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
       </nav>
 
       <div ref={wrapRef} style={{ height: ONTWERPHOOGTE * schaal, overflow: 'hidden', background: '#fff' }}>
+        {/* pointerEvents: none — binnen het voorbeeld valt niets aan te klikken.
+            Een bezoeker die op "Nieuwe werkbon" drukt en niets ziet gebeuren,
+            denkt dat het product hapert. Bladeren doe je met de tabs hierboven;
+            de rest is een stilstaande, maar echte, weergave van de pagina. */}
         <iframe
           key={pad}
           src={pad}
           title={`Voorbeeld: ${PAGINAS.find(p => p[0] === pagina)?.[1]}`}
           loading="lazy"
+          tabIndex={-1}
+          aria-hidden="true"
           style={{
             width: ONTWERPBREEDTE,
             height: ONTWERPHOOGTE,
             border: 0,
             display: 'block',
+            pointerEvents: 'none',
             transform: `scale(${schaal})`,
             transformOrigin: 'top left',
           }}
