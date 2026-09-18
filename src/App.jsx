@@ -39,8 +39,6 @@ import IndustriesPage from './pages/marketing/IndustriesPage.jsx';
 import AboutPage from './pages/marketing/AboutPage.jsx';
 import ContactPage from './pages/marketing/ContactPage.jsx';
 import FaqPage from './pages/marketing/FaqPage.jsx';
-import DemoMobiel from './demo/DemoMobiel.jsx';
-import DemoBalk from './demo/DemoBalk.jsx';
 import { SuperAdminPage } from './pages/SuperAdminPage.jsx';
 import { createMissingProfile, getSession, logout, onAuthStateChange } from './services/authService.js';
 import { getCurrentUserContext } from './services/profileService.js';
@@ -77,13 +75,10 @@ import { staatOpDag } from './utils/werkbonDagen.js';
 import { ActivityEditModal, NewActivityModal, NewLeadModal, ProfileModal } from './components/SharedModals.jsx';
 import { supabase } from './lib/supabase.js';
 import { listNotifications, markNotificationRead, markAllNotificationsRead } from './services/notificatieService.js';
-import { isDemo } from './lib/supabase.js';
-import { DEMO_SESSION, DEMO_USER, DEMO_PROFILE, DEMO_COMPANY, DEMO_PLAN_STATUS, DEMO_PERMISSIONS } from './demo/demoSessie.js';
 
-// De demo draait dezelfde shell en dezelfde pagina's, alleen onder /demo in
-// plaats van /dashboard. Eén constante in plaats van acht losse demo-takken:
-// overal waar het pad gelezen of geschreven wordt, telt deze waarde.
-const BASISPAD = isDemo ? '/demo' : '/dashboard';
+// Basispad van de app-shell. Eén constante, zodat het pad op één plek staat in
+// plaats van verspreid door de routerlogica.
+const BASISPAD = '/dashboard';
 
 // De URL is de bron van waarheid voor wat er open staat. Zie lib/route.js.
 
@@ -877,10 +872,8 @@ function AppInner() {
   const [route,      setRoute]      = useState(() => window.location.pathname || '/');
   // Het geopende detail dat in het pad staat (/werkbonnen/<id>, /projecten/<id>, …).
   const [itemId,     setItemId]     = useState(() => leesRoute(BASISPAD).itemId);
-  // In de demo is er geen login: de sessie staat er meteen, zodat de shell niet
-  // naar /login stuurt en de gedeelde fetch direct mag draaien.
-  const [session,    setSession]    = useState(isDemo ? DEMO_SESSION : null);
-  const [authReady,  setAuthReady]  = useState(isDemo);
+  const [session,    setSession]    = useState(null);
+  const [authReady,  setAuthReady]  = useState(false);
   // De URL bepaalt wat je ziet: pagina, geopend item en tabblad. Zie lib/route.js.
   const [page,       setPage]       = useState(() => leesRoute(BASISPAD).page);
   const [sbOpen,     setSbOpen]     = useState(false);
@@ -915,19 +908,16 @@ function AppInner() {
   // Terug-naar-klant context: { page, klantId, klantNaam }. Blijft staan tot je
   // ergens anders heen navigeert of op "Terug" klikt (niet gewist door navIntent).
   const [backCtx,    setBackCtx]    = useState(null);
-  // Demo: gebruiker, bedrijf en rechten staan meteen klaar. Er is geen auth-flow
-  // die ze kan vullen, en zonder deze waarden blijft de shell op een skelet
-  // hangen of valt het halve menu weg.
-  const [user,       setUser]       = useState(isDemo ? DEMO_USER : null);
-  const [profile,    setProfile]    = useState(isDemo ? DEMO_PROFILE : null);
-  const [company,    setCompany]    = useState(isDemo ? DEMO_COMPANY : null);
+  const [user,       setUser]       = useState(null);
+  const [profile,    setProfile]    = useState(null);
+  const [company,    setCompany]    = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError,   setProfileError]   = useState(null);
-  const [userPermissions, setUserPermissions] = useState(isDemo ? DEMO_PERMISSIONS : []);
-  const [permissionsLoaded, setPermissionsLoaded] = useState(isDemo);
+  const [userPermissions, setUserPermissions] = useState([]);
+  const [permissionsLoaded, setPermissionsLoaded] = useState(false);
   // Abonnementsstand (features, modules, limieten + huidige stand). Komt uit
   // get_plan_status() — dezelfde bron die de server-side RLS gebruikt.
-  const [planStatus, setPlanStatus] = useState(isDemo ? DEMO_PLAN_STATUS : null);
+  const [planStatus, setPlanStatus] = useState(null);
   const [repairing,  setRepairing]  = useState(false);
   const [openProfile, setOpenProfile] = useState(false);
   const [globalLeadModal, setGlobalLeadModal] = useState(false);
@@ -1206,7 +1196,7 @@ function AppInner() {
     setRoute(nextPath);
     // Reset scroll when entering a public marketing page so each route
     // starts at the top, mirroring real multi-page navigation.
-    const PUBLIC = ['/', '/functies', '/prijzen', '/voor-wie', '/over-ons', '/over', '/contact', '/faq', '/demo', '/login', '/register', '/betaald', '/betaling-geannuleerd'];
+    const PUBLIC = ['/', '/functies', '/prijzen', '/voor-wie', '/over-ons', '/over', '/contact', '/faq', '/login', '/register', '/betaald', '/betaling-geannuleerd'];
     if (changed && PUBLIC.includes(nextPath)) {
       window.scrollTo({ top: 0, left: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
     }
@@ -1527,10 +1517,9 @@ function AppInner() {
     return <FaqPage navigate={navigate} isAuthenticated={Boolean(session)} />;
   }
 
-  // /demo heeft hier bewust GEEN eigen pagina meer. De demo is het echte
-  // portaal: de route valt door naar dezelfde shell als /dashboard, met
-  // BASISPAD op '/demo' en een nep-datalaag eronder. Zo blijft de demo vanzelf
-  // gelijk aan het product in plaats van een nabouw die uit de pas loopt.
+  // Geen losse demo-omgeving: wie het product wil zien, klikt door het
+  // voorbeeldscherm op de homepage of vraagt een proefaccount aan. /demo valt
+  // daarom door naar de marketingsite.
 
   if (route === '/cookieverklaring') {
     return <CookieverklaringPage navigate={navigate} />;
@@ -1551,11 +1540,7 @@ function AppInner() {
   }
 
   if (route === '/login') {
-    // In de demo is er ALTIJD een (nep)sessie. Zonder deze uitzondering wordt
-    // een bezoeker die wil inloggen of een proefaccount wil starten meteen
-    // teruggestuurd naar /dashboard — geen demo-pad, dus daarna door naar de
-    // marketingsite. De belangrijkste knop van de demo deed daardoor niets.
-    if (session && !isDemo) {
+    if (session) {
       navigate('/dashboard', true);
       return null;
     }
@@ -1573,8 +1558,7 @@ function AppInner() {
   }
 
   if (route === '/register') {
-    // Zie /login hierboven: de demo-sessie mag het aanmelden niet blokkeren.
-    if (session && !isDemo) {
+    if (session) {
       navigate('/dashboard', true);
       return null;
     }
@@ -1679,11 +1663,6 @@ function AppInner() {
   // download-scherm i.p.v. de dashboard-shell. Login/registratie/verificatie
   // (hierboven), de ondertekenpagina en de marketingsite blijven mobiel werken.
   if (isMobile) {
-    // Het echte dashboard is op telefoon geblokkeerd (daar is de losse app
-    // voor). De demo hoort daar niet onder te vallen: een bezoeker op zijn
-    // telefoon moet het product juist kunnen zien. Hij krijgt een mobiele
-    // weergave op dezelfde nepdata — geen geperst dashboard.
-    if (isDemo) return <DemoMobiel navigate={navigate} />;
     return <MobileBlock onLogout={handleLogout} />;
   }
 
@@ -1692,7 +1671,6 @@ function AppInner() {
   return (
     <ProfileContext.Provider value={profileApi}>
       <DataContext.Provider value={dataApi}>
-      {isDemo && <DemoBalk navigate={navigate} />}
       <div className="shell">
         <Sidebar
           page={page}

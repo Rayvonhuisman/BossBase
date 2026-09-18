@@ -150,7 +150,7 @@ export default function MarketingShell({ navigate, active, children, isAuthentic
                   <li><button onClick={() => go('/functies')}>Functies</button></li>
                   <li><button onClick={() => go('/prijzen')}>Prijzen</button></li>
                   <li><button onClick={() => go('/voor-wie')}>Voor wie</button></li>
-                  <li><button onClick={() => go('/demo')}>Demo</button></li>
+                  <li><button onClick={() => go('/register')}>Gratis proberen</button></li>
                 </ul>
               </div>
 
