@@ -3,8 +3,11 @@ import { makeAdminClient, timingSafeEqual } from "../_shared/scheduledSync.ts"
 
 // SnelStart koppelsleutel-webhook (productiekoppeling, oAuth-flow).
 //
-// De geregistreerde WebhookURL is
-//   https://mawzqpnsluljxpbarhng.supabase.co/functions/v1/snelstart-webhook?key=<SNELSTART_WEBHOOK_SECRET>
+// De bij SnelStart geregistreerde WebhookURL is
+//   https://www.bossbase.nl/api/snelstart/webhook
+// Dat is een Vercel-functie (api/snelstart/webhook.js) die hierheen doorstuurt
+// en ?key=<SNELSTART_WEBHOOK_SECRET> er serverkant aan toevoegt. Deze URL met
+// ?key= werkt rechtstreeks ook nog, maar hoort nergens meer te staan.
 // Eén URL voor alle klanten; bij wie een bericht hoort volgt uit ReferenceKey.
 //
 // Flow (developer portal → "oAuth Authenticatie voor productiekoppelingen"):

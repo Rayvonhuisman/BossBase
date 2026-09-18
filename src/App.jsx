@@ -1516,6 +1516,14 @@ function AppInner() {
     return <SuperAdminPage navigate={navigate} profile={profile} />;
   }
 
+  // /api/ is van Vercel (serverfuncties, o.a. de SnelStart-webhook) en komt hier
+  // normaal nooit: vercel.json stuurt het niet naar index.html. Komt het tóch
+  // in de SPA terecht, dan niet doorsturen naar de marketingsite — een POST die
+  // op de homepage eindigt en 200 geeft, zou SnelStart als "verwerkt" lezen.
+  if (route.startsWith('/api/')) {
+    return null;
+  }
+
   if (!route.startsWith('/dashboard')) {
     navigate('/', true);
     return null;
