@@ -38,6 +38,12 @@ const toDeal = row => ({
   files: row.files_count || 0,
   acts: row.activities_count || 0,
   assignedTo: row.assigned_to || null,
+  // Wie de aanvraag behandelen. Meerdere mensen sinds migratie
+  // 20260919170000; valt terug op de enkele assigned_to voor rijen die nog van
+  // daarvoor zijn.
+  assignedToIds: Array.isArray(row.assigned_to_ids) && row.assigned_to_ids.length
+    ? row.assigned_to_ids
+    : (row.assigned_to ? [row.assigned_to] : []),
   createdAt: row.created_at || null,
   raw: row,
 })
@@ -127,6 +133,8 @@ const isUuid = v => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{
 export async function createDeal(input) {
   const stageCandidate = input.stage_id || input.stage || null
   const revenue = Number(input.value || input.amount || input.expected_revenue || 0)
+  const eigenaren = (input.assigned_to_ids ?? input.assignedToIds ?? [])
+    .filter(Boolean)
   // Map to the ACTUAL deals columns: title, customer_id, stage_id (uuid),
   // expected_revenue, description, priority. (priority bestaat sinds migratie
   // 20260708120000 — daarvoor werd de gekozen prioriteit stil weggelaten.)
@@ -140,6 +148,11 @@ export async function createDeal(input) {
     description: input.notes || input.description || null,
     // Standaard 'med' (= Normaal) als er geen prioriteit is meegegeven.
     priority: input.priority || "med",
+    // Wie de aanvraag behandelen. Werd hier eerder helemaal niet geschreven,
+    // waardoor elke aanvraag uit de app stil zonder eigenaar bleef.
+    // assigned_to houdt de eerste vast, voor wat daar nog op leest.
+    assigned_to_ids: eigenaren,
+    assigned_to: eigenaren[0] || null,
   }
   Object.keys(base).forEach(k => base[k] === null && delete base[k])
   const payload = await withCompanyId(base)
