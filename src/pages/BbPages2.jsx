@@ -1740,55 +1740,16 @@ export function RevenuePage() {
            (btwIndicatieService) is ongewijzigd en levert die rubrieken nog.
 
            Berekend uit de eigen facturen en kosten, dus ook zonder koppeling
-           bruikbaar. De Moneybird-vergelijking staat achter het info-icoon —
-           alleen Moneybird levert die cijfers, en dat is de minderheid.
+           bruikbaar. De uitleg is één korte tip op het icoon. De
+           Moneybird-vergelijking staat alleen in beeld bij een Moneybird-
+           koppeling — alleen Moneybird levert die cijfers.
            Bewust GEEN aangifteknop of -export. */}
       {btwPlan.has('btw_overzicht') && (
       <div className="tw afu3" style={{ marginBottom: 20 }}>
-        <div className="tw-hd" style={{ flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+        <div className="tw-hd" style={{ marginBottom: 12 }}>
           <div className="f-label-rij">
             <div className="card-title">BTW</div>
-            <InfoUitklap id="uitleg-btw" label="Hoe deze btw berekend wordt">
-              {(() => {
-                const boekhouding = btwPerioden.find(x => x.periode_label === btwSelectedLabel);
-                const bhTeBetalen = boekhouding
-                  ? (boekhouding.btw_ontvangen_21 || 0) + (boekhouding.btw_ontvangen_9 || 0)
-                    - (boekhouding.btw_betaald_21 || 0) - (boekhouding.btw_betaald_9 || 0)
-                  : null;
-                return (
-                  <>
-                    <p style={{ margin: '0 0 6px' }}>
-                      Een indicatie, berekend uit je facturen en kosten in BossBase. Dit is geen aangifte: je
-                      boekhouder of boekhoudpakket is leidend. Correcties en boekingen die buiten BossBase om
-                      zijn gedaan, zitten er niet in.
-                    </p>
-                    <p style={{ margin: '0 0 6px' }}>
-                      <strong>BTW ontvangen</strong> is de btw op je facturen,{' '}
-                      {btwStelsel === 'kas'
-                        ? 'alleen betaalde facturen, op betaaldatum (kasstelsel).'
-                        : 'verzonden en betaalde facturen, op factuurdatum (factuurstelsel).'}
-                      {' '}Creditfacturen halen eraf. Het stelsel pas je aan bij Instellingen.
-                    </p>
-                    <p style={{ margin: 0 }}>
-                      <strong>BTW betaald</strong> is de btw op je kosten. Materiaal op werkbonnen telt niet
-                      mee: dat staat al als inkoopfactuur van de leverancier in je kosten.
-                    </p>
-                    {mbConnection?.connected && (
-                      <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--br)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                        <span>
-                          {bhTeBetalen != null
-                            ? <>Volgens je boekhouding: {bhTeBetalen >= 0 ? 'te betalen' : 'terug te krijgen'} <strong>{fmt(Math.abs(bhTeBetalen))}</strong></>
-                            : 'Nog geen cijfers uit je boekhouding voor deze periode.'}
-                        </span>
-                        <button className="btn btn-s btn-sm" onClick={handleSyncBtw} disabled={btwSyncing}>
-                          {btwSyncing ? 'Ophalen...' : 'Ophalen uit boekhouding'}
-                        </button>
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
-            </InfoUitklap>
+            <InfoTip tekst="Indicatie uit je facturen en kosten in BossBase, geen aangifte. Factuur- of kasstelsel kies je bij Instellingen." />
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <div className="tabs">
@@ -1831,6 +1792,26 @@ export function RevenuePage() {
                     </strong>
                   )}
                 </div>
+                {/* Alleen met een Moneybird-koppeling: die levert de cijfers van
+                    de aangifte zelf. Klein, want het is de uitzondering. */}
+                {mbConnection?.connected && (() => {
+                  const bh = btwPerioden.find(x => x.periode_label === btwSelectedLabel);
+                  const bhSaldo = bh
+                    ? (bh.btw_ontvangen_21 || 0) + (bh.btw_ontvangen_9 || 0) - (bh.btw_betaald_21 || 0) - (bh.btw_betaald_9 || 0)
+                    : null;
+                  return (
+                    <div style={{ fontSize: '.78rem', color: 'var(--dmu)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span>
+                        {bhSaldo != null
+                          ? <>Volgens je boekhouding: {bhSaldo >= 0 ? 'te betalen' : 'terug'} {fmt(Math.abs(bhSaldo))}</>
+                          : 'Nog geen cijfers uit je boekhouding voor deze periode.'}
+                      </span>
+                      <button className="btn btn-s btn-sm" onClick={handleSyncBtw} disabled={btwSyncing}>
+                        {btwSyncing ? 'Ophalen...' : 'Ophalen uit boekhouding'}
+                      </button>
+                    </div>
+                  );
+                })()}
                 {/* Geen uitleg maar een waarschuwing dat het bedrag niet compleet
                     is, dus zichtbaar en niet achter het icoon (zie Uitleg.jsx). */}
                 {eigen.waarschuwingen.length > 0 && (

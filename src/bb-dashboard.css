@@ -2955,14 +2955,6 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
    deze flex-rij duwde hij het label anders samen tot twee regels. */
 .f-label-rij .bb-uitleg{flex-basis:100%}
 .bb-uitleg{margin:6px 0 0;padding:8px 10px;border-radius:var(--r8);background:var(--bgs);font-size:.75rem;font-weight:500;line-height:1.5;color:var(--dmu)}
-/* BTW-kaart op Financiën: titel + icoon links, periodekeuze rechts, en de
-   uitgeklapte uitleg als volle regel eronder. De titelrij valt weg als
-   flex-container (display:contents), zodat de uitleg een kind van de kop wordt
-   en met order onder de periodekeuze kan zakken. */
-.btw-hd{justify-content:flex-start}
-.btw-hd .f-label-rij{display:contents}
-.btw-hd .btw-hd-keuze{margin-left:auto}
-.btw-hd .bb-uitleg{order:3;flex-basis:100%;margin:0}
 
 /* ── ADRES-ZOEKER (PDOK) ─────────────────────────────────────
    Invulhulp boven de losse adresvelden. Mobile-first: ruime
