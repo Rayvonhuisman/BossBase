@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { I, ModalX, NotifyMailToggle, fmt, fmt0, BackToKlant } from '../bb-shared.jsx';
+import { InfoTip } from '../components/Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
@@ -122,8 +123,9 @@ export function NewProjectModal({ onClose, onSaved, customers, deals, offertes, 
       <div className="modal modal-wide">
         <div className="modal-hd">
           <div>
-            <div className="modal-title">Nieuw project</div>
-            <div className="modal-sub">Beheer uren, offerte, facturatie en deadline op één plek</div>
+            <div className="modal-title">
+              Nieuw project <InfoTip tekst="Beheer uren, offerte, facturatie en deadline op één plek." />
+            </div>
           </div>
           <ModalX onClose={onClose} />
         </div>

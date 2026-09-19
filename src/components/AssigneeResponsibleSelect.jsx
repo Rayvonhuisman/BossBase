@@ -1,4 +1,5 @@
 import { MemberMultiSelect } from './MemberMultiSelect.jsx';
+import { InfoTip } from './Uitleg.jsx';
 
 // Gedeelde keuze "gekoppelde medewerkers + verantwoordelijke(n)" voor het
 // inplannen/bewerken van een werkbon. Verantwoordelijken zijn altijd een subset
@@ -39,11 +40,11 @@ export function AssigneeResponsibleSelect({
       </div>
       {assignedIds.length > 0 && (
         <div className={fieldClassName} style={fieldStyle}>
-          <label>Verantwoordelijke(n) <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(mogen de werkbon bewerken · minimaal één)</span></label>
+          <label>
+            Verantwoordelijke(n) <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(mogen de werkbon bewerken · minimaal één)</span>
+            <InfoTip tekst="Niet-verantwoordelijke medewerkers zien de werkbon wel, maar kunnen niets bewerken." />
+          </label>
           <MemberMultiSelect members={gekoppelde} value={verantwoordelijkeIds} onChange={handleVerantwoordelijke} disabled={disabled} />
-          <div style={{ fontSize: 11.5, color: 'var(--dl)', marginTop: 6, lineHeight: 1.5 }}>
-            Niet-verantwoordelijke medewerkers zien de werkbon wel, maar kunnen niets bewerken.
-          </div>
         </div>
       )}
     </>

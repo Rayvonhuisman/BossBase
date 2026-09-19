@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { I, ModalX, initials, Av } from '../bb-shared.jsx';
+import { InfoTip } from '../components/Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useUploads } from '../lib/uploadContext.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -72,8 +73,9 @@ function InviteModal({ onClose, onSaved }) {
       <div className="modal">
         <div className="modal-hd">
           <div>
-            <div className="modal-title">Teamlid uitnodigen</div>
-            <div className="modal-sub">Stuur een uitnodiging naar een nieuw teamlid</div>
+            <div className="modal-title">
+              Teamlid uitnodigen <InfoTip tekst="Stuur een uitnodiging naar een nieuw teamlid." />
+            </div>
           </div>
           <ModalX onClose={onClose} />
         </div>

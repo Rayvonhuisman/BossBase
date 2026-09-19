@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ModalX, NotifyMailToggle } from '../bb-shared.jsx';
+import { InfoTip } from './Uitleg.jsx';
 import { AssigneeResponsibleSelect } from './AssigneeResponsibleSelect.jsx';
 import { getWerkbonnen, updateWerkbon } from '../services/werkbonService.js';
 import { syncWerkbonEvents } from '../services/calendarService.js';
@@ -110,8 +111,9 @@ export function AgendaWerkbonPlanModal({ currentUserId, currentUserName, default
       <div className="modal" style={{ maxWidth: 420 }}>
         <div className="modal-hd">
           <div>
-            <div className="modal-title">Werkbon inplannen</div>
-            <div className="modal-sub">Zet een bestaande werkbon op een datum en tijd.</div>
+            <div className="modal-title">
+              Werkbon inplannen <InfoTip tekst="Zet een bestaande werkbon op een datum en tijd." />
+            </div>
           </div>
           <ModalX onClose={onClose} />
         </div>

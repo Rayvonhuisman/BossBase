@@ -41,6 +41,7 @@ import { createPortal } from 'react-dom';
 import { useEscapeSluit } from '../hooks/useEscapeSluit.js';
 import { Link2, SlidersHorizontal, RefreshCw, AlertTriangle } from 'lucide-react';
 import { I } from '../bb-shared.jsx';
+import { InfoUitklap } from './Uitleg.jsx';
 
 // ── Beeldmerken ─────────────────────────────────────────────────────────────
 // De merken hebben sterk verschillende verhoudingen (Stripe ~2,4:1, Moneybird en
@@ -470,12 +471,12 @@ function IntegratieDrawer({ integratie, onClose }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {sync.status}
               <ActieRij acties={sync.acties} links={<LaatsteSync iso={sync.laatsteSync} />} />
+              {/* De werkwijze is naslag: je leest hem één keer en daarna staat
+                  hij in de weg bij het synchroniseren zelf. */}
               {sync.toelichting && (
-                <div style={{
-                  background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 'var(--r8)',
-                  padding: '12px 14px', fontSize: '.8rem', color: 'var(--dm)', lineHeight: 1.55,
-                }}>
-                  {sync.toelichting}
+                <div className="f-label-rij">
+                  <span style={{ fontSize: '.8rem', color: 'var(--dm)', fontWeight: 600 }}>Wat er meegaat</span>
+                  <InfoUitklap id="uitleg-sync-werkwijze">{sync.toelichting}</InfoUitklap>
                 </div>
               )}
             </div>
