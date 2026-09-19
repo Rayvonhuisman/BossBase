@@ -358,7 +358,9 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
   );
 
   const customerById = id => customers.find(c => c.id === id);
-  const today = new Date().toISOString().slice(0, 10);
+  // Via toLocalDateKey, niet toISOString(): die laatste rekent naar UTC en
+  // levert in Amsterdam tussen middernacht en 02:00 de dag van gisteren.
+  const today = toLocalDateKey(new Date());
   const isOpenAct = a => a.status !== 'completed' && a.status !== 'done';
   const tip = (e, node) => ux && ux.tip && ux.tip(e, node);
   const off = () => ux && ux.off && ux.off();
@@ -604,7 +606,9 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
               })}
             </div>
           )}
-          <WFoot meta={`${items.length} achterstallig`} linkText="Alle activiteiten" onLink={() => setPage('activities')} />
+          <WFoot
+            meta={rest > 0 ? `${teLaat.length} achterstallig (${rest} niet getoond)` : `${teLaat.length} achterstallig`}
+            linkText="Alle activiteiten" onLink={() => setPage('activities')} />
         </div>
       );
     }

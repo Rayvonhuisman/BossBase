@@ -62,6 +62,15 @@ function matchLayoutKey(widgets) {
 // No extra Supabase queries. Empty arrays → widgets show their empty state.
 const MONTHS_NL = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 
+// De kalenderdag zoals de gebruiker hem ziet, als 'YYYY-MM-DD'.
+//
+// NIET via toISOString(): dat rekent naar UTC, en een datum die op lokale
+// middernacht staat wordt dan de dág ervoor. In Amsterdam (UTC+2) schoof
+// daardoor het hele weekvenster een dag op — de balk boven "ma" toonde zondag,
+// en de weektelling pakte de vorige zondag mee in plaats van de komende.
+// Gemeten: 22 activiteiten deze week terwijl de database er 21 heeft.
+const lokaleDag = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 function isoWeekNr(d) {
   const dt = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   const dayNum = (dt.getUTCDay() + 6) % 7;
@@ -74,7 +83,7 @@ function isoWeekNr(d) {
 
 function deriveCharts({ deals = [], activities = [], offertes = [], customers = [], uren = [], facturen = [], jobCosts = [], stages = [] }) {
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
+  const today = lokaleDag(now);
   const stageIndex = buildStageIndex(stages);
   // Status uit de database; de fase alleen voor de weergave en voor de vraag of
   // gewonnen werk al is afgerekend.
@@ -154,15 +163,18 @@ function deriveCharts({ deals = [], activities = [], offertes = [], customers = 
   monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
   const apd = DN.map((label, i) => {
     const day = new Date(monday); day.setDate(monday.getDate() + i);
-    const iso = day.toISOString().slice(0, 10);
-    return { label, value: activities.filter(a => a.dueAt && a.dueAt.slice(0, 10) === iso).length };
+    const iso = lokaleDag(day);
+    // Aan BEIDE kanten de lokale dag: dueAt is een tijdstip, en .slice(0, 10)
+    // daarop geeft de UTC-dag — dat zet een activiteit van vlak na middernacht
+    // op de verkeerde staaf.
+    return { label, value: activities.filter(a => a.dueAt && lokaleDag(new Date(a.dueAt)) === iso).length };
   });
   const activitiesPerDay = apd.some(x => x.value > 0) ? apd : [];
 
   // Werkdaguren uit urenregistratie (datum = 'YYYY-MM-DD', uren = number).
   // Bewust de werkdag en niet de werkbonuren: deze grafiek gaat over hoeveel er
   // gewerkt is, niet over hoeveel er op klussen is geschreven.
-  const isoOf = dt => { const x = new Date(dt); x.setHours(0, 0, 0, 0); return x.toISOString().slice(0, 10); };
+  const isoOf = dt => lokaleDag(new Date(dt));
   const urenOnDay = iso => uren.reduce((s, r) => (r.datum && String(r.datum).slice(0, 10) === iso ? s + (Number(r.uren) || 0) : s), 0);
   const dh = DN.map((label, i) => {
     const day = new Date(monday); day.setDate(monday.getDate() + i);
@@ -303,7 +315,7 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
     setUrenLoading(true);
     const wkMonday = new Date(); wkMonday.setHours(0, 0, 0, 0);
     wkMonday.setDate(wkMonday.getDate() - ((wkMonday.getDay() + 6) % 7) - 5 * 7);
-    const urenVanaf = wkMonday.toISOString().slice(0, 10);
+    const urenVanaf = lokaleDag(wkMonday);
     getUrenregistratie({ vanDatum: urenVanaf, profileId: profile.id })
       .then(u => { if (alive) setUren(u); })
       .catch(() => {})
