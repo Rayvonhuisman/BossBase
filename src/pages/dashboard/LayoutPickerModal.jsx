@@ -5,7 +5,7 @@ import { DEFAULT_LAYOUTS, layoutPermissions } from '../../data/widgetRegistry.js
 const LAYOUT_ROWS = {
   medewerker:[[6,6], [6,6]],
   standaard: [[3,3,3,3], [6,6], [6,6], [12]],
-  sales:     [[3,3,3,3], [6,6], [4,4,4]],
+  sales:     [[3,3,3,3], [6,6], [6,6]],
   planning:  [[3,3,3,3], [6,6], [4,4,4]],
   financial: [[3,3,3,3], [6,6], [6,3,3]],
 };

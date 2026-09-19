@@ -8,7 +8,7 @@ import { useData } from '../../lib/dataContext.jsx';
 import { getUrenregistratie } from '../../services/urenService.js';
 import { sumOmzetExclBtw } from '../../services/customerTotalsService.js';
 import { loadUserWidgets, saveUserWidgets } from '../../services/dashboardWidgetService.js';
-import { getDefaultWidgets, DEFAULT_LAYOUTS, DEFAULT_LAYOUT_KEY, DEFAULT_MEDEWERKER_LAYOUT_KEY, normalizeWidgetSize } from '../../data/widgetRegistry.js';
+import { getDefaultWidgets, DEFAULT_LAYOUTS, DEFAULT_LAYOUT_KEY, DEFAULT_MEDEWERKER_LAYOUT_KEY, normalizeWidgetSize, bestaatWidget } from '../../data/widgetRegistry.js';
 import { DashboardCustomizeBar } from './DashboardCustomizeBar.jsx';
 import { DashboardWidgetGrid } from './DashboardWidgetGrid.jsx';
 import { statusInfo } from '../../utils/statusColors.js';
@@ -284,7 +284,10 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
     const defaultKey = isAdmin ? DEFAULT_LAYOUT_KEY : DEFAULT_MEDEWERKER_LAYOUT_KEY;
     loadUserWidgets()
       .then(rows => {
-        const loaded = rows && rows.length > 0 ? rows.map(mapDbWidget) : getDefaultWidgets(defaultKey);
+        // Verwijderde widget-types uit een opgeslagen dashboard overslaan; die
+        // zouden anders als "Widget … is nog niet beschikbaar" renderen.
+        const bruikbaar = (rows || []).filter(r => bestaatWidget(r.widget_type));
+        const loaded = bruikbaar.length > 0 ? bruikbaar.map(mapDbWidget) : getDefaultWidgets(defaultKey);
         setWidgets(loaded);
         setCurrentLayout(matchLayoutKey(loaded));
         setSavedFingerprint(widgetFingerprint(loaded));

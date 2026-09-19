@@ -16,8 +16,6 @@ export const WIDGET_REGISTRY = [
   // ── Popular ──────────────────────────────────────────────
   { type: 'actions_today',          iconKey: 'act',     label: 'Activiteiten vandaag',          category: 'popular',  defaultSize: 'large',  description: 'Openstaande activiteiten voor vandaag' },
   { type: 'quick_actions',          iconKey: 'dash',    label: 'Snelle acties',           category: 'popular',  defaultSize: 'medium', description: 'Knoppen voor veelgebruikte acties' },
-  { type: 'notes',                  iconKey: 'note',    label: 'Notities',                category: 'popular',  defaultSize: 'medium', description: 'Persoonlijk notitieblok' },
-  { type: 'overdue_tasks',          iconKey: 'clock',   label: 'Taken die te laat zijn',  category: 'popular',  defaultSize: 'medium', description: 'Activiteiten die over datum zijn' },
   // ── Planning ─────────────────────────────────────────────
   { type: 'agenda_week',            iconKey: 'cal',     label: 'Agenda deze week',        category: 'planning', defaultSize: 'large',  supportedSizes: ['large', 'full'], description: 'Afspraken en geplande activiteiten' },
   { type: 'werkbonnen_today',       iconKey: 'wo',      label: 'Werkbonnen vandaag',      category: 'planning', defaultSize: 'medium', description: 'Werkbonnen voor vandaag' },
@@ -37,7 +35,6 @@ export const WIDGET_REGISTRY = [
   { type: 'new_leads',              iconKey: 'pipe',    label: 'Nieuwe aanvragen',        category: 'crm',       defaultSize: 'medium', description: 'Deals in de fase Nieuwe aanvragen' },
   { type: 'active_deals',           iconKey: 'pipe',    label: 'Actieve deals',           category: 'crm',       defaultSize: 'large',  supportedSizes: ['large', 'full'], description: 'Deals in actieve pipeline fasen' },
   { type: 'last_customer_activity', iconKey: 'act',     label: 'Laatste klantactiviteit', category: 'crm',       defaultSize: 'large',  supportedSizes: ['medium', 'large', 'full'], description: 'Recente activiteiten per klant' },
-  { type: 'lead_followup',          iconKey: 'call',    label: 'Lead opvolging',          category: 'crm',       defaultSize: 'medium', supportedSizes: ['medium', 'large', 'full'], description: 'Leads gesorteerd op opvolgdatum met belknop' },
   { type: 'conversion_overview',    iconKey: 'pipe',    label: 'Conversie overzicht',     category: 'crm',       defaultSize: 'large',  supportedSizes: ['medium', 'large', 'full'], description: 'Verdeling deals over pipeline fasen' },
   // ── Charts ───────────────────────────────────────────────
   { type: 'monthly_revenue_chart',   iconKey: 'revenue', label: 'Omzet per maand',         category: 'charts',    defaultSize: 'large', supportedSizes: ['large', 'full'], description: 'Lijngrafiek omzet per maand, excl. btw' },
@@ -115,9 +112,8 @@ export const DEFAULT_LAYOUTS = {
       w('profit_month',         'small'),   // 3  → row 1 = 12 ✓
       w('new_leads',            'large'),   // 6
       w('active_deals',         'large'),   // 6  → row 2 = 12 ✓
-      w('open_offertes',        'medium'),  // 4
-      w('lead_followup',        'medium'),  // 4
-      w('conversion_overview',  'medium'),  // 4  → row 3 = 12 ✓
+      w('open_offertes',        'large'),   // 6
+      w('conversion_overview',  'large'),   // 6  → row 3 = 12 ✓
     ],
   },
   planning: {
@@ -125,7 +121,9 @@ export const DEFAULT_LAYOUTS = {
     iconKey: 'cal',
     description: 'Focus op uitvoering en agenda',
     widgets: [
-      w('overdue_tasks',            'small'),  // 3
+      // Stond op 'overdue_tasks'; die tegel is weg. De KPI-variant van
+      // actions_today toont sinds de tellerfix zelf "X vandaag · Y te laat".
+      w('actions_today',            'small'),  // 3
       w('customers',                'small'),  // 3
       w('werkbonnen_today',         'small'),  // 3
       w('uren_registratie',         'small'),  // 3  → row 1 = 12 ✓
@@ -173,6 +171,11 @@ export function getDefaultWidgets(layoutKey = DEFAULT_LAYOUT_KEY) {
   }));
 }
 
+// Bestaat dit widget-type nog? Een opgeslagen dashboard kan een type bevatten
+// dat sindsdien is verwijderd; dat zou anders als "nog niet beschikbaar"
+// renderen. DashboardHome filtert ze hiermee weg bij het laden.
+export const bestaatWidget = type => WIDGET_REGISTRY.some(r => r.type === type);
+
 export function getWidgetMeta(type) {
   return WIDGET_REGISTRY.find(r => r.type === type) || { type, label: type, category: 'popular', defaultSize: 'medium' };
 }
@@ -215,7 +218,6 @@ export const WIDGET_PERMISSION = {
   active_deals:          'verkoop',
   conversion_overview:   'verkoop',
   conversion_funnel:     'verkoop',
-  lead_followup:         'verkoop',
   lead_source_chart:     'verkoop',
 };
 

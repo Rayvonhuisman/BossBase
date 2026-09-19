@@ -565,54 +565,6 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       );
     }
 
-    // ───────── Taken te laat ─────────
-    case 'overdue_tasks': {
-      // Zelfde verhaal als bij "Activiteiten vandaag": de teller telt alles, de
-      // lijst toont er hoogstens FEED_LIMIET.
-      const teLaat = myActivities.filter(a => isOpenAct(a) && a.status === 'overdue');
-      const items = teLaat.slice(0, FEED_LIMIET);
-      const rest = teLaat.length - items.length;
-      if (widget.size === 'small') {
-        return <KpiCard tone={teLaat.length ? 'warn' : 'success'} icon={I.clock} label="Taken te laat" value={teLaat.length} sub={teLaat.length ? `${teLaat.length} over datum` : 'alles op tijd'} onClick={() => setPage('activities')} />;
-      }
-      return (
-        <div className="bb-widget">
-          <WHead title="Taken te laat" sub={<><strong style={{ color: C.warn }}>{teLaat.length}</strong> activiteiten over datum</>} right={<Chip tone="warn">Actie nodig</Chip>} />
-          {teLaat.length === 0 ? (
-            <EmptyState title="Niets te laat" text="Mooi werk — geen openstaande achterstand." />
-          ) : (
-            <div className="feed">
-              {items.map(a => {
-                const c = customerById(a.custId);
-                const od = Math.max(1, Math.floor((new Date(today) - new Date(a.dueAt.slice(0, 10))) / 864e5));
-                const openIt = () => open.activity(a);
-                return (
-                  <div key={a.id} className="feed-row ic-overdue" role="button" tabIndex={0}
-                    onClick={openIt}
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openIt(); } }}>
-                    <span className="feed-icon" style={{ fontWeight: 800, fontSize: 12 }}>{od}d</span>
-                    <div className="feed-main">
-                      <div className="feed-title">{a.title}</div>
-                      <div className="feed-meta">
-                        {c && <><strong>{c.name}</strong><span className="sep">·</span></>}
-                        <span>gepland {a.dueAt?.slice(0, 10)}</span>
-                      </div>
-                    </div>
-                    <div className="feed-aside">
-                      <button className="bbw-btn sm ghost" onClick={e => { e.stopPropagation(); openIt(); }}>Plan</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          <WFoot
-            meta={rest > 0 ? `${teLaat.length} achterstallig (${rest} niet getoond)` : `${teLaat.length} achterstallig`}
-            linkText="Alle activiteiten" onLink={() => setPage('activities')} />
-        </div>
-      );
-    }
-
     // ───────── Nieuwe aanvragen ─────────
     case 'new_leads': {
       // Eerste pipeline-fase ("Nieuwe aanvragen") bepalen uit de echte stages
@@ -1050,61 +1002,6 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       );
     }
 
-    // ───────── Lead opvolging ─────────
-    case 'lead_followup': {
-      // Vroege pipeline: de eerste twee echte fases (val terug op demo-strings).
-      const earlyIds = orderedStages.slice(0, 2).map(s => s.id);
-      const leadDeals = (earlyIds.length ? deals.filter(d => earlyIds.includes(d.stage)) : deals.filter(d => ['new_lead', 'contact'].includes(d.stage))).slice(0, 6);
-      const when = iso => {
-        if (!iso) return { txt: 'plan actie', tone: 'neutral' };
-        const diff = Math.round((new Date(iso.slice(0, 10)) - new Date(today)) / 864e5);
-        if (diff < 0) return { txt: `${Math.abs(diff)}d te laat`, tone: 'warn' };
-        if (diff === 0) return { txt: 'vandaag', tone: 'amber' };
-        if (diff === 1) return { txt: 'morgen', tone: 'amber' };
-        if (diff <= 3) return { txt: `over ${diff}d`, tone: 'info' };
-        return { txt: `over ${diff}d`, tone: 'neutral' };
-      };
-      return (
-        <div className="bb-widget">
-          <WHead title="Lead opvolging" sub={`${leadDeals.length} leads te bellen`} />
-          {leadDeals.length === 0 ? (
-            <EmptyState title="Geen leads te bellen" text="Alle opvolging is bij." />
-          ) : (
-            <div className="feed">
-              {leadDeals.map(d => {
-                const c = customerById(d.custId);
-                const name = c?.name || d.customerName || '?';
-                const na = activities.filter(a => a.custId === d.custId && isOpenAct(a) && a.type === 'call').sort((x, y) => new Date(x.dueAt) - new Date(y.dueAt))[0];
-                const w = when(na?.dueAt);
-                const openIt = goDeal(d);
-                return (
-                  <div key={d.id} className="feed-row ic-follow" role="button" tabIndex={0}
-                    onClick={openIt}
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openIt(); } }}>
-                    <span className="feed-icon"><AvatarSq name={name} /></span>
-                    <div className="feed-main">
-                      <div className="feed-title">{name}</div>
-                      <div className="feed-meta">
-                        {d.title && <span>{d.title}</span>}
-                        <span className="sep">·</span>
-                        <span>bel </span>
-                        <Chip tone={w.tone}>{w.txt}</Chip>
-                      </div>
-                    </div>
-                    <div className="feed-aside">
-                      <button className="bbw-btn call sm" onClick={e => { e.stopPropagation(); if (c) openCustomer(d.custId); else setPage('pipeline'); }} aria-label={`${name} bellen`} title={`${name} bellen`}>
-                        {I.call}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      );
-    }
-
     // ───────── Conversie overzicht ─────────
     case 'conversion_overview': {
       // Echte pipeline_stages, deals geteld per stage_id (val terug op demo-strings).
@@ -1177,24 +1074,6 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                 </div>
               </button>
             ))}
-          </div>
-        </div>
-      );
-    }
-
-    // ───────── Notities ─────────
-    case 'notes': {
-      const content = widget.settings?.content || '';
-      return (
-        <div className="bb-widget">
-          <WHead title="Notities" sub="Persoonlijk notitieblok" />
-          <div style={{ padding: '6px 16px 16px', flex: 1, display: 'flex', flexDirection: 'column' }}>
-            <textarea
-              className="notes-field"
-              defaultValue={content}
-              placeholder="Schrijf hier je notities…"
-              onBlur={e => onSettingsChange({ ...widget.settings, content: e.target.value })}
-            />
           </div>
         </div>
       );
