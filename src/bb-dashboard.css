@@ -2941,6 +2941,20 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .bb-info{position:relative;display:inline-flex;align-items:center;justify-content:center;border:none;background:none;padding:0;margin:0;color:var(--dl);cursor:help;line-height:0;flex-shrink:0}
 .bb-info:hover,.bb-info:focus-visible{color:var(--p)}
 .bb-info[data-tip]:hover::after,.bb-info[data-tip]:focus-visible::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);left:0;width:min(280px,70vw);white-space:normal;text-align:left;background:var(--dk);color:#fff;font-size:.72rem;font-weight:500;line-height:1.45;padding:8px 10px;border-radius:var(--r8);z-index:40;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.18)}
+/* Uitklapbare uitleg (component InfoUitklap). Voor tekst die te lang is voor
+   een zwevende tip, en in modals: die hebben overflow-y:auto, waardoor een tip
+   kan worden afgeknipt. bb-info staat op cursor:help omdat het daar een tip is;
+   hier klik je er echt op. */
+.bb-uitleg-knop{cursor:pointer}
+/* Label met een info-icoontje ernaast. Het icoontje hoort bij het label, maar
+   de uitklaptekst mag niet ÍN het label staan: een klik daarop zou dan het
+   invoerveld focussen. Vandaar deze rij ernaast in plaats van eromheen. */
+.f-label-rij{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.f-label-rij label{margin:0;white-space:nowrap}
+/* De uitgeklapte tekst hoort ONDER het label, niet ernaast: als derde kind in
+   deze flex-rij duwde hij het label anders samen tot twee regels. */
+.f-label-rij .bb-uitleg{flex-basis:100%}
+.bb-uitleg{margin:6px 0 0;padding:8px 10px;border-radius:var(--r8);background:var(--bgs);font-size:.75rem;font-weight:500;line-height:1.5;color:var(--dmu)}
 
 /* ── ADRES-ZOEKER (PDOK) ─────────────────────────────────────
    Invulhulp boven de losse adresvelden. Mobile-first: ruime
