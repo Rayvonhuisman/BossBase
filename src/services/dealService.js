@@ -27,6 +27,10 @@ const toDeal = row => ({
   // value/amount/revenue are kept only as defensive fallbacks.
   value: Number(row.expected_revenue ?? row.final_revenue ?? row.value ?? row.amount ?? row.revenue ?? 0),
   priority: row.priority || "med",
+  // De status zoals de database hem kent: open | won | lost. Dit is de bron van
+  // waarheid voor "waar staat deze deal", niet de naam van de fase. Zie
+  // utils/pipeline.js → dealStatus().
+  status: row.status || null,
   lostReason: row.lost_reason || "",
   nextAct: row.next_activity || "",
   nextDate: row.next_date || "",

@@ -12,7 +12,7 @@ import { getDefaultWidgets, DEFAULT_LAYOUTS, DEFAULT_LAYOUT_KEY, DEFAULT_MEDEWER
 import { DashboardCustomizeBar } from './DashboardCustomizeBar.jsx';
 import { DashboardWidgetGrid } from './DashboardWidgetGrid.jsx';
 import { statusInfo } from '../../utils/statusColors.js';
-import { buildStageIndex, stageCategory } from '../../utils/pipeline.js';
+import { buildStageIndex, dealStatus, stageCategory } from '../../utils/pipeline.js';
 import { AddWidgetModal } from './AddWidgetModal.jsx';
 import { LayoutPickerModal } from './LayoutPickerModal.jsx';
 
@@ -76,7 +76,9 @@ function deriveCharts({ deals = [], activities = [], offertes = [], customers = 
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
   const stageIndex = buildStageIndex(stages);
-  const dealCat = d => stageIndex.get(d.stage)?.category || 'open';
+  // Status uit de database; de fase alleen voor de weergave en voor de vraag of
+  // gewonnen werk al is afgerekend.
+  const dSt = d => dealStatus(d, stageIndex);
   const dealOrd = d => stageIndex.get(d.stage)?.order ?? -1;
   const monthKey = v => { const x = new Date(v); return isNaN(x.getTime()) ? null : x.getFullYear() * 12 + x.getMonth(); };
 
@@ -101,7 +103,7 @@ function deriveCharts({ deals = [], activities = [], offertes = [], customers = 
   const orderedStages = [...stages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   const pipelineByStage = orderedStages
     .filter(s => stageCategory(s.label) !== 'lost')
-    .map((s, i) => ({ label: s.label, color: stageColors[i % stageColors.length], value: deals.filter(d => d.stage === s.id).reduce((sum, d) => sum + (d.value || 0), 0) }))
+    .map((s, i) => ({ label: s.label, color: stageColors[i % stageColors.length], value: deals.filter(d => d.stage === s.id && dSt(d) !== 'lost').reduce((sum, d) => sum + (d.value || 0), 0) }))
     .filter(x => x.value > 0);
 
   // ── Conversiefunnel (mijlpalen afgeleid uit de echte fasenamen) ──
@@ -110,17 +112,17 @@ function deriveCharts({ deals = [], activities = [], offertes = [], customers = 
     return s ? (stageIndex.get(s.id)?.order ?? Infinity) : Infinity;
   };
   const offerteOrder = milestoneOrder(/offerte/);
-  const akkoordOrder = (() => {
-    const s = orderedStages.find(st => { const n = (st.label || '').toLowerCase(); return /akkoord/.test(n) && !/wacht/.test(n); });
-    return s ? (stageIndex.get(s.id)?.order ?? Infinity) : Infinity;
-  })();
   const leads = deals.length;
-  const nonLost = deals.filter(d => dealCat(d) !== 'lost');
+  const nonLost = deals.filter(d => dSt(d) !== 'lost');
   const fSteps = [
     { label: 'Leads', value: leads },
+    // "Offerte" is een mijlpaal in de pipeline en staat alleen in de fase — de
+    // status kent die stap niet. Verloren deals tellen niet mee.
     { label: 'Offerte', value: nonLost.filter(d => dealOrd(d) >= offerteOrder).length },
-    { label: 'Akkoord', value: nonLost.filter(d => dealOrd(d) >= akkoordOrder).length },
-    { label: 'Gewonnen', value: deals.filter(d => ['won', 'paid'].includes(dealCat(d))).length },
+    // Akkoord = gewonnen volgens de database.
+    { label: 'Akkoord', value: deals.filter(d => dSt(d) === 'won').length },
+    // Gewonnen = gewonnen én het werk is af (afgerond, gefactureerd of betaald).
+    { label: 'Gewonnen', value: deals.filter(d => dSt(d) === 'won' && ['won', 'paid'].includes(stageIndex.get(d.stage)?.category)).length },
   ];
   const conversionFunnel = leads ? fSteps.map(s => ({ ...s, pct: Math.round((s.value / leads) * 100) })) : [];
 

@@ -3,7 +3,7 @@ import { I } from '../../bb-shared.jsx';
 import { getSupportedSizes } from '../../data/widgetRegistry.js';
 import { activiteitTypeLabel } from '../../services/activityService.js';
 import { statusInfo } from '../../utils/statusColors.js';
-import { buildStageIndex, firstStageId } from '../../utils/pipeline.js';
+import { buildStageIndex, dealStatus, firstStageId } from '../../utils/pipeline.js';
 import { sumOmzetExclBtw } from '../../services/customerTotalsService.js';
 import { staatOpDagVoor } from '../../utils/werkbonDagen.js';
 
@@ -317,17 +317,13 @@ const actIcoSvg = t => {
 // ── Widget content renderer ───────────────────────────────────
 function renderContent(type, data, widget, setPage, openCustomer, onSettingsChange, ux, openDeal, openInvoice, openCalendarEvent) {
   const { deals = [], stages = [], activities = [], customers = [], offertes = [], werkbonnen = [], calendarEvents = [], facturen = [], jobCosts = [], loading, currentUserId = null } = data;
-  // Fase-categorie per deal (stage_id = uuid → semantische groep) zodat de
-  // pipeline-/financiële widgets op echte data werken.
+  // Waar een deal staat komt uit deals.status (open | won | lost). De FASE is er
+  // alleen nog voor de weergave, en voor de enige vraag die de status niet kan
+  // beantwoorden: is gewonnen werk al afgerekend (categorie 'paid')?
   const stageIndex = buildStageIndex(stages);
-  const dealCat = d => stageIndex.get(d.stage)?.category || 'open';
+  const dStatus = d => dealStatus(d, stageIndex);
+  const stageCat = d => stageIndex.get(d.stage)?.category || 'open';
   const orderedStages = [...stages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  const dealOrd = d => stageIndex.get(d.stage)?.order ?? -1;
-  // "Akkoord"-mijlpaal (geaccepteerd) afgeleid uit de echte fasenamen.
-  const akkoordOrder = (() => {
-    const s = orderedStages.find(st => { const n = (st.label || '').toLowerCase(); return /akkoord/.test(n) && !/wacht/.test(n); });
-    return s ? (stageIndex.get(s.id)?.order ?? Infinity) : Infinity;
-  })();
   const thisMonthKey = (() => { const n = new Date(); return n.getFullYear() * 12 + n.getMonth(); })();
   const inThisMonth = v => { const d = new Date(v); return !isNaN(d.getTime()) && d.getFullYear() * 12 + d.getMonth() === thisMonthKey; };
   // Persoonlijke widgets (eigen activiteiten/werkbonnen/agenda) tonen alleen de
@@ -384,13 +380,14 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
 
     // ───────── KPI cards ─────────
     case 'open_pipeline_value': {
-      const open = deals.filter(d => dealCat(d) === 'open');
+      const open = deals.filter(d => dStatus(d) === 'open');
       const val = open.reduce((s, d) => s + (d.value || 0), 0);
       return <KpiCard tone="green" icon={I.brief} label="Open pipeline" value={eur(val)} sub={<><span>{open.length} deals</span><span>·</span><Delta dir="up">Live</Delta></>} onClick={() => setPage('pipeline')} />;
     }
     case 'accepted_value': {
-      // Geaccepteerd = deals die de Akkoord-fase of verder hebben bereikt.
-      const acc = deals.filter(d => dealCat(d) !== 'lost' && dealOrd(d) >= akkoordOrder);
+      // Geaccepteerd = gewonnen volgens de database. Stond eerder op "de
+      // Akkoord-fase of verder", wat een tekstvergelijking op de fasenaam was.
+      const acc = deals.filter(d => dStatus(d) === 'won');
       const val = acc.reduce((s, d) => s + (d.value || 0), 0);
       return <KpiCard tone="success" icon={I.euro} label="Geaccepteerd" value={eur(val)} sub={<><span>{acc.length} deals</span><span>·</span><Delta dir="up">Akkoord+</Delta></>} onClick={() => setPage('pipeline')} />;
     }
@@ -411,8 +408,11 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       return <KpiCard tone="amber" icon={I.costs} label="Kosten deze maand" value={val > 0 ? eur(val) : ''} sub={`${md.length} kostenposten`} onClick={() => setPage('costs')} />;
     }
     case 'billable': {
-      // Te factureren = afgeronde klussen (deals in een 'afgerond'-fase).
-      const b = deals.filter(d => dealCat(d) === 'won');
+      // Te factureren = het werk is af, maar nog niet afgerekend. "Af" staat
+      // alleen in de fase (de status kent enkel open/won/lost), dus die bepaalt
+      // hier de selectie — maar een verloren deal valt er nu uit. Daar zat
+      // eerder €85.900 aan verloren werk in.
+      const b = deals.filter(d => stageCat(d) === 'won' && dStatus(d) !== 'lost');
       const val = b.reduce((s, d) => s + (d.value || 0), 0);
       return <KpiCard tone="warn" icon={I.euro} label="Te factureren" value={val > 0 ? eur(val) : ''} sub={b.length ? `${b.length} afgeronde klussen` : 'niets in de wacht'} onClick={() => setPage('facturen')} />;
     }
@@ -628,7 +628,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       // Echte deals in de pipeline: niet verloren/afgerond/betaald, en niet de
       // eerste (nieuwe aanvragen) fase. Valt terug op demo-strings.
       const all = deals.filter(d => stageIndex.size
-        ? (dealCat(d) === 'open' && !stageIndex.get(d.stage)?.isFirst)
+        ? (dStatus(d) === 'open' && !stageIndex.get(d.stage)?.isFirst)
         : !['lost', 'completed', 'paid', 'new_lead'].includes(d.stage));
       const count = all.length;
       const totalVal = all.reduce((s, d) => s + (d.value || 0), 0);
@@ -1067,7 +1067,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
           ]);
       const max = Math.max(...rows.map(r => r.count), 1);
       const totalLeads = deals.length;
-      const won = deals.filter(d => ['won', 'paid'].includes(dealCat(d))).length;
+      const won = deals.filter(d => dStatus(d) === 'won').length;
       const conv = totalLeads ? Math.round((won / totalLeads) * 100) : 0;
       const totalVal = deals.reduce((s, d) => s + (d.value || 0), 0);
       return (

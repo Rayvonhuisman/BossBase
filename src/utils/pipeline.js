@@ -4,11 +4,41 @@
 // dashboard-widgets op echte data i.p.v. hardcoded string-fases.
 
 // Naam van een fase → semantische groep. 'open' = nog in de pipeline.
+//
+// LET OP: dit is sinds de statusomzetting nog maar voor twee dingen goed — de
+// WEERGAVE (welke fases hoort de gebruiker te zien) en de vraag of gewonnen werk
+// al is afgerekend ('paid'). Of een deal open, gewonnen of verloren is komt uit
+// deals.status; zie dealStatus() hieronder.
+//
+// 'gefactureerd' hoort bij 'paid': de factuur is eruit, dus het werk staat niet
+// meer "te factureren". Die naam stond er eerder niet in, waardoor een fase
+// "Gefactureerd" stilletjes als 'open' werd geteld en dus meeliep in de open
+// pipeline.
 export function stageCategory(name = '') {
   const n = (name || '').toLowerCase();
   if (/verloren|verloor|afgewezen|geannuleerd|geen interesse/.test(n)) return 'lost';
-  if (/betaald|gesloten|voldaan/.test(n)) return 'paid';
+  if (/betaald|gesloten|voldaan|gefactureerd/.test(n)) return 'paid';
   if (/afgerond|gewonnen|voltooid|opgeleverd/.test(n)) return 'won';
+  return 'open';
+}
+
+// De status van een deal: 'open' | 'won' | 'lost'. Uit de database, niet uit de
+// fasenaam geraden.
+//
+// Waarom dit er is: stageCategory() leidde de status af uit de naam van de fase,
+// en in productie liepen die twee uiteen. Gemeten in het testbedrijf: 27 deals
+// met status 'won' stonden in Akkoord/Gepland/In uitvoering en telden daardoor
+// mee als open pipeline (€934.500), en 2 verloren deals stonden in de fase
+// Afgerond en telden mee als te factureren (€85.900).
+//
+// `stageIndex` is optioneel en dient alleen als terugval voor rijen zonder
+// status (demo-data, en deals van vóór de statuskolom).
+export function dealStatus(deal, stageIndex = null) {
+  const s = String(deal?.status || '').toLowerCase();
+  if (s === 'open' || s === 'won' || s === 'lost') return s;
+  const cat = stageIndex ? stageIndex.get(deal?.stage)?.category : null;
+  if (cat === 'lost') return 'lost';
+  if (cat === 'won' || cat === 'paid') return 'won';
   return 'open';
 }
 
