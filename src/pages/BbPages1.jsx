@@ -5,7 +5,7 @@ import { mailVoorbeeldDocument } from '../utils/mailFrame.js';
 import { Bold, Calendar, Check, Edit2, Euro, FileText, Folder, Italic, List, ListOrdered, Maximize2, Minimize2, MoreHorizontal, PenLine, Plus, RotateCcw, ShoppingCart, Sparkles, Underline, User, Wrench, X } from 'lucide-react';
 import {
   I, CUSTOMERS_DATA, DEALS, ACTIVITIES_DATA, QUOTES_DATA, COSTS_DATA,
-  fmt, fmt0, custById, stageLabel, stageCol, Av, StatusBadge, ModalX, CostCategoryBadge,
+  fmt, custById, stageLabel, stageCol, Av, StatusBadge, ModalX, CostCategoryBadge,
 } from '../bb-shared.jsx';
 import { createCustomer, deleteCustomer, getCustomer, listCustomers, updateCustomer } from '../services/customerService.js';
 import { customerTotals, listCustomersWithTotals } from '../services/customerTotalsService.js';
@@ -15,9 +15,8 @@ import NotitieLog, { toLogItem } from '../components/NotitieLog.jsx';
 import { getTeamMembers, createMentionNotifications } from '../services/notificatieService.js';
 import { updateContactInMoneybird } from '../services/accountingService.js';
 import { buildDueAt, createActivity, listActivities, updateActivity } from '../services/activityService.js';
-import { getKlantKostenOverzicht, inkopenPerProject, LEEG_OVERZICHT } from '../services/kostenOverzichtService.js';
+import { getKlantKostenOverzicht, LEEG_OVERZICHT } from '../services/kostenOverzichtService.js';
 import { sumOmzetExclBtw } from '../services/customerTotalsService.js';
-import KostenOverzichtBlok, { KostenTegels } from '../components/KostenOverzichtBlok.jsx';
 import { listDeals } from '../services/dealService.js';
 import { getOffertesByCustomer } from '../services/offerteService.js';
 import { getFacturenByCustomer } from '../services/factuurService.js';
@@ -428,9 +427,10 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   const magInkoop = can('inkoopprijzen');
   const totalCosts = kostenOverzicht.totaal;
   // Excl. btw aan beide kanten: "betaald" is inclusief btw en zou de winst
-  // structureel te hoog maken. Arbeid zit er niet in — zie KostenOverzichtBlok.
+  // structureel te hoog maken. Arbeid zit er niet in: er is geen kostprijs per uur.
   const omzetExclBtw = sumOmzetExclBtw(cFacturen);
   const profit = omzetExclBtw - totalCosts;
+  const margin = omzetExclBtw > 0 ? Math.round((profit / omzetExclBtw) * 100) : 0;
   const startEdit = (key) => { setEditingField(key); setFieldDraft(c[key] || ''); };
   const cancelEdit = () => { setEditingField(null); setFieldDraft(''); };
   const saveField = async (key) => {
@@ -714,8 +714,8 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
           {[
             { label: 'Gefactureerd',      val: fmt(totalGefactureerd) },
             { label: 'Betaald',           val: fmt(totalBetaald),    green: totalBetaald > 0 },
-            { label: 'Totaal kosten',     val: fmt(totalCosts) },
-            { label: 'Brutowinst vóór arbeid', val: fmt(profit),    green: profit > 0, red: profit < 0 },
+            { label: 'Totale kosten',     val: fmt(totalCosts) },
+            { label: 'Winst',             val: fmt(profit),    green: profit > 0, red: profit < 0 },
           ].map((s, i) => (
             <div key={i} style={{ background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 'var(--r10)', padding: '12px 14px' }}>
               <div style={{ fontSize: '.7rem', color: 'var(--dl)', marginBottom: 4, fontWeight: 600 }}>{s.label}</div>
@@ -1024,94 +1024,86 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
       )}
 
       {/* Kosten */}
-      {tab === 'costs' && (
+      {tab === 'costs' && (() => {
+        // De regels die samen "Totale kosten" vormen (werkbonmateriaal op
+        // inkoopprijs + projectkosten), de uren zonder bedrag, en de boekingen
+        // met de aantekening dat ze niet meetellen: het materiaal daarvan staat
+        // al via de werkbon in de lijst, dus meetellen zou het dubbel zetten.
+        const { materiaal, inkopen, uren, boekingen } = kostenOverzicht;
+        const projectNaam = id => cProjecten.find(p => p.id === id)?.name || '';
+        const aantalRegels = (magInkoop ? materiaal.regels.length : 0) + inkopen.regels.length + boekingen.regels.length;
+        const klein = { fontSize: 10.5, fontWeight: 400, color: 'var(--dl)' };
+        return (
         <div>
-          {/* Zelfde tegels, zelfde volgorde en dezelfde bron als op het
-              project: ze rekenen met exact het `kostenOverzicht` dat ook de
-              regels eronder vult. */}
-          <KostenTegels
-            overzicht={kostenOverzicht}
-            omzetExclBtw={omzetExclBtw}
-            magBedragen={can('projectbedragen')}
-            magInkoop={magInkoop}
-            extra={can('projectbedragen') ? [{ label: 'Betaald', val: fmt0(totalBetaald), sub: 'incl. btw' }] : []}
-          />
-
-          <div style={{ marginTop: 12 }}>
-            <KostenOverzichtBlok overzicht={kostenOverzicht} magInkoop={magInkoop} bron="klant" />
-          </div>
-
-          {/* Materiaal van alle werkbonnen van deze klant */}
-          {magInkoop && (
-            <div style={{ marginTop: 16 }}>
-              <div className="lsec-hd">
-                <div className="lsec-title">Materiaal op de werkbonnen ({kostenOverzicht.materiaal.regels.length})</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 14 }}>
+            {[
+              { label: 'Totale kosten',    val: fmt(totalCosts) },
+              { label: 'Betaald',          val: fmt(totalBetaald) },
+              { label: 'Winst / marge',    val: `${fmt(profit)} (${margin}%)`, green: profit > 0 },
+            ].map((s, i) => (
+              <div key={i} className="sc" style={{ padding: '14px 16px' }}>
+                <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginBottom: 6 }}>{s.label}</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: s.green ? '#15A34A' : 'var(--dk)' }}>{s.val}</div>
               </div>
-              {kostenOverzicht.materiaal.regels.length === 0
-                ? <div className="lsec-empty">Nog geen materiaal op de werkbonnen van deze klant</div>
-                : (
-                  <div className="lrows">
-                    {kostenOverzicht.materiaal.regels.map(r => (
-                      <div key={r.id} className="lrow lrow-static">
-                        <div className="lrow-main">
-                          <div className="lrow-title">{(r.desc || '').replace(/^Materiaal:\s*/i, '') || '(geen omschrijving)'}</div>
-                          <div className="lrow-sub" style={{ color: r.inkoopprijsPer == null ? '#92400E' : 'var(--dl)' }}>
-                            {r.inkoopprijsPer == null ? 'op verkoopprijs — inkoopprijs ontbreekt' : 'inkoopprijs, excl. btw'}
-                          </div>
-                        </div>
-                        <div className="lrow-amount" style={{ textAlign: 'right' }}>{fmt(r.amt)}</div>
-                        <div className="lrow-date">{fmtRowDate(r.date)}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-            </div>
-          )}
-
-          {/* Inkopen, gegroepeerd per project — bewerken doe je op het project */}
-          <div style={{ marginTop: 16 }}>
-            <div className="lsec-hd">
-              <div className="lsec-title">Inkopen ({kostenOverzicht.inkopen.regels.length})</div>
-            </div>
-            {kostenOverzicht.inkopen.regels.length === 0
-              ? <div className="lsec-empty">Nog geen inkopen op de projecten van deze klant</div>
-              : (
-                <div className="lrows">
-                  {inkopenPerProject(kostenOverzicht.inkopen.regels, cProjecten).map(groep => (
-                    <div key={groep.projectId} className="lrow lrow-static">
-                      <div className="lrow-main">
-                        <div className="lrow-title">{groep.naam}</div>
-                        <div className="lrow-sub">
-                          {groep.regels.length === 1 ? '1 inkoop' : `${groep.regels.length} inkopen`} · {groep.regels.map(r => r.naam).join(', ')}
-                        </div>
-                      </div>
-                      <div className="lrow-amount" style={{ textAlign: 'right' }}>{fmt(groep.bedrag)}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
+            ))}
           </div>
-
-          {/* Boekingen: de boekhouding. Staan hier ter inzage en tellen niet mee
-              in het totaal hierboven — zie de uitleg in het overzichtsblok. */}
-          <div style={{ marginTop: 16 }}>
+          <div>
             <div className="lsec-hd">
-              <div className="lsec-title">Boekingen op de Kosten-pagina ({kostenOverzicht.boekingen.regels.length})</div>
+              <div className="lsec-title">Kostenregels ({aantalRegels})</div>
               <button className="btn btn-s btn-sm" onClick={() => setShowCostModal(true)}>{I.plus} Kosten toevoegen</button>
             </div>
-            {kostenOverzicht.boekingen.regels.length === 0
+            {aantalRegels === 0 && !(uren.uren > 0)
               ? <div className="lsec-empty">Nog geen kosten geboekt</div>
               : (
                 <div className="lrows">
-                  {kostenOverzicht.boekingen.regels.map(r => (
+                  {magInkoop && materiaal.regels.map(r => (
                     <div key={r.id} className="lrow lrow-static">
                       <div className="lrow-main">
-                        <div className="lrow-title">{r.desc || ''}</div>
-                        <div className="lrow-sub"><CostCategoryBadge category={r.cat} /></div>
+                        <div className="lrow-title">{(r.desc || '').replace(/^Materiaal:\s*/i, '') || '(geen omschrijving)'}</div>
+                        <div className="lrow-sub" style={{ color: r.inkoopprijsPer == null ? '#92400E' : 'var(--dl)' }}>
+                          {r.inkoopprijsPer == null ? 'Werkbonmateriaal · op verkoopprijs, inkoopprijs ontbreekt' : 'Werkbonmateriaal · inkoopprijs'}
+                        </div>
                       </div>
                       <div className="lrow-amount" style={{ textAlign: 'right' }}>
                         {fmt(r.amt)}
-                        <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--dl)' }}>excl. · {r.btwPercentage ?? 21}% btw</div>
+                        <div style={klein}>excl. btw</div>
+                      </div>
+                      <div className="lrow-date">{r.date}</div>
+                    </div>
+                  ))}
+                  {inkopen.regels.map(r => (
+                    <div key={r.id} className="lrow lrow-static">
+                      <div className="lrow-main">
+                        <div className="lrow-title">{r.naam}</div>
+                        <div className="lrow-sub">Projectkosten{projectNaam(r.projectId) ? ` · ${projectNaam(r.projectId)}` : ''}</div>
+                      </div>
+                      <div className="lrow-amount" style={{ textAlign: 'right' }}>
+                        {fmt(r.bedrag)}
+                        <div style={klein}>excl. btw</div>
+                      </div>
+                      <div className="lrow-date">{r.datum}</div>
+                    </div>
+                  ))}
+                  {uren.uren > 0 && (
+                    <div className="lrow lrow-static">
+                      <div className="lrow-main">
+                        <div className="lrow-title">Uren</div>
+                        <div className="lrow-sub">
+                          {Number(uren.uren).toLocaleString('nl-NL', { maximumFractionDigits: 2 })} uur gewerkt · geen kostprijs per uur, telt niet mee
+                        </div>
+                      </div>
+                      <div className="lrow-amount" style={{ textAlign: 'right', fontWeight: 400, color: 'var(--dl)' }}>geen bedrag</div>
+                    </div>
+                  )}
+                  {boekingen.regels.map(r => (
+                    <div key={r.id} className="lrow lrow-static">
+                      <div className="lrow-main">
+                        <div className="lrow-title">{r.desc || ''}</div>
+                        <div className="lrow-sub"><CostCategoryBadge category={r.cat} /> <span style={{ color: 'var(--dl)' }}>boeking · telt niet mee</span></div>
+                      </div>
+                      <div className="lrow-amount" style={{ textAlign: 'right', color: 'var(--dl)' }}>
+                        {fmt(r.amt)}
+                        <div style={klein}>excl. · {r.btwPercentage ?? 21}% btw</div>
                       </div>
                       <div className="lrow-date">{r.date}</div>
                     </div>
@@ -1120,7 +1112,8 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
               )}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Projecten */}
       {tab === 'projecten' && (
