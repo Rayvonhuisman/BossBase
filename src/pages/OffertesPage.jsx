@@ -3,6 +3,7 @@ import { Download, MoreVertical, Send, CheckCircle2, Copy } from 'lucide-react';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
+import { InfoTip, InfoUitklap } from '../components/Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import {
@@ -140,8 +141,9 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
       <div className="modal modal-wide" style={modalStyle}>
         <div className="modal-hd">
           <div>
-            <div className="modal-title">Nieuwe offerte</div>
-            <div className="modal-sub">Vul de offerte gegevens in</div>
+            <div className="modal-title">
+              Nieuwe offerte <InfoTip tekst="Vul de offerte gegevens in." />
+            </div>
           </div>
           <ModalX onClose={onClose} />
         </div>
@@ -599,7 +601,14 @@ function CopyOfferteModal({ offerte, customers, onClose, onCopied }) {
       <div className="modal">
         <div className="modal-hd">
           <div>
-            <div className="modal-title">Offerte kopiëren</div>
+            <div className="modal-title">
+              Offerte kopiëren
+              <InfoUitklap
+                id="uitleg-offerte-kopieren"
+                tekst="De kopie is een bewerkbare conceptofferte met dezelfde regels. Je kunt deze daarna aanpassen en versturen."
+              />
+            </div>
+            {/* Het nummer blijft: dat is een gegeven, geen uitleg. */}
             <div className="modal-sub">{offerte.nummer}</div>
           </div>
           <ModalX onClose={onClose} />
@@ -627,9 +636,6 @@ function CopyOfferteModal({ offerte, customers, onClose, onCopied }) {
               </select>
             </div>
           )}
-          <div className="f s2" style={{ fontSize: 13, color: 'var(--dl)' }}>
-            De kopie is een bewerkbare conceptofferte met dezelfde regels. Je kunt deze daarna aanpassen en versturen.
-          </div>
           {kopieGeblokkeerd && (
             <div className="f s2" style={{ fontSize: 13, color: '#b45309' }}>
               Je offertelimiet voor deze periode is bereikt. Een nieuwe <strong>versie</strong> voor
