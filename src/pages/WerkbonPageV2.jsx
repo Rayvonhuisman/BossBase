@@ -3,6 +3,7 @@ import { listMaterialen } from '../services/materiaalService.js';
 import { listLeveranciers } from '../services/leverancierService.js';
 import LeverancierSelect from '../components/LeverancierSelect.jsx';
 import { I, ModalX, NotifyMailToggle } from '../bb-shared.jsx';
+import { InfoTip, InfoUitklap } from '../components/Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
@@ -306,8 +307,15 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
       <div className="modal modal-wide">
         <div className="modal-hd">
           <div>
-            <div className="modal-title">{isEdit ? 'Werkbon bewerken' : 'Nieuwe werkbon'}</div>
-            <div className="modal-sub">{isEdit ? `WB-${String(werkbon?.id || '').slice(0, 4).toUpperCase()}` : 'Plan een nieuwe klus in'}</div>
+            <div className="modal-title">
+              {isEdit ? 'Werkbon bewerken' : 'Nieuwe werkbon'}
+              {!isEdit && <InfoTip tekst="Plan een nieuwe klus in." />}
+            </div>
+            {/* Bij bewerken staat hier het bonnummer: dat is een gegeven, geen
+                uitleg, dus dat blijft gewoon staan. */}
+            {isEdit && (
+              <div className="modal-sub">{`WB-${String(werkbon?.id || '').slice(0, 4).toUpperCase()}`}</div>
+            )}
           </div>
           <ModalX onClose={onClose} />
         </div>
@@ -410,12 +418,14 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
               vullen naast het log. */}
           {(!isEdit || htmlToPlain(werkbon?.notes || '')) && (
             <div className="f full">
-              <label>{isEdit ? 'Interne notitie (oud veld)' : 'Interne notitie'}</label>
-              <div style={{ fontSize: '.72rem', color: 'var(--dl)', margin: '-2px 0 4px' }}>
-                {isEdit
-                  ? 'Deze tekst staat los van het notitielog op de werkbon.'
-                  : 'Komt in het notitielog te staan, alleen voor collega’s. Niet op de werkbon-PDF en niet bij de klant.'}
-              </div>
+              <label>
+                {isEdit ? 'Interne notitie (oud veld)' : 'Interne notitie'}
+                <InfoTip
+                  tekst={isEdit
+                    ? 'Deze tekst staat los van het notitielog op de werkbon.'
+                    : 'Komt in het notitielog te staan, alleen voor collega’s. Niet op de werkbon-PDF en niet bij de klant.'}
+                />
+              </label>
               <NoteEditor mentions={true} value={form.notes} onChange={v => set('notes', v)} placeholder="Bv. klant heeft hond, deur dicht houden… Typ @ om iemand te taggen" rows={2} disabled={saving} teamMembers={teamMembers} />
             </div>
           )}
@@ -723,15 +733,17 @@ function TakenSection({
   return (
     <div className="wb2-card">
       <div className="wb2-card-hd">
-        <div className="wb2-card-hd-title">{titel}{total > 0 ? ` · ${done} / ${total}` : ''}</div>
+        <div className="wb2-card-hd-title">
+          {titel}{total > 0 ? ` · ${done} / ${total}` : ''}
+          {/* De uitleg bij deze lijst (bv. wat meerwerk is) stond er altijd
+              boven; nu opgevouwen, zodat de lijst zelf vooraan staat. */}
+          {uitleg && <InfoUitklap id={`uitleg-${titel.toLowerCase()}`} tekst={uitleg} />}
+        </div>
       </div>
       <div className="wb2-card-body">
         {/* Geen "nog geen taken"-melding: zolang er niets is, staat hier alleen
             de invoerregel. Teller en voortgang verschijnen bij de eerste taak. */}
         {toonVoortgang && total > 0 && <div className="wb2-progress"><span style={{ width: `${pct}%` }} /></div>}
-        {uitleg && (
-          <div style={{ fontSize: '.78rem', color: 'var(--dl)', lineHeight: 1.5, marginBottom: 8 }}>{uitleg}</div>
-        )}
         {taken.map(t => (
           <div key={t.id} className="wb2-taak">
             <button
@@ -1182,11 +1194,11 @@ function WaarschuwingModal({ notitie, klantEmail, klantNaam, werkbon, customer, 
             <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <AlertTriangle size={16} strokeWidth={2.2} style={{ color: '#dc2626' }} />
               {stap === 'voorbeeld' ? 'Zo krijgt de klant hem' : 'Waarschuwing voor klant'}
-            </div>
-            <div className="modal-sub">
-              {stap === 'voorbeeld'
-                ? 'Lees na en verstuur pas als het klopt.'
-                : 'Een formele melding op grond van de waarschuwingsplicht.'}
+              <InfoTip
+                tekst={stap === 'voorbeeld'
+                  ? 'Lees na en verstuur pas als het klopt.'
+                  : 'Een formele melding op grond van de waarschuwingsplicht.'}
+              />
             </div>
           </div>
           <ModalX onClose={onClose} />
@@ -1346,7 +1358,13 @@ function NotitiesSection({
   return (
     <div className="wb2-card">
       <div className="wb2-card-hd">
-        <div className="wb2-card-hd-title">Notities</div>
+        <div className="wb2-card-hd-title">
+          Notities
+          {/* Alleen de interne toelichting gaat achter het icoontje. De blauwe
+              regel bij "Voor de klant" blijft staan: die waarschuwt dat wat je
+              daar typt bij de klant terechtkomt. */}
+          <InfoTip tekst="Alleen voor collega’s. Komt niet op de werkbon en niet in beeld bij de klant." />
+        </div>
         <div className="wb2-card-hd-spacer" />
         <div style={{ display: 'flex', gap: 4 }}>
           {[
@@ -1367,17 +1385,20 @@ function NotitiesSection({
         </div>
       </div>
       <div className="wb2-card-body">
-        <div style={{
-          fontSize: '.78rem', color: voorKlant ? '#075985' : 'var(--dl)',
-          background: voorKlant ? '#F0F9FF' : 'transparent',
-          border: voorKlant ? '1px solid #BAE6FD' : 'none',
-          borderRadius: 8, padding: voorKlant ? '8px 11px' : '0 0 8px',
-          marginBottom: 10, lineHeight: 1.5,
-        }}>
-          {voorKlant
-            ? 'Deze regels staan op de werkbon-PDF en op de pagina waar de klant tekent.'
-            : 'Alleen voor collega\u2019s. Komt niet op de werkbon en niet in beeld bij de klant.'}
-        </div>
+        {/* Blijft staan, en alleen hier: op dit tabblad typ je iets dat de KLANT
+            straks leest. Dat is geen achtergrondinformatie maar een attentie op
+            het moment zelf. De interne tegenhanger zit achter het icoontje in de
+            kaartkop. */}
+        {voorKlant && (
+          <div style={{
+            fontSize: '.78rem', color: '#075985',
+            background: '#F0F9FF', border: '1px solid #BAE6FD',
+            borderRadius: 8, padding: '8px 11px',
+            marginBottom: 10, lineHeight: 1.5,
+          }}>
+            Deze regels staan op de werkbon-PDF en op de pagina waar de klant tekent.
+          </div>
+        )}
 
         {canEdit ? (
           <NotitieLog
@@ -2424,8 +2445,10 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
             <div className="modal" style={{ maxWidth: 420 }}>
               <div className="modal-hd">
                 <div>
-                  <div className="modal-title">Wanneer is de klus gestart?</div>
-                  <div className="modal-sub">Deze werkbon heeft geen startmoment en geen geplande start. Vul het startmoment in om te kunnen afronden.</div>
+                  <div className="modal-title">
+                    Wanneer is de klus gestart?
+                    <InfoTip tekst="Deze werkbon heeft geen startmoment en geen geplande start. Vul het startmoment in om te kunnen afronden." />
+                  </div>
                 </div>
                 <ModalX onClose={() => !completing && setStartPrompt(false)} />
               </div>
