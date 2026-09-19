@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase'
+import { alleRijen } from '../lib/alleRijen.js'
 
 // BTW-indicatie: berekend uit de eigen facturen en kosten in BossBase.
 //
@@ -58,37 +59,42 @@ export async function berekenBtwIndicatie({ start, eind, stelsel = 'factuur' }) 
   // zodra hij betaald is — dus alleen betaalde facturen, op hun betaaldatum.
   const datumVeld = stelsel === 'kas' ? 'betaald_op' : 'factuurdatum'
 
-  let factuurQ = supabase
-    .from('facturen')
-    .select('id, nummer, status, is_credit, factuurdatum, betaald_op, totaal_excl, totaal_incl, factuur_regels(btw_pct, btw_regime, regelprijs)')
-    .gte(datumVeld, start)
-    .lte(datumVeld, eind)
+  // Alles ophalen, niet de eerste duizend rijen. Een kwartaal met veel facturen
+  // of kostenregels gaf anders stil een te lage indicatie — en dit is het getal
+  // waarop iemand zijn aangifte naast legt.
+  const bouwFactuurQ = () => {
+    const q = supabase
+      .from('facturen')
+      .select('id, nummer, status, is_credit, factuurdatum, betaald_op, totaal_excl, totaal_incl, factuur_regels(btw_pct, btw_regime, regelprijs)', { count: 'exact' })
+      .gte(datumVeld, start)
+      .lte(datumVeld, eind)
+      .order('id', { ascending: true })
+    return stelsel === 'kas'
+      ? q.eq('status', 'betaald')
+      // 'geboekt' = uit SnelStart opgehaald. Die facturen zijn daar definitief en
+      // horen dus in de aangifte-indicatie mee te tellen; ze weglaten zou het
+      // omzetbeeld precies zo incompleet maken als het vóór de import was.
+      : q.in('status', ['verzonden', 'betaald', 'geboekt'])
+  }
 
-  factuurQ = stelsel === 'kas'
-    ? factuurQ.eq('status', 'betaald')
-    // 'geboekt' = uit SnelStart opgehaald. Die facturen zijn daar definitief en
-    // horen dus in de aangifte-indicatie mee te tellen; ze weglaten zou het
-    // omzetbeeld precies zo incompleet maken als het vóór de import was.
-    : factuurQ.in('status', ['verzonden', 'betaald', 'geboekt'])
-
-  const [{ data: facturen, error: fErr }, { data: kosten, error: kErr }, { data: concepten }] = await Promise.all([
-    factuurQ,
-    supabase
+  const [facturen, kosten, concepten] = await Promise.all([
+    alleRijen(bouwFactuurQ),
+    alleRijen(() => supabase
       .from('job_costs')
-      .select('id, amount, btw_percentage, btw_inclusief, werkbon_materiaal_id')
+      .select('id, amount, btw_percentage, btw_inclusief, werkbon_materiaal_id', { count: 'exact' })
       .gte('cost_date', start)
-      .lte('cost_date', eind),
+      .lte('cost_date', eind)
+      .order('id', { ascending: true })),
     // Concepten binnen de periode: die tellen niet mee, maar de gebruiker moet
     // weten dat ze er zijn — anders lijkt het bedrag te laag zonder reden.
-    supabase
+    alleRijen(() => supabase
       .from('facturen')
-      .select('id')
+      .select('id', { count: 'exact' })
       .eq('status', 'concept')
       .gte('factuurdatum', start)
-      .lte('factuurdatum', eind),
+      .lte('factuurdatum', eind)
+      .order('id', { ascending: true })),
   ])
-  if (fErr) throw fErr
-  if (kErr) throw kErr
 
   let btw1a = 0, omzet1a = 0;
   let btw1b = 0, omzet1b = 0;

@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase"
+import { alleRijen } from "../lib/alleRijen.js"
 import { withCompanyId } from "../lib/currentCompany"
 import { safeInsert } from "../lib/safeInsert"
 import { logTijdlijnSafe } from "./klantTijdlijnService"
@@ -113,9 +114,14 @@ export const toCalendarEvent = row => {
 }
 
 export async function listCalendarEvents() {
-  const { data, error } = await supabase.from("calendar_events").select("*").order("start_at", { ascending: true })
-  if (error) throw error
-  return (data || []).map(toCalendarEvent)
+  // Groeit met één rij per werkbondag; zonder dit verdwenen afspraken stil uit
+  // de agenda zodra het bedrijf er meer dan duizend had.
+  const rijen = await alleRijen(() => supabase
+    .from("calendar_events")
+    .select("*", { count: "exact" })
+    .order("start_at", { ascending: true })
+    .order("id", { ascending: true }))
+  return rijen.map(toCalendarEvent)
 }
 
 export async function createCalendarEvent(input) {

@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase'
 import { getProjectCosts, isWerkbonMateriaal, inkoopwaardeVanKosten, toJobCost } from './jobCostService.js'
 import { listProjectKosten, toProjectKost } from './projectKostenService.js'
 import { getTimeEntries } from './projectsService.js'
+import { alleRijen } from '../lib/alleRijen.js'
 
 // Eén bron voor het kostenoverzicht, zowel van één project als van een hele
 // klant. De tegels bovenaan en de regels eronder rekenen allebei hiermee, zodat
@@ -90,22 +91,7 @@ export async function getProjectKostenOverzicht(projectId) {
   return bouwKostenOverzicht({ jobCosts, projectKosten, urenRegels })
 }
 
-// PostgREST geeft per verzoek hooguit 1000 rijen en meldt niet dat er meer
-// waren. Een klant met veel werkbonnen zou dus stil te weinig uren of kosten
-// tellen. Doorvragen tot het aantal binnen is dat de database zelf opgeeft.
-// (Zelfde aanpak als alleRijen in projectsService; die is daar privé.)
-async function alleRijen(maakQuery) {
-  const rijen = []
-  let totaal = Infinity
-  while (rijen.length < totaal) {
-    const { data, error, count } = await maakQuery().range(rijen.length, rijen.length + 999)
-    if (error) throw error
-    if (count != null) totaal = count
-    if (!data?.length) break
-    rijen.push(...data)
-  }
-  return rijen
-}
+// Doorvragen tot alle rijen binnen zijn: zie lib/alleRijen.js.
 
 // Dezelfde join als getProjectCosts: de inkoopprijs komt mee via de
 // materiaalregel, en die tabel heeft eigen RLS — zonder het recht
@@ -135,10 +121,19 @@ const metMateriaalVelden = row => {
 export async function getKlantKostenOverzicht(customerId) {
   if (!customerId) return { ...LEEG_OVERZICHT }
 
+  // Ook deze id-lijsten doorvragen: ze bepalen via .in(...) welke kosten en uren
+  // meetellen, dus een afgekapte lijst laat stil werk wegvallen ondanks dat de
+  // rest van deze functie wél alles ophaalt.
+  const idLijst = (tabel, select) => alleRijen(() => supabase
+    .from(tabel)
+    .select(select, { count: 'exact' })
+    .eq('customer_id', customerId)
+    .order('id', { ascending: true })).catch(() => [])
+
   const [projectRijen, werkbonRijen, dealRijen] = await Promise.all([
-    supabase.from('projects').select('id').eq('customer_id', customerId).then(r => r.data || []),
-    supabase.from('werkbonnen').select('id, project_id').eq('customer_id', customerId).then(r => r.data || []),
-    supabase.from('deals').select('id').eq('customer_id', customerId).then(r => r.data || []),
+    idLijst('projects', 'id'),
+    idLijst('werkbonnen', 'id, project_id'),
+    idLijst('deals', 'id'),
   ])
 
   const projectIds = projectRijen.map(p => p.id)
@@ -147,9 +142,12 @@ export async function getKlantKostenOverzicht(customerId) {
   // overzicht terwijl ze op de projectkaart wél meetellen.
   const werkbonIds = new Set(werkbonRijen.map(w => w.id))
   if (projectIds.length) {
-    const { data: viaProject } = await supabase
-      .from('werkbonnen').select('id').in('project_id', projectIds)
-    for (const w of viaProject || []) werkbonIds.add(w.id)
+    const viaProject = await alleRijen(() => supabase
+      .from('werkbonnen')
+      .select('id', { count: 'exact' })
+      .in('project_id', projectIds)
+      .order('id', { ascending: true })).catch(() => [])
+    for (const w of viaProject) werkbonIds.add(w.id)
   }
   const werkbonIdLijst = [...werkbonIds]
   const dealIds = dealRijen.map(d => d.id)

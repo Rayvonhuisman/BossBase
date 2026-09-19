@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase"
+import { alleRijen } from "../lib/alleRijen.js"
 import { getCompanyId, withCompanyId } from "../lib/currentCompany"
 import { comprimeerAfbeelding, FOTO_MAX_ZIJDE } from "../utils/afbeeldingComprimeren.js"
 
@@ -214,12 +215,26 @@ function zonderOnbekendeVoertuigen(payload) {
 }
 
 export async function getWerkbonnen() {
-  const { data, error } = await metDagen(sel => supabase
-    .from("werkbonnen")
-    .select(sel)
-    .order("gepland_op", { ascending: true }))
-  if (error) throw error
-  return (data || []).map(toWerkbon)
+  // Doorvragen tot alles binnen is. Niet via lib/alleRijen: die verwacht een
+  // kale querybuilder, terwijl hier elke pagina door metDagen moet — dat is de
+  // terugval voor een database die de dagen-kolommen nog niet kent. Na de
+  // eerste pagina staat dagenStand goed, dus dat kost verder niets.
+  const rijen = []
+  let totaal = Infinity
+  while (rijen.length < totaal) {
+    const van = rijen.length
+    const { data, error, count } = await metDagen(sel => supabase
+      .from("werkbonnen")
+      .select(sel, { count: "exact" })
+      .order("gepland_op", { ascending: true })
+      .order("id", { ascending: true })
+      .range(van, van + 999))
+    if (error) throw error
+    if (count != null) totaal = count
+    if (!data?.length) break
+    rijen.push(...data)
+  }
+  return rijen.map(toWerkbon)
 }
 
 export async function getWerkbonById(id) {
@@ -718,13 +733,15 @@ export async function getWerkbonnenByProject(projectId) {
 
 /** Voortgang per werkbon voor de lijstweergave. Zonder meerwerk — zie hierboven. */
 export async function getAllWerkbonTakenCounts() {
-  const { data, error } = await supabase
+  // Meerdere taken per werkbon, dus deze lijst loopt snel tegen de grens aan —
+  // en dan klopt de voortgang ("3 van 7") stil niet meer.
+  const rijen = await alleRijen(() => supabase
     .from("werkbon_taken")
-    .select("werkbon_id, afgerond")
+    .select("werkbon_id, afgerond", { count: "exact" })
     .eq("is_meerwerk", false)
-  if (error) throw error
+    .order("id", { ascending: true }))
   const counts = {}
-  for (const row of data || []) {
+  for (const row of rijen) {
     if (!counts[row.werkbon_id]) counts[row.werkbon_id] = { total: 0, done: 0 }
     counts[row.werkbon_id].total++
     if (row.afgerond) counts[row.werkbon_id].done++

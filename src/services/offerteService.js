@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase"
+import { alleRijen } from "../lib/alleRijen.js"
 import { withCompanyId } from "../lib/currentCompany"
 import { logTijdlijnSafe } from "./klantTijdlijnService"
 import { regimeVanPct, regimeVoorOpslag } from "../lib/btwRegime"
@@ -218,12 +219,12 @@ export async function markOfferteVervangen(id, vervangenDoorNummer) {
 // ── OFFERTES ────────────────────────────────────────────────────────────────
 
 export async function getOffertes() {
-  const { data, error } = await supabase
+  const rijen = await alleRijen(() => supabase
     .from("offertes")
-    .select("*, customers(name)")
+    .select("*, customers(name)", { count: "exact" })
     .order("created_at", { ascending: false })
-  if (error) throw error
-  return (data || []).map(toOfferte)
+    .order("id", { ascending: true }))
+  return rijen.map(toOfferte)
 }
 
 export async function getOffertesByCustomer(customerId) {

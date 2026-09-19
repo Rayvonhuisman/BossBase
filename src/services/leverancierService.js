@@ -1,5 +1,6 @@
 import { negeerBijImport } from './accountingService.js'
 import { supabase } from '../lib/supabase'
+import { alleRijen } from '../lib/alleRijen.js'
 import { withCompanyId } from '../lib/currentCompany'
 import { valideerRelatieVelden } from '../lib/validatie'
 
@@ -124,13 +125,16 @@ export async function deleteLeverancier(id) {
 // Hoeveel kosten hangen er aan deze leveranciers? Voedt de kolom "kosten" in het
 // overzicht en de waarschuwing bij verwijderen. Eén query voor de hele lijst.
 export async function getLeverancierKostenTotalen() {
-  const { data, error } = await supabase
-    .from('job_costs')
-    .select('leverancier_id, amount')
-    .not('leverancier_id', 'is', null)
-  if (error) return {}
+  let data
+  try {
+    data = await alleRijen(() => supabase
+      .from('job_costs')
+      .select('leverancier_id, amount', { count: 'exact' })
+      .not('leverancier_id', 'is', null)
+      .order('id', { ascending: true }))
+  } catch { return {} }
   const totalen = {}
-  for (const r of (data || [])) {
+  for (const r of data) {
     const id = r.leverancier_id
     if (!totalen[id]) totalen[id] = { aantal: 0, bedrag: 0 }
     totalen[id].aantal += 1

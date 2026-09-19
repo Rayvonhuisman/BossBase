@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase"
 import { negeerBijImport } from "./accountingService.js"
 import { withCompanyId } from "../lib/currentCompany"
+import { alleRijen } from "../lib/alleRijen.js"
 
 // ── CATEGORIE → LABEL + KLEUR ────────────────────────────────────────────────
 // Eén bron voor categorie-weergave. Case-insensitief zodat 'materiaal' en
@@ -260,22 +261,34 @@ export const toJobCost = row => ({
   raw: row,
 })
 
-// The deals join is best-effort: if the FK isn't declared in Postgres metadata
-// Supabase returns "Could not find a relationship between …" — we then fall
-// back to a plain select so the page still loads.
-async function selectWithDealsFallback(query) {
-  let { data, error } = await query.select("*, deals(customer_id)").order("created_at", { ascending: false })
-  if (error && /could not find.*relationship|foreign key/i.test(error.message)) {
-    const fallback = await query.select("*").order("created_at", { ascending: false })
-    data = fallback.data
-    error = fallback.error
+// De deals-join is best-effort: staat de FK niet in de Postgres-metadata, dan
+// geeft Supabase "Could not find a relationship between …" — dan vallen we terug
+// op een kale select zodat de pagina toch laadt.
+//
+// Doorvragen tot alles binnen is (alleRijen). job_costs is de eerste lijst die
+// in de praktijk boven de 1000 rijen uitkomt, en een afgekapte lijst gaf stil te
+// lage bedragen op de Kosten-pagina, Financiën en het dashboard: gemeten 235 van
+// 450 boekingen, €171.720,05 in plaats van €333.046,70. Het werkbonmateriaal
+// vulde daarbij driekwart van het ophaalvenster.
+//
+// `id` als tweede sorteersleutel: created_at is niet uniek (een import zet veel
+// rijen op dezelfde seconde), en zonder unieke laatste sleutel kan een rij bij
+// het bladeren dubbel komen of wegvallen.
+async function selectWithDealsFallback(maakBasis) {
+  const gesorteerd = (q, select) => q
+    .select(select, { count: "exact" })
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: true })
+  try {
+    return await alleRijen(() => gesorteerd(maakBasis(), "*, deals(customer_id)"))
+  } catch (error) {
+    if (!/could not find.*relationship|foreign key/i.test(error?.message || "")) throw error
+    return await alleRijen(() => gesorteerd(maakBasis(), "*"))
   }
-  if (error) throw error
-  return data || []
 }
 
 export async function listJobCosts() {
-  const rows = await selectWithDealsFallback(supabase.from("job_costs"))
+  const rows = await selectWithDealsFallback(() => supabase.from("job_costs"))
   return rows.map(toJobCost)
 }
 

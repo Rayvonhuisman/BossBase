@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase'
 import { withCompanyId } from '../lib/currentCompany'
 import { berekenUren } from './urenService.js'
+import { alleRijen } from '../lib/alleRijen.js'
 
 // Uren op een werkbon. Los van urenregistratie, dat de wérkdag van een
 // medewerker bijhoudt (loon en verlof).
@@ -61,16 +62,22 @@ export async function getWerkbonUren(werkbonId) {
 
 /** Alle werkbonuren van het bedrijf — voedt de leeslijst op de urenpagina. */
 export async function getAlleWerkbonUren({ vanDatum, totDatum } = {}) {
-  let query = supabase
-    .from('werkbon_uren')
-    .select('*, profiles(full_name), werkbonnen(id, titel, customer_id, project_id)')
-    .order('datum', { ascending: false })
-    .order('created_at', { ascending: false })
-  if (vanDatum) query = query.gte('datum', vanDatum)
-  if (totDatum) query = query.lte('datum', totDatum)
+  // Alle regels, niet de eerste duizend: de urenpagina telt ze op, en
+  // werkbon_uren is een van de snelst groeiende tabellen.
+  const bouw = () => {
+    let query = supabase
+      .from('werkbon_uren')
+      .select('*, profiles(full_name), werkbonnen(id, titel, customer_id, project_id)', { count: 'exact' })
+      .order('datum', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
+    if (vanDatum) query = query.gte('datum', vanDatum)
+    if (totDatum) query = query.lte('datum', totDatum)
+    return query
+  }
 
-  const { data, error } = await query
-  if (error) return []
+  let data
+  try { data = await alleRijen(bouw) } catch { return [] }
   return (data || []).map(r => ({
     ...toWerkbonUur(r),
     werkbonTitel: r.werkbonnen?.titel || '',

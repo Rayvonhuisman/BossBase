@@ -5,6 +5,7 @@ import { logTijdlijnSafe } from './klantTijdlijnService'
 // hiervoor domweg alle facturen op, inclusief concepten: Badkamer renovatie
 // toonde €133,10 waar €66,55 in rekening was gebracht.
 import { sumGefactureerd, sumOmzetExclBtw } from './customerTotalsService'
+import { alleRijen } from '../lib/alleRijen.js'
 
 // =============================================================================
 // projects / uren (werkbon_uren) / project_notes  service-laag
@@ -106,12 +107,12 @@ export const PROJECT_STATUS_OPTIONS = Object.entries(PROJECT_STATUS).map(([id, v
 // =============================================================================
 
 export async function getProjects() {
-  const { data, error } = await supabase
+  const rijen = await alleRijen(() => supabase
     .from('projects')
-    .select('*, customers(name), deals(title), offertes(nummer, totaal_incl, arbeidsuren)')
+    .select('*, customers(name), deals(title), offertes(nummer, totaal_incl, arbeidsuren)', { count: 'exact' })
     .order('created_at', { ascending: false })
-  if (error) throw error
-  return (data || []).map(toProject)
+    .order('id', { ascending: true }))
+  return rijen.map(toProject)
 }
 
 export async function getProjectsByCustomer(customerId) {
@@ -237,23 +238,8 @@ export async function deleteProject(projectId) {
 
 // Map werkbon → project, zodat we uren die via een werkbon zijn geboekt kunnen
 // toewijzen aan het project van die werkbon.
-// PostgREST geeft per verzoek hooguit een vast aantal rijen (standaard 1000) en
-// meldt NIET dat er meer waren. Dat gaf een stille fout: een project met meer
-// urenregels kreeg te weinig uren in de nacalculatie. Hier wordt doorgevraagd
-// tot het aantal dat de database opgeeft binnen is — onafhankelijk van waar de
-// grens precies ligt. maakQuery moet een select met { count: 'exact' } geven.
-async function alleRijen(maakQuery) {
-  const rijen = []
-  let totaal = Infinity
-  while (rijen.length < totaal) {
-    const { data, error, count } = await maakQuery().range(rijen.length, rijen.length + 999)
-    if (error) throw error
-    if (count != null) totaal = count
-    if (!data?.length) break
-    rijen.push(...data)
-  }
-  return rijen
-}
+// Doorvragen tot alle rijen binnen zijn: zie lib/alleRijen.js. Stond hier als
+// eigen kopie; nu gedeeld, omdat job_costs tegen dezelfde grens aan liep.
 
 // Uren van één project: alles op de werkbonnen van dit project. Gefilterd via
 // de join, niet via een lijst van alle werkbonnen — die liep tegen dezelfde
@@ -439,7 +425,13 @@ export async function getEnrichedProjects() {
   const [projects, hoursByProject, allInvoices] = await Promise.all([
     getProjects(),
     getProjectHoursMap().catch(() => ({})),
-    supabase.from('facturen').select('*').then(r => (r.error ? [] : r.data || [])),
+    // Alle facturen, niet de eerste duizend: anders mist een project facturen
+    // en valt "nog te factureren" structureel te hoog uit.
+    alleRijen(() => supabase
+      .from('facturen')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })).catch(() => []),
   ])
 
   const invoicesByProject = {}

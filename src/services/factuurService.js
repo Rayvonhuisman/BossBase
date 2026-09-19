@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase'
+import { alleRijen } from '../lib/alleRijen.js'
 import { negeerBijImport } from './accountingService.js'
 import { withCompanyId } from '../lib/currentCompany'
 import { syncFactuurNaarBoekhouding } from './accountingService'
@@ -147,13 +148,16 @@ export async function generateCreditFactuurNummer() {
   return `BB-CF${String((count || 0) + 1).padStart(3, '0')}`
 }
 
+// Alle facturen, niet de eerste duizend: dit is de bron voor vrijwel elk
+// geldbedrag in de app — dashboard, klantenlijst, Financiën, de export. Een
+// afgekapte lijst maakte al die bedragen stil te laag.
 export async function getFacturen() {
-  const { data, error } = await supabase
+  const rijen = await alleRijen(() => supabase
     .from('facturen')
-    .select('*, customers(name)')
+    .select('*, customers(name)', { count: 'exact' })
     .order('created_at', { ascending: false })
-  if (error) throw error
-  return (data || []).map(toFactuur)
+    .order('id', { ascending: true }))
+  return rijen.map(toFactuur)
 }
 
 export async function getFacturenByCustomer(customerId) {
@@ -308,12 +312,15 @@ export async function getFactuurRegels(factuurId) {
   return (data || []).map(toRegel)
 }
 
+// Factuurregels groeien het snelst van alles (meerdere per factuur), dus hier
+// wordt de grens als eerste geraakt. Er stond ook geen sortering: dan bepaalt
+// Postgres zelf welke duizend je kreeg, en dus ook welke btw je zag.
 export async function getAllFactuurRegels() {
-  const { data, error } = await supabase
+  const rijen = await alleRijen(() => supabase
     .from('factuur_regels')
-    .select('*')
-  if (error) throw error
-  return (data || []).map(toRegel)
+    .select('*', { count: 'exact' })
+    .order('id', { ascending: true }))
+  return rijen.map(toRegel)
 }
 
 export async function createCreditFactuur(origineleFactuurId, regels, origineleFactuur) {

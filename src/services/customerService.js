@@ -1,5 +1,6 @@
 import { negeerBijImport } from './accountingService.js'
 import { supabase } from "../lib/supabase"
+import { alleRijen } from "../lib/alleRijen.js"
 import { withCompanyId } from "../lib/currentCompany"
 import { safeInsert } from "../lib/safeInsert"
 import { logTijdlijnSafe } from "./klantTijdlijnService"
@@ -72,9 +73,12 @@ export function mapCustomerFormToPayload(form = {}) {
 }
 
 export async function listCustomers() {
-  const { data, error } = await supabase.from("customers").select("*").order("created_at", { ascending: false })
-  if (error) throw error
-  return (data || []).map((row, i) => toCustomer(row, i))
+  const rijen = await alleRijen(() => supabase
+    .from("customers")
+    .select("*", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: true }))
+  return rijen.map((row, i) => toCustomer(row, i))
 }
 
 export async function getCustomer(id) {

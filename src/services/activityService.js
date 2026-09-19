@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase"
+import { alleRijen } from "../lib/alleRijen.js"
 import { withCompanyId } from "../lib/currentCompany"
 import { safeInsert } from "../lib/safeInsert"
 import { sanitizeName } from "./customerService"
@@ -141,12 +142,12 @@ function computeOpenStatus(dueAt) {
 }
 
 export async function listActivities() {
-  const { data, error } = await supabase
+  const rijen = await alleRijen(() => supabase
     .from("activities")
-    .select(ACTIVITY_SELECT)
+    .select(ACTIVITY_SELECT, { count: "exact" })
     .order("due_at", { ascending: true })
-  if (error) throw error
-  return (data || []).map(toActivity)
+    .order("id", { ascending: true }))
+  return rijen.map(toActivity)
 }
 
 export async function createActivity(input) {

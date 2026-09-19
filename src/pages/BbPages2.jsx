@@ -5,7 +5,8 @@ import {
   fmt, custById, Av, StatusBadge, ModalX, Logo, CostCategoryBadge,
 } from '../bb-shared.jsx';
 import { createCalendarEvent, listCalendarEvents, updateCalendarEvent } from '../services/calendarService.js';
-import { createJobCost, deleteJobCost, listJobCosts, updateJobCost, getKostenBijlageUrl, kostenPerGroep, kostenSplitsing, alleenGeboekt } from '../services/jobCostService.js'
+import { createJobCost, deleteJobCost, listJobCosts, updateJobCost, getKostenBijlageUrl, kostenPerGroep, alleenGeboekt } from '../services/jobCostService.js'
+import { PERIODE_TYPES, periodeRange, inPeriode } from '../lib/periode.js'
 import { listLeveranciers } from '../services/leverancierService.js'
 import LeverancierSelect from '../components/LeverancierSelect.jsx'
 import { categorieOptiesUit } from '../lib/kostenCategorieen.js';
@@ -1111,21 +1112,35 @@ export function CostsPage() {
   const [selectedCost, setSelectedCost] = useState(null);
   const [mbAdminId, setMbAdminId] = useState('');
   const [leveranciers, setLeveranciers] = useState([]);
-  // Werkbonmateriaal staat standaard NIET in deze lijst. Deze pagina is de
-  // boekhouding, en die spiegelregels zijn geen boeking: de inkoopfactuur van de
-  // leverancier is daar de kostenpost. Wie ze wil zien zet de schakelaar aan; de
-  // keuze blijft in deze browser bewaard (per gebruiker, per apparaat).
-  //
-  // De schakelaar toont alleen: de tegels, de totalen en de btw-indicatie
-  // rekenen altijd met `boekingen`, nooit met wat hier zichtbaar is.
-  const [toonMateriaal, setToonMateriaal] = useState(() => {
-    try { return localStorage.getItem('kosten_toon_werkbonmateriaal') === 'true'; } catch { return false; }
+  // Twee weergaven, nooit allebei tegelijk: "Kosten" (de boekingen, standaard)
+  // en "Materiaal op werkbonnen" (wat er op klussen verbruikt is). Dat zijn twee
+  // verschillende dingen — boekingen gaan naar de boekhouding, materiaal niet —
+  // en ze worden daarom nergens bij elkaar opgeteld. De pagina blijft verder
+  // gelijk: dezelfde tegels, dezelfde tabel, hetzelfde periodefilter.
+  const [weergave, setWeergave] = useState(() => {
+    try { return localStorage.getItem('kosten_weergave') === 'materiaal' ? 'materiaal' : 'kosten'; } catch { return 'kosten'; }
   });
-  const zetToonMateriaal = aan => {
-    setToonMateriaal(aan);
+  const kiesWeergave = keuze => {
+    setWeergave(keuze);
     // Privémodus of geblokkeerde opslag: dan onthouden we het gewoon niet.
-    try { localStorage.setItem('kosten_toon_werkbonmateriaal', String(aan)); } catch { /* niet blokkerend */ }
+    try { localStorage.setItem('kosten_weergave', keuze); } catch { /* niet blokkerend */ }
   };
+  // Periodefilter, standaard deze maand. Het type onthouden we; de sprong niet —
+  // kom je morgen terug, dan wil je de huidige periode zien en niet de week van
+  // vorige maand waar je toevallig was blijven staan.
+  const [periodeType, setPeriodeType] = useState(() => {
+    try {
+      const bewaard = localStorage.getItem('kosten_periode_type');
+      return PERIODE_TYPES.some(p => p.id === bewaard) ? bewaard : 'maand';
+    } catch { return 'maand'; }
+  });
+  const [periodeOffset, setPeriodeOffset] = useState(0);
+  const kiesPeriodeType = id => {
+    setPeriodeType(id);
+    setPeriodeOffset(0);
+    try { localStorage.setItem('kosten_periode_type', id); } catch { /* niet blokkerend */ }
+  };
+  const periode = periodeRange(periodeType, periodeOffset);
   React.useEffect(() => {
     setLoading(true);
     Promise.all([listJobCosts(), listCustomers(), listDeals(), getConnection(), listLeveranciers()])
@@ -1143,23 +1158,24 @@ export function CostsPage() {
   const filtered = costs.filter(r => {
     if (filterCust && String(r.custId) !== filterCust) return false;
     if (filterCat && r.cat !== filterCat) return false;
+    // Een kost zonder datum hoort in geen enkele periode thuis; anders zou hij
+    // in élke periode opduiken en elk totaal te hoog maken.
+    if (!inPeriode(r.date, periode)) return false;
     return true;
   });
-  // Eén splitsing waar alles aan hangt: de tabel toont de boekingen, de tegels
-  // rekenen erop, en het materiaal staat apart. Zo kán de schakelaar geen enkel
-  // totaal veranderen — er is niet één plek waar de twee bij elkaar opgeteld
-  // worden.
+  // De twee weergaven, elk uit hun eigen bron. Ze worden nergens bij elkaar
+  // opgeteld: tegels én tabel rekenen allebei met `actieveRegels`, dus wat je
+  // ziet is altijd precies één van de twee.
   const boekingen = alleenGeboekt(filtered);
   const materiaalRegels = filtered.filter(isWerkbonMateriaalKost);
-  // De categorietegels tellen alleen boekingen, zodat ze optellen tot
-  // "Geboekte kosten". Werkbonmateriaal staat apart: dat is de kostprijs van een
-  // klus, geen boeking (zie alleenGeboekt).
-  const groepTotalen = kostenPerGroep(boekingen);
+  const toontMateriaal = weergave === 'materiaal';
+  const actieveRegels = toontMateriaal ? materiaalRegels : boekingen;
+  const actiefTotaal = Math.round(actieveRegels.reduce((s, c) => s + (Number(c.amt) || 0), 0) * 100) / 100;
+  // De categorietegels tellen op tot de eerste tegel, in beide weergaven.
+  const groepTotalen = kostenPerGroep(actieveRegels);
   // Kosten zonder leverancier kunnen niet naar de boekhouding. Werkbonmateriaal
   // telt niet mee: die regels worden sowieso niet geëxporteerd.
   const zonderLeverancier = costs.filter(c => !c.leverancierId && !isWerkbonMateriaalKost(c));
-  // Kostprijs (alles) vs boekhoudkosten (wat naar SnelStart/Moneybird gaat).
-  const splitsing = kostenSplitsing(filtered);
   const cats = [...new Set(costs.map(c => c.cat))];
   // Hier stond "Kostprijs klus": alle kosten opgeteld, ook de algemene die aan
   // geen enkele klus hangen. Dat was geen kostprijs van iets. Wat een klus kost
@@ -1172,8 +1188,11 @@ export function CostsPage() {
   // Arbeid blijft staan zolang er oude data is; als categorie is hij niet meer
   // te kiezen.
   const tegels = [
-    { label: 'Geboekte kosten', val: fmt(splitsing.boekhouding), icon: I.brief,
-      sub: 'Wat naar de boekhouding gaat' },
+    toontMateriaal
+      ? { label: 'Materiaal op werkbonnen', val: fmt(actiefTotaal), icon: I.costs,
+          sub: 'Geen boeking · telt in de marge van een project' }
+      : { label: 'Geboekte kosten', val: fmt(actiefTotaal), icon: I.brief,
+          sub: 'Wat naar de boekhouding gaat' },
     { label: 'Materiaalkosten', val: fmt(groepTotalen.materiaal), icon: I.brief },
     ...(groepTotalen.arbeid > 0 ? [{ label: 'Arbeidskosten', val: fmt(groepTotalen.arbeid), icon: I.hours }] : []),
     { label: 'Reiskosten', val: fmt(groepTotalen.reiskosten), icon: I.map },
@@ -1204,9 +1223,9 @@ export function CostsPage() {
           </div>
         ))}
       </div>
-      {/* Staat de schakelaar aan, dan staat er meteen bij wat je ziet — anders
-          lijkt het materiaal alsnog een kostenpost die nergens meetelt. */}
-      {toonMateriaal && (
+      {/* In de materiaalweergave staat er meteen bij wat je ziet — anders lijkt
+          het materiaal alsnog een kostenpost die in je boekhouding thuishoort. */}
+      {toontMateriaal && (
         <div className="afu2" style={{
           fontSize: '.82rem', color: 'var(--dm)', lineHeight: 1.55,
           background: 'var(--bgs)', border: '1px solid var(--border)',
@@ -1214,11 +1233,13 @@ export function CostsPage() {
         }}>
           Materiaal op werkbonnen is wat je op klussen hebt verbruikt. Dit zijn geen boekingen: in je
           boekhouding is de inkoopfactuur van je leverancier de kostenpost. Deze bedragen tellen daarom niet
-          mee in je kostentotaal en je btw. Je ziet ze hier puur voor inzicht, en ze tellen wel mee in de
-          marge van een project.
+          mee in je kosten en je btw. Je ziet ze hier puur voor inzicht, en ze tellen wel mee in de marge van
+          een project.
         </div>
       )}
-      {zonderLeverancier.length > 0 && (
+      {/* Alleen bij de boekingen: materiaal hoeft geen leverancier te hebben,
+          dat loopt via de werkbon. */}
+      {!toontMateriaal && zonderLeverancier.length > 0 && (
         <div className="afu2" style={{
           fontSize: '.82rem', color: 'var(--dm)',
           background: 'var(--warn-bg, rgba(224,176,80,.10))', border: '1px solid var(--warn-bd, #e0b050)',
@@ -1239,34 +1260,40 @@ export function CostsPage() {
       )}
 
       <div className="tw afu3">
-        <div className="tw-hd">
-          <div className="card-title">Kostenregels</div>
-          <div style={{ display: 'flex', gap: 6 }}>
+        <div className="tw-hd" style={{ flexWrap: 'wrap', gap: 10 }}>
+          <div className="card-title">{toontMateriaal ? 'Materiaal op werkbonnen' : 'Kostenregels'}</div>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Dezelfde bediening als de periodekeuze bij de btw-indicatie op
+                Financiën: tabs voor de keuze, zodat het vertrouwd oogt. */}
+            <div className="tabs">
+              <button className={`tab${!toontMateriaal ? ' active' : ''}`} onClick={() => kiesWeergave('kosten')}>Kosten</button>
+              <button className={`tab${toontMateriaal ? ' active' : ''}`} onClick={() => kiesWeergave('materiaal')}>Materiaal op werkbonnen</button>
+            </div>
+            <div className="tabs">
+              {PERIODE_TYPES.map(p => (
+                <button key={p.id} className={`tab${periodeType === p.id ? ' active' : ''}`} onClick={() => kiesPeriodeType(p.id)}>{p.label}</button>
+              ))}
+            </div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <button className="btn btn-s btn-sm" style={{ padding: '5px 9px' }} onClick={() => setPeriodeOffset(o => o - 1)} aria-label="Vorige periode">‹</button>
+              <span style={{ minWidth: 148, textAlign: 'center', fontSize: '.82rem', fontWeight: 600 }}>{periode.label}</span>
+              <button className="btn btn-s btn-sm" style={{ padding: '5px 9px' }} onClick={() => setPeriodeOffset(o => o + 1)} aria-label="Volgende periode">›</button>
+              {periodeOffset !== 0 && (
+                <button className="btn btn-s btn-sm" style={{ padding: '5px 9px' }} onClick={() => setPeriodeOffset(0)} title="Terug naar nu">Nu</button>
+              )}
+            </div>
             <select className="btn btn-s btn-sm" style={{ padding: '5px 10px' }} value={filterCust} onChange={e => setFilterCust(e.target.value)}>
               <option value="">Alle klanten</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
             <select className="btn btn-s btn-sm" style={{ padding: '5px 10px' }} value={filterCat} onChange={e => setFilterCat(e.target.value)}>
               <option value="">Alle categorieën</option>{cats.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            <label
-              className="btn btn-s btn-sm"
-              style={{ padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}
-              title="Materiaal van werkbonnen is geen boeking en telt niet mee in de totalen"
-            >
-              <input
-                type="checkbox"
-                checked={toonMateriaal}
-                onChange={e => zetToonMateriaal(e.target.checked)}
-                style={{ margin: 0 }}
-              />
-              Materiaal op werkbonnen tonen
-            </label>
           </div>
         </div>
         <table className="dt">
           <thead><tr><th>Klant</th><th>Categorie</th><th>Omschrijving</th><th>Leverancier</th><th>Bedrag</th><th>Datum</th><th>Bron</th><th></th></tr></thead>
           <tbody>
-            {boekingen.map(r => {
+            {actieveRegels.map(r => {
               const c = customers.find(x => x.id === r.custId);
               return (
                 <tr key={r.id} onClick={() => setSelectedCost(r)} style={{ cursor: 'pointer' }}>
@@ -1312,51 +1339,16 @@ export function CostsPage() {
                 </tr>
               );
             })}
-            {boekingen.length === 0 && !loading && (
-              <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--dl)', padding: 24 }}>Geen kosten gevonden{(filterCust || filterCat) ? ' bij dit filter.' : '. Voeg de eerste kost toe.'}</td></tr>
+            {actieveRegels.length === 0 && !loading && (
+              <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--dl)', padding: 24 }}>
+                {toontMateriaal ? 'Geen materiaal op werkbonnen' : 'Geen kosten'} in {periode.label}
+                {(filterCust || filterCat) ? ' bij dit filter' : ''}.
+              </td></tr>
             )}
           </tbody>
         </table>
       </div>
 
-      {/* Materiaal apart, met een eigen subtotaal. Bewust een eigen tabel en
-          geen extra rijen in de tabel hierboven: daar staat wat geboekt is, en
-          alles in die lijst telt mee in de tegels. */}
-      {toonMateriaal && (
-        <div className="tw afu3" style={{ marginTop: 14 }}>
-          <div className="tw-hd">
-            <div className="card-title">Materiaal op werkbonnen ({materiaalRegels.length})</div>
-            <div style={{ fontSize: '.82rem', color: 'var(--dm)' }}>
-              Subtotaal <strong>{fmt(splitsing.werkbonMateriaal)}</strong>
-              <span style={{ color: 'var(--dl)' }}> · niet meegeteld in de kosten hierboven</span>
-            </div>
-          </div>
-          <table className="dt">
-            <thead><tr><th>Klant</th><th>Omschrijving</th><th>Bedrag</th><th>Datum</th></tr></thead>
-            <tbody>
-              {materiaalRegels.map(r => {
-                const c = customers.find(x => x.id === r.custId);
-                return (
-                  <tr key={r.id} onClick={() => setSelectedCost(r)} style={{ cursor: 'pointer' }}>
-                    <td style={{ fontWeight: 600 }}>{r.customerId ? (customers.find(x => x.id === r.customerId)?.name || '') : (c?.name || '')}</td>
-                    <td>{(r.desc || '').replace(/^Materiaal:\s*/i, '')}</td>
-                    <td style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
-                      {fmt(r.amt)}
-                      <div style={{ fontSize: '.7rem', color: 'var(--dl)', fontWeight: 400 }}>inkoopprijs, excl. btw</div>
-                    </td>
-                    <td style={{ color: 'var(--dl)', fontSize: '.8rem' }}>{r.date}</td>
-                  </tr>
-                );
-              })}
-              {materiaalRegels.length === 0 && (
-                <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--dl)', padding: 24 }}>
-                  Geen materiaal op werkbonnen{(filterCust || filterCat) ? ' bij dit filter.' : '.'}
-                </td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
       {showNew && (
         <NewJobCostModal
           onClose={() => setShowNew(false)}

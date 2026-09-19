@@ -1,5 +1,6 @@
 import { supabase } from "../lib/supabase"
 import { withCompanyId } from "../lib/currentCompany"
+import { alleRijen } from "../lib/alleRijen.js"
 
 // Werkdaguren: de werkdag van een medewerker, voor loon en verlof. Uren op een
 // klus staan in werkbon_uren — die hebben andere schrijfrechten en voeden de
@@ -72,9 +73,10 @@ export async function getUrenregistratie(filters = {}) {
   const bouw = (select) => {
     let query = supabase
       .from("urenregistratie")
-      .select(select)
+      .select(select, { count: "exact" })
       .order("datum", { ascending: false })
       .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
 
     if (filters.profileId) query = query.eq("profile_id", filters.profileId)
     if (filters.vanDatum) query = query.gte("datum", filters.vanDatum)
@@ -82,9 +84,10 @@ export async function getUrenregistratie(filters = {}) {
     return query
   }
 
-  const { data, error } = await bouw(SELECT_UREN)
-  if (error) throw error
-  return (data || []).map(toUrenregel)
+  // Alles ophalen: de urenpagina roept dit zonder datumfilter aan en telt het
+  // resultaat op (getUrenSummary).
+  const rijen = await alleRijen(() => bouw(SELECT_UREN))
+  return rijen.map(toUrenregel)
 }
 
 // ── SAMENVATTING ─────────────────────────────────────────────────────────────

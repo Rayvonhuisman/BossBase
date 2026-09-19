@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase"
+import { alleRijen } from "../lib/alleRijen.js"
 import { withCompanyId } from "../lib/currentCompany"
 import { safeInsert } from "../lib/safeInsert"
 import { logTijdlijnSafe } from "./klantTijdlijnService"
@@ -52,15 +53,18 @@ export async function listDeals() {
   // (deals_customer_id_fkey + fk_deals_customer, both on customer_id), so the
   // FK must be named explicitly or PostgREST errors with "more than one
   // relationship". Keep the embed key `customers` so toDeal stays unchanged.
-  const { data, error } = await supabase
-    .from("deals")
-    .select("*, customers!deals_customer_id_fkey(*)")
-    .order("created_at", { ascending: false })
-  if (error) {
+  let data
+  try {
+    data = await alleRijen(() => supabase
+      .from("deals")
+      .select("*, customers!deals_customer_id_fkey(*)", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true }))
+  } catch (error) {
     console.error("[bb:pipeline] listDeals mislukt", { message: error.message, code: error.code, details: error.details })
     throw error
   }
-  return (data || []).map(toDeal)
+  return data.map(toDeal)
 }
 
 export async function updateDealStage(dealId, stageId) {
