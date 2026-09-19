@@ -27,7 +27,7 @@ function PriorityBadge({ priority, style }) {
 // gerenderd en is verwijderd.
 
 // ── MOBILE PIPELINE (swipeable carousel) ─────────────────────
-function MobilePipeline({ stages, dealsInStage, openCustomer, moveDeal, markLost, lostStageId, setNewStage, setShowNew, customers }) {
+function MobilePipeline({ stages, dealsInStage, openCustomer, moveDeal, markLost, lostStageId, setNewStage, setShowNew, customers, geenVervolg }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
@@ -124,8 +124,17 @@ function MobilePipeline({ stages, dealsInStage, openCustomer, moveDeal, markLost
                     onClick={e => { e.stopPropagation(); markLost(deal); }}
                   >{I.flag}</button>
                 )}
-                <div style={{ fontWeight: 700, fontSize: '.85rem', color: 'var(--dk)', marginBottom: 3, paddingRight: 20, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {deal.customerName || 'Klant'}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, paddingRight: 20 }}>
+                  {geenVervolg?.(deal) && (
+                    <span
+                      title="Geen vervolgactiviteit gepland"
+                      aria-label="Geen vervolgactiviteit gepland"
+                      style={{ width: 7, height: 7, borderRadius: '50%', background: '#e8784a', flexShrink: 0 }}
+                    />
+                  )}
+                  <span style={{ fontWeight: 700, fontSize: '.85rem', color: 'var(--dk)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {deal.customerName || 'Klant'}
+                  </span>
                 </div>
                 {deal.title && (
                   <div style={{ fontSize: '.78rem', color: 'var(--dl)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>
@@ -252,6 +261,7 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
 
   const [showFilter, setShowFilter] = useState(false);
   const [teamMembers, setTeamMembers] = useState([]);
+  const [activities, setActivities] = useState([]);
   const [filter, setFilter] = useState({ stage: 'all', status: 'open', priority: 'all', text: '', persoon: 'all' });
 
   const [showNew, setShowNew] = useState(false);
@@ -337,13 +347,15 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
       listDeals(), listPipelineStages(), listCustomers(),
       getLostReasons().catch(() => []),
       getTeamMembers().catch(() => []),
+      listActivities().catch(() => []),
     ])
-      .then(([dealData, stageData, customerData, reasonData, teamData]) => {
+      .then(([dealData, stageData, customerData, reasonData, teamData, activityData]) => {
         setDeals(dealData);
         setStages(stageData.length ? stageData : PIPELINE_STAGES);
         setCustomers(customerData);
         setLostReasons(reasonData);
         setTeamMembers(teamData);
+        setActivities(activityData);
         setError('');
       })
       .catch(err => setError(err.message || 'Pipeline laden is mislukt.'))
@@ -406,6 +418,21 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
     if (stageId === firstStageId && (!d.stage || !stageIdSet.has(d.stage))) return true;
     return false;
   });
+
+  // Staat er nog iets gepland voor deze deal? Een activiteit die al over datum
+  // is telt niet mee: juist dan wil je de waarschuwing zien. 'open' = datum in
+  // de toekomst, 'today' = vandaag; 'overdue' en 'completed' vallen af.
+  const dealsMetVervolg = useMemo(() => {
+    const set = new Set();
+    activities.forEach(a => {
+      if (a.status !== 'open' && a.status !== 'today') return;
+      if (a.dealId) set.add(`d:${a.dealId}`);
+      if (a.custId) set.add(`k:${a.custId}`);
+    });
+    return set;
+  }, [activities]);
+  const geenVervolg = deal =>
+    !dealsMetVervolg.has(`d:${deal.id}`) && !dealsMetVervolg.has(`k:${deal.custId}`);
 
   const totalShown = filteredDeals.length;
   // Ook hier stond een slugvergelijking (d.stage !== 'lost'), waardoor verloren
@@ -629,6 +656,7 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
         <MobilePipeline
           stages={filter.stage === 'all' ? stages : stages.filter(s => s.id === filter.stage)}
           dealsInStage={dealsInStage}
+          geenVervolg={geenVervolg}
           openCustomer={openCustomer}
           moveDeal={moveDeal}
           markLost={markLost}
@@ -736,8 +764,17 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
                           onClick={e => { e.stopPropagation(); openCardMenu(e, deal); }}
                         >{I.meer}</button>
                       )}
-                      <div style={{ fontWeight: 700, fontSize: '.85rem', color: 'var(--dk)', marginBottom: 3, paddingRight: 20, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {deal.customerName || 'Klant'}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, paddingRight: 20 }}>
+                        {geenVervolg(deal) && (
+                          <span
+                            title="Geen vervolgactiviteit gepland"
+                            aria-label="Geen vervolgactiviteit gepland"
+                            style={{ width: 7, height: 7, borderRadius: '50%', background: '#e8784a', flexShrink: 0 }}
+                          />
+                        )}
+                        <span style={{ fontWeight: 700, fontSize: '.85rem', color: 'var(--dk)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {deal.customerName || 'Klant'}
+                        </span>
                       </div>
                       {deal.title && (
                         <div style={{ fontSize: '.78rem', color: 'var(--dl)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>
