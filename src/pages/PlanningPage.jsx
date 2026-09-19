@@ -8,6 +8,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { I, ModalX, NotifyMailToggle } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { useData } from '../lib/dataContext.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
 import { getWerkbonnen, getWerkbonById, createWerkbon, updateWerkbon, zetWerkbonDagen } from '../services/werkbonService.js';
 import { WerkbonDagenVelden, WerkbonLocatieVeld, useKlantAdres } from '../components/WerkbonPlanning.jsx';
@@ -28,7 +29,6 @@ import {
   getActiveTeamMembers, notifyNewAssignees, notifyNieuweVerantwoordelijken,
   meldPlanningWijziging, createMentionNotifications,
 } from '../services/notificatieService.js';
-import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
 import { syncWerkbonEvents, upsertActivityEvent, deleteActivityEvent } from '../services/calendarService.js';
 import { listActivities, createActivity, updateActivity, buildDueAt } from '../services/activityService.js';
@@ -1248,7 +1248,10 @@ export function PlanningPage({ openCustomer } = {}) {
   const [werkbonnen,     setWerkbonnen]     = useState([]);
   const [teamMembers,    setTeamMembers]    = useState([]);
   const [voertuigen,     setVoertuigen]     = useState([]);
-  const [customers,      setCustomers]      = useState([]);
+  // Klanten komen uit de gedeelde dataset. Werkbonnen, activiteiten, projecten,
+  // teamleden en voertuigen blijven eigen state: de eerste twee worden hier na
+  // een bewerking lokaal bijgewerkt, de laatste drie staan niet in de context.
+  const { customers = [] } = useData();
   const [projects,       setProjects]       = useState([]);
   const [activities,          setActivities]          = useState([]);
   const [selectedActivity,    setSelectedActivity]    = useState(null);
@@ -1279,16 +1282,14 @@ export function PlanningPage({ openCustomer } = {}) {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [wbs, members, custs, projs, acts] = await Promise.all([
+      const [wbs, members, projs, acts] = await Promise.all([
         getWerkbonnen(),
         getActiveTeamMembers({ includeSelf: true }).catch(() => []),
-        listCustomers().catch(() => []),
         getProjects().catch(() => []),
         listActivities().catch(() => []),
       ]);
       setWerkbonnen(wbs);
       setTeamMembers(members);
-      setCustomers(custs);
       setProjects(projs);
       setActivities(acts);
     } catch (e) {
