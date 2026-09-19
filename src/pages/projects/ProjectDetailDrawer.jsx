@@ -22,7 +22,9 @@ import {
 import { getWerkbonnenByProject } from '../../services/werkbonService.js';
 import { planningLabel } from '../../utils/werkbonDagen.js';
 import { PlanningRegels, planRegels } from '../../components/PlanningBlok.jsx';
-import { getProjectCosts, inkoopwaardeVanKosten, isWerkbonMateriaal } from '../../services/jobCostService.js';
+import { getProjectCosts } from '../../services/jobCostService.js';
+import { bouwKostenOverzicht } from '../../services/kostenOverzichtService.js';
+import KostenOverzichtBlok, { KostenTegels } from '../../components/KostenOverzichtBlok.jsx';
 import {
   listProjectKosten, createProjectKost, updateProjectKost, deleteProjectKost,
 } from '../../services/projectKostenService.js';
@@ -569,6 +571,7 @@ function KostenTab({ project, canManage }) {
 
   const [kosten, setKosten] = useState([]);           // job_costs rond dit project
   const [projectKosten, setProjectKosten] = useState([]);
+  const [urenRegels, setUrenRegels] = useState([]);   // werkbon_uren van dit project
   const [laadFout, setLaadFout] = useState('');
   const [loading, setLoading] = useState(true);
   const [toonWinstUitleg, setToonWinstUitleg] = useState(false);
@@ -582,26 +585,31 @@ function KostenTab({ project, canManage }) {
       listProjectKosten(project.id)
         .then(r => { setLaadFout(''); return r; })
         .catch(e => { setLaadFout(e.message || 'Laden mislukt'); return []; }),
+      getTimeEntries(project.id).catch(() => []),
     ])
-      .then(([jc, pk]) => { setKosten(jc); setProjectKosten(pk); })
+      .then(([jc, pk, u]) => { setKosten(jc); setProjectKosten(pk); setUrenRegels(u); })
       .finally(() => setLoading(false));
   };
   useEffect(() => { if (project.id) load(); }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Kostprijs en brutowinst ────────────────────────────────────────────────
-  // Arbeid en reiskilometers zitten er BEWUST niet in: uren worden nergens in
-  // geld omgerekend. Vandaar de uitleg achter het info-icoon.
+  // ── Het overzicht ──────────────────────────────────────────────────────────
+  // Eén berekening voor de tegels én de regels eronder (bouwKostenOverzicht),
+  // dezelfde die de klantkaart gebruikt. Opgebouwd uit de losse stukken en niet
+  // uit een tweede fetch, zodat een net toegevoegde inkoop meteen in het totaal
+  // staat en tegel en regel niet uit elkaar kunnen lopen.
+  //
+  // Arbeid zit er BEWUST niet in: er is geen kostprijs per uur, dus de uren
+  // staan er als aantal bij en tellen niet mee in het geld. Vandaar de uitleg
+  // achter het info-icoon.
   //
   // Excl. btw aan beide kanten: rekenen met een bedrag inclusief zou de winst
   // structureel te laag maken.
-  const materiaal = kosten.filter(isWerkbonMateriaal);
-  const geboekt = kosten.filter(k => !isWerkbonMateriaal(k));
-  const geboektTotaal = geboekt.reduce((s, k) => s + (Number(k.amt) || 0), 0);
-  const inkoop = inkoopwaardeVanKosten(materiaal);
-  const projectKostenTotaal = Math.round(projectKosten.reduce((s, k) => s + k.bedrag, 0) * 100) / 100;
-  const kostprijs = inkoop.materiaalInkoop + projectKostenTotaal;
+  const overzicht = useMemo(
+    () => bouwKostenOverzicht({ jobCosts: kosten, projectKosten, urenRegels }),
+    [kosten, projectKosten, urenRegels],
+  );
+  const materiaal = overzicht.materiaal.regels;
   const omzet = Number(project.omzetExclBtw ?? project.invoicedAmount ?? 0);
-  const brutowinst = omzet - kostprijs;
   const toonWinst = magBedragen && magInkoop;
 
   // ── Projectkosten bewerken ─────────────────────────────────────────────────
@@ -649,62 +657,44 @@ function KostenTab({ project, canManage }) {
   return (
     <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div className="card card-p" style={{ padding: 14, background: '#fafafa' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${1 + (magBedragen ? 1 : 0) + (toonWinst ? 1 : 0)}, 1fr)`, gap: 10 }}>
-          {magBedragen && (
-            <div>
-              <div style={labelStyle}>Gefactureerd (excl. btw)</div>
-              <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(omzet)}</div>
-            </div>
-          )}
-          <div>
-            <div style={labelStyle}>{magInkoop ? 'Kostprijs' : 'Projectkosten'}</div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(magInkoop ? kostprijs : projectKostenTotaal)}</div>
-            {magInkoop && (inkoop.materiaalInkoop > 0 || projectKostenTotaal > 0) && (
-              <div style={{ fontSize: 11, color: 'var(--dl)', marginTop: 2 }}>
-                materiaal {fmt0(inkoop.materiaalInkoop)} · projectkosten {fmt0(projectKostenTotaal)}
-              </div>
-            )}
-          </div>
-          {toonWinst && (
-            <div>
-              <div style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 4 }}>
-                Brutowinst
-                <button
-                  type="button"
-                  aria-label="Uitleg over brutowinst"
-                  aria-expanded={toonWinstUitleg}
-                  title="Wat zit er in de brutowinst?"
-                  onClick={() => setToonWinstUitleg(v => !v)}
-                  style={{
-                    background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex',
-                    color: toonWinstUitleg ? 'var(--p)' : 'var(--dl)',
-                  }}
-                >
-                  {I.info}
-                </button>
-              </div>
-              <div style={{ fontWeight: 700, fontSize: 16, color: brutowinst < 0 ? '#dc2626' : '#15A34A' }}>
-                {fmt0(brutowinst)}
-              </div>
-            </div>
-          )}
-        </div>
+        <KostenTegels
+          overzicht={overzicht}
+          omzetExclBtw={omzet}
+          magBedragen={magBedragen}
+          magInkoop={magInkoop}
+        />
+
+        {toonWinst && (
+          <button
+            type="button"
+            aria-expanded={toonWinstUitleg}
+            onClick={() => setToonWinstUitleg(v => !v)}
+            style={{
+              background: 'none', border: 'none', padding: 0, marginTop: 10, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5,
+              color: toonWinstUitleg ? 'var(--p)' : 'var(--dm)',
+            }}
+          >
+            {I.info} Wat zit er in de brutowinst?
+          </button>
+        )}
 
         {toonWinst && toonWinstUitleg && (
           <div style={{
             fontSize: 11.5, color: 'var(--dm)', marginTop: 10, lineHeight: 1.5,
             background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 11px',
           }}>
-            Brutowinst is gefactureerd min de kostprijs: het materiaal van de werkbonnen op inkoopprijs, plus
-            de projectkosten hieronder. <b>Arbeid en reiskilometers zitten er niet in</b> — wat je aan uren
-            kwijt bent is hier niet verrekend. Boekingen op de Kosten-pagina tellen ook niet mee: daar staat de
-            inkoopfactuur van hetzelfde materiaal.
+            Brutowinst is gefactureerd min de kosten hieronder: het materiaal van de werkbonnen op inkoopprijs,
+            plus de inkopen. <b>Arbeid zit er niet in</b> — er is geen kostprijs per uur, dus de gewerkte uren
+            staan er wel bij maar tellen niet mee in het bedrag. Dit is dus brutowinst <b>vóór arbeid</b>, geen
+            nettowinst. Boekingen op de Kosten-pagina tellen ook niet mee: daar staat de inkoopfactuur van
+            hetzelfde materiaal.
           </div>
         )}
 
         {!magInkoop && (
           <div style={{ fontSize: 11.5, color: 'var(--dm)', marginTop: 10, lineHeight: 1.5 }}>
-            Het materiaal van de werkbonnen telt ook mee in de kostprijs, maar staat op inkoopprijs en die is
+            Het materiaal van de werkbonnen telt ook mee in de kosten, maar staat op inkoopprijs en die is
             voor jou afgeschermd. Daarom zie je hier geen brutowinst.
           </div>
         )}
@@ -713,19 +703,21 @@ function KostenTab({ project, canManage }) {
             verkoopprijs gebruikt, en dan is de brutowinst een ondergrens. Alleen
             zichtbaar voor wie de inkoop mag zien — anders zou elke regel als
             "zonder inkoopprijs" tellen terwijl hij er gewoon een heeft. */}
-        {magInkoop && inkoop.zonderInkoopprijs > 0 && (
+        {magInkoop && overzicht.materiaal.zonderInkoopprijs > 0 && (
           <div style={{
             fontSize: 11.5, lineHeight: 1.5, marginTop: 8, borderRadius: 8, padding: '8px 11px',
             background: '#FFFBEB', border: '1px solid #FDE68A', color: '#92400E',
           }}>
-            {inkoop.zonderInkoopprijs === 1
+            {overzicht.materiaal.zonderInkoopprijs === 1
               ? '1 materiaalregel heeft geen inkoopprijs'
-              : `${inkoop.zonderInkoopprijs} materiaalregels hebben geen inkoopprijs`}
-            {' '}({fmt0(inkoop.geschatBedrag)}). Daarvoor is de verkoopprijs gerekend, dus de
+              : `${overzicht.materiaal.zonderInkoopprijs} materiaalregels hebben geen inkoopprijs`}
+            {' '}({fmt0(overzicht.materiaal.geschatBedrag)}). Daarvoor is de verkoopprijs gerekend, dus de
             werkelijke brutowinst ligt hoger. Vul de inkoopprijs in op de werkbon.
           </div>
         )}
       </div>
+
+      <KostenOverzichtBlok overzicht={overzicht} magInkoop={magInkoop} bron="project" />
 
       <ProjectKostenSection
         kosten={projectKosten}
@@ -741,7 +733,7 @@ function KostenTab({ project, canManage }) {
 
       {magInkoop && (
         <div>
-          <div style={kopStijl}>Werkbonmateriaal ({materiaal.length})</div>
+          <div style={kopStijl}>Materiaal op de werkbonnen ({materiaal.length})</div>
           {loading ? (
             <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--dl)', fontSize: 13 }}>Laden…</div>
           ) : materiaal.length === 0 ? (
@@ -770,16 +762,9 @@ function KostenTab({ project, canManage }) {
         </div>
       )}
 
-      {/* Boekingen die aan dit project hangen worden niet stil weggelaten:
-          wie ze hier eerder zag optellen, moet kunnen zien waar ze zijn. */}
-      {!loading && geboekt.length > 0 && (
-        <div style={{ fontSize: 12, color: 'var(--dm)', lineHeight: 1.5, background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 11px' }}>
-          {geboekt.length === 1 ? '1 boeking' : `${geboekt.length} boekingen`} op de Kosten-pagina
-          {geboekt.length === 1 ? ' hangt' : ' hangen'} aan dit project ({fmt(geboektTotaal)}). Dat is de boekhouding
-          en telt niet mee in de marge: het materiaal zelf staat hierboven al via de werkbon.
-          Hoort een kost echt bij deze klus en staat hij nergens op een werkbon, zet hem dan bij de projectkosten.
-        </div>
-      )}
+      {/* De boekingen staan in KostenOverzichtBlok hierboven genoemd — één plek
+          waar staat wat níét meetelt, zodat die uitleg niet twee keer (en op
+          termijn verschillend) in beeld komt. */}
     </div>
   );
 }
@@ -824,8 +809,8 @@ function ProjectKostenSection({ kosten, leveranciers, onLeverancierBij, canEdit,
   // foutmelding in beeld, maar wat er aan de hand is.
   const foutTekst = !laadFout ? ''
     : /schema cache|does not exist|project_kosten/i.test(laadFout)
-      ? 'Projectkosten zijn nog niet beschikbaar: de database-update hiervoor is nog niet uitgevoerd.'
-      : `Projectkosten konden niet worden geladen (${laadFout}).`;
+      ? 'Inkopen zijn nog niet beschikbaar: de database-update hiervoor is nog niet uitgevoerd.'
+      : `Inkopen konden niet worden geladen (${laadFout}).`;
 
   const submit = async () => {
     if (!form.naam.trim()) return;
@@ -854,7 +839,7 @@ function ProjectKostenSection({ kosten, leveranciers, onLeverancierBij, canEdit,
   return (
     <div className="wb2-card" ref={kaartRef}>
       <div className="wb2-card-hd">
-        <div className="wb2-card-hd-title">Projectkosten</div>
+        <div className="wb2-card-hd-title">Inkopen</div>
       </div>
       <div className="wb2-card-body">
         <div className="wb2-mat-body">
@@ -916,7 +901,7 @@ function ProjectKostenSection({ kosten, leveranciers, onLeverancierBij, canEdit,
           <div className="wb2-mat-foot">
             <div className="wb2-mat-foot-add" style={{ visibility: 'hidden' }}>spacer</div>
             <div style={{ textAlign: 'right' }}>
-              <div className="wb2-mat-foot-total-lbl">Totaal projectkosten (excl. BTW)</div>
+              <div className="wb2-mat-foot-total-lbl">Totaal inkopen (excl. BTW)</div>
               <div className="wb2-mat-foot-total">{fmt(totaal)}</div>
             </div>
           </div>

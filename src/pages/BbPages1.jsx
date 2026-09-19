@@ -5,7 +5,7 @@ import { mailVoorbeeldDocument } from '../utils/mailFrame.js';
 import { Bold, Calendar, Check, Edit2, Euro, FileText, Folder, Italic, List, ListOrdered, Maximize2, Minimize2, MoreHorizontal, PenLine, Plus, RotateCcw, ShoppingCart, Sparkles, Underline, User, Wrench, X } from 'lucide-react';
 import {
   I, CUSTOMERS_DATA, DEALS, ACTIVITIES_DATA, QUOTES_DATA, COSTS_DATA,
-  fmt, custById, stageLabel, stageCol, Av, StatusBadge, ModalX, CostCategoryBadge,
+  fmt, fmt0, custById, stageLabel, stageCol, Av, StatusBadge, ModalX, CostCategoryBadge,
 } from '../bb-shared.jsx';
 import { createCustomer, deleteCustomer, getCustomer, listCustomers, updateCustomer } from '../services/customerService.js';
 import { customerTotals, listCustomersWithTotals } from '../services/customerTotalsService.js';
@@ -15,7 +15,9 @@ import NotitieLog, { toLogItem } from '../components/NotitieLog.jsx';
 import { getTeamMembers, createMentionNotifications } from '../services/notificatieService.js';
 import { updateContactInMoneybird } from '../services/accountingService.js';
 import { buildDueAt, createActivity, listActivities, updateActivity } from '../services/activityService.js';
-import { listJobCosts } from '../services/jobCostService.js';
+import { getKlantKostenOverzicht, inkopenPerProject, LEEG_OVERZICHT } from '../services/kostenOverzichtService.js';
+import { sumOmzetExclBtw } from '../services/customerTotalsService.js';
+import KostenOverzichtBlok, { KostenTegels } from '../components/KostenOverzichtBlok.jsx';
 import { listDeals } from '../services/dealService.js';
 import { getOffertesByCustomer } from '../services/offerteService.js';
 import { getFacturenByCustomer } from '../services/factuurService.js';
@@ -218,7 +220,10 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   }, [onTabChange]);
   const [c, setCustomer] = useState(null);
   const [cActs, setActs] = useState([]);
-  const [cCosts, setCosts] = useState([]);
+  // Kostenoverzicht van deze klant: materiaal, inkopen en uren over al zijn
+  // projecten en werkbonnen. Zelfde berekening als de kostentab van het
+  // project, zodat de klantkaart de optelsom is van wat je daar ziet.
+  const [kostenOverzicht, setKostenOverzicht] = useState(LEEG_OVERZICHT);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editingField, setEditingField] = useState(null);
@@ -314,7 +319,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
     let alive = true;
     setLoading(true);
     Promise.all([
-      getCustomer(custId), listActivities(), listJobCosts(),
+      getCustomer(custId), listActivities(),
       getOffertesByCustomer(custId).catch(() => []),
       getFacturenByCustomer(custId).catch(() => []),
       getProjectsByCustomer(custId).catch(() => []),
@@ -323,14 +328,15 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
       getWerkbonnen().catch(() => []),
       listDeals().catch(() => []),
       listPipelineStages().catch(() => []),
+      getKlantKostenOverzicht(custId).catch(() => LEEG_OVERZICHT),
     ])
-    .then(([customer, activities, costs, offertes, facturen, projecten, notities, tl, werkbonnen, deals, pipelineStages]) => {
+    .then(([customer, activities, offertes, facturen, projecten, notities, tl, werkbonnen, deals, pipelineStages, overzicht]) => {
       if (!alive) return;
+      setKostenOverzicht(overzicht);
       setCustomer(customer);
       setKlantNotities(notities);
       setTijdlijn(tl);
       setActs(activities.filter(a => a.custId === custId));
-      setCosts(costs.filter(x => x.custId === custId || x.customerId === custId));
       setOffertes(offertes);
       setFacturen(facturen);
       setProjecten(projecten);
@@ -414,9 +420,17 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   const cQuotes = [];
   // Zelfde definitie als de klantenlijst, Financiën en de database-export.
   const { total: totalGefactureerd, paid: totalBetaald } = customerTotals({ facturen: cFacturen });
-  const totalCosts = cCosts.reduce((s, x) => s + x.amt, 0);
-  const profit = totalBetaald - totalCosts;
-  const margin = totalBetaald > 0 ? Math.round((profit / totalBetaald) * 100) : 0;
+  // Kosten komen uit één bron (kostenOverzichtService), net als op het project:
+  // materiaal van de werkbonnen op inkoopprijs + de inkopen op de projecten.
+  // Hier stond de optelsom van álle job_costs van deze klant; daarin zat het
+  // werkbonmateriaal én de inkoopfactuur van datzelfde materiaal, dus dezelfde
+  // inkoop telde twee keer. Boekingen staan nu apart, buiten het totaal.
+  const magInkoop = can('inkoopprijzen');
+  const totalCosts = kostenOverzicht.totaal;
+  // Excl. btw aan beide kanten: "betaald" is inclusief btw en zou de winst
+  // structureel te hoog maken. Arbeid zit er niet in — zie KostenOverzichtBlok.
+  const omzetExclBtw = sumOmzetExclBtw(cFacturen);
+  const profit = omzetExclBtw - totalCosts;
   const startEdit = (key) => { setEditingField(key); setFieldDraft(c[key] || ''); };
   const cancelEdit = () => { setEditingField(null); setFieldDraft(''); };
   const saveField = async (key) => {
@@ -469,10 +483,12 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
       setActs(activities.filter(a => a.custId === custId));
     } catch { /* ignore */ }
   };
+  // Na het boeken van een kost het hele overzicht opnieuw ophalen, niet alleen
+  // de boekingenlijst: één bron betekent ook één verversing. Anders zou de
+  // lijst bijwerken terwijl de tegels op het oude totaal blijven staan.
   const reloadCosts = async () => {
     try {
-      const costs = await listJobCosts();
-      setCosts(costs.filter(x => x.custId === custId || x.customerId === custId));
+      setKostenOverzicht(await getKlantKostenOverzicht(custId));
     } catch { /* ignore */ }
   };
 
@@ -698,8 +714,8 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
           {[
             { label: 'Gefactureerd',      val: fmt(totalGefactureerd) },
             { label: 'Betaald',           val: fmt(totalBetaald),    green: totalBetaald > 0 },
-            { label: 'Totale kosten',     val: fmt(totalCosts) },
-            { label: 'Winst',             val: fmt(profit),    green: profit > 0, red: profit < 0 },
+            { label: 'Totaal kosten',     val: fmt(totalCosts) },
+            { label: 'Brutowinst vóór arbeid', val: fmt(profit),    green: profit > 0, red: profit < 0 },
           ].map((s, i) => (
             <div key={i} style={{ background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 'var(--r10)', padding: '12px 14px' }}>
               <div style={{ fontSize: '.7rem', color: 'var(--dl)', marginBottom: 4, fontWeight: 600 }}>{s.label}</div>
@@ -1010,28 +1026,84 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
       {/* Kosten */}
       {tab === 'costs' && (
         <div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 14 }}>
-            {[
-              { label: 'Totale kosten',    val: fmt(totalCosts) },
-              { label: 'Betaald',          val: fmt(totalBetaald) },
-              { label: 'Winst / marge',    val: `${fmt(profit)} (${margin}%)`, green: profit > 0 },
-            ].map((s, i) => (
-              <div key={i} className="sc" style={{ padding: '14px 16px' }}>
-                <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginBottom: 6 }}>{s.label}</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: s.green ? '#15A34A' : 'var(--dk)' }}>{s.val}</div>
-              </div>
-            ))}
+          {/* Zelfde tegels, zelfde volgorde en dezelfde bron als op het
+              project: ze rekenen met exact het `kostenOverzicht` dat ook de
+              regels eronder vult. */}
+          <KostenTegels
+            overzicht={kostenOverzicht}
+            omzetExclBtw={omzetExclBtw}
+            magBedragen={can('projectbedragen')}
+            magInkoop={magInkoop}
+            extra={can('projectbedragen') ? [{ label: 'Betaald', val: fmt0(totalBetaald), sub: 'incl. btw' }] : []}
+          />
+
+          <div style={{ marginTop: 12 }}>
+            <KostenOverzichtBlok overzicht={kostenOverzicht} magInkoop={magInkoop} bron="klant" />
           </div>
-          <div>
+
+          {/* Materiaal van alle werkbonnen van deze klant */}
+          {magInkoop && (
+            <div style={{ marginTop: 16 }}>
+              <div className="lsec-hd">
+                <div className="lsec-title">Materiaal op de werkbonnen ({kostenOverzicht.materiaal.regels.length})</div>
+              </div>
+              {kostenOverzicht.materiaal.regels.length === 0
+                ? <div className="lsec-empty">Nog geen materiaal op de werkbonnen van deze klant</div>
+                : (
+                  <div className="lrows">
+                    {kostenOverzicht.materiaal.regels.map(r => (
+                      <div key={r.id} className="lrow lrow-static">
+                        <div className="lrow-main">
+                          <div className="lrow-title">{(r.desc || '').replace(/^Materiaal:\s*/i, '') || '(geen omschrijving)'}</div>
+                          <div className="lrow-sub" style={{ color: r.inkoopprijsPer == null ? '#92400E' : 'var(--dl)' }}>
+                            {r.inkoopprijsPer == null ? 'op verkoopprijs — inkoopprijs ontbreekt' : 'inkoopprijs, excl. btw'}
+                          </div>
+                        </div>
+                        <div className="lrow-amount" style={{ textAlign: 'right' }}>{fmt(r.amt)}</div>
+                        <div className="lrow-date">{fmtRowDate(r.date)}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+            </div>
+          )}
+
+          {/* Inkopen, gegroepeerd per project — bewerken doe je op het project */}
+          <div style={{ marginTop: 16 }}>
             <div className="lsec-hd">
-              <div className="lsec-title">Kostenregels ({cCosts.length})</div>
+              <div className="lsec-title">Inkopen ({kostenOverzicht.inkopen.regels.length})</div>
+            </div>
+            {kostenOverzicht.inkopen.regels.length === 0
+              ? <div className="lsec-empty">Nog geen inkopen op de projecten van deze klant</div>
+              : (
+                <div className="lrows">
+                  {inkopenPerProject(kostenOverzicht.inkopen.regels, cProjecten).map(groep => (
+                    <div key={groep.projectId} className="lrow lrow-static">
+                      <div className="lrow-main">
+                        <div className="lrow-title">{groep.naam}</div>
+                        <div className="lrow-sub">
+                          {groep.regels.length === 1 ? '1 inkoop' : `${groep.regels.length} inkopen`} · {groep.regels.map(r => r.naam).join(', ')}
+                        </div>
+                      </div>
+                      <div className="lrow-amount" style={{ textAlign: 'right' }}>{fmt(groep.bedrag)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+          </div>
+
+          {/* Boekingen: de boekhouding. Staan hier ter inzage en tellen niet mee
+              in het totaal hierboven — zie de uitleg in het overzichtsblok. */}
+          <div style={{ marginTop: 16 }}>
+            <div className="lsec-hd">
+              <div className="lsec-title">Boekingen op de Kosten-pagina ({kostenOverzicht.boekingen.regels.length})</div>
               <button className="btn btn-s btn-sm" onClick={() => setShowCostModal(true)}>{I.plus} Kosten toevoegen</button>
             </div>
-            {cCosts.length === 0
+            {kostenOverzicht.boekingen.regels.length === 0
               ? <div className="lsec-empty">Nog geen kosten geboekt</div>
               : (
                 <div className="lrows">
-                  {cCosts.map(r => (
+                  {kostenOverzicht.boekingen.regels.map(r => (
                     <div key={r.id} className="lrow lrow-static">
                       <div className="lrow-main">
                         <div className="lrow-title">{r.desc || ''}</div>
