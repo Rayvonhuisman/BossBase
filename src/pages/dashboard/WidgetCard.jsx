@@ -4,7 +4,7 @@ import { getSupportedSizes } from '../../data/widgetRegistry.js';
 import { activiteitTypeLabel } from '../../services/activityService.js';
 import { statusInfo } from '../../utils/statusColors.js';
 import { buildStageIndex, dealStatus, firstStageId } from '../../utils/pipeline.js';
-import { sumOmzetExclBtw } from '../../services/customerTotalsService.js';
+import { isRealFactuur, sumOmzetExclBtw } from '../../services/customerTotalsService.js';
 import { staatOpDagVoor } from '../../utils/werkbonDagen.js';
 
 // ── Design tokens (BossBase widget redesign v2) ───────────────
@@ -480,8 +480,10 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const rev = sumOmzetExclBtw(facturen.filter(f => inThisMonth(f.factuurdatum)));
       const cost = jobCosts.filter(c => inThisMonth(c.date)).reduce((s, c) => s + (Number(c.amt) || 0), 0);
       const val = rev - cost;
-      const target = Math.max(1, Math.round(rev));
-      const p = rev > 0 ? Math.min(100, Math.round((val / target) * 100)) : 0;
+      // De marge mag negatief zijn (dat ís het nieuws), de BALK niet — die
+      // kreeg anders een negatieve breedte en verdween.
+      const marge = rev > 0 ? Math.round((val / rev) * 100) : 0;
+      const p = Math.max(0, Math.min(100, marge));
       return (
         <div className="bb-kpi kpi-green" onClick={() => setPage('revenue')} role="button" tabIndex={0}
           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPage('revenue'); } }}>
@@ -500,7 +502,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
               <div style={{ flex: 1, height: 6, borderRadius: 999, background: C.track, overflow: 'hidden' }}>
                 <div style={{ width: `${p}%`, height: '100%', background: C.green, borderRadius: 999, transition: 'width .6s cubic-bezier(.22,1,.36,1)' }} />
               </div>
-              <span style={{ fontSize: 11.5, color: C.dmu, fontWeight: 700 }}>{p}%</span>
+              <span style={{ fontSize: 11.5, color: marge < 0 ? C.warn : C.dmu, fontWeight: 700 }}>{marge}%</span>
             </div>
           </div>
         </div>
@@ -776,7 +778,13 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
 
     // ───────── Openstaande facturen (echte facturen, niet betaald) ─────────
     case 'open_facturen': {
-      const openF = facturen.filter(f => f.status && f.status !== 'betaald' && f.status !== 'concept' && f.status !== 'aangemaakt');
+      // Creditfacturen horen niet in "openstaand": ze zijn geen geld dat nog
+      // binnen moet komen, en met hun negatieve bedrag verlaagden ze het totaal
+      // stilletjes (4 stuks, -€ 11.580,64). Ze staan apart in de voet.
+      const alleOpen = facturen.filter(f => f.status && !['betaald', 'concept', 'aangemaakt'].includes(f.status));
+      const openF = alleOpen.filter(isRealFactuur);
+      const credits = alleOpen.filter(f => !isRealFactuur(f));
+      const creditTotaal = credits.reduce((s, f) => s + (f.totaalIncl || 0), 0);
       const items = openF.slice(0, 6);
       const totalOpen = openF.reduce((s, f) => s + (f.totaalIncl || 0), 0);
       return (
@@ -808,7 +816,11 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
               })}
             </div>
           )}
-          <WFoot meta={`Totaal ${eur(totalOpen)}`} linkText="Alle facturen" onLink={() => setPage('facturen')} />
+          <WFoot
+            meta={credits.length
+              ? `Totaal ${eur(totalOpen)} · ${credits.length} credit ${eur(creditTotaal)}`
+              : `Totaal ${eur(totalOpen)}`}
+            linkText="Alle facturen" onLink={() => setPage('facturen')} />
         </div>
       );
     }
@@ -1095,7 +1107,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const palette = ['#9ca3af', '#60a5fa', '#a78bfa', '#fb923c', '#34d399', '#2dd4bf', '#f472b6', '#fb7185', C.green];
       const rows = (orderedStages.length
         ? orderedStages.filter(s => stageIndex.get(s.id)?.category !== 'lost')
-            .map((s, i) => ({ key: s.id, label: s.label, c: palette[i % palette.length], count: deals.filter(d => d.stage === s.id).length }))
+            .map((s, i) => ({ key: s.id, label: s.label, c: palette[i % palette.length], count: deals.filter(d => d.stage === s.id && dStatus(d) !== 'lost').length }))
         : [
             { key: 'new_lead', label: 'Nieuwe aanvragen', c: '#9ca3af', count: deals.filter(d => d.stage === 'new_lead').length },
             { key: 'contact', label: 'Contact', c: '#60a5fa', count: deals.filter(d => d.stage === 'contact').length },
@@ -1107,7 +1119,10 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const totalLeads = deals.length;
       const won = deals.filter(d => dStatus(d) === 'won').length;
       const conv = totalLeads ? Math.round((won / totalLeads) * 100) : 0;
-      const totalVal = deals.reduce((s, d) => s + (d.value || 0), 0);
+      // Verloren werk telt niet mee in de waarde van de pipeline. Stond hier
+      // wél, waardoor deze tegel € 3.841.850 zei en "Waarde per fase"
+      // € 3.367.350 — precies de € 474.500 aan verloren deals ertussen.
+      const totalVal = deals.filter(d => dStatus(d) !== 'lost').reduce((s, d) => s + (d.value || 0), 0);
       return (
         <div className="bb-widget">
           <WHead eyebrow="Pipeline" title="Deals per fase" right={<Chip tone="neutral" noDot>{eur(totalVal)} totaal</Chip>} />
@@ -1200,7 +1215,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const totalP = rows.reduce((s, r) => s + r.winst, 0);
       return (
         <div className="bb-widget">
-          <WHead eyebrow="Winst" title="Winst per maand" sub={`Totaal ${kEur(totalP)} · stabiele groei`}
+          <WHead eyebrow="Winst" title="Winst per maand" sub={`Totaal ${kEur(totalP)} over ${rows.length} maanden`}
             right={<Seg options={['6M', '12M']} active="6M" />} />
           <div style={{ padding: '14px 16px 6px', display: 'flex', alignItems: 'flex-end', gap: 16, height: 220 }}>
             {rows.map((d, i) => {
@@ -1261,7 +1276,11 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const d = charts.conversionFunnel || [];
       return (
         <div className="bb-widget">
-          <WHead eyebrow="Trechter" title="Conversie funnel" sub={d.length ? `${d[0].value} leads · ${d[d.length - 1].pct}% win rate` : null} />
+          {/* Niet "win rate" noemen: de laatste stap is afgerónd werk, terwijl
+              "Deals per fase" met win rate alle gewonnen deals bedoelt. Twee
+              verschillende dingen, dus twee verschillende woorden. */}
+          <WHead eyebrow="Trechter" title="Conversie funnel"
+            sub={d.length ? `${d[0].value} leads · ${d[d.length - 1].value} ${d[d.length - 1].label.toLowerCase()} (${d[d.length - 1].pct}%)` : null} />
           {d.length ? (
             <div className="funnel">
               {d.map((s, i) => {
@@ -1339,7 +1358,10 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const tight = widget.size === 'medium';
       return (
         <div className="bb-widget">
-          <WHead eyebrow="Kosten" title="Per klant" sub={`${eur(total)} totaal`} />
+          {/* `total` is de som van de getoonde klanten, niet van alle kosten.
+              Het stond hier als "totaal" en week daardoor fors af van de
+              Kosten-pagina. */}
+          <WHead eyebrow="Kosten" title="Per klant" sub={cats.length ? `top ${cats.length} · ${eur(total)}` : null} />
           <div style={{ padding: '14px 16px 18px', display: 'flex', alignItems: 'flex-end', gap: 14, height: 220 }}>
             {cats.length ? cats.map((c, i) => {
               const h = Math.max(8, (c.value / max) * 150);
