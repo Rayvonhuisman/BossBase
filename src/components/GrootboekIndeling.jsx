@@ -19,6 +19,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '../lib/toast.jsx';
 import { BTW_REGIMES } from '../lib/btwRegime.js';
+import { InfoTip, InfoUitklap } from './Uitleg.jsx';
 import {
   getGrootboekrekeningen, getGrootboekVoorkeuren, setGrootboekVoorkeur, haalAllesOpnieuwOp,
 } from '../services/accountingService.js';
@@ -183,9 +184,9 @@ export default function GrootboekIndeling() {
     <div>
       <div>
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Grootboekindeling</div>
-          <div style={{ fontSize: '.78rem', color: 'var(--dmu)', marginTop: 2 }}>
-            Hoe BossBase jouw boekingen indeelt in SnelStart
+          <div style={{ fontWeight: 700, fontSize: '.9rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+            Grootboekindeling
+            <InfoTip tekst="Hoe BossBase jouw boekingen indeelt in SnelStart." />
           </div>
         </div>
 
@@ -216,9 +217,12 @@ export default function GrootboekIndeling() {
                 </div>
               )}
 
-              <div style={{ fontSize: 12.5, lineHeight: 1.5, color: 'var(--dm)', marginBottom: 14 }}>
-                Alle velden zijn optioneel: laat je er een leeg, dan gebruikt BossBase de rekening die erachter staat.
-                Wijkt jouw rekeningschema af, kies hem dan hier — je boekhouder weet welke.
+              <div className="f-label-rij" style={{ marginBottom: 14 }}>
+                <span style={{ fontSize: 12.5, color: 'var(--dm)', fontWeight: 600 }}>Rekeningen</span>
+                <InfoUitklap
+                  id="uitleg-rekeningen"
+                  tekst="Alle velden zijn optioneel: laat je er een leeg, dan gebruikt BossBase de rekening die erachter staat. Wijkt jouw rekeningschema af, kies hem dan hier — je boekhouder weet welke."
+                />
               </div>
 
               {['Kosten', 'Omzet'].map(groep => (
@@ -283,10 +287,13 @@ export default function GrootboekIndeling() {
                 <div style={{
                   fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em',
                   color: 'var(--dl)', marginBottom: 6,
-                }}>Kostencategorieën</div>
-                <div style={{ fontSize: 12, lineHeight: 1.5, color: 'var(--dm)', marginBottom: 10 }}>
-                  De zes standaardcategorieën kennen hun eigen rekening en zijn niet te verwijderen. Voeg je er zelf
-                  een toe, kies er dan hierboven een rekening bij.
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  Kostencategorieën
+                  <InfoUitklap
+                    id="uitleg-kostencategorieen"
+                    tekst="De zes standaardcategorieën kennen hun eigen rekening en zijn niet te verwijderen. Voeg je er zelf een toe, kies er dan hierboven een rekening bij."
+                  />
                 </div>
 
                 {categorieen.map(cat => {

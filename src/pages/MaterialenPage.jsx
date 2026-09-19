@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from 'react';
 import { I, ModalX, fmt, Av } from '../bb-shared.jsx';
+import { InfoTip } from '../components/Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
@@ -55,8 +56,10 @@ function MateriaalModal({ materiaal, leveranciers, magInkoop, onClose, onSaved, 
       <div className="modal modal-wide">
         <div className="modal-hd">
           <div>
-            <div className="modal-title">{bewerken ? 'Materiaal bewerken' : 'Nieuw materiaal'}</div>
-            <div className="modal-sub">Alleen de naam is verplicht.</div>
+            <div className="modal-title">
+              {bewerken ? 'Materiaal bewerken' : 'Nieuw materiaal'}
+              <InfoTip tekst="Alleen de naam is verplicht." />
+            </div>
           </div>
           <ModalX onClose={onClose} />
         </div>

@@ -16,6 +16,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ModalX } from '../bb-shared.jsx';
+import { InfoTip } from './Uitleg.jsx';
 import HandtekeningCanvas from './HandtekeningCanvas.jsx';
 import {
   signWerkbon, verstuurWerkbonTerOndertekening, bouwPdfData, bouwPdfWerkbon,
@@ -236,11 +237,8 @@ export default function WerkbonAfrondenModal({
                 <input value={naam} onChange={e => setNaam(e.target.value)} placeholder="Naam van de klant" />
               </div>
               <div className="f">
-                <label>E-mailadres</label>
+                <label>E-mailadres <InfoTip tekst="Hier gaat de ondertekende werkbon als bevestiging heen." /></label>
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="klant@voorbeeld.nl" />
-                <div style={{ fontSize: '.75rem', color: 'var(--dl)', marginTop: 3 }}>
-                  Hier gaat de ondertekende werkbon als bevestiging heen.
-                </div>
               </div>
               <HandtekeningCanvas ref={canvasRef} onChange={setHeeftHandtekening} disabled={bezig} />
             </>
@@ -249,12 +247,11 @@ export default function WerkbonAfrondenModal({
           {/* ── Mailen ────────────────────────────────────────────────────── */}
           {stap === 'mailen' && (
             <div className="f">
-              <label>E-mailadres klant</label>
+              <label>
+                E-mailadres klant
+                <InfoTip tekst="De klant krijgt de werkbon als PDF én een link om te tekenen. De werkbon blijft open tot hij getekend heeft." />
+              </label>
               <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="klant@voorbeeld.nl" autoFocus />
-              <div style={{ fontSize: '.75rem', color: 'var(--dl)', marginTop: 3 }}>
-                De klant krijgt de werkbon als PDF én een link om te tekenen. De werkbon blijft
-                open tot hij getekend heeft.
-              </div>
             </div>
           )}
 
