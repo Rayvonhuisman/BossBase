@@ -715,7 +715,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
             { label: 'Gefactureerd',      val: fmt(totalGefactureerd) },
             { label: 'Betaald',           val: fmt(totalBetaald),    green: totalBetaald > 0 },
             { label: 'Totale kosten',     val: fmt(totalCosts) },
-            { label: 'Winst',             val: fmt(profit),    green: profit > 0, red: profit < 0 },
+            { label: 'Brutowinst vóór arbeid', val: fmt(profit), green: profit > 0, red: profit < 0 },
           ].map((s, i) => (
             <div key={i} style={{ background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 'var(--r10)', padding: '12px 14px' }}>
               <div style={{ fontSize: '.7rem', color: 'var(--dl)', marginBottom: 4, fontWeight: 600 }}>{s.label}</div>
@@ -1039,7 +1039,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
             {[
               { label: 'Totale kosten',    val: fmt(totalCosts) },
               { label: 'Betaald',          val: fmt(totalBetaald) },
-              { label: 'Winst / marge',    val: `${fmt(profit)} (${margin}%)`, green: profit > 0 },
+              { label: 'Brutowinst vóór arbeid / marge', val: `${fmt(profit)} (${margin}%)`, green: profit > 0 },
             ].map((s, i) => (
               <div key={i} className="sc" style={{ padding: '14px 16px' }}>
                 <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginBottom: 6 }}>{s.label}</div>
@@ -1061,7 +1061,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
                       <div className="lrow-main">
                         <div className="lrow-title">{(r.desc || '').replace(/^Materiaal:\s*/i, '') || '(geen omschrijving)'}</div>
                         <div className="lrow-sub" style={{ color: r.inkoopprijsPer == null ? '#92400E' : 'var(--dl)' }}>
-                          {r.inkoopprijsPer == null ? 'Werkbonmateriaal · op verkoopprijs, inkoopprijs ontbreekt' : 'Werkbonmateriaal · inkoopprijs'}
+                          {r.inkoopprijsPer == null ? 'Materiaal · op verkoopprijs, inkoopprijs ontbreekt' : 'Materiaal · inkoopprijs'}
                         </div>
                       </div>
                       <div className="lrow-amount" style={{ textAlign: 'right' }}>
@@ -1075,7 +1075,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
                     <div key={r.id} className="lrow lrow-static">
                       <div className="lrow-main">
                         <div className="lrow-title">{r.naam}</div>
-                        <div className="lrow-sub">Projectkosten{projectNaam(r.projectId) ? ` · ${projectNaam(r.projectId)}` : ''}</div>
+                        <div className="lrow-sub">Inkopen{projectNaam(r.projectId) ? ` · ${projectNaam(r.projectId)}` : ''}</div>
                       </div>
                       <div className="lrow-amount" style={{ textAlign: 'right' }}>
                         {fmt(r.bedrag)}

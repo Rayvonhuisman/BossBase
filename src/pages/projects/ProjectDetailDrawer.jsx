@@ -666,11 +666,11 @@ function KostenTab({ project, canManage }) {
             </div>
           )}
           <div>
-            <div style={labelStyle}>{magInkoop ? 'Kostprijs' : 'Projectkosten'}</div>
+            <div style={labelStyle}>{magInkoop ? 'Kostprijs' : 'Inkopen'}</div>
             <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(magInkoop ? kostprijs : overzicht.inkopen.bedrag)}</div>
             {magInkoop && (overzicht.materiaal.bedrag > 0 || overzicht.inkopen.bedrag > 0) && (
               <div style={{ fontSize: 11, color: 'var(--dl)', marginTop: 2 }}>
-                materiaal {fmt0(overzicht.materiaal.bedrag)} · projectkosten {fmt0(overzicht.inkopen.bedrag)}
+                materiaal {fmt0(overzicht.materiaal.bedrag)} · inkopen {fmt0(overzicht.inkopen.bedrag)}
               </div>
             )}
             {/* Uren staan er als aantal, zonder bedrag: er is geen kostprijs per
@@ -684,7 +684,7 @@ function KostenTab({ project, canManage }) {
           {toonWinst && (
             <div>
               <div style={{ ...labelStyle, display: 'flex', alignItems: 'center', gap: 4 }}>
-                Brutowinst
+                Brutowinst vóór arbeid
                 <button
                   type="button"
                   aria-label="Uitleg over brutowinst"
@@ -712,7 +712,7 @@ function KostenTab({ project, canManage }) {
             background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 11px',
           }}>
             Brutowinst is het gefactureerde bedrag min de kostprijs: materiaal op
-            inkoopprijs plus projectkosten. Arbeid telt niet mee.
+            inkoopprijs plus inkopen. Arbeid telt niet mee.
           </div>
         )}
 
@@ -759,7 +759,7 @@ function KostenTab({ project, canManage }) {
       {magInkoop && (
         <div>
           <div style={{ ...kopStijl, display: 'flex', alignItems: 'center', gap: 6 }}>
-            Werkbonmateriaal ({materiaal.length})
+            Materiaal ({materiaal.length})
             <InfoTip tekst="Aantallen en prijzen wijzig je op de werkbon." />
           </div>
           {loading ? (
@@ -796,7 +796,7 @@ function KostenTab({ project, canManage }) {
           {overzicht.boekingen.regels.length === 1 ? '1 boeking' : `${overzicht.boekingen.regels.length} boekingen`} op de Kosten-pagina
           {overzicht.boekingen.regels.length === 1 ? ' hangt' : ' hangen'} aan dit project ({fmt(overzicht.boekingen.bedrag)}). Dat is de boekhouding
           en telt niet mee in de marge: het materiaal zelf staat hierboven al via de werkbon.
-          Hoort een kost echt bij deze klus en staat hij nergens op een werkbon, zet hem dan bij de projectkosten.
+          Hoort een kost echt bij deze klus en staat hij nergens op een werkbon, zet hem dan bij de inkopen.
         </div>
       )}
     </div>
@@ -810,10 +810,11 @@ function KostenTab({ project, canManage }) {
 // zichtbaar — daarmee zou de afgeschermde inkoopprijs via deze weg alsnog te
 // lezen zijn. Projectkosten zijn bovendien huur en diensten, geen artikelen.
 function ProjectKostenSection({ kosten, leveranciers, onLeverancierBij, canEdit, loading, laadFout, onAdd, onUpdate, onDelete }) {
-  // De drawer is smaller dan de werkbonpagina. Onder 640px gaan leverancier,
-  // subtotaal en de knop naar een tweede regel; anders werd elk veld te smal
-  // om te lezen ("Geen le…"). Gemeten op de kaart zelf, niet op het venster:
-  // de drawer kan ook gemaximaliseerd staan.
+  // De drawer is smaller dan de werkbonpagina. Onder 640px (de drawer op half
+  // scherm is 520px) blijft alles op één regel, met smallere vaste kolommen en
+  // "Leverancier" als lege keuze — "Geen leverancier" paste daar niet ("Geen
+  // le…"). Gemeten op de kaart zelf, niet op het venster: de drawer kan ook
+  // gemaximaliseerd staan.
   const kaartRef = useRef(null);
   const [smal, setSmal] = useState(true);
   useEffect(() => {
@@ -830,21 +831,19 @@ function ProjectKostenSection({ kosten, leveranciers, onLeverancierBij, canEdit,
   const totaal = kosten.reduce((s, k) => s + k.bedrag, 0);
   const addSub = (Number(form.aantal) || 0) * (Number(form.prijs_per) || 0);
   const COLS = smal
-    ? 'minmax(0,1fr) 56px 64px 84px'
+    ? 'minmax(0,1fr) 44px 52px 60px 104px 58px 28px'
     : 'minmax(0,2.2fr) 62px 74px 84px minmax(0,1.3fr) 84px 30px';
-  const rijStijl = {
-    display: 'grid', gridTemplateColumns: COLS, gap: 5, alignItems: 'center',
-    ...(smal ? { paddingBottom: 8, marginBottom: 8, borderBottom: '1px dashed var(--border)' } : { marginBottom: 5 }),
-  };
-  const levStijl = { minWidth: 0, ...(smal ? { gridColumn: 'span 2' } : null) };
+  const GAP = smal ? 4 : 5;
+  const rijStijl = { display: 'grid', gridTemplateColumns: COLS, gap: GAP, alignItems: 'center', marginBottom: 5 };
+  const levStijl = { minWidth: 0 };
   const subStijl = { textAlign: 'right', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden' };
 
   // Zonder de migratie bestaat de tabel nog niet. Dan geen technische
   // foutmelding in beeld, maar wat er aan de hand is.
   const foutTekst = !laadFout ? ''
     : /schema cache|does not exist|project_kosten/i.test(laadFout)
-      ? 'Projectkosten zijn nog niet beschikbaar: de database-update hiervoor is nog niet uitgevoerd.'
-      : `Projectkosten konden niet worden geladen (${laadFout}).`;
+      ? 'Inkopen zijn nog niet beschikbaar: de database-update hiervoor is nog niet uitgevoerd.'
+      : `Inkopen konden niet worden geladen (${laadFout}).`;
 
   const submit = async () => {
     if (!form.naam.trim()) return;
@@ -867,13 +866,15 @@ function ProjectKostenSection({ kosten, leveranciers, onLeverancierBij, canEdit,
 
   const levSelect = (value, onChange, disabled) => (
     <LeverancierSelect value={value || ''} disabled={disabled} leveranciers={leveranciers}
-      onLijstGewijzigd={onLeverancierBij} onChange={onChange} style={{ minWidth: 0, width: '100%' }} />
+      onLijstGewijzigd={onLeverancierBij} onChange={onChange}
+      leegLabel={smal ? 'Leverancier' : undefined}
+      style={{ minWidth: 0, width: '100%', ...(smal ? { padding: '0 2px 0 6px' } : null) }} />
   );
 
   return (
     <div className="wb2-card" ref={kaartRef}>
       <div className="wb2-card-hd">
-        <div className="wb2-card-hd-title">Projectkosten</div>
+        <div className="wb2-card-hd-title">Inkopen</div>
       </div>
       <div className="wb2-card-body">
         <div className="wb2-mat-body">
@@ -885,9 +886,9 @@ function ProjectKostenSection({ kosten, leveranciers, onLeverancierBij, canEdit,
 
           {kosten.length > 0 && (
             <div>
-              <div className="wb2-mat-kop" style={{ display: 'grid', gridTemplateColumns: COLS, gap: 5 }}>
+              <div className="wb2-mat-kop" style={{ display: 'grid', gridTemplateColumns: COLS, gap: GAP }}>
                 <span>Omschrijving</span><span>Aantal</span><span>Eenheid</span><span>Kostprijs</span>
-                {!smal && <><span>Leverancier</span><span style={{ textAlign: 'right' }}>Subtotaal</span><span /></>}
+                <span>Leverancier</span><span style={{ textAlign: 'right' }}>Subtotaal</span><span />
               </div>
               {kosten.map(k => (
                 <div key={k.id} className="wb2-mat-rij" style={rijStijl}>
@@ -895,7 +896,7 @@ function ProjectKostenSection({ kosten, leveranciers, onLeverancierBij, canEdit,
                     onBlur={e => naamKlaar(k, e.target.value)} />
                   <input type="number" min="0" step="0.01" value={k.aantal} disabled={!canEdit} style={{ minWidth: 0 }}
                     onChange={e => veld(k, 'aantal', e.target.value)} />
-                  <input type="text" value={k.eenheid} placeholder="stuk" disabled={!canEdit} style={{ minWidth: 0 }}
+                  <input type="text" value={k.eenheid} placeholder="stuk" disabled={!canEdit} style={{ minWidth: 0, ...(smal ? { padding: '0 6px' } : null) }}
                     onChange={e => veld(k, 'eenheid', e.target.value)} />
                   <input type="number" min="0" step="0.01" value={k.prijsPer} disabled={!canEdit} style={{ minWidth: 0 }}
                     title="Kostprijs per eenheid, excl. btw" onChange={e => veld(k, 'prijs_per', e.target.value)} />
@@ -910,14 +911,14 @@ function ProjectKostenSection({ kosten, leveranciers, onLeverancierBij, canEdit,
           )}
 
           {canEdit && !loading && (
-            <div className="wb2-mat-rij" style={{ borderTop: kosten.length && !smal ? '1px solid var(--border)' : 'none', paddingTop: kosten.length && !smal ? 10 : 0, marginTop: kosten.length && !smal ? 6 : 0 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: COLS, gap: 5, alignItems: 'center' }}>
-                <input type="text" placeholder="Bijv. steigerhuur" value={form.naam} style={{ minWidth: 0 }}
+            <div className="wb2-mat-rij" style={{ borderTop: kosten.length ? '1px solid var(--border)' : 'none', paddingTop: kosten.length ? 10 : 0, marginTop: kosten.length ? 6 : 0 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: COLS, gap: GAP, alignItems: 'center' }}>
+                <input type="text" placeholder="Bijv. steigerhuur" value={form.naam} style={{ minWidth: 0, ...(smal ? { padding: '0 6px' } : null) }}
                   onChange={e => setForm(f => ({ ...f, naam: e.target.value }))}
                   onKeyDown={e => { if (e.key === 'Enter') submit(); }} />
                 <input type="number" min="0" step="0.01" value={form.aantal} placeholder="1" style={{ minWidth: 0 }}
                   onChange={e => setForm(f => ({ ...f, aantal: e.target.value }))} />
-                <input type="text" value={form.eenheid} placeholder="stuk" style={{ minWidth: 0 }}
+                <input type="text" value={form.eenheid} placeholder="stuk" style={{ minWidth: 0, ...(smal ? { padding: '0 6px' } : null) }}
                   onChange={e => setForm(f => ({ ...f, eenheid: e.target.value }))} />
                 <input type="number" min="0" step="0.01" value={form.prijs_per} placeholder="0,00" style={{ minWidth: 0 }}
                   title="Kostprijs per eenheid, excl. btw"
@@ -925,7 +926,7 @@ function ProjectKostenSection({ kosten, leveranciers, onLeverancierBij, canEdit,
                 <div style={levStijl}>{levSelect(form.leverancier_id, v => setForm(f => ({ ...f, leverancier_id: v })), false)}</div>
                 <div style={subStijl}>{fmt(addSub)}</div>
                 <button onClick={submit} disabled={adding || !form.naam.trim()} className="wb2-mat-add-btn"
-                  aria-label="Projectkost toevoegen" title="Toevoegen" style={{ justifySelf: 'end' }}>{I.plus}</button>
+                  aria-label="Inkoop toevoegen" title="Toevoegen" style={{ justifySelf: 'end' }}>{I.plus}</button>
               </div>
             </div>
           )}
@@ -935,7 +936,7 @@ function ProjectKostenSection({ kosten, leveranciers, onLeverancierBij, canEdit,
           <div className="wb2-mat-foot">
             <div className="wb2-mat-foot-add" style={{ visibility: 'hidden' }}>spacer</div>
             <div style={{ textAlign: 'right' }}>
-              <div className="wb2-mat-foot-total-lbl">Totaal projectkosten (excl. BTW)</div>
+              <div className="wb2-mat-foot-total-lbl">Totaal inkopen (excl. BTW)</div>
               <div className="wb2-mat-foot-total">{fmt(totaal)}</div>
             </div>
           </div>
