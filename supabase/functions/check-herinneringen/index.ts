@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
 import { lokaleDatum, lokaleTijd, langeDatumNl, lokaalNaarUtc, voegDagenToe } from '../_shared/datumTijd.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
+import { kiesTemplate } from '../_shared/standaardMailTemplates.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -113,17 +114,22 @@ serve(async (req) => {
       const vervalDate = new Date(f.vervaldatum)
       const daysPast = Math.floor((today.getTime() - vervalDate.getTime()) / 86400000)
 
-      // Haal templates op voor dit bedrijf
-      const { data: tpls } = await db
+      // Haal templates op voor dit bedrijf. Bewust zonder filter op actief/
+      // auto_versturen: geen rij → standaardtekst, een uitgezette rij → niets.
+      const { data: tpls, error: tplErr } = await db
         .from('email_templates')
         .select('*')
         .eq('company_id', companyId)
         .in('type', ['herinnering_1', 'herinnering_2'])
-        .eq('actief', true)
-        .eq('auto_versturen', true)
+      if (tplErr) {
+        // Niet terugvallen op de standaard als we niet weten wat er staat: dan
+        // zou een herinnering uitgaan die de ondernemer heeft uitgezet.
+        results.errors.push(`email_templates ${companyId}: ${tplErr.message}`)
+        continue
+      }
 
-      const tpl1 = tpls?.find(t => t.type === 'herinnering_1')
-      const tpl2 = tpls?.find(t => t.type === 'herinnering_2')
+      const tpl1 = kiesTemplate('herinnering_1', tpls?.find(t => t.type === 'herinnering_1'))
+      const tpl2 = kiesTemplate('herinnering_2', tpls?.find(t => t.type === 'herinnering_2'))
 
       const vars = {
         klant_naam: f.customers.name || 'klant',
@@ -166,54 +172,63 @@ serve(async (req) => {
 
     // ── Afspraakherinneringen ─────────────────────────────────────────────────
     // Lead-tijd is per bedrijf instelbaar via email_templates.auto_dagen (default
-    // 1) en gerespecteerd t.o.v. de `auto_versturen`-toggle. We halen eerst de
-    // actieve + auto_versturen afspraak-templates op (map per bedrijf), bepalen
+    // 1) en gerespecteerd t.o.v. de `auto_versturen`-toggle. We bepalen eerst per
+    // bedrijf welk template geldt (map per bedrijf), bepalen
     // het min/max aantal dagen vooruit voor het db-venster, en matchen per
     // afspraak op EXACT de dag (vandaag + auto_dagen) — zodat elke afspraak
     // precies één keer matcht en de idempotentie (sent_emails per appointment_id)
     // intact blijft.
-    const { data: afsprTpls } = await db
+    //
+    // Een bedrijf zonder afspraak_herinnering-rij krijgt de standaardtekst: een
+    // ontbrekend template mag niet betekenen dat de klant niets krijgt. Daarom
+    // hier alle rijen, ook uitgezette — alleen zo is "geen rij" te onderscheiden
+    // van "bewust uit".
+    const { data: afsprTpls, error: afsprTplErr } = await db
       .from('email_templates')
-      .select('company_id, onderwerp, body, body_html, auto_dagen')
+      .select('company_id, onderwerp, body, body_html, auto_dagen, actief, auto_versturen')
       .eq('type', 'afspraak_herinnering')
-      .eq('actief', true)
-      .eq('auto_versturen', true)
 
     // Testbedrijven sturen geen klantpost. In testdata kunnen echte adressen
     // staan, en dan krijgt een echte klant een herinnering voor een afspraak die
     // niet bestaat. Eén filter hier dekt beide takken hieronder (activiteiten én
     // agenda), omdat allebei op tplByCompany afgaan.
-    const { data: testBedrijven, error: testErr } = await db
+    const { data: bedrijven, error: bedrijvenErr } = await db
       .from('companies')
-      .select('id')
-      .eq('is_testbedrijf', true)
-    if (testErr) {
-      // Veilig falen: weten we niet wie een testbedrijf is, dan gaan er GEEN
-      // afspraakherinneringen uit. Liever een gemiste herinnering dan post naar
-      // een echte klant vanuit testdata. De fout is zichtbaar in mail_fouten.
+      .select('id, is_testbedrijf')
+    // Veilig falen: weten we niet wie een testbedrijf is, of welke templates er
+    // staan (en dus wie hem heeft uitgezet), dan gaan er GEEN
+    // afspraakherinneringen uit. Liever een gemiste herinnering dan post naar
+    // een echte klant vanuit testdata, of een mail die de ondernemer had
+    // uitgezet. De fout is zichtbaar in mail_fouten.
+    const ophaalFout = bedrijvenErr
+      ? `Bedrijven ophalen mislukt: ${bedrijvenErr.message}`
+      : afsprTplErr ? `Afspraaktemplates ophalen mislukt: ${afsprTplErr.message}` : null
+    if (ophaalFout) {
       await logMailFout({
         soort: 'afspraak_herinnering', ontvanger: null, companyId: null, bedrijfNaam: 'BossBase',
-        fout: `Testbedrijven ophalen mislukt, afspraakherinneringen overgeslagen: ${testErr.message}`,
+        fout: `${ophaalFout}; afspraakherinneringen overgeslagen`,
         bron: 'check-herinneringen',
       })
-      results.errors.push(`companies.is_testbedrijf: ${testErr.message}`)
+      results.errors.push(ophaalFout)
     }
-    const testIds = new Set((testBedrijven || []).map((c: any) => c.id))
 
     const tplByCompany = new Map<string, any>()
     let minDagen = Infinity
     let maxDagen = 0
-    if (!testErr) {
-      for (const t of (afsprTpls || [])) {
-        if (testIds.has(t.company_id)) continue
-        const d = (t.auto_dagen ?? 1)
-        tplByCompany.set(t.company_id, t)
+    if (!ophaalFout) {
+      const rijen = new Map((afsprTpls || []).map((t: any) => [t.company_id, t]))
+      for (const b of (bedrijven || [])) {
+        if (b.is_testbedrijf) continue
+        const tpl = kiesTemplate('afspraak_herinnering', rijen.get(b.id))
+        if (!tpl) continue // bewust uitgezet
+        const d = (tpl.auto_dagen ?? 1)
+        tplByCompany.set(b.id, tpl)
         if (d < minDagen) minDagen = d
         if (d > maxDagen) maxDagen = d
       }
     }
 
-    // Alleen zoeken als er minstens één bedrijf een actieve+auto_versturen template heeft.
+    // Alleen zoeken als er minstens één bedrijf afspraakherinneringen verstuurt.
     if (tplByCompany.size > 0) {
       // Dagen tellen op de Nederlandse kalender; de grenzen daarna omrekenen
       // naar echte UTC-momenten. Voorheen gingen hier naive strings naar een
@@ -246,7 +261,7 @@ serve(async (req) => {
         if (!company) continue
 
         const tpl = tplByCompany.get(act.company_id)
-        if (!tpl) continue // geen actieve + auto_versturen afspraak-template voor dit bedrijf
+        if (!tpl) continue // afspraakherinnering uitgezet, of testbedrijf
 
         // EXACT-dag match: de afspraak moet precies over auto_dagen dagen plaatsvinden.
         const autoDagen = (tpl.auto_dagen ?? 1)

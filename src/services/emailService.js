@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase.js'
 import { getCompanyId, withCompanyId } from '../lib/currentCompany.js'
 import { mailTemplate } from '../utils/mailTemplate.js'
+import { kiesTemplate } from '../lib/standaardMailTemplates.js'
 
 // ── VARIABELEN VERVANGEN ─────────────────────────────────────────────────────
 
@@ -124,15 +125,19 @@ export async function getSentEmailsByCustomer(customerId) {
 
 export async function triggerAutoEmail(type, vars, toEmail, companyId, relatedType, relatedId, customerId) {
   try {
-    const { data: tpls } = await supabase
+    // Bewust zonder filter op actief/auto_versturen: we moeten kunnen zien of er
+    // géén rij is (→ standaardtekst) of een rij die de ondernemer heeft uitgezet
+    // (→ niets versturen). Een ontbrekend template mag de mail niet tegenhouden.
+    const { data: tpls, error } = await supabase
       .from('email_templates')
       .select('*')
       .eq('type', type)
       .eq('company_id', companyId)
-      .eq('actief', true)
-      .eq('auto_versturen', true)
       .limit(1)
-    const tpl = tpls?.[0]
+    // Weten we niet wat er staat, dan ook niet terugvallen: dat zou een
+    // uitgezette mail alsnog versturen.
+    if (error) throw error
+    const tpl = kiesTemplate(type, tpls?.[0])
     if (!tpl || !toEmail) return
     const subject = substituteVars(tpl.onderwerp, vars)
     const innerBody = tpl.body_html
