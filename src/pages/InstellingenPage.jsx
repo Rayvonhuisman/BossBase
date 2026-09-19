@@ -18,7 +18,6 @@ import { usePermissions } from '../hooks/usePermissions.js';
 import { useUrlTab } from '../hooks/useUrlTab.js';
 import { useUploads } from '../lib/uploadContext.jsx';
 import { openCookieBanner } from '../components/CookieBanner.jsx';
-import { InfoTip, InfoUitklap } from '../components/Uitleg.jsx';
 import {
   getBedrijfsinstellingen,
   upsertBedrijfsinstellingen,
@@ -1729,8 +1728,11 @@ export function InstellingenPage() {
                 </div>
               </div>
               <div className="f">
-                <label>E-mailadres <InfoTip tekst="Je e-mailadres kan niet worden gewijzigd." /></label>
+                <label>E-mailadres</label>
                 <input value={profile?.email || ''} disabled />
+                <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginTop: 4 }}>
+                  Je e-mailadres kan niet worden gewijzigd.
+                </div>
               </div>
               <div className="f">
                 <label>Rol</label>
@@ -1905,7 +1907,7 @@ export function InstellingenPage() {
             </div>
           </div>
           <div className="f" style={{ marginBottom: 20 }}>
-            <label>Merkkleur <InfoTip tekst="Gebruikt in offertes en facturen." /></label>
+            <label>Merkkleur</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div
                 onClick={() => document.getElementById('branding-color-input').click()}
@@ -1937,6 +1939,7 @@ export function InstellingenPage() {
                 style={{ width: 110, fontFamily: 'monospace' }}
               />
             </div>
+            <div style={{ fontSize: 11, color: 'var(--dmu)', marginTop: 5 }}>Gebruikt in offertes en facturen</div>
           </div>
           <div className="fg">
             <div className="f">
@@ -1948,14 +1951,11 @@ export function InstellingenPage() {
               <input type="email" value={bedrijfForm.email} onChange={e => setBedrijf('email', e.target.value)} placeholder="Nog niet ingevuld" />
             </div>
             <div className="f s2">
-              <div className="f-label-rij">
-                <label htmlFor="reply-to-email">Antwoord e-mailadres</label>
-                <InfoUitklap
-                  id="uitleg-antwoordadres"
-                  tekst="Wanneer een klant op 'Beantwoorden' klikt bij een mail van BossBase, komt het antwoord op dit adres binnen. Mails worden verzonden vanaf noreply@bossbase.nl."
-                />
+              <label>Antwoord e-mailadres</label>
+              <input type="email" value={bedrijfForm.reply_to_email} onChange={e => setBedrijf('reply_to_email', e.target.value)} placeholder="bijv. info@jouwbedrijf.nl" />
+              <div style={{ fontSize: 11, color: 'var(--dmu)', marginTop: 5, lineHeight: 1.5 }}>
+                Wanneer een klant op 'Beantwoorden' klikt bij een mail van BossBase, komt het antwoord op dit adres binnen. Mails worden verzonden vanaf noreply@bossbase.nl.
               </div>
-              <input id="reply-to-email" type="email" value={bedrijfForm.reply_to_email} onChange={e => setBedrijf('reply_to_email', e.target.value)} placeholder="bijv. info@jouwbedrijf.nl" />
             </div>
             <div className="f">
               <label>Telefoonnummer</label>
@@ -1998,9 +1998,8 @@ export function InstellingenPage() {
         <>
         <div className="card card-p afu3">
           <div className="card-hd" style={{ marginBottom: 18 }}>
-            <div className="card-title">
-              Standaardwaarden <InfoTip tekst="Wordt vooringevuld bij nieuwe offertes en werkbonnen." />
-            </div>
+            <div className="card-title">Standaardwaarden</div>
+            <div className="card-sub">Wordt vooringevuld bij nieuwe offertes en werkbonnen</div>
           </div>
           <div className="fg">
             <div className="f">
@@ -2031,21 +2030,20 @@ export function InstellingenPage() {
               />
             </div>
             <div className="f s2">
-              <div className="f-label-rij">
-                <label htmlFor="btw-stelsel">BTW-stelsel</label>
-                <InfoUitklap
-                  id="uitleg-btw-stelsel"
-                  tekst="Bij het factuurstelsel draag je btw af zodra je factureert, ook als de klant nog niet betaald heeft. Bij het kasstelsel pas als het geld binnen is. De meeste kleine ondernemers zitten op het factuurstelsel; twijfel je, kijk dan op je aangifte of vraag het je boekhouder. Dit bepaalt in welke periode een factuur valt in de BTW-indicatie."
-                />
-              </div>
+              <label>BTW-stelsel</label>
               <select
-                id="btw-stelsel"
                 value={standaardForm.btw_stelsel || 'factuur'}
                 onChange={e => setStandaard('btw_stelsel', e.target.value)}
               >
                 <option value="factuur">Factuurstelsel — omzet telt op factuurdatum</option>
                 <option value="kas">Kasstelsel — omzet telt op betaaldatum</option>
               </select>
+              <span style={{ fontSize: '.75rem', color: 'var(--dl)', marginTop: 4, lineHeight: 1.4 }}>
+                Bij het factuurstelsel draag je btw af zodra je factureert, ook als de klant nog niet betaald heeft.
+                Bij het kasstelsel pas als het geld binnen is. De meeste kleine ondernemers zitten op het
+                factuurstelsel; twijfel je, kijk dan op je aangifte of vraag het je boekhouder.
+                Dit bepaalt in welke periode een factuur valt in de BTW-indicatie.
+              </span>
             </div>
             <div className="f">
               <label>Offerte geldig (dagen)</label>
@@ -2067,21 +2065,13 @@ export function InstellingenPage() {
         {/* ── Herinneringen ── */}
         <div className="card card-p afu3" style={{ marginTop: 16 }}>
           <div className="card-hd" style={{ marginBottom: 18 }}>
-            <div className="card-title">
-              Herinneringen <InfoTip tekst="Herinner medewerkers eraan hun uren in te vullen voor verstreken geplande dagen." />
-            </div>
+            <div className="card-title">Herinneringen</div>
+            <div className="card-sub">Herinner medewerkers eraan hun uren in te vullen voor verstreken geplande dagen</div>
           </div>
           <div className="fg">
             <div className="f">
-              <div className="f-label-rij">
-                <label htmlFor="uren-herinnering">Uren-herinnering</label>
-                <InfoUitklap
-                  id="uitleg-uren-herinnering"
-                  tekst="De pop-up verschijnt alleen bij medewerkers met een verstreken geplande dag zonder geboekte uren, en keert op dit interval terug tot de uren zijn ingevuld."
-                />
-              </div>
+              <label>Uren-herinnering</label>
               <select
-                id="uren-herinnering"
                 value={standaardForm.uren_herinnering_interval_min}
                 onChange={e => setStandaard('uren_herinnering_interval_min', e.target.value)}
               >
@@ -2092,6 +2082,9 @@ export function InstellingenPage() {
                 <option value={120}>Elke 2 uur</option>
                 <option value={240}>Elke 4 uur</option>
               </select>
+              <div className="card-sub" style={{ marginTop: 6 }}>
+                De pop-up verschijnt alleen bij medewerkers met een verstreken geplande dag zonder geboekte uren, en keert op dit interval terug tot de uren zijn ingevuld.
+              </div>
             </div>
           </div>
           <div className="fa">
@@ -2104,9 +2097,8 @@ export function InstellingenPage() {
         {/* ── Agenda ── */}
         <div className="card card-p afu3" style={{ marginTop: 16 }}>
           <div className="card-hd" style={{ marginBottom: 18 }}>
-            <div className="card-title">
-              Agenda <InfoTip tekst="Welk deel van de dag standaard in beeld staat. De agenda beslaat altijd 24 uur — dit bepaalt alleen het zichtbare venster." />
-            </div>
+            <div className="card-title">Agenda</div>
+            <div className="card-sub">Welk deel van de dag standaard in beeld staat. De agenda beslaat altijd 24 uur — dit bepaalt alleen het zichtbare venster.</div>
           </div>
           <div className="fg">
             <div className="f">
@@ -2136,9 +2128,8 @@ export function InstellingenPage() {
         {/* ── Eigen prijzen / eenheden ── */}
         <div className="card card-p afu3" style={{ marginTop: 16 }}>
           <div className="card-hd" style={{ marginBottom: 14 }}>
-            <div className="card-title">
-              Eigen prijzen / eenheden <InfoTip tekst="Eigen regeltypes met een standaardprijs — verschijnen naast Uren/Km/Overig in offertes en facturen." />
-            </div>
+            <div className="card-title">Eigen prijzen / eenheden</div>
+            <div className="card-sub">Eigen regeltypes met een standaardprijs — verschijnen naast Uren/Km/Overig in offertes en facturen</div>
           </div>
 
           {eenheden.length === 0 && !eenheidForm && (
@@ -2409,15 +2400,10 @@ export function InstellingenPage() {
                 </div>
 
                 {cfg.vars.includes('betaalinstructie') && (
-                  <div className="f-label-rij" style={{ marginTop: 12 }}>
-                    {/* De variabelenaam blijft staan — dat is het onderwerp, geen
-                        uitleg. Wát hij invult zit achter het icoontje. */}
-                    <span style={{ fontSize: '.8rem', color: 'var(--dm)', fontFamily: 'monospace' }}>{'{{betaalinstructie}}'}</span>
-                    <InfoUitklap id="uitleg-betaalinstructie" label="Wat betaalinstructie invult">
-                      <div style={{ marginBottom: 4 }}>Past zich aan bij het versturen:</div>
-                      <div><strong style={{ color: 'var(--dm)' }}>Met Stripe-koppeling:</strong> "U kunt de factuur eenvoudig online betalen via de knop hieronder, of het bedrag overmaken onder vermelding van het factuurnummer."</div>
-                      <div><strong style={{ color: 'var(--dm)' }}>Standaard:</strong> "Gelieve het totaalbedrag voor de betaaltermijn over te maken onder vermelding van het factuurnummer."</div>
-                    </InfoUitklap>
+                  <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 'var(--r8)', fontSize: '.8rem', color: 'var(--dmu)', lineHeight: 1.55 }}>
+                    <div style={{ marginBottom: 4 }}><strong style={{ color: 'var(--dm)', fontFamily: 'monospace' }}>{'{{betaalinstructie}}'}</strong> past zich aan bij het versturen:</div>
+                    <div><strong style={{ color: 'var(--dm)' }}>Met Stripe-koppeling:</strong> "U kunt de factuur eenvoudig online betalen via de knop hieronder, of het bedrag overmaken onder vermelding van het factuurnummer."</div>
+                    <div><strong style={{ color: 'var(--dm)' }}>Standaard:</strong> "Gelieve het totaalbedrag voor de betaaltermijn over te maken onder vermelding van het factuurnummer."</div>
                   </div>
                 )}
 
@@ -2450,9 +2436,8 @@ export function InstellingenPage() {
           <div className="modal modal-wide">
             <div className="modal-hd">
               <div>
-                <div className="modal-title">
-                  Nieuw e-mailtemplate <InfoTip tekst="Maak een eigen template aan." />
-                </div>
+                <div className="modal-title">Nieuw e-mailtemplate</div>
+                <div className="modal-sub">Maak een eigen template aan</div>
               </div>
               <ModalX onClose={() => !creatingTemplate && setShowNewTemplate(false)} />
             </div>
@@ -2528,16 +2513,26 @@ export function InstellingenPage() {
         <div className="afu3" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="tw">
             <div className="tw-hd">
-              {/* Stond hier eerst als zichtbare zin mét daarnaast nog een
-                  info-icoon: uitleg naast uitleg. Nu samen achter één icoon. */}
-              <div className="card-title">
-                Automatische koppeling
-                <InfoUitklap
-                  id="uitleg-pipelinekoppeling"
-                  label="Uitleg over de automatische koppeling"
-                  tekst="Je deals schuiven automatisch mee met je werk. Kies hieronder bij elk moment in welke fase de deal moet komen. Een deal gaat alleen vooruit, nooit terug. Een fase hernoemen verandert niets. Een deal zelf verslepen verandert het project of de werkbon niet."
-                />
-              </div>
+              <div className="card-title">Automatische koppeling</div>
+            </div>
+            {/* Zelfde zijmarge als .tw-hd (18px), anders plakt de tekst tegen
+                de kaartrand. De details zitten achter het info-icoon. */}
+            <div style={{
+              fontSize: '.8rem', color: 'var(--dm)', padding: '10px 18px 12px', lineHeight: 1.5,
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <span>
+                Je deals schuiven automatisch mee met je werk. Kies hieronder bij elk moment
+                in welke fase de deal moet komen.
+              </span>
+              <button
+                type="button"
+                className="bb-info"
+                aria-label="Meer uitleg over de automatische koppeling"
+                data-tip="Een deal gaat alleen vooruit, nooit terug. Een fase hernoemen verandert niets. Een deal zelf verslepen verandert het project of de werkbon niet."
+              >
+                {I.info}
+              </button>
             </div>
             <table className="dt">
               <thead>
@@ -2696,9 +2691,8 @@ export function InstellingenPage() {
           <div className="tw">
             <div className="tw-hd">
               <div>
-                <div className="card-title">
-                  Verloren-redenen <InfoTip tekst={'De keuzelijst die verschijnt wanneer een lead in de pipeline op "verloren" wordt gezet.'} />
-                </div>
+                <div className="card-title">Verloren-redenen</div>
+                <div style={{ fontSize: '.82rem', color: 'var(--dmu)', marginTop: 2 }}>De keuzelijst die verschijnt wanneer een lead in de pipeline op "verloren" wordt gezet.</div>
               </div>
               {isAdmin && (
                 <button className="btn btn-p btn-sm" onClick={() => setShowNewReason(v => !v)}>
@@ -2800,9 +2794,8 @@ export function InstellingenPage() {
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <div>
-                <div className="card-title">
-                  Voertuigen <InfoTip tekst="Beheer de voertuigen die je kunt inplannen via de Planning pagina." />
-                </div>
+                <div className="card-title">Voertuigen</div>
+                <div style={{ fontSize: '.82rem', color: 'var(--dmu)', marginTop: 2 }}>Beheer de voertuigen die je kunt inplannen via de Planning pagina.</div>
               </div>
               {!showVoertuigForm && (
                 <button className="btn btn-p btn-sm" onClick={() => setShowVoertuigForm(true)}>{I.plus} Voertuig toevoegen</button>
