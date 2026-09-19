@@ -971,37 +971,6 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     }
 
     // ───────── Laatste klantactiviteit ─────────
-    case 'last_customer_activity': {
-      const sorted = [...activities].sort((a, b) => new Date(b.dueAt || 0) - new Date(a.dueAt || 0)).slice(0, 6);
-      return (
-        <div className="bb-widget">
-          <WHead title="Laatste klantactiviteit" sub="Realtime feed" right={<Chip tone="green" noDot>● Live</Chip>} />
-          {sorted.length === 0 ? (
-            <EmptyState title="Geen klantactiviteiten" text="Activiteiten op klanten verschijnen hier." />
-          ) : (
-            <div className="feed">
-              {sorted.map(a => {
-                const c = customerById(a.custId);
-                const ago = relAgo(a.dueAt);
-                return (
-                  <button key={a.id} className={`feed-row compact ${actIcoClass(a.type)}`} onClick={() => open.activity(a)}>
-                    <span className="feed-icon">{actIcoSvg(a.type)}</span>
-                    <div className="feed-main">
-                      <div className="feed-title"><strong>{c?.name || 'Onbekende klant'}</strong> — {a.title}</div>
-                      <div className="feed-meta">
-                        {a.type && <span>{activiteitTypeLabel(a.type)}</span>}
-                        {ago && (<><span className="sep">·</span><span>{ago} geleden</span></>)}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      );
-    }
-
     // ───────── Conversie overzicht ─────────
     case 'conversion_overview': {
       // Echte pipeline_stages, deals geteld per stage_id (val terug op demo-strings).

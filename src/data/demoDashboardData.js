@@ -65,7 +65,7 @@ function buildActivities() {
     { id: 'da6', title: 'Demo Follow-up VVE bestuursvergadering',type: 'follow', dueAt: relISO(1, 10), time: '10:00', custId: 'dc2' },
     { id: 'da7', title: 'Demo Oplevering controle supermarkt',   type: 'task',   dueAt: relISO(2, 16), time: '16:00', custId: 'dc4' },
     { id: 'da8', title: 'Demo Klantbezoek Van den Berg',         type: 'visit',  dueAt: relISO(3, 13), time: '13:00', custId: 'dc5' },
-    // Afgerond → enkel in last_customer_activity
+    // Afgerond → telt niet mee in de openstaande-activiteitentegels
     { id: 'da9',  title: 'Demo Intake gesprek Jansen',           type: 'call',   dueAt: relISO(-5, 9),  time: '09:00', custId: 'dc1', status: 'completed' },
     { id: 'da10', title: 'Demo Offerte besproken Willems',       type: 'email',  dueAt: relISO(-3, 14), time: '14:00', custId: 'dc3', status: 'completed' },
   ];

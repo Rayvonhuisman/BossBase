@@ -34,7 +34,6 @@ export const WIDGET_REGISTRY = [
   { type: 'customers',              iconKey: 'cust',    label: 'Klanten',                 category: 'crm',       defaultSize: 'small', description: 'Totaal aantal actieve klanten' },
   { type: 'new_leads',              iconKey: 'pipe',    label: 'Nieuwe aanvragen',        category: 'crm',       defaultSize: 'medium', description: 'Deals in de fase Nieuwe aanvragen' },
   { type: 'active_deals',           iconKey: 'pipe',    label: 'Actieve deals',           category: 'crm',       defaultSize: 'large',  supportedSizes: ['large', 'full'], description: 'Deals in actieve pipeline fasen' },
-  { type: 'last_customer_activity', iconKey: 'act',     label: 'Laatste klantactiviteit', category: 'crm',       defaultSize: 'large',  supportedSizes: ['medium', 'large', 'full'], description: 'Recente activiteiten per klant' },
   { type: 'conversion_overview',    iconKey: 'pipe',    label: 'Conversie overzicht',     category: 'crm',       defaultSize: 'large',  supportedSizes: ['medium', 'large', 'full'], description: 'Verdeling deals over pipeline fasen' },
   // ── Charts ───────────────────────────────────────────────
   { type: 'monthly_revenue_chart',   iconKey: 'revenue', label: 'Omzet per maand',         category: 'charts',    defaultSize: 'large', supportedSizes: ['large', 'full'], description: 'Lijngrafiek omzet per maand, excl. btw' },
@@ -129,9 +128,9 @@ export const DEFAULT_LAYOUTS = {
       w('uren_registratie',         'small'),  // 3  → row 1 = 12 ✓
       w('actions_today',            'large'),  // 6
       w('agenda_week',              'large'),  // 6  → row 2 = 12 ✓
-      w('last_customer_activity',   'medium'), // 4
-      w('quick_actions',            'medium'), // 4
-      w('activities_per_day_chart', 'medium'), // 4  → row 3 = 12 ✓
+      // Rij 3 stond op 3x medium met last_customer_activity; die tegel is weg.
+      w('quick_actions',            'large'),  // 6
+      w('activities_per_day_chart', 'large'),  // 6  → row 3 = 12 ✓
     ],
   },
   financial: {
