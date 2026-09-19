@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { ModalX } from '../bb-shared.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { useData } from '../lib/dataContext.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { getBedrijfsinstellingen } from '../services/instellingenService.js';
-import { getWerkbonnen } from '../services/werkbonService.js';
-import { listActivities } from '../services/activityService.js';
 import { getUrenregistratie, createUrenregel, berekenUren } from '../services/urenService.js';
 import { getTeamMembers } from '../services/notificatieService.js';
 import { PauzeKnoppen, rondAfOpVijf } from './UrenVelden.jsx';
@@ -102,6 +101,9 @@ const fmtDag = d => {
 
 export function UrenHerinneringModal({ navigatePage }) {
   const { profile, refreshKey } = useProfile();
+  // Werkbonnen en activiteiten uit de gedeelde dataset: deze modal hangt altijd
+  // in de app, dus een eigen fetch zou op elke pagina meelopen.
+  const { werkbonnen = [], activities = [] } = useData();
   const toast = useToast();
   const uid = profile?.id;
   // Werkdaguren zijn er voor wie ze aan iemand anders verantwoordt. Dus:
@@ -137,12 +139,15 @@ export function UrenHerinneringModal({ navigatePage }) {
   const load = useCallback(async () => {
     if (!toonHerinnering || !uid) { setEntries([]); setIntervalMin(0); return; }
     try {
-      const [inst, wbs, acts, uren] = await Promise.all([
+      // Werkbonnen en activiteiten komen uit de gedeelde dataset. Deze modal
+      // staat altijd gemount (App.jsx), dus hij haalde die twee lijsten op ÉLKE
+      // pagina opnieuw op voor iedereen die geen admin is.
+      const [inst, uren] = await Promise.all([
         getBedrijfsinstellingen().catch(() => null),
-        getWerkbonnen().catch(() => []),
-        listActivities().catch(() => []),
         getUrenregistratie({ profileId: uid }).catch(() => []),
       ]);
+      const wbs = werkbonnen;
+      const acts = activities;
       const iv = Number(inst?.urenHerinneringIntervalMin ?? 0);
       setIntervalMin(iv);
       const found = iv > 0 ? computeMissingEntries(uid, wbs, acts, uren) : [];
@@ -151,7 +156,7 @@ export function UrenHerinneringModal({ navigatePage }) {
     } catch {
       // Stil falen — een herinnering mag nooit de app blokkeren.
     }
-  }, [toonHerinnering, uid]);
+  }, [toonHerinnering, uid, werkbonnen, activities]);
 
   // (Her)laad bij mount, rolwissel en globale refresh (o.a. ná uren boeken).
   useEffect(() => { load(); }, [load, refreshKey]);

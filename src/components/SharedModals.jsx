@@ -8,6 +8,7 @@ import { createDeal } from '../services/dealService.js';
 import { createActivity, updateActivity, deleteActivity, buildDueAt, getActiviteitNotities, addActiviteitNotitie } from '../services/activityService.js';
 import { syncActivity } from '../services/googleCalendarService.js';
 import { useProfile } from '../lib/profileContext.jsx';
+import { useData } from '../lib/dataContext.jsx';
 import { triggerAutoEmail } from '../services/emailService.js';
 import { getCompanyId } from '../lib/currentCompany.js';
 import { createCalendarEvent } from '../services/calendarService.js';
@@ -702,13 +703,13 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
     }
   }, [categorieen]); // eslint-disable-line react-hooks/exhaustive-deps
   // Leveranciers om uit te kiezen. Verplicht: zie validate().
-  const [leverancierOpties, setLeverancierOpties] = useState([]);
-  const [werkbonnen, setWerkbonnen] = useState([]);
+  // Leveranciers en werkbonnen komen uit de gedeelde dataset; deze modal haalde
+  // ze op bij élke opening. Projecten zitten niet in de context, dus die blijft
+  // een eigen fetch.
+  const { leveranciers: leverancierOpties = [], werkbonnen = [], refresh: verversGedeeld } = useData();
   const [projecten, setProjecten] = useState([]);
   useEffect(() => {
-    getWerkbonnen().then(setWerkbonnen).catch(() => {});
     getProjects().then(setProjecten).catch(() => {});
-    listLeveranciers({ inclusiefInactief: false }).then(setLeverancierOpties).catch(() => {});
   }, []);
   const [regels, setRegels] = useState(() => [newKostenRegel()]);
   const [bijlageFiles, setBijlageFiles] = useState([]);
@@ -907,7 +908,7 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
               value={form.leverancier_id}
               onChange={v => setField('leverancier_id', v)}
               leveranciers={leverancierOpties}
-              onLijstGewijzigd={g => setLeverancierOpties(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
+              onLijstGewijzigd={() => verversGedeeld?.()}
               verplicht
               fout={Boolean(errors.leverancier_id)}
             />

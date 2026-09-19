@@ -846,18 +846,16 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
   const [date, setDate] = useState(cost.date || '');
   const [desc, setDesc] = useState(cost.desc || '');
   const [leverancierId, setLeverancierId] = useState(cost.leverancierId || '');
-  const [leverancierOpties, setLeverancierOpties] = useState([]);
-  useEffect(() => { listLeveranciers({ inclusiefInactief: false }).then(setLeverancierOpties).catch(() => {}); }, []);
+  // Leveranciers en werkbonnen komen uit de gedeelde dataset; deze modal haalde
+  // ze op bij élke keer dat je een kostenregel opent. Projecten zitten niet in
+  // de context, dus die blijft een eigen fetch.
+  const { leveranciers: leverancierOpties = [], werkbonnen = [], refresh: verversGedeeld } = useData();
   const [savedField, setSavedField] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const toast = useToast();
 
-  const [werkbonnen, setWerkbonnen] = useState([]);
   const [projecten, setProjecten] = useState([]);
-  useEffect(() => {
-    getWerkbonnen().then(setWerkbonnen).catch(() => {});
-    getProjects().then(setProjecten).catch(() => {});
-  }, []);
+  useEffect(() => { getProjects().then(setProjecten).catch(() => {}); }, []);
 
   // amount is exclusief BTW → btw-bedrag en incl. afgeleid (live).
   const btwCalc = calcBtw(amt, btwPct, 'excl');
@@ -1017,7 +1015,7 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
                 value={leverancierId}
                 onChange={v => { setLeverancierId(v); save('leverancier_id', v); if (v) setLevGemeld(false); }}
                 leveranciers={leverancierOpties}
-                onLijstGewijzigd={g => setLeverancierOpties(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
+                onLijstGewijzigd={() => verversGedeeld?.()}
                 verplicht={!isWerkbonMateriaal}
                 fout={levGemeld && levOntbreekt}
               />
