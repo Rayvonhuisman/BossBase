@@ -630,9 +630,17 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     case 'active_deals': {
       // Echte deals in de pipeline: niet verloren/afgerond/betaald, en niet de
       // eerste (nieuwe aanvragen) fase. Valt terug op demo-strings.
-      const all = deals.filter(d => stageIndex.size
+      const actieveDeals = deals.filter(d => stageIndex.size
         ? (dStatus(d) === 'open' && !stageIndex.get(d.stage)?.isFirst)
         : !['lost', 'completed', 'paid', 'new_lead'].includes(d.stage));
+      // Alle/Mijn/Team deed niets: de knoppen hadden geen onPick. Nu op de
+      // behandelaars van de aanvraag (assigned_to_ids), dezelfde bron als het
+      // filter in de pipeline.
+      const dealsView = widget.settings?.dealsView || 'Alle';
+      const vanMij = d => Boolean(currentUserId) && (d.assignedToIds || []).includes(currentUserId);
+      const all = dealsView === 'Mijn' ? actieveDeals.filter(vanMij)
+        : dealsView === 'Team' ? actieveDeals.filter(d => !vanMij(d))
+        : actieveDeals;
       const count = all.length;
       const totalVal = all.reduce((s, d) => s + (d.value || 0), 0);
       const items = all.slice(0, 6);
@@ -655,7 +663,10 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       return (
         <div className="bb-widget">
           <WHead title="Actieve deals" sub={`${count} deals · ${eur(totalVal)}`}
-            right={<Seg options={['Alle', 'Mijn', 'Team']} active="Alle" />} />
+            right={<Seg
+              options={['Alle', 'Mijn', 'Team']}
+              active={dealsView}
+              onPick={o => onSettingsChange && onSettingsChange({ ...widget.settings, dealsView: o })} />} />
           {items.length === 0 ? (
             <EmptyState title="Geen actieve deals" text="Push een lead verder of voeg een nieuwe deal toe." />
           ) : (

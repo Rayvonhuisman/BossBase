@@ -10,7 +10,7 @@ import { getFacturen } from '../../services/factuurService.js';
 import { listJobCosts, alleenGeboekt } from '../../services/jobCostService.js';
 import { listCalendarEvents } from '../../services/calendarService.js';
 import { sumOmzetExclBtw } from '../../services/customerTotalsService.js';
-import { loadUserWidgets, saveUserWidgets } from '../../services/dashboardWidgetService.js';
+import { loadUserWidgets, saveUserWidgets, updateWidgetSettings } from '../../services/dashboardWidgetService.js';
 import { getDefaultWidgets, DEFAULT_LAYOUTS, DEFAULT_LAYOUT_KEY, DEFAULT_MEDEWERKER_LAYOUT_KEY, normalizeWidgetSize, bestaatWidget } from '../../data/widgetRegistry.js';
 import { DashboardCustomizeBar } from './DashboardCustomizeBar.jsx';
 import { DashboardWidgetGrid } from './DashboardWidgetGrid.jsx';
@@ -391,7 +391,19 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
     setSaving(true);
     setSaveError('');
     try {
-      await saveUserWidgets(widgets);
+      // De opgeslagen rijen terug in de state. saveUserWidgets verwijdert en
+      // herinsert, dus de database geeft NIEUWE id's terug. Zonder deze regel
+      // bleef de UI doorwerken met de default-/local-id's van vóór het
+      // opslaan, en dan weet updateSettings niet welke rij hij moet bijwerken:
+      // je keuze voor Alle/Mijn/Team of Vandaag/Week werd stil niet bewaard.
+      // Sorteren op position, want de volgorde waarin een bulk-insert
+      // terugkomt is niets om op te leunen.
+      const opgeslagen = await saveUserWidgets(widgets);
+      if (opgeslagen && opgeslagen.length) {
+        setWidgets([...opgeslagen]
+          .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+          .map(mapDbWidget));
+      }
       setSavedFingerprint(widgetFingerprint(widgets));
       setEditMode(false);
       toast.success('Dashboard opgeslagen');
@@ -485,9 +497,20 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
     setSaveError('');
   }, []);
 
+  // De instelling van een tegel (Alle/Mijn/Team, Vandaag/Week) werd alleen in
+  // het geheugen gezet: updateWidgetSettings bestond wel, maar werd nergens
+  // aangeroepen. Je keuze was na een herlaadbeurt dus weg.
+  //
+  // Alleen bewaren voor een tegel die al in de database staat. Een nog niet
+  // opgeslagen tegel heeft een local-/default-id en bestaat daar niet; die
+  // keuze gaat mee zodra de gebruiker het dashboard opslaat.
   const updateSettings = useCallback((idx, settings) => {
-    setWidgets(ws => ws.map((w, i) => i === idx ? { ...w, settings } : w));
-  }, []);
+    const w = widgets[idx];
+    if (w && !/^(local|default)-/.test(String(w.id))) {
+      updateWidgetSettings(w.id, settings).catch(() => {});
+    }
+    setWidgets(ws => ws.map((x, i) => i === idx ? { ...x, settings } : x));
+  }, [widgets]);
 
   // Header greeting
   const greetName = displayName(profile, user);
