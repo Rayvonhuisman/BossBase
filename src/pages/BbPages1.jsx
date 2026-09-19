@@ -22,8 +22,8 @@ import { getOffertesByCustomer } from '../services/offerteService.js';
 import { getFacturenByCustomer } from '../services/factuurService.js';
 import { getProjectsByCustomer } from '../services/projectsService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
-import { listPipelineStages } from '../services/dealService.js';
-import { buildStageIndex, dealCategory } from '../utils/pipeline.js';
+import { listPipelineStages, updateDealStage } from '../services/dealService.js';
+import { buildStageIndex, dealStatus } from '../utils/pipeline.js';
 import { korteDatum } from '../utils/werkbonDagen.js';
 import { PlanningRegels, losseRegels, planRegels, samenOpDatum } from '../components/PlanningBlok.jsx';
 import { WerkbonModal } from './WerkbonPageV2.jsx';
@@ -246,6 +246,9 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   const [cWerkbonnen, setCWerkbonnen] = useState([]);
   const [cDealsLijst, setCDeals] = useState([]);
   const [stages, setStages] = useState([]);
+  // Moet hier staan en niet verderop: de klantkaart heeft early returns, en een
+  // hook daarna breekt de volgorde.
+  const [faseBezig, setFaseBezig] = useState(false);
   const [showNewWerkbon, setShowNewWerkbon] = useState(false);
   const [showNewOfferte, setShowNewOfferte] = useState(false);
   const [showNewFactuur, setShowNewFactuur] = useState(false);
@@ -270,7 +273,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   // activiteit van deze klant (verslepen in de planning bijvoorbeeld). Zonder
   // die sleutel in het laadeffect hieronder blijft de klantkaart op zijn oude
   // kopie staan en toont het Planning-blok de vorige dag en tijd.
-  const { company, profile, refreshKey } = useProfile();
+  const { company, profile, refreshKey, bumpRefresh } = useProfile();
   const { can, isAdmin } = usePermissions();
 
   useEffect(() => {
@@ -376,7 +379,10 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   const stageIndex = buildStageIndex(stages);
   const opDatum = (a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
   const cDeals = [...cDealsLijst].sort(opDatum);
-  const actieveDeal = cDeals.find(d => dealCategory(d, stageIndex) === 'open') || cDeals[0] || null;
+  // Status uit de database, niet geraden uit de fasenaam — dezelfde omzetting
+  // als op het dashboard. Een deal met status 'won' in de fase "Gepland" is
+  // gewonnen, niet lopend.
+  const actieveDeal = cDeals.find(d => dealStatus(d, stageIndex) === 'open') || cDeals[0] || null;
   // Werkbonnen bij die deal; heeft de deal er geen, dan die van de klant zelf.
   const dealWerkbonnen = actieveDeal ? cWerkbonnen.filter(w => w.dealId === actieveDeal.id) : [];
   const planWerkbonnen = dealWerkbonnen.length ? dealWerkbonnen : cWerkbonnen;
@@ -423,6 +429,31 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
         waarde: actieveDeal.value || 0,
       }
     : null;
+  // De fase van de lopende aanvraag aanpassen, vanaf de klantkaart zelf.
+  //
+  // Alleen met 'verkoop': de policy deals_update eist dat recht in zowel qual
+  // als with_check. Zonder recht een keuzelijst tonen zou een knop opleveren
+  // die de database stil weigert.
+  const magFaseWijzigen = Boolean(actieveDeal) && can('verkoop');
+  const gesorteerdeStages = [...stages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const wijzigFase = async stageId => {
+    if (!actieveDeal || !stageId || stageId === actieveDeal.stage) return;
+    const vorige = actieveDeal.stage;
+    setFaseBezig(true);
+    // Meteen in beeld; bij een fout draaien we hem terug.
+    setCDeals(list => list.map(d => (d.id === actieveDeal.id ? { ...d, stage: stageId } : d)));
+    try {
+      await updateDealStage(actieveDeal.id, stageId);
+      toast.success(`Fase gewijzigd naar ${stageIndex.get(stageId)?.label || 'de nieuwe fase'}`);
+      bumpRefresh?.();
+    } catch (e) {
+      setCDeals(list => list.map(d => (d.id === actieveDeal.id ? { ...d, stage: vorige } : d)));
+      toast.error(e.message || 'Fase wijzigen is mislukt');
+    } finally {
+      setFaseBezig(false);
+    }
+  };
+
   const cQuotes = [];
   // Zelfde definitie als de klantenlijst, Financiën en de database-export.
   const { total: totalGefactureerd, paid: totalBetaald } = customerTotals({ facturen: cFacturen });
@@ -746,7 +777,22 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
               <button type="button" className="kk-blok-titel" onClick={() => setPage?.('pipeline')}>
                 Aanvraag <span className="kk-pijl">→</span>
               </button>
-              {aanvraag?.fase && <span className="badge b-gray">{aanvraag.fase}</span>}
+              {magFaseWijzigen ? (
+                <select
+                  className="badge b-gray"
+                  style={{ border: '1px solid var(--border)', cursor: 'pointer', padding: '2px 6px', maxWidth: 190 }}
+                  value={actieveDeal.stage || ''}
+                  disabled={faseBezig}
+                  aria-label="Fase van deze aanvraag"
+                  onChange={e => wijzigFase(e.target.value)}
+                >
+                  {gesorteerdeStages.map(s => (
+                    <option key={s.id} value={s.id}>{s.label}</option>
+                  ))}
+                </select>
+              ) : (
+                aanvraag?.fase && <span className="badge b-gray">{aanvraag.fase}</span>
+              )}
             </div>
             {aanvraag ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
