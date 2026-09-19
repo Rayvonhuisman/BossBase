@@ -53,7 +53,7 @@ export const FEATURES = [
   // zodat er nergens meer een losse `tier === '…'`-vergelijking nodig is.
   // `intern: true` houdt het uit prijskaarten en upgrade-meldingen.
   { key: 'gedeelde_werkruimte',     label: 'Gedeelde werkruimte',         intern: true,
-    uitleg: 'Iedereen ziet elkaars agenda, projecten en werkbonnen zonder rechtenbeheer. Past bij een bedrijf van één of twee personen.' },
+    uitleg: 'Iedereen ziet alles van het bedrijf zonder rechtenbeheer: agenda, projecten, werkbonnen, deals, offertes, facturen en kosten. Past bij een bedrijf van één of twee personen.' },
 ]
 
 // Features die aan de gebruiker getoond mogen worden (prijskaarten, upgrade).

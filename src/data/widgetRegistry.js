@@ -247,12 +247,6 @@ export const WIDGET_FEATURE = {
   job_costs_bar_chart: 'kosten_nacalculatie',
 };
 
-// Widgets waarbij de rechteneis vervalt in een gedeelde werkruimte. Ook dit
-// volgt de policy: bij Groei (1-2 personen) ziet iedereen elkaars werk zonder
-// rechtenbeheer, dus daar klopt het teamtotaal zónder recht. Zou de tegel daar
-// tóch verborgen worden, dan verstopten we cijfers die de gebruiker mag zien.
-const GEDEELDE_WERKRUIMTE_WIDGETS = new Set(['activities_per_day_chart']);
-
 /**
  * Mag deze gebruiker deze widget zien? Eén plek voor de hele afweging —
  * abonnement én rechten — zodat het dashboard, de toevoegen-modal en de
@@ -268,8 +262,21 @@ export function magWidgetZien(type, { can, has } = {}) {
   const feature = WIDGET_FEATURE[type];
   if (feature && has && !has(feature)) return false;
 
-  // 2. In een gedeelde werkruimte vervalt de rechteneis voor teambrede tegels.
-  if (GEDEELDE_WERKRUIMTE_WIDGETS.has(type) && has && has('gedeelde_werkruimte')) return true;
+  // 2. In een gedeelde werkruimte vervalt élke rechteneis.
+  //
+  //    Groei (1-2 personen) heeft geen `rollen_rechten` — die feature zit pas
+  //    in Team. De rechten-UI staat daar dus op slot en user_permissions blijft
+  //    leeg, terwijl bb_has_permission() alleen `true` geeft voor admin en
+  //    planner. Wie je uitnodigt wordt medewerker (zie accept-invite), en die
+  //    had dus nergens recht op zonder dat iemand daar iets aan kon doen: 8 van
+  //    de 27 tegels. Een recht dat niemand kán toekennen is geen bescherming
+  //    maar een blokkade.
+  //
+  //    De policies volgen dit sinds 20260919210000: deals, facturen, offertes
+  //    en job_costs kennen nu bb_gedeelde_werkruimte(), net als agenda,
+  //    projecten en werkbonnen al deden. UI en database zeggen dus hetzelfde —
+  //    zonder die migratie zou dit lege tegels opleveren in plaats van cijfers.
+  if (has && has('gedeelde_werkruimte')) return true;
 
   // 3. Het recht. Een array = één ervan volstaat.
   const nodig = WIDGET_PERMISSION[type];
