@@ -3253,7 +3253,10 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .meld-modal{max-width:540px}
 .meld-actie{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;margin-bottom:16px;border-radius:var(--r12);background:linear-gradient(135deg,#f0fdf4,#ecfeff);border:1px solid #bbf7d0;font-size:.83rem;color:var(--dm)}
 .meld-actie-icoon{color:var(--pd);flex-shrink:0;margin-top:1px}
-.meld-actie-kop{font-weight:700;color:var(--dk);margin-bottom:3px}
+.meld-actie-kop{font-weight:700;color:var(--dk);margin-bottom:3px;display:flex;align-items:center;gap:6px}
+/* Het info-icoontje klapt de voorwaarden uit; bb-info staat standaard op
+   cursor:help omdat het daar een tooltip is. Hier klik je er echt op. */
+.meld-voorwaarden-knop{cursor:pointer}
 .meld-actie ul{margin:0;padding-left:18px;line-height:1.55}
 .meld-voorwaarden{margin:8px 0 0;font-size:.7rem;line-height:1.45;color:var(--dl)}
 .meld-soort{display:grid;grid-template-columns:1fr 1fr;gap:10px}

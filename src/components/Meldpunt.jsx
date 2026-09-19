@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bug, Lightbulb, MessageSquarePlus, ImagePlus, X, Gift, CheckCircle2 } from 'lucide-react';
+import { Bug, Lightbulb, MessageSquarePlus, ImagePlus, X, Gift, CheckCircle2, Info } from 'lucide-react';
 import { ModalX } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import {
@@ -64,6 +64,10 @@ function MeldModal({ pagina, prijzen, onClose }) {
   const [shotFout, setShotFout] = useState('');
   const [bezig, setBezig] = useState(false);
   const [klaar, setKlaar] = useState(null);       // { nummer, bevestigd, actie }
+  // De voorwaarden staan achter het info-icoontje. Uitgeklapt en niet als
+  // tooltip: het is te veel tekst om te lezen in een blokje dat verdwijnt zodra
+  // je de muis beweegt.
+  const [voorwaardenOpen, setVoorwaardenOpen] = useState(false);
   const fileRef = useRef(null);
   const tekstRef = useRef(null);
 
@@ -160,13 +164,30 @@ function MeldModal({ pagina, prijzen, onClose }) {
               <div className="meld-actie">
                 <Gift size={18} className="meld-actie-icoon" />
                 <div>
-                  <div className="meld-actie-kop">Wie een melding doet, maakt kans op:</div>
+                  <div className="meld-actie-kop">
+                    Wie een melding doet, maakt kans op:
+                    <button
+                      type="button"
+                      className="bb-info meld-voorwaarden-knop"
+                      aria-expanded={voorwaardenOpen}
+                      aria-controls="meld-voorwaarden"
+                      title="Voorwaarden"
+                      aria-label="Voorwaarden van de actie"
+                      onClick={() => setVoorwaardenOpen(v => !v)}
+                    >
+                      <Info size={14} />
+                    </button>
+                  </div>
                   <ul>{prijzen.map(p => <li key={p}>{p}</li>)}</ul>
-                  <p className="meld-voorwaarden">
-                    Deelname staat open voor gebruikers van BossBase.<br />
-                    Winnaars worden door ons gekozen uit de ingezonden meldingen en krijgen persoonlijk bericht.<br />
-                    Over de uitslag kan niet worden gecorrespondeerd.
-                  </p>
+                  {voorwaardenOpen && (
+                    <p className="meld-voorwaarden" id="meld-voorwaarden">
+                      Deelname staat open voor gebruikers van BossBase. De prijzen worden verdeeld
+                      onder de eerste 1500 klanten die iets doorgeven. Je mag zoveel meldingen doen
+                      als je wilt: elke melding geeft extra kans om te winnen. Winnaars worden door
+                      ons gekozen uit de ingezonden meldingen en krijgen persoonlijk bericht. Over
+                      de uitslag kan niet worden gecorrespondeerd.
+                    </p>
+                  )}
                 </div>
               </div>
             )}
