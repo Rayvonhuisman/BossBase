@@ -1111,6 +1111,21 @@ export function CostsPage() {
   const [selectedCost, setSelectedCost] = useState(null);
   const [mbAdminId, setMbAdminId] = useState('');
   const [leveranciers, setLeveranciers] = useState([]);
+  // Werkbonmateriaal staat standaard NIET in deze lijst. Deze pagina is de
+  // boekhouding, en die spiegelregels zijn geen boeking: de inkoopfactuur van de
+  // leverancier is daar de kostenpost. Wie ze wil zien zet de schakelaar aan; de
+  // keuze blijft in deze browser bewaard (per gebruiker, per apparaat).
+  //
+  // De schakelaar toont alleen: de tegels, de totalen en de btw-indicatie
+  // rekenen altijd met `boekingen`, nooit met wat hier zichtbaar is.
+  const [toonMateriaal, setToonMateriaal] = useState(() => {
+    try { return localStorage.getItem('kosten_toon_werkbonmateriaal') === 'true'; } catch { return false; }
+  });
+  const zetToonMateriaal = aan => {
+    setToonMateriaal(aan);
+    // Privémodus of geblokkeerde opslag: dan onthouden we het gewoon niet.
+    try { localStorage.setItem('kosten_toon_werkbonmateriaal', String(aan)); } catch { /* niet blokkerend */ }
+  };
   React.useEffect(() => {
     setLoading(true);
     Promise.all([listJobCosts(), listCustomers(), listDeals(), getConnection(), listLeveranciers()])
@@ -1130,11 +1145,16 @@ export function CostsPage() {
     if (filterCat && r.cat !== filterCat) return false;
     return true;
   });
-  const total = filtered.reduce((s, c) => s + c.amt, 0);
+  // Eén splitsing waar alles aan hangt: de tabel toont de boekingen, de tegels
+  // rekenen erop, en het materiaal staat apart. Zo kán de schakelaar geen enkel
+  // totaal veranderen — er is niet één plek waar de twee bij elkaar opgeteld
+  // worden.
+  const boekingen = alleenGeboekt(filtered);
+  const materiaalRegels = filtered.filter(isWerkbonMateriaalKost);
   // De categorietegels tellen alleen boekingen, zodat ze optellen tot
   // "Geboekte kosten". Werkbonmateriaal staat apart: dat is de kostprijs van een
   // klus, geen boeking (zie alleenGeboekt).
-  const groepTotalen = kostenPerGroep(alleenGeboekt(filtered));
+  const groepTotalen = kostenPerGroep(boekingen);
   // Kosten zonder leverancier kunnen niet naar de boekhouding. Werkbonmateriaal
   // telt niet mee: die regels worden sowieso niet geëxporteerd.
   const zonderLeverancier = costs.filter(c => !c.leverancierId && !isWerkbonMateriaalKost(c));
@@ -1145,8 +1165,10 @@ export function CostsPage() {
   // geen enkele klus hangen. Dat was geen kostprijs van iets. Wat een klus kost
   // staat nu op het project (werkbonmateriaal + projectkosten); deze pagina is
   // de boekhouding, dus de eerste tegel is wat er geboekt is, en de categorieën
-  // tellen daartoe op. Werkbonmateriaal krijgt een eigen tegel, en alleen als
-  // het er is — zonder het recht inkoopprijzen komen die regels niet binnen.
+  // tellen daartoe op. Werkbonmateriaal heeft hier bewust GEEN tegel meer: het
+  // is geen boeking, dus het hoort niet tussen de bedragen die optellen tot het
+  // kostentotaal. Het staat onder de tabel, achter de schakelaar, met een eigen
+  // subtotaal.
   // Arbeid blijft staan zolang er oude data is; als categorie is hij niet meer
   // te kiezen.
   const tegels = [
@@ -1156,8 +1178,6 @@ export function CostsPage() {
     ...(groepTotalen.arbeid > 0 ? [{ label: 'Arbeidskosten', val: fmt(groepTotalen.arbeid), icon: I.hours }] : []),
     { label: 'Reiskosten', val: fmt(groepTotalen.reiskosten), icon: I.map },
     { label: 'Overige kosten', val: fmt(groepTotalen.overig), icon: I.costs },
-    ...(splitsing.werkbonMateriaal > 0 ? [{ label: 'Materiaal op werkbonnen', val: fmt(splitsing.werkbonMateriaal), icon: I.costs,
-      sub: 'Niet geboekt · telt in de projectmarge' }] : []),
   ];
   return (
     <div>
@@ -1184,17 +1204,18 @@ export function CostsPage() {
           </div>
         ))}
       </div>
-      {splitsing.werkbonMateriaal > 0 && (
-        <div className="f-label-rij afu2" style={{ marginBottom: 14 }}>
-          {/* Het bedrag blijft staan — dat is een gegeven. Waaróm het geen
-              boeking is, zat er als alinea onder en zit nu achter het icoon. */}
-          <span style={{ fontSize: '.78rem', color: 'var(--dm)' }}>
-            {fmt(splitsing.werkbonMateriaal)} aan werkbonmateriaal
-          </span>
-          <InfoUitklap
-            id="uitleg-werkbonmateriaal"
-            tekst={`Dit staat hier ter inzage, maar is geen boeking: het telt in de marge van het project, en in de boekhouding is de inkoopfactuur van je leverancier de kostenpost. Daarom zit het niet in de geboekte kosten.`}
-          />
+      {/* Staat de schakelaar aan, dan staat er meteen bij wat je ziet — anders
+          lijkt het materiaal alsnog een kostenpost die nergens meetelt. */}
+      {toonMateriaal && (
+        <div className="afu2" style={{
+          fontSize: '.82rem', color: 'var(--dm)', lineHeight: 1.55,
+          background: 'var(--bgs)', border: '1px solid var(--border)',
+          borderRadius: 'var(--r8)', padding: '10px 12px', marginBottom: 14,
+        }}>
+          Materiaal op werkbonnen is wat je op klussen hebt verbruikt. Dit zijn geen boekingen: in je
+          boekhouding is de inkoopfactuur van je leverancier de kostenpost. Deze bedragen tellen daarom niet
+          mee in je kostentotaal en je btw. Je ziet ze hier puur voor inzicht, en ze tellen wel mee in de
+          marge van een project.
         </div>
       )}
       {zonderLeverancier.length > 0 && (
@@ -1227,12 +1248,25 @@ export function CostsPage() {
             <select className="btn btn-s btn-sm" style={{ padding: '5px 10px' }} value={filterCat} onChange={e => setFilterCat(e.target.value)}>
               <option value="">Alle categorieën</option>{cats.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
+            <label
+              className="btn btn-s btn-sm"
+              style={{ padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}
+              title="Materiaal van werkbonnen is geen boeking en telt niet mee in de totalen"
+            >
+              <input
+                type="checkbox"
+                checked={toonMateriaal}
+                onChange={e => zetToonMateriaal(e.target.checked)}
+                style={{ margin: 0 }}
+              />
+              Materiaal op werkbonnen tonen
+            </label>
           </div>
         </div>
         <table className="dt">
           <thead><tr><th>Klant</th><th>Categorie</th><th>Omschrijving</th><th>Leverancier</th><th>Bedrag</th><th>Datum</th><th>Bron</th><th></th></tr></thead>
           <tbody>
-            {filtered.map(r => {
+            {boekingen.map(r => {
               const c = customers.find(x => x.id === r.custId);
               return (
                 <tr key={r.id} onClick={() => setSelectedCost(r)} style={{ cursor: 'pointer' }}>
@@ -1278,12 +1312,51 @@ export function CostsPage() {
                 </tr>
               );
             })}
-            {filtered.length === 0 && !loading && (
-              <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--dl)', padding: 24 }}>Geen kosten gevonden{(filterCust || filterCat) ? ' bij dit filter.' : '. Voeg de eerste kost toe.'}</td></tr>
+            {boekingen.length === 0 && !loading && (
+              <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--dl)', padding: 24 }}>Geen kosten gevonden{(filterCust || filterCat) ? ' bij dit filter.' : '. Voeg de eerste kost toe.'}</td></tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {/* Materiaal apart, met een eigen subtotaal. Bewust een eigen tabel en
+          geen extra rijen in de tabel hierboven: daar staat wat geboekt is, en
+          alles in die lijst telt mee in de tegels. */}
+      {toonMateriaal && (
+        <div className="tw afu3" style={{ marginTop: 14 }}>
+          <div className="tw-hd">
+            <div className="card-title">Materiaal op werkbonnen ({materiaalRegels.length})</div>
+            <div style={{ fontSize: '.82rem', color: 'var(--dm)' }}>
+              Subtotaal <strong>{fmt(splitsing.werkbonMateriaal)}</strong>
+              <span style={{ color: 'var(--dl)' }}> · niet meegeteld in de kosten hierboven</span>
+            </div>
+          </div>
+          <table className="dt">
+            <thead><tr><th>Klant</th><th>Omschrijving</th><th>Bedrag</th><th>Datum</th></tr></thead>
+            <tbody>
+              {materiaalRegels.map(r => {
+                const c = customers.find(x => x.id === r.custId);
+                return (
+                  <tr key={r.id} onClick={() => setSelectedCost(r)} style={{ cursor: 'pointer' }}>
+                    <td style={{ fontWeight: 600 }}>{r.customerId ? (customers.find(x => x.id === r.customerId)?.name || '') : (c?.name || '')}</td>
+                    <td>{(r.desc || '').replace(/^Materiaal:\s*/i, '')}</td>
+                    <td style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
+                      {fmt(r.amt)}
+                      <div style={{ fontSize: '.7rem', color: 'var(--dl)', fontWeight: 400 }}>inkoopprijs, excl. btw</div>
+                    </td>
+                    <td style={{ color: 'var(--dl)', fontSize: '.8rem' }}>{r.date}</td>
+                  </tr>
+                );
+              })}
+              {materiaalRegels.length === 0 && (
+                <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--dl)', padding: 24 }}>
+                  Geen materiaal op werkbonnen{(filterCust || filterCat) ? ' bij dit filter.' : '.'}
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
       {showNew && (
         <NewJobCostModal
           onClose={() => setShowNew(false)}
