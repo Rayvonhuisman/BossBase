@@ -229,7 +229,7 @@ function deriveCharts({ deals = [], activities = [], offertes = [], customers = 
 
 export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, openCalendarEvent }) {
   const { profile, user, company, loading: profileLoading, permissionsLoaded, requestNewLead, requestNewActivity, refreshKey } = useProfile();
-  const { can, isAdmin } = usePermissions();
+  const { can, magBewerken, isAdmin } = usePermissions();
   // Rechten zeggen "mag deze gebruiker het", het abonnement zegt "zit het in dit
   // pakket". De widgetfilters wegen allebei (zie magWidgetZien).
   //
@@ -576,7 +576,15 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
             {!editMode && (
               <>
                 <button className="btn btn-s btn-sm" onClick={() => requestNewActivity?.()}>{I.act} Nieuwe activiteit</button>
-                <button className="btn btn-s btn-sm" onClick={() => requestNewLead?.()}>{I.plus} Nieuwe aanvraag</button>
+                {/* Deze maakt een deal aan, en deals_insert eist 'verkoop' —
+                    die policy kent bb_gedeelde_werkruimte() bewust niet. Zonder
+                    het recht opende deze knop een modal die de database stil
+                    weigert. "Nieuwe activiteit" hiernaast mag wel blijven: de
+                    INSERT-policy op activities vraagt alleen om het eigen
+                    bedrijf, geen recht. */}
+                {magBewerken('verkoop') && (
+                  <button className="btn btn-s btn-sm" onClick={() => requestNewLead?.()}>{I.plus} Nieuwe aanvraag</button>
+                )}
                 <button className="btn btn-p btn-sm" onClick={enterEdit}>{I.edit} Dashboard aanpassen</button>
               </>
             )}

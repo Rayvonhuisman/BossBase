@@ -9,6 +9,7 @@ import { useProfile, displayName } from '../lib/profileContext.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { ActivityEditModal, NewLeadModal } from '../components/SharedModals.jsx';
 import { usePlanGuard } from '../components/PlanUpgradeModal.jsx';
+import { usePermissions } from '../hooks/usePermissions.js';
 import { statusInfo } from '../utils/statusColors.js';
 import { buildStageIndex, dealStatus } from '../utils/pipeline.js';
 import { getTeamMembers } from '../services/notificatieService.js';
@@ -106,10 +107,14 @@ function MobilePipeline({ stages, dealsInStage, openCustomer, moveDeal, markLost
           {stageDeals.length === 0 && (
             <div className="pipe-mob-empty">
               <div>Geen leads in deze fase</div>
-              <button className="btn btn-p btn-sm" style={{ marginTop: 14 }}
-                onClick={() => { setNewStage(stage.id); setShowNew(true); }}>
-                {I.plus} Lead toevoegen
-              </button>
+              {/* setShowNew komt niet binnen zonder 'verkoop' — zelfde patroon
+                  als markLost hieronder. */}
+              {setShowNew && (
+                <button className="btn btn-p btn-sm" style={{ marginTop: 14 }}
+                  onClick={() => { setNewStage(stage.id); setShowNew(true); }}>
+                  {I.plus} Lead toevoegen
+                </button>
+              )}
             </div>
           )}
           {stageDeals.map(deal => {
@@ -162,9 +167,11 @@ function MobilePipeline({ stages, dealsInStage, openCustomer, moveDeal, markLost
         </div>
 
         {/* Add lead to this stage */}
-        <button className="pipe-mob-add" onClick={() => { setNewStage(stage.id); setShowNew(true); }}>
-          {I.plus} Lead toevoegen aan {stage.label}
-        </button>
+        {setShowNew && (
+          <button className="pipe-mob-add" onClick={() => { setNewStage(stage.id); setShowNew(true); }}>
+            {I.plus} Lead toevoegen aan {stage.label}
+          </button>
+        )}
       </div>
 
     </div>
@@ -245,6 +252,16 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
   const toast = useToast();
   const { refreshKey, bumpRefresh } = useProfile();
   const { guardSchrijven, planModal } = usePlanGuard();
+  // guardSchrijven kijkt alleen naar plan.readonly — dat is een abonnements-
+  // wachter, geen rechtenwachter. Sinds de gedeelde werkruimte kan een
+  // medewerker zónder 'verkoop' deze pagina openen (can('verkoop') geeft daar
+  // true voor inzage), en dan stonden hier knoppen die de database stil
+  // weigert: deals_insert en deals_update eisen nog altijd dat recht.
+  //
+  // Zien mag, wijzigen niet. Dit dekt aanmaken, slepen, prioriteit en
+  // verloren markeren.
+  const { magBewerken } = usePermissions();
+  const magDealsBeheren = magBewerken('verkoop');
   const [deals, setDeals] = useState([]);
   const [stages, setStages] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -586,7 +603,9 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
           <button className={`btn btn-s btn-sm${showFilter ? ' active' : ''}`} onClick={() => setShowFilter(s => !s)}>
             {I.flag} Filter{filterActive ? ' (actief)' : ''}
           </button>
-          <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een aanvraag toevoegen', () => { setNewStage(null); setShowNew(true); })}>{I.plus} Nieuwe aanvraag</button>
+          {magDealsBeheren && (
+            <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een aanvraag toevoegen', () => { setNewStage(null); setShowNew(true); })}>{I.plus} Nieuwe aanvraag</button>
+          )}
         </div>
       </div>
 
@@ -647,7 +666,9 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
             {filterActive && <button className="btn btn-s btn-sm" onClick={resetFilter}>Reset filter</button>}
-            <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een aanvraag toevoegen', () => { setNewStage(null); setShowNew(true); })}>{I.plus} Nieuwe aanvraag</button>
+            {magDealsBeheren && (
+              <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een aanvraag toevoegen', () => { setNewStage(null); setShowNew(true); })}>{I.plus} Nieuwe aanvraag</button>
+            )}
           </div>
         </div>
       )}
@@ -658,11 +679,11 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
           dealsInStage={dealsInStage}
           geenVervolg={geenVervolg}
           openCustomer={openCustomer}
-          moveDeal={moveDeal}
-          markLost={markLost}
+          moveDeal={magDealsBeheren ? moveDeal : null}
+          markLost={magDealsBeheren ? markLost : null}
           lostStageId={lostStageId}
           setNewStage={setNewStage}
-          setShowNew={guardSchrijven('Een lead toevoegen', setShowNew)}
+          setShowNew={magDealsBeheren ? guardSchrijven('Een lead toevoegen', setShowNew) : null}
           customers={customers}
         />
       )}
@@ -723,9 +744,9 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
           return (
             <div key={stageId}
               className={`pipe-col${dragOverStage === stageId ? ' pipe-col-drop' : ''}`}
-              onDragOver={e => onColDragOver(e, stageId)}
-              onDragLeave={e => onColDragLeave(e, stageId)}
-              onDrop={e => onColDrop(e, stageId)}>
+              onDragOver={magDealsBeheren ? (e => onColDragOver(e, stageId)) : undefined}
+              onDragLeave={magDealsBeheren ? (e => onColDragLeave(e, stageId)) : undefined}
+              onDrop={magDealsBeheren ? (e => onColDrop(e, stageId)) : undefined}>
               <div className="pipe-col-hd">
                 <div>
                   <span className="badge" style={{ ...stageBadgeStyle(stage.col), marginBottom: 2 }}>{stage.label}</span>
@@ -752,11 +773,14 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
                     <div key={deal.id}
                       className={`pc${draggingId === deal.id ? ' pc-dragging' : ''}`}
                       style={{ cursor: 'pointer', position: 'relative' }}
-                      draggable
-                      onDragStart={e => onCardDragStart(e, deal)}
-                      onDragEnd={onCardDragEnd}
+                      draggable={magDealsBeheren}
+                      onDragStart={magDealsBeheren ? (e => onCardDragStart(e, deal)) : undefined}
+                      onDragEnd={magDealsBeheren ? onCardDragEnd : undefined}
                       onClick={() => openCustomer(deal.custId)}>
-                      {deal.stage !== lostStageId && (
+                      {/* Het ⋮-menu bevat prioriteit (updateDeal) en "markeer
+                          als verloren" (markDealLost). Beide vragen 'verkoop',
+                          dus één toets op de opener dekt ze allebei. */}
+                      {deal.stage !== lostStageId && magDealsBeheren && (
                         <button
                           className="btn-icon pc-menu-btn"
                           title="Meer acties"
@@ -806,7 +830,9 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
                   <div style={{ fontSize: '.74rem', color: 'var(--dl)', textAlign: 'center', padding: '12px 6px' }}>Geen items</div>
                 )}
               </div>
-              <button className="pipe-add" onClick={guardSchrijven('Een lead toevoegen', () => { setNewStage(stageId); setShowNew(true); })}>{I.plus} Lead toevoegen</button>
+              {magDealsBeheren && (
+                <button className="pipe-add" onClick={guardSchrijven('Een lead toevoegen', () => { setNewStage(stageId); setShowNew(true); })}>{I.plus} Lead toevoegen</button>
+              )}
             </div>
           );
         })}

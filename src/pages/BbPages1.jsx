@@ -274,7 +274,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   // die sleutel in het laadeffect hieronder blijft de klantkaart op zijn oude
   // kopie staan en toont het Planning-blok de vorige dag en tijd.
   const { company, profile, refreshKey, bumpRefresh } = useProfile();
-  const { can, isAdmin } = usePermissions();
+  const { can, magBewerken, isAdmin } = usePermissions();
 
   useEffect(() => {
     const el = document.querySelector('.sb');
@@ -434,7 +434,12 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   // Alleen met 'verkoop': de policy deals_update eist dat recht in zowel qual
   // als with_check. Zonder recht een keuzelijst tonen zou een knop opleveren
   // die de database stil weigert.
-  const magFaseWijzigen = Boolean(actieveDeal) && can('verkoop');
+  //
+  // Daarom magBewerken en niet can: sinds de gedeelde werkruimte geeft can()
+  // voor 'verkoop' ook true aan een medewerker in een Groei-bedrijf, zodat hij
+  // de Pipeline kan openen. Zien mag daar, wijzigen niet — deals_update kent
+  // bb_gedeelde_werkruimte() bewust niet.
+  const magFaseWijzigen = Boolean(actieveDeal) && magBewerken('verkoop');
   const gesorteerdeStages = [...stages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   const wijzigFase = async stageId => {
     if (!actieveDeal || !stageId || stageId === actieveDeal.stage) return;

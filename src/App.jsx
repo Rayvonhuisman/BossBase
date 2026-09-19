@@ -46,7 +46,7 @@ import { createMissingProfile, getSession, logout, onAuthStateChange } from './s
 import { getCurrentUserContext } from './services/profileService.js';
 import { getPlanStatus, fallbackPlanStatus } from './services/planService.js';
 import { getUserPermissions } from './services/permissionsService.js';
-import { usePermissions } from './hooks/usePermissions.js';
+import { usePermissions, INZAGE_RECHTEN } from './hooks/usePermissions.js';
 import { usePlan } from './hooks/usePlan.js';
 import { ReadOnlyBanner } from './components/ReadOnly.jsx';
 import { CheckoutTerugkeer } from './components/CheckoutTerugkeer.jsx';
@@ -1513,10 +1513,32 @@ function AppInner() {
   // Twee onafhankelijke gates: het rechtensysteem (mag deze gebruiker het?) en
   // de abonnementsmatrix (zit het in dit pakket?).
   useEffect(() => {
-    if (!profile || !permissionsLoaded) return;
+    // Ook op planStatus wachten, niet alleen op permissionsLoaded. Die twee
+    // komen na elkaar binnen: setPermissionsLoaded(true) staat vóór de await
+    // van getPlanStatus(), dus er is een venster waarin de rechten bekend zijn
+    // en de abonnementsstand nog niet. In dat venster is gedeeldeWerkruimte
+    // hieronder false, en kaatste een directe URL (/dashboard/pipeline) terug
+    // naar het dashboard terwijl dezelfde pagina via het menu wél opende.
+    if (!profile || !permissionsLoaded || !planStatus) return;
     const isAdmin = profile.role === 'admin';
     const requiredPerm = PROTECTED_PAGES[page];
-    if (requiredPerm && !isAdmin && !userPermissions.includes(requiredPerm)) {
+    // In een gedeelde werkruimte vervallen de inzagerechten — dezelfde regel als
+    // in usePermissions().can(), in magWidgetZien en in de policies.
+    //
+    // Die hook kan hier niet gebruikt worden: AppInner levert de profielcontext
+    // zélf, en een component kan de context die hij aanbiedt niet consumeren.
+    // Vandaar dat de regel hier is uitgeschreven, met INZAGE_RECHTEN uit
+    // dezelfde bron zodat de twee niet uit elkaar kunnen lopen.
+    //
+    // Zonder dit blokkeerde de route wat het menu wél toonde: Pipeline,
+    // Offertes, Facturen en Kosten kaatsten terug naar het dashboard met
+    // "Je hebt geen toegang tot deze pagina".
+    const gedeeldeWerkruimte = Boolean(planStatus?.features?.includes('gedeelde_werkruimte'));
+    const magPagina = !requiredPerm
+      || isAdmin
+      || userPermissions.includes(requiredPerm)
+      || (gedeeldeWerkruimte && INZAGE_RECHTEN.has(requiredPerm));
+    if (!magPagina) {
       toast.error('Je hebt geen toegang tot deze pagina');
       navigatePage('dashboard');
       return;
