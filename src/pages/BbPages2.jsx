@@ -13,6 +13,7 @@ import LeverancierSelect from '../components/LeverancierSelect.jsx'
 import { categorieOptiesUit } from '../lib/kostenCategorieen.js';
 import { useKostenCategorieen } from '../hooks/useKostenCategorieen.js';
 import { getAllFactuurRegels } from '../services/factuurService.js';
+import { getFinancienKpi } from '../services/financienService.js';
 import { getConnection } from '../services/accountingService.js';
 import { getBtwPeriodes, syncBtwData } from '../services/btwService.js';
 import { berekenBtwIndicatie } from '../services/btwIndicatieService.js';
@@ -1541,11 +1542,39 @@ export function RevenuePage() {
   // eigen datumveld: gefactureerd kijkt naar de factuurdatum, ontvangen naar de
   // betaaldatum, en openstaand is een momentopname zonder tijdvak (net als de
   // kolom Openstaand, die ook alles meetelt wat nog niet binnen is).
-  const omzetPeriode     = sumGefactureerd(facturen.filter(f => inPeriode(f.factuurdatum)));
-  const ontvangenPeriode = sumBetaald(facturen.filter(f => inPeriode(f.betaaldOp)));
-  const openstaand       = sumOpenstaand(facturen);
-  const teVerwachten     = offertes.filter(o => o.status === 'geaccepteerd').reduce((s, o) => s + o.totaalIncl, 0);
-  const kostenPeriode    = costsData.filter(c => inPeriode(c.date)).reduce((s, c) => s + c.amt, 0);
+  // De tegels komen uit de database (bb_financien_kpi, migratie 20260919160000)
+  // en niet meer uit vijf volledige tabellen die de browser optelt. Dezelfde
+  // definities, dus dezelfde bedragen — alleen staan ze er nu binnen een
+  // seconde in plaats van na zeven.
+  //
+  // kpiRange denkt in maandsleutels ("2026-09"); de database wil echte datums.
+  const kpiDatums = React.useMemo(() => {
+    if (kpiRange.mode === 'month') {
+      const [j, m] = kpiRange.start.split('-').map(Number);
+      const laatste = new Date(j, m, 0).getDate();
+      return { van: `${kpiRange.start}-01`, tot: `${kpiRange.start}-${String(laatste).padStart(2, '0')}` };
+    }
+    return { van: kpiRange.start || '', tot: kpiRange.end || '' };
+  }, [kpiRange]);
+
+  const [kpi, setKpi] = useState(null);
+  React.useEffect(() => {
+    if (!kpiDatums.van || !kpiDatums.tot) return undefined;
+    let leeft = true;
+    // Bewust géén setKpi(null) vooraf: bij het wisselen van periode blijven de
+    // vorige bedragen staan tot de nieuwe binnen zijn. Dat leest rustiger dan
+    // een tegel die even op nul springt.
+    getFinancienKpi(kpiDatums)
+      .then(r => { if (leeft) setKpi(r); })
+      .catch(() => { if (leeft) setKpi(null); });
+    return () => { leeft = false; };
+  }, [kpiDatums.van, kpiDatums.tot, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const omzetPeriode     = kpi?.gefactureerd ?? 0;
+  const ontvangenPeriode = kpi?.ontvangen ?? 0;
+  const openstaand       = kpi?.openstaand ?? 0;
+  const teVerwachten     = kpi?.teVerwachten ?? 0;
+  const kostenPeriode    = kpi?.kosten ?? 0;
   const netto            = ontvangenPeriode - kostenPeriode;
   const marge            = ontvangenPeriode > 0 ? Math.round((netto / ontvangenPeriode) * 100) : 0;
 
@@ -1714,7 +1743,10 @@ export function RevenuePage() {
         </div>
       </div>
 
-      {(loading || gedeeldLaden) && <div className="card card-p">Financiën laden...</div>}
+      {/* De tegels hangen niet meer aan dit laden: die komen uit één RPC en
+          staan er als eerste. Deze melding gaat alleen nog over de grafiek, de
+          btw-kaart en de tabel per klant, die op de gedeelde dataset wachten. */}
+      {!kpi && (loading || gedeeldLaden) && <div className="card card-p">Financiën laden...</div>}
 
       <div className="stats-row afu2" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
         {KPI.map((k, i) => (
