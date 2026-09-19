@@ -11,7 +11,7 @@ import { DashboardHome } from './pages/dashboard/DashboardHome.jsx';
 import { Pipeline } from './pages/BbDashboard.jsx';
 import { DealDetailDrawer } from './pages/dashboard/DealDetailDrawer.jsx';
 import { leesRoute, bouwRoute } from './lib/route.js';
-import { schrijfEntry, sluitDelta } from './lib/geschiedenis.js';
+import { schrijfEntry, sluitDelta, huidigeIndex } from './lib/geschiedenis.js';
 import { useEscapeSluit } from './hooks/useEscapeSluit.js';
 import AbonnementPage from './pages/AbonnementPage.jsx';
 import { CalendarEventDetailDrawer } from './pages/dashboard/CalendarEventDetailDrawer.jsx';
@@ -209,6 +209,23 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, compan
   };
   const hideNavTip = () => setNavTip(null);
 
+  // Ingeklapt heeft een groep (Relaties) geen ruimte voor zijn subitems. Een
+  // klik opent ze daarom in een klein menu ernaast; anders kon je alleen naar
+  // het eerste kind (Klanten) en was Leveranciers onbereikbaar.
+  const [groepMenu, setGroepMenu] = useState(null);
+  useEffect(() => {
+    if (!groepMenu) return undefined;
+    const dicht = e => {
+      if (e.type === 'keydown' && e.key !== 'Escape') return;
+      if (e.type === 'mousedown' && e.target.closest?.('.sb-flyout, .sb-flyout-kop')) return;
+      setGroepMenu(null);
+    };
+    document.addEventListener('mousedown', dicht);
+    document.addEventListener('keydown', dicht);
+    return () => { document.removeEventListener('mousedown', dicht); document.removeEventListener('keydown', dicht); };
+  }, [groepMenu]);
+  useEffect(() => { if (!collapsed) setGroepMenu(null); }, [collapsed]);
+
   return (
     <>
       {open && (
@@ -242,6 +259,19 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, compan
             </span>,
             document.body
           )}
+          {groepMenu && createPortal(
+            <div className="sb-flyout" role="menu" aria-label={groepMenu.label} style={{ left: groepMenu.x, top: groepMenu.y }}>
+              <div className="sb-flyout-titel">{groepMenu.label}</div>
+              {groepMenu.kinderen.map(kind => (
+                <button key={kind.id} role="menuitem" type="button"
+                  className={`sb-flyout-item${page === kind.id ? ' active' : ''}`}
+                  onClick={() => { setGroepMenu(null); go(kind.id); }}>
+                  {kind.label}
+                </button>
+              ))}
+            </div>,
+            document.body
+          )}
         </div>
 
         <nav className="sb-nav" ref={navRef}
@@ -265,17 +295,22 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, compan
                   // Groep met subitems (Relaties → Klanten/Leveranciers).
                   if (item.kinderen) {
                     const actiefKind = item.kinderen.find(k => k.id === page);
-                    // Ingeklapt is er geen ruimte voor subitems: dan gedraagt de
-                    // groep zich als één knop naar het eerste kind, met de
-                    // subitems in de tooltip.
+                    // Ingeklapt is er geen ruimte voor subitems: een klik opent
+                    // ze in een klein menu ernaast (groepMenu).
                     if (collapsed) {
                       return (
                         <button
                           key={item.id}
-                          className={`sbi${actiefKind ? ' active' : ''}`}
-                          onClick={() => go(item.kinderen[0].id)}
+                          className={`sbi sb-flyout-kop${actiefKind ? ' active' : ''}`}
+                          onClick={e => {
+                            hideNavTip();
+                            const r = e.currentTarget.getBoundingClientRect();
+                            setGroepMenu(m => (m?.id === item.id ? null : { id: item.id, x: r.right + 8, y: r.top, kinderen: item.kinderen, label: item.label }));
+                          }}
                           aria-label={item.label}
-                          onMouseEnter={e => showNavTip(e, `${item.label}: ${item.kinderen.map(k => k.label).join(', ')}`)}
+                          aria-haspopup="menu"
+                          aria-expanded={groepMenu?.id === item.id}
+                          onMouseEnter={groepMenu ? undefined : e => showNavTip(e, item.label)}
                           onMouseLeave={hideNavTip}
                         >
                           <span className="sbi-icon">{I[item.icon]}</span>
@@ -1271,12 +1306,31 @@ function AppInner() {
   // tabblad met de kaart nog open. sluitDelta() geeft het aantal stappen naar
   // de entry waar dit venster openging — precies dat venster dicht, en niets
   // anders.
+  //
+  // Eén keer per stap. Veel vensters roepen bij opslaan eerst onSaved() en dan
+  // onClose() aan, en de pagina sluit in onSaved zelf óók. history.go() werkt
+  // pas na afloop, dus de tweede aanroep zag het venster nog in de URL en ging
+  // nóg een stap terug: na het opslaan van een activiteit belandde je op de
+  // pagina daarvóór (bijvoorbeeld Leveranciers). Een tweede sluitactie op
+  // dezelfde entry doet daarom niets; de popstate van de eerste zet dit vrij.
+  const sluitBezig = useRef(null);
+  useEffect(() => {
+    const vrij = () => { sluitBezig.current = null; };
+    window.addEventListener('popstate', vrij);
+    return () => window.removeEventListener('popstate', vrij);
+  }, []);
   const sluitTerug = useCallback((soort, terugval) => {
     const r = leesRoute(BASISPAD);
     const venster = soort || 'item';
     if (venster === 'item' ? !r.itemId : !r[venster]) return;
     const delta = sluitDelta(venster);
-    if (delta) { window.history.go(delta); return; }
+    if (delta) {
+      const sleutel = `${huidigeIndex()}:${venster}`;
+      if (sluitBezig.current === sleutel) return;
+      sluitBezig.current = sleutel;
+      window.history.go(delta);
+      return;
+    }
     gaNaar(terugval);
   }, [gaNaar]);
 

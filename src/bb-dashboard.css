@@ -204,6 +204,13 @@ ul{list-style:none}
 .sb-toggle-icon{display:flex;align-items:center;justify-content:center;width:18px;height:18px;flex-shrink:0;transition:transform .28s cubic-bezier(.22,1,.36,1)}
 .sb.collapsed .sb-toggle-icon{transform:rotate(180deg)}
 .sb-toggle-tip{position:fixed;transform:translateY(-50%);background:#1a1a1a;color:#fff;font-size:.72rem;font-weight:600;padding:5px 9px;border-radius:6px;white-space:nowrap;pointer-events:none;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.25);letter-spacing:.01em}
+/* Menu naast een ingeklapte groep (Relaties → Klanten / Leveranciers). Zelfde
+   donkere stijl als de tooltip ernaast, maar klikbaar. */
+.sb-flyout{position:fixed;z-index:9999;min-width:150px;background:#1a1a1a;border-radius:8px;padding:6px;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+.sb-flyout-titel{font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.45);padding:4px 8px 6px}
+.sb-flyout-item{display:block;width:100%;text-align:left;background:none;border:0;border-radius:6px;padding:7px 8px;font-size:.8rem;font-weight:600;color:#fff;cursor:pointer;font-family:inherit}
+.sb-flyout-item:hover,.sb-flyout-item:focus-visible{background:rgba(255,255,255,.08);outline:none}
+.sb-flyout-item.active{color:#1DDB62}
 
 /* Mobile reset — never apply collapsed styles on touch widths.
    Sidebar is already hidden via mobile.css, but in case mobile.css is not
