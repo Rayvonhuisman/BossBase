@@ -194,7 +194,7 @@ export function NewCustomerModal({ onClose, onSaved }) {
 // ── NEW LEAD / DEAL MODAL ────────────────────────────────────
 export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage = '', defaultCustomerId = '' }) {
   const toast = useToast();
-  const { company } = useProfile();
+  const { company, profile } = useProfile();
   // Always prefer real DB stages; only fall back to the hardcoded slug list if
   // the database has no stages at all (so the dropdown isn't empty).
   const stageOptions = (stages?.length ? stages : PIPELINE_STAGES);
@@ -211,6 +211,10 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
     description: '',
     priority: 'med',
     newCustomerName: '',
+    // Wie de aanvraag behandelen. Standaard degene die hem aanmaakt: een leeg
+    // veld zou betekenen dat aanvragen opnieuw zonder eigenaar ontstaan, en dat
+    // was nu juist het probleem.
+    assignedToIds: profile?.id ? [profile.id] : [],
   });
   const [createNewCust, setCreateNewCust] = useState(!defaultCustomerId && (customers?.length || 0) === 0);
   const [errors, setErrors] = useState({});
@@ -254,6 +258,11 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
         value: form.value,
         notes: form.description,
         priority: form.priority,
+        // Vangnet: was het profiel bij het openen nog niet geladen, dan staat
+        // de lijst leeg. Liever de aanmaker dan niemand.
+        assigned_to_ids: form.assignedToIds.length
+          ? form.assignedToIds
+          : (profile?.id ? [profile.id] : []),
       };
       // Only send stage_id when it actually looks like a DB UUID. Slug
       // fallbacks ('new_lead', etc.) are dropped so Postgres can use the
@@ -336,6 +345,15 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
               <option value="med">Normaal</option>
               <option value="low">Laag</option>
             </select>
+          </div>
+          <div className="f s2">
+            <label>Wie behandelt deze aanvraag?</label>
+            <MemberMultiSelect
+              members={teamMembersNL}
+              value={form.assignedToIds}
+              onChange={ids => set('assignedToIds', ids)}
+              disabled={saving}
+            />
           </div>
           <div className="f s2">
             <label>Omschrijving</label>
