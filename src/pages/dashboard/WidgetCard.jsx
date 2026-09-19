@@ -371,6 +371,13 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     else if (d && d.custId) openCustomer(d.custId);
     else setPage('pipeline');
   };
+  // Naar de klantkaart, tabblad Overzicht — daar staat het Aanvraag-blok. De
+  // sleutel is 'overview' (TAB_LABELS in BbPages1.jsx); een onbekende tab valt
+  // stil terug op de standaard, dus die naam moet exact kloppen.
+  const goKlantOverzicht = d => () => {
+    if (d && d.custId) openCustomer(d.custId, 'overview');
+    else setPage('pipeline');
+  };
   const goInvoice = o => () => { if (o && o.id && openInvoice) openInvoice(o.id); else setPage('revenue'); };
   const open = {
     offerte:  o => o && o.id ? setPage('offertes', { id: o.id }) : setPage('offertes'),
@@ -596,7 +603,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                 const name = c?.name || d.customerName || 'Onbekende klant';
                 const ago = relAgo(d.createdAt);
                 return (
-                  <button key={d.id} className="feed-row ic-lead" onClick={goDeal(d)}>
+                  <button key={d.id} className="feed-row ic-lead" onClick={goKlantOverzicht(d)}>
                     <span className="feed-icon"><AvatarSq name={name} /></span>
                     <div className="feed-main">
                       <div className="feed-title">{name}</div>
