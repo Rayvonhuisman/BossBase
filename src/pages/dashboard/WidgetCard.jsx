@@ -1029,12 +1029,17 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     // ───────── Snelle acties ─────────
     case 'quick_actions': {
       const acts = [
-        { icon: I.pipe,   l: 'Nieuwe aanvraag', d: 'voeg toe aan pipeline', tone: { qaBg: '#ecfdf5', qaFg: '#15A34A' }, go: 'pipeline', primary: true },
+        // I.pipe was een staafdiagrammetje: dat staat voor een grafiek, niet
+        // voor een aanvraag. De andere vijf tonen allemaal hun onderwerp, dus
+        // hier de aktetas — die staat in deze app al voor een pipeline-aanvraag
+        // (zie de tegel "Open pipelinewaarde").
+        { icon: I.brief,  l: 'Nieuwe aanvraag', d: 'voeg toe aan pipeline', tone: { qaBg: '#ecfdf5', qaFg: '#15A34A' }, go: 'pipeline', primary: true },
         { icon: I.act,    l: 'Activiteit',     d: 'plan een belactie',     tone: { qaBg: '#eff6ff', qaFg: '#2563eb' }, go: 'activities' },
         { icon: I.quotes, l: 'Offerte',        d: 'nieuwe offerte maken',  tone: { qaBg: '#f5f3ff', qaFg: '#7c3aed' }, go: 'offertes' },
         { icon: I.wo,     l: 'Werkbon',        d: 'nieuwe werkbon',        tone: { qaBg: '#fffbeb', qaFg: '#b45309' }, go: 'werkbonnen' },
         { icon: I.cust,   l: 'Klant',          d: 'klantbestand uitbreiden', tone: { qaBg: '#f0fdfa', qaFg: '#0d9488' }, go: 'customers' },
-        { icon: I.hours,  l: 'Uren boeken',    d: 'urenregistratie',       tone: { qaBg: '#f0fdf4', qaFg: '#15A34A' }, go: 'activities' },
+        // Ging naar 'activities' — de urenregistratie staat op 'uren'.
+        { icon: I.hours,  l: 'Uren boeken',    d: 'urenregistratie',       tone: { qaBg: '#f0fdf4', qaFg: '#15A34A' }, go: 'uren' },
       ];
       return (
         <div className="bb-widget">
