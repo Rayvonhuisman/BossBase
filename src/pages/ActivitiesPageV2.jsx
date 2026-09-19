@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listActivities, updateActivity } from '../services/activityService.js';
-import { listCustomers } from '../services/customerService.js';
-import { listDeals } from '../services/dealService.js';
 import { ActivityEditModal, NewActivityModal } from '../components/SharedModals.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { useData } from '../lib/dataContext.jsx';
 import { useUrlTab } from '../hooks/useUrlTab.js';
 import { usePlanGuard } from '../components/PlanUpgradeModal.jsx';
 import { getTeamMembers } from '../services/notificatieService.js';
@@ -143,8 +142,10 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onItemOpen, 
   const { refreshKey, bumpRefresh } = useProfile();
   const { guardSchrijven, planModal } = usePlanGuard();
   const [acts, setActs] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [deals, setDeals] = useState([]);
+  // Klanten en deals komen uit de gedeelde dataset; deze pagina haalde ze apart
+  // op. De activiteiten zelf blijven eigen state: die worden hier na een
+  // bewerking lokaal bijgewerkt, zodat je je wijziging meteen ziet.
+  const { customers = [], deals = [] } = useData();
   const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -161,11 +162,9 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onItemOpen, 
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([listActivities(), listCustomers(), listDeals(), getTeamMembers()])
-      .then(([activityData, customerData, dealData, memberData]) => {
+    Promise.all([listActivities(), getTeamMembers()])
+      .then(([activityData, memberData]) => {
         setActs(activityData);
-        setCustomers(customerData);
-        setDeals(dealData);
         setTeamMembers(memberData);
         setError('');
       })

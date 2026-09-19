@@ -6,6 +6,7 @@ import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
 import { InfoTip, InfoUitklap } from '../components/Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { useData } from '../lib/dataContext.jsx';
 import {
   getOffertes, createOfferte, updateOfferte, deleteOfferte, calculateOfferteTotals, createOfferteItem, getOfferteItems, deleteOfferteItemsByOfferteId,
   copyOfferte, markOfferteVervangen, nextOfferteVersionNumber,
@@ -15,8 +16,6 @@ import { getEigenEenheden } from '../services/eigenEenheidService.js';
 import { typeCfg, typeOptionsWith, applyTypeChange, omschrijvingFallback, reconstructRegel } from '../lib/regelTypes.js'
 import BtwRegimeSelect, { VerlegdUitleg } from '../components/BtwRegimeSelect.jsx';
 import { regimeVanPct, regimeVanRegel, regimeVoorOpslag } from '../lib/btwRegime.js';
-import { listCustomers } from '../services/customerService.js';
-import { listDeals } from '../services/dealService.js';
 import { NewFactuurModal, SendFactuurMailModal } from './FacturenPage.jsx';
 import { generateOffertePdf, previewOffertePdf, getOffertePdfBase64 } from '../utils/generatePdf.js';
 import { mistGetekendePdf, stuurGetekendePdfNa } from '../services/getekendePdfService.js';
@@ -1079,8 +1078,10 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
   const { profile, company } = useProfile();
   const canManageOffertes = profile?.role === 'admin' || profile?.role === 'planner';
   const [offertes, setOffertes] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [deals, setDeals] = useState([]);
+  // Klanten en deals komen uit de gedeelde dataset; deze pagina haalde ze apart
+  // op. De offertes zelf blijven eigen state: die worden hier na kopiëren,
+  // verwijderen of een nieuwe versie lokaal bijgewerkt.
+  const { customers = [], deals = [] } = useData();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -1099,8 +1100,8 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
 
   const load = () => {
     setLoading(true);
-    Promise.all([getOffertes(), listCustomers(), listDeals().catch(() => [])])
-      .then(([o, c, d]) => { setOffertes(o); setCustomers(c); setDeals(d); setError(''); })
+    getOffertes()
+      .then(o => { setOffertes(o); setError(''); })
       .catch(err => setError(err.message || 'Laden mislukt'))
       .finally(() => setLoading(false));
   };
@@ -1242,11 +1243,10 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
 
   const handleDownloadPdfFromMenu = async (o) => {
     try {
-      const [items, customerList] = await Promise.all([
-        getOfferteItems(o.id),
-        listCustomers(),
-      ]);
-      const customer = customerList.find(c => c.id === o.customerId) || null;
+      // De klantenlijst staat al in de gedeelde dataset; die hoefde hier niet
+      // opnieuw opgehaald te worden voor één naam op de PDF.
+      const items = await getOfferteItems(o.id);
+      const customer = customers.find(c => c.id === o.customerId) || null;
       await generateOffertePdf(o, items, customer, companyForDocument(o, company));
     } catch (e) {
       toast.error('PDF genereren mislukt: ' + e.message);

@@ -3,15 +3,13 @@ import { I, ModalX, NotifyMailToggle, fmt, fmt0, BackToKlant } from '../bb-share
 import { InfoTip } from '../components/Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { useData } from '../lib/dataContext.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
 import { usePlanGuard } from '../components/PlanUpgradeModal.jsx';
 import {
   getEnrichedProjects,
   createProject,
 } from '../services/projectsService.js';
-import { listCustomers } from '../services/customerService.js';
-import { listDeals } from '../services/dealService.js';
-import { getOffertes } from '../services/offerteService.js';
 import { ProjectDetailDrawer } from './projects/ProjectDetailDrawer.jsx';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { getTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
@@ -295,9 +293,11 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [projects, setProjects] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [deals, setDeals] = useState([]);
-  const [offertes, setOffertes] = useState([]);
+  // Klanten, deals en offertes komen uit de gedeelde dataset die de app toch al
+  // ophaalt; deze pagina haalde ze apart op. De projecten zelf blijven een eigen
+  // fetch: die staan niet in de context en worden hier verrijkt met uren en
+  // facturen (getEnrichedProjects).
+  const { customers = [], deals = [], offertes = [] } = useData();
 
   const [statusFilter, setStatusFilter] = useState('all'); // all | gepland | in_uitvoering | afgerond
   const [invoiceFilter, setInvoiceFilter] = useState('all'); // all | unbilled | billed
@@ -316,16 +316,8 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
     setLoading(true);
     setErr('');
     try {
-      const [proj, cs, ds, os] = await Promise.all([
-        getEnrichedProjects(),
-        listCustomers().catch(() => []),
-        listDeals().catch(() => []),
-        getOffertes().catch(() => []),
-      ]);
+      const proj = await getEnrichedProjects();
       setProjects(proj);
-      setCustomers(cs);
-      setDeals(ds);
-      setOffertes(os);
     } catch (e) {
       setErr(e.message || 'Laden mislukt');
     } finally {

@@ -6,17 +6,17 @@ import { supabase } from '../lib/supabase.js';
 import { I, fmt, Av } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { useData } from '../lib/dataContext.jsx';
 import { useUrlTab } from '../hooks/useUrlTab.js';
-import { listCustomers, deleteCustomer } from '../services/customerService.js';
+import { deleteCustomer } from '../services/customerService.js';
 import { sumGefactureerd, sumBetaald, sumOpenstaand } from '../services/customerTotalsService.js';
 import { getFacturen, getFactuurRegels, FACTUUR_STATUS_OPTIONS } from '../services/factuurService.js';
-import { getOffertes, getOfferteItems, getOndertekendePdfUrl, OFFERTE_STATUS_OPTIONS } from '../services/offerteService.js';
+import { getOfferteItems, getOndertekendePdfUrl, OFFERTE_STATUS_OPTIONS } from '../services/offerteService.js';
 import { getOffertePdfBase64, getFactuurPdfBase64 } from '../utils/generatePdf.js';
 import { getProjects, PROJECT_STATUS, PROJECT_STATUS_OPTIONS } from '../services/projectsService.js';
 import { statusInfo } from '../utils/statusColors.js';
-import { listDeals, listPipelineStages } from '../services/dealService.js';
 import { getLostReasons } from '../services/lostReasonService.js';
-import { listActivities, ACTIVITEIT_TYPE_LABELS } from '../services/activityService.js';
+import { ACTIVITEIT_TYPE_LABELS } from '../services/activityService.js';
 // De typen die de app daadwerkelijk kan wegschrijven (ALLOWED_TYPES in activityService);
 // de labelmap bevat daarnaast varianten die alleen voor weergave van oude data bestaan.
 const ACTIVITEIT_FILTER_TYPEN = ['call', 'email', 'visit', 'task', 'follow'];
@@ -459,15 +459,14 @@ export function DatabasePage({ openCustomer }) {
   const toast = useToast();
   const { profile, company } = useProfile();
 
-  const [customers, setCustomers]     = useState([]);
+  // Klanten, offertes, deals, activiteiten en fasen komen uit de gedeelde
+  // dataset die de app toch al ophaalt. Deze pagina haalde ze apart op: vijf
+  // extra verzoeken voor gegevens die al in het geheugen stonden.
+  const { customers = [], offertes = [], deals = [], activities = [], stages = [], refresh: verversGedeeld } = useData();
   const [projects, setProjects]       = useState([]);
   const [facturen, setFacturen]       = useState([]);
-  const [offertes, setOffertes]       = useState([]);
-  const [deals, setDeals]             = useState([]);
-  const [activities, setActivities]   = useState([]);
   const [sentEmails, setSentEmails]   = useState([]);
   const [urenData, setUrenData]       = useState([]);
-  const [stages, setStages]           = useState([]);
   const [lostReasons, setLostReasons] = useState([]);
   const [templates, setTemplates]     = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
@@ -527,15 +526,12 @@ export function DatabasePage({ openCustomer }) {
   // ── Load data ────────────────────────────────────────────────
   useEffect(() => {
     setLoading(true);
+    // Klanten, offertes, deals, activiteiten en fasen komen uit de gedeelde
+    // dataset (useData hierboven); hier blijft alleen wat daar niet in zit.
     Promise.all([
-      listCustomers(),
       getProjects(),
       getFacturen(),
-      getOffertes(),
-      listDeals(),
-      listActivities(),
       getEmailTemplates(),
-      listPipelineStages(),
       getLostReasons().catch(() => []),
       (async () => {
         const companyId = await getCompanyId();
@@ -572,9 +568,8 @@ export function DatabasePage({ openCustomer }) {
         const { data } = await supabase.rpc('get_accounting_status');
         return data || [];
       })(),
-    ]).then(([c, p, f, o, d, a, tpl, st, lr, se, ur, tm, ac]) => {
-      setCustomers(c); setProjects(p); setFacturen(f); setOffertes(o);
-      setDeals(d); setActivities(a); setTemplates(tpl); setStages(st);
+    ]).then(([p, f, tpl, lr, se, ur, tm, ac]) => {
+      setProjects(p); setFacturen(f); setTemplates(tpl);
       setLostReasons(lr); setSentEmails(se); setUrenData(ur); setTeamMembers(tm);
       const connected = new Set();
       (ac || []).forEach(row => {
@@ -756,7 +751,9 @@ export function DatabasePage({ openCustomer }) {
     setDeleting(true);
     try {
       const waarschuwing = await deleteCustomer(deleteTarget.id);
-      setCustomers(cs => cs.filter(c => c.id !== deleteTarget.id));
+      // De klantenlijst komt uit de gedeelde dataset, dus die ververst daar —
+      // anders bleef een verwijderde klant tot de volgende paginalading staan.
+      verversGedeeld?.();
       setSelected(s => { const n = new Set(s); n.delete(deleteTarget.id); return n; });
       if (waarschuwing) toast.error(waarschuwing, { duration: 10000 });
       else toast.success(`${deleteTarget.name} verwijderd`);
