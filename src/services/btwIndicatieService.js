@@ -60,7 +60,7 @@ export async function berekenBtwIndicatie({ start, eind, stelsel = 'factuur' }) 
 
   let factuurQ = supabase
     .from('facturen')
-    .select('id, nummer, status, is_credit, factuurdatum, betaald_op, factuur_regels(btw_pct, btw_regime, regelprijs)')
+    .select('id, nummer, status, is_credit, factuurdatum, betaald_op, totaal_excl, totaal_incl, factuur_regels(btw_pct, btw_regime, regelprijs)')
     .gte(datumVeld, start)
     .lte(datumVeld, eind)
 
@@ -93,12 +93,19 @@ export async function berekenBtwIndicatie({ start, eind, stelsel = 'factuur' }) 
   let btw1a = 0, omzet1a = 0;
   let btw1b = 0, omzet1b = 0;
   let omzet1e = 0;
+  // Btw zoals hij óp de facturen staat (incl − excl), per factuur al op centen.
+  // De rubrieken hierboven rekenen vanuit de regels en ronden pas aan het eind
+  // af; over een kwartaal scheelde dat een paar cent met de facturen zelf
+  // (gemeten: 206 van 208 facturen exact bij afronden per factuur, en de som van
+  // de regels zat er 6 cent naast). Het overzicht toont dit getal.
+  let btwOpFacturen = 0;
 
   for (const f of (facturen || [])) {
     // Een creditfactuur haalt af. De regelbedragen staan er al negatief in,
     // maar we rekenen met absolute waarden × teken zodat oude rijen met een
     // positief bedrag op een creditfactuur ook goed vallen.
     const teken = f.is_credit ? -1 : 1
+    btwOpFacturen += Math.abs(rond((Number(f.totaal_incl) || 0) - (Number(f.totaal_excl) || 0))) * teken
     for (const r of (f.factuur_regels || [])) {
       const bedrag = Math.abs(Number(r.regelprijs) || 0) * teken
       const regime = regimeVan(r)
@@ -114,15 +121,20 @@ export async function berekenBtwIndicatie({ start, eind, stelsel = 'factuur' }) 
   // niet naar de boekhouding — de inkoopfactuur van de leverancier is daar de
   // kostenpost, en die staat er als aparte kostenregel in.
   let btw5b = 0;
+  // Zelfde idee als btwOpFacturen: per kostenpost op centen, zoals het op de
+  // inkoopfactuur staat.
+  let btwOpKosten = 0;
   let kostenZonderBtw = 0;
   for (const k of (kosten || [])) {
     if (k.werkbon_materiaal_id) continue
     const pct = k.btw_percentage
     if (pct == null) { kostenZonderBtw++; continue }
     const bedrag = Math.abs(Number(k.amount) || 0)
-    btw5b += k.btw_inclusief
+    const btw = k.btw_inclusief
       ? bedrag - bedrag / (1 + Number(pct) / 100)
       : bedrag * (Number(pct) / 100)
+    btw5b += btw
+    btwOpKosten += rond(btw)
   }
 
   const teBetalen = rond(btw1a + btw1b - btw5b)
@@ -130,6 +142,11 @@ export async function berekenBtwIndicatie({ start, eind, stelsel = 'factuur' }) 
   return {
     stelsel,
     periode: { start, eind },
+    // De twee regels van het eenvoudige overzicht op Financiën: btw op je
+    // facturen en btw op je kosten, per document op centen. Kan een paar cent
+    // afwijken van 1a + 1b en 5b hieronder, die pas aan het eind afronden.
+    btwOntvangen: rond(btwOpFacturen),
+    btwBetaald: rond(btwOpKosten),
     rubrieken: {
       '1a': { omzet: rond(omzet1a), btw: rond(btw1a) },
       '1b': { omzet: rond(omzet1b), btw: rond(btw1b) },
