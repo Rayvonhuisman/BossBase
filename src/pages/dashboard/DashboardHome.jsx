@@ -198,12 +198,6 @@ function deriveCharts({ deals = [], activities = [], offertes = [], customers = 
   }
   const weeklyHours = wkRows.some(x => x.value > 0) ? wkRows : [];
 
-  const srcColors = ['#1DDB62', '#15A34A', '#2563eb', '#d97706', '#7c3aed', '#9ca3af'];
-  const srcMap = new Map();
-  deals.forEach(d => { if (d.source) srcMap.set(d.source, (srcMap.get(d.source) || 0) + 1); });
-  const leadSource = [...srcMap.entries()].sort((a, b) => b[1] - a[1])
-    .map(([label, value], i) => ({ label, value, color: srcColors[i % srcColors.length] }));
-
   const tcMap = new Map();
   deals.forEach(d => {
     const nm = nameOf(d);
@@ -228,7 +222,6 @@ function deriveCharts({ deals = [], activities = [], offertes = [], customers = 
     weeklyHours,
     dailyHours,
     activitiesPerDay,
-    leadSource,
     topCustomers,
   };
 }

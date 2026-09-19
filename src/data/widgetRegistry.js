@@ -44,7 +44,6 @@ export const WIDGET_REGISTRY = [
   { type: 'job_costs_bar_chart',     iconKey: 'costs',   label: 'Kosten per klant',        category: 'charts',    defaultSize: 'large', supportedSizes: ['medium', 'large', 'full'], description: 'Geregistreerde kosten per klant' },
   { type: 'weekly_hours_histogram',  iconKey: 'hours',   label: 'Uren per week',           category: 'charts',    defaultSize: 'large', supportedSizes: ['medium', 'large', 'full'], description: 'Histogram gewerkte uren per week' },
   { type: 'activities_per_day_chart',iconKey: 'act',     label: 'Activiteiten per dag',    category: 'charts',    defaultSize: 'medium', supportedSizes: ['medium', 'large', 'full'], description: 'Activiteiten per dag van de week' },
-  { type: 'lead_source_chart',       iconKey: 'pipe',    label: 'Lead bronnen',            category: 'charts',    defaultSize: 'large', supportedSizes: ['medium', 'large', 'full'], description: 'Verdeling leads per bron' },
   { type: 'top_customers_chart',     iconKey: 'cust',    label: 'Top klanten',             category: 'charts',    defaultSize: 'large', supportedSizes: ['medium', 'large', 'full'], description: 'Klanten gesorteerd op dealwaarde' },
 ];
 
@@ -146,8 +145,9 @@ export const DEFAULT_LAYOUTS = {
       w('open_facturen',         'large'),   // 6  → row 2 = 12 ✓
       w('monthly_profit_chart',  'large'),   // 6
       w('invoice_status_chart',  'large'),   // 6  → row 3 = 12 ✓
-      w('top_customers_chart',   'large'),   // 6
-      w('lead_source_chart',     'large'),   // 6  → row 4 = 12 ✓
+      // Rij 4 was top_customers naast lead_source_chart; die laatste is weg
+      // (er is geen bron-kolom op deals), dus Top klanten vult de rij nu zelf.
+      w('top_customers_chart',   'full'),    // 12 → row 4 = 12 ✓
       w('conversion_overview',   'full'),    // 12 → row 5 = 12 ✓
     ],
   },
@@ -217,7 +217,6 @@ export const WIDGET_PERMISSION = {
   active_deals:          'verkoop',
   conversion_overview:   'verkoop',
   conversion_funnel:     'verkoop',
-  lead_source_chart:     'verkoop',
 };
 
 // Het recht dat een widget vereist, of null als hij voor iedereen zichtbaar is.

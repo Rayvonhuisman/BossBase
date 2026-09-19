@@ -138,7 +138,23 @@ function WidgetControls({ size, supportedSizes, onMoveUp, onMoveDown, onResize, 
             <div className="dw-ctrl-section">Grootte</div>
             <div className="dw-size-row">
               {sizeOptions.map(o => (
-                <button key={o.value} className={`dw-size-btn${size === o.value ? ' active' : ''}`} onClick={() => onResize(o.value)}>
+                <button
+                  key={o.value}
+                  className={`dw-size-btn${size === o.value ? ' active' : ''}`}
+                  // Zwart met groene tekst, dezelfde tokens als .wb2-complete-btn
+                  // ("Klus afronden"). De actieve maat krijgt een groene rand —
+                  // zonder dat verschil zie je niet meer welke aanstaat.
+                  //
+                  // Inline en niet in bb-dashboard.css, omdat daar ongecommit
+                  // werk in staat dat niet in deze wijziging hoort. Verhuist naar
+                  // de klasse zodra dat bestand vrij is.
+                  style={{
+                    background: C.dk,
+                    color: C.p,
+                    borderColor: size === o.value ? C.p : C.dk,
+                  }}
+                  onClick={() => onResize(o.value)}
+                >
                   {o.label}
                 </button>
               ))}
@@ -1315,41 +1331,14 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       );
     }
 
-    case 'lead_source_chart': {
-      const src = charts.leadSource || [];
-      const total = src.reduce((s, x) => s + x.value, 0) || 1;
-      return (
-        <div className="bb-widget">
-          <WHead eyebrow="Leads" title="Bronnen" sub={`${total} leads · 30 dagen`} />
-          {src.length ? (
-            <div style={{ padding: '8px 16px 18px' }}>
-              <div style={{ display: 'flex', height: 16, borderRadius: 999, overflow: 'hidden' }}>
-                {src.map((s, i) => (
-                  <div key={i} {...hov(<Tt title={s.label} rows={[{ k: 'Leads', v: s.value }, { k: 'Aandeel', v: `${pct(s.value, total)}%` }]} />)} onClick={() => setPage('pipeline')} style={{ flex: s.value, background: s.color || C.green, cursor: 'pointer' }} />
-                ))}
-              </div>
-              <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {src.map((s, i) => (
-                  <div key={i} {...hov(<Tt title={s.label} rows={[{ k: 'Leads', v: s.value }, { k: 'Aandeel', v: `${pct(s.value, total)}%` }]} />)} onClick={() => setPage('pipeline')} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                    <span style={{ width: 10, height: 10, borderRadius: 999, background: s.color || C.green }} />
-                    <span style={{ fontSize: 12.5, color: C.dk, flex: 1 }}>{s.label}</span>
-                    <span style={{ fontSize: 11.5, color: C.dmu }}>{pct(s.value, total)}%</span>
-                    <span style={{ fontSize: 13, color: C.dk, fontWeight: 700, width: 28, textAlign: 'right' }}>{s.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : <EmptyState title="Geen bron-data" text="Vul lead-bron in op nieuwe aanvragen." />}
-        </div>
-      );
-    }
-
     case 'top_customers_chart': {
       const items = charts.topCustomers || [];
       const max = items.length ? items[0].value : 1;
       return (
         <div className="bb-widget">
-          <WHead eyebrow="Top 5" title="Beste klanten" sub="Jaar tot nu" />
+          {/* "Jaar tot nu" was onwaar: er zit geen enkel tijdvak in deze
+              berekening, hij sorteert alle aanvragen op dealwaarde. */}
+          <WHead eyebrow="Top 5" title="Beste klanten" sub="Op waarde van alle aanvragen" />
           {items.length ? (
             <div>
               {items.map((it, i) => {

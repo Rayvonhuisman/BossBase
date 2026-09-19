@@ -7,7 +7,9 @@ const LAYOUT_ROWS = {
   standaard: [[3,3,3,3], [6,6], [6,6], [12]],
   sales:     [[3,3,3,3], [6,6], [6,6]],
   planning:  [[3,3,3,3], [6,6], [6,6]],
-  financial: [[3,3,3,3], [6,6], [6,3,3]],
+  // Toonde drie rijen terwijl de layout er vijf heeft; het voorbeeld hoort te
+  // laten zien wat je krijgt.
+  financial: [[3,3,3,3], [6,6], [6,6], [12], [12]],
 };
 
 function LayoutPreview({ layoutKey }) {
