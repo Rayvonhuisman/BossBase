@@ -684,11 +684,8 @@ function KostenTab({ project, canManage }) {
             fontSize: 11.5, color: 'var(--dm)', marginTop: 10, lineHeight: 1.5,
             background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 11px',
           }}>
-            Brutowinst is gefactureerd min de kosten hieronder: het materiaal van de werkbonnen op inkoopprijs,
-            plus de inkopen. <b>Arbeid zit er niet in</b> — er is geen kostprijs per uur, dus de gewerkte uren
-            staan er wel bij maar tellen niet mee in het bedrag. Dit is dus brutowinst <b>vóór arbeid</b>, geen
-            nettowinst. Boekingen op de Kosten-pagina tellen ook niet mee: daar staat de inkoopfactuur van
-            hetzelfde materiaal.
+            Brutowinst is het gefactureerde bedrag min de kosten hieronder: materiaal op
+            inkoopprijs plus inkopen. Arbeid telt niet mee.
           </div>
         )}
 
