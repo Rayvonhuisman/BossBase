@@ -12,12 +12,11 @@ import { listLeveranciers } from '../services/leverancierService.js'
 import LeverancierSelect from '../components/LeverancierSelect.jsx'
 import { categorieOptiesUit } from '../lib/kostenCategorieen.js';
 import { useKostenCategorieen } from '../hooks/useKostenCategorieen.js';
-import { getFacturen, getAllFactuurRegels } from '../services/factuurService.js';
+import { getAllFactuurRegels } from '../services/factuurService.js';
 import { getConnection } from '../services/accountingService.js';
 import { getBtwPeriodes, syncBtwData } from '../services/btwService.js';
 import { berekenBtwIndicatie } from '../services/btwIndicatieService.js';
 import { InfoTip, InfoUitklap } from '../components/Uitleg.jsx';
-import { getOffertes } from '../services/offerteService.js';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { listCustomers } from '../services/customerService.js';
 import { sumGefactureerd, sumBetaald, sumOpenstaand, withCustomerTotals } from '../services/customerTotalsService.js';
@@ -1433,10 +1432,18 @@ export function RevenuePage() {
   const { refreshKey } = useProfile();
   // BTW-overzicht is een feature uit de centrale matrix (Groei+).
   const btwPlan = usePlan();
-  const [customers, setCustomers] = useState([]);
-  const [costsData, setCostsData] = useState([]);
-  const [facturen, setFacturen] = useState([]);
-  const [offertes, setOffertes] = useState([]);
+  // Klanten, kosten, facturen en offertes komen uit de gedeelde dataset die de
+  // app toch al ophaalt (DataContext). Deze pagina haalde ze apart op: vier
+  // verzoeken per bezoek voor gegevens die al in het geheugen stonden.
+  //
+  // jobCosts uit de context zijn al gefilterd op boekingen (alleenGeboekt in
+  // App.jsx) — precies wat hier nodig is: werkbonmateriaal staat in de
+  // boekhouding al als inkoopfactuur, en meetellen zou dezelfde inkoop dubbel
+  // tellen.
+  const {
+    customers = [], jobCosts: costsData = [], facturen = [], offertes = [],
+    loading: gedeeldLaden,
+  } = useData();
   const [allRegels, setAllRegels] = useState([]);
   const [chartMode, setChartMode] = useState('gefactureerd');
   const [chartPeriod, setChartPeriod] = useState('maand');
@@ -1458,14 +1465,10 @@ export function RevenuePage() {
 
   React.useEffect(() => {
     setLoading(true);
-    Promise.all([listCustomers(), listJobCosts(), getFacturen(), getOffertes(), getAllFactuurRegels(), getConnection()])
-      .then(([custData, costData, facturenData, offertesData, regelsData, mbConn]) => {
-        setCustomers(custData);
-        // Bedrijfskosten = boekingen. Werkbonmateriaal staat daar al in als
-        // inkoopfactuur; meetellen zou dezelfde inkoop dubbel tellen.
-        setCostsData(alleenGeboekt(costData));
-        setFacturen(facturenData);
-        setOffertes(offertesData);
+    // Alleen wat niet in de gedeelde dataset zit: de factuurregels (voor de
+    // btw-rubrieken) en de boekhoudkoppeling.
+    Promise.all([getAllFactuurRegels(), getConnection()])
+      .then(([regelsData, mbConn]) => {
         setAllRegels(regelsData);
         // Alleen Moneybird: dat is de enige koppeling die btw_periodes nog vult.
         // SnelStart stond hier als terugval, maar snelstart-sync-btw is eruit —
@@ -1681,7 +1684,7 @@ export function RevenuePage() {
         </div>
       </div>
 
-      {loading && <div className="card card-p">Financiën laden...</div>}
+      {(loading || gedeeldLaden) && <div className="card card-p">Financiën laden...</div>}
 
       <div className="stats-row afu2" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
         {KPI.map((k, i) => (

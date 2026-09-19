@@ -1,14 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { I, NotifyMailToggle, fmt, stageBadgeStyle } from '../../bb-shared.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
 import { useEscapeSluit } from '../../hooks/useEscapeSluit.js';
 import { useToast } from '../../lib/toast.jsx';
-import { listDeals, listPipelineStages, updateDeal } from '../../services/dealService.js';
-import { listActivities } from '../../services/activityService.js';
-import { getOffertes } from '../../services/offerteService.js';
+import { updateDeal } from '../../services/dealService.js';
 import { getDealNotities, addDealNotitie, deleteDealNotitie } from '../../services/dealNotitieService.js';
-import { listJobCosts } from '../../services/jobCostService.js';
-import { getWerkbonnen } from '../../services/werkbonService.js';
+import { useData } from '../../lib/dataContext.jsx';
 import NotitieLog, { toLogItem } from '../../components/NotitieLog.jsx';
 import { getTeamMembers, createMentionNotifications, notifyNewAssignees } from '../../services/notificatieService.js';
 
@@ -52,48 +49,53 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
   const toast = useToast();
   const { profile, bumpRefresh, requestNewActivity } = useProfile();
 
-  const [loading, setLoading] = useState(true);
+  const [notitiesLaden, setNotitiesLaden] = useState(true);
   const [err, setErr] = useState('');
-  const [deal, setDeal] = useState(null);
-  const [stages, setStages] = useState([]);
-  const [acts, setActs] = useState([]);
-  const [offs, setOffs] = useState([]);
+  // Deals, fasen, activiteiten, offertes, kosten en werkbonnen komen uit de
+  // gedeelde dataset (DataContext). Deze drawer haalde bij élke opening zes
+  // bedrijfsbrede lijsten op om één deal te tonen.
+  const {
+    deals = [], stages = [], activities = [], offertes = [],
+    jobCosts = [], werkbonnen = [], loading: gedeeldLaden,
+  } = useData();
+  // Na opslaan meteen de bijgewerkte deal tonen, zonder te wachten tot de
+  // gedeelde dataset ververst is.
+  const [bewerkteDeal, setBewerkteDeal] = useState(null);
+  const deal = (bewerkteDeal && bewerkteDeal.id === dealId ? bewerkteDeal : null)
+    || deals.find(x => x.id === dealId) || null;
+  // Eén "laden": de gedeelde dataset moet binnen zijn én de notities van deze
+  // deal. Zonder dat eerste stond er "bestaat niet" zolang de context laadde.
+  const loading = notitiesLaden || gedeeldLaden;
   const [notes, setNotes] = useState([]);
-  const [costs, setCosts] = useState([]);
-  const [wbs, setWbs] = useState([]);
+  const acts = useMemo(() => activities.filter(x => x.dealId === dealId), [activities, dealId]);
+  const offs = useMemo(() => offertes.filter(x => x.dealId === dealId), [offertes, dealId]);
+  const costs = useMemo(() => jobCosts.filter(x => x.dealId === dealId), [jobCosts, dealId]);
+  const wbs = useMemo(() => werkbonnen.filter(x => x.dealId === dealId), [werkbonnen, dealId]);
   const [teamMembers, setTeamMembers] = useState([]);
 
   const [form, setForm] = useState({ title: '', value: '', stageId: '', nextAct: '', assignedTo: '', priority: 'med' });
   const [saving, setSaving] = useState(false);
   const [notifyMail, setNotifyMail] = useState(true);
 
+  // Alleen de notities zijn van deze ene deal en zitten niet in de gedeelde
+  // dataset; de rest komt daar vandaan.
   useEffect(() => {
     let alive = true;
-    setLoading(true);
+    setNotitiesLaden(true);
     setErr('');
-    Promise.all([
-      listDeals(),
-      listPipelineStages().catch(() => []),
-      listActivities().catch(() => []),
-      getOffertes().catch(() => []),
-      getDealNotities(dealId).catch(() => []),
-      listJobCosts().catch(() => []),
-      getWerkbonnen().catch(() => []),
-    ]).then(([deals, st, a, o, n, jc, w]) => {
-      if (!alive) return;
-      const d = deals.find(x => x.id === dealId) || null;
-      setDeal(d);
-      setStages(st);
-      setActs(a.filter(x => x.dealId === dealId));
-      setOffs(o.filter(x => x.dealId === dealId));
-      setNotes(n);
-      setCosts(jc.filter(x => x.dealId === dealId));
-      setWbs(w.filter(x => x.dealId === dealId));
-      if (d) setForm({ title: d.title || '', value: d.value || 0, stageId: d.stage || '', nextAct: d.nextAct || '', assignedTo: d.assignedTo || '', priority: d.priority || 'med' });
-    }).catch(e => { if (alive) setErr(e.message || 'Laden mislukt'); })
-      .finally(() => { if (alive) setLoading(false); });
+    getDealNotities(dealId)
+      .then(n => { if (alive) setNotes(n); })
+      .catch(e => { if (alive) setErr(e.message || 'Laden mislukt'); })
+      .finally(() => { if (alive) setNotitiesLaden(false); });
     return () => { alive = false; };
   }, [dealId]);
+
+  // Het formulier volgt de deal zodra die bekend is, of als je een andere
+  // opent. Op deal?.id en niet op deal: dat is elke render een nieuw object.
+  useEffect(() => {
+    if (!deal) return;
+    setForm({ title: deal.title || '', value: deal.value || 0, stageId: deal.stage || '', nextAct: deal.nextAct || '', assignedTo: deal.assignedTo || '', priority: deal.priority || 'med' });
+  }, [deal?.id]);
 
   useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
 
@@ -127,7 +129,7 @@ export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
       const updated = await updateDeal(deal.id, payload);
       const prevAssigned = deal.assignedTo || '';
       notifyNewAssignees({ userIds: form.assignedTo ? [form.assignedTo] : [], prevUserIds: prevAssigned ? [prevAssigned] : [], members: teamMembers, sendMail: notifyMail, type: 'toewijzing_deal', title: `Je bent toegewezen aan ${form.title}`, link: 'pipeline', relatedType: 'deal', relatedId: deal.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
-      setDeal(updated);
+      setBewerkteDeal(updated);
       setForm(f => ({ ...f, title: updated.title || '', value: updated.value || 0, stageId: updated.stage || '', nextAct: updated.nextAct || '', assignedTo: updated.assignedTo || '', priority: updated.priority || 'med' }));
       bumpRefresh && bumpRefresh();
       toast.success('Deal opgeslagen');
