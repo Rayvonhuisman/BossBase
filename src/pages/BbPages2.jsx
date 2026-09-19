@@ -12,7 +12,7 @@ import { listLeveranciers } from '../services/leverancierService.js'
 import LeverancierSelect from '../components/LeverancierSelect.jsx'
 import { categorieOptiesUit } from '../lib/kostenCategorieen.js';
 import { useKostenCategorieen } from '../hooks/useKostenCategorieen.js';
-import { getAllFactuurRegels } from '../services/factuurService.js';
+import { getFacturen, getAllFactuurRegels } from '../services/factuurService.js';
 import { getFinancienKpi } from '../services/financienService.js';
 import { getConnection } from '../services/accountingService.js';
 import { getBtwPeriodes, syncBtwData } from '../services/btwService.js';
@@ -1442,10 +1442,14 @@ export function RevenuePage() {
   // App.jsx) — precies wat hier nodig is: werkbonmateriaal staat in de
   // boekhouding al als inkoopfactuur, en meetellen zou dezelfde inkoop dubbel
   // tellen.
-  const {
-    customers = [], jobCosts: costsData = [], facturen = [], offertes = [],
-    loading: gedeeldLaden,
-  } = useData();
+  const { customers = [], offertes = [], loading: gedeeldLaden } = useData();
+  // Facturen en kosten zitten niet meer in de gedeelde dataset: ze werden op
+  // élke pagina opgehaald terwijl alleen deze pagina en het dashboard ze tonen.
+  // De tegels komen uit de database (bb_financien_kpi) en staan er dus al; deze
+  // twee lijsten voeden de grafiek, de btw-kaart en de tabel per klant, die
+  // daarna invullen.
+  const [facturen, setFacturen] = useState([]);
+  const [costsData, setCostsData] = useState([]);
   const [allRegels, setAllRegels] = useState([]);
   const [chartMode, setChartMode] = useState('gefactureerd');
   const [chartPeriod, setChartPeriod] = useState('maand');
@@ -1467,10 +1471,18 @@ export function RevenuePage() {
 
   React.useEffect(() => {
     setLoading(true);
-    // Alleen wat niet in de gedeelde dataset zit: de factuurregels (voor de
-    // btw-rubrieken) en de boekhoudkoppeling.
-    Promise.all([getAllFactuurRegels(), getConnection()])
-      .then(([regelsData, mbConn]) => {
+    // Alles wat niet in de gedeelde dataset zit: facturen en kosten voor de
+    // grafiek en de tabel, de factuurregels voor de btw-rubrieken, en de
+    // boekhoudkoppeling.
+    Promise.all([
+      getFacturen().catch(() => []),
+      listJobCosts().then(alleenGeboekt).catch(() => []),
+      getAllFactuurRegels(),
+      getConnection(),
+    ])
+      .then(([facturenData, costData, regelsData, mbConn]) => {
+        setFacturen(facturenData);
+        setCostsData(costData);
         setAllRegels(regelsData);
         // Alleen Moneybird: dat is de enige koppeling die btw_periodes nog vult.
         // SnelStart stond hier als terugval, maar snelstart-sync-btw is eruit —

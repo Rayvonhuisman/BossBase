@@ -6,6 +6,9 @@ import { usePermissions } from '../../hooks/usePermissions.js';
 import { useToast } from '../../lib/toast.jsx';
 import { useData } from '../../lib/dataContext.jsx';
 import { getUrenregistratie } from '../../services/urenService.js';
+import { getFacturen } from '../../services/factuurService.js';
+import { listJobCosts, alleenGeboekt } from '../../services/jobCostService.js';
+import { listCalendarEvents } from '../../services/calendarService.js';
 import { sumOmzetExclBtw } from '../../services/customerTotalsService.js';
 import { loadUserWidgets, saveUserWidgets } from '../../services/dashboardWidgetService.js';
 import { getDefaultWidgets, DEFAULT_LAYOUTS, DEFAULT_LAYOUT_KEY, DEFAULT_MEDEWERKER_LAYOUT_KEY, normalizeWidgetSize, bestaatWidget } from '../../data/widgetRegistry.js';
@@ -235,7 +238,7 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
   const { can, isAdmin } = usePermissions();
   const toast = useToast();
   // Gedeelde data (één fetch voor de hele shell) — geen eigen queries meer.
-  const { customers, deals, stages, activities, offertes, werkbonnen, calendarEvents, facturen, jobCosts, loading: sharedLoading } = useData();
+  const { customers, deals, stages, activities, offertes, werkbonnen, loading: sharedLoading } = useData();
 
   // Demo mode: IS_DEV-only toggle that substitutes real data with static demo data
   // Persistent: stond eerder op useState(IS_DEV) en sprong daardoor bij elke
@@ -272,7 +275,14 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
   // de rest komt uit de gedeelde DataContext.
   const [uren, setUren] = useState([]);
   const [urenLoading, setUrenLoading] = useState(true);
-  const dataLoading = sharedLoading || urenLoading;
+  // Facturen, kosten en agenda-items haalt het dashboard zelf op. Ze zaten in
+  // de gedeelde dataset en werden daardoor op élke pagina opgehaald, terwijl
+  // alleen deze pagina (en Financiën) ze gebruikt.
+  const [facturen, setFacturen] = useState([]);
+  const [jobCosts, setJobCosts] = useState([]);
+  const [calendarEvents, setCalendarEvents] = useState([]);
+  const [eigenLaden, setEigenLaden] = useState(true);
+  const dataLoading = sharedLoading || urenLoading || eigenLaden;
 
   // Load widget layout from Supabase. Pas laden zodra de rechten bekend zijn,
   // zodat we voor een medewerker (zonder opgeslagen layout) de medewerker-layout
@@ -325,6 +335,28 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
       .finally(() => { if (alive) setUrenLoading(false); });
     return () => { alive = false; };
   }, [refreshKey, profile?.id]);
+
+  // Eigen data van het dashboard. Apart van de uren-fetch hierboven, zodat de
+  // widgets die alleen deals of activiteiten nodig hebben niet hoeven te wachten
+  // op de facturen. Alleen boekingen bij de kosten: werkbonmateriaal staat in de
+  // boekhouding al als inkoopfactuur (zie alleenGeboekt).
+  useEffect(() => {
+    let alive = true;
+    setEigenLaden(true);
+    Promise.all([
+      getFacturen().catch(() => []),
+      listJobCosts().then(alleenGeboekt).catch(() => []),
+      listCalendarEvents().catch(() => []),
+    ])
+      .then(([facs, jcs, ces]) => {
+        if (!alive) return;
+        setFacturen(facs);
+        setJobCosts(jcs);
+        setCalendarEvents(ces);
+      })
+      .finally(() => { if (alive) setEigenLaden(false); });
+    return () => { alive = false; };
+  }, [refreshKey]);
 
   const realCharts = useMemo(
     () => deriveCharts({ deals, activities, offertes, customers, uren, facturen, jobCosts, stages }),

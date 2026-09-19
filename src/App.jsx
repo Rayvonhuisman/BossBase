@@ -70,9 +70,6 @@ import { listDeals, listPipelineStages } from './services/dealService.js';
 import { listActivities } from './services/activityService.js';
 import { getOffertes } from './services/offerteService.js';
 import { getWerkbonnen } from './services/werkbonService.js';
-import { getFacturen } from './services/factuurService.js';
-import { listJobCosts, alleenGeboekt } from './services/jobCostService.js';
-import { listCalendarEvents } from './services/calendarService.js';
 import { staatOpDag } from './utils/werkbonDagen.js';
 import { ActivityEditModal, NewActivityModal, NewLeadModal, ProfileModal } from './components/SharedModals.jsx';
 import { supabase } from './lib/supabase.js';
@@ -949,9 +946,11 @@ function AppInner() {
   const [globalActivities, setGlobalActivities] = useState([]);
   const [globalOffertes, setGlobalOffertes] = useState([]);
   const [globalWerkbonnen, setGlobalWerkbonnen] = useState([]);
-  const [globalCalendarEvents, setGlobalCalendarEvents] = useState([]);
-  const [globalFacturen, setGlobalFacturen] = useState([]);
-  const [globalJobCosts, setGlobalJobCosts] = useState([]);
+  // Agenda-items, facturen en kosten zitten bewust NIET in de gedeelde dataset.
+  // Ze werden op élke pagina opgehaald terwijl alleen het dashboard en Financiën
+  // ze tonen — en het zijn juist de zwaarste lijsten (gemeten: werkbonnen,
+  // job_costs en calendar_events waren steeds de traagste verzoeken). Die twee
+  // pagina's halen ze nu zelf op, met hun eigen laadstatus.
   const [globalDataLoading, setGlobalDataLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   // Boss. De geschiedenis staat hier en niet in het chatvenster zelf: sluit je
@@ -1383,14 +1382,9 @@ function AppInner() {
       listActivities().catch(() => []),
       getOffertes().catch(() => []),
       getWerkbonnen().catch(() => []),
-      listCalendarEvents().catch(() => []),
-      getFacturen().catch(() => []),
-      // Alleen boekingen: het dashboard telt kosten van het bedrijf, en werkbon-
-      // materiaal staat daarin al als inkoopfactuur (zie alleenGeboekt).
-      listJobCosts().then(alleenGeboekt).catch(() => []),
       listLeveranciers().catch(() => []),
     ])
-      .then(([cs, ds, st, acts, offs, wbs, ces, facs, jcs, levs]) => {
+      .then(([cs, ds, st, acts, offs, wbs, levs]) => {
         if (!alive) return;
         setGlobalCustomers(cs);
         setGlobalDeals(ds);
@@ -1398,9 +1392,6 @@ function AppInner() {
         setGlobalActivities(acts);
         setGlobalOffertes(offs);
         setGlobalWerkbonnen(wbs);
-        setGlobalCalendarEvents(ces);
-        setGlobalFacturen(facs);
-        setGlobalJobCosts(jcs);
         setGlobalLeveranciers(levs);
       })
       .catch(() => {})
@@ -1427,12 +1418,9 @@ function AppInner() {
     activities: globalActivities,
     offertes: globalOffertes,
     werkbonnen: globalWerkbonnen,
-    calendarEvents: globalCalendarEvents,
-    facturen: globalFacturen,
-    jobCosts: globalJobCosts,
     loading: globalDataLoading,
     refresh: bumpRefresh,
-  }), [globalCustomers, globalLeveranciers, globalDeals, globalStages, globalActivities, globalOffertes, globalWerkbonnen, globalCalendarEvents, globalFacturen, globalJobCosts, globalDataLoading, bumpRefresh]);
+  }), [globalCustomers, globalLeveranciers, globalDeals, globalStages, globalActivities, globalOffertes, globalWerkbonnen, globalDataLoading, bumpRefresh]);
 
   // Compute these here (BEFORE any early returns) so the useEffect below
   // is always called in the same order — required by React's hooks rules.
