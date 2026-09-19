@@ -84,6 +84,12 @@ const relAgo = iso => {
 };
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 
+// Hoeveel rijen een lijstwidget hoogstens toont. De TELLERS tellen door: een
+// teller die op `items.length` staat ná een slice kan nooit boven dit getal
+// uitkomen, en dat is precies wat er misging — iemand met 11 achterstallige
+// taken las "8".
+const FEED_LIMIET = 8;
+
 // avatar color tone derived from a string (stable hash)
 function avatarTone(name) {
   const palette = [
@@ -488,55 +494,72 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
 
     // ───────── Acties vandaag ─────────
     case 'actions_today': {
-      const items = myActivities.filter(a => isOpenAct(a) && (a.dueAt?.slice(0, 10) === today || a.status === 'today' || a.status === 'overdue')).slice(0, 8);
-      const overdue = myActivities.filter(a => isOpenAct(a) && a.dueAt && a.dueAt.slice(0, 10) < today).length;
+      // "Vandaag" is vandaag. Taken die over datum zijn hebben hun eigen teller
+      // en tellen hier niet mee; ze stonden eerder in dezelfde lijst, waardoor
+      // een medewerker met 1 taak voor vandaag en 11 achterstallige "8
+      // openstaand" las.
+      //
+      // a.status komt uit activityService en is op de Nederlandse kalenderdag
+      // berekend. Een eigen vergelijking op de ISO-string gaat op de dag-/
+      // tijdzonegrens mis — zie de opmerking bij de sidebar-badge in App.jsx.
+      const vandaag = myActivities.filter(a => isOpenAct(a) && a.status === 'today');
+      const teLaat = myActivities.filter(a => isOpenAct(a) && a.status === 'overdue');
+      const items = vandaag.slice(0, FEED_LIMIET);
+      const rest = vandaag.length - items.length;
       if (widget.size === 'small') {
-        return <KpiCard tone={overdue > 0 ? 'warn' : 'info'} icon={I.act} label="Activiteiten vandaag" value={items.length} sub={overdue > 0 ? <>{overdue} <Delta dir="down">te laat</Delta></> : 'alles op tijd'} onClick={() => setPage('activities')} />;
+        return <KpiCard tone={teLaat.length > 0 ? 'warn' : 'info'} icon={I.act} label="Activiteiten vandaag" value={vandaag.length} sub={teLaat.length > 0 ? <>{teLaat.length} <Delta dir="down">te laat</Delta></> : 'alles op tijd'} onClick={() => setPage('activities')} />;
       }
       return (
         <div className="bb-widget">
-          <WHead title="Activiteiten vandaag" sub={`${items.length} openstaand · ${overdue} te laat`}
-            right={<Chip tone={overdue > 0 ? 'warn' : 'success'} noDot={overdue === 0}>{overdue > 0 ? `${overdue} te laat` : 'Op schema'}</Chip>} />
-          {items.length === 0 ? (
+          <WHead title="Activiteiten vandaag" sub={`${vandaag.length} vandaag · ${teLaat.length} te laat`}
+            right={<Chip tone={teLaat.length > 0 ? 'warn' : 'success'} noDot={teLaat.length === 0}>{teLaat.length > 0 ? `${teLaat.length} te laat` : 'Op schema'}</Chip>} />
+          {vandaag.length === 0 ? (
             <EmptyState title="Geen activiteiten vandaag" text="Tijd om vooruit te plannen of even adem te halen." />
           ) : (
             <div className="feed">
               {items.map(a => {
                 const c = customerById(a.custId);
-                const od = a.status === 'overdue' || (a.dueAt && a.dueAt.slice(0, 10) < today);
                 return (
                   <button key={a.id} className={`feed-row ${actIcoClass(a.type)}`} onClick={() => open.activity(a)}>
                     <span className="feed-icon">{actIcoSvg(a.type)}</span>
                     <div className="feed-main">
                       <div className="feed-title">{a.title}{c && <> · <strong>{c.name}</strong></>}</div>
                       <div className="feed-meta">
-                        <span>{a.time || a.dueAt?.slice(0, 10) || ''}</span>
+                        <span>{a.time || ''}</span>
                         {a.type && (<><span className="sep">·</span><span>{activiteitTypeLabel(a.type)}</span></>)}
                       </div>
                     </div>
                     <div className="feed-aside">
-                      <Chip tone={od ? 'warn' : (a.dueAt?.slice(0, 10) === today ? 'info' : 'neutral')}>{od ? 'Te laat' : (a.dueAt?.slice(0, 10) === today ? 'Vandaag' : (a.time || ''))}</Chip>
+                      <Chip tone="info">{a.time || 'Vandaag'}</Chip>
                     </div>
                   </button>
                 );
               })}
             </div>
           )}
-          <WFoot meta={`${items.length} open · ${overdue} te laat`} linkText="Alle activiteiten" onLink={() => setPage('activities')} />
+          <WFoot
+            meta={rest > 0
+              ? `${vandaag.length} vandaag (${rest} niet getoond) · ${teLaat.length} te laat`
+              : `${vandaag.length} vandaag · ${teLaat.length} te laat`}
+            linkText="Alle activiteiten" onLink={() => setPage('activities')} />
         </div>
       );
     }
 
     // ───────── Taken te laat ─────────
     case 'overdue_tasks': {
-      const items = myActivities.filter(a => isOpenAct(a) && a.dueAt && a.dueAt.slice(0, 10) < today).slice(0, 6);
+      // Zelfde verhaal als bij "Activiteiten vandaag": de teller telt alles, de
+      // lijst toont er hoogstens FEED_LIMIET.
+      const teLaat = myActivities.filter(a => isOpenAct(a) && a.status === 'overdue');
+      const items = teLaat.slice(0, FEED_LIMIET);
+      const rest = teLaat.length - items.length;
       if (widget.size === 'small') {
-        return <KpiCard tone={items.length ? 'warn' : 'success'} icon={I.clock} label="Taken te laat" value={items.length} sub={items.length ? `${items.length} over datum` : 'alles op tijd'} onClick={() => setPage('activities')} />;
+        return <KpiCard tone={teLaat.length ? 'warn' : 'success'} icon={I.clock} label="Taken te laat" value={teLaat.length} sub={teLaat.length ? `${teLaat.length} over datum` : 'alles op tijd'} onClick={() => setPage('activities')} />;
       }
       return (
         <div className="bb-widget">
-          <WHead title="Taken te laat" sub={<><strong style={{ color: C.warn }}>{items.length}</strong> activiteiten over datum</>} right={<Chip tone="warn">Actie nodig</Chip>} />
-          {items.length === 0 ? (
+          <WHead title="Taken te laat" sub={<><strong style={{ color: C.warn }}>{teLaat.length}</strong> activiteiten over datum</>} right={<Chip tone="warn">Actie nodig</Chip>} />
+          {teLaat.length === 0 ? (
             <EmptyState title="Niets te laat" text="Mooi werk — geen openstaande achterstand." />
           ) : (
             <div className="feed">
