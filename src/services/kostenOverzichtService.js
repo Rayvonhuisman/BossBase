@@ -109,6 +109,39 @@ const metMateriaalVelden = row => {
   }
 }
 
+// ── Welke kosten horen bij een klant ───────────────────────────────────────
+// Eén definitie, voor de klantkaart (getKlantKostenOverzicht, filtert in de
+// database) én voor Financiën (getKostenOverzichtPerKlant, filtert hier). Zo kan
+// een klant op Financiën niets anders laten zien dan op zijn klantkaart.
+//
+// Bij een klant horen: zijn projecten, zijn werkbonnen plus de werkbonnen van
+// die projecten (een werkbon zonder eigen customer_id hoort via zijn project
+// bij de klant), en zijn deals. Een kost hoort bij de klant als hij langs één
+// van die routes aan hem hangt.
+
+/**
+ * @param {string} customerId
+ * @param {object} rijen  { projecten, werkbonnen, deals } — ruwe rijen met
+ *                        id, customer_id en (werkbonnen) project_id
+ */
+export function klantSleutels(customerId, { projecten = [], werkbonnen = [], deals = [] } = {}) {
+  const projectIds = new Set(projecten.filter(p => p.customer_id === customerId).map(p => p.id))
+  const werkbonIds = new Set(werkbonnen
+    .filter(w => w.customer_id === customerId || (w.project_id && projectIds.has(w.project_id)))
+    .map(w => w.id))
+  const dealIds = new Set(deals.filter(d => d.customer_id === customerId).map(d => d.id))
+  return { projectIds, werkbonIds, dealIds }
+}
+
+/** Hoort deze job_costs-rij (ruw, snake_case) bij de klant? */
+export const kostHoortBijKlant = (rij, customerId, sleutels) =>
+  rij.customer_id === customerId
+  || (rij.project_id != null && sleutels.projectIds.has(rij.project_id))
+  || (rij.werkbon_id != null && sleutels.werkbonIds.has(rij.werkbon_id))
+  || (rij.deal_id != null && sleutels.dealIds.has(rij.deal_id))
+
+const naarUrenRegel = r => ({ uren: Number(r.uren || 0), reisKm: r.reis_km == null ? null : Number(r.reis_km) })
+
 /**
  * Kostenoverzicht van één klant: alles van al zijn projecten én al zijn
  * werkbonnen, met dezelfde indeling als het project.
@@ -131,26 +164,30 @@ export async function getKlantKostenOverzicht(customerId) {
     .order('id', { ascending: true })).catch(() => [])
 
   const [projectRijen, werkbonRijen, dealRijen] = await Promise.all([
-    idLijst('projects', 'id'),
-    idLijst('werkbonnen', 'id, project_id'),
-    idLijst('deals', 'id'),
+    idLijst('projects', 'id, customer_id'),
+    idLijst('werkbonnen', 'id, project_id, customer_id'),
+    idLijst('deals', 'id, customer_id'),
   ])
 
-  const projectIds = projectRijen.map(p => p.id)
   // Ook de werkbonnen die via hun project bij deze klant horen maar zelf geen
   // customer_id dragen: anders vallen hun uren en materiaal buiten het
   // overzicht terwijl ze op de projectkaart wél meetellen.
-  const werkbonIds = new Set(werkbonRijen.map(w => w.id))
-  if (projectIds.length) {
-    const viaProject = await alleRijen(() => supabase
-      .from('werkbonnen')
-      .select('id', { count: 'exact' })
-      .in('project_id', projectIds)
-      .order('id', { ascending: true })).catch(() => [])
-    for (const w of viaProject) werkbonIds.add(w.id)
-  }
-  const werkbonIdLijst = [...werkbonIds]
-  const dealIds = dealRijen.map(d => d.id)
+  const eigenProjectIds = projectRijen.map(p => p.id)
+  const viaProject = eigenProjectIds.length
+    ? await alleRijen(() => supabase
+        .from('werkbonnen')
+        .select('id, project_id, customer_id', { count: 'exact' })
+        .in('project_id', eigenProjectIds)
+        .order('id', { ascending: true })).catch(() => [])
+    : []
+  const sleutels = klantSleutels(customerId, {
+    projecten: projectRijen,
+    werkbonnen: [...werkbonRijen, ...viaProject],
+    deals: dealRijen,
+  })
+  const projectIds = [...sleutels.projectIds]
+  const werkbonIdLijst = [...sleutels.werkbonIds]
+  const dealIds = [...sleutels.dealIds]
 
   const orDelen = [`customer_id.eq.${customerId}`]
   if (projectIds.length) orDelen.push(`project_id.in.(${projectIds.join(',')})`)
@@ -167,11 +204,14 @@ export async function getKlantKostenOverzicht(customerId) {
   // Kent de API de materiaalrelatie nog niet, dan weigert hij de héle select.
   // Terugvallen op de kale kolommen: liever kosten zonder inkoopprijs dan een
   // leeg overzicht.
+  // De database filtert al op dezelfde routes; kostHoortBijKlant erover is
+  // dezelfde regel als op Financiën, zodat die twee niet uit elkaar lopen.
+  const bijKlant = rows => rows.filter(r => kostHoortBijKlant(r, customerId, sleutels))
   let jobCosts
   try {
-    jobCosts = (await haalJobCosts(MET_INKOOP)).map(metMateriaalVelden)
+    jobCosts = bijKlant(await haalJobCosts(MET_INKOOP)).map(metMateriaalVelden)
   } catch {
-    jobCosts = (await haalJobCosts('*').catch(() => [])).map(toJobCost)
+    jobCosts = bijKlant(await haalJobCosts('*').catch(() => [])).map(toJobCost)
   }
   // Ontdubbelen op id: één rij is één kostenpost, ongeacht hoeveel routes er
   // naar deze klant leiden.
@@ -194,12 +234,56 @@ export async function getKlantKostenOverzicht(customerId) {
           .select('uren, reis_km, werkbon_id', { count: 'exact' })
           .in('werkbon_id', werkbonIdLijst)
           .order('id', { ascending: true }))
-        .then(rows => rows.map(r => ({ uren: Number(r.uren || 0), reisKm: r.reis_km == null ? null : Number(r.reis_km) })))
+        .then(rows => rows.map(naarUrenRegel))
         .catch(() => [])
       : [],
   ])
 
   return bouwKostenOverzicht({ jobCosts, projectKosten, urenRegels })
+}
+
+/**
+ * Kostenoverzicht van ÁLLE klanten in één keer, voor Financiën.
+ *
+ * Zelfde toewijzing (klantSleutels + kostHoortBijKlant) en zelfde rekenwerk
+ * (bouwKostenOverzicht) als getKlantKostenOverzicht; alleen haalt deze alles
+ * één keer op in plaats van per klant een reeks queries te doen.
+ *
+ * @param {string[]} customerIds
+ * @returns {Promise<Map<string, object>>} customerId → overzicht
+ */
+export async function getKostenOverzichtPerKlant(customerIds = []) {
+  const alles = (tabel, select) => alleRijen(() => supabase
+    .from(tabel)
+    .select(select, { count: 'exact' })
+    .order('id', { ascending: true }))
+
+  const [projecten, werkbonnen, deals, pkRijen, urenRijen] = await Promise.all([
+    alles('projects', 'id, customer_id'),
+    alles('werkbonnen', 'id, project_id, customer_id'),
+    alles('deals', 'id, customer_id'),
+    alles('project_kosten', '*'),
+    alles('werkbon_uren', 'id, uren, reis_km, werkbon_id'),
+  ])
+  let jcRijen, naarKost
+  try {
+    jcRijen = await alles('job_costs', MET_INKOOP)
+    naarKost = metMateriaalVelden
+  } catch {
+    jcRijen = await alles('job_costs', '*')
+    naarKost = toJobCost
+  }
+
+  const per = new Map()
+  for (const cid of customerIds) {
+    const sleutels = klantSleutels(cid, { projecten, werkbonnen, deals })
+    per.set(cid, bouwKostenOverzicht({
+      jobCosts: jcRijen.filter(r => kostHoortBijKlant(r, cid, sleutels)).map(naarKost),
+      projectKosten: pkRijen.filter(r => sleutels.projectIds.has(r.project_id)).map(toProjectKost),
+      urenRegels: urenRijen.filter(r => sleutels.werkbonIds.has(r.werkbon_id)).map(naarUrenRegel),
+    }))
+  }
+  return per
 }
 
 /** Alleen de projectkosten van een klant, gegroepeerd per project (voor de lijst). */

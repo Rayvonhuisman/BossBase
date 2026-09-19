@@ -34,7 +34,10 @@ import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
-import { ActivityEditModal, NewActivityModal, NewCustomerModal, NewJobCostModal } from '../components/SharedModals.jsx';
+import { ActivityEditModal, NewActivityModal, NewCustomerModal } from '../components/SharedModals.jsx';
+import KostenInvoerRegel, { useKostenKolommen } from '../components/KostenInvoerRegel.jsx';
+import { createProjectKost } from '../services/projectKostenService.js';
+import { listLeveranciers } from '../services/leverancierService.js';
 import AdresZoeker from '../components/AdresZoeker.jsx';
 import { ChevronDown, Download, Mail, Send } from 'lucide-react';
 import { getMailTemplate, sendEmail, substituteVars, substituteVarsHtml, logSentEmail, getSentEmailsByCustomer } from '../services/emailService.js';
@@ -231,11 +234,15 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   const [activityTitle, setActivityTitle] = useState('');
   const [savingActivity, setSavingActivity] = useState(false);
   const [showActivityModal, setShowActivityModal] = useState(false);
-  const [showCostModal, setShowCostModal] = useState(false);
+  // Inkopen toevoegen: dezelfde invoerregel als op het project (KostenInvoerRegel).
+  const [leveranciers, setLeveranciers] = useState([]);
+  useEffect(() => { listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(() => {}); }, []);
   const [selectedAct, setSelectedAct] = useState(null);
   const [cOffertes, setOffertes] = useState([]);
   const [cFacturen, setFacturen] = useState([]);
   const [cProjecten, setProjecten] = useState([]);
+  // De projectkeuze staat er alleen bij meer dan één project; de kolommen volgen dat.
+  const kostenKolommen = useKostenKolommen({ metProject: cProjecten.length > 1 });
   const [cWerkbonnen, setCWerkbonnen] = useState([]);
   const [cDealsLijst, setCDeals] = useState([]);
   const [stages, setStages] = useState([]);
@@ -1050,7 +1057,6 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
           <div>
             <div className="lsec-hd">
               <div className="lsec-title">Kostenregels ({aantalRegels})</div>
-              <button className="btn btn-s btn-sm" onClick={() => setShowCostModal(true)}>{I.plus} Kosten toevoegen</button>
             </div>
             {aantalRegels === 0 && !(uren.uren > 0)
               ? <div className="lsec-empty">Nog geen kosten geboekt</div>
@@ -1110,6 +1116,28 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
                   ))}
                 </div>
               )}
+            {/* Zelfde invoerregel als op het project. Een inkoop hoort bij een
+                project; heeft de klant er meer, dan kies je dat vooraan. Zelfde
+                recht als de kostentab van het project. */}
+            {(['admin', 'planner'].includes(profile?.role) || can('projecten_bewerken')) && (
+              <div ref={kostenKolommen.ref} style={{ marginTop: 10 }}>
+                <KostenInvoerRegel
+                  kolommen={kostenKolommen}
+                  projecten={cProjecten}
+                  leveranciers={leveranciers}
+                  onLeverancierBij={g => setLeveranciers(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
+                  onAdd={async form => {
+                    try {
+                      await createProjectKost(form.project_id, form);
+                    } catch (e) {
+                      toast.error(e.message || 'Toevoegen mislukt');
+                      throw e;
+                    }
+                    await reloadCosts();
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
         );
@@ -1451,15 +1479,6 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
             setActs(list => list.filter(a => a.id !== id));
             setSelectedAct(null);
           }}
-        />
-      )}
-      {showCostModal && (
-        <NewJobCostModal
-          onClose={() => setShowCostModal(false)}
-          customers={[c]}
-          defaultCustId={c.id}
-          onSaved={() => { reloadCosts(); }}
-          onAttached={() => reloadCosts()}
         />
       )}
       {showNewOfferte && (

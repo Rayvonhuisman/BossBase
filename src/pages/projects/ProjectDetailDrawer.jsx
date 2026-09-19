@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { listLeveranciers } from '../../services/leverancierService.js';
-import LeverancierSelect from '../../components/LeverancierSelect.jsx';
 import { Maximize2, Minimize2, AlertTriangle, AlertOctagon } from 'lucide-react';
 import { I, ModalX, NotifyMailToggle, fmt, fmt0 } from '../../bb-shared.jsx';
 import { InfoTip, InfoUitklap } from '../../components/Uitleg.jsx';
@@ -25,6 +24,7 @@ import { planningLabel } from '../../utils/werkbonDagen.js';
 import { PlanningRegels, planRegels } from '../../components/PlanningBlok.jsx';
 import { getProjectCosts } from '../../services/jobCostService.js';
 import { bouwKostenOverzicht } from '../../services/kostenOverzichtService.js';
+import KostenInvoerRegel, { useKostenKolommen, KostenLeverancier, smalVeld } from '../../components/KostenInvoerRegel.jsx';
 import {
   listProjectKosten, createProjectKost, updateProjectKost, deleteProjectKost,
 } from '../../services/projectKostenService.js';
@@ -810,32 +810,13 @@ function KostenTab({ project, canManage }) {
 // zichtbaar — daarmee zou de afgeschermde inkoopprijs via deze weg alsnog te
 // lezen zijn. Projectkosten zijn bovendien huur en diensten, geen artikelen.
 function ProjectKostenSection({ kosten, leveranciers, onLeverancierBij, canEdit, loading, laadFout, onAdd, onUpdate, onDelete }) {
-  // De drawer is smaller dan de werkbonpagina. Onder 640px (de drawer op half
-  // scherm is 520px) blijft alles op één regel, met smallere vaste kolommen en
-  // "Leverancier" als lege keuze — "Geen leverancier" paste daar niet ("Geen
-  // le…"). Gemeten op de kaart zelf, niet op het venster: de drawer kan ook
-  // gemaximaliseerd staan.
-  const kaartRef = useRef(null);
-  const [smal, setSmal] = useState(true);
-  useEffect(() => {
-    const el = kaartRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return undefined;
-    const ro = new ResizeObserver(([e]) => setSmal(e.contentRect.width < 640));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const LEEG = { naam: '', aantal: 1, eenheid: '', prijs_per: '', leverancier_id: '' };
-  const [form, setForm] = useState(LEEG);
-  const [adding, setAdding] = useState(false);
+  // Kolommen en invoerregel komen uit KostenInvoerRegel, dezelfde als op de
+  // klantkaart. De bestaande regels gebruiken dezelfde kolommen, zodat ze onder
+  // dezelfde koppen staan.
+  const kolommen = useKostenKolommen();
+  const { ref: kaartRef, smal, COLS, GAP } = kolommen;
   const totaal = kosten.reduce((s, k) => s + k.bedrag, 0);
-  const addSub = (Number(form.aantal) || 0) * (Number(form.prijs_per) || 0);
-  const COLS = smal
-    ? 'minmax(0,1fr) 44px 52px 60px 104px 58px 28px'
-    : 'minmax(0,2.2fr) 62px 74px 84px minmax(0,1.3fr) 84px 30px';
-  const GAP = smal ? 4 : 5;
   const rijStijl = { display: 'grid', gridTemplateColumns: COLS, gap: GAP, alignItems: 'center', marginBottom: 5 };
-  const levStijl = { minWidth: 0 };
   const subStijl = { textAlign: 'right', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden' };
 
   // Zonder de migratie bestaat de tabel nog niet. Dan geen technische
@@ -845,17 +826,6 @@ function ProjectKostenSection({ kosten, leveranciers, onLeverancierBij, canEdit,
       ? 'Inkopen zijn nog niet beschikbaar: de database-update hiervoor is nog niet uitgevoerd.'
       : `Inkopen konden niet worden geladen (${laadFout}).`;
 
-  const submit = async () => {
-    if (!form.naam.trim()) return;
-    setAdding(true);
-    try {
-      await onAdd(form);
-      setForm(LEEG);
-    } catch { /* melding komt van onAdd; invoer blijft staan */ } finally {
-      setAdding(false);
-    }
-  };
-
   const veld = (r, k, v) => onUpdate(r, { [k]: v });
   // De omschrijving pas bij verlaten opslaan: leegmaken om opnieuw te typen
   // zou anders tussendoor een lege naam wegschrijven, en die weigert de database.
@@ -863,13 +833,6 @@ function ProjectKostenSection({ kosten, leveranciers, onLeverancierBij, canEdit,
     const naam = v.trim();
     if (naam && naam !== r.naam) veld(r, 'naam', naam);
   };
-
-  const levSelect = (value, onChange, disabled) => (
-    <LeverancierSelect value={value || ''} disabled={disabled} leveranciers={leveranciers}
-      onLijstGewijzigd={onLeverancierBij} onChange={onChange}
-      leegLabel={smal ? 'Leverancier' : undefined}
-      style={{ minWidth: 0, width: '100%', ...(smal ? { padding: '0 2px 0 6px' } : null) }} />
-  );
 
   return (
     <div className="wb2-card" ref={kaartRef}>
@@ -892,15 +855,18 @@ function ProjectKostenSection({ kosten, leveranciers, onLeverancierBij, canEdit,
               </div>
               {kosten.map(k => (
                 <div key={k.id} className="wb2-mat-rij" style={rijStijl}>
-                  <input type="text" defaultValue={k.naam} disabled={!canEdit} style={{ minWidth: 0 }}
+                  <input type="text" defaultValue={k.naam} disabled={!canEdit} style={smalVeld(smal)}
                     onBlur={e => naamKlaar(k, e.target.value)} />
                   <input type="number" min="0" step="0.01" value={k.aantal} disabled={!canEdit} style={{ minWidth: 0 }}
                     onChange={e => veld(k, 'aantal', e.target.value)} />
-                  <input type="text" value={k.eenheid} placeholder="stuk" disabled={!canEdit} style={{ minWidth: 0, ...(smal ? { padding: '0 6px' } : null) }}
+                  <input type="text" value={k.eenheid} placeholder="stuk" disabled={!canEdit} style={smalVeld(smal)}
                     onChange={e => veld(k, 'eenheid', e.target.value)} />
                   <input type="number" min="0" step="0.01" value={k.prijsPer} disabled={!canEdit} style={{ minWidth: 0 }}
                     title="Kostprijs per eenheid, excl. btw" onChange={e => veld(k, 'prijs_per', e.target.value)} />
-                  <div style={levStijl}>{levSelect(k.leverancierId, v => veld(k, 'leverancier_id', v), !canEdit)}</div>
+                  <div style={{ minWidth: 0 }}>
+                    <KostenLeverancier smal={smal} value={k.leverancierId} onChange={v => veld(k, 'leverancier_id', v)}
+                      disabled={!canEdit} leveranciers={leveranciers} onLeverancierBij={onLeverancierBij} />
+                  </div>
                   <div style={subStijl}>{fmt(k.bedrag)}</div>
                   {canEdit
                     ? <button className="btn btn-xs btn-danger btn-icon" onClick={() => onDelete(k)} title="Verwijderen" style={{ justifySelf: 'end' }}>{I.trash}</button>
@@ -911,24 +877,8 @@ function ProjectKostenSection({ kosten, leveranciers, onLeverancierBij, canEdit,
           )}
 
           {canEdit && !loading && (
-            <div className="wb2-mat-rij" style={{ borderTop: kosten.length ? '1px solid var(--border)' : 'none', paddingTop: kosten.length ? 10 : 0, marginTop: kosten.length ? 6 : 0 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: COLS, gap: GAP, alignItems: 'center' }}>
-                <input type="text" placeholder="Bijv. steigerhuur" value={form.naam} style={{ minWidth: 0, ...(smal ? { padding: '0 6px' } : null) }}
-                  onChange={e => setForm(f => ({ ...f, naam: e.target.value }))}
-                  onKeyDown={e => { if (e.key === 'Enter') submit(); }} />
-                <input type="number" min="0" step="0.01" value={form.aantal} placeholder="1" style={{ minWidth: 0 }}
-                  onChange={e => setForm(f => ({ ...f, aantal: e.target.value }))} />
-                <input type="text" value={form.eenheid} placeholder="stuk" style={{ minWidth: 0, ...(smal ? { padding: '0 6px' } : null) }}
-                  onChange={e => setForm(f => ({ ...f, eenheid: e.target.value }))} />
-                <input type="number" min="0" step="0.01" value={form.prijs_per} placeholder="0,00" style={{ minWidth: 0 }}
-                  title="Kostprijs per eenheid, excl. btw"
-                  onChange={e => setForm(f => ({ ...f, prijs_per: e.target.value }))} />
-                <div style={levStijl}>{levSelect(form.leverancier_id, v => setForm(f => ({ ...f, leverancier_id: v })), false)}</div>
-                <div style={subStijl}>{fmt(addSub)}</div>
-                <button onClick={submit} disabled={adding || !form.naam.trim()} className="wb2-mat-add-btn"
-                  aria-label="Inkoop toevoegen" title="Toevoegen" style={{ justifySelf: 'end' }}>{I.plus}</button>
-              </div>
-            </div>
+            <KostenInvoerRegel kolommen={kolommen} onAdd={onAdd} leveranciers={leveranciers}
+              onLeverancierBij={onLeverancierBij} metScheiding={kosten.length > 0} />
           )}
         </div>
 

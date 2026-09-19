@@ -19,7 +19,8 @@ import { berekenBtwIndicatie } from '../services/btwIndicatieService.js';
 import { InfoTip, InfoUitklap } from '../components/Uitleg.jsx';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { listCustomers } from '../services/customerService.js';
-import { sumGefactureerd, sumBetaald, sumOpenstaand, withCustomerTotals } from '../services/customerTotalsService.js';
+import { sumGefactureerd, sumBetaald, sumOpenstaand, withCustomerTotals, sumOmzetExclBtw } from '../services/customerTotalsService.js';
+import { getKostenOverzichtPerKlant, LEEG_OVERZICHT } from '../services/kostenOverzichtService.js';
 import { listActivities } from '../services/activityService.js';
 import { getConnectionStatus, startGoogleCalendarConnect, disconnectGoogleCalendar } from '../services/googleCalendarService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
@@ -1603,12 +1604,38 @@ export function RevenuePage() {
   // customers-tabel kent die kolommen niet. customerTotalsService leidt ze af
   // uit de facturen die deze pagina toch al inleest; de klantenlijst, de
   // klantkaart en de database-export gebruiken exact dezelfde definitie.
+  //
+  // De kosten per klant komen uit kostenOverzichtService, met dezelfde
+  // toewijzing en hetzelfde rekenwerk als de klantkaart en het project:
+  // materiaal op inkoopprijs + inkopen, uren als aantal zonder bedrag. Boekingen
+  // tellen niet mee (dat is de boekhouding; het materiaal daarvan telt al via de
+  // werkbon). Hier stond eerst een eigen som van de boekingen per klant, met de
+  // winst op het betaalde bedrag incl. btw — een ander getal dan op de klantkaart.
+  const [kostenPerKlant, setKostenPerKlant] = useState(null);
+  const klantIdSleutel = customers.map(c => c.id).join(',');
+  React.useEffect(() => {
+    if (!customers.length) { setKostenPerKlant(new Map()); return undefined; }
+    let leeft = true;
+    getKostenOverzichtPerKlant(customers.map(c => c.id))
+      .then(m => { if (leeft) setKostenPerKlant(m); })
+      .catch(() => { if (leeft) setKostenPerKlant(new Map()); });
+    return () => { leeft = false; };
+  }, [klantIdSleutel, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const rows = withCustomerTotals(customers, { facturen }).map(c => {
-    const costs  = costsData.filter(x => x.custId === c.id).reduce((s, x) => s + x.amt, 0);
-    const profit = c.paid - costs;
-    const margin = c.paid > 0 ? Math.round((profit / c.paid) * 100) : 0;
-    return { ...c, costs, profit, margin };
+    const kosten = kostenPerKlant?.get(c.id) || LEEG_OVERZICHT;
+    // Zelfde als de klantkaart: omzet excl. btw min kosten.
+    const omzetExcl = sumOmzetExclBtw(facturen.filter(f => f.customerId === c.id));
+    const profit = omzetExcl - kosten.totaal;
+    const margin = omzetExcl > 0 ? Math.round((profit / omzetExcl) * 100) : 0;
+    return { ...c, materiaal: kosten.materiaal.bedrag, inkopen: kosten.inkopen.bedrag, uren: kosten.uren.uren, profit, margin };
   });
+  const som = veld => Math.round(rows.reduce((s, r) => s + (Number(r[veld]) || 0), 0) * 100) / 100;
+  const totaalRij = {
+    total: som('total'), paid: som('paid'), openstaand: som('openstaand'),
+    materiaal: som('materiaal'), inkopen: som('inkopen'), uren: som('uren'), profit: som('profit'),
+  };
+  const fmtUren = u => `${Number(u || 0).toLocaleString('nl-NL', { maximumFractionDigits: 2 })} uur`;
 
   const handleSyncBtw = async () => {
     setBtwSyncing(true);
@@ -1831,10 +1858,10 @@ export function RevenuePage() {
       <div className="tw afu3">
         <div className="tw-hd"><div className="card-title">Per klant / opdracht</div></div>
         <div style={{ overflowX: 'auto' }}>
-          <table className="dt" style={{ minWidth: 680 }}>
+          <table className="dt" style={{ minWidth: 860 }}>
             <thead>
               <tr>
-                <th>Klant</th><th>Gefactureerd</th><th>Kosten</th><th>Betaald</th><th>Openstaand</th><th>Nettoresultaat</th><th>Marge</th><th>Status</th>
+                <th>Klant</th><th>Gefactureerd</th><th>Materiaal</th><th>Inkopen</th><th>Uren</th><th>Betaald</th><th>Openstaand</th><th>Brutowinst vóór arbeid</th><th>Marge</th><th>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -1850,7 +1877,9 @@ export function RevenuePage() {
                     </div>
                   </td>
                   <td style={{ fontWeight: 600 }}>{fmt(r.total)}</td>
-                  <td style={{ color: '#dc2626', fontWeight: 600 }}>{fmt(r.costs)}</td>
+                  <td style={{ color: '#dc2626', fontWeight: 600 }}>{kostenPerKlant ? fmt(r.materiaal) : '…'}</td>
+                  <td style={{ color: '#dc2626', fontWeight: 600 }}>{kostenPerKlant ? fmt(r.inkopen) : '…'}</td>
+                  <td style={{ color: 'var(--dl)', whiteSpace: 'nowrap' }}>{kostenPerKlant ? fmtUren(r.uren) : '…'}</td>
                   <td style={{ color: '#15A34A', fontWeight: 700 }}>{fmt(r.paid)}</td>
                   <td style={{ fontWeight: 600, color: r.openstaand > 0 ? '#e8784a' : 'var(--dl)' }}>{fmt(r.openstaand)}</td>
                   <td style={{ fontWeight: 800, color: r.profit >= 0 ? '#15A34A' : '#dc2626' }}>{fmt(r.profit)}</td>
@@ -1866,9 +1895,26 @@ export function RevenuePage() {
                 </tr>
               ))}
               {rows.length === 0 && !loading && (
-                <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--dl)', padding: 24 }}>Nog geen klantdata beschikbaar.</td></tr>
+                <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--dl)', padding: 24 }}>Nog geen klantdata beschikbaar.</td></tr>
               )}
             </tbody>
+            {/* De som van de rijen hierboven. Uren staan erbij als aantal: er is
+                geen kostprijs per uur, dus ze tellen niet mee in de brutowinst. */}
+            {rows.length > 0 && kostenPerKlant && (
+              <tfoot>
+                <tr style={{ borderTop: '1px solid var(--br)' }}>
+                  <td style={{ fontWeight: 700 }}>Totaal</td>
+                  <td style={{ fontWeight: 700 }}>{fmt(totaalRij.total)}</td>
+                  <td style={{ color: '#dc2626', fontWeight: 700 }}>{fmt(totaalRij.materiaal)}</td>
+                  <td style={{ color: '#dc2626', fontWeight: 700 }}>{fmt(totaalRij.inkopen)}</td>
+                  <td style={{ color: 'var(--dl)', whiteSpace: 'nowrap' }}>{fmtUren(totaalRij.uren)}</td>
+                  <td style={{ color: '#15A34A', fontWeight: 700 }}>{fmt(totaalRij.paid)}</td>
+                  <td style={{ fontWeight: 700 }}>{fmt(totaalRij.openstaand)}</td>
+                  <td style={{ fontWeight: 800, color: totaalRij.profit >= 0 ? '#15A34A' : '#dc2626' }}>{fmt(totaalRij.profit)}</td>
+                  <td /><td />
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
