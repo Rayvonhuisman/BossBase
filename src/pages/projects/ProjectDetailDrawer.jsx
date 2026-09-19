@@ -3,6 +3,7 @@ import { listLeveranciers } from '../../services/leverancierService.js';
 import LeverancierSelect from '../../components/LeverancierSelect.jsx';
 import { Maximize2, Minimize2, AlertTriangle, AlertOctagon } from 'lucide-react';
 import { I, ModalX, NotifyMailToggle, fmt, fmt0 } from '../../bb-shared.jsx';
+import { InfoTip, InfoUitklap } from '../../components/Uitleg.jsx';
 import { useToast } from '../../lib/toast.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
 import { usePermissions } from '../../hooks/usePermissions.js';
@@ -243,14 +244,13 @@ function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
           <input value={form.name} onChange={e => set('name', e.target.value)} disabled={!canManage} />
         </div>
         <div className="f">
-          <label>Status</label>
           {/* Afgeleid uit de werkbonnen, niet zelf te kiezen: in uitvoering
               zodra er één gestart is, afgerond als ze allemaal klaar zijn. */}
+          <label>Status <InfoTip tekst="Volgt de werkbonnen: in uitvoering zodra er één gestart is, afgerond als ze allemaal klaar zijn." /></label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 38 }}>
             <span className={`badge ${PROJECT_STATUS[form.status]?.col || 'b-gray'}`}>
               {PROJECT_STATUS[form.status]?.label || form.status}
             </span>
-            <span style={{ fontSize: '.72rem', color: 'var(--dl)' }}>volgt de werkbonnen</span>
           </div>
         </div>
         <div className="f">
@@ -693,9 +693,12 @@ function KostenTab({ project, canManage }) {
         )}
 
         {!magInkoop && (
-          <div style={{ fontSize: 11.5, color: 'var(--dm)', marginTop: 10, lineHeight: 1.5 }}>
-            Het materiaal van de werkbonnen telt ook mee in de kosten, maar staat op inkoopprijs en die is
-            voor jou afgeschermd. Daarom zie je hier geen brutowinst.
+          <div className="f-label-rij" style={{ marginTop: 10 }}>
+            <span style={{ fontSize: 11.5, color: 'var(--dm)' }}>Geen brutowinst zichtbaar</span>
+            <InfoUitklap
+              id="uitleg-geen-brutowinst"
+              tekst="Het materiaal van de werkbonnen telt ook mee in de kosten, maar staat op inkoopprijs en die is voor jou afgeschermd. Daarom zie je hier geen brutowinst."
+            />
           </div>
         )}
 
@@ -733,7 +736,10 @@ function KostenTab({ project, canManage }) {
 
       {magInkoop && (
         <div>
-          <div style={kopStijl}>Materiaal op de werkbonnen ({materiaal.length})</div>
+          <div style={{ ...kopStijl, display: 'flex', alignItems: 'center', gap: 6 }}>
+            Materiaal op de werkbonnen ({materiaal.length})
+            <InfoTip tekst="Aantallen en prijzen wijzig je op de werkbon." />
+          </div>
           {loading ? (
             <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--dl)', fontSize: 13 }}>Laden…</div>
           ) : materiaal.length === 0 ? (
@@ -756,7 +762,6 @@ function KostenTab({ project, canManage }) {
                   </div>
                 </div>
               ))}
-              <div style={{ fontSize: 11, color: 'var(--dl)' }}>Aantallen en prijzen wijzig je op de werkbon.</div>
             </div>
           )}
         </div>
