@@ -1113,7 +1113,7 @@ export function CostsPage() {
   const [selectedCost, setSelectedCost] = useState(null);
   const [mbAdminId, setMbAdminId] = useState('');
   // Twee weergaven, nooit allebei tegelijk: "Kosten" (de boekingen, standaard)
-  // en "Materiaal op werkbonnen" (wat er op klussen verbruikt is). Dat zijn twee
+  // en "Kosten op werkbonnen" (het materiaal dat op klussen verbruikt is). Dat zijn twee
   // verschillende dingen — boekingen gaan naar de boekhouding, materiaal niet —
   // en ze worden daarom nergens bij elkaar opgeteld. De pagina blijft verder
   // gelijk: dezelfde tegels, dezelfde tabel, hetzelfde periodefilter.
@@ -1196,7 +1196,7 @@ export function CostsPage() {
   // te kiezen.
   const tegels = [
     toontMateriaal
-      ? { label: 'Materiaal op werkbonnen', val: fmt(actiefTotaal), icon: I.costs,
+      ? { label: 'Kosten op werkbonnen', val: fmt(actiefTotaal), icon: I.costs,
           sub: 'Geen boeking · telt in de marge van een project' }
       : { label: 'Geboekte kosten', val: fmt(actiefTotaal), icon: I.brief,
           sub: 'Wat naar de boekhouding gaat' },
@@ -1238,7 +1238,7 @@ export function CostsPage() {
           background: 'var(--bgs)', border: '1px solid var(--border)',
           borderRadius: 'var(--r8)', padding: '10px 12px', marginBottom: 14,
         }}>
-          Materiaal op werkbonnen is wat je op klussen hebt verbruikt. Dit zijn geen boekingen: in je
+          Kosten op werkbonnen is het materiaal dat je op klussen hebt verbruikt. Dit zijn geen boekingen: in je
           boekhouding is de inkoopfactuur van je leverancier de kostenpost. Deze bedragen tellen daarom niet
           mee in je kosten en je btw. Je ziet ze hier puur voor inzicht, en ze tellen wel mee in de marge van
           een project.
@@ -1268,13 +1268,13 @@ export function CostsPage() {
 
       <div className="tw afu3">
         <div className="tw-hd" style={{ flexWrap: 'wrap', gap: 10 }}>
-          <div className="card-title">{toontMateriaal ? 'Materiaal op werkbonnen' : 'Kostenregels'}</div>
+          <div className="card-title">{toontMateriaal ? 'Kosten op werkbonnen' : 'Kostenregels'}</div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
             {/* Dezelfde bediening als de periodekeuze bij de btw-indicatie op
                 Financiën: tabs voor de keuze, zodat het vertrouwd oogt. */}
             <div className="tabs">
               <button className={`tab${!toontMateriaal ? ' active' : ''}`} onClick={() => kiesWeergave('kosten')}>Kosten</button>
-              <button className={`tab${toontMateriaal ? ' active' : ''}`} onClick={() => kiesWeergave('materiaal')}>Materiaal op werkbonnen</button>
+              <button className={`tab${toontMateriaal ? ' active' : ''}`} onClick={() => kiesWeergave('materiaal')}>Kosten op werkbonnen</button>
             </div>
             <div className="tabs">
               {PERIODE_TYPES.map(p => (
@@ -1348,7 +1348,7 @@ export function CostsPage() {
             })}
             {actieveRegels.length === 0 && !loading && (
               <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--dl)', padding: 24 }}>
-                {toontMateriaal ? 'Geen materiaal op werkbonnen' : 'Geen kosten'} in {periode.label}
+                {toontMateriaal ? 'Geen kosten op werkbonnen' : 'Geen kosten'} in {periode.label}
                 {(filterCust || filterCat) ? ' bij dit filter' : ''}.
               </td></tr>
             )}

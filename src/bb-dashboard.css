@@ -2938,7 +2938,17 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
    woorden; deze is voor een paar zinnen. Klapt naar BENEDEN uit, want .tw heeft
    overflow:hidden en snijdt alles boven de kaartrand af. Ook op focus zichtbaar,
    zodat toetsenbord en touch er ook bij kunnen. */
-.bb-info{position:relative;display:inline-flex;align-items:center;justify-content:center;border:none;background:none;padding:0;margin:0;color:var(--dl);cursor:help;line-height:0;flex-shrink:0}
+/* Het icoontje staat in lopende tekst (kaarttitels, labels). line-height:0 zet
+   het op de basislijn van een nul-hoge regel, waardoor het tegen de bovenkant
+   van de letters hing. vertical-align + een eigen marge zetten het op de
+   optische middenlijn, ook waar in de JSX geen spatie voor staat. */
+.bb-info{position:relative;display:inline-flex;align-items:center;justify-content:center;border:none;background:none;padding:0;margin:0 0 0 5px;color:var(--dl);cursor:help;line-height:0;flex-shrink:0;vertical-align:-.12em}
+/* Is het icoontje zélf een kind van een flex-rij MET gap, dan regelt die gap de
+   ruimte al en zou de marge dubbelop zijn. Alleen deze twee rijen hebben een
+   gap; .card-hd en .wb2-card-hd hebben er geen, dus daar zou de marge weghalen
+   het icoontje juist tegen de titel plakken. Bewust de kind-combinator: een
+   icoontje dat genest in .card-title staat is lopende tekst en houdt zijn marge. */
+.f-label-rij>.bb-info,.tw-hd>.bb-info{margin-left:0}
 .bb-info:hover,.bb-info:focus-visible{color:var(--p)}
 .bb-info[data-tip]:hover::after,.bb-info[data-tip]:focus-visible::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);left:0;width:min(280px,70vw);white-space:normal;text-align:left;background:var(--dk);color:#fff;font-size:.72rem;font-weight:500;line-height:1.45;padding:8px 10px;border-radius:var(--r8);z-index:40;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.18)}
 /* Uitklapbare uitleg (component InfoUitklap). Voor tekst die te lang is voor

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { I, fmt } from '../bb-shared.jsx';
 import LeverancierSelect from './LeverancierSelect.jsx';
+import { InfoTip } from './Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { updateProjectKost, deleteProjectKost } from '../services/projectKostenService.js';
 
@@ -184,7 +185,11 @@ export function useInkopenBewerken(setLijst) {
 export function InkopenKaart({
   kosten, leveranciers, onLeverancierBij, canEdit, loading, laadFout, onAdd, onUpdate, onDelete,
   titel = 'Inkopen', kop = null,
-  leegTekst = 'Kosten die bij deze klus horen maar niet op een werkbon staan, zoals steigerhuur of een gehuurde hoogwerker. Bedragen exclusief btw.',
+  // De uitleg hoort achter het icoontje bij de titel, niet als losse zin in de
+  // kaart: je leest hem één keer, daarna staat hij alleen maar in de weg. De
+  // lege kaart houdt een korte regel, anders lijkt een leeg blok stuk.
+  leegTekst = 'Nog geen kosten toegevoegd.',
+  uitleg = 'Kosten die bij deze klus horen maar niet op een werkbon staan, zoals steigerhuur of een gehuurde hoogwerker. Bedragen exclusief btw.',
 }) {
   // De bestaande regels gebruiken dezelfde kolommen als de invoerregel, zodat
   // ze onder dezelfde koppen staan.
@@ -212,7 +217,9 @@ export function InkopenKaart({
   return (
     <div className="wb2-card" ref={kaartRef}>
       <div className="wb2-card-hd">
-        <div className="wb2-card-hd-title">{titel}</div>
+        {/* Het icoontje staat ín de titel, niet ernaast als flex-kind: deze rij
+            heeft geen gap, dus als tekst houdt het zijn eigen marge. */}
+        <div className="wb2-card-hd-title">{titel}<InfoTip tekst={uitleg} /></div>
       </div>
       <div className="wb2-card-body">
         {kop}

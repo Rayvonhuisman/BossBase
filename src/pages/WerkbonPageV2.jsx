@@ -1156,7 +1156,7 @@ function WerkbonKostenSection({ werkbon, uren, materialen }) {
     <InkopenKaart
       titel="Kosten"
       kop={kop}
-      leegTekst="Kosten voor deze werkbon die niet bij het materiaal staan, zoals steigerhuur of een gehuurde hoogwerker. Bedragen exclusief btw."
+      uitleg="Kosten voor deze werkbon die niet bij het materiaal staan, zoals steigerhuur of een gehuurde hoogwerker. Bedragen exclusief btw."
       kosten={inkopen}
       leveranciers={leveranciers}
       onLeverancierBij={g => setLeveranciers(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
