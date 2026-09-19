@@ -12,10 +12,11 @@ import { I, ModalX, fmt, Av } from '../bb-shared.jsx';
 import { InfoTip } from '../components/Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { useData } from '../lib/dataContext.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
 import AdresZoeker from '../components/AdresZoeker.jsx';
 import {
-  listLeveranciers, createLeverancier, deleteLeverancier, getLeverancierKostenTotalen,
+  createLeverancier, deleteLeverancier, getLeverancierKostenTotalen,
 } from '../services/leverancierService.js';
 
 const LEEG = {
@@ -138,7 +139,10 @@ export default function LeveranciersPage({ openLeverancier }) {
   const { can } = usePermissions();
   const [search, setSearch] = useState('');
   const [view, setView] = useState(() => localStorage.getItem('leveranciers_view') || 'grid');
-  const [leveranciers, setLeveranciers] = useState([]);
+  // De leverancierslijst komt uit de gedeelde dataset. Toevoegen en verwijderen
+  // riepen hier al bumpRefresh() aan, en die ververst die dataset — het lokale
+  // bijwerken van een eigen kopie is daarmee overbodig geworden.
+  const { leveranciers = [] } = useData();
   const [totalen, setTotalen] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -146,8 +150,10 @@ export default function LeveranciersPage({ openLeverancier }) {
 
   const reload = () => {
     setLoading(true);
-    Promise.all([listLeveranciers(), getLeverancierKostenTotalen()])
-      .then(([l, t]) => { setLeveranciers(l); setTotalen(t); setError(''); })
+    // Alleen de kostentotalen zijn van deze pagina; de leveranciers zelf komen
+    // uit de gedeelde dataset.
+    getLeverancierKostenTotalen()
+      .then(t => { setTotalen(t); setError(''); })
       .catch(err => setError(err.message || 'Leveranciers laden is mislukt.'))
       .finally(() => setLoading(false));
   };
@@ -176,7 +182,6 @@ export default function LeveranciersPage({ openLeverancier }) {
     if (!confirm('Weet je zeker dat je deze leverancier wilt verwijderen?')) return;
     try {
       const waarschuwing = await deleteLeverancier(l.id);
-      setLeveranciers(ls => ls.filter(x => x.id !== l.id));
       if (waarschuwing) toast.error(waarschuwing, { duration: 10000 });
       else toast.success('Leverancier verwijderd');
       bumpRefresh?.();
@@ -275,7 +280,6 @@ export default function LeveranciersPage({ openLeverancier }) {
         <NewLeverancierModal
           onClose={() => setShowNew(false)}
           onSaved={created => {
-            setLeveranciers(ls => [created, ...ls]);
             bumpRefresh?.();
             openLeverancier?.(created.id);
           }}

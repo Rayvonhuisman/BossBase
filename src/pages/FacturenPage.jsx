@@ -5,6 +5,7 @@ import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { useData } from '../lib/dataContext.jsx';
 import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
 import { createFactuurPaymentLink, getStripeConnection } from '../services/stripeService.js';
 import {
@@ -13,7 +14,6 @@ import {
   generateCreditFactuurNummer, createCreditFactuur, uploadFactuurPdf, getFactuurDocumentUrl,
   getFacturenMetDocument, FACTUUR_STATUS_OPTIONS, kopieerFactuur,
 } from '../services/factuurService.js';
-import { listCustomers } from '../services/customerService.js';
 import { getProjects } from '../services/projectsService.js';
 import { getBedrijfsinstellingen } from '../services/instellingenService.js';
 import { getEigenEenheden } from '../services/eigenEenheidService.js';
@@ -1079,7 +1079,9 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
   // Factuur-id's waarvan een brondocument is bewaard: onze eigen PDF bij het
   // versturen, of het document dat uit de boekhouding is meegekomen.
   const [metDocument, setMetDocument] = useState(new Set());
-  const [customers, setCustomers] = useState([]);
+  // Klanten komen uit de gedeelde dataset; deze pagina haalde ze apart op.
+  // Projecten staan daar niet in en blijven dus een eigen fetch.
+  const { customers = [] } = useData();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -1096,9 +1098,9 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
 
   const load = () => {
     setLoading(true);
-    Promise.all([getFacturen(), listCustomers(), getProjects().catch(() => [])])
-      .then(([f, c, p]) => {
-        setFacturen(f); setCustomers(c); setProjects(p); setError('');
+    Promise.all([getFacturen(), getProjects().catch(() => [])])
+      .then(([f, p]) => {
+        setFacturen(f); setProjects(p); setError('');
         // Eén listing van de bucket, niet één check per rij.
         getFacturenMetDocument(f[0]?.companyId).then(setMetDocument).catch(() => {});
       })

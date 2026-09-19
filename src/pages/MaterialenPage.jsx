@@ -12,11 +12,11 @@ import { I, ModalX, fmt, Av } from '../bb-shared.jsx';
 import { InfoTip } from '../components/Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { useData } from '../lib/dataContext.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
 import {
   listMaterialen, createMateriaal, updateMateriaal, deleteMateriaal, marge, EENHEDEN,
 } from '../services/materiaalService.js';
-import { listLeveranciers } from '../services/leverancierService.js';
 import LeverancierSelect from '../components/LeverancierSelect.jsx';
 
 const LEEG = {
@@ -158,15 +158,17 @@ export default function MaterialenPage() {
   const magInkoop = can('inkoopprijzen');
   const [zoek, setZoek] = useState('');
   const [lijst, setLijst] = useState([]);
-  const [leveranciers, setLeveranciers] = useState([]);
+  // De leverancierslijst komt uit de gedeelde dataset; alleen de materialen
+  // zelf zijn van deze pagina.
+  const { leveranciers = [] } = useData();
   const [laden, setLaden] = useState(true);
   const [fout, setFout] = useState('');
   const [modal, setModal] = useState(null);
 
   const herlaad = () => {
     setLaden(true);
-    Promise.all([listMaterialen(), listLeveranciers({ inclusiefInactief: false })])
-      .then(([m, l]) => { setLijst(m); setLeveranciers(l); setFout(''); })
+    listMaterialen()
+      .then(m => { setLijst(m); setFout(''); })
       .catch(err => setFout(err.message || 'Materialen laden is mislukt.'))
       .finally(() => setLaden(false));
   };
@@ -273,7 +275,7 @@ export default function MaterialenPage() {
           materiaal={modal === 'nieuw' ? null : modal}
           leveranciers={leveranciers}
           magInkoop={magInkoop}
-          onLeverancierToegevoegd={g => setLeveranciers(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
+          onLeverancierToegevoegd={() => bumpRefresh?.()}
           onClose={() => setModal(null)}
           onSaved={() => { herlaad(); bumpRefresh?.(); }}
         />

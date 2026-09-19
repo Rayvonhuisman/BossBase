@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
+import { useData } from '../lib/dataContext.jsx';
 import { useUrlTab } from '../hooks/useUrlTab.js';
 import { useEscapeSluit } from '../hooks/useEscapeSluit.js';
 import {
@@ -8,8 +9,6 @@ import {
 } from '../services/urenService.js';
 import { PauzeKnoppen, rondAfOpVijf, Dropdown } from '../components/UrenVelden.jsx';
 import { getAlleWerkbonUren } from '../services/werkbonUrenService.js';
-import { listCustomers } from '../services/customerService.js';
-import { getWerkbonnen } from '../services/werkbonService.js';
 import { getProjects } from '../services/projectsService.js';
 import { getTeamMembers } from '../services/notificatieService.js';
 import { I } from '../bb-shared.jsx';
@@ -691,8 +690,9 @@ export function UrenPageV2({ navigatePage } = {}) {
   const [allRows, setAllRows] = useState([]);
   // Werkbonuren komen uit een eigen tabel en zijn hier alleen ter inzage.
   const [werkbonUren, setWerkbonUren] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [werkbonnen, setWerkbonnen] = useState([]);
+  // Klanten en werkbonnen komen uit de gedeelde dataset; deze pagina haalde ze
+  // apart op. De uren, projecten en werkbonuren blijven eigen fetches.
+  const { customers = [], werkbonnen = [] } = useData();
   const [projecten, setProjecten] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -724,14 +724,12 @@ export function UrenPageV2({ navigatePage } = {}) {
     setLoading(true);
     Promise.all([
       getUrenregistratie(),
-      listCustomers(),
-      getWerkbonnen().catch(() => []),
       getProjects().catch(() => []),
       getAlleWerkbonUren().catch(() => []),
     ])
-      .then(([r, c, w, p, wu]) => {
+      .then(([r, p, wu]) => {
         if (!alive) return;
-        setAllRows(r); setCustomers(c); setWerkbonnen(w); setProjecten(p); setWerkbonUren(wu); setError('');
+        setAllRows(r); setProjecten(p); setWerkbonUren(wu); setError('');
       })
       .catch(err => { if (!alive) return; setError(err.message || 'Laden mislukt'); })
       .finally(() => { if (alive) setLoading(false); });
