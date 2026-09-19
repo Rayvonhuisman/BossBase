@@ -19,6 +19,9 @@ export const toProjectKost = row => {
   return {
     id: row.id,
     projectId: row.project_id,
+    // Gezet als de inkoop op een werkbon is toegevoegd; project_id is dan het
+    // project van die werkbon (trigger, migratie 20260919140000).
+    werkbonId: row.werkbon_id || null,
     datum: row.datum || '',
     naam: row.naam || '',
     eenheid: row.eenheid || '',
@@ -42,11 +45,31 @@ export async function listProjectKosten(projectId) {
   return (data || []).map(toProjectKost)
 }
 
+/** Inkopen die op deze werkbon zijn toegevoegd. */
+export async function listWerkbonKosten(werkbonId) {
+  if (!werkbonId) return []
+  const { data, error } = await supabase
+    .from('project_kosten')
+    .select('*')
+    .eq('werkbon_id', werkbonId)
+    .order('datum', { ascending: true })
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return (data || []).map(toProjectKost)
+}
+
+/**
+ * @param {string|null} projectId
+ * @param {object} input  naam, aantal, eenheid, prijs_per, leverancier_id, en
+ *                        optioneel werkbon_id. Met een werkbon zet de database
+ *                        het project zelf (het project van die werkbon).
+ */
 export async function createProjectKost(projectId, input) {
   const naam = (input.naam || '').trim()
   if (!naam) throw new Error('Omschrijving is verplicht')
   const payload = await withCompanyId({
-    project_id: projectId,
+    project_id: input.werkbon_id ? null : projectId,
+    werkbon_id: input.werkbon_id || null,
     naam,
     eenheid: input.eenheid || null,
     aantal: Number(input.aantal) || 1,

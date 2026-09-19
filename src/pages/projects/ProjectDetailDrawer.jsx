@@ -24,9 +24,9 @@ import { planningLabel } from '../../utils/werkbonDagen.js';
 import { PlanningRegels, planRegels } from '../../components/PlanningBlok.jsx';
 import { getProjectCosts } from '../../services/jobCostService.js';
 import { bouwKostenOverzicht } from '../../services/kostenOverzichtService.js';
-import KostenInvoerRegel, { useKostenKolommen, KostenLeverancier, smalVeld } from '../../components/KostenInvoerRegel.jsx';
+import { InkopenKaart, useInkopenBewerken } from '../../components/KostenInvoerRegel.jsx';
 import {
-  listProjectKosten, createProjectKost, updateProjectKost, deleteProjectKost,
+  listProjectKosten, createProjectKost,
 } from '../../services/projectKostenService.js';
 import { NewFactuurModal, SendFactuurMailModal } from '../FacturenPage.jsx';
 import { NewOfferteModal, SendOfferteMailModal } from '../OffertesPage.jsx';
@@ -626,32 +626,8 @@ function KostenTab({ project, canManage }) {
     }
   };
 
-  const wijzigKost = async (rij, patch) => {
-    const nieuw = { ...rij };
-    if ('naam' in patch) nieuw.naam = patch.naam;
-    if ('eenheid' in patch) nieuw.eenheid = patch.eenheid;
-    if ('aantal' in patch) nieuw.aantal = Number(patch.aantal) || 0;
-    if ('prijs_per' in patch) nieuw.prijsPer = Number(patch.prijs_per) || 0;
-    if ('leverancier_id' in patch) nieuw.leverancierId = patch.leverancier_id || null;
-    nieuw.bedrag = Math.round(nieuw.aantal * nieuw.prijsPer * 100) / 100;
-    setProjectKosten(l => l.map(x => (x.id === rij.id ? nieuw : x)));
-    try {
-      await updateProjectKost(rij.id, patch);
-    } catch (e) {
-      toast.error(e.message || 'Bijwerken mislukt');
-      setProjectKosten(l => l.map(x => (x.id === rij.id ? rij : x)));
-    }
-  };
-
-  const verwijderKost = async rij => {
-    if (!window.confirm(`"${rij.naam}" verwijderen?`)) return;
-    try {
-      await deleteProjectKost(rij.id);
-      setProjectKosten(l => l.filter(x => x.id !== rij.id));
-    } catch (e) {
-      toast.error(e.message || 'Verwijderen mislukt');
-    }
-  };
+  // Bewerken en verwijderen: gedeeld met de werkbon (useInkopenBewerken).
+  const { wijzig: wijzigKost, verwijder: verwijderKost } = useInkopenBewerken(setProjectKosten);
 
   const kopStijl = { fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--dl)', marginBottom: 8 };
 
@@ -744,7 +720,7 @@ function KostenTab({ project, canManage }) {
         )}
       </div>
 
-      <ProjectKostenSection
+      <InkopenKaart
         kosten={projectKosten}
         leveranciers={leveranciers}
         onLeverancierBij={g => setLeveranciers(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
@@ -799,99 +775,6 @@ function KostenTab({ project, canManage }) {
           Hoort een kost echt bij deze klus en staat hij nergens op een werkbon, zet hem dan bij de inkopen.
         </div>
       )}
-    </div>
-  );
-}
-
-// Invoer van projectkosten. Zelfde opzet als materiaal op de werkbon: een
-// tabel met direct bewerkbare regels en onderaan één invoerregel met een
-// plusknop. Geen keuze uit de materialenbibliotheek: die draagt een
-// inkoopprijs, en een projectkost is voor iedereen met het recht 'kosten'
-// zichtbaar — daarmee zou de afgeschermde inkoopprijs via deze weg alsnog te
-// lezen zijn. Projectkosten zijn bovendien huur en diensten, geen artikelen.
-function ProjectKostenSection({ kosten, leveranciers, onLeverancierBij, canEdit, loading, laadFout, onAdd, onUpdate, onDelete }) {
-  // Kolommen en invoerregel komen uit KostenInvoerRegel, dezelfde als op de
-  // klantkaart. De bestaande regels gebruiken dezelfde kolommen, zodat ze onder
-  // dezelfde koppen staan.
-  const kolommen = useKostenKolommen();
-  const { ref: kaartRef, smal, COLS, GAP } = kolommen;
-  const totaal = kosten.reduce((s, k) => s + k.bedrag, 0);
-  const rijStijl = { display: 'grid', gridTemplateColumns: COLS, gap: GAP, alignItems: 'center', marginBottom: 5 };
-  const subStijl = { textAlign: 'right', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden' };
-
-  // Zonder de migratie bestaat de tabel nog niet. Dan geen technische
-  // foutmelding in beeld, maar wat er aan de hand is.
-  const foutTekst = !laadFout ? ''
-    : /schema cache|does not exist|project_kosten/i.test(laadFout)
-      ? 'Inkopen zijn nog niet beschikbaar: de database-update hiervoor is nog niet uitgevoerd.'
-      : `Inkopen konden niet worden geladen (${laadFout}).`;
-
-  const veld = (r, k, v) => onUpdate(r, { [k]: v });
-  // De omschrijving pas bij verlaten opslaan: leegmaken om opnieuw te typen
-  // zou anders tussendoor een lege naam wegschrijven, en die weigert de database.
-  const naamKlaar = (r, v) => {
-    const naam = v.trim();
-    if (naam && naam !== r.naam) veld(r, 'naam', naam);
-  };
-
-  return (
-    <div className="wb2-card" ref={kaartRef}>
-      <div className="wb2-card-hd">
-        <div className="wb2-card-hd-title">Inkopen</div>
-      </div>
-      <div className="wb2-card-body">
-        <div className="wb2-mat-body">
-          {!kosten.length && (
-            <div style={{ fontSize: 12, color: 'var(--dl)', lineHeight: 1.5, marginBottom: canEdit ? 10 : 0 }}>
-              {foutTekst || 'Kosten die bij deze klus horen maar niet op een werkbon staan, zoals steigerhuur of een gehuurde hoogwerker. Bedragen exclusief btw.'}
-            </div>
-          )}
-
-          {kosten.length > 0 && (
-            <div>
-              <div className="wb2-mat-kop" style={{ display: 'grid', gridTemplateColumns: COLS, gap: GAP }}>
-                <span>Omschrijving</span><span>Aantal</span><span>Eenheid</span><span>Kostprijs</span>
-                <span>Leverancier</span><span style={{ textAlign: 'right' }}>Subtotaal</span><span />
-              </div>
-              {kosten.map(k => (
-                <div key={k.id} className="wb2-mat-rij" style={rijStijl}>
-                  <input type="text" defaultValue={k.naam} disabled={!canEdit} style={smalVeld(smal)}
-                    onBlur={e => naamKlaar(k, e.target.value)} />
-                  <input type="number" min="0" step="0.01" value={k.aantal} disabled={!canEdit} style={{ minWidth: 0 }}
-                    onChange={e => veld(k, 'aantal', e.target.value)} />
-                  <input type="text" value={k.eenheid} placeholder="stuk" disabled={!canEdit} style={smalVeld(smal)}
-                    onChange={e => veld(k, 'eenheid', e.target.value)} />
-                  <input type="number" min="0" step="0.01" value={k.prijsPer} disabled={!canEdit} style={{ minWidth: 0 }}
-                    title="Kostprijs per eenheid, excl. btw" onChange={e => veld(k, 'prijs_per', e.target.value)} />
-                  <div style={{ minWidth: 0 }}>
-                    <KostenLeverancier smal={smal} value={k.leverancierId} onChange={v => veld(k, 'leverancier_id', v)}
-                      disabled={!canEdit} leveranciers={leveranciers} onLeverancierBij={onLeverancierBij} />
-                  </div>
-                  <div style={subStijl}>{fmt(k.bedrag)}</div>
-                  {canEdit
-                    ? <button className="btn btn-xs btn-danger btn-icon" onClick={() => onDelete(k)} title="Verwijderen" style={{ justifySelf: 'end' }}>{I.trash}</button>
-                    : <div />}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {canEdit && !loading && (
-            <KostenInvoerRegel kolommen={kolommen} onAdd={onAdd} leveranciers={leveranciers}
-              onLeverancierBij={onLeverancierBij} metScheiding={kosten.length > 0} />
-          )}
-        </div>
-
-        {kosten.length > 0 && (
-          <div className="wb2-mat-foot">
-            <div className="wb2-mat-foot-add" style={{ visibility: 'hidden' }}>spacer</div>
-            <div style={{ textAlign: 'right' }}>
-              <div className="wb2-mat-foot-total-lbl">Totaal inkopen (excl. BTW)</div>
-              <div className="wb2-mat-foot-total">{fmt(totaal)}</div>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { listMaterialen } from '../services/materiaalService.js';
 import { listLeveranciers } from '../services/leverancierService.js';
 import LeverancierSelect from '../components/LeverancierSelect.jsx';
-import { I, ModalX, NotifyMailToggle } from '../bb-shared.jsx';
+import { I, ModalX, NotifyMailToggle, fmt } from '../bb-shared.jsx';
 import { InfoTip, InfoUitklap } from '../components/Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -54,6 +54,10 @@ import {
 } from '../components/UrenVelden.jsx';
 import { statusInfo } from '../utils/statusColors.js';
 import { calcBtw, BTW_PCT_OPTIONS } from '../utils/btw.js';
+import { InkopenKaart, useInkopenBewerken } from '../components/KostenInvoerRegel.jsx';
+import { bouwKostenOverzicht, getWerkbonKostenBron } from '../services/kostenOverzichtService.js';
+import { createProjectKost } from '../services/projectKostenService.js';
+import { usePlan } from '../hooks/usePlan.js';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 
@@ -1061,6 +1065,110 @@ const FOTO_CATS = [
   { key: 'tijdens', label: 'Tijdens', color: '#D97706', bg: '#FFF7E6' },
   { key: 'na',      label: 'Na',      color: '#0F7A3F', bg: '#E8FBEF' },
 ];
+
+// ── Kosten ──────────────────────────────────────────────────────────────────
+// Zelfde opzet als de kostentab van het project: de kostprijs bovenaan, daaronder
+// de inkopen met dezelfde invoerregel (InkopenKaart / KostenInvoerRegel).
+//
+// Een inkoop die je hier toevoegt krijgt werkbon_id; de database zet er het
+// project van deze werkbon bij (migratie 20260919140000). Het is één rij: het
+// project telt hem via project_id, de klantkaart via het project of de werkbon.
+//
+// Materiaal staat hier als bedrag (op inkoopprijs); de regels zelf staan in het
+// blok Materialen erboven. Uren als aantal, zonder bedrag, zoals overal.
+//
+// Rechten zoals op het project: het blok met 'kosten' en de module
+// kosten_nacalculatie, toevoegen en bewerken voor admin, planner of
+// 'projecten_bewerken'. Materiaal alleen met 'inkoopprijzen' — zonder dat recht
+// komen die regels niet eens uit de database.
+function WerkbonKostenSection({ werkbon, uren, materialen }) {
+  const toast = useToast();
+  const { profile } = useProfile();
+  const { can } = usePermissions();
+  const plan = usePlan();
+  const magZien = can('kosten') && plan.has('kosten_nacalculatie');
+  const magInkoop = can('inkoopprijzen');
+  const magBewerken = ['admin', 'planner'].includes(profile?.role) || can('projecten_bewerken');
+
+  const [jobCosts, setJobCosts] = useState([]);
+  const [inkopen, setInkopen] = useState([]);
+  const [laadFout, setLaadFout] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [leveranciers, setLeveranciers] = useState([]);
+  useEffect(() => { if (magZien) listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(() => {}); }, [magZien]);
+
+  // Opnieuw laden als het materiaal op deze werkbon verandert: de materiaal-
+  // kosten zijn spiegelregels die de database bij elke wijziging bijwerkt.
+  const materiaalSleutel = (materialen || []).map(m => `${m.id}:${m.aantal}`).join(',');
+  useEffect(() => {
+    if (!magZien || !werkbon?.id) return undefined;
+    let leeft = true;
+    setLoading(true);
+    getWerkbonKostenBron(werkbon.id)
+      .then(b => { if (leeft) { setJobCosts(b.jobCosts); setInkopen(b.projectKosten); setLaadFout(''); } })
+      .catch(e => { if (leeft) setLaadFout(e.message || 'Laden mislukt'); })
+      .finally(() => { if (leeft) setLoading(false); });
+    return () => { leeft = false; };
+  }, [werkbon?.id, materiaalSleutel, magZien]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const overzicht = useMemo(
+    () => bouwKostenOverzicht({ jobCosts, projectKosten: inkopen, urenRegels: uren || [] }),
+    [jobCosts, inkopen, uren],
+  );
+  const { wijzig, verwijder } = useInkopenBewerken(setInkopen);
+
+  if (!magZien) return null;
+
+  const voegToe = async form => {
+    try {
+      const nieuw = await createProjectKost(werkbon.projectId, { ...form, werkbon_id: werkbon.id });
+      setInkopen(l => [...l, nieuw]);
+    } catch (e) {
+      toast.error(e.message || 'Toevoegen mislukt');
+      throw e;
+    }
+  };
+
+  const labelStijl = { fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 };
+  const subStijl = { fontSize: 11, color: 'var(--dl)', marginTop: 2 };
+  const fmtUren = u => `${Number(u || 0).toLocaleString('nl-NL', { maximumFractionDigits: 2 })} uur`;
+  const kop = (
+    <div style={{ padding: '2px 0 12px' }}>
+      <div style={labelStijl}>{magInkoop ? 'Kostprijs' : 'Inkopen'}</div>
+      <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt(magInkoop ? overzicht.totaal : overzicht.inkopen.bedrag)}</div>
+      {magInkoop && (overzicht.materiaal.bedrag > 0 || overzicht.inkopen.bedrag > 0) && (
+        <div style={subStijl}>materiaal {fmt(overzicht.materiaal.bedrag)} · inkopen {fmt(overzicht.inkopen.bedrag)}</div>
+      )}
+      {overzicht.uren.uren > 0 && (
+        <div style={subStijl}>{fmtUren(overzicht.uren.uren)} gewerkt · geen bedrag</div>
+      )}
+      {overzicht.boekingen.regels.length > 0 && (
+        <div style={{ ...subStijl, marginTop: 6, lineHeight: 1.5 }}>
+          {overzicht.boekingen.regels.length === 1 ? '1 boeking' : `${overzicht.boekingen.regels.length} boekingen`} op
+          de Kosten-pagina {overzicht.boekingen.regels.length === 1 ? 'hangt' : 'hangen'} aan deze werkbon
+          ({fmt(overzicht.boekingen.bedrag)}). Die tellen niet mee: het materiaal zelf staat hierboven al.
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <InkopenKaart
+      titel="Kosten"
+      kop={kop}
+      leegTekst="Kosten voor deze werkbon die niet bij het materiaal staan, zoals steigerhuur of een gehuurde hoogwerker. Bedragen exclusief btw."
+      kosten={inkopen}
+      leveranciers={leveranciers}
+      onLeverancierBij={g => setLeveranciers(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
+      canEdit={magBewerken}
+      loading={loading}
+      laadFout={laadFout}
+      onAdd={voegToe}
+      onUpdate={wijzig}
+      onDelete={verwijder}
+    />
+  );
+}
 
 function FotoSection({ fotos, onUpload, onDelete, canEdit = true }) {
   const inputRefs = useRef({});
@@ -2367,6 +2475,9 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
 
             {/* Materialen */}
             <MaterialenSection materialen={materialen} onAdd={handleAddMaterial} onUpdate={handleUpdateMaterial} onDelete={handleDeleteMaterial} canEdit={canEdit} />
+
+            {/* Kosten: zelfde opzet en invoerregel als project en klantkaart */}
+            {detail && <WerkbonKostenSection werkbon={detail} uren={uren} materialen={materialen} />}
 
             {/* Meerwerk */}
             <TakenSection

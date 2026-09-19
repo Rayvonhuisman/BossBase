@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase'
 import { getProjectCosts, isWerkbonMateriaal, inkoopwaardeVanKosten, toJobCost } from './jobCostService.js'
-import { listProjectKosten, toProjectKost } from './projectKostenService.js'
+import { listProjectKosten, listWerkbonKosten, toProjectKost } from './projectKostenService.js'
 import { getTimeEntries } from './projectsService.js'
 import { alleRijen } from '../lib/alleRijen.js'
 
@@ -140,6 +140,14 @@ export const kostHoortBijKlant = (rij, customerId, sleutels) =>
   || (rij.werkbon_id != null && sleutels.werkbonIds.has(rij.werkbon_id))
   || (rij.deal_id != null && sleutels.dealIds.has(rij.deal_id))
 
+/**
+ * Hoort deze inkoop (project_kosten, ruw) bij de klant? Via zijn project, of via
+ * zijn werkbon als die geen project heeft. Het blijft één rij, dus één keer.
+ */
+export const inkoopHoortBijKlant = (rij, sleutels) =>
+  (rij.project_id != null && sleutels.projectIds.has(rij.project_id))
+  || (rij.werkbon_id != null && sleutels.werkbonIds.has(rij.werkbon_id))
+
 const naarUrenRegel = r => ({ uren: Number(r.uren || 0), reisKm: r.reis_km == null ? null : Number(r.reis_km) })
 
 /**
@@ -218,14 +226,17 @@ export async function getKlantKostenOverzicht(customerId) {
   jobCosts = [...new Map(jobCosts.map(k => [k.id, k])).values()]
 
   const [projectKosten, urenRegels] = await Promise.all([
-    projectIds.length
+    (projectIds.length || werkbonIdLijst.length)
       ? alleRijen(() => supabase
           .from('project_kosten')
           .select('*', { count: 'exact' })
-          .in('project_id', projectIds)
+          .or([
+            projectIds.length ? `project_id.in.(${projectIds.join(',')})` : null,
+            werkbonIdLijst.length ? `werkbon_id.in.(${werkbonIdLijst.join(',')})` : null,
+          ].filter(Boolean).join(','))
           .order('datum', { ascending: true })
           .order('id', { ascending: true }))
-        .then(rows => rows.map(toProjectKost))
+        .then(rows => rows.filter(r => inkoopHoortBijKlant(r, sleutels)).map(toProjectKost))
         .catch(() => [])
       : [],
     werkbonIdLijst.length
@@ -279,11 +290,34 @@ export async function getKostenOverzichtPerKlant(customerIds = []) {
     const sleutels = klantSleutels(cid, { projecten, werkbonnen, deals })
     per.set(cid, bouwKostenOverzicht({
       jobCosts: jcRijen.filter(r => kostHoortBijKlant(r, cid, sleutels)).map(naarKost),
-      projectKosten: pkRijen.filter(r => sleutels.projectIds.has(r.project_id)).map(toProjectKost),
+      projectKosten: pkRijen.filter(r => inkoopHoortBijKlant(r, sleutels)).map(toProjectKost),
       urenRegels: urenRijen.filter(r => sleutels.werkbonIds.has(r.werkbon_id)).map(naarUrenRegel),
     }))
   }
   return per
+}
+
+/**
+ * De bronrijen van één werkbon, voor het blok "Kosten" op de werkbon: materiaal
+ * (en boekingen) uit job_costs, en de inkopen die op deze werkbon zijn
+ * toegevoegd. De uren heeft de werkbonpagina al; die gaan er daar bij in
+ * bouwKostenOverzicht, zodat het rekenwerk hetzelfde blijft.
+ */
+export async function getWerkbonKostenBron(werkbonId) {
+  if (!werkbonId) return { jobCosts: [], projectKosten: [] }
+  const haal = select => alleRijen(() => supabase
+    .from('job_costs')
+    .select(select, { count: 'exact' })
+    .eq('werkbon_id', werkbonId)
+    .order('id', { ascending: true }))
+  let jobCosts
+  try {
+    jobCosts = (await haal(MET_INKOOP)).map(metMateriaalVelden)
+  } catch {
+    jobCosts = (await haal('*').catch(() => [])).map(toJobCost)
+  }
+  const projectKosten = await listWerkbonKosten(werkbonId)
+  return { jobCosts, projectKosten }
 }
 
 /** Alleen de projectkosten van een klant, gegroepeerd per project (voor de lijst). */

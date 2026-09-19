@@ -1614,13 +1614,16 @@ export function RevenuePage() {
   const [kostenPerKlant, setKostenPerKlant] = useState(null);
   const klantIdSleutel = customers.map(c => c.id).join(',');
   React.useEffect(() => {
-    if (!customers.length) { setKostenPerKlant(new Map()); return undefined; }
+    // Tijdens het laden null (de tabel toont dan "…"), nooit een lege map: die
+    // liet €0 zien als echte uitkomst terwijl de kosten nog onderweg waren.
+    if (!customers.length) { setKostenPerKlant(gedeeldLaden ? null : new Map()); return undefined; }
     let leeft = true;
+    setKostenPerKlant(null);
     getKostenOverzichtPerKlant(customers.map(c => c.id))
       .then(m => { if (leeft) setKostenPerKlant(m); })
       .catch(() => { if (leeft) setKostenPerKlant(new Map()); });
     return () => { leeft = false; };
-  }, [klantIdSleutel, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [klantIdSleutel, refreshKey, gedeeldLaden]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rows = withCustomerTotals(customers, { facturen }).map(c => {
     const kosten = kostenPerKlant?.get(c.id) || LEEG_OVERZICHT;
