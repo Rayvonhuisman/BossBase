@@ -5,6 +5,7 @@ import { createContext, useContext } from 'react';
 // dat customers/deals/activities/offertes/werkbonnen 2-3× worden gequeried.
 export const DataContext = createContext({
   customers: [],
+  leveranciers: [],
   deals: [],
   stages: [],
   activities: [],

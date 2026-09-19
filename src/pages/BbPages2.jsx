@@ -6,7 +6,8 @@ import {
 } from '../bb-shared.jsx';
 import { createCalendarEvent, listCalendarEvents, updateCalendarEvent } from '../services/calendarService.js';
 import { createJobCost, deleteJobCost, listJobCosts, updateJobCost, getKostenBijlageUrl, kostenPerGroep, alleenGeboekt } from '../services/jobCostService.js'
-import { PERIODE_TYPES, periodeRange, inPeriode } from '../lib/periode.js'
+import { PERIODE_TYPES, periodeRange } from '../lib/periode.js'
+import { useData } from '../lib/dataContext.jsx'
 import { listLeveranciers } from '../services/leverancierService.js'
 import LeverancierSelect from '../components/LeverancierSelect.jsx'
 import { categorieOptiesUit } from '../lib/kostenCategorieen.js';
@@ -20,7 +21,6 @@ import { getOffertes } from '../services/offerteService.js';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { listCustomers } from '../services/customerService.js';
 import { sumGefactureerd, sumBetaald, sumOpenstaand, withCustomerTotals } from '../services/customerTotalsService.js';
-import { listDeals } from '../services/dealService.js';
 import { listActivities } from '../services/activityService.js';
 import { getConnectionStatus, startGoogleCalendarConnect, disconnectGoogleCalendar } from '../services/googleCalendarService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
@@ -1102,8 +1102,10 @@ export function CostsPage() {
   const { refreshKey, bumpRefresh } = useProfile();
   const { guardSchrijven, planModal } = usePlanGuard();
   const [costs, setCosts] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [deals, setDeals] = useState([]);
+  // Klanten, deals en leveranciers komen uit de gedeelde dataset die de app
+  // toch al ophaalt (DataContext). Deze pagina haalde ze apart op: drie extra
+  // verzoeken per bezoek voor gegevens die al in het geheugen stonden.
+  const { customers = [], deals = [], leveranciers = [] } = useData();
   const [showNew, setShowNew] = useState(false);
   const [filterCust, setFilterCust] = useState('');
   const [filterCat, setFilterCat] = useState('');
@@ -1111,7 +1113,6 @@ export function CostsPage() {
   const [error, setError] = useState('');
   const [selectedCost, setSelectedCost] = useState(null);
   const [mbAdminId, setMbAdminId] = useState('');
-  const [leveranciers, setLeveranciers] = useState([]);
   // Twee weergaven, nooit allebei tegelijk: "Kosten" (de boekingen, standaard)
   // en "Materiaal op werkbonnen" (wat er op klussen verbruikt is). Dat zijn twee
   // verschillende dingen — boekingen gaan naar de boekhouding, materiaal niet —
@@ -1141,26 +1142,33 @@ export function CostsPage() {
     try { localStorage.setItem('kosten_periode_type', id); } catch { /* niet blokkerend */ }
   };
   const periode = periodeRange(periodeType, periodeOffset);
+  // Alleen de kosten van de gekozen periode ophalen, server-side op cost_date.
+  // Een bedrijf met jaren historie hoeft niet zijn hele kostenboek te
+  // downloaden om één maand te tonen: bij het testbedrijf scheelt september al
+  // 1215 -> 781 rijen, en in de kostenweergave blijven er 16 over.
+  //
+  // start en eind als dependency, niet het periode-object zelf: dat is bij elke
+  // render een nieuw object en zou eindeloos opnieuw laden.
+  const { start: periodeStart, eind: periodeEind } = periode;
   React.useEffect(() => {
     setLoading(true);
-    Promise.all([listJobCosts(), listCustomers(), listDeals(), getConnection(), listLeveranciers()])
-      .then(([costData, customerData, dealData, conn, levData]) => {
+    Promise.all([
+      listJobCosts({ vanDatum: periodeStart, totDatum: periodeEind }),
+      getConnection(),
+    ])
+      .then(([costData, conn]) => {
         setCosts(costData);
-        setCustomers(customerData);
-        setDeals(dealData);
-        setLeveranciers(levData);
         if (conn?.administrationId) setMbAdminId(conn.administrationId);
         setError('');
       })
       .catch(err => setError(err.message || 'Kosten laden is mislukt.'))
       .finally(() => setLoading(false));
-  }, [refreshKey]);
+  }, [refreshKey, periodeStart, periodeEind]);
+  // De periode zit nu in de query zelf, dus hier blijven alleen de twee
+  // dropdowns over.
   const filtered = costs.filter(r => {
     if (filterCust && String(r.custId) !== filterCust) return false;
     if (filterCat && r.cat !== filterCat) return false;
-    // Een kost zonder datum hoort in geen enkele periode thuis; anders zou hij
-    // in élke periode opduiken en elk totaal te hoog maken.
-    if (!inPeriode(r.date, periode)) return false;
     return true;
   });
   // De twee weergaven, elk uit hun eigen bron. Ze worden nergens bij elkaar

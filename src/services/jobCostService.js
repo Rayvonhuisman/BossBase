@@ -274,9 +274,11 @@ export const toJobCost = row => ({
 // `id` als tweede sorteersleutel: created_at is niet uniek (een import zet veel
 // rijen op dezelfde seconde), en zonder unieke laatste sleutel kan een rij bij
 // het bladeren dubbel komen of wegvallen.
-async function selectWithDealsFallback(maakBasis) {
-  const gesorteerd = (q, select) => q
-    .select(select, { count: "exact" })
+async function selectWithDealsFallback(maakBasis, pasFilters = q => q) {
+  // Filters gaan ná .select(): daarvoor is het nog een tabelverwijzing zonder
+  // filtermethodes. Daarom komen ze als functie binnen en niet als kant-en-
+  // klare query.
+  const gesorteerd = (q, select) => pasFilters(q.select(select, { count: "exact" }))
     .order("created_at", { ascending: false })
     .order("id", { ascending: true })
   try {
@@ -287,8 +289,24 @@ async function selectWithDealsFallback(maakBasis) {
   }
 }
 
-export async function listJobCosts() {
-  const rows = await selectWithDealsFallback(() => supabase.from("job_costs"))
+/**
+ * Kosten ophalen, eventueel alleen die van één periode.
+ *
+ * Zonder datums komt alles binnen — dat is wat het dashboard en Financiën
+ * nodig hebben. De Kosten-pagina geeft wél een bereik mee: die toont één
+ * periode tegelijk, en dan is het zonde om de hele geschiedenis op te halen.
+ * Filtert op cost_date; geen enkele rij heeft die leeg (gecontroleerd op
+ * productie), dus er valt niets stil buiten beeld.
+ *
+ * @param {{vanDatum?: string, totDatum?: string}} bereik ISO-datums, inclusief
+ */
+export async function listJobCosts({ vanDatum, totDatum } = {}) {
+  const filters = q => {
+    if (vanDatum) q = q.gte("cost_date", vanDatum)
+    if (totDatum) q = q.lte("cost_date", totDatum)
+    return q
+  }
+  const rows = await selectWithDealsFallback(() => supabase.from("job_costs"), filters)
   return rows.map(toJobCost)
 }
 
