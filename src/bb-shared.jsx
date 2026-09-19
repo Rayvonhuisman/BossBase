@@ -1,4 +1,5 @@
 import React from 'react';
+import { useEscapeSluit } from './hooks/useEscapeSluit.js';
 import { costCategoryMeta } from './services/jobCostService.js';
 import { statusInfo } from './utils/statusColors.js';
 
@@ -249,7 +250,14 @@ export function Logo({ dark }) {
   );
 }
 
-export function ModalX({ onClose }) {
+// Het kruisje van een venster. Escape hoort hetzelfde te doen als erop klikken,
+// en omdat elk venster dit kruisje gebruikt is dit de plek om dat één keer te
+// regelen — niet in elk venster apart.
+// `escape={false}` voor een venster dat Escape zélf afhandelt, bijvoorbeeld om
+// het te blokkeren zolang er wordt opgeslagen. Zonder die uitzondering zouden
+// er twee luisteraars zijn en wint de verkeerde.
+export function ModalX({ onClose, escape = true }) {
+  useEscapeSluit(onClose, escape);
   return <button className="modal-x" onClick={onClose}>{I.x}</button>;
 }
 

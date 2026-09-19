@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { MapPin } from 'lucide-react';
 import { I, fmt } from '../../bb-shared.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
+import { useEscapeSluit } from '../../hooks/useEscapeSluit.js';
 import { usePermissions } from '../../hooks/usePermissions.js';
 import { useToast } from '../../lib/toast.jsx';
 import {
@@ -58,6 +59,8 @@ function Field({ label, children }) {
 }
 
 export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, openDeal }) {
+  // Escape sluit deze drawer, net als het kruisje en een klik ernaast.
+  useEscapeSluit(onClose);
   const { profile, bumpRefresh } = useProfile();
   const { can } = usePermissions();
   const toast = useToast();

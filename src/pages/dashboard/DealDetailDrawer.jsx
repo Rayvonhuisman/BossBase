@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { I, NotifyMailToggle, fmt, stageBadgeStyle } from '../../bb-shared.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
+import { useEscapeSluit } from '../../hooks/useEscapeSluit.js';
 import { useToast } from '../../lib/toast.jsx';
 import { listDeals, listPipelineStages, updateDeal } from '../../services/dealService.js';
 import { listActivities } from '../../services/activityService.js';
@@ -46,6 +47,8 @@ function Hint({ children }) {
 }
 
 export function DealDetailDrawer({ dealId, onClose, setPage, openCustomer }) {
+  // Escape sluit deze drawer, net als het kruisje en een klik ernaast.
+  useEscapeSluit(onClose);
   const toast = useToast();
   const { profile, bumpRefresh, requestNewActivity } = useProfile();
 

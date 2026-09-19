@@ -14,6 +14,7 @@ import { Check, X, Edit2, Maximize2, Minimize2, User } from 'lucide-react';
 import { I, Av, fmt } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
+import { useEscapeSluit } from '../hooks/useEscapeSluit.js';
 import { NoteEditor, renderNote } from '../components/NoteEditor.jsx';
 import NotitieLog, { toLogItem } from '../components/NotitieLog.jsx';
 import Tijdlijn from '../components/Tijdlijn.jsx';
@@ -31,6 +32,8 @@ import { sendEmail } from '../services/emailService.js';
 import { mailTemplate } from '../utils/mailTemplate.js';
 
 export default function LeverancierPage({ leverancierId, onClose }) {
+  // Escape sluit de kaart, net als het kruisje.
+  useEscapeSluit(onClose);
   const toast = useToast();
   // Wie tagt er? Nodig voor de melding aan de getagde collega.
   const { profile } = useProfile();

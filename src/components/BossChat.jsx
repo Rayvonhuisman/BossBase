@@ -93,12 +93,8 @@ export function BossChat({ open, onClose, berichten, setBerichten, gesprekId, se
     if (open) setTimeout(() => veldRef.current?.focus(), 120);
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const esc = e => { if (e.key === 'Escape' && !bezig) onClose(); };
-    document.addEventListener('keydown', esc);
-    return () => document.removeEventListener('keydown', esc);
-  }, [open, bezig, onClose]);
+  // Esc sluit, behalve tijdens het antwoorden: dat regelt het kruisje (ModalX),
+  // met dezelfde bezig-controle.
 
   const verstuur = async () => {
     const vraag = invoer.trim();
@@ -216,7 +212,7 @@ export function BossChat({ open, onClose, berichten, setBerichten, gesprekId, se
             <div style={{ fontWeight: 700, fontSize: 15 }}>Boss</div>
             <div style={{ fontSize: '.78rem', color: 'var(--dmu)' }}>Helpt je met BossBase</div>
           </div>
-          <div style={{ marginLeft: 'auto' }}><ModalX onClose={onClose} /></div>
+          <div style={{ marginLeft: 'auto' }}><ModalX onClose={() => !bezig && onClose()} /></div>
         </div>
 
         {/* Gesprek */}

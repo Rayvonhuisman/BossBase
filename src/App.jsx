@@ -11,6 +11,8 @@ import { DashboardHome } from './pages/dashboard/DashboardHome.jsx';
 import { Pipeline } from './pages/BbDashboard.jsx';
 import { DealDetailDrawer } from './pages/dashboard/DealDetailDrawer.jsx';
 import { leesRoute, bouwRoute } from './lib/route.js';
+import { schrijfEntry, sluitDelta } from './lib/geschiedenis.js';
+import { useEscapeSluit } from './hooks/useEscapeSluit.js';
 import AbonnementPage from './pages/AbonnementPage.jsx';
 import { CalendarEventDetailDrawer } from './pages/dashboard/CalendarEventDetailDrawer.jsx';
 import { PageErrorBoundary } from './components/PageErrorBoundary.jsx';
@@ -805,6 +807,14 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
   );
 }
 
+// De klantkaart in beide montages: als drawer over een pagina, en als paneel in
+// de split-weergave. Escape hangt hier en niet in CustomerPage zelf, zodat het
+// sluiten op één plek staat — bij het kruisje en de klik ernaast.
+function KlantkaartPaneel(props) {
+  useEscapeSluit(props.onClose);
+  return <CustomerPage {...props} />;
+}
+
 // ── CUSTOMER DRAWER ──────────────────────────────────────────
 function CustomerDrawer({ custId, initialTab, onClose, setPage, onTabChange }) {
   return (
@@ -812,7 +822,7 @@ function CustomerDrawer({ custId, initialTab, onClose, setPage, onTabChange }) {
       <div className="drawer-overlay" onClick={onClose} />
       <div className="drawer">
         <div className="drawer-body">
-          <CustomerPage
+          <KlantkaartPaneel
             custId={custId}
             initialTab={initialTab}
             onTabChange={onTabChange}
@@ -1201,7 +1211,10 @@ function AppInner() {
     const nextPath = path === '/website' ? '/' : path === '/registreer' ? '/register' : path;
     const changed = window.location.pathname !== nextPath;
     if (changed) {
-      window.history[replace ? 'replaceState' : 'pushState']({}, '', nextPath);
+      // Ook buiten het dashboard de teller doorzetten: het verschil tussen twee
+      // entries moet gelijk blijven aan hun afstand in de geschiedenis, want
+      // daar rekent het sluiten van een venster mee.
+      schrijfEntry(nextPath, { replace, vensters: {} });
     }
     setRoute(nextPath);
     // Reset scroll when entering a public marketing page so each route
@@ -1224,10 +1237,14 @@ function AppInner() {
         const el = document.querySelector('.content');
         window.history.replaceState({ ...(window.history.state || {}), bbScroll: el ? el.scrollTop : 0 }, '');
       }
-      // bbDiep markeert een entry die we zelf hebben gepusht. Alleen dán is
-      // teruggaan zinvol; bij een verse tab of een gedeelde link is er niets
-      // om naar terug te keren en valt sluiten terug op de pagina eronder.
-      window.history[replace ? 'replaceState' : 'pushState']({ bbDiep: !replace }, '', pad);
+      // Welke vensters staan er ná deze stap open? Daarmee onthoudt de entry
+      // waar het sluiten van élk venster heen moet, ook als je er daarna nog
+      // tabbladen in wisselt (zie lib/geschiedenis.js).
+      const n = leesRoute(BASISPAD, pad);
+      schrijfEntry(pad, {
+        replace,
+        vensters: { klant: n.klant, deal: n.deal, lev: n.lev, agenda: n.agenda, item: n.itemId },
+      });
     } catch { /* niet blokkerend */ }
     setRoute(window.location.pathname);
     const r = leesRoute(BASISPAD);
@@ -1249,10 +1266,18 @@ function AppInner() {
   // daarna `setPage(...)`. Terugspringen zou dan de zojuist geopende weergave
   // weer ongedaan maken; precies dat gebeurde bij het openen van een werkbon
   // vanuit de klantkaart. Alleen een échte sluitactie gaat terug.
+  //
+  // Eén stap terug is niet goed genoeg: een tabwissel in de klantkaart is óók
+  // een stap, dus na twee tabbladen bracht history.back() je naar het vorige
+  // tabblad met de kaart nog open. sluitDelta() geeft het aantal stappen naar
+  // de entry waar dit venster openging — precies dat venster dicht, en niets
+  // anders.
   const sluitTerug = useCallback((soort, terugval) => {
     const r = leesRoute(BASISPAD);
-    if (soort && !r[soort]) return;
-    if (window.history.state?.bbDiep) { window.history.back(); return; }
+    const venster = soort || 'item';
+    if (venster === 'item' ? !r.itemId : !r[venster]) return;
+    const delta = sluitDelta(venster);
+    if (delta) { window.history.go(delta); return; }
     gaNaar(terugval);
   }, [gaNaar]);
 
@@ -1274,6 +1299,9 @@ function AppInner() {
   // consistent met de klantkaart en projecten — geen aparte factuur-drawer meer.
   const openInvoice      = id => navigatePage('facturen', { id });
   const openLeverancier  = id => gaNaar({ page, itemId, lev: id });
+  // Sluiten liep hier langs de geschiedenis om (alleen de state werd geleegd),
+  // waardoor ?lev= in de URL bleef staan en herladen de kaart weer opende.
+  const closeLeverancier = () => sluitTerug('lev', { page, itemId });
   const openCalendarEvent = id => gaNaar({ page, itemId, agenda: id });
   // Ook na het verwijderen van een agenda-item: dat item staat dan niet meer in
   // de URL, dus dit sluit zonder terugsprong.
@@ -1456,7 +1484,7 @@ function AppInner() {
               <CustomersPage openCustomer={openCustomer} />
             </div>
             <div className="cust-split-panel">
-              <CustomerPage
+              <KlantkaartPaneel
                 custId={drawerCust?.id ?? drawerCust}
                 initialTab={drawerCust?.tab}
                 onTabChange={t => gaNaar({ page, itemId, klant: drawerCust?.id ?? drawerCust, tab: t })}
@@ -1473,7 +1501,7 @@ function AppInner() {
               <LeveranciersPage openLeverancier={openLeverancier} />
             </div>
             <div className="cust-split-panel">
-              <LeverancierPage leverancierId={drawerLev} onClose={() => setDrawerLev(null)} />
+              <LeverancierPage leverancierId={drawerLev} onClose={closeLeverancier} />
             </div>
           </div>
         ) : <LeveranciersPage openLeverancier={openLeverancier} />;

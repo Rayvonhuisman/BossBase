@@ -177,6 +177,12 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onItemOpen, 
   // hele object door, dus hier pakken we het id eruit.
   const openActiviteit = a => (onItemOpen ? onItemOpen(a.id) : setSelected(a));
 
+  // Sluiten spiegelt openen. Stond de activiteit in de URL, dan haalt het
+  // sluiten hem daar ook weg; het effect hieronder leegt de lokale state dan
+  // vanzelf. Zonder die spiegeling bleef /activities/<id> in de URL staan na het
+  // kruisje, en opende herladen het venster opnieuw.
+  const sluitActiviteit = () => (onItemClose ? onItemClose() : setSelected(null));
+
   // De URL bepaalt welke activiteit open staat; het object komt uit de geladen
   // lijst. Geen id meer in de URL betekent sluiten.
   useEffect(() => {
@@ -418,14 +424,14 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onItemOpen, 
           activity={selected}
           customers={customers}
           deals={deals}
-          onClose={() => setSelected(null)}
+          onClose={sluitActiviteit}
           onSaved={updated => {
             setActs(as => as.map(a => a.id === updated.id ? updated : a));
-            setSelected(null);
+            sluitActiviteit();
           }}
           onDeleted={id => {
             setActs(as => as.filter(a => a.id !== id));
-            setSelected(null);
+            sluitActiviteit();
           }}
         />
       )}

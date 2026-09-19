@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { useUrlTab } from '../hooks/useUrlTab.js';
+import { useEscapeSluit } from '../hooks/useEscapeSluit.js';
 import {
   getUrenregistratie, createUrenregel, updateUrenregel, deleteUrenregel, berekenUren,
 } from '../services/urenService.js';
@@ -447,12 +448,8 @@ function MobileList({ rows, onEdit, onDelete }) {
 
 // ── Modal shell ─────────────────────────────────────────────────────────────
 function ModalShell({ open, onClose, busy, mobile, children, maxWidth = 640 }) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = e => { if (e.key === 'Escape' && !busy) onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose, busy]);
+  // Escape sluit, maar niet halverwege het opslaan.
+  useEscapeSluit(onClose, open && !busy);
   if (!open) return null;
   return (
     <div

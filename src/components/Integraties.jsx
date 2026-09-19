@@ -38,6 +38,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useEscapeSluit } from '../hooks/useEscapeSluit.js';
 import { Link2, SlidersHorizontal, RefreshCw, AlertTriangle } from 'lucide-react';
 import { I } from '../bb-shared.jsx';
 
@@ -332,12 +333,9 @@ function IntegratieDrawer({ integratie, onClose }) {
     if (!tabs.some(t => t.id === tab)) setTab(tabs[0].id);
   }, [tabs, tab]);
 
-  // Escape sluit, zoals bij de andere drawers.
-  useEffect(() => {
-    const opToets = e => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', opToets);
-    return () => window.removeEventListener('keydown', opToets);
-  }, [onClose]);
+  // Escape sluit, zoals bij de andere drawers — en alleen als deze drawer
+  // bovenop ligt.
+  useEscapeSluit(onClose);
 
   const { naam, omschrijving, logo, status, gate, koppeling, instellingen, sync, meldingen } = integratie;
   const handmatigVerborgen = !!koppeling?.activatie?.terugvalLabel && !handmatigOpen;

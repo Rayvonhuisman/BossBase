@@ -76,12 +76,9 @@ function MeldModal({ pagina, prijzen, onClose }) {
 
   useEffect(() => { tekstRef.current?.focus(); }, []);
 
-  // Esc sluit, behalve tijdens het versturen.
-  useEffect(() => {
-    const esc = e => { if (e.key === 'Escape' && !bezig) onClose(); };
-    document.addEventListener('keydown', esc);
-    return () => document.removeEventListener('keydown', esc);
-  }, [bezig, onClose]);
+  // Esc sluit, behalve tijdens het versturen. Dat loopt via het kruisje
+  // (ModalX), dat dezelfde bezig-controle meekrijgt als de knop zelf — zo is er
+  // één luisteraar en sluit Escape altijd het bovenste venster.
 
   // Voorbeeld-URL opruimen als de afbeelding wisselt of het venster sluit.
   useEffect(() => () => { if (shot?.url) URL.revokeObjectURL(shot.url); }, [shot]);

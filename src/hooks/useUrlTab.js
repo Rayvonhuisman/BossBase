@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { schrijfEntry } from '../lib/geschiedenis.js';
 
 // ── useUrlTab ─────────────────────────────────────────────────────────────────
 // Houdt de actieve tab in de URL (?<param>=<id>) zodat een refresh of een externe
@@ -45,7 +46,10 @@ export function useUrlTab(defaultId, { param = 'tab', validIds = null, stap = fa
       if (id == null || id === defaultId) url.searchParams.delete(param);
       else url.searchParams.set(param, id);
       const pad = url.pathname + url.search + url.hash;
-      if (stap) window.history.pushState({ bbDiep: true }, '', pad);
+      // Een tabblad is geen venster: de sluitdoelen van het venster eromheen
+      // gaan ongewijzigd mee (schrijfEntry zonder `vensters`), zodat het kruisje
+      // ook na drie tabwissels nog in één keer dat venster sluit.
+      if (stap) schrijfEntry(pad);
       else window.history.replaceState(window.history.state, '', pad);
     } catch { /* URL niet beschikbaar — sla het URL-schrijven over */ }
   }, [param, defaultId, stap]);
