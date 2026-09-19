@@ -1361,8 +1361,17 @@ function AppInner() {
   const requestNewActivity = useCallback((opts = {}) => setGlobalActivityModal(opts), []);
   const bumpRefresh = useCallback(() => setRefreshKey(k => k + 1), []);
 
+  // Wie is er ingelogd — als waarde, niet als object. De sessie zelf is bij elk
+  // auth-event een NIEUW object: getSession() zet hem één keer, en
+  // onAuthStateChange doet dat nog eens bij INITIAL_SESSION, SIGNED_IN en bij
+  // elke stille tokenvernieuwing. Met `session` in de dependencies draaide de
+  // gedeelde fetch daardoor twee tot drie keer per paginalading (zichtbaar als
+  // customers/deals/offertes 3x in de netwerktab), terwijl het steeds dezelfde
+  // gebruiker is. Op het id blijft hij staan tot je echt in- of uitlogt.
+  const sessionUserId = session?.user?.id ?? null;
+
   useEffect(() => {
-    if (!session) return;
+    if (!sessionUserId) return;
     let alive = true;
     setGlobalDataLoading(true);
     // Eén gedeelde fetch voor de hele dashboard-shell (dashboard, sidebar-badges,
@@ -1397,18 +1406,18 @@ function AppInner() {
       .catch(() => {})
       .finally(() => { if (alive) setGlobalDataLoading(false); });
     return () => { alive = false; };
-  }, [session, refreshKey]);
+  }, [sessionUserId, refreshKey]);
 
   // Limietstanden meeverversen. Na elke bumpRefresh (nieuwe offerte, factuur,
   // klant…) klopt "offerte 7 van 20" weer met de werkelijkheid.
   useEffect(() => {
-    if (!session || !profile?.companyId) return;
+    if (!sessionUserId || !profile?.companyId) return;
     let alive = true;
     getPlanStatus()
       .then(st => { if (alive && st) setPlanStatus(st); })
       .catch(() => {});
     return () => { alive = false; };
-  }, [session, refreshKey, profile?.companyId]);
+  }, [sessionUserId, refreshKey, profile?.companyId]);
 
   const dataApi = useMemo(() => ({
     customers: globalCustomers,
