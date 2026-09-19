@@ -2955,6 +2955,21 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
    deze flex-rij duwde hij het label anders samen tot twee regels. */
 .f-label-rij .bb-uitleg{flex-basis:100%}
 .bb-uitleg{margin:6px 0 0;padding:8px 10px;border-radius:var(--r8);background:var(--bgs);font-size:.75rem;font-weight:500;line-height:1.5;color:var(--dmu)}
+/* BTW-kaart op Financiën. Zelfde maten als de rest van de pagina: rijen zoals
+   de tabel (.dt), het saldo in de grootte van de tegels bovenaan (.sc-val), en
+   18px binnenmarge zoals de kop, zodat alles onder de titel uitlijnt. */
+.btw-body{padding:4px 18px 18px;max-width:560px}
+.btw-rij{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:12px 0;border-bottom:1px solid #f3f4f6;font-size:.84rem;color:var(--dm)}
+.btw-bedrag{font-size:.92rem;font-weight:600;color:var(--dk);font-variant-numeric:tabular-nums}
+.btw-saldo{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px;padding:16px 18px;border-radius:var(--r12);background:var(--bgs);border:1px solid var(--border)}
+.btw-saldo.terug{background:var(--pll);border-color:var(--pl)}
+.btw-saldo-label{font-size:.92rem;font-weight:700;color:var(--dk)}
+.btw-saldo-sub{font-size:.72rem;color:var(--dl);margin-top:3px}
+.btw-saldo-val{font-size:1.65rem;font-weight:var(--fw-bold);letter-spacing:-.03em;line-height:1;color:var(--dk);font-variant-numeric:tabular-nums}
+.btw-saldo.terug .btw-saldo-val{color:var(--pd)}
+.btw-saldo.nul .btw-saldo-val{color:var(--dl)}
+.btw-let-op{display:flex;align-items:flex-start;gap:8px;margin-top:12px;font-size:.76rem;line-height:1.45;color:var(--dmu)}
+.btw-let-op svg{flex-shrink:0;margin-top:1px;color:#d97706}
 
 /* ── ADRES-ZOEKER (PDOK) ─────────────────────────────────────
    Invulhulp boven de losse adresvelden. Mobile-first: ruime

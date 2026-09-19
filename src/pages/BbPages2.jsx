@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Smartphone, Phone, Navigation, Camera, Clock, Package, CheckCircle2, ExternalLink } from 'lucide-react';
+import { Smartphone, Phone, Navigation, Camera, Clock, Package, CheckCircle2, ExternalLink, AlertTriangle } from 'lucide-react';
 import {
   I, CAL_EVENTS, HOURS_DATA, COSTS_DATA, TEAM_DATA, CUSTOMERS_DATA, QUOTES_DATA,
   fmt, custById, Av, StatusBadge, ModalX, Logo, CostCategoryBadge,
@@ -1746,7 +1746,7 @@ export function RevenuePage() {
            Bewust GEEN aangifteknop of -export. */}
       {btwPlan.has('btw_overzicht') && (
       <div className="tw afu3" style={{ marginBottom: 20 }}>
-        <div className="tw-hd" style={{ marginBottom: 12 }}>
+        <div className="tw-hd">
           <div className="f-label-rij">
             <div className="card-title">BTW</div>
             <InfoTip tekst="Indicatie uit je facturen en kosten in BossBase, geen aangifte. Factuur- of kasstelsel kies je bij Instellingen." />
@@ -1762,35 +1762,33 @@ export function RevenuePage() {
           </div>
         </div>
 
-        <div style={{ padding: '0 16px 16px' }}>
+        <div className="btw-body">
           {(() => {
             const eigen = btwIndicatie;
-            if (!eigen) return <div style={{ fontSize: '.84rem', color: 'var(--dl)' }}>Berekenen…</div>;
+            if (!eigen) return <div className="btw-rij" style={{ color: 'var(--dl)', borderBottom: 'none' }}>Berekenen…</div>;
             // Het saldo uit de twee getoonde bedragen, zodat wat er staat altijd
             // precies optelt. Kan een paar cent afwijken van eigen.teBetalen, die
             // vanuit de regels rekent (zie btwIndicatieService).
             const saldo = Math.round((eigen.btwOntvangen - eigen.btwBetaald) * 100) / 100;
-            const regel = { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, padding: '6px 0', fontSize: '.92rem' };
-            const bedrag = { fontVariantNumeric: 'tabular-nums', fontWeight: 600 };
+            const soort = saldo > 0 ? 'betalen' : saldo < 0 ? 'terug' : 'nul';
             return (
-              <div style={{ maxWidth: 420 }}>
-                <div style={regel}>
+              <>
+                <div className="btw-rij">
                   <span>BTW ontvangen</span>
-                  <span style={bedrag}>{fmt(eigen.btwOntvangen)}</span>
+                  <span className="btw-bedrag">{fmt(eigen.btwOntvangen)}</span>
                 </div>
-                <div style={regel}>
+                <div className="btw-rij">
                   <span>BTW betaald</span>
-                  <span style={bedrag}>{fmt(eigen.btwBetaald)}</span>
+                  <span className="btw-bedrag">{fmt(eigen.btwBetaald)}</span>
                 </div>
-                <div style={{ ...regel, borderTop: '1px solid var(--br)', marginTop: 4, paddingTop: 10, fontSize: '1rem' }}>
-                  <strong>
-                    {saldo > 0 ? 'Je moet betalen' : saldo < 0 ? 'Je krijgt terug' : 'Niets te betalen of terug te krijgen'}
-                  </strong>
-                  {saldo !== 0 && (
-                    <strong style={{ ...bedrag, fontWeight: 800, color: saldo < 0 ? '#15A34A' : 'var(--dk)' }}>
-                      {fmt(Math.abs(saldo))}
-                    </strong>
-                  )}
+                <div className={`btw-saldo ${soort}`}>
+                  <div>
+                    <div className="btw-saldo-label">
+                      {soort === 'betalen' ? 'Je moet betalen' : soort === 'terug' ? 'Je krijgt terug' : 'Niets te betalen of terug te krijgen'}
+                    </div>
+                    <div className="btw-saldo-sub">Over {btwSelectedLabel}</div>
+                  </div>
+                  <div className="btw-saldo-val">{fmt(Math.abs(saldo))}</div>
                 </div>
                 {/* Alleen met een Moneybird-koppeling: die levert de cijfers van
                     de aangifte zelf. Klein, want het is de uitzondering. */}
@@ -1800,7 +1798,7 @@ export function RevenuePage() {
                     ? (bh.btw_ontvangen_21 || 0) + (bh.btw_ontvangen_9 || 0) - (bh.btw_betaald_21 || 0) - (bh.btw_betaald_9 || 0)
                     : null;
                   return (
-                    <div style={{ fontSize: '.78rem', color: 'var(--dmu)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <div className="btw-let-op" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
                       <span>
                         {bhSaldo != null
                           ? <>Volgens je boekhouding: {bhSaldo >= 0 ? 'te betalen' : 'terug'} {fmt(Math.abs(bhSaldo))}</>
@@ -1815,11 +1813,12 @@ export function RevenuePage() {
                 {/* Geen uitleg maar een waarschuwing dat het bedrag niet compleet
                     is, dus zichtbaar en niet achter het icoon (zie Uitleg.jsx). */}
                 {eigen.waarschuwingen.length > 0 && (
-                  <div style={{ fontSize: '.78rem', color: 'var(--dmu)', marginTop: 8 }}>
-                    Let op: {eigen.waarschuwingen.join(' ')}
+                  <div className="btw-let-op">
+                    <AlertTriangle size={14} aria-hidden="true" />
+                    <span>Let op: {eigen.waarschuwingen.join(' ')}</span>
                   </div>
                 )}
-              </div>
+              </>
             );
           })()}
         </div>
