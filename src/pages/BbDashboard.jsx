@@ -10,6 +10,8 @@ import { useToast } from '../lib/toast.jsx';
 import { ActivityEditModal, NewLeadModal } from '../components/SharedModals.jsx';
 import { usePlanGuard } from '../components/PlanUpgradeModal.jsx';
 import { statusInfo } from '../utils/statusColors.js';
+import { buildStageIndex, dealStatus } from '../utils/pipeline.js';
+import { getTeamMembers } from '../services/notificatieService.js';
 
 // Subtiele prioriteit-badge voor aanvragen/deals. Normaal (med) toont niets
 // om ruis in de lijst te voorkomen; Hoog = opvallend, Laag = rustig/neutraal.
@@ -249,7 +251,8 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
   const [cardMenu, setCardMenu] = useState(null); // { dealId, x, y } — open kaart-menu
 
   const [showFilter, setShowFilter] = useState(false);
-  const [filter, setFilter] = useState({ stage: 'all', status: 'open', priority: 'all', text: '' });
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [filter, setFilter] = useState({ stage: 'all', status: 'open', priority: 'all', text: '', persoon: 'all' });
 
   const [showNew, setShowNew] = useState(false);
   const [newStage, setNewStage] = useState(null);
@@ -330,12 +333,17 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
 
   const reload = () => {
     setLoading(true);
-    Promise.all([listDeals(), listPipelineStages(), listCustomers(), getLostReasons().catch(() => [])])
-      .then(([dealData, stageData, customerData, reasonData]) => {
+    Promise.all([
+      listDeals(), listPipelineStages(), listCustomers(),
+      getLostReasons().catch(() => []),
+      getTeamMembers().catch(() => []),
+    ])
+      .then(([dealData, stageData, customerData, reasonData, teamData]) => {
         setDeals(dealData);
         setStages(stageData.length ? stageData : PIPELINE_STAGES);
         setCustomers(customerData);
         setLostReasons(reasonData);
+        setTeamMembers(teamData);
         setError('');
       })
       .catch(err => setError(err.message || 'Pipeline laden is mislukt.'))
@@ -344,24 +352,35 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
 
   useEffect(() => { reload(); }, [refreshKey]);
 
-  const closedStages = ['lost', 'completed', 'paid'];
+  const stageIndex = useMemo(() => buildStageIndex(stages), [stages]);
 
+  // Het statusfilter vergeleek d.stage met slugs ('lost', 'completed',
+  // 'approved', 'in_progress', …) terwijl d.stage een uuid is. Geen van die
+  // regels matchte ooit, dus het filter deed niets: "Open trajecten" toonde
+  // alle 110 deals inclusief verloren en betaald, en Gewonnen, Verloren en
+  // Afgerond gaven een leeg bord. Nu op deals.status, net als het dashboard.
   const filteredDeals = useMemo(() => {
     const text = filter.text.trim().toLowerCase();
+    const faseCat = d => stageIndex.get(d.stage)?.category || 'open';
     return deals.filter(d => {
+      const st = dealStatus(d, stageIndex);
       if (filter.stage !== 'all' && d.stage !== filter.stage) return false;
       if (filter.priority !== 'all' && d.priority !== filter.priority) return false;
-      if (filter.status === 'open'   && closedStages.includes(d.stage)) return false;
-      if (filter.status === 'won'    && !['approved', 'planned', 'in_progress', 'completed', 'paid'].includes(d.stage)) return false;
-      if (filter.status === 'lost'   && d.stage !== 'lost') return false;
-      if (filter.status === 'done'   && !['completed', 'paid'].includes(d.stage)) return false;
+      // Behandeld door: de aanvraag kan aan meerdere mensen hangen.
+      if (filter.persoon !== 'all' && !(d.assignedToIds || []).includes(filter.persoon)) return false;
+      if (filter.status === 'open' && st !== 'open') return false;
+      if (filter.status === 'won'  && st !== 'won') return false;
+      if (filter.status === 'lost' && st !== 'lost') return false;
+      // Afgerond/betaald = gewonnen én het werk is af. "Af" staat alleen in de
+      // fase; de status kent enkel open/won/lost.
+      if (filter.status === 'done' && !(st === 'won' && ['won', 'paid'].includes(faseCat(d)))) return false;
       if (text) {
         const hay = `${d.title || ''} ${d.customerName || ''} ${d.city || ''}`.toLowerCase();
         if (!hay.includes(text)) return false;
       }
       return true;
     });
-  }, [deals, filter]);
+  }, [deals, filter, stageIndex]);
 
   // Show every stage as a column — the board scrolls horizontally so all
   // fases stay reachable (previously capped at 8, hiding later stages).
@@ -389,7 +408,15 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
   });
 
   const totalShown = filteredDeals.length;
-  const totalValue = filteredDeals.filter(d => d.stage !== 'lost').reduce((s, d) => s + d.value, 0);
+  // Ook hier stond een slugvergelijking (d.stage !== 'lost'), waardoor verloren
+  // werk gewoon meetelde in het totaal boven het bord.
+  //
+  // Verloren werk telt niet mee in de waarde van de pipeline — tenzij je er
+  // expliciet op filtert, want dan is het juist het onderwerp. Zonder die
+  // uitzondering zei de kop "11 trajecten · € 0,00 totaal".
+  const totalValue = filteredDeals
+    .filter(d => filter.status === 'lost' || dealStatus(d, stageIndex) !== 'lost')
+    .reduce((s, d) => s + d.value, 0);
 
   // deals.stage_id is a UUID column — resolve the real "Verloren" stage object
   // for use in confirmLost (lostStageId is already derived above for filtering).
@@ -506,8 +533,8 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
     }
   };
 
-  const resetFilter = () => setFilter({ stage: 'all', status: 'open', priority: 'all', text: '' });
-  const filterActive = filter.stage !== 'all' || filter.status !== 'open' || filter.priority !== 'all' || filter.text;
+  const resetFilter = () => setFilter({ stage: 'all', status: 'open', priority: 'all', text: '', persoon: 'all' });
+  const filterActive = filter.stage !== 'all' || filter.status !== 'open' || filter.priority !== 'all' || filter.text || filter.persoon !== 'all';
 
   const onSaved = () => {
     bumpRefresh?.();
@@ -553,6 +580,15 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
               <option value="done">Afgerond / betaald</option>
               <option value="lost">Verloren</option>
               <option value="any">Alles tonen</option>
+            </select>
+          </div>
+          <div className="pf-group">
+            <label>Behandeld door</label>
+            <select value={filter.persoon} onChange={e => setFilter(f => ({ ...f, persoon: e.target.value }))}>
+              <option value="all">Iedereen</option>
+              {teamMembers.map(m => (
+                <option key={m.id} value={m.id}>{m.fullName || m.email || 'Teamlid'}</option>
+              ))}
             </select>
           </div>
           <div className="pf-group">
