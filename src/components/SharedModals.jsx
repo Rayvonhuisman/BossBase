@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { I, ModalX, NotifyMailToggle, PIPELINE_STAGES, fmt } from '../bb-shared.jsx';
+import { InfoTip } from './Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { supabase } from '../lib/supabase';
 import { createCustomer } from '../services/customerService.js';
@@ -109,8 +110,9 @@ export function NewCustomerModal({ onClose, onSaved }) {
       <div className="modal modal-wide">
         <div className="modal-hd">
           <div>
-            <div className="modal-title">Nieuwe klant</div>
-            <div className="modal-sub">Voeg een klant toe aan je CRM.</div>
+            <div className="modal-title">
+              Nieuwe klant <InfoTip tekst="Voeg een klant toe aan je CRM." />
+            </div>
           </div>
           <ModalX onClose={onClose} />
         </div>
@@ -283,8 +285,9 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
       <div className="modal modal-wide">
         <div className="modal-hd">
           <div>
-            <div className="modal-title">Nieuwe aanvraag</div>
-            <div className="modal-sub">Voeg een nieuwe deal toe aan je pipeline.</div>
+            <div className="modal-title">
+              Nieuwe aanvraag <InfoTip tekst="Voeg een nieuwe deal toe aan je pipeline." />
+            </div>
           </div>
           <ModalX onClose={onClose} />
         </div>
@@ -438,8 +441,9 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
       <div className="modal modal-wide">
         <div className="modal-hd">
           <div>
-            <div className="modal-title">Nieuwe activiteit</div>
-            <div className="modal-sub">Plan een taak, telefoontje, e-mail of bezoek.</div>
+            <div className="modal-title">
+              Nieuwe activiteit <InfoTip tekst="Plan een taak, telefoontje, e-mail of bezoek." />
+            </div>
           </div>
           <ModalX onClose={onClose} />
         </div>
@@ -596,8 +600,9 @@ export function NewCalendarEventModal({ onClose, onSaved, customers, defaultDate
       <div className="modal modal-wide">
         <div className="modal-hd">
           <div>
-            <div className="modal-title">Nieuw agenda-item</div>
-            <div className="modal-sub">Plan een afspraak, klus of opname.</div>
+            <div className="modal-title">
+              Nieuw agenda-item <InfoTip tekst="Plan een afspraak, klus of opname." />
+            </div>
           </div>
           <ModalX onClose={onClose} />
         </div>
@@ -833,8 +838,9 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
       <div className="modal modal-wide">
         <div className="modal-hd">
           <div>
-            <div className="modal-title">Kosten toevoegen</div>
-            <div className="modal-sub">Houd materiaal, arbeid en reiskosten per klus bij.</div>
+            <div className="modal-title">
+              Kosten toevoegen <InfoTip tekst="Houd materiaal, arbeid en reiskosten per klus bij." />
+            </div>
           </div>
           <ModalX onClose={onClose} />
         </div>
@@ -853,16 +859,16 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
             </select>
           </div>
           <div className="f">
-            <label>Project <span style={{ color: 'var(--dl)', fontWeight: 400 }}>(optioneel)</span></label>
+            {/* Een boeking is boekhouding. De projectmarge draait op werkbon-
+                materiaal en projectkosten; anders telt de inkoop dubbel. */}
+            <label>
+              Project <span style={{ color: 'var(--dl)', fontWeight: 400 }}>(optioneel)</span>
+              <InfoTip tekst="Ter referentie — telt niet mee in de projectmarge." />
+            </label>
             <select value={form.project_id} onChange={e => onProjectChange(e.target.value)}>
               <option value="">Geen project</option>
               {filteredProjecten.map(p => <option key={p.id} value={p.id}>{p.name || 'Project'}</option>)}
             </select>
-            {/* Een boeking is boekhouding. De projectmarge draait op werkbon-
-                materiaal en projectkosten; anders telt de inkoop dubbel. */}
-            <div style={{ fontSize: '.72rem', color: 'var(--dl)', marginTop: 4, lineHeight: 1.35 }}>
-              Ter referentie — telt niet mee in de projectmarge.
-            </div>
           </div>
           <div className="f">
             <label>Werkbon <span style={{ color: 'var(--dl)', fontWeight: 400 }}>(optioneel)</span></label>
@@ -1192,7 +1198,14 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
         <div className="modal-hd">
           <div>
             <div className="modal-title">Activiteit bewerken</div>
-            <div className="modal-sub">{activity?.customerName ? `Klant: ${activity.customerName}` : 'Wijzigingen worden opgeslagen in Supabase.'}</div>
+            {/* Zonder klant stond hier "Wijzigingen worden opgeslagen in
+                Supabase" — de naam van onze database zegt een dakdekker niets,
+                en als uitleg verplaatsen zou dat alleen verbergen. Weggelaten;
+                bij een bekende klant blijft de klantnaam staan, want dat is een
+                gegeven en geen uitleg. */}
+            {activity?.customerName && (
+              <div className="modal-sub">{`Klant: ${activity.customerName}`}</div>
+            )}
           </div>
           <ModalX onClose={onClose} />
         </div>
@@ -1370,8 +1383,9 @@ export function ProfileModal({ onClose, profile, company, user, onSaved, onLogou
       <div className="modal" style={{ maxWidth: 460 }}>
         <div className="modal-hd">
           <div>
-            <div className="modal-title">Mijn profiel</div>
-            <div className="modal-sub">Beheer je persoonlijke gegevens.</div>
+            <div className="modal-title">
+              Mijn profiel <InfoTip tekst="Beheer je persoonlijke gegevens." />
+            </div>
           </div>
           <ModalX onClose={onClose} />
         </div>
