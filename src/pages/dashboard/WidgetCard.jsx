@@ -401,12 +401,27 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       return <KpiCard tone="info" icon={I.cust} label="Klanten" value={customers.length} sub={`${customers.length} actief in CRM`} onClick={() => setPage('customers')} />;
 
     case 'costs_per_job': {
-      // Echte job_costs, gegroepeerd per klus (deal/project/werkbon).
+      // Alleen een deal, project of werkbon is een klus. De groepeersleutel
+      // eindigde hiervoor op `|| c.id`, waardoor een kostenpost zonder klus zijn
+      // eigen "klus" werd: 141 losse boekingen maakten er 216 in plaats van 75,
+      // en dat drukte het gemiddelde van € 3.589 naar € 1.542.
+      //
+      // Die losse boekingen zijn geen fout en verdwijnen niet — ze staan apart
+      // als "overig" (€ 63.906 op 141 regels), buiten het gemiddelde.
       const byJob = new Map();
-      jobCosts.forEach(c => { const k = c.dealId || c.projectId || c.werkbonId || c.id; byJob.set(k, (byJob.get(k) || 0) + (Number(c.amt) || 0)); });
+      let overig = 0;
+      jobCosts.forEach(c => {
+        const bedrag = Number(c.amt) || 0;
+        const klus = c.dealId || c.projectId || c.werkbonId;
+        if (!klus) { overig += bedrag; return; }
+        byJob.set(klus, (byJob.get(klus) || 0) + bedrag);
+      });
       const jobs = [...byJob.values()];
       const avg = jobs.length ? jobs.reduce((s, v) => s + v, 0) / jobs.length : 0;
-      return <KpiCard tone="neutral" icon={I.costs} label="Kosten per klus" value={avg > 0 ? eur(avg) : ''} sub={jobs.length ? `gemiddeld · ${jobs.length} klussen` : 'geen kosten geregistreerd'} onClick={() => setPage('costs')} />;
+      const sub = jobs.length
+        ? `gemiddeld · ${jobs.length} klussen${overig > 0 ? ` · ${eur(overig)} overig` : ''}`
+        : 'geen kosten op een klus';
+      return <KpiCard tone="neutral" icon={I.costs} label="Kosten per klus" value={avg > 0 ? eur(avg) : ''} sub={sub} onClick={() => setPage('costs')} />;
     }
     case 'costs_month': {
       const md = jobCosts.filter(c => inThisMonth(c.date));
