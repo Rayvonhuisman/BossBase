@@ -923,6 +923,16 @@ function AppInner() {
   // de shell niet naar /login stuurt en de gedeelde fetch direct mag draaien.
   const [session,    setSession]    = useState(isDemo ? DEMO_SESSION : null);
   const [authReady,  setAuthReady]  = useState(isDemo);
+  // Wie is er ingelogd — als waarde, niet als object. De sessie zelf is bij elk
+  // auth-event een NIEUW object: getSession() zet hem één keer, en
+  // onAuthStateChange doet dat nog eens bij INITIAL_SESSION, SIGNED_IN en bij
+  // elke stille tokenvernieuwing. Effects die op `session` hingen draaiden
+  // daardoor twee tot drie keer per paginalading, terwijl het steeds dezelfde
+  // gebruiker is: eerst de gedeelde fetch (customers/deals/offertes 3x in de
+  // netwerktab), en daarna ook het profiel — profiel, bedrijf, tier en
+  // abonnementsstand kwamen zo drie keer over de lijn. Op het id blijft de
+  // waarde staan tot je echt in- of uitlogt.
+  const sessionUserId = session?.user?.id ?? null;
   // De URL bepaalt wat je ziet: pagina, geopend item en tabblad. Zie lib/route.js.
   const [page,       setPage]       = useState(() => leesRoute(BASISPAD).page);
   const [sbOpen,     setSbOpen]     = useState(false);
@@ -1151,7 +1161,7 @@ function AppInner() {
   }, []);
 
   useEffect(() => {
-    if (session) refreshProfile();
+    if (sessionUserId) refreshProfile();
     else {
       setUser(null); setProfile(null); setCompany(null); setProfileError(null);
       setUserPermissions([]);
@@ -1159,7 +1169,7 @@ function AppInner() {
       setPlanStatus(null);
       clearCompanyId();
     }
-  }, [session, refreshProfile]);
+  }, [sessionUserId, refreshProfile]);
 
   const repairProfile = useCallback(async () => {
     setRepairing(true);
@@ -1176,12 +1186,12 @@ function AppInner() {
 
   // Blokkeer ingelogde gebruikers van geblokkeerde companies
   useEffect(() => {
-    if (!company || !session) return;
+    if (!company || !sessionUserId) return;
     if (company.status === 'geblokkeerd') {
       supabase.auth.signOut();
       // auth state change handler handelt de redirect naar /login af
     }
-  }, [company, session]); // eslint-disable-line
+  }, [company, sessionUserId]);
 
   // ── Actieve sessie-controle ───────────────────────────────────────────────
   // Een al ingelogde gebruiker die verwijderd of gedeactiveerd wordt, mag niet
@@ -1189,7 +1199,7 @@ function AppInner() {
   // (elke 45s) én bij window-focus / tab-zichtbaar of het auth-account nog
   // bestaat en het profiel nog actief is. Zo niet → direct uitloggen + redirect.
   useEffect(() => {
-    if (!session) return;
+    if (!sessionUserId) return;
     let stopped = false;
 
     const forceLogout = (message) => {
@@ -1239,7 +1249,7 @@ function AppInner() {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [session]); // eslint-disable-line
+  }, [sessionUserId]); // eslint-disable-line
 
   const navigate = (path, replace = false) => {
     const nextPath = path === '/website' ? '/' : path === '/registreer' ? '/register' : path;
@@ -1414,15 +1424,7 @@ function AppInner() {
   const requestNewActivity = useCallback((opts = {}) => setGlobalActivityModal(opts), []);
   const bumpRefresh = useCallback(() => setRefreshKey(k => k + 1), []);
 
-  // Wie is er ingelogd — als waarde, niet als object. De sessie zelf is bij elk
-  // auth-event een NIEUW object: getSession() zet hem één keer, en
-  // onAuthStateChange doet dat nog eens bij INITIAL_SESSION, SIGNED_IN en bij
-  // elke stille tokenvernieuwing. Met `session` in de dependencies draaide de
-  // gedeelde fetch daardoor twee tot drie keer per paginalading (zichtbaar als
-  // customers/deals/offertes 3x in de netwerktab), terwijl het steeds dezelfde
-  // gebruiker is. Op het id blijft hij staan tot je echt in- of uitlogt.
-  const sessionUserId = session?.user?.id ?? null;
-
+  // Draait op sessionUserId, niet op de sessie zelf — zie de toelichting daar.
   useEffect(() => {
     if (!sessionUserId) return;
     let alive = true;
@@ -1457,6 +1459,10 @@ function AppInner() {
   // klant…) klopt "offerte 7 van 20" weer met de werkelijkheid.
   useEffect(() => {
     if (!sessionUserId || !profile?.companyId) return;
+    // Bij de eerste lading heeft refreshProfile() de stand zojuist opgehaald;
+    // deze run zou hem meteen nog eens ophalen. Pas na een bumpRefresh is er
+    // werkelijk iets veranderd aan de limietstanden.
+    if (refreshKey === 0) return;
     let alive = true;
     getPlanStatus()
       .then(st => { if (alive && st) setPlanStatus(st); })
