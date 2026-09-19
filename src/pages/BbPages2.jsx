@@ -14,7 +14,7 @@ import { getFacturen, getAllFactuurRegels } from '../services/factuurService.js'
 import { getConnection } from '../services/accountingService.js';
 import { getBtwPeriodes, syncBtwData } from '../services/btwService.js';
 import { berekenBtwIndicatie } from '../services/btwIndicatieService.js';
-import { InfoUitklap } from '../components/Uitleg.jsx';
+import { InfoTip, InfoUitklap } from '../components/Uitleg.jsx';
 import { getOffertes } from '../services/offerteService.js';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { listCustomers } from '../services/customerService.js';
@@ -651,7 +651,7 @@ function CalendarEventModal({ event, onClose, onSave, customers = [] }) {
     <div className="overlay" onClick={e => e.target === e.currentTarget && !saving && onClose()}>
       <div className="modal modal-wide">
         <div className="modal-hd">
-          <div><div className="modal-title">Agenda item</div><div className="modal-sub">Maak of bewerk een kalenderitem.</div></div>
+          <div><div className="modal-title">Agenda item <InfoTip tekst="Maak of bewerk een kalenderitem." /></div></div>
           <ModalX onClose={onClose} />
         </div>
         <div className="fg">
@@ -1176,20 +1176,25 @@ export function CostsPage() {
           <div key={i} className="sc">
             <div className="sc-top"><div className="sc-icon">{s.icon}</div></div>
             <div className="sc-val">{s.val}</div>
-            <div className="sc-label">{s.label}</div>
-            {s.sub && <div style={{ fontSize: '.68rem', color: 'var(--dl)', marginTop: 2, lineHeight: 1.3 }}>{s.sub}</div>}
+            {/* De toelichting onder een tegel ("Wat naar de boekhouding gaat")
+                stond permanent in beeld; nu achter het icoontje bij het label. */}
+            <div className="sc-label">
+              {s.label}{s.sub && <InfoTip tekst={s.sub} />}
+            </div>
           </div>
         ))}
       </div>
       {splitsing.werkbonMateriaal > 0 && (
-        <div className="afu2" style={{
-          fontSize: '.78rem', color: 'var(--dm)', background: 'var(--bgs)',
-          border: '1px solid var(--border)', borderRadius: 'var(--r8)',
-          padding: '8px 12px', marginBottom: 14,
-        }}>
-          {fmt(splitsing.werkbonMateriaal)} aan werkbonmateriaal staat hier ter inzage, maar is geen boeking:
-          het telt in de marge van het project, en in de boekhouding is de inkoopfactuur van je leverancier
-          de kostenpost. Daarom zit het niet in de geboekte kosten.
+        <div className="f-label-rij afu2" style={{ marginBottom: 14 }}>
+          {/* Het bedrag blijft staan — dat is een gegeven. Waaróm het geen
+              boeking is, zat er als alinea onder en zit nu achter het icoon. */}
+          <span style={{ fontSize: '.78rem', color: 'var(--dm)' }}>
+            {fmt(splitsing.werkbonMateriaal)} aan werkbonmateriaal
+          </span>
+          <InfoUitklap
+            id="uitleg-werkbonmateriaal"
+            tekst={`Dit staat hier ter inzage, maar is geen boeking: het telt in de marge van het project, en in de boekhouding is de inkoopfactuur van je leverancier de kostenpost. Daarom zit het niet in de geboekte kosten.`}
+          />
         </div>
       )}
       {zonderLeverancier.length > 0 && (
@@ -1198,12 +1203,16 @@ export function CostsPage() {
           background: 'var(--warn-bg, rgba(224,176,80,.10))', border: '1px solid var(--warn-bd, #e0b050)',
           borderRadius: 'var(--r8)', padding: '10px 12px', marginBottom: 14,
         }}>
-          <strong>
-            {zonderLeverancier.length} {zonderLeverancier.length === 1 ? 'kostenpost heeft' : 'kostenposten hebben'} nog geen leverancier
-          </strong>
-          <div style={{ marginTop: 3 }}>
-            Zonder leverancier kunnen ze niet naar de boekhouding. Ze staan hieronder gemarkeerd met “Ontbreekt” —
-            open zo’n regel en kies alsnog een leverancier.
+          {/* De melding zelf blijft zichtbaar: dit is een signaal dat er iets
+              te doen is. Alleen de toelichting eronder zit achter het icoon. */}
+          <div className="f-label-rij">
+            <strong>
+              {zonderLeverancier.length} {zonderLeverancier.length === 1 ? 'kostenpost heeft' : 'kostenposten hebben'} nog geen leverancier
+            </strong>
+            <InfoUitklap
+              id="uitleg-zonder-leverancier"
+              tekst="Zonder leverancier kunnen ze niet naar de boekhouding. Ze staan hieronder gemarkeerd met “Ontbreekt” — open zo’n regel en kies alsnog een leverancier."
+            />
           </div>
         </div>
       )}
