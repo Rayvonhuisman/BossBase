@@ -381,12 +381,9 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
   const tip = (e, node) => ux && ux.tip && ux.tip(e, node);
   const off = () => ux && ux.off && ux.off();
   const hov = node => ({ onMouseMove: e => tip(e, node), onMouseLeave: off });
-  const goCustOr = (custId, page) => () => { if (custId) openCustomer(custId); else setPage(page); };
-  const goDeal = d => () => {
-    if (d && d.id && openDeal) openDeal(d.id);
-    else if (d && d.custId) openCustomer(d.custId);
-    else setPage('pipeline');
-  };
+  // openDeal komt nog als prop binnen, maar geen enkele tegel opent de deal-la
+  // meer: Nieuwe aanvragen én Actieve deals gaan naar de klantkaart. Vanuit de
+  // pipeline zelf blijft de la gewoon bereikbaar.
   // Naar de klantkaart, tabblad Overzicht — daar staat het Aanvraag-blok. De
   // sleutel is 'overview' (TAB_LABELS in BbPages1.jsx); een onbekende tab valt
   // stil terug op de standaard, dus die naam moet exact kloppen.
@@ -696,7 +693,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                 const stageCol = stage?.col || (sm ? toneBadge[sm.tone] : null) || 'b-gray';
                 const nx = nextAct(d.custId);
                 return (
-                  <button key={d.id} className="feed-row ic-deal" onClick={goDeal(d)}>
+                  <button key={d.id} className="feed-row ic-deal" onClick={goKlantOverzicht(d)}>
                     <span className="feed-icon"><AvatarSq name={name} /></span>
                     <div className="feed-main">
                       <div className="feed-title">{name}</div>
@@ -819,7 +816,14 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     case 'werkbonnen_today': {
       // Elke geplande dag telt — een klus van ma t/m vr staat ook woensdag hier —
       // maar alleen als je die dag in de (dag)ploeg staat.
-      const items = myWerkbonnen.filter(w => staatOpDagVoor(w, today, currentUserId) || w.datum === today).slice(0, 6);
+      //
+      // Hier stond nog `|| w.datum === today`. Een werkbon heeft geen `datum`
+      // op topniveau — de mapper in werkbonService levert `geplandOp` en
+      // `dagen`, en `datum` bestaat alleen bínnen een dag-rij. De vergelijking
+      // was dus altijd false. Weg, en maar goed ook: als het veld er wél was
+      // geweest, had die tak de ploegtoets omzeild die de regel hierboven
+      // belooft, en stond andermans werkbon op jouw dashboard.
+      const items = myWerkbonnen.filter(w => staatOpDagVoor(w, today, currentUserId)).slice(0, 6);
       const tone = s => statusInfo(s, 'werkbon').chip;
       const label = s => statusInfo(s, 'werkbon').label;
       if (widget.size === 'small') {
@@ -1060,7 +1064,11 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
         // voor een aanvraag. De andere vijf tonen allemaal hun onderwerp, dus
         // hier de aktetas — die staat in deze app al voor een pipeline-aanvraag
         // (zie de tegel "Open pipelinewaarde").
-        { icon: I.brief,  l: 'Nieuwe aanvraag', d: 'voeg toe aan pipeline', tone: { qaBg: '#ecfdf5', qaFg: '#15A34A' }, go: 'pipeline', primary: true },
+        // Geen `primary` meer: die klasse geeft de tegel var(--p) — het felle
+        // merkgroen mét groene schaduw — terwijl de andere vijf een zachte
+        // pasteltint dragen. Als enige uitgelicht viel hij uit de toon. Nu op
+        // zijn eigen zachtgroen, dezelfde behandeling als de rest.
+        { icon: I.brief,  l: 'Nieuwe aanvraag', d: 'voeg toe aan pipeline', tone: { qaBg: '#ecfdf5', qaFg: '#15A34A' }, go: 'pipeline' },
         { icon: I.act,    l: 'Activiteit',     d: 'plan een belactie',     tone: { qaBg: '#eff6ff', qaFg: '#2563eb' }, go: 'activities' },
         { icon: I.quotes, l: 'Offerte',        d: 'nieuwe offerte maken',  tone: { qaBg: '#f5f3ff', qaFg: '#7c3aed' }, go: 'offertes' },
         { icon: I.wo,     l: 'Werkbon',        d: 'nieuwe werkbon',        tone: { qaBg: '#fffbeb', qaFg: '#b45309' }, go: 'werkbonnen' },
@@ -1106,8 +1114,11 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const totalP = rows.reduce((s, r) => s + r.winst, 0);
       return (
         <div className="bb-widget">
-          <WHead eyebrow="Winst" title="Winst per maand" sub={`Totaal ${kEur(totalP)} over ${rows.length} maanden`}
-            right={<Seg options={['6M', '12M']} active="6M" />} />
+          {/* Hier stond een 6M/12M-schakelaar zonder onPick: klikken deed niets.
+              Er is ook geen twaalfmaandsreeks om naartoe te schakelen — months
+              in DashboardHome bouwt zes maanden op. Weg, tot de reeks dat echt
+              aankan; een knop die niets doet is erger dan geen knop. */}
+          <WHead eyebrow="Winst" title="Winst per maand" sub={`Totaal ${kEur(totalP)} over ${rows.length} maanden`} />
           <div style={{ padding: '14px 16px 6px', display: 'flex', alignItems: 'flex-end', gap: 16, height: 220 }}>
             {rows.map((d, i) => {
               const totalH = (d.omzet / max) * 150;
@@ -1411,8 +1422,8 @@ function MonthlyRevenueChart({ charts, widget, ux, onNav }) {
   const gradId = `bbOmzetGrad-${size}`;
   return (
     <div className="bb-widget">
-      <WHead eyebrow="Omzet" title="Per maand" sub="Maandelijkse omzetontwikkeling"
-        right={<Seg options={['6M', '12M']} active="6M" />} />
+      {/* Zelfde dode 6M/12M-schakelaar als bij Winst per maand — zie daar. */}
+      <WHead eyebrow="Omzet" title="Per maand" sub="Maandelijkse omzetontwikkeling" />
       <div style={{ padding: '6px 16px 4px', display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
         <div>
           <div className="bb-widget-eyebrow" style={{ fontSize: 10.5 }}>Deze maand</div>

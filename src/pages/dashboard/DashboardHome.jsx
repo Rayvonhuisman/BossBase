@@ -232,7 +232,15 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
   const { can, isAdmin } = usePermissions();
   // Rechten zeggen "mag deze gebruiker het", het abonnement zegt "zit het in dit
   // pakket". De widgetfilters wegen allebei (zie magWidgetZien).
-  const { has } = usePlan();
+  //
+  // Alleen doorgeven als de stand er écht is. usePlan valt zonder planStatus
+  // terug op DEFAULT_TIER ('starter'), en get_plan_status() doet er zo'n 200 ms
+  // over — zonder deze regel zag een Groei- of Teamgebruiker zijn kostentegels
+  // eerst verdwijnen en dan terugkomen. Zonder `has` slaat magWidgetZien de
+  // abonnementstoets over: bij twijfel niet blokkeren, dezelfde keuze die
+  // usePlan zelf maakt voor `readonly`.
+  const plan = usePlan();
+  const has = plan.planStatus ? plan.has : undefined;
   const toast = useToast();
   // Gedeelde data (één fetch voor de hele shell) — geen eigen queries meer.
   const { customers, deals, stages, activities, offertes, werkbonnen, loading: sharedLoading } = useData();
