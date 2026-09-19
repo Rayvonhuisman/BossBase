@@ -6,6 +6,7 @@ import {
 } from '../bb-shared.jsx';
 import { createCalendarEvent, listCalendarEvents, updateCalendarEvent } from '../services/calendarService.js';
 import { createJobCost, deleteJobCost, listJobCosts, updateJobCost, getKostenBijlageUrl, kostenPerGroep, alleenGeboekt } from '../services/jobCostService.js'
+import { listWerkbonInkopen } from '../services/projectKostenService.js'
 import { PERIODE_TYPES, periodeRange } from '../lib/periode.js'
 import { useData } from '../lib/dataContext.jsx'
 import { listLeveranciers } from '../services/leverancierService.js'
@@ -1097,10 +1098,30 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
 // worden niet naar de boekhouding geëxporteerd (exportKosten filtert ze eruit).
 const isWerkbonMateriaalKost = c => Boolean(c?.werkbonMateriaalId ?? c?.werkbon_materiaal_id);
 
+// Een inkoop die op een werkbon is gezet (tabel project_kosten) in de rijvorm
+// van deze tabel, zodat hij naast het werkbonmateriaal kan staan.
+//
+// Twee dingen bewust anders dan bij een boeking: geen btw-percentage (dat is
+// nergens vastgelegd, dus 21% tonen zou een getal verzinnen) en een vlag, want
+// het bewerkvenster schrijft op job_costs en deze rij staat in een andere tabel.
+const werkbonInkoopAlsRij = k => ({
+  id: k.id,
+  cat: 'Inkopen',
+  desc: k.naam,
+  leverancierId: k.leverancierId,
+  amt: k.bedrag,
+  btwPercentage: null,
+  date: k.datum,
+  custId: k.customerId,
+  customerId: k.customerId,
+  werkbonInkoop: true,
+});
+
 export function CostsPage() {
   const { refreshKey, bumpRefresh } = useProfile();
   const { guardSchrijven, planModal } = usePlanGuard();
   const [costs, setCosts] = useState([]);
+  const [werkbonInkopen, setWerkbonInkopen] = useState([]);
   // Klanten, deals en leveranciers komen uit de gedeelde dataset die de app
   // toch al ophaalt (DataContext). Deze pagina haalde ze apart op: drie extra
   // verzoeken per bezoek voor gegevens die al in het geheugen stonden.
@@ -1154,9 +1175,13 @@ export function CostsPage() {
     Promise.all([
       listJobCosts({ vanDatum: periodeStart, totDatum: periodeEind }),
       getConnection(),
+      // Bewust geen .catch hier: gaat dit mis, dan hoort de foutmelding in beeld
+      // te komen. Stil op nul uitkomen is precies de fout waar alleRijen voor is.
+      listWerkbonInkopen({ vanDatum: periodeStart, totDatum: periodeEind }),
     ])
-      .then(([costData, conn]) => {
+      .then(([costData, conn, inkoopData]) => {
         setCosts(costData);
+        setWerkbonInkopen(inkoopData.map(werkbonInkoopAlsRij));
         if (conn?.administrationId) setMbAdminId(conn.administrationId);
         setError('');
       })
@@ -1174,7 +1199,19 @@ export function CostsPage() {
   // opgeteld: tegels én tabel rekenen allebei met `actieveRegels`, dus wat je
   // ziet is altijd precies één van de twee.
   const boekingen = alleenGeboekt(filtered);
-  const materiaalRegels = filtered.filter(isWerkbonMateriaalKost);
+  // "Kosten op werkbonnen" is allebei: het materiaal (spiegelregels in
+  // job_costs) én de inkopen die op een werkbon zijn gezet (project_kosten).
+  // Los van elkaar dekte die naam de lading niet. De inkopen blijven buiten
+  // `costs`, zodat de boekingen, het leverancier-signaal en de categorieënlijst
+  // onaangeroerd blijven; daarom krijgen ze hier dezelfde filters.
+  const materiaalRegels = [
+    ...filtered.filter(isWerkbonMateriaalKost),
+    ...werkbonInkopen.filter(r => {
+      if (filterCust && String(r.custId) !== filterCust) return false;
+      if (filterCat && r.cat !== filterCat) return false;
+      return true;
+    }),
+  ].sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const toontMateriaal = weergave === 'materiaal';
   const actieveRegels = toontMateriaal ? materiaalRegels : boekingen;
   const actiefTotaal = Math.round(actieveRegels.reduce((s, c) => s + (Number(c.amt) || 0), 0) * 100) / 100;
@@ -1234,14 +1271,16 @@ export function CostsPage() {
           het materiaal alsnog een kostenpost die in je boekhouding thuishoort. */}
       {toontMateriaal && (
         <div className="afu2" style={{
-          fontSize: '.82rem', color: 'var(--dm)', lineHeight: 1.55,
-          background: 'var(--bgs)', border: '1px solid var(--border)',
+          fontSize: '.82rem', lineHeight: 1.5,
+          background: '#F0F9FF', border: '1px solid #BAE6FD', color: '#075985',
           borderRadius: 'var(--r8)', padding: '10px 12px', marginBottom: 14,
         }}>
-          Kosten op werkbonnen is het materiaal dat je op klussen hebt verbruikt. Dit zijn geen boekingen: in je
-          boekhouding is de inkoopfactuur van je leverancier de kostenpost. Deze bedragen tellen daarom niet
-          mee in je kosten en je btw. Je ziet ze hier puur voor inzicht, en ze tellen wel mee in de marge van
-          een project.
+          <div style={{ fontWeight: 700, marginBottom: 2 }}>Dit zijn geen boekingen</div>
+          Materiaal en inkopen die op werkbonnen staan.
+          <ul style={{ margin: '4px 0 0', paddingLeft: 17 }}>
+            <li>Ze tellen niet mee in je kosten en je btw. In je boekhouding is de factuur van je leverancier de kostenpost.</li>
+            <li>Ze tellen wél mee in de brutowinst van een project.</li>
+          </ul>
         </div>
       )}
       {/* Alleen bij de boekingen: materiaal hoeft geen leverancier te hebben,
@@ -1273,7 +1312,7 @@ export function CostsPage() {
             {/* Dezelfde bediening als de periodekeuze bij de btw-indicatie op
                 Financiën: tabs voor de keuze, zodat het vertrouwd oogt. */}
             <div className="tabs">
-              <button className={`tab${!toontMateriaal ? ' active' : ''}`} onClick={() => kiesWeergave('kosten')}>Kosten</button>
+              <button className={`tab${!toontMateriaal ? ' active' : ''}`} onClick={() => kiesWeergave('kosten')}>Geboekte kosten</button>
               <button className={`tab${toontMateriaal ? ' active' : ''}`} onClick={() => kiesWeergave('materiaal')}>Kosten op werkbonnen</button>
             </div>
             <div className="tabs">
@@ -1303,14 +1342,16 @@ export function CostsPage() {
             {actieveRegels.map(r => {
               const c = customers.find(x => x.id === r.custId);
               return (
-                <tr key={r.id} onClick={() => setSelectedCost(r)} style={{ cursor: 'pointer' }}>
+                <tr key={r.id}
+                  onClick={r.werkbonInkoop ? undefined : () => setSelectedCost(r)}
+                  style={{ cursor: r.werkbonInkoop ? 'default' : 'pointer' }}>
                   <td style={{ fontWeight: 600 }}>{r.customerId ? (customers.find(x => x.id === r.customerId)?.name || '') : r.klantType === 'algemeen' ? 'Algemeen' : (c?.name || '')}</td>
                   <td><CostCategoryBadge category={r.cat} /></td>
                   <td>{r.desc}</td>
                   <td>
                     {r.leverancierId
                       ? (leveranciers.find(l => l.id === r.leverancierId)?.naam || '')
-                      : isWerkbonMateriaalKost(r)
+                      : (isWerkbonMateriaalKost(r) || r.werkbonInkoop)
                         ? <span style={{ color: 'var(--dl)', fontSize: '.78rem' }}>via werkbon</span>
                         : <span style={{
                             display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '.72rem', fontWeight: 600,
@@ -1322,8 +1363,15 @@ export function CostsPage() {
                   </td>
                   <td style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
                     {fmt(r.amt)}
-                    <span style={{ marginLeft: 5, fontSize: '.68rem', color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 5px', fontWeight: 400 }}>excl. · {r.btwPercentage ?? 21}% btw</span>
-                    <div style={{ fontSize: '.7rem', color: 'var(--dl)', fontWeight: 400 }}>{fmt(calcBtw(r.amt, r.btwPercentage ?? 21, 'excl').incl)} incl.</div>
+                    {/* Een inkoop op een werkbon is geen boeking en heeft geen
+                        vastgelegd btw-percentage; 21% tonen zou een getal
+                        verzinnen dat niemand heeft ingevuld. */}
+                    {!r.werkbonInkoop && (
+                      <>
+                        <span style={{ marginLeft: 5, fontSize: '.68rem', color: 'var(--dl)', background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 4, padding: '1px 5px', fontWeight: 400 }}>excl. · {r.btwPercentage ?? 21}% btw</span>
+                        <div style={{ fontSize: '.7rem', color: 'var(--dl)', fontWeight: 400 }}>{fmt(calcBtw(r.amt, r.btwPercentage ?? 21, 'excl').incl)} incl.</div>
+                      </>
+                    )}
                   </td>
                   <td style={{ color: 'var(--dl)', fontSize: '.8rem' }}>{r.date}</td>
                   <td>

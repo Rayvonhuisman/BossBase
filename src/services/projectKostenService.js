@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
 import { withCompanyId } from '../lib/currentCompany'
+import { alleRijen } from '../lib/alleRijen'
 
 // Projectkosten: wat één klus gekost heeft buiten het werkbonmateriaal om —
 // steigerhuur, een gehuurde hoogwerker. Ze tellen mee in de projectmarge en
@@ -56,6 +57,42 @@ export async function listWerkbonKosten(werkbonId) {
     .order('created_at', { ascending: true })
   if (error) throw error
   return (data || []).map(toProjectKost)
+}
+
+/**
+ * Alle inkopen die op een werkbon staan, bedrijfsbreed en eventueel beperkt tot
+ * één periode. Voor de Kosten-pagina: daar staan ze naast het werkbonmateriaal
+ * onder "Kosten op werkbonnen", zodat die naam de lading dekt.
+ *
+ * Via alleRijen, want dit is een bedrijfsbrede lijst die wordt opgeteld en
+ * PostgREST kapt stil af op duizend rijen. Filteren op `datum` mag: die kolom is
+ * NOT NULL met default CURRENT_DATE (gecontroleerd op productie), dus er valt
+ * niets buiten de periode weg.
+ *
+ * De klant hangt niet aan de inkoop maar aan de werkbon, vandaar de embed.
+ * @param {{vanDatum?: string, totDatum?: string}} bereik ISO-datums, inclusief
+ */
+export async function listWerkbonInkopen({ vanDatum, totDatum } = {}) {
+  const gesorteerd = select => {
+    let q = supabase.from('project_kosten')
+      .select(select, { count: 'exact' })
+      .not('werkbon_id', 'is', null)
+    if (vanDatum) q = q.gte('datum', vanDatum)
+    if (totDatum) q = q.lte('datum', totDatum)
+    // Vaste sortering met een unieke laatste sleutel; zonder dat mist alleRijen
+    // rijen of levert ze dubbel.
+    return q.order('created_at', { ascending: false }).order('id', { ascending: true })
+  }
+  let rijen
+  try {
+    rijen = await alleRijen(() => gesorteerd('*, werkbonnen(customer_id)'))
+  } catch (error) {
+    // Zonder de embed blijft alleen de klantnaam leeg. Dat is beter dan een
+    // lege tab, maar een andere fout hoort wél door te komen.
+    if (!/could not find.*relationship|foreign key/i.test(error?.message || '')) throw error
+    rijen = await alleRijen(() => gesorteerd('*'))
+  }
+  return rijen.map(row => ({ ...toProjectKost(row), customerId: row.werkbonnen?.customer_id || null }))
 }
 
 /**
