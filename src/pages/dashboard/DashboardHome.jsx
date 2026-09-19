@@ -289,18 +289,27 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
 
   // Load uren (dashboard-specifiek: laatste ~6 weken voor beide uren-widgets).
   // customers/deals/activities/offertes/werkbonnen/calendarEvents komen uit DataContext.
+  //
+  // ALLEEN DE EIGEN UREN. RLS geeft een admin of planner de uren van het hele
+  // bedrijf, en die werden hier afgezet tegen een doel van 40 uur: 129 uur van
+  // tien medewerkers werd "323% van je weekdoel". Voor een medewerker stond er
+  // wél zijn eigen stand. Dezelfde tegel betekende dus iets anders per rol.
+  //
+  // Het dashboard is persoonlijk — werkbonnen, agenda en activiteiten filteren
+  // hier al op de ingelogde gebruiker. Het teamoverzicht staat op de Uren-pagina.
   useEffect(() => {
     let alive = true;
+    if (!profile?.id) { setUren([]); setUrenLoading(false); return; }
     setUrenLoading(true);
     const wkMonday = new Date(); wkMonday.setHours(0, 0, 0, 0);
     wkMonday.setDate(wkMonday.getDate() - ((wkMonday.getDay() + 6) % 7) - 5 * 7);
     const urenVanaf = wkMonday.toISOString().slice(0, 10);
-    getUrenregistratie({ vanDatum: urenVanaf })
+    getUrenregistratie({ vanDatum: urenVanaf, profileId: profile.id })
       .then(u => { if (alive) setUren(u); })
       .catch(() => {})
       .finally(() => { if (alive) setUrenLoading(false); });
     return () => { alive = false; };
-  }, [refreshKey]);
+  }, [refreshKey, profile?.id]);
 
   const realCharts = useMemo(
     () => deriveCharts({ deals, activities, offertes, customers, uren, facturen, jobCosts, stages }),
