@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { WidgetCard } from './WidgetCard.jsx';
-import { widgetPermission } from '../../data/widgetRegistry.js';
+import { magWidgetZien } from '../../data/widgetRegistry.js';
 
 // Coordinates HTML5 drag-and-drop across widgets in edit mode.
 // - draggable={editMode} on each WidgetCard
@@ -12,14 +12,15 @@ import { widgetPermission } from '../../data/widgetRegistry.js';
 // - dragend always clears state so the UI never gets stuck if the user
 //   drops outside the grid
 export function DashboardWidgetGrid({
-  widgets, editMode, data, can,
+  widgets, editMode, data, can, has,
   setPage, openCustomer, openDeal, openInvoice, openCalendarEvent,
   onMoveUp, onMoveDown, onResize, onRemove, onReorder, onSettingsChange,
 }) {
-  // Een widget wordt verborgen als de gebruiker het vereiste recht mist. De
-  // index blijft gelijk aan de positie in de volledige widgets-array, zodat de
-  // verplaats-/verwijder-handlers (die op index werken) blijven kloppen.
-  const maySee = (w) => { const p = widgetPermission(w.widget_type); return !p || !can || can(p); };
+  // Een widget wordt verborgen als de gebruiker het vereiste recht mist of als
+  // hij buiten het abonnement valt. De index blijft gelijk aan de positie in de
+  // volledige widgets-array, zodat de verplaats-/verwijder-handlers (die op
+  // index werken) blijven kloppen.
+  const maySee = (w) => magWidgetZien(w.widget_type, { can, has });
   const visibleCount = widgets.filter(maySee).length;
   const [dragIdx, setDragIdx] = useState(null);
   const [overIdx, setOverIdx] = useState(null);

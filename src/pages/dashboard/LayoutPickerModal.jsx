@@ -1,5 +1,5 @@
 import { I } from '../../bb-shared.jsx';
-import { DEFAULT_LAYOUTS, layoutPermissions } from '../../data/widgetRegistry.js';
+import { DEFAULT_LAYOUTS, layoutZichtbaar } from '../../data/widgetRegistry.js';
 
 // Mini grid preview showing approximate widget row proportions
 const LAYOUT_ROWS = {
@@ -45,10 +45,11 @@ function LayoutThumb({ widgetCount }) {
   );
 }
 
-export function LayoutPickerModal({ onApply, onClose, currentLayout, can }) {
-  // Toon een layout alleen als de gebruiker alle rechten heeft voor de widgets erin.
+export function LayoutPickerModal({ onApply, onClose, currentLayout, can, has }) {
+  // Toon een layout alleen als de gebruiker élke widget erin mag zien — rechten
+  // én abonnement.
   const visibleLayouts = Object.entries(DEFAULT_LAYOUTS)
-    .filter(([key]) => layoutPermissions(key).every(p => !can || can(p)));
+    .filter(([key]) => layoutZichtbaar(key, { can, has }));
   return (
     <div className="overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 660 }}>

@@ -3,6 +3,7 @@ import { getDemoDashboardData } from '../../data/demoDashboardData.js';
 import { I } from '../../bb-shared.jsx';
 import { useProfile, displayName } from '../../lib/profileContext.jsx';
 import { usePermissions } from '../../hooks/usePermissions.js';
+import { usePlan } from '../../hooks/usePlan.js';
 import { useToast } from '../../lib/toast.jsx';
 import { useData } from '../../lib/dataContext.jsx';
 import { getUrenregistratie } from '../../services/urenService.js';
@@ -229,6 +230,9 @@ function deriveCharts({ deals = [], activities = [], offertes = [], customers = 
 export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, openCalendarEvent }) {
   const { profile, user, company, loading: profileLoading, permissionsLoaded, requestNewLead, requestNewActivity, refreshKey } = useProfile();
   const { can, isAdmin } = usePermissions();
+  // Rechten zeggen "mag deze gebruiker het", het abonnement zegt "zit het in dit
+  // pakket". De widgetfilters wegen allebei (zie magWidgetZien).
+  const { has } = usePlan();
   const toast = useToast();
   // Gedeelde data (één fetch voor de hele shell) — geen eigen queries meer.
   const { customers, deals, stages, activities, offertes, werkbonnen, loading: sharedLoading } = useData();
@@ -336,10 +340,23 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
   useEffect(() => {
     let alive = true;
     setEigenLaden(true);
+    // Een mislukte fetch niet stil opeten. Deze drie stonden op `.catch(() => [])`,
+    // en dan tonen de tegels gewoon niets: "Geen agenda-items", € 0 omzet, € 0
+    // kosten — zonder dat er iets misgegaan lijkt. De agenda liep hier
+    // structureel in een statement timeout (HTTP 500) en dat is zo een halve
+    // dag onopgemerkt gebleven.
+    //
+    // De lege array blijft de terugval, zodat één kapotte bron niet het hele
+    // dashboard meesleept, maar de fout komt nu in beeld.
+    const meldFout = wat => err => {
+      console.error(`[bb:dashboard] ${wat} laden mislukt`, err);
+      toast.error(`${wat} konden niet worden geladen — probeer het opnieuw.`);
+      return [];
+    };
     Promise.all([
-      getFacturen().catch(() => []),
-      listJobCosts().then(alleenGeboekt).catch(() => []),
-      listCalendarEvents().catch(() => []),
+      getFacturen().catch(meldFout('Facturen')),
+      listJobCosts().then(alleenGeboekt).catch(meldFout('Kosten')),
+      listCalendarEvents().catch(meldFout('Agenda-items')),
     ])
       .then(([facs, jcs, ces]) => {
         if (!alive) return;
@@ -349,7 +366,7 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
       })
       .finally(() => { if (alive) setEigenLaden(false); });
     return () => { alive = false; };
-  }, [refreshKey]);
+  }, [refreshKey, toast]);
 
   const realCharts = useMemo(
     () => deriveCharts({ deals, activities, offertes, customers, uren, facturen, jobCosts, stages }),
@@ -579,6 +596,7 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
             editMode={editMode}
             data={sharedData}
             can={can}
+            has={has}
             setPage={setPage}
             openCustomer={openCustomer}
             openDeal={openDeal}
@@ -608,6 +626,7 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
           onAdd={addWidget}
           onClose={() => setShowAddModal(false)}
           can={can}
+          has={has}
         />
       )}
 
@@ -617,6 +636,7 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
           onApply={applyLayout}
           onClose={() => setShowLayoutModal(false)}
           can={can}
+          has={has}
         />
       )}
     </>

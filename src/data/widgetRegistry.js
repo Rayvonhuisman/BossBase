@@ -179,13 +179,14 @@ export function getWidgetMeta(type) {
   return WIDGET_REGISTRY.find(r => r.type === type) || { type, label: type, category: 'popular', defaultSize: 'medium' };
 }
 
-// De rechten die een vooraf gedefinieerde layout vereist = de unie van de
-// rechten van alle widgets erin. Een layout is alleen kiesbaar als de gebruiker
-// ál die rechten heeft (zie LayoutPickerModal).
-export function layoutPermissions(layoutKey) {
+// Een vooraf gedefinieerde layout is alleen kiesbaar als de gebruiker élke
+// widget erin mag zien. Dat was al zo voor rechten; nu telt het abonnement even
+// hard mee, zodat de financiële layout niet aan te klikken is voor een Starter
+// die de kostentegels erin toch niet krijgt.
+export function layoutZichtbaar(layoutKey, gebruiker) {
   const layout = DEFAULT_LAYOUTS[layoutKey];
-  if (!layout) return [];
-  return [...new Set(layout.widgets.map(wd => widgetPermission(wd.widget_type)).filter(Boolean))];
+  if (!layout) return false;
+  return layout.widgets.every(wd => magWidgetZien(wd.widget_type, gebruiker));
 }
 
 // Welke widgets een recht vereisen. Financiële widgets (omzet, winst, waarde,
@@ -217,9 +218,61 @@ export const WIDGET_PERMISSION = {
   active_deals:          'verkoop',
   conversion_overview:   'verkoop',
   conversion_funnel:     'verkoop',
+  // Activiteiten van het hele team. Een array betekent "één van deze rechten
+  // is genoeg" en spiegelt letterlijk de SELECT-policy op activities:
+  //   bb_gedeelde_werkruimte() OR planning OR agenda_inzien OR (het is van jou)
+  // Precies die twee rechten staan erin — alles_inzien nadrukkelijk NIET. Wie
+  // dat recht wel heeft maar deze twee niet, krijgt van de database alleen zijn
+  // eigen rijen terug; de tegel zou dan een veel te laag getal tonen alsof dat
+  // het teamtotaal was.
+  activities_per_day_chart: ['planning', 'agenda_inzien'],
 };
 
-// Het recht dat een widget vereist, of null als hij voor iedereen zichtbaar is.
-export function widgetPermission(type) {
-  return WIDGET_PERMISSION[type] || null;
+// ── ABONNEMENT ────────────────────────────────────────────────────────────────
+// Een recht zegt "mag deze gebruiker het", een feature zegt "zit het in dit
+// abonnement". Beide moeten kloppen — dezelfde scheiding als PLAN_GATED_PAGES
+// in App.jsx, en met dezelfde sleutels uit features.js.
+//
+// Bewust kort. Bijna elke feature (klanten, offertes, facturen, agenda, uren)
+// zit al in Starter, dus een gate erop is altijd waar: dat beschermt niets en
+// suggereert alleen dat er iets bewaakt wordt. Alleen wat écht buiten een
+// pakket valt staat hier. Vandaar dat de navigatie ook maar twee gates kent.
+//
+// kosten_nacalculatie zit in Groei en Team, niet in Starter — zonder deze kaart
+// kon een Starter de kostentegels gewoon toevoegen terwijl de Kosten-pagina
+// zelf voor hem verborgen is.
+export const WIDGET_FEATURE = {
+  costs_per_job:       'kosten_nacalculatie',
+  costs_month:         'kosten_nacalculatie',
+  job_costs_bar_chart: 'kosten_nacalculatie',
+};
+
+// Widgets waarbij de rechteneis vervalt in een gedeelde werkruimte. Ook dit
+// volgt de policy: bij Groei (1-2 personen) ziet iedereen elkaars werk zonder
+// rechtenbeheer, dus daar klopt het teamtotaal zónder recht. Zou de tegel daar
+// tóch verborgen worden, dan verstopten we cijfers die de gebruiker mag zien.
+const GEDEELDE_WERKRUIMTE_WIDGETS = new Set(['activities_per_day_chart']);
+
+/**
+ * Mag deze gebruiker deze widget zien? Eén plek voor de hele afweging —
+ * abonnement én rechten — zodat het dashboard, de toevoegen-modal en de
+ * layoutkiezer niet uit elkaar kunnen lopen. Ze deden alle drie hun eigen
+ * `!p || !can || can(p)` en dat is precies het soort herhaling waarbij er
+ * later één wordt vergeten.
+ *
+ * @param {{can?: (r: string) => boolean, has?: (f: string) => boolean}} gebruiker
+ */
+export function magWidgetZien(type, { can, has } = {}) {
+  // 1. Abonnement eerst: dit staat boven de rol. Een admin op Starter hoort de
+  //    kostentegels net zomin te zien als zijn medewerker.
+  const feature = WIDGET_FEATURE[type];
+  if (feature && has && !has(feature)) return false;
+
+  // 2. In een gedeelde werkruimte vervalt de rechteneis voor teambrede tegels.
+  if (GEDEELDE_WERKRUIMTE_WIDGETS.has(type) && has && has('gedeelde_werkruimte')) return true;
+
+  // 3. Het recht. Een array = één ervan volstaat.
+  const nodig = WIDGET_PERMISSION[type];
+  if (!nodig || !can) return true;
+  return Array.isArray(nodig) ? nodig.some(r => can(r)) : can(nodig);
 }
