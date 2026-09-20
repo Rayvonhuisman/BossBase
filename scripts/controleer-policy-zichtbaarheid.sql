@@ -39,7 +39,12 @@ create temporary table zichtbaarheid (
   deals      bigint,
   facturen   bigint,
   job_costs  bigint,
-  agenda     bigint
+  agenda     bigint,
+  -- De subtabellen van een werkbon leunen op werkbonnen_select; ze staan hier
+  -- omdat een wijziging daar stilzwijgend doorwerkt op deze drie.
+  wb_taken   bigint,
+  wb_mat     bigint,
+  wb_dagen   bigint
 ) on commit drop;
 
 -- Meten gebeurt als de gebruiker, wegschrijven niet: de temp-tabel is van
@@ -51,6 +56,7 @@ declare
   v_uid uuid; v_gedeeld boolean;
   v_act bigint; v_wb bigint; v_proj bigint; v_off bigint;
   v_deals bigint; v_fact bigint; v_kost bigint; v_agenda bigint;
+  v_taken bigint; v_mat bigint; v_dagen bigint;
 begin
   perform set_config('request.jwt.claims',
                      json_build_object('sub', p_uid::text, 'role', 'authenticated')::text,
@@ -66,11 +72,14 @@ begin
   select count(*) into v_fact   from public.facturen;
   select count(*) into v_kost   from public.job_costs;
   select count(*) into v_agenda from public.calendar_events;
+  select count(*) into v_taken  from public.werkbon_taken;
+  select count(*) into v_mat    from public.werkbon_materialen;
+  select count(*) into v_dagen  from public.werkbon_dagen;
 
   reset role;
   insert into zichtbaarheid values
     (p_blok, p_wie, v_uid, v_gedeeld, v_act, v_wb, v_proj, v_off,
-     v_deals, v_fact, v_kost, v_agenda);
+     v_deals, v_fact, v_kost, v_agenda, v_taken, v_mat, v_dagen);
 end $$;
 
 -- Zet de feature expliciet AAN voor het tier van dit bedrijf. Niet aannemen dat
@@ -101,7 +110,8 @@ select pg_temp.meet('2 gedeeld UIT', 'monteur1',    '7e57c0de-0000-4000-b000-000
 -- uitkomst staat hier en nergens anders.
 select blok, wie,
        case when uid is null then 'ONGELDIG: geen auth.uid()' else 'ok' end as meting,
-       gedeeld, activities, werkbonnen, projects, offertes, deals, facturen, job_costs, agenda
+       gedeeld, activities, werkbonnen, projects, offertes, deals, facturen, job_costs, agenda,
+       wb_taken, wb_mat, wb_dagen
 from zichtbaarheid
 order by blok, wie;
 
