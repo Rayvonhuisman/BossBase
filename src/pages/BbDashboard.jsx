@@ -422,7 +422,17 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
   // zijn, en een afgeronde aanvraag stond er juist niet in. De fase zelf blijft
   // bestaan, zodat van oudere aanvragen te zien blijft waar ze stonden.
   const afgerondStageId = stages.find(s => /afgerond/i.test(s.label || ''))?.id;
-  const SHOWN_STAGE_IDS = stages.filter(s => s.id !== afgerondStageId).map(s => s.id);
+  // Bij het filter "Afgerond" komt die kolom wél terug, net als Verloren: ook
+  // die is verborgen tot je hem opvraagt. Zonder dit belandde een afgeronde
+  // aanvraag in de eerste kolom ("Nieuwe aanvraag"), omdat zijn eigen fase geen
+  // kolom meer heeft — dat leest als het tegenovergestelde van wat er speelt.
+  // Ook als je in de fase-keuzelijst bewust "Afgerond" kiest: die lijst toont
+  // alle fasen van het bedrijf, dus zonder dit hield visibleStages niets over
+  // en keek je naar een leeg bord zonder uitleg.
+  const toonAfgerondKolom = filter.status === 'done' || filter.stage === afgerondStageId;
+  const SHOWN_STAGE_IDS = stages
+    .filter(s => s.id !== afgerondStageId || toonAfgerondKolom)
+    .map(s => s.id);
   const lostStageId = (stages.find(s => /verlor/i.test(s.label || '')) || stages.find(s => /\blost\b/i.test(s.label || '')))?.id;
   const toggleHideLost = () => setHideLost(v => {
     const next = !v;
