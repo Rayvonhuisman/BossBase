@@ -263,7 +263,12 @@ export const PIPELINE_MOMENTEN = [
   { key: 'akkoord',       label: 'Akkoord (gewonnen)', uitleg: 'Vanaf deze fase telt de deal als gewonnen. Ook bereikt als de klant de offerte ondertekent. Sleep je hem terug naar een eerdere fase, dan staat hij weer open.' },
   { key: 'gepland',       label: 'Werkbon gepland',    uitleg: 'Zodra een werkbon voor dit project is ingepland.' },
   { key: 'in_uitvoering', label: 'Klus gestart',       uitleg: 'Zodra iemand op "Start klus" drukt.' },
-  { key: 'afgerond',      label: 'Klus afgerond',      uitleg: 'Zodra alle werkbonnen van het project afgerond zijn.' },
+  // 'afgerond' stond hier ook. Vervallen: een aanvraag afronden is sinds
+  // migratie 20260920100000 een bewuste handeling op de aanvraag zelf
+  // (afgerond_op), geen fase waar iets hem automatisch heen duwt. Het werk kan
+  // af zijn terwijl er nog gefactureerd moet worden; automatisch afronden zou
+  // die aanvragen van het bord halen voordat ze klaar waren. De bijbehorende
+  // koppelingen zijn opgeruimd in 20260920160000.
   { key: 'gefactureerd',  label: 'Factuur verstuurd',  uitleg: 'Zodra een factuur voor dit project is verstuurd.' },
   { key: 'betaald',       label: 'Factuur betaald',    uitleg: 'Zodra de factuur als betaald is gemarkeerd.' },
   { key: 'verloren',      label: 'Verloren',           uitleg: 'Een deal die in deze fase komt telt altijd als verloren, ook zonder reden erbij. En verloren blijft verloren.' },

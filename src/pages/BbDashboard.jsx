@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { I, PIPELINE_STAGES, fmt, Av, ModalX, stageBadgeStyle } from '../bb-shared.jsx';
-import { listDeals, listPipelineStages, updateDealStage, markDealLost, updateDeal } from '../services/dealService.js';
+import { listDeals, listPipelineStages, updateDealStage, markDealLost, updateDeal, zetDealAfgerond } from '../services/dealService.js';
 import { getLostReasons } from '../services/lostReasonService.js';
 import { listActivities } from '../services/activityService.js';
 import { listCustomers } from '../services/customerService.js';
@@ -415,7 +415,14 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
 
   // Show every stage as a column — the board scrolls horizontally so all
   // fases stay reachable (previously capped at 8, hiding later stages).
-  const SHOWN_STAGE_IDS = stages.map(s => s.id);
+  //
+  // Eén uitzondering: "Afgerond". Afronden is sinds migratie 20260920100000 een
+  // eigen kenmerk van de aanvraag (afgerond_op) en geen fase meer. De kolom was
+  // daardoor een dubbelganger: een aanvraag kon erin staan zonder afgerond te
+  // zijn, en een afgeronde aanvraag stond er juist niet in. De fase zelf blijft
+  // bestaan, zodat van oudere aanvragen te zien blijft waar ze stonden.
+  const afgerondStageId = stages.find(s => /afgerond/i.test(s.label || ''))?.id;
+  const SHOWN_STAGE_IDS = stages.filter(s => s.id !== afgerondStageId).map(s => s.id);
   const lostStageId = (stages.find(s => /verlor/i.test(s.label || '')) || stages.find(s => /\blost\b/i.test(s.label || '')))?.id;
   const toggleHideLost = () => setHideLost(v => {
     const next = !v;
@@ -430,7 +437,10 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
   // Deals whose stage_id is NULL or points to a stage that no longer exists
   // must not silently disappear — funnel them into the first column so they
   // stay visible and can be dragged to a real stage.
-  const stageIdSet = new Set(stages.map(s => s.id));
+  // Bewust de GETOONDE fasen en niet alle fasen: een aanvraag in een fase
+  // zonder kolom ("Afgerond") zou anders nergens staan en dus onvindbaar zijn.
+  // Zo komt hij in de eerste kolom terecht en kun je hem verslepen.
+  const stageIdSet = new Set(SHOWN_STAGE_IDS);
   const firstStageId = SHOWN_STAGE_IDS[0];
   const dealsInStage = stageId => filteredDeals.filter(d => {
     if (d.stage === stageId) return true;
@@ -478,6 +488,21 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
     setCardMenu(cur => cur?.dealId === deal.id ? null : { dealId: deal.id, x: r.right, y: r.bottom + 4 });
   };
   const markLost = deal => { setCardMenu(null); setLostReason(''); setLostNote(''); setLostDeal(deal); setShowLostModal(true); };
+  // Afronden haalt de aanvraag van het bord; op de klantkaart blijft hij staan
+  // met de status Afgerond, en daar kun je hem ook weer heropenen. Fase en
+  // status blijven wat ze waren: afgerond zegt alleen dat deze aanvraag klaar
+  // is, niet hoe hij afliep.
+  const markAfgerond = async deal => {
+    setCardMenu(null);
+    try {
+      const updated = await zetDealAfgerond(deal.id, true);
+      setDeals(ds => ds.map(d => d.id === deal.id ? updated : d));
+      toast.success('Aanvraag afgerond');
+    } catch (err) {
+      console.error('[bb:pipeline] aanvraag afronden mislukt', err);
+      toast.error(err.message || 'Afronden mislukt');
+    }
+  };
   const setDealPriority = async (deal, priority) => {
     setCardMenu(null);
     if ((deal.priority || 'med') === priority) return;
@@ -677,7 +702,7 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
 
       {!loading && !error && totalShown > 0 && isMobile && (
         <MobilePipeline
-          stages={filter.stage === 'all' ? stages : stages.filter(s => s.id === filter.stage)}
+          stages={stages.filter(s => SHOWN_STAGE_IDS.includes(s.id) && (filter.stage === 'all' || s.id === filter.stage))}
           dealsInStage={dealsInStage}
           geenVervolg={geenVervolg}
           openCustomer={openCustomer}
@@ -872,6 +897,12 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
                     </button>
                   ))}
                   <div className="card-menu-sep" />
+                  <button
+                    className="card-menu-item"
+                    onClick={() => menuDeal && markAfgerond(menuDeal)}
+                  >
+                    {I.check} Markeer als afgerond
+                  </button>
                   <button
                     className="card-menu-item card-menu-item-danger"
                     onClick={() => menuDeal && markLost(menuDeal)}
