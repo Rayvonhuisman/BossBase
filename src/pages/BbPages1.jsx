@@ -22,8 +22,8 @@ import { getOffertesByCustomer } from '../services/offerteService.js';
 import { getFacturenByCustomer } from '../services/factuurService.js';
 import { getProjectsByCustomer } from '../services/projectsService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
-import { listPipelineStages, updateDealStage } from '../services/dealService.js';
-import { buildStageIndex, dealStatus } from '../utils/pipeline.js';
+import { listPipelineStages, updateDealStage, zetDealAfgerond } from '../services/dealService.js';
+import { buildStageIndex, dealStatus, isAfgerond } from '../utils/pipeline.js';
 import { korteDatum } from '../utils/werkbonDagen.js';
 import { PlanningRegels, losseRegels, planRegels, samenOpDatum } from '../components/PlanningBlok.jsx';
 import { WerkbonModal } from './WerkbonPageV2.jsx';
@@ -34,7 +34,7 @@ import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
-import { ActivityEditModal, NewActivityModal, NewCustomerModal } from '../components/SharedModals.jsx';
+import { ActivityEditModal, NewActivityModal, NewCustomerModal, NewLeadModal } from '../components/SharedModals.jsx';
 import KostenInvoerRegel, { useKostenKolommen } from '../components/KostenInvoerRegel.jsx';
 import { createProjectKost } from '../services/projectKostenService.js';
 import { listLeveranciers } from '../services/leverancierService.js';
@@ -245,6 +245,10 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   const kostenKolommen = useKostenKolommen({ metProject: cProjecten.length > 1 });
   const [cWerkbonnen, setCWerkbonnen] = useState([]);
   const [cDealsLijst, setCDeals] = useState([]);
+  // Bij de andere hooks en niet verderop: alles onder de vroege returns
+  // (loading/error) zou de hook-volgorde per render laten verschillen.
+  const [afrondBezig, setAfrondBezig] = useState(false);
+  const [showNieuweAanvraag, setShowNieuweAanvraag] = useState(false);
   const [stages, setStages] = useState([]);
   // Moet hier staan en niet verderop: de klantkaart heeft early returns, en een
   // hook daarna breekt de volgorde.
@@ -382,7 +386,21 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   // Status uit de database, niet geraden uit de fasenaam — dezelfde omzetting
   // als op het dashboard. Een deal met status 'won' in de fase "Gepland" is
   // gewonnen, niet lopend.
-  const actieveDeal = cDeals.find(d => dealStatus(d, stageIndex) === 'open') || cDeals[0] || null;
+  // Een afgeronde aanvraag is geen lopende: die telt hier niet mee. Is alles
+  // afgerond, dan blijft de nieuwste in beeld — mét de status Afgerond, zodat
+  // de klant niet plots zonder aanvraag lijkt te zitten.
+  const lopendeDeals = cDeals.filter(d => !isAfgerond(d));
+  const actieveDeal = lopendeDeals.find(d => dealStatus(d, stageIndex) === 'open') || lopendeDeals[0] || cDeals[0] || null;
+  const aanvraagAfgerond = isAfgerond(actieveDeal);
+  // De andere aanvragen van deze klant blijven zichtbaar met hun status: een
+  // afgeronde aanvraag is van het bord af, maar hier hoort hij te blijven staan.
+  const eerdereAanvragen = cDeals.filter(d => d.id !== actieveDeal?.id);
+  const aanvraagStatus = d => {
+    if (isAfgerond(d)) return { label: 'Afgerond', klasse: 'b-done' };
+    const st = dealStatus(d, stageIndex);
+    if (st === 'lost') return { label: 'Verloren', klasse: 'b-lost' };
+    return { label: stageIndex.get(d.stage)?.label || 'Loopt', klasse: 'b-gray' };
+  };
   // Werkbonnen bij die deal; heeft de deal er geen, dan die van de klant zelf.
   const dealWerkbonnen = actieveDeal ? cWerkbonnen.filter(w => w.dealId === actieveDeal.id) : [];
   const planWerkbonnen = dealWerkbonnen.length ? dealWerkbonnen : cWerkbonnen;
@@ -439,7 +457,28 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   // voor 'verkoop' ook true aan een medewerker in een Groei-bedrijf, zodat hij
   // de Pipeline kan openen. Zien mag daar, wijzigen niet — deals_update kent
   // bb_gedeelde_werkruimte() bewust niet.
-  const magFaseWijzigen = Boolean(actieveDeal) && magBewerken('verkoop');
+  // Zelfde recht als de fasekeuze hierboven: deals_update eist 'verkoop'.
+  const magVerkoop = magBewerken('verkoop');
+  const magFaseWijzigen = Boolean(actieveDeal) && magVerkoop && !aanvraagAfgerond;
+  // Afronden haalt de aanvraag van het pipelinebord; hier blijft hij staan met
+  // de status Afgerond. Omkeerbaar met dezelfde knop.
+  const zetAfgerond = async (aan) => {
+    if (!actieveDeal) return;
+    setAfrondBezig(true);
+    const vorige = actieveDeal.afgerondOp || null;
+    setCDeals(list => list.map(d => (d.id === actieveDeal.id ? { ...d, afgerondOp: aan ? new Date().toISOString() : null } : d)));
+    try {
+      const bij = await zetDealAfgerond(actieveDeal.id, aan);
+      setCDeals(list => list.map(d => (d.id === actieveDeal.id ? bij : d)));
+      toast.success(aan ? 'Aanvraag afgerond' : 'Aanvraag weer geopend');
+      bumpRefresh?.();
+    } catch (e) {
+      setCDeals(list => list.map(d => (d.id === actieveDeal.id ? { ...d, afgerondOp: vorige } : d)));
+      toast.error(e.message || (aan ? 'Afronden is mislukt' : 'Heropenen is mislukt'));
+    } finally {
+      setAfrondBezig(false);
+    }
+  };
   const gesorteerdeStages = [...stages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   const wijzigFase = async stageId => {
     if (!actieveDeal || !stageId || stageId === actieveDeal.stage) return;
@@ -782,22 +821,40 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
               <button type="button" className="kk-blok-titel" onClick={() => setPage?.('pipeline')}>
                 Aanvraag <span className="kk-pijl">→</span>
               </button>
-              {magFaseWijzigen ? (
-                <select
-                  className="badge b-gray"
-                  style={{ border: '1px solid var(--border)', cursor: 'pointer', padding: '2px 6px', maxWidth: 190 }}
-                  value={actieveDeal.stage || ''}
-                  disabled={faseBezig}
-                  aria-label="Fase van deze aanvraag"
-                  onChange={e => wijzigFase(e.target.value)}
-                >
-                  {gesorteerdeStages.map(s => (
-                    <option key={s.id} value={s.id}>{s.label}</option>
-                  ))}
-                </select>
-              ) : (
-                aanvraag?.fase && <span className="badge b-gray">{aanvraag.fase}</span>
-              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                {aanvraagAfgerond
+                  ? <span className="badge b-done">Afgerond</span>
+                  : magFaseWijzigen ? (
+                    <select
+                      className="badge b-gray"
+                      style={{ border: '1px solid var(--border)', cursor: 'pointer', padding: '2px 6px', maxWidth: 190 }}
+                      value={actieveDeal.stage || ''}
+                      disabled={faseBezig}
+                      aria-label="Fase van deze aanvraag"
+                      onChange={e => wijzigFase(e.target.value)}
+                    >
+                      {gesorteerdeStages.map(s => (
+                        <option key={s.id} value={s.id}>{s.label}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    aanvraag?.fase && <span className="badge b-gray">{aanvraag.fase}</span>
+                  )}
+                {/* Afronden haalt hem van het bord; een volgende klus krijgt een
+                    nieuwe aanvraag, de afgeronde blijft staan. */}
+                {actieveDeal && magVerkoop && (
+                  <button className="btn btn-s btn-sm" disabled={afrondBezig}
+                    onClick={guardSchrijven(aanvraagAfgerond ? 'Een aanvraag heropenen' : 'Een aanvraag afronden', () => zetAfgerond(!aanvraagAfgerond))}>
+                    {aanvraagAfgerond ? 'Heropenen' : 'Aanvraag afronden'}
+                  </button>
+                )}
+                {magVerkoop && (!actieveDeal || aanvraagAfgerond) && (
+                  <button className="btn btn-s btn-sm"
+                    onClick={guardSchrijven('Een aanvraag aanmaken', () => setShowNieuweAanvraag(true))}>
+                    {I.plus} Nieuwe aanvraag
+                  </button>
+                )}
+              </div>
             </div>
             {aanvraag ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -811,6 +868,23 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
               </div>
             ) : (
               <div className="kk-leeg">Nog geen aanvraag voor deze klant.</div>
+            )}
+
+            {eerdereAanvragen.length > 0 && (
+              <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--dl)', marginBottom: 6 }}>
+                  Andere aanvragen ({eerdereAanvragen.length})
+                </div>
+                {eerdereAanvragen.map(d => {
+                  const st = aanvraagStatus(d);
+                  return (
+                    <div key={d.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '4px 0', fontSize: '.83rem' }}>
+                      <span style={{ color: 'var(--dm)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.title}</span>
+                      <span className={`badge ${st.klasse}`} style={{ flexShrink: 0 }}>{st.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
 
@@ -1529,6 +1603,19 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
           onDeleted={id => {
             setActs(list => list.filter(a => a.id !== id));
             setSelectedAct(null);
+          }}
+        />
+      )}
+      {showNieuweAanvraag && (
+        <NewLeadModal
+          customers={[c]}
+          stages={stages}
+          defaultCustomerId={c.id}
+          onClose={() => setShowNieuweAanvraag(false)}
+          onSaved={deal => {
+            setCDeals(list => [deal, ...list]);
+            setShowNieuweAanvraag(false);
+            bumpRefresh?.();
           }}
         />
       )}

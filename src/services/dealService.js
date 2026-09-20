@@ -45,6 +45,9 @@ const toDeal = row => ({
     ? row.assigned_to_ids
     : (row.assigned_to ? [row.assigned_to] : []),
   createdAt: row.created_at || null,
+  // Wanneer de aanvraag is afgerond (migratie 20260920100000). Leeg = loopt nog
+  // en staat op het pipelinebord. Fase en status blijven staan zoals ze waren.
+  afgerondOp: row.afgerond_op || null,
   raw: row,
 })
 
@@ -75,6 +78,25 @@ export async function listDeals() {
     throw error
   }
   return data.map(toDeal)
+}
+
+/**
+ * Aanvraag afronden of weer openzetten. De fase en de status blijven staan:
+ * afgerond zegt alleen dat deze aanvraag klaar is, niet waar hij stond of hoe
+ * hij afliep.
+ */
+export async function zetDealAfgerond(dealId, afgerond = true) {
+  const { data, error } = await supabase
+    .from("deals")
+    .update({ afgerond_op: afgerond ? new Date().toISOString() : null })
+    .eq("id", dealId)
+    .select("*, customers!deals_customer_id_fkey(*)")
+    .single()
+  if (error) {
+    console.error("[bb:pipeline] zetDealAfgerond mislukt", { message: error.message, code: error.code })
+    throw error
+  }
+  return toDeal(data)
 }
 
 export async function updateDealStage(dealId, stageId) {

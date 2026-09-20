@@ -11,7 +11,7 @@ import { ActivityEditModal, NewLeadModal } from '../components/SharedModals.jsx'
 import { usePlanGuard } from '../components/PlanUpgradeModal.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
 import { statusInfo } from '../utils/statusColors.js';
-import { buildStageIndex, dealStatus } from '../utils/pipeline.js';
+import { buildStageIndex, dealStatus, isAfgerond } from '../utils/pipeline.js';
 import { getTeamMembers } from '../services/notificatieService.js';
 
 // Subtiele prioriteit-badge voor aanvragen/deals. Normaal (med) toont niets
@@ -390,9 +390,11 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
   // Afgerond gaven een leeg bord. Nu op deals.status, net als het dashboard.
   const filteredDeals = useMemo(() => {
     const text = filter.text.trim().toLowerCase();
-    const faseCat = d => stageIndex.get(d.stage)?.category || 'open';
     return deals.filter(d => {
       const st = dealStatus(d, stageIndex);
+      // Een afgeronde aanvraag is van het bord af: dat is de hele reden dat
+      // afronden bestaat. Te zien via het filter Afgerond, en op de klantkaart.
+      if (isAfgerond(d) !== (filter.status === 'done')) return false;
       if (filter.stage !== 'all' && d.stage !== filter.stage) return false;
       if (filter.priority !== 'all' && d.priority !== filter.priority) return false;
       // Behandeld door: de aanvraag kan aan meerdere mensen hangen.
@@ -400,9 +402,9 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
       if (filter.status === 'open' && st !== 'open') return false;
       if (filter.status === 'won'  && st !== 'won') return false;
       if (filter.status === 'lost' && st !== 'lost') return false;
-      // Afgerond/betaald = gewonnen én het werk is af. "Af" staat alleen in de
-      // fase; de status kent enkel open/won/lost.
-      if (filter.status === 'done' && !(st === 'won' && ['won', 'paid'].includes(faseCat(d)))) return false;
+      // 'done' hoeft hier niets meer te toetsen: afgerond is een eigen veld,
+      // hierboven al afgehandeld. Het stond eerder op de fasenaam ("Afgerond",
+      // "Betaald"), en bedrijven die hun fasen anders noemen hadden dus niets.
       if (text) {
         const hay = `${d.title || ''} ${d.customerName || ''} ${d.city || ''}`.toLowerCase();
         if (!hay.includes(text)) return false;
@@ -623,7 +625,7 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
             <select value={filter.status} onChange={e => setFilter(f => ({ ...f, status: e.target.value }))}>
               <option value="open">Open trajecten</option>
               <option value="won">Gewonnen</option>
-              <option value="done">Afgerond / betaald</option>
+              <option value="done">Afgerond</option>
               <option value="lost">Verloren</option>
               <option value="any">Alles tonen</option>
             </select>

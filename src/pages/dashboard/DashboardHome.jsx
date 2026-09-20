@@ -16,7 +16,7 @@ import { getDefaultWidgets, DEFAULT_LAYOUTS, DEFAULT_LAYOUT_KEY, DEFAULT_MEDEWER
 import { DashboardCustomizeBar } from './DashboardCustomizeBar.jsx';
 import { DashboardWidgetGrid } from './DashboardWidgetGrid.jsx';
 import { statusInfo } from '../../utils/statusColors.js';
-import { buildStageIndex, dealStatus, stageCategory } from '../../utils/pipeline.js';
+import { buildStageIndex, dealStatus, stageCategory, isAfgerond } from '../../utils/pipeline.js';
 import { AddWidgetModal } from './AddWidgetModal.jsx';
 import { LayoutPickerModal } from './LayoutPickerModal.jsx';
 
@@ -119,23 +119,32 @@ function deriveCharts({ deals = [], activities = [], offertes = [], customers = 
     .map((s, i) => ({ label: s.label, color: stageColors[i % stageColors.length], value: deals.filter(d => d.stage === s.id && dSt(d) !== 'lost').reduce((sum, d) => sum + (d.value || 0), 0) }))
     .filter(x => x.value > 0);
 
-  // ── Conversiefunnel (mijlpalen afgeleid uit de echte fasenamen) ──
-  const milestoneOrder = re => {
-    const s = orderedStages.find(st => re.test((st.label || '').toLowerCase()));
-    return s ? (stageIndex.get(s.id)?.order ?? Infinity) : Infinity;
-  };
-  const offerteOrder = milestoneOrder(/offerte/);
+  // ── Conversiefunnel: de fasen van dit bedrijf ──
+  // De funnel had vier vaste stappen (Leads, Offerte, Akkoord, Gewonnen) en
+  // zocht "Offerte" met een regex op de fasenaam. Een bedrijf dat zijn fasen
+  // anders noemt kreeg daar niets van te zien, en hernoemen brak de stap.
+  //
+  // Nu volgt hij de pipeline-instellingen: elke fase is een stap, gekoppeld op
+  // stage_id (hernoemen verandert alleen het label). Per stap: hoeveel
+  // aanvragen zijn tot hier gekomen — de huidige fase telt, en alles wat verder
+  // staat telt ook mee. Verloren aanvragen vallen af zodra ze verloren zijn,
+  // afgeronde tellen mee tot en met de fase waarin ze zijn afgerond.
+  //
+  // Verloren fasen zijn geen stap: daar loopt de trechter niet doorheen. De
+  // laatste stap is Afgerond, de enige stap die niet uit een fase komt maar uit
+  // het afronden zelf (deals.afgerond_op).
+  const funnelStages = orderedStages.filter(s => stageCategory(s.label) !== 'lost');
   const leads = deals.length;
-  const nonLost = deals.filter(d => dSt(d) !== 'lost');
+  const nietVerloren = deals.filter(d => dSt(d) !== 'lost');
   const fSteps = [
-    { label: 'Leads', value: leads },
-    // "Offerte" is een mijlpaal in de pipeline en staat alleen in de fase — de
-    // status kent die stap niet. Verloren deals tellen niet mee.
-    { label: 'Offerte', value: nonLost.filter(d => dealOrd(d) >= offerteOrder).length },
-    // Akkoord = gewonnen volgens de database.
-    { label: 'Akkoord', value: deals.filter(d => dSt(d) === 'won').length },
-    // Gewonnen = gewonnen én het werk is af (afgerond, gefactureerd of betaald).
-    { label: 'Gewonnen', value: deals.filter(d => dSt(d) === 'won' && ['won', 'paid'].includes(stageIndex.get(d.stage)?.category)).length },
+    ...funnelStages.map(st => ({
+      label: st.label,
+      value: nietVerloren.filter(d => dealOrd(d) >= (stageIndex.get(st.id)?.order ?? 0)).length,
+    })),
+    // "Afgeronde aanvragen" en niet "Afgerond": een bedrijf mag een fase zo
+    // noemen (deze heeft er een), en dan stonden er twee stappen met dezelfde
+    // naam die iets anders betekenen.
+    { label: 'Afgeronde aanvragen', value: deals.filter(isAfgerond).length },
   ];
   const conversionFunnel = leads ? fSteps.map(s => ({ ...s, pct: Math.round((s.value / leads) * 100) })) : [];
 

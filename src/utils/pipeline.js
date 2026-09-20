@@ -42,6 +42,13 @@ export function dealStatus(deal, stageIndex = null) {
   return 'open';
 }
 
+// Is deze aanvraag afgerond? Eén plek, zodat bord, klantkaart en funnel het
+// over hetzelfde hebben. Niet uit de fasenaam geraden: zie migratie
+// 20260920100000.
+export function isAfgerond(deal) {
+  return Boolean(deal?.afgerondOp || deal?.afgerond_op);
+}
+
 // Map: stage_id → { id, label, order, category, isFirst }.
 export function buildStageIndex(stages = []) {
   const sorted = [...stages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
