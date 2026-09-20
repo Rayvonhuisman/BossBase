@@ -2886,6 +2886,14 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .dw-grid.dw-edit-mode .dw-widget .dw-size-btn,
 .dw-grid.dw-edit-mode .dw-widget .dw-ctrl-item{ cursor:pointer }
 
+/* Tegel met een open optiemenu ligt bovenop. Het menu klapt naar beneden uit
+   en steekt de tegel eronder in; alle tegels zijn position:relative zonder
+   z-index, dus zonder deze regel schildert de volgende tegel eroverheen en is
+   "Verwijderen" onderin het menu niet aan te klikken. De z-index van het menu
+   zelf (20) helpt daar niet tegen: die telt alleen binnen de eigen tegel.
+   6 = net boven de slepende tegel (5) en de droptarget (4). */
+.dw-grid .dw-widget.dw-widget--menu-open{ z-index:6 }
+
 /* The widget currently being dragged */
 .dw-grid .dw-widget.dw-widget--dragging{
   opacity:.85;

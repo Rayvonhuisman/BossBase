@@ -109,14 +109,24 @@ function avatarTone(name) {
 
 // ── Size toggle labels (edit mode) ────────────────────────────
 const SIZE_OPTIONS = [
-  { value: 'small',  label: 'Klein · ¼' },
-  { value: 'medium', label: 'Middel · ⅓' },
-  { value: 'large',  label: 'Groot · ½' },
-  { value: 'full',   label: 'Breed · ↔' },
+  { value: 'small',  label: 'Klein ¼' },
+  { value: 'medium', label: 'Middel ⅓' },
+  { value: 'large',  label: 'Groot ½' },
+  { value: 'full',   label: 'Breed ↔' },
 ];
 
-function WidgetControls({ size, supportedSizes, onMoveUp, onMoveDown, onResize, onRemove, isFirst, isLast }) {
-  const [menuOpen, setMenuOpen] = useState(false);
+function WidgetControls({ size, supportedSizes, onMoveUp, onMoveDown, onResize, onRemove, isFirst, isLast, onMenuToggle }) {
+  // De tegel eromheen moet weten of dit menu openstaat: het klapt naar beneden
+  // uit en valt daarmee over de tegel eronder. Alle tegels zijn position:
+  // relative zonder z-index, dus zonder dit signaal wint de DOM-volgorde en
+  // schildert de volgende tegel over het menu heen — precies over
+  // "Verwijderen", dat onderaan staat.
+  const [menuOpen, setMenuOpenState] = useState(false);
+  const setMenuOpen = v => setMenuOpenState(prev => {
+    const next = typeof v === 'function' ? v(prev) : v;
+    onMenuToggle?.(next);
+    return next;
+  });
   const sizeOptions = SIZE_OPTIONS.filter(o => supportedSizes.includes(o.value));
   // Prevent the controls subtree from initiating an HTML5 drag on the
   // parent .dw-widget. draggable={false} suppresses drag-from-this-element;
@@ -1549,6 +1559,8 @@ export function WidgetCard({
   const supportedSizes = getSupportedSizes(widget.widget_type);
   const hostRef = useRef(null);
   const [tipState, setTipState] = useState(null);
+  // Zie WidgetControls: nodig om de tegel op te tillen zolang zijn menu open is.
+  const [menuOpen, setMenuOpen] = useState(false);
   const showTip = (e, node) => {
     if (editMode) return; // no chart tooltips while reordering
     const host = hostRef.current;
@@ -1608,6 +1620,10 @@ export function WidgetCard({
     editMode ? 'edit' : '',
     isDragging ? 'dw-widget--dragging' : '',
     isDropTarget ? 'dw-widget--drop-target' : '',
+    // Tilt deze tegel boven zijn buren zolang het optiemenu openstaat. De
+    // z-index op het menu zelf helpt niet: die geldt alleen binnen de
+    // stapelcontext van de eigen tegel.
+    menuOpen ? 'dw-widget--menu-open' : '',
   ].filter(Boolean).join(' ');
 
   return (
@@ -1615,7 +1631,7 @@ export function WidgetCard({
       {editMode && (
         <>
           <div className="dw-drag-handle" title="Sleep om te verplaatsen"><DragDots /></div>
-          <WidgetControls size={widget.size} supportedSizes={supportedSizes} onMoveUp={onMoveUp} onMoveDown={onMoveDown} onResize={onResize} onRemove={onRemove} isFirst={isFirst} isLast={isLast} />
+          <WidgetControls size={widget.size} supportedSizes={supportedSizes} onMoveUp={onMoveUp} onMoveDown={onMoveDown} onResize={onResize} onRemove={onRemove} isFirst={isFirst} isLast={isLast} onMenuToggle={setMenuOpen} />
         </>
       )}
       <div className="card" style={{ height: '100%' }}>
