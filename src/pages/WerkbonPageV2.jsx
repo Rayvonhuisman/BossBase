@@ -1145,16 +1145,12 @@ function WerkbonKostenSection({ werkbon, uren, materialen }) {
 
   const labelStijl = { fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 };
   const subStijl = { fontSize: 11, color: 'var(--dl)', marginTop: 2 };
-  const fmtUren = u => `${Number(u || 0).toLocaleString('nl-NL', { maximumFractionDigits: 2 })} uur`;
   const kop = (
     <div style={{ padding: '2px 0 12px' }}>
       <div style={labelStijl}>{magInkoop ? 'Kostprijs' : 'Inkopen'}</div>
       <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt(magInkoop ? overzicht.totaal : overzicht.inkopen.bedrag)}</div>
       {magInkoop && (overzicht.materiaal.bedrag > 0 || overzicht.inkopen.bedrag > 0) && (
         <div style={subStijl}>materiaal {fmt(overzicht.materiaal.bedrag)} · inkopen {fmt(overzicht.inkopen.bedrag)}</div>
-      )}
-      {overzicht.uren.uren > 0 && (
-        <div style={subStijl}>{fmtUren(overzicht.uren.uren)} gewerkt · geen bedrag</div>
       )}
       {overzicht.boekingen.regels.length > 0 && (
         <div style={{ ...subStijl, marginTop: 6, lineHeight: 1.5 }}>

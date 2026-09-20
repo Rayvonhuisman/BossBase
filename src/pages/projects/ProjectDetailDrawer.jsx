@@ -611,7 +611,6 @@ function KostenTab({ project, canManage }) {
   const kostprijs = overzicht.totaal;
   const brutowinst = omzet - kostprijs;
   const toonWinst = magBedragen && magInkoop;
-  const fmtUren = u => `${Number(u || 0).toLocaleString('nl-NL', { maximumFractionDigits: 2 })} uur`;
 
   // ── Projectkosten bewerken ─────────────────────────────────────────────────
   // Zelfde werkwijze als materiaal op de werkbon: direct in beeld, de
@@ -647,13 +646,6 @@ function KostenTab({ project, canManage }) {
             {magInkoop && (overzicht.materiaal.bedrag > 0 || overzicht.inkopen.bedrag > 0) && (
               <div style={{ fontSize: 11, color: 'var(--dl)', marginTop: 2 }}>
                 materiaal {fmt0(overzicht.materiaal.bedrag)} · inkopen {fmt0(overzicht.inkopen.bedrag)}
-              </div>
-            )}
-            {/* Uren staan er als aantal, zonder bedrag: er is geen kostprijs per
-                uur, dus ze tellen niet mee in de kostprijs. */}
-            {overzicht.uren.uren > 0 && (
-              <div style={{ fontSize: 11, color: 'var(--dl)', marginTop: 2 }}>
-                {fmtUren(overzicht.uren.uren)} gewerkt · geen bedrag
               </div>
             )}
           </div>

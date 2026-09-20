@@ -1158,10 +1158,13 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
       {/* Kosten */}
       {tab === 'costs' && (() => {
         // De regels die samen "Totale kosten" vormen (werkbonmateriaal op
-        // inkoopprijs + projectkosten), de uren zonder bedrag, en de boekingen
-        // met de aantekening dat ze niet meetellen: het materiaal daarvan staat
-        // al via de werkbon in de lijst, dus meetellen zou het dubbel zetten.
-        const { materiaal, inkopen, uren, boekingen } = kostenOverzicht;
+        // inkoopprijs + projectkosten), en de boekingen met de aantekening dat
+        // ze niet meetellen: het materiaal daarvan staat al via de werkbon in de
+        // lijst, dus meetellen zou het dubbel zetten.
+        //
+        // Uren staan hier bewust niet meer: zonder kostprijs per uur horen ze
+        // niet onder kosten thuis. Zie de urenpagina en de werkbon.
+        const { materiaal, inkopen, boekingen } = kostenOverzicht;
         const projectNaam = id => cProjecten.find(p => p.id === id)?.name || '';
         const aantalRegels = (magInkoop ? materiaal.regels.length : 0) + inkopen.regels.length + boekingen.regels.length;
         const klein = { fontSize: 10.5, fontWeight: 400, color: 'var(--dl)' };
@@ -1183,7 +1186,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
             <div className="lsec-hd">
               <div className="lsec-title">Kostenregels ({aantalRegels})</div>
             </div>
-            {aantalRegels === 0 && !(uren.uren > 0)
+            {aantalRegels === 0
               ? <div className="lsec-empty">Nog geen kosten geboekt</div>
               : (
                 <div className="lrows">
@@ -1215,17 +1218,6 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
                       <div className="lrow-date">{r.datum}</div>
                     </div>
                   ))}
-                  {uren.uren > 0 && (
-                    <div className="lrow lrow-static">
-                      <div className="lrow-main">
-                        <div className="lrow-title">Uren</div>
-                        <div className="lrow-sub">
-                          {Number(uren.uren).toLocaleString('nl-NL', { maximumFractionDigits: 2 })} uur gewerkt · geen kostprijs per uur, telt niet mee
-                        </div>
-                      </div>
-                      <div className="lrow-amount" style={{ textAlign: 'right', fontWeight: 400, color: 'var(--dl)' }}>geen bedrag</div>
-                    </div>
-                  )}
                   {boekingen.regels.map(r => (
                     <div key={r.id} className="lrow lrow-static">
                       <div className="lrow-main">
