@@ -842,10 +842,17 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
                   )}
                 {/* Afronden haalt hem van het bord; een volgende klus krijgt een
                     nieuwe aanvraag, de afgeronde blijft staan. */}
+                {/* Afronden is de hoofdactie en krijgt daarom dezelfde zwarte knop
+                    met groene tekst als "Klus afronden" op de werkbon. Let op de
+                    klassen: .wb2-complete-btn zet alleen kleur en gewicht, de
+                    padding en ronding komen daar van de ouder .wb2-eind-acties.
+                    Die ouder is hier niet, dus .btn + .btn-sm leveren de maat.
+                    Heropenen blijft wit: dat maakt iets ongedaan. */}
                 {actieveDeal && magVerkoop && (
-                  <button className="btn btn-s btn-sm" disabled={afrondBezig}
+                  <button className={aanvraagAfgerond ? 'btn btn-s btn-sm' : 'btn btn-sm wb2-complete-btn'}
+                    disabled={afrondBezig}
                     onClick={guardSchrijven(aanvraagAfgerond ? 'Een aanvraag heropenen' : 'Een aanvraag afronden', () => zetAfgerond(!aanvraagAfgerond))}>
-                    {aanvraagAfgerond ? 'Heropenen' : 'Aanvraag afronden'}
+                    {aanvraagAfgerond ? 'Heropenen' : <>{I.check} Afronden</>}
                   </button>
                 )}
                 {magVerkoop && (!actieveDeal || aanvraagAfgerond) && (
