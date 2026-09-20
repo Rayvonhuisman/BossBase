@@ -204,6 +204,12 @@ ul{list-style:none}
 .sb-toggle-icon{display:flex;align-items:center;justify-content:center;width:18px;height:18px;flex-shrink:0;transition:transform .28s cubic-bezier(.22,1,.36,1)}
 .sb.collapsed .sb-toggle-icon{transform:rotate(180deg)}
 .sb-toggle-tip{position:fixed;transform:translateY(-50%);background:#1a1a1a;color:#fff;font-size:.72rem;font-weight:600;padding:5px 9px;border-radius:6px;white-space:nowrap;pointer-events:none;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.25);letter-spacing:.01em}
+/* Bedrag op een dashboardtegel: afgekort in beeld, volledig in een zwevende
+   tooltip bij hover of toetsenbordfocus. Zweeft omdat de tegelwaarde in een
+   vak met overflow:hidden staat. */
+.bb-bedrag{cursor:default;outline:none}
+.bb-bedrag:focus-visible{outline:2px solid var(--p);outline-offset:2px;border-radius:4px}
+.bb-bedrag-tip{position:fixed;transform:translate(-50%,0);background:#1a1a1a;color:#fff;font-size:.74rem;font-weight:600;padding:5px 9px;border-radius:6px;white-space:nowrap;pointer-events:none;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.25);font-variant-numeric:tabular-nums}
 /* Menu naast een ingeklapte groep (Relaties → Klanten / Leveranciers). Zelfde
    donkere stijl als de tooltip ernaast, maar klikbaar. */
 .sb-flyout{position:fixed;z-index:9999;min-width:150px;background:#1a1a1a;border-radius:8px;padding:6px;box-shadow:0 6px 18px rgba(0,0,0,.3)}

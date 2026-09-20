@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { I } from '../../bb-shared.jsx';
 import { getSupportedSizes } from '../../data/widgetRegistry.js';
 import { activiteitTypeLabel } from '../../services/activityService.js';
@@ -6,6 +7,7 @@ import { statusInfo } from '../../utils/statusColors.js';
 import { buildStageIndex, dealStatus, firstStageId } from '../../utils/pipeline.js';
 import { isRealFactuur, sumOmzetExclBtw } from '../../services/customerTotalsService.js';
 import { staatOpDagVoor } from '../../utils/werkbonDagen.js';
+import { kortBedrag, voluitBedrag } from '../../utils/bedrag.js';
 
 // ── Design tokens (BossBase widget redesign v2) ───────────────
 // CSS classes (.bb-widget, .bb-kpi, .feed-row, .chip, .pill-tabs, …)
@@ -234,6 +236,37 @@ function Seg({ options, active, onPick }) {
 }
 
 // KPI card (full bb-kpi)
+// Het bedrag op een tegel: afgekort in beeld (€12,3k), volledig bij hover en
+// bij toetsenbordfocus (€12.345,67). Beide vormen komen uit utils/bedrag.js,
+// zodat alle tegels hetzelfde afkorten.
+//
+// De tooltip hangt in een portal en niet als ::after aan het bedrag zelf: de
+// waarde staat in FitValue, en die heeft overflow:hidden — daar zou hij worden
+// afgeknipt.
+function Bedrag({ n }) {
+  const [tip, setTip] = useState(null);
+  const toon = e => {
+    const r = e.currentTarget.getBoundingClientRect();
+    // Onder het bedrag: erboven staat het label van de tegel, en dat wil je
+    // juist blijven zien.
+    setTip({ x: r.left + r.width / 2, y: r.bottom + 8 });
+  };
+  const verberg = () => setTip(null);
+  const voluit = voluitBedrag(n);
+  return (
+    <>
+      <span className="bb-bedrag" tabIndex={0} aria-label={voluit}
+        onMouseEnter={toon} onMouseLeave={verberg} onFocus={toon} onBlur={verberg}>
+        {kortBedrag(n)}
+      </span>
+      {tip && createPortal(
+        <span className="bb-bedrag-tip" style={{ left: tip.x, top: tip.y }}>{voluit}</span>,
+        document.body,
+      )}
+    </>
+  );
+}
+
 function KpiCard({ icon, label, value, sub, tone = 'green', onClick }) {
   return (
     <div className={`bb-kpi kpi-${tone}`} onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}
@@ -410,14 +443,14 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     case 'open_pipeline_value': {
       const open = deals.filter(d => dStatus(d) === 'open');
       const val = open.reduce((s, d) => s + (d.value || 0), 0);
-      return <KpiCard tone="green" icon={I.brief} label="Open pipeline" value={eur(val)} sub={<><span>{open.length} deals</span><span>·</span><Delta dir="up">Live</Delta></>} onClick={() => setPage('pipeline')} />;
+      return <KpiCard tone="green" icon={I.brief} label="Open pipeline" value={<Bedrag n={val} />} sub={<><span>{open.length} deals</span><span>·</span><Delta dir="up">Live</Delta></>} onClick={() => setPage('pipeline')} />;
     }
     case 'accepted_value': {
       // Geaccepteerd = gewonnen volgens de database. Stond eerder op "de
       // Akkoord-fase of verder", wat een tekstvergelijking op de fasenaam was.
       const acc = deals.filter(d => dStatus(d) === 'won');
       const val = acc.reduce((s, d) => s + (d.value || 0), 0);
-      return <KpiCard tone="success" icon={I.euro} label="Geaccepteerd" value={eur(val)} sub={<><span>{acc.length} deals</span><span>·</span><Delta dir="up">Akkoord+</Delta></>} onClick={() => setPage('pipeline')} />;
+      return <KpiCard tone="success" icon={I.euro} label="Geaccepteerd" value={<Bedrag n={val} />} sub={<><span>{acc.length} deals</span><span>·</span><Delta dir="up">Akkoord+</Delta></>} onClick={() => setPage('pipeline')} />;
     }
     case 'customers':
       return <KpiCard tone="info" icon={I.cust} label="Klanten" value={customers.length} sub={`${customers.length} actief in CRM`} onClick={() => setPage('customers')} />;
@@ -441,14 +474,14 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const jobs = [...byJob.values()];
       const avg = jobs.length ? jobs.reduce((s, v) => s + v, 0) / jobs.length : 0;
       const sub = jobs.length
-        ? `gemiddeld · ${jobs.length} klussen${overig > 0 ? ` · ${eur(overig)} overig` : ''}`
+        ? `gemiddeld · ${jobs.length} klussen${overig > 0 ? ` · ${kortBedrag(overig)} overig` : ''}`
         : 'geen kosten op een klus';
-      return <KpiCard tone="neutral" icon={I.costs} label="Kosten per klus" value={avg > 0 ? eur(avg) : ''} sub={sub} onClick={() => setPage('costs')} />;
+      return <KpiCard tone="neutral" icon={I.costs} label="Kosten per klus" value={avg > 0 ? <Bedrag n={avg} /> : ''} sub={sub} onClick={() => setPage('costs')} />;
     }
     case 'costs_month': {
       const md = jobCosts.filter(c => inThisMonth(c.date));
       const val = md.reduce((s, c) => s + (Number(c.amt) || 0), 0);
-      return <KpiCard tone="amber" icon={I.costs} label="Kosten deze maand" value={val > 0 ? eur(val) : ''} sub={`${md.length} kostenposten`} onClick={() => setPage('costs')} />;
+      return <KpiCard tone="amber" icon={I.costs} label="Kosten deze maand" value={val > 0 ? <Bedrag n={val} /> : ''} sub={`${md.length} kostenposten`} onClick={() => setPage('costs')} />;
     }
     case 'billable': {
       // Te factureren = het werk is af, maar nog niet afgerekend. "Af" staat
@@ -457,7 +490,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       // eerder €85.900 aan verloren werk in.
       const b = deals.filter(d => stageCat(d) === 'won' && dStatus(d) !== 'lost');
       const val = b.reduce((s, d) => s + (d.value || 0), 0);
-      return <KpiCard tone="warn" icon={I.euro} label="Te factureren" value={val > 0 ? eur(val) : ''} sub={b.length ? `${b.length} afgeronde klussen` : 'niets in de wacht'} onClick={() => setPage('facturen')} />;
+      return <KpiCard tone="warn" icon={I.euro} label="Te factureren" value={val > 0 ? <Bedrag n={val} /> : ''} sub={b.length ? `${b.length} afgeronde klussen` : 'niets in de wacht'} onClick={() => setPage('facturen')} />;
     }
 
     case 'revenue_month': {
@@ -478,7 +511,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
             <span className="tile">{I.revenue}</span>
             Omzet deze maand
           </div>
-          <FitValue>{eur(val)}</FitValue>
+          <FitValue><Bedrag n={val} /></FitValue>
           <div className="bb-kpi-sub">
             <span>vs. vorige maand</span>
             <span>·</span>
@@ -513,11 +546,11 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
             <span className="tile">{I.trend}</span>
             Winst deze maand
           </div>
-          <FitValue>{eur(val)}</FitValue>
+          <FitValue><Bedrag n={val} /></FitValue>
           <div className="bb-kpi-sub">
-            <span>omzet {eur(rev)}</span>
+            <span>omzet {kortBedrag(rev)}</span>
             <span>·</span>
-            <span>kosten {eur(cost)}</span>
+            <span>kosten {kortBedrag(cost)}</span>
           </div>
           <div style={{ marginTop: 'auto', paddingTop: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
