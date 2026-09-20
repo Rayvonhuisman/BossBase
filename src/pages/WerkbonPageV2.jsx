@@ -54,7 +54,7 @@ import {
 } from '../components/UrenVelden.jsx';
 import { statusInfo } from '../utils/statusColors.js';
 import { calcBtw, BTW_PCT_OPTIONS } from '../utils/btw.js';
-import { InkopenKaart, useInkopenBewerken } from '../components/KostenInvoerRegel.jsx';
+import { InkopenKaart, useInkopenBewerken, RegelKnoppen } from '../components/KostenInvoerRegel.jsx';
 import { bouwKostenOverzicht, getWerkbonKostenBron } from '../services/kostenOverzichtService.js';
 import { createProjectKost } from '../services/projectKostenService.js';
 import { usePlan } from '../hooks/usePlan.js';
@@ -812,6 +812,9 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
   };
   const [form, setForm] = useState(LEEG);
   const [adding, setAdding] = useState(false);
+  // Eén materiaalregel tegelijk open; opgeslagen regels staan grijs met een
+  // pennetje. Zelfde gedrag als de inkopen (RegelKnoppen).
+  const [openId, setOpenId] = useState(null);
 
   const totalEx = materialen.reduce((s, m) => s + (m.subtotaal || m.aantal * m.prijsPer || 0), 0);
   const totalIncl = materialen.reduce((s, m) => {
@@ -878,7 +881,7 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
     magInkoop && '84px',                      // inkoop
     'minmax(0,1.3fr)',                        // leverancier
     magBedragen && '96px',                    // subtotaal
-    '30px',                                   // verwijderen
+    '64px',                                   // bewerken en verwijderen
   ].filter(Boolean);
   const COLS = KOLOMMEN.join(' ');
 
@@ -902,33 +905,39 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
               {materialen.map(m => {
                 const sub = m.subtotaal || m.aantal * m.prijsPer;
                 const vast = uitBiblio(m);
+                const open = openId === m.id;
+                const uit = !canEdit || !open;
                 return (
-                  <div key={m.id} className="wb2-mat-rij" style={{ border: '1px solid var(--bstrong)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div key={m.id} className={`wb2-mat-rij${open ? '' : ' rij-dicht'}`} style={{ border: '1px solid var(--bstrong)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      <input type="text" value={m.naam || ''} disabled={!canEdit} style={{ flex: 1 }}
+                      <input type="text" value={m.naam || ''} disabled={uit} style={{ flex: 1 }}
                         onChange={e => veld(m, 'naam', e.target.value)} />
-                      {canEdit && <button className="btn btn-xs btn-danger btn-icon" onClick={() => onDelete(m)}>{I.trash}</button>}
+                      {canEdit && (
+                        <RegelKnoppen open={open} onOpen={() => setOpenId(m.id)} onKlaar={() => setOpenId(null)}
+                          onDelete={() => onDelete(m)} />
+                      )}
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-                      <input type="number" min="0" step="0.01" value={m.aantal ?? 1} disabled={!canEdit}
+                      <input type="number" min="0" step="0.01" value={m.aantal ?? 1} disabled={uit}
                         onChange={e => veld(m, 'aantal', e.target.value)} />
-                      <input type="text" value={m.eenheid || ''} placeholder="stuk" disabled={!canEdit}
+                      <input type="text" value={m.eenheid || ''} placeholder="stuk" disabled={uit}
                         onChange={e => veld(m, 'eenheid', e.target.value)} />
                       {magBedragen && (
-                        <input type="number" min="0" step="0.01" value={m.prijsPer ?? 0} disabled={!canEdit}
+                        <input type="number" min="0" step="0.01" value={m.prijsPer ?? 0} disabled={uit}
                           onChange={e => veld(m, 'prijs_per', e.target.value)} />
                       )}
                     </div>
+                    {/* Vast materiaal blijft vast, ook als de regel open staat. */}
                     {magInkoop && (
                       vast
                         ? <input type="text" readOnly disabled title={vastTitel}
                             value={m.inkoopprijsPer != null ? `Inkoop ${fmtEur(m.inkoopprijsPer)} p/st` : 'Inkoop —'} />
-                        : <input type="number" min="0" step="0.01" value={m.inkoopprijsPer ?? ''} disabled={!canEdit}
+                        : <input type="number" min="0" step="0.01" value={m.inkoopprijsPer ?? ''} disabled={uit}
                             placeholder="Inkoopprijs per stuk (intern)" onChange={e => veld(m, 'inkoopprijs_per', e.target.value)} />
                     )}
                     {vast
                       ? <input type="text" value={levNaam(m.leverancierId)} readOnly disabled title={vastTitel} />
-                      : <LeverancierSelect value={m.leverancierId || ''} disabled={!canEdit} leveranciers={leveranciers}
+                      : <LeverancierSelect value={m.leverancierId || ''} disabled={uit} leveranciers={leveranciers}
                           onLijstGewijzigd={g => setLeveranciers(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
                           onChange={v => veld(m, 'leverancier_id', v)} />}
                     {magBedragen && <div style={{ textAlign: 'right', fontWeight: 600, fontSize: 13 }}>{fmtEur(sub)}</div>}
@@ -950,29 +959,33 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
                 const sub = m.subtotaal || m.aantal * m.prijsPer;
                 const pct = m.btwPercentage ?? 21;
                 const vast = uitBiblio(m);
+                const open = openId === m.id;
+                const uit = !canEdit || !open;
                 return (
-                  <div key={m.id} className="wb2-mat-rij" style={{ display: 'grid', gridTemplateColumns: COLS, gap: 5, alignItems: 'center', marginBottom: 5 }}>
-                    <input type="text" value={m.naam || ''} disabled={!canEdit}
+                  <div key={m.id} className={`wb2-mat-rij${open ? '' : ' rij-dicht'}`} style={{ display: 'grid', gridTemplateColumns: COLS, gap: 5, alignItems: 'center', marginBottom: 5 }}>
+                    <input type="text" value={m.naam || ''} disabled={uit}
                       onChange={e => veld(m, 'naam', e.target.value)} style={{ minWidth: 0 }} />
-                    <input type="number" min="0" step="0.01" value={m.aantal ?? 1} disabled={!canEdit}
+                    <input type="number" min="0" step="0.01" value={m.aantal ?? 1} disabled={uit}
                       onChange={e => veld(m, 'aantal', e.target.value)} style={{ minWidth: 0 }} />
-                    <input type="text" value={m.eenheid || ''} placeholder="stuk" disabled={!canEdit}
+                    <input type="text" value={m.eenheid || ''} placeholder="stuk" disabled={uit}
                       onChange={e => veld(m, 'eenheid', e.target.value)} style={{ minWidth: 0 }} />
                     {magBedragen && (
-                      <input type="number" min="0" step="0.01" value={m.prijsPer ?? 0} disabled={!canEdit}
+                      <input type="number" min="0" step="0.01" value={m.prijsPer ?? 0} disabled={uit}
                         onChange={e => veld(m, 'prijs_per', e.target.value)} style={{ minWidth: 0 }} />
                     )}
+                    {/* Materiaal uit de bibliotheek blijft vast, ook in een open
+                        regel: inkoop en leverancier horen bij het materiaal zelf. */}
                     {magInkoop && (
                       vast
                         ? <input type="text" readOnly disabled title={vastTitel} style={{ minWidth: 0 }}
                             value={m.inkoopprijsPer != null ? fmtEur(m.inkoopprijsPer) : ''} />
                         : <input type="number" min="0" step="0.01" value={m.inkoopprijsPer ?? ''} placeholder="p/st"
-                            disabled={!canEdit} title="Inkoopprijs per stuk — intern" style={{ minWidth: 0 }}
+                            disabled={uit} title="Inkoopprijs per stuk — intern" style={{ minWidth: 0 }}
                             onChange={e => veld(m, 'inkoopprijs_per', e.target.value)} />
                     )}
                     {vast
                       ? <input type="text" value={levNaam(m.leverancierId)} readOnly disabled title={vastTitel} style={{ minWidth: 0 }} />
-                      : <LeverancierSelect value={m.leverancierId || ''} disabled={!canEdit} leveranciers={leveranciers}
+                      : <LeverancierSelect value={m.leverancierId || ''} disabled={uit} leveranciers={leveranciers}
                           onLijstGewijzigd={g => setLeveranciers(l => [...l, g].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')))}
                           onChange={v => veld(m, 'leverancier_id', v)} style={{ minWidth: 0, width: '100%' }} />}
                     {magBedragen && (
@@ -982,7 +995,8 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
                       </div>
                     )}
                     {canEdit
-                      ? <button className="btn btn-xs btn-danger btn-icon" onClick={() => onDelete(m)} title="Verwijderen">{I.trash}</button>
+                      ? <RegelKnoppen open={open} onOpen={() => setOpenId(m.id)} onKlaar={() => setOpenId(null)}
+                          onDelete={() => onDelete(m)} />
                       : <div />}
                   </div>
                 );

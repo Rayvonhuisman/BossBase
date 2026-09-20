@@ -21,8 +21,12 @@ import { updateProjectKost, deleteProjectKost } from '../services/projectKostenS
 // keuze — "Geen leverancier" paste daar niet. Gemeten op de kaart zelf, niet op
 // het venster: de drawer kan ook gemaximaliseerd staan.
 
-const KOLOMMEN_BREED = 'minmax(0,2.2fr) 62px 74px 84px minmax(0,1.3fr) 84px 30px';
-const KOLOMMEN_SMAL = 'minmax(0,1fr) 44px 52px 60px 104px 58px 28px';
+// De laatste kolom is breed genoeg voor twee knoppen: een opgeslagen regel staat
+// dicht met alleen een pennetje, open komt het vinkje ernaast om hem te sluiten.
+// Vast, niet meebewegend met de stand — anders verschuift de hele tabel zodra je
+// één regel opent.
+const KOLOMMEN_BREED = 'minmax(0,2.2fr) 62px 74px 84px minmax(0,1.3fr) 84px 64px';
+const KOLOMMEN_SMAL = 'minmax(0,1fr) 44px 52px 60px 104px 58px 62px';
 const PROJECT_BREED = 'minmax(0,1.2fr) ';
 const PROJECT_SMAL = 'minmax(0,.8fr) ';
 
@@ -61,6 +65,35 @@ export function KostenLeverancier({ smal, value, onChange, disabled, leverancier
 
 /** Binnenmarge van de smalle tekstvelden (omschrijving, eenheid). */
 export const smalVeld = smal => ({ minWidth: 0, ...(smal ? { padding: '0 6px' } : null) });
+
+/**
+ * De knoppen achter een opgeslagen regel. Dicht: een pennetje. Open: een vinkje
+ * om weer te sluiten, met de prullenbak ernaast — verwijderen hoort bij
+ * bewerken, niet bij lezen.
+ *
+ * Gedeeld met het materiaal op de werkbon, zodat die twee lijsten zich hetzelfde
+ * gedragen.
+ */
+export function RegelKnoppen({ open, onOpen, onKlaar, onDelete }) {
+  return (
+    <div style={{ display: 'flex', gap: 4, justifySelf: 'end' }}>
+      {open ? (
+        <>
+          {/* Het naamveld schrijft weg op blur. Die blur gebeurt bij het
+              aanklikken van deze knop, dus vóór het sluiten — een net getypte
+              omschrijving gaat daarmee niet verloren. */}
+          <button type="button" className="btn btn-xs btn-icon" onClick={onKlaar}
+            title="Klaar met bewerken" aria-label="Klaar met bewerken">{I.check}</button>
+          <button type="button" className="btn btn-xs btn-danger btn-icon" onClick={onDelete}
+            title="Verwijderen" aria-label="Verwijderen">{I.trash}</button>
+        </>
+      ) : (
+        <button type="button" className="btn btn-xs btn-icon" onClick={onOpen}
+          title="Bewerken" aria-label="Regel bewerken">{I.edit}</button>
+      )}
+    </div>
+  );
+}
 
 /**
  * @param {object}   kolommen          uit useKostenKolommen()
@@ -195,6 +228,10 @@ export function InkopenKaart({
   // ze onder dezelfde koppen staan.
   const kolommen = useKostenKolommen();
   const { ref: kaartRef, smal, COLS, GAP } = kolommen;
+  // Eén regel tegelijk open. Een opgeslagen regel staat dicht: grijs, met een
+  // pennetje. Zo is te zien dat er iets bewaard is, en typ je niet per ongeluk
+  // in een regel die je alleen wilde nalezen.
+  const [openId, setOpenId] = useState(null);
   const totaal = kosten.reduce((s, k) => s + k.bedrag, 0);
   const rijStijl = { display: 'grid', gridTemplateColumns: COLS, gap: GAP, alignItems: 'center', marginBottom: 5 };
   const subStijl = { textAlign: 'right', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden' };
@@ -242,26 +279,34 @@ export function InkopenKaart({
                 <span>Leverancier</span>
                 <span style={{ textAlign: 'right' }} title="Subtotaal">{smal ? 'Totaal' : 'Subtotaal'}</span><span />
               </div>
-              {kosten.map(k => (
-                <div key={k.id} className="wb2-mat-rij" style={rijStijl}>
-                  <input type="text" defaultValue={k.naam} disabled={!canEdit} style={smalVeld(smal)}
-                    onBlur={e => naamKlaar(k, e.target.value)} />
-                  <input type="number" min="0" step="0.01" value={k.aantal} disabled={!canEdit} style={{ minWidth: 0 }}
-                    onChange={e => veld(k, 'aantal', e.target.value)} />
-                  <input type="text" value={k.eenheid} placeholder="stuk" disabled={!canEdit} style={smalVeld(smal)}
-                    onChange={e => veld(k, 'eenheid', e.target.value)} />
-                  <input type="number" min="0" step="0.01" value={k.prijsPer} disabled={!canEdit} style={{ minWidth: 0 }}
-                    title="Kostprijs per eenheid, excl. btw" onChange={e => veld(k, 'prijs_per', e.target.value)} />
-                  <div style={{ minWidth: 0 }}>
-                    <KostenLeverancier smal={smal} value={k.leverancierId} onChange={v => veld(k, 'leverancier_id', v)}
-                      disabled={!canEdit} leveranciers={leveranciers} onLeverancierBij={onLeverancierBij} />
+              {kosten.map(k => {
+                const open = openId === k.id;
+                const uit = !canEdit || !open;
+                return (
+                  <div key={k.id} className={`wb2-mat-rij${open ? '' : ' rij-dicht'}`} style={rijStijl}>
+                    {/* Sleutel op de stand: dit veld houdt zijn eigen waarde vast
+                        (defaultValue), en zonder remount zou bij het opnieuw
+                        openen de tekst van vóór het sluiten er nog staan. */}
+                    <input key={open ? 'open' : 'dicht'} type="text" defaultValue={k.naam} disabled={uit} style={smalVeld(smal)}
+                      onBlur={e => naamKlaar(k, e.target.value)} />
+                    <input type="number" min="0" step="0.01" value={k.aantal} disabled={uit} style={{ minWidth: 0 }}
+                      onChange={e => veld(k, 'aantal', e.target.value)} />
+                    <input type="text" value={k.eenheid} placeholder="stuk" disabled={uit} style={smalVeld(smal)}
+                      onChange={e => veld(k, 'eenheid', e.target.value)} />
+                    <input type="number" min="0" step="0.01" value={k.prijsPer} disabled={uit} style={{ minWidth: 0 }}
+                      title="Kostprijs per eenheid, excl. btw" onChange={e => veld(k, 'prijs_per', e.target.value)} />
+                    <div style={{ minWidth: 0 }}>
+                      <KostenLeverancier smal={smal} value={k.leverancierId} onChange={v => veld(k, 'leverancier_id', v)}
+                        disabled={uit} leveranciers={leveranciers} onLeverancierBij={onLeverancierBij} />
+                    </div>
+                    <div style={subStijl}>{fmt(k.bedrag)}</div>
+                    {canEdit
+                      ? <RegelKnoppen open={open} onOpen={() => setOpenId(k.id)} onKlaar={() => setOpenId(null)}
+                          onDelete={() => onDelete(k)} />
+                      : <div />}
                   </div>
-                  <div style={subStijl}>{fmt(k.bedrag)}</div>
-                  {canEdit
-                    ? <button className="btn btn-xs btn-danger btn-icon" onClick={() => onDelete(k)} title="Verwijderen" style={{ justifySelf: 'end' }}>{I.trash}</button>
-                    : <div />}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

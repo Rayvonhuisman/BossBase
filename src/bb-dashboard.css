@@ -233,6 +233,11 @@ ul{list-style:none}
 /* Ligt vast op het bibliotheekmateriaal: grijs en niet te bewerken, zodat
    niemand zich afvraagt waarom er niets gebeurt bij typen. */
 .wb2-mat-rij input:disabled,.wb2-mat-rij select:disabled{background:var(--bgs);color:var(--dmu);cursor:not-allowed;border-style:dashed}
+/* Een opgeslagen regel staat dicht: grijs en rustig, met een pennetje ernaast.
+   De streepjesrand hierboven blijft voorbehouden aan velden die écht vastliggen
+   (materiaal uit de bibliotheek, binnen een open regel) — stond hij op elke
+   bewaarde regel, dan leek de hele lijst stuk. */
+.wb2-mat-rij.rij-dicht input:disabled,.wb2-mat-rij.rij-dicht select:disabled{border-style:solid;cursor:default}
 
 @media(max-width:768px){
   .sb.collapsed{width:var(--sw)}
