@@ -14,6 +14,11 @@ const toStage = (row, i) => ({
   label: row.name || row.label || "Fase",
   col: row.color_class || STAGE_COLORS[(row.position ?? i ?? 0) - 1] || "b-gray",
   order: row.position ?? row.sort_order ?? 0,
+  // Telt deze fase mee als stap in de conversiefunnel? Instelbaar per fase in
+  // Instellingen (migratie 20260920170000). Deze omzetting voedt het dashboard;
+  // het instellingenscherm gebruikt toPipelineStage, dus het veld staat op twee
+  // plekken — ontbreekt het hier, dan filtert de funnel stil niets weg.
+  inFunnel: row.in_funnel === true,
 })
 
 const toDeal = row => ({

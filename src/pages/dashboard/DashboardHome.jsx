@@ -133,7 +133,19 @@ function deriveCharts({ deals = [], activities = [], offertes = [], customers = 
   // Verloren fasen zijn geen stap: daar loopt de trechter niet doorheen. De
   // laatste stap is Afgerond, de enige stap die niet uit een fase komt maar uit
   // het afronden zelf (deals.afgerond_op).
-  const funnelStages = orderedStages.filter(s => stageCategory(s.label) !== 'lost');
+  // Alleen de fasen die je in Instellingen hebt aangevinkt. Elke fase als stap
+  // maakte de trechter zo lang dat hij niets meer liet zien.
+  //
+  // De TELLING verandert hier niet en mag dat ook niet: hieronder telt een
+  // aanvraag mee zodra hij de fase heeft bereikt (order >=), en die volgorde
+  // komt uit stageIndex, die op ALLE fasen is gebouwd. Vink je een tussenfase
+  // uit, dan telt een aanvraag die daar staat gewoon door naar de dichtstbijzijnde
+  // aangevinkte stap ervoor — er valt dus niets buiten de boot.
+  //
+  // Geen terugval als er niets is aangevinkt: dan blijft alleen de slotstap
+  // staan. "Dan maar alles tonen" zou een bedrijf zonder selectie er precies
+  // hetzelfde uit laten zien als voorheen, en dat verbergt het probleem.
+  const funnelStages = orderedStages.filter(s => s.inFunnel && stageCategory(s.label) !== 'lost');
   const leads = deals.length;
   const nietVerloren = deals.filter(d => dSt(d) !== 'lost');
   const fSteps = [
