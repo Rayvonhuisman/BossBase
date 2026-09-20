@@ -142,19 +142,11 @@ function WidgetControls({ size, supportedSizes, onMoveUp, onMoveDown, onResize, 
               {sizeOptions.map(o => (
                 <button
                   key={o.value}
+                  // Opmaak staat in .dw-size-btn(.active) in bb-dashboard.css.
+                  // Stond hier even inline omdat dat bestand toen ongecommit werk
+                  // bevatte; inline won van de klasse, waardoor ALLE maten zwart
+                  // met groen werden in plaats van alleen de gekozen maat.
                   className={`dw-size-btn${size === o.value ? ' active' : ''}`}
-                  // Zwart met groene tekst, dezelfde tokens als .wb2-complete-btn
-                  // ("Klus afronden"). De actieve maat krijgt een groene rand —
-                  // zonder dat verschil zie je niet meer welke aanstaat.
-                  //
-                  // Inline en niet in bb-dashboard.css, omdat daar ongecommit
-                  // werk in staat dat niet in deze wijziging hoort. Verhuist naar
-                  // de klasse zodra dat bestand vrij is.
-                  style={{
-                    background: C.dk,
-                    color: C.p,
-                    borderColor: size === o.value ? C.p : C.dk,
-                  }}
                   onClick={() => onResize(o.value)}
                 >
                   {o.label}

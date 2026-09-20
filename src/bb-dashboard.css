@@ -920,7 +920,16 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .dw-size-btn{flex:1;padding:6px 0;border-radius:var(--r6);font-size:.74rem;font-weight:700;background:#fff;border:1px solid var(--border);color:var(--dm);transition:background .15s ease, border-color .15s ease, color .15s ease;letter-spacing:.02em}
 .dw-size-btn:hover:not(:disabled){background:var(--pll);border-color:var(--p);color:var(--pd)}
 .dw-size-btn:disabled{opacity:.4;cursor:not-allowed}
-.dw-size-btn.active{background:var(--p);border-color:var(--p);color:var(--dk);box-shadow:none;filter:none}
+/* Alleen de gekozen maat is zwart met groen, met dezelfde tokens als
+   .wb2-complete-btn ("Klus afronden"). De andere maten houden de witte knop
+   hierboven — kleurden ze allemaal zwart, dan zie je niet meer welke aanstaat.
+   Stond eerst inline in WidgetCard.jsx omdat dit bestand toen ongecommit werk
+   bevatte; dat is nu weg, dus het hoort weer hier. */
+.dw-size-btn.active{background:var(--dk);border-color:var(--dk);color:var(--p);box-shadow:none;filter:none}
+/* Nodig: .dw-size-btn:hover:not(:disabled) hierboven is specifieker dan
+   .active, dus zonder deze regel wordt de zwarte knop lichtgroen zodra je
+   eroverheen gaat. */
+.dw-size-btn.active:hover:not(:disabled){background:#262626;border-color:#262626;color:var(--p)}
 
 /* Customize bar */
 .dw-bar{display:flex;align-items:center;gap:10px;padding:10px 16px;background:#0D0D0D;border-radius:var(--r12);margin-bottom:16px;flex-wrap:wrap}
