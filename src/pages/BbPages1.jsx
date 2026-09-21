@@ -22,11 +22,8 @@ import { getOffertesByCustomer } from '../services/offerteService.js';
 import { getFacturenByCustomer } from '../services/factuurService.js';
 import { getProjectsByCustomer } from '../services/projectsService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
-import { listPipelineStages, updateDeal, updateDealStage, zetDealAfgerond } from '../services/dealService.js';
-import { buildStageIndex, dealStatus, isAfgerond } from '../utils/pipeline.js';
 import { korteDatum } from '../utils/werkbonDagen.js';
 import { PlanningRegels, losseRegels, planRegels, samenOpDatum } from '../components/PlanningBlok.jsx';
-import { MemberMultiSelect } from '../components/MemberMultiSelect.jsx';
 import { WerkbonModal } from './WerkbonPageV2.jsx';
 import { NewOfferteModal, OfferteBadge } from './OffertesPage.jsx';
 import { NewFactuurModal, FactuurBadge } from './FacturenPage.jsx';
@@ -35,7 +32,7 @@ import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
-import { ActivityEditModal, NewActivityModal, NewCustomerModal, NewLeadModal } from '../components/SharedModals.jsx';
+import { ActivityEditModal, NewActivityModal, NewCustomerModal } from '../components/SharedModals.jsx';
 import KostenInvoerRegel, { useKostenKolommen } from '../components/KostenInvoerRegel.jsx';
 import { createProjectKost } from '../services/projectKostenService.js';
 import { listLeveranciers } from '../services/leverancierService.js';
@@ -245,16 +242,6 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   // De projectkeuze staat er alleen bij meer dan één project; de kolommen volgen dat.
   const kostenKolommen = useKostenKolommen({ metProject: cProjecten.length > 1 });
   const [cWerkbonnen, setCWerkbonnen] = useState([]);
-  const [cDealsLijst, setCDeals] = useState([]);
-  // Bij de andere hooks en niet verderop: alles onder de vroege returns
-  // (loading/error) zou de hook-volgorde per render laten verschillen.
-  const [afrondBezig, setAfrondBezig] = useState(false);
-  const [showNieuweAanvraag, setShowNieuweAanvraag] = useState(false);
-  const [stages, setStages] = useState([]);
-  // Moet hier staan en niet verderop: de klantkaart heeft early returns, en een
-  // hook daarna breekt de volgorde.
-  const [faseBezig, setFaseBezig] = useState(false);
-  const [toewijzenBezig, setToewijzenBezig] = useState(false);
   const [showNewWerkbon, setShowNewWerkbon] = useState(false);
   const [showNewOfferte, setShowNewOfferte] = useState(false);
   const [showNewFactuur, setShowNewFactuur] = useState(false);
@@ -279,8 +266,8 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   // activiteit van deze klant (verslepen in de planning bijvoorbeeld). Zonder
   // die sleutel in het laadeffect hieronder blijft de klantkaart op zijn oude
   // kopie staan en toont het Planning-blok de vorige dag en tijd.
-  const { company, profile, refreshKey, bumpRefresh } = useProfile();
-  const { can, magBewerken, isAdmin } = usePermissions();
+  const { company, profile, refreshKey } = useProfile();
+  const { can, isAdmin } = usePermissions();
 
   useEffect(() => {
     const el = document.querySelector('.sb');
@@ -341,11 +328,9 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
       getKlantNotities(custId).catch(() => []),
       getTijdlijnByCustomer(custId).catch(() => []),
       getWerkbonnen().catch(() => []),
-      listDeals().catch(() => []),
-      listPipelineStages().catch(() => []),
       getKlantKostenOverzicht(custId).catch(() => LEEG_OVERZICHT),
     ])
-    .then(([customer, activities, offertes, facturen, projecten, notities, tl, werkbonnen, deals, pipelineStages, overzicht]) => {
+    .then(([customer, activities, offertes, facturen, projecten, notities, tl, werkbonnen, overzicht]) => {
       if (!alive) return;
       setKostenOverzicht(overzicht);
       setCustomer(customer);
@@ -356,8 +341,6 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
       setFacturen(facturen);
       setProjecten(projecten);
       setCWerkbonnen(werkbonnen.filter(w => w.customerId === custId));
-      setCDeals(deals.filter(d => d.custId === custId));
-      setStages(pipelineStages);
       setError('');
     })
     .catch(err => alive && setError(err.message || 'Klant laden is mislukt.'))
@@ -378,34 +361,9 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   if (error) return <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>;
   if (!c) return null;
 
-  // De actieve deal: de lopende aanvraag van deze klant. Gewonnen, betaalde en
-  // verloren deals tellen niet mee; van de rest de nieuwste. Zonder lopende deal
-  // valt hij terug op de nieuwste, zodat het blok niet leeg blijft als alles al
-  // is afgerond.
-  const stageIndex = buildStageIndex(stages);
-  const opDatum = (a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
-  const cDeals = [...cDealsLijst].sort(opDatum);
-  // Status uit de database, niet geraden uit de fasenaam — dezelfde omzetting
-  // als op het dashboard. Een deal met status 'won' in de fase "Gepland" is
-  // gewonnen, niet lopend.
-  // Een afgeronde aanvraag is geen lopende: die telt hier niet mee. Is alles
-  // afgerond, dan blijft de nieuwste in beeld — mét de status Afgerond, zodat
-  // de klant niet plots zonder aanvraag lijkt te zitten.
-  const lopendeDeals = cDeals.filter(d => !isAfgerond(d));
-  const actieveDeal = lopendeDeals.find(d => dealStatus(d, stageIndex) === 'open') || lopendeDeals[0] || cDeals[0] || null;
-  const aanvraagAfgerond = isAfgerond(actieveDeal);
-  // De andere aanvragen van deze klant blijven zichtbaar met hun status: een
-  // afgeronde aanvraag is van het bord af, maar hier hoort hij te blijven staan.
-  const eerdereAanvragen = cDeals.filter(d => d.id !== actieveDeal?.id);
-  const aanvraagStatus = d => {
-    if (isAfgerond(d)) return { label: 'Afgerond', klasse: 'b-done' };
-    const st = dealStatus(d, stageIndex);
-    if (st === 'lost') return { label: 'Verloren', klasse: 'b-lost' };
-    return { label: stageIndex.get(d.stage)?.label || 'Loopt', klasse: 'b-gray' };
-  };
-  // Werkbonnen bij die deal; heeft de deal er geen, dan die van de klant zelf.
-  const dealWerkbonnen = actieveDeal ? cWerkbonnen.filter(w => w.dealId === actieveDeal.id) : [];
-  const planWerkbonnen = dealWerkbonnen.length ? dealWerkbonnen : cWerkbonnen;
+  // Alle werkbonnen van deze klant; de planning op de klantkaart gaat over de
+  // klant, niet over één klus. Per klus staat de planning op de projectkaart.
+  const planWerkbonnen = cWerkbonnen;
   const naamVan = id => teamMembers.find(m => m.id === id || m.profileId === id)?.fullName || '';
   // Wat mag deze gebruiker inplannen?
   //
@@ -439,92 +397,6 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   const komendeRegels = planningRegels.filter(r => r.datum >= new Date().toISOString().slice(0, 10));
   const alleRegels = samenOpDatum(planRegels(cWerkbonnen, naamVan), losRegels);
   const vandaagIso = new Date().toISOString().slice(0, 10);
-  // Aanvraagtekst: voorlopig wat de deal erover zegt. Eén plek, zodat de echte
-  // aanvraagdata later alleen hier hoeft te worden aangesloten.
-  const aanvraag = actieveDeal
-    ? {
-        titel: actieveDeal.title,
-        tekst: actieveDeal.raw?.description || actieveDeal.raw?.notes || '',
-        fase: stageIndex.get(actieveDeal.stage)?.label || '',
-        waarde: actieveDeal.value || 0,
-      }
-    : null;
-  // De fase van de lopende aanvraag aanpassen, vanaf de klantkaart zelf.
-  //
-  // Alleen met 'verkoop': de policy deals_update eist dat recht in zowel qual
-  // als with_check. Zonder recht een keuzelijst tonen zou een knop opleveren
-  // die de database stil weigert.
-  //
-  // Daarom magBewerken en niet can: sinds de gedeelde werkruimte geeft can()
-  // voor 'verkoop' ook true aan een medewerker in een Groei-bedrijf, zodat hij
-  // de Pipeline kan openen. Zien mag daar, wijzigen niet — deals_update kent
-  // bb_gedeelde_werkruimte() bewust niet.
-  // Zelfde recht als de fasekeuze hierboven: deals_update eist 'verkoop'.
-  const magVerkoop = magBewerken('verkoop');
-  const magFaseWijzigen = Boolean(actieveDeal) && magVerkoop && !aanvraagAfgerond;
-  // Afronden haalt de aanvraag van het pipelinebord; hier blijft hij staan met
-  // de status Afgerond. Omkeerbaar met dezelfde knop.
-  const zetAfgerond = async (aan) => {
-    if (!actieveDeal) return;
-    setAfrondBezig(true);
-    const vorige = actieveDeal.afgerondOp || null;
-    setCDeals(list => list.map(d => (d.id === actieveDeal.id ? { ...d, afgerondOp: aan ? new Date().toISOString() : null } : d)));
-    try {
-      const bij = await zetDealAfgerond(actieveDeal.id, aan);
-      setCDeals(list => list.map(d => (d.id === actieveDeal.id ? bij : d)));
-      toast.success(aan ? 'Aanvraag afgerond' : 'Aanvraag weer geopend');
-      bumpRefresh?.();
-    } catch (e) {
-      setCDeals(list => list.map(d => (d.id === actieveDeal.id ? { ...d, afgerondOp: vorige } : d)));
-      toast.error(e.message || (aan ? 'Afronden is mislukt' : 'Heropenen is mislukt'));
-    } finally {
-      setAfrondBezig(false);
-    }
-  };
-  const gesorteerdeStages = [...stages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  const wijzigFase = async stageId => {
-    if (!actieveDeal || !stageId || stageId === actieveDeal.stage) return;
-    const vorige = actieveDeal.stage;
-    setFaseBezig(true);
-    // Meteen in beeld; bij een fout draaien we hem terug.
-    setCDeals(list => list.map(d => (d.id === actieveDeal.id ? { ...d, stage: stageId } : d)));
-    try {
-      await updateDealStage(actieveDeal.id, stageId);
-      toast.success(`Fase gewijzigd naar ${stageIndex.get(stageId)?.label || 'de nieuwe fase'}`);
-      bumpRefresh?.();
-    } catch (e) {
-      setCDeals(list => list.map(d => (d.id === actieveDeal.id ? { ...d, stage: vorige } : d)));
-      toast.error(e.message || 'Fase wijzigen is mislukt');
-    } finally {
-      setFaseBezig(false);
-    }
-  };
-
-  // Behandeld door: dezelfde weg als de fasekeuze hierboven — meteen in beeld,
-  // en bij een fout terug naar wat er stond. Schrijft naar assigned_to_ids, het
-  // veld waarop het pipelinebord filtert ("Behandeld door"), zodat dat filter
-  // meteen klopt.
-  //
-  // Geen melding bij succes: je vinkt vaak twee mensen achter elkaar aan en dan
-  // is een toast per klik alleen maar lawaai. Een fout meldt wel.
-  const wijzigToewijzing = async ids => {
-    if (!actieveDeal) return;
-    const vorige = actieveDeal.assignedToIds || [];
-    setToewijzenBezig(true);
-    setCDeals(list => list.map(d => (d.id === actieveDeal.id ? { ...d, assignedToIds: ids } : d)));
-    try {
-      // Ook assigned_to meeschrijven: createDeal zet dat veld bij het aanmaken
-      // op de eerste behandelaar, "voor wat daar nog op leest". Alleen de array
-      // bijwerken laat die kolom stil achterlopen.
-      await updateDeal(actieveDeal.id, { assigned_to_ids: ids, assigned_to: ids[0] || null });
-      bumpRefresh?.();
-    } catch (e) {
-      setCDeals(list => list.map(d => (d.id === actieveDeal.id ? { ...d, assignedToIds: vorige } : d)));
-      toast.error(e.message || 'Toewijzen is mislukt');
-    } finally {
-      setToewijzenBezig(false);
-    }
-  };
 
   const cQuotes = [];
   // Zelfde definitie als de klantenlijst, Financiën en de database-export.
@@ -841,104 +713,44 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
       {/* Overview */}
       {tab === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Aanvraag: wat de klant gevraagd heeft. Voorlopig uit de deal;
-              zodra de echte aanvraagdata er is, hoeft alleen `aanvraag`
-              hierboven te worden gevuld. */}
+          {/* Projecten van deze klant. De klantkaart gaat over de klant zelf;
+              wat er binnen één klus gebeurt — aanvraag, fase, offerte, planning,
+              facturen — staat op de projectkaart. */}
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <button type="button" className="kk-blok-titel" onClick={() => setPage?.('pipeline')}>
-                Aanvraag <span className="kk-pijl">→</span>
+              <button type="button" className="kk-blok-titel" onClick={() => setTab('projecten')}>
+                Projecten <span className="kk-pijl">→</span>
               </button>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                {aanvraagAfgerond
-                  ? <span className="badge b-done">Afgerond</span>
-                  : magFaseWijzigen ? (
-                    <select
-                      className="badge b-gray"
-                      style={{ border: '1px solid var(--border)', cursor: 'pointer', padding: '2px 6px', maxWidth: 190 }}
-                      value={actieveDeal.stage || ''}
-                      disabled={faseBezig}
-                      aria-label="Fase van deze aanvraag"
-                      onChange={e => wijzigFase(e.target.value)}
-                    >
-                      {gesorteerdeStages.map(s => (
-                        <option key={s.id} value={s.id}>{s.label}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    aanvraag?.fase && <span className="badge b-gray">{aanvraag.fase}</span>
-                  )}
-                {/* Afronden haalt hem van het bord; een volgende klus krijgt een
-                    nieuwe aanvraag, de afgeronde blijft staan. */}
-                {/* Afronden is de hoofdactie en krijgt daarom dezelfde zwarte knop
-                    met groene tekst als "Klus afronden" op de werkbon. Let op de
-                    klassen: .wb2-complete-btn zet alleen kleur en gewicht, de
-                    padding en ronding komen daar van de ouder .wb2-eind-acties.
-                    Die ouder is hier niet, dus .btn + .btn-sm leveren de maat.
-                    Heropenen blijft wit: dat maakt iets ongedaan. */}
-                {actieveDeal && magVerkoop && (
-                  <button className={aanvraagAfgerond ? 'btn btn-s btn-sm' : 'btn btn-sm wb2-complete-btn'}
-                    disabled={afrondBezig}
-                    onClick={guardSchrijven(aanvraagAfgerond ? 'Een aanvraag heropenen' : 'Een aanvraag afronden', () => zetAfgerond(!aanvraagAfgerond))}>
-                    {aanvraagAfgerond ? 'Heropenen' : <>{I.check} Afronden</>}
-                  </button>
-                )}
-                {magVerkoop && (!actieveDeal || aanvraagAfgerond) && (
-                  <button className="btn btn-s btn-sm"
-                    onClick={guardSchrijven('Een aanvraag aanmaken', () => setShowNieuweAanvraag(true))}>
-                    {I.plus} Nieuwe aanvraag
-                  </button>
-                )}
-              </div>
+              <button className="btn-plus" title="Nieuw project"
+                onClick={guardSchrijven('Een project aanmaken', () => setShowNewProject(true))}>{I.plus}</button>
             </div>
-            {aanvraag ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div style={{ fontWeight: 600, fontSize: '.88rem', color: 'var(--dk)' }}>{aanvraag.titel}</div>
-                {aanvraag.tekst
-                  ? <div style={{ fontSize: '.83rem', color: 'var(--dm)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{aanvraag.tekst}</div>
-                  : <div style={{ fontSize: '.83rem', color: 'var(--dl)' }}>Geen omschrijving bij deze aanvraag.</div>}
-                {aanvraag.waarde > 0 && (
-                  <div style={{ fontSize: '.8rem', color: 'var(--dl)' }}>Verwachte waarde: <strong style={{ color: 'var(--dk)' }}>{fmt(aanvraag.waarde)}</strong></div>
-                )}
-                {/* Wie de aanvraag behandelt: dezelfde lijst als bij het
-                    aanmaken, hier direct aanpasbaar zonder venster — net als de
-                    fasekeuze in de kop. Alleen met verkooprecht. Een afgeronde
-                    aanvraag laat de namen wel zien, maar niet meer wijzigen. */}
-                {actieveDeal && magVerkoop && (
-                  <div style={{ marginTop: 4 }}>
-                    <div style={{ fontSize: '.75rem', fontWeight: 600, color: 'var(--dl)', marginBottom: 4 }}>Behandeld door</div>
-                    <MemberMultiSelect
-                      members={teamMembers}
-                      value={actieveDeal.assignedToIds || []}
-                      onChange={wijzigToewijzing}
-                      disabled={toewijzenBezig || aanvraagAfgerond}
-                    />
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="kk-leeg">Nog geen aanvraag voor deze klant.</div>
-            )}
-
-            {eerdereAanvragen.length > 0 && (
-              <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
-                <div style={{ fontSize: '.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--dl)', marginBottom: 6 }}>
-                  Andere aanvragen ({eerdereAanvragen.length})
-                </div>
-                {eerdereAanvragen.map(d => {
-                  const st = aanvraagStatus(d);
-                  return (
-                    <div key={d.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '4px 0', fontSize: '.83rem' }}>
-                      <span style={{ color: 'var(--dm)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.title}</span>
-                      <span className={`badge ${st.klasse}`} style={{ flexShrink: 0 }}>{st.label}</span>
+            {cProjecten.length === 0
+              ? <div className="kk-leeg">Nog geen projecten voor deze klant.</div>
+              : (
+                <div className="lrows">
+                  {cProjecten.slice(0, 5).map(p => (
+                    <div key={p.id} className="lrow"
+                      onClick={() => setPage('projecten', { id: p.id, from: 'klant', klantId: custId, klantNaam: c?.name })}>
+                      <div className="lrow-main">
+                        <div className="lrow-title">{p.name}</div>
+                      </div>
+                      <ProjectBadge status={p.status} />
+                      {can('projectbedragen') && p.projectValue > 0 && (
+                        <div className="lrow-amount">{fmt(p.projectValue)}</div>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                  ))}
+                  {cProjecten.length > 5 && (
+                    <button onClick={() => setTab('projecten')}
+                      style={{ alignSelf: 'flex-start', background: 'none', border: 'none', cursor: 'pointer', fontSize: '.8rem', color: 'var(--p)', fontWeight: 600, padding: '2px 0' }}>
+                      Alle projecten → ({cProjecten.length})
+                    </button>
+                  )}
+                </div>
+              )}
           </div>
 
-          {/* Planning van de werkbon(nen) bij deze aanvraag. */}
+          {/* Planning van alle werkbonnen van deze klant. */}
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <button type="button" className="kk-blok-titel" onClick={() => setTab('planning')}>
@@ -1645,19 +1457,6 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
           onDeleted={id => {
             setActs(list => list.filter(a => a.id !== id));
             setSelectedAct(null);
-          }}
-        />
-      )}
-      {showNieuweAanvraag && (
-        <NewLeadModal
-          customers={[c]}
-          stages={stages}
-          defaultCustomerId={c.id}
-          onClose={() => setShowNieuweAanvraag(false)}
-          onSaved={deal => {
-            setCDeals(list => [deal, ...list]);
-            setShowNieuweAanvraag(false);
-            bumpRefresh?.();
           }}
         />
       )}

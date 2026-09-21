@@ -28,7 +28,7 @@ function PriorityBadge({ priority, style }) {
 // gerenderd en is verwijderd.
 
 // ── MOBILE PIPELINE (swipeable carousel) ─────────────────────
-function MobilePipeline({ stages, dealsInStage, openCustomer, moveDeal, markLost, lostStageId, setNewStage, setShowNew, customers, geenVervolg }) {
+function MobilePipeline({ stages, dealsInStage, openDeal, moveDeal, markLost, lostStageId, setNewStage, setShowNew, customers, geenVervolg }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
@@ -120,7 +120,7 @@ function MobilePipeline({ stages, dealsInStage, openCustomer, moveDeal, markLost
           {stageDeals.map(deal => {
             const cust = customers?.find(c => c.id === deal.custId);
             return (
-              <div key={deal.id} className="pipe-mob-card" style={{ cursor: 'pointer', position: 'relative' }} onClick={() => openCustomer(deal.custId)}>
+              <div key={deal.id} className="pipe-mob-card" style={{ cursor: 'pointer', position: 'relative' }} onClick={() => openDeal(deal.id)}>
                 {stage.id !== lostStageId && markLost && (
                   <button
                     className="btn-icon pc-menu-btn"
@@ -248,7 +248,7 @@ function MaakProjectModal({ deal, customers, onClose, setPage }) {
 }
 
 // ── PIPELINE ─────────────────────────────────────────────────
-export function Pipeline({ openCustomer, openDeal, setPage }) {
+export function Pipeline({ openDeal, setPage }) {
   const toast = useToast();
   const { refreshKey, bumpRefresh } = useProfile();
   const { guardSchrijven, planModal } = usePlanGuard();
@@ -715,7 +715,7 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
           stages={stages.filter(s => SHOWN_STAGE_IDS.includes(s.id) && (filter.stage === 'all' || s.id === filter.stage))}
           dealsInStage={dealsInStage}
           geenVervolg={geenVervolg}
-          openCustomer={openCustomer}
+          openDeal={openDeal}
           moveDeal={magDealsBeheren ? moveDeal : null}
           markLost={magDealsBeheren ? markLost : null}
           lostStageId={lostStageId}
@@ -813,7 +813,7 @@ export function Pipeline({ openCustomer, openDeal, setPage }) {
                       draggable={magDealsBeheren}
                       onDragStart={magDealsBeheren ? (e => onCardDragStart(e, deal)) : undefined}
                       onDragEnd={magDealsBeheren ? onCardDragEnd : undefined}
-                      onClick={() => openCustomer(deal.custId)}>
+                      onClick={() => openDeal(deal.id)}>
                       {/* Het ⋮-menu bevat prioriteit (updateDeal) en "markeer
                           als verloren" (markDealLost). Beide vragen 'verkoop',
                           dus één toets op de opener dekt ze allebei. */}

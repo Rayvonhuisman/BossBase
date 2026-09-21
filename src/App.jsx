@@ -9,7 +9,7 @@ import OfferteSigneren from './pages/OfferteSigneren.jsx';
 import WerkbonOndertekenen from './pages/WerkbonOndertekenen.jsx';
 import { DashboardHome } from './pages/dashboard/DashboardHome.jsx';
 import { Pipeline } from './pages/BbDashboard.jsx';
-import { DealDetailDrawer } from './pages/dashboard/DealDetailDrawer.jsx';
+import { ProjectkaartDrawer } from './pages/projects/ProjectkaartDrawer.jsx';
 import { leesRoute, bouwRoute } from './lib/route.js';
 import { schrijfEntry, sluitDelta, huidigeIndex } from './lib/geschiedenis.js';
 import { useEscapeSluit } from './hooks/useEscapeSluit.js';
@@ -867,18 +867,11 @@ function CustomerDrawer({ custId, initialTab, onClose, setPage, onTabChange }) {
   );
 }
 
-// ── DEAL DRAWER ──────────────────────────────────────────────
+// ── PROJECTKAART ─────────────────────────────────────────────
+// Eén kaart voor de hele klus, geopend vanaf een pipelinekaart of de klantkaart.
+// De kaart brengt zijn eigen overlay en drawer mee, dus hier geen omhulsel.
 function DealDrawer({ dealId, onClose, setPage, openCustomer }) {
-  return (
-    <>
-      <div className="drawer-overlay" onClick={onClose} />
-      <div className="drawer">
-        <div className="drawer-body">
-          <DealDetailDrawer dealId={dealId} onClose={onClose} setPage={setPage} openCustomer={openCustomer} />
-        </div>
-      </div>
-    </>
-  );
+  return <ProjectkaartDrawer dealId={dealId} onClose={onClose} setPage={setPage} openCustomer={openCustomer} />;
 }
 
 // ── CALENDAR EVENT DRAWER ────────────────────────────────────

@@ -179,6 +179,30 @@ export async function createProject(input) {
   return project
 }
 
+/**
+ * Het project dat aan een deal hangt, of null.
+ *
+ * De projectkaart wordt geopend vanaf een pipelinekaart, en die kent alleen de
+ * deal. Voor de gebruiker zijn deal en project één ding; in de database zijn ze
+ * dat nog niet, dus zoeken we de tegenhanger op. Er is er hoogstens één: geen
+ * enkele deal in productie heeft meer dan één project (gemeten 21-09-2026),
+ * en de UI maakt er nooit een tweede bij.
+ */
+export async function getProjectByDeal(dealId) {
+  if (!dealId) return null
+  const { data, error } = await supabase
+    .from('projects')
+    .select('*, customers(name), deals(title), offertes(nummer, totaal_incl, arbeidsuren)')
+    .eq('deal_id', dealId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+  if (error) {
+    console.error('[bb:projects] getProjectByDeal mislukt', { message: error.message, code: error.code })
+    throw error
+  }
+  return data?.length ? toProject(data[0]) : null
+}
+
 export async function updateProject(projectId, patch) {
   if (!projectId) throw new Error('projectId is verplicht')
   const updates = {}

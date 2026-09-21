@@ -4,7 +4,8 @@ import { InfoTip } from './Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { supabase } from '../lib/supabase';
 import { createCustomer } from '../services/customerService.js';
-import { createDeal } from '../services/dealService.js';
+import { createDeal, markDealLost } from '../services/dealService.js';
+import { getLostReasons } from '../services/lostReasonService.js';
 import { createActivity, updateActivity, deleteActivity, buildDueAt, getActiviteitNotities, addActiviteitNotitie } from '../services/activityService.js';
 import { syncActivity } from '../services/googleCalendarService.js';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -185,6 +186,77 @@ export function NewCustomerModal({ onClose, onSaved }) {
           <button className="btn btn-s" onClick={onClose} disabled={saving}>Annuleren</button>
           <button className="btn btn-p" onClick={submit} disabled={saving}>
             {saving ? 'Opslaan...' : <>{I.check} Klant opslaan</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── VERLOREN MODAL ───────────────────────────────────────────
+// Verliezen vraagt om een reden, en dat is een handeling — geen gevolg van een
+// fase. Stond als losse JSX in het pipelinebord; de projectkaart heeft hem ook
+// nodig, dus hier één keer.
+export const LOST_REASONS_FALLBACK = ['Te duur', 'Gekozen voor concurrent', 'Geen reactie', 'Timing niet goed', 'Anders'];
+
+export function VerlorenModal({ deal, lostStage, onClose, onSaved }) {
+  const toast = useToast();
+  const [reason, setReason] = useState('');
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [reasons, setReasons] = useState([]);
+
+  useEffect(() => { getLostReasons().then(setReasons).catch(() => {}); }, []);
+  const opties = reasons.length ? reasons.map(r => r.label) : LOST_REASONS_FALLBACK;
+
+  const bevestig = async () => {
+    // Zonder gekoppelde Verloren-fase weten we niet waar hij heen moet; dan
+    // liever niets doen dan hem ergens anders parkeren.
+    if (!lostStage) {
+      toast.error('Geen "Verloren"-fase gevonden in de pipeline');
+      onClose();
+      return;
+    }
+    if (!reason) { toast.error('Kies een reden'); return; }
+    setSaving(true);
+    try {
+      const updated = await markDealLost(deal.id, lostStage.id, reason, note);
+      toast.success('Aanvraag gemarkeerd als verloren');
+      onSaved?.(updated);
+      onClose();
+    } catch (err) {
+      console.error('[bb:verloren] markeren mislukt', err);
+      toast.error(err.message || 'Status bijwerken mislukt');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 400 }}>
+        <div className="modal-hd">
+          <div>
+            <div className="modal-title">Markeer als verloren</div>
+            <div className="modal-sub">{deal?.customerName || 'Klant'}{deal?.title ? ` — ${deal.title}` : ''}</div>
+          </div>
+          <ModalX onClose={onClose} />
+        </div>
+        <div className="f" style={{ marginBottom: 14 }}>
+          <label>Reden van verlies</label>
+          <select value={reason} onChange={e => setReason(e.target.value)}>
+            <option value="">Kies een reden...</option>
+            {opties.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </div>
+        <div className="f">
+          <label>Toelichting (optioneel)</label>
+          <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Eventuele extra informatie..." style={{ height: 60 }} />
+        </div>
+        <div className="fa">
+          <button className="btn btn-s" onClick={onClose}>Annuleren</button>
+          <button className="btn btn-danger" onClick={bevestig} disabled={saving || !reason}>
+            {saving ? 'Bezig...' : 'Markeer verloren'}
           </button>
         </div>
       </div>
