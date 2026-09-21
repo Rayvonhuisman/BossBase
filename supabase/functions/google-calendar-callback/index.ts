@@ -39,7 +39,11 @@ function redirect(status: "connected" | "error", detail = "") {
   const base = (Deno.env.get("APP_URL") || "").replace(/\/$/, "")
   const q = new URLSearchParams({ google: status })
   if (detail) q.set("google_msg", detail.slice(0, 160))
-  return new Response(null, { status: 302, headers: { Location: `${base}/calendar?${q.toString()}` } })
+  // /dashboard/calendar en niet /calendar: de app leest zijn route pas vanaf
+  // BASISPAD (/dashboard, zie App.jsx). Een pad daarbuiten wordt niet herkend en
+  // valt terug op de marketingpagina, waarna de gebruiker nooit te zien krijgt
+  // of de koppeling is gelukt.
+  return new Response(null, { status: 302, headers: { Location: `${base}/dashboard/calendar?${q.toString()}` } })
 }
 
 serve(async (req) => {

@@ -18,7 +18,9 @@ export async function getConnectionStatus() {
 }
 
 // Starts the OAuth flow: ask the Edge Function for a consent URL, then send
-// the browser to Google. Google redirects back to /calendar?google=...
+// the browser to Google. Google redirects back to /dashboard/calendar?google=...
+// (the /dashboard prefix is required: the app only reads its route from
+// BASISPAD onwards, so a path outside it falls back to the marketing page).
 export async function startGoogleCalendarConnect() {
   // The Edge Function verifies the caller via supabase.auth.getUser(), so it
   // needs a valid *user* JWT. Without an explicit header, invoke() can fall
