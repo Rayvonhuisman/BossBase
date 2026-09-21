@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { listLeveranciers } from '../../services/leverancierService.js';
 import { Maximize2, Minimize2, AlertTriangle, AlertOctagon, Check, X, Edit2, Trash2 } from 'lucide-react';
 import { updateCustomer } from '../../services/customerService.js';
-import { I, ModalX, NotifyMailToggle, fmt, fmt0 } from '../../bb-shared.jsx';
+import { I, ModalX, fmt, fmt0 } from '../../bb-shared.jsx';
 import { InfoTip, InfoUitklap } from '../../components/Uitleg.jsx';
 import { useToast } from '../../lib/toast.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
@@ -18,7 +18,6 @@ import {
   deleteProjectNote,
   getProjectInvoices,
   enrichProject,
-  PROJECT_STATUS,
   getProjectFotos,
   uploadProjectFoto,
   deleteProjectFoto,
@@ -43,7 +42,7 @@ import { NewFactuurModal, SendFactuurMailModal } from '../FacturenPage.jsx';
 import { NewOfferteModal, SendOfferteMailModal } from '../OffertesPage.jsx';
 import { WerkbonModal } from '../WerkbonPageV2.jsx';
 import NotitieLog, { toLogItem } from '../../components/NotitieLog.jsx';
-import { getTeamMembers, notifyNewAssignees, createMentionNotifications } from '../../services/notificatieService.js';
+import { getTeamMembers, createMentionNotifications } from '../../services/notificatieService.js';
 import { statusInfo } from '../../utils/statusColors.js';
 
 const TABS = [
@@ -140,7 +139,6 @@ function OverviewTab({
   openCustomer, onSave, onChanged, setPage, setTab, canManage,
 }) {
   const toast = useToast();
-  const { profile } = useProfile();
   const { magBewerken } = usePermissions();
 
   // ── De aanvraag achter dit project ────────────────────────────────────────
@@ -163,59 +161,35 @@ function OverviewTab({
   const { can } = usePermissions();
   const magBedragen = can('projectbedragen');
   const [teamMembers, setTeamMembers] = useState([]);
-  const [form, setForm] = useState({
-    name: project.name || '',
-    status: project.status || 'concept',
-    project_value: project.projectValue || 0,
-    quoted_hours: project.quotedHours || 0,
-    start_date: project.startDate || '',
-    deadline: project.deadline || '',
-    description: project.description || '',
-    customer_id: project.customerId || '',
-    assigned_to: project.assignedTo || '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [notifyMail, setNotifyMail] = useState(true);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  // ── Projectinformatie ─────────────────────────────────────────────────────
+  // Startdatum, einddatum en begrote uren worden per veld opgeslagen, met
+  // hetzelfde inline-patroon als de klantgegevens. Het grote bewerkformulier
+  // onderaan de kaart is vervallen; daarmee staan projectnaam, klantkeuze,
+  // projectwaarde en de toegewezen medewerker niet meer op dit tabblad.
+  const [projVeld, setProjVeld] = useState(null);
+  const [projDraft, setProjDraft] = useState('');
+  const [projBezig, setProjBezig] = useState(false);
 
   useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
 
-  useEffect(() => {
-    setForm({
-      name: project.name || '',
-      status: project.status || 'concept',
-      project_value: project.projectValue || 0,
-      quoted_hours: project.quotedHours || 0,
-      start_date: project.startDate || '',
-      deadline: project.deadline || '',
-      description: project.description || '',
-      customer_id: project.customerId || '',
-      assigned_to: project.assignedTo || '',
-    });
-  }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const submit = async () => {
-    if (!canManage) return;
-    setSaving(true);
+  const startProjEdit = (key, waarde) => {
+    setProjVeld(key);
+    setProjDraft(waarde === null || waarde === undefined ? '' : String(waarde));
+  };
+  const stopProjEdit = () => { setProjVeld(null); setProjDraft(''); };
+  const bewaarProjVeld = async key => {
+    setProjBezig(true);
     try {
-      const prevAssigned = project.assignedTo || '';
-      await onSave({
-        name: form.name.trim() || project.name,
-        status: form.status,
-        project_value: Number(form.project_value || 0),
-        quoted_hours: Number(form.quoted_hours || 0),
-        start_date: form.start_date || null,
-        deadline: form.deadline || null,
-        description: form.description,
-        customer_id: form.customer_id || null,
-        assigned_to: form.assigned_to || null,
-      });
-      notifyNewAssignees({ userIds: form.assigned_to ? [form.assigned_to] : [], prevUserIds: prevAssigned ? [prevAssigned] : [], members: teamMembers, sendMail: notifyMail, type: 'toewijzing_project', title: `Je bent toegewezen aan ${form.name.trim() || project.name}`, link: 'projecten', relatedType: 'project', relatedId: project.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
-      toast.success('Project opgeslagen');
+      // Een leeggemaakt datumveld moet als NULL de database in: start_date en
+      // deadline zijn van het type date en weigeren een lege tekst.
+      const waarde = key === 'quoted_hours' ? Number(projDraft || 0) : (projDraft || null);
+      await onSave({ [key]: waarde });
+      stopProjEdit();
+      toast.success('Project bijgewerkt');
     } catch (e) {
       toast.error(e.message || 'Opslaan mislukt');
     } finally {
-      setSaving(false);
+      setProjBezig(false);
     }
   };
 
@@ -448,67 +422,6 @@ function OverviewTab({
         </div>
       )}
 
-      {/* ── Klantgegevens ──────────────────────────────────────────────────── */}
-      {/* Dezelfde klant als op de klantkaart, geen kopie: bewerken schrijft naar
-          customers, dus het staat meteen op beide plekken. Lezen mag iedereen
-          van het bedrijf (customers_select); bewerken vraagt 'klanten_bewerken'. */}
-      {klant && (
-        <div className="card card-p">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <button type="button" className="kk-blok-titel" onClick={() => openCustomer?.(klant.id)}>
-              Klantgegevens <span className="kk-pijl">→</span>
-            </button>
-          </div>
-          <div>
-            {[
-              { key: 'name', label: 'Naam' },
-              { key: 'contactpersoon', label: 'Contactpersoon' },
-              { key: 'phone', label: 'Telefoon' },
-              { key: 'email', label: 'E-mail' },
-              { key: 'address', label: 'Adres' },
-            ].map(veld => {
-              const actief = klantVeld === veld.key;
-              return (
-                <div key={veld.key} className="cust-info-row" style={{ alignItems: 'center' }}>
-                  <span className="cust-info-label">{veld.label}</span>
-                  {actief ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
-                      <input
-                        autoFocus
-                        value={klantDraft}
-                        onChange={e => setKlantDraft(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') bewaarKlantVeld(veld.key); if (e.key === 'Escape') stopKlantEdit(); }}
-                        style={{ flex: 1, fontSize: '.82rem', padding: '2px 6px' }}
-                      />
-                      <button onClick={() => bewaarKlantVeld(veld.key)} disabled={klantBezig}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#15A34A', display: 'flex', alignItems: 'center', padding: 2 }}>
-                        <Check size={14} />
-                      </button>
-                      <button onClick={stopKlantEdit}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2 }}>
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
-                      <span className="cust-info-val" style={{ flex: 1, color: klant[veld.key] ? undefined : 'var(--dl)' }}>
-                        {klant[veld.key] || '—'}
-                      </span>
-                      {magKlantBewerken && (
-                        <button onClick={() => startKlantEdit(veld.key)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}>
-                          <Edit2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* ── De aanvraag ────────────────────────────────────────────────────── */}
       {/* Het belangrijkste blok: wat wil de klant, waar, wanneer, waarvandaan,
           met foto's. De tekst staat op het project, dus ook leesbaar voor een
@@ -626,6 +539,83 @@ function OverviewTab({
         </div>
       </div>
 
+      {/* ── Projectinformatie ──────────────────────────────────────────────── */}
+      {/* Compact, en op de kaart zelf aan te passen: startdatum, einddatum en
+          begrote uren schrijven rechtstreeks naar het project, per veld, met
+          hetzelfde inline-potloodje als de klantgegevens. Gewerkte uren staan
+          ernaast maar zijn afgeleid uit de werkbonuren en dus niet te typen. */}
+      <div className="card card-p">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Projectinformatie</div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+          {[
+            { key: 'start_date',   label: 'Startdatum',   type: 'date',   waarde: project.startDate },
+            { key: 'deadline',     label: 'Einddatum',    type: 'date',   waarde: project.deadline },
+            { key: 'quoted_hours', label: 'Begrote uren', type: 'number', waarde: project.quotedHours },
+          ].map(veld => {
+            const actief = projVeld === veld.key;
+            const leeg = veld.waarde === null || veld.waarde === undefined || veld.waarde === '';
+            return (
+              <div key={veld.key}>
+                <div style={labelStyle}>{veld.label}</div>
+                {actief ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <input
+                      autoFocus
+                      type={veld.type}
+                      min={veld.type === 'number' ? '0' : undefined}
+                      step={veld.type === 'number' ? '0.5' : undefined}
+                      value={projDraft}
+                      onChange={e => setProjDraft(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') bewaarProjVeld(veld.key); if (e.key === 'Escape') stopProjEdit(); }}
+                      style={{ flex: 1, minWidth: 0, fontSize: '.82rem', padding: '2px 6px' }}
+                    />
+                    <button onClick={() => bewaarProjVeld(veld.key)} disabled={projBezig}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#15A34A', display: 'flex', alignItems: 'center', padding: 2 }}>
+                      <Check size={14} />
+                    </button>
+                    <button onClick={stopProjEdit}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2 }}>
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontWeight: 600, fontSize: 13, color: leeg ? 'var(--dl)' : (veld.key === 'deadline' && isOverdue ? '#dc2626' : 'inherit') }}>
+                      {veld.type === 'date'
+                        ? (leeg ? 'Niet ingevuld' : fmtDate(veld.waarde))
+                        : fmtHours(veld.waarde)}
+                      {veld.key === 'deadline' && isOverdue && <span style={{ fontSize: 11, marginLeft: 6 }}>verlopen</span>}
+                    </span>
+                    {canManage && (
+                      <button onClick={() => startProjEdit(veld.key, veld.waarde)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}>
+                        <Edit2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {/* Afgeleid uit de werkbonuren; het percentage kleurt mee zodra het
+              tegen de begroting aanloopt. Blijft zichtbaar zonder recht op
+              bedragen: hoe ver de klus is mag een medewerker weten. */}
+          <div>
+            <div style={labelStyle}>Gewerkte uren</div>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>
+              {fmtHours(project.usedHours)}
+              {project.quotedHours > 0 && (
+                <span style={{ color: (project.hoursPercentage || 0) > 1 ? '#dc2626' : (project.hoursPercentage || 0) >= 0.8 ? '#f59e0b' : 'var(--dl)', marginLeft: 6, fontSize: 12 }}>
+                  ({Math.round((project.hoursPercentage || 0) * 100)}%)
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ── Planning ───────────────────────────────────────────────────────── */}
       <div className="card card-p">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -709,120 +699,66 @@ function OverviewTab({
         </div>
       )}
 
-      {/* ── Projectcontrole (uren, budget, deadline) ───────────────────────── */}
-      <div className="card card-p" style={{ padding: 14, background: '#fafafa' }}>
-        <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--dl)', marginBottom: 10 }}>
-          Projectcontrole
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+      {/* ── Klantgegevens ──────────────────────────────────────────────────── */}
+      {/* Dezelfde klant als op de klantkaart, geen kopie: bewerken schrijft naar
+          customers, dus het staat meteen op beide plekken. Lezen mag iedereen
+          van het bedrijf (customers_select); bewerken vraagt 'klanten_bewerken'. */}
+      {klant && (
+        <div className="card card-p">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <button type="button" className="kk-blok-titel" onClick={() => openCustomer?.(klant.id)}>
+              Klantgegevens <span className="kk-pijl">→</span>
+            </button>
+          </div>
           <div>
-            <div style={labelStyle}>Urenstatus</div>
-            <div style={{ fontWeight: 600, fontSize: 13 }}>
-              {fmtHours(project.usedHours)} van {fmtHours(project.quotedHours)}
-              {project.quotedHours > 0 && (
-                <span style={{ color: (project.hoursPercentage || 0) > 1 ? '#dc2626' : (project.hoursPercentage || 0) >= 0.8 ? '#f59e0b' : 'var(--dl)', marginLeft: 6, fontSize: 12 }}>
-                  ({Math.round((project.hoursPercentage || 0) * 100)}%)
-                </span>
-              )}
-            </div>
-          </div>
-          {/* Bedragen achter 'projectbedragen'. Urenstatus en deadline blijven
-              staan: een monteur mag zien hoe ver de klus is, alleen niet wat
-              hij opbrengt. */}
-          {magBedragen && (
-          <div>
-            <div style={labelStyle}>Budget</div>
-            <div style={{ fontWeight: 600, fontSize: 13 }}>{fmt0(project.projectValue)}</div>
-          </div>
-          )}
-          {magBedragen && (
-          <div>
-            <div style={labelStyle}>Gefactureerd</div>
-            <div style={{ fontWeight: 600, fontSize: 13 }}>
-              {fmt0(project.invoicedAmount)}
-              {project.remainingToInvoice > 0 && (
-                <span style={{ color: '#f59e0b', fontSize: 11, marginLeft: 6 }}>nog {fmt0(project.remainingToInvoice)}</span>
-              )}
-            </div>
-          </div>
-          )}
-          <div>
-            <div style={labelStyle}>Deadline</div>
-            <div style={{ fontWeight: 600, fontSize: 13, color: isOverdue ? '#dc2626' : 'inherit' }}>
-              {fmtDate(project.deadline)}
-              {isOverdue && <span style={{ fontSize: 11, marginLeft: 6 }}>verlopen</span>}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Edit form */}
-      <div className="fg" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <div className="f" style={{ gridColumn: '1 / -1' }}>
-          <label>Projectnaam</label>
-          <input value={form.name} onChange={e => set('name', e.target.value)} disabled={!canManage} />
-        </div>
-        <div className="f">
-          {/* Afgeleid uit de werkbonnen, niet zelf te kiezen: in uitvoering
-              zodra er één gestart is, afgerond als ze allemaal klaar zijn. */}
-          <label>Status <InfoTip tekst="Volgt de werkbonnen: in uitvoering zodra er één gestart is, afgerond als ze allemaal klaar zijn." /></label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 38 }}>
-            <span className={`badge ${PROJECT_STATUS[form.status]?.col || 'b-gray'}`}>
-              {PROJECT_STATUS[form.status]?.label || form.status}
-            </span>
+            {[
+              { key: 'name', label: 'Naam' },
+              { key: 'contactpersoon', label: 'Contactpersoon' },
+              { key: 'phone', label: 'Telefoon' },
+              { key: 'email', label: 'E-mail' },
+              { key: 'address', label: 'Adres' },
+            ].map(veld => {
+              const actief = klantVeld === veld.key;
+              return (
+                <div key={veld.key} className="cust-info-row" style={{ alignItems: 'center' }}>
+                  <span className="cust-info-label">{veld.label}</span>
+                  {actief ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+                      <input
+                        autoFocus
+                        value={klantDraft}
+                        onChange={e => setKlantDraft(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') bewaarKlantVeld(veld.key); if (e.key === 'Escape') stopKlantEdit(); }}
+                        style={{ flex: 1, fontSize: '.82rem', padding: '2px 6px' }}
+                      />
+                      <button onClick={() => bewaarKlantVeld(veld.key)} disabled={klantBezig}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#15A34A', display: 'flex', alignItems: 'center', padding: 2 }}>
+                        <Check size={14} />
+                      </button>
+                      <button onClick={stopKlantEdit}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2 }}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
+                      <span className="cust-info-val" style={{ flex: 1, color: klant[veld.key] ? undefined : 'var(--dl)' }}>
+                        {klant[veld.key] || '—'}
+                      </span>
+                      {magKlantBewerken && (
+                        <button onClick={() => startKlantEdit(veld.key)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}>
+                          <Edit2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
-        <div className="f">
-          <label>Klant</label>
-          <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)} disabled={!canManage}>
-            <option value="">— Geen —</option>
-            {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        </div>
-        {magBedragen && (
-          <div className="f">
-            <label>Projectwaarde</label>
-            <input type="number" min="0" step="0.01" value={form.project_value} onChange={e => set('project_value', e.target.value)} disabled={!canManage} />
-          </div>
-        )}
-        <div className="f">
-          <label>Begrote uren</label>
-          <input type="number" min="0" step="0.5" value={form.quoted_hours} onChange={e => set('quoted_hours', e.target.value)} disabled={!canManage} />
-        </div>
-        <div className="f">
-          <label>Startdatum</label>
-          <input type="date" value={form.start_date || ''} onChange={e => set('start_date', e.target.value)} disabled={!canManage} />
-        </div>
-        <div className="f">
-          <label>Deadline</label>
-          <input type="date" value={form.deadline || ''} onChange={e => set('deadline', e.target.value)} disabled={!canManage} />
-        </div>
-        <div className="f">
-          <label>Toegewezen aan</label>
-          <select value={form.assigned_to} onChange={e => set('assigned_to', e.target.value)} disabled={!canManage}>
-            <option value="">— Geen medewerker —</option>
-            {teamMembers.map(m => <option key={m.id} value={m.id}>{m.fullName}</option>)}
-          </select>
-          {canManage && <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />}
-        </div>
-        <div className="f" style={{ gridColumn: '1 / -1' }}>
-          <label>Omschrijving</label>
-          <textarea rows={4} value={form.description} onChange={e => set('description', e.target.value)} disabled={!canManage} />
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
-        {project.customerId && (
-          <button className="btn btn-ghost btn-sm" onClick={() => openCustomer?.(project.customerId)}>
-            Open klant {I.arrow_r}
-          </button>
-        )}
-        {canManage && (
-          <button className="btn btn-p" onClick={submit} disabled={saving}>
-            {saving ? 'Opslaan…' : 'Opslaan'}
-          </button>
-        )}
-      </div>
+      )}
 
       {/* Verliezen vraagt om een reden; zelfde venster als op het pipelinebord. */}
       {toonVerloren && huidigeDeal && (
