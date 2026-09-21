@@ -399,7 +399,19 @@ export function Pipeline({ openDeal, setPage }) {
       if (filter.priority !== 'all' && d.priority !== filter.priority) return false;
       // Behandeld door: de aanvraag kan aan meerdere mensen hangen.
       if (filter.persoon !== 'all' && !(d.assignedToIds || []).includes(filter.persoon)) return false;
-      if (filter.status === 'open' && st !== 'open') return false;
+      // "Open trajecten" betekent LOPEND: alles behalve verloren (afgerond is
+      // een regel hierboven al van het bord). Bewust niet strikt status='open'.
+      //
+      // Het bord toont de hele klus, van Nieuwe aanvraag tot Betaald/Gesloten.
+      // Kolommen als Gepland, In uitvoering en Betaald/Gesloten kunnen alleen
+      // gewonnen werk bevatten, dus een filter op status='open' haalde precies
+      // die kolommen leeg — het bord sprak zichzelf tegen. Bij een bedrijf dat
+      // zijn verkoop rond heeft bleef er niets over: Dakdekker Niels had 14
+      // aanvragen, 12 gewonnen, 1 verloren, 1 afgerond, en dus een leeg bord
+      // terwijl er tien klussen in uitvoering waren. Tot 5b45879 viel dat niet
+      // op omdat het statusfilter stage-uuid's met tekstslugs vergeleek en
+      // daardoor nooit iets deed.
+      if (filter.status === 'open' && st === 'lost') return false;
       if (filter.status === 'won'  && st !== 'won') return false;
       if (filter.status === 'lost' && st !== 'lost') return false;
       // 'done' hoeft hier niets meer te toetsen: afgerond is een eigen veld,
