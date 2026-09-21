@@ -9,7 +9,8 @@ import OfferteSigneren from './pages/OfferteSigneren.jsx';
 import WerkbonOndertekenen from './pages/WerkbonOndertekenen.jsx';
 import { DashboardHome } from './pages/dashboard/DashboardHome.jsx';
 import { Pipeline } from './pages/BbDashboard.jsx';
-import { ProjectkaartDrawer } from './pages/projects/ProjectkaartDrawer.jsx';
+import { ProjectDetailDrawer } from './pages/projects/ProjectDetailDrawer.jsx';
+import { getProjectByDeal } from './services/projectsService.js';
 import { leesRoute, bouwRoute } from './lib/route.js';
 import { schrijfEntry, sluitDelta, huidigeIndex } from './lib/geschiedenis.js';
 import { useEscapeSluit } from './hooks/useEscapeSluit.js';
@@ -867,11 +868,52 @@ function CustomerDrawer({ custId, initialTab, onClose, setPage, onTabChange }) {
   );
 }
 
-// ── PROJECTKAART ─────────────────────────────────────────────
-// Eén kaart voor de hele klus, geopend vanaf een pipelinekaart of de klantkaart.
-// De kaart brengt zijn eigen overlay en drawer mee, dus hier geen omhulsel.
-function DealDrawer({ dealId, onClose, setPage, openCustomer }) {
-  return <ProjectkaartDrawer dealId={dealId} onClose={onClose} setPage={setPage} openCustomer={openCustomer} />;
+// ── PROJECT VANAF DE PIPELINE ────────────────────────────────
+// Een pipelinekaart ís een aanvraag, en bij elke aanvraag hoort sinds migratie
+// 20260921190434 een project. Hier zoeken we dat project op en openen we het
+// bestaande projectdetail — geen tweede scherm voor hetzelfde ding.
+//
+// Blijft de opzoeking leeg (een deal van vóór de trigger die de bijvulling
+// gemist heeft), dan zeggen we dat, in plaats van een leeg paneel te tonen.
+function DealDrawer({ dealId, customers, deals, offertes, onClose, setPage, openCustomer, openInvoice }) {
+  const [projectId, setProjectId] = useState(null);
+  const [zoeken, setZoeken] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    setZoeken(true);
+    getProjectByDeal(dealId)
+      .then(p => { if (alive) setProjectId(p?.id || null); })
+      .catch(() => { if (alive) setProjectId(null); })
+      .finally(() => { if (alive) setZoeken(false); });
+    return () => { alive = false; };
+  }, [dealId]);
+
+  if (zoeken || !projectId) {
+    return (
+      <>
+        <div className="drawer-overlay" onClick={onClose} />
+        <div className="drawer">
+          <div className="drawer-body" style={{ padding: 32, textAlign: 'center', color: 'var(--dl)' }}>
+            {zoeken ? 'Project laden…' : 'Bij deze aanvraag hoort nog geen project.'}
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <ProjectDetailDrawer
+      projectId={projectId}
+      customers={customers}
+      deals={deals}
+      offertes={offertes}
+      onClose={onClose}
+      openCustomer={openCustomer}
+      openInvoice={openInvoice}
+      setPage={setPage}
+    />
+  );
 }
 
 // ── CALENDAR EVENT DRAWER ────────────────────────────────────
@@ -1907,9 +1949,13 @@ function AppInner() {
         {drawerDeal !== null && (
           <DealDrawer
             dealId={drawerDeal}
+            customers={globalCustomers}
+            deals={globalDeals}
+            offertes={globalOffertes}
             onClose={closeDeal}
             setPage={navigatePage}
             openCustomer={openCustomer}
+            openInvoice={openInvoice}
           />
         )}
 

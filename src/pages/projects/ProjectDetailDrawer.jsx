@@ -20,6 +20,12 @@ import {
   PROJECT_STATUS,
 } from '../../services/projectsService.js';
 import { getWerkbonnenByProject } from '../../services/werkbonService.js';
+// De aanvraag achter dit project: fase, behandelaars, afronden en verloren
+// leven op de deal. Het project toont ze; de deal blijft de bron.
+import { listPipelineStages, updateDeal, updateDealStage, zetDealAfgerond } from '../../services/dealService.js';
+import { isAfgerond } from '../../utils/pipeline.js';
+import { VerlorenModal } from '../../components/SharedModals.jsx';
+import { MemberMultiSelect } from '../../components/MemberMultiSelect.jsx';
 import { planningLabel } from '../../utils/werkbonDagen.js';
 import { PlanningRegels, planRegels } from '../../components/PlanningBlok.jsx';
 import { getProjectCosts } from '../../services/jobCostService.js';
@@ -76,7 +82,12 @@ function DrawerHeader({ project, onClose, fullscreen, onToggleFullscreen }) {
       </button>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--dk)', letterSpacing: '-.01em', wordBreak: 'break-word', overflowWrap: 'break-word' }}>{project.name}</div>
+        {/* "Uitvoering" erbij, want op het overzicht staat óók een badge: die
+            gaat over de fase in de pipeline. Twee badges die iets anders
+            zeggen leest als tegenspraak zolang er niet bij staat wát ze zeggen.
+            Deze volgt de werkbonnen, die volgt het verkoopverhaal. */}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 600 }}>Uitvoering</span>
           <StatusBadge status={project.status} />
           {project.customerName && (
             <span style={{ fontSize: 12, color: 'var(--dl)' }}>· {project.customerName}</span>
@@ -121,9 +132,29 @@ function Tabs({ tab, setTab, tabs = TABS }) {
 
 // ── OVERVIEW TAB ─────────────────────────────────────────────────────────────
 
-function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
+function OverviewTab({
+  project, customers, deals = [], stages = [], offertes = [], invoices = [], werkbonnen = [],
+  openCustomer, onSave, onChanged, setPage, setTab, canManage,
+}) {
   const toast = useToast();
   const { profile } = useProfile();
+  const { magBewerken } = usePermissions();
+
+  // ── De aanvraag achter dit project ────────────────────────────────────────
+  // Fase, behandelaars, afronden en verloren staan op de deal. Het project is
+  // wat de gebruiker ziet; de deal blijft de bron. Hoort er geen deal bij (een
+  // project dat met de hand is aangemaakt), dan valt de hele kopstrook weg.
+  const deal = deals.find(d => d.id === project.dealId) || null;
+  const magVerkoop = magBewerken('verkoop');
+  const dealAfgerond = isAfgerond(deal);
+  const dealVerloren = deal?.status === 'lost';
+  const [faseBezig, setFaseBezig] = useState(false);
+  const [afrondBezig, setAfrondBezig] = useState(false);
+  const [toewijzenBezig, setToewijzenBezig] = useState(false);
+  const [toonVerloren, setToonVerloren] = useState(false);
+  const [toonToewijzen, setToonToewijzen] = useState(false);
+  const [dealLokaal, setDealLokaal] = useState(null);
+  const huidigeDeal = dealLokaal?.id === deal?.id ? dealLokaal : deal;
   // Bedragen op projecten horen achter 'projectbedragen'. Dat recht bestond al
   // en beloofde dit ook, maar werd op de projectschermen nergens toegepast.
   const { can } = usePermissions();
@@ -187,9 +218,250 @@ function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
 
   const isOverdue = project.deadline && project.deadline < new Date().toISOString().slice(0, 10) && project.status !== 'afgerond';
 
+  // ── Acties op de aanvraag ─────────────────────────────────────────────────
+  const wijzigFase = async stageId => {
+    if (!huidigeDeal || !stageId || stageId === huidigeDeal.stage) return;
+    setFaseBezig(true);
+    try {
+      const bij = await updateDealStage(huidigeDeal.id, stageId);
+      setDealLokaal(bij);
+      onChanged?.();
+    } catch (e) {
+      toast.error(e.message || 'Fase wijzigen is mislukt');
+    } finally {
+      setFaseBezig(false);
+    }
+  };
+
+  const zetAfgerond = async aan => {
+    if (!huidigeDeal) return;
+    setAfrondBezig(true);
+    try {
+      const bij = await zetDealAfgerond(huidigeDeal.id, aan);
+      setDealLokaal(bij);
+      toast.success(aan ? 'Aanvraag afgerond' : 'Aanvraag heropend');
+      onChanged?.();
+    } catch (e) {
+      toast.error(e.message || (aan ? 'Afronden is mislukt' : 'Heropenen is mislukt'));
+    } finally {
+      setAfrondBezig(false);
+    }
+  };
+
+  const wijzigToewijzing = async ids => {
+    if (!huidigeDeal) return;
+    setToewijzenBezig(true);
+    try {
+      const bij = await updateDeal(huidigeDeal.id, { assigned_to_ids: ids, assigned_to: ids[0] || null });
+      setDealLokaal(bij);
+      onChanged?.();
+    } catch (e) {
+      toast.error(e.message || 'Toewijzen is mislukt');
+    } finally {
+      setToewijzenBezig(false);
+    }
+  };
+
+  const behandelaars = (huidigeDeal?.assignedToIds || [])
+    .map(id => teamMembers.find(m => m.id === id || m.profileId === id)?.fullName)
+    .filter(Boolean);
+  const naamVan = id => teamMembers.find(m => m.id === id || m.profileId === id)?.fullName || '';
+  // De fasen op volgorde, voor de keuzelijst in de kop.
+  const gesorteerdeStages = [...stages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const huidigeFase = stages.find(s => s.id === huidigeDeal?.stage) || null;
+  // De offertes van deze klus: alles wat aan dezelfde aanvraag hangt, plus de
+  // offerte die expliciet aan het project is gekoppeld.
+  const projectOffertes = offertes.filter(o =>
+    (project.dealId && o.dealId === project.dealId) || (project.offerteId && o.id === project.offerteId));
+  const planning = planRegels(werkbonnen, naamVan);
+  const komende = planning.filter(r => r.datum >= new Date().toISOString().slice(0, 10));
+  const aanvraagTekst = huidigeDeal?.raw?.description || huidigeDeal?.raw?.notes || project.description || '';
+  const klant = customers.find(c => c.id === project.customerId) || null;
+
   return (
-    <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 18, overflow: 'hidden' }}>
-      {/* Projectcontrole card */}
+    <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14, overflow: 'hidden' }}>
+      {/* ── De aanvraag: fase, wie het behandelt, en de twee eindacties ────── */}
+      {huidigeDeal && (
+        <div className="card card-p" style={{ padding: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+            <button type="button" className="kk-blok-titel" onClick={() => setPage?.('pipeline')}>
+              Aanvraag <span className="kk-pijl">→</span>
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {dealAfgerond
+                ? <span className="badge b-done">Afgerond</span>
+                : dealVerloren
+                  ? <span className="badge b-lost">Verloren</span>
+                  : magVerkoop && gesorteerdeStages.length ? (
+                    <select
+                      className="badge b-gray"
+                      style={{ border: '1px solid var(--border)', cursor: 'pointer', padding: '2px 6px', maxWidth: 190 }}
+                      value={huidigeDeal.stage || ''}
+                      disabled={faseBezig}
+                      aria-label="Fase van deze aanvraag"
+                      onChange={e => wijzigFase(e.target.value)}
+                    >
+                      {gesorteerdeStages.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                    </select>
+                  ) : (
+                    <span className="badge b-gray">{huidigeFase?.label || 'Loopt'}</span>
+                  )}
+              {magVerkoop && !dealVerloren && (
+                <>
+                  {!dealAfgerond && (
+                    <button className="btn btn-s btn-sm" style={{ color: '#dc2626' }} onClick={() => setToonVerloren(true)}>
+                      Verloren
+                    </button>
+                  )}
+                  <button
+                    className={dealAfgerond ? 'btn btn-s btn-sm' : 'btn btn-p btn-sm'}
+                    disabled={afrondBezig}
+                    onClick={() => zetAfgerond(!dealAfgerond)}
+                  >
+                    {dealAfgerond ? 'Heropenen' : <>{I.check} Afronden</>}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div style={{ fontSize: 13.5, color: aanvraagTekst ? 'var(--dk)' : 'var(--dl)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+            {aanvraagTekst || 'Geen omschrijving bij deze aanvraag.'}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginTop: 12 }}>
+            <div>
+              <div style={labelStyle}>Waar</div>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{klant?.address || '—'}</div>
+              {(klant?.postcode || klant?.city) && (
+                <div style={{ fontSize: 12, color: 'var(--dl)' }}>{[klant?.postcode, klant?.city].filter(Boolean).join(' ')}</div>
+              )}
+            </div>
+            <div>
+              <div style={labelStyle}>Wanneer</div>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>
+                {project.startDate ? `Gestart ${fmtDate(project.startDate)}` : 'Nog niet ingepland'}
+              </div>
+            </div>
+            <div>
+              <div style={labelStyle}>Via</div>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{huidigeDeal?.raw?.source || 'Handmatig aangemaakt'}</div>
+              {huidigeDeal?.createdAt && (
+                <div style={{ fontSize: 12, color: 'var(--dl)' }}>binnen op {fmtDate(String(huidigeDeal.createdAt).slice(0, 10))}</div>
+              )}
+            </div>
+            <div>
+              <div style={labelStyle}>Contact</div>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{klant?.phone || klant?.email || '—'}</div>
+            </div>
+          </div>
+
+          {/* Wie het behandelt. Dicht als knop met de namen erop: de lijst toont
+              alle teamleden en zou het blok anders uit elkaar duwen. */}
+          {magVerkoop && (
+            <div style={{ marginTop: 12 }}>
+              <div style={labelStyle}>Behandeld door</div>
+              {toonToewijzen ? (
+                <MemberMultiSelect
+                  members={teamMembers}
+                  value={huidigeDeal.assignedToIds || []}
+                  onChange={wijzigToewijzing}
+                  disabled={toewijzenBezig || dealAfgerond}
+                />
+              ) : (
+                <button className="btn btn-s btn-sm" disabled={dealAfgerond} onClick={() => setToonToewijzen(true)}>
+                  {behandelaars.length ? behandelaars.join(', ') : 'Niemand toegewezen'} {I.edit}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Offertes ───────────────────────────────────────────────────────── */}
+      <div className="card card-p">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <button type="button" className="kk-blok-titel" onClick={() => setTab?.('offerte')}>Offertes <span className="kk-pijl">→</span></button>
+        </div>
+        {projectOffertes.length === 0
+          ? <div className="lsec-empty">Geen offertes</div>
+          : (
+            <div className="lrows">
+              {projectOffertes.map(o => (
+                <div key={o.id} className="lrow" onClick={() => setPage?.('offertes', { id: o.id, from: 'project', projectId: project.id, projectNaam: project.name })}>
+                  <div className="lrow-main">
+                    <div className="lrow-title">{o.omschrijving || o.nummer || ''}</div>
+                    {o.omschrijving && o.nummer && <div className="lrow-sub">{o.nummer}</div>}
+                  </div>
+                  {(() => { const s = statusInfo(o.status, 'offerte'); return <span className={s.className}>{s.label}</span>; })()}
+                  {magBedragen && <div className="lrow-amount">{fmt(o.totaalIncl)}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+      </div>
+
+      {/* ── Facturen ───────────────────────────────────────────────────────── */}
+      {magBedragen && (
+        <div className="card card-p">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <button type="button" className="kk-blok-titel" onClick={() => setTab?.('facturen')}>Facturen <span className="kk-pijl">→</span></button>
+          </div>
+          {invoices.length === 0
+            ? <div className="lsec-empty">Geen facturen</div>
+            : (
+              <div className="lrows">
+                {invoices.map(f => (
+                  <div key={f.id} className="lrow" onClick={() => setPage?.('facturen', { id: f.id, from: 'project', projectId: project.id, projectNaam: project.name })}>
+                    <div className="lrow-num">{f.nummer || ''}</div>
+                    <div className="lrow-meta">
+                      {fmtDate(f.factuurdatum)}
+                      {f.vervaldatum && ` · vervalt ${fmtDate(f.vervaldatum)}`}
+                    </div>
+                    {(() => { const s = statusInfo(f.status, 'factuur'); return <span className={s.className}>{s.label}</span>; })()}
+                    <div className="lrow-amount">{fmt(f.totaalIncl)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+        </div>
+      )}
+
+      {/* ── Werkbonnen ─────────────────────────────────────────────────────── */}
+      <div className="card card-p">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <button type="button" className="kk-blok-titel" onClick={() => setTab?.('werkbonnen')}>Werkbonnen <span className="kk-pijl">→</span></button>
+        </div>
+        {werkbonnen.length === 0
+          ? <div className="lsec-empty">Geen werkbonnen</div>
+          : (
+            <div className="lrows">
+              {[...werkbonnen]
+                .sort((a, b) => String(b.geplandOp || '').localeCompare(String(a.geplandOp || '')))
+                .map(w => (
+                  <div key={w.id} className="lrow" onClick={() => setPage?.('werkbonnen', { id: w.id, from: 'project', projectId: project.id, projectNaam: project.name })}>
+                    <div className="lrow-main">
+                      <div className="lrow-title">{w.titel || 'Werkbon'}</div>
+                      <div className="lrow-sub">{w.nummer || 'geen nummer'}{w.locatie ? ` · ${w.locatie}` : ''}</div>
+                    </div>
+                    {(() => { const s = statusInfo(w.status, 'werkbon'); return <span className={s.className}>{s.label}</span>; })()}
+                  </div>
+                ))}
+            </div>
+          )}
+      </div>
+
+      {/* ── Planning ───────────────────────────────────────────────────────── */}
+      <div className="card card-p">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Planning</div>
+        </div>
+        {planning.length === 0
+          ? <div className="kk-leeg">Nog niets ingepland voor dit project.</div>
+          : <PlanningRegels regels={(komende.length ? komende : planning).slice(0, 4)} onOpen={r => setPage?.('werkbonnen', { id: r.werkbon.id })} />}
+      </div>
+
+      {/* ── Projectcontrole (uren, budget, deadline) ───────────────────────── */}
       <div className="card card-p" style={{ padding: 14, background: '#fafafa' }}>
         <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--dl)', marginBottom: 10 }}>
           Projectcontrole
@@ -303,6 +575,16 @@ function OverviewTab({ project, customers, openCustomer, onSave, canManage }) {
           </button>
         )}
       </div>
+
+      {/* Verliezen vraagt om een reden; zelfde venster als op het pipelinebord. */}
+      {toonVerloren && huidigeDeal && (
+        <VerlorenModal
+          deal={huidigeDeal}
+          lostStage={stages.find(s => /verlor/i.test(s.label || '')) || null}
+          onClose={() => setToonVerloren(false)}
+          onSaved={bij => { setDealLokaal(bij); onChanged?.(); }}
+        />
+      )}
     </div>
   );
 }
@@ -1006,6 +1288,10 @@ export function ProjectDetailDrawer({
   const [notes, setNotes] = useState([]);
   const [werkbonnen, setWerkbonnen] = useState([]);
   const [fullscreen, setFullscreen] = useState(false);
+  // De pipelinefasen, voor de fasekeuze op het overzicht. Eén keer per drawer;
+  // het zijn er een stuk of twaalf en ze veranderen zelden.
+  const [stages, setStages] = useState([]);
+  useEffect(() => { listPipelineStages().then(setStages).catch(() => {}); }, []);
 
   // Full-screen toggle — exact dezelfde aanpak als de klantkaart: voeg de
   // klasse klant-fullscreen toe aan de .drawer zodat hij het hele scherm vult.
@@ -1131,8 +1417,16 @@ export function ProjectDetailDrawer({
                 <OverviewTab
                   project={project}
                   customers={customers}
+                  deals={deals}
+                  stages={stages}
+                  offertes={offertes}
+                  invoices={invoices}
+                  werkbonnen={werkbonnen}
                   openCustomer={openCustomer}
                   onSave={handleSave}
+                  onChanged={onChanged}
+                  setPage={setPage}
+                  setTab={setTab}
                   canManage={canManage}
                 />
               )}

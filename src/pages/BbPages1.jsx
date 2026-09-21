@@ -713,43 +713,6 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
       {/* Overview */}
       {tab === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Projecten van deze klant. De klantkaart gaat over de klant zelf;
-              wat er binnen één klus gebeurt — aanvraag, fase, offerte, planning,
-              facturen — staat op de projectkaart. */}
-          <div className="card card-p">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <button type="button" className="kk-blok-titel" onClick={() => setTab('projecten')}>
-                Projecten <span className="kk-pijl">→</span>
-              </button>
-              <button className="btn-plus" title="Nieuw project"
-                onClick={guardSchrijven('Een project aanmaken', () => setShowNewProject(true))}>{I.plus}</button>
-            </div>
-            {cProjecten.length === 0
-              ? <div className="kk-leeg">Nog geen projecten voor deze klant.</div>
-              : (
-                <div className="lrows">
-                  {cProjecten.slice(0, 5).map(p => (
-                    <div key={p.id} className="lrow"
-                      onClick={() => setPage('projecten', { id: p.id, from: 'klant', klantId: custId, klantNaam: c?.name })}>
-                      <div className="lrow-main">
-                        <div className="lrow-title">{p.name}</div>
-                      </div>
-                      <ProjectBadge status={p.status} />
-                      {can('projectbedragen') && p.projectValue > 0 && (
-                        <div className="lrow-amount">{fmt(p.projectValue)}</div>
-                      )}
-                    </div>
-                  ))}
-                  {cProjecten.length > 5 && (
-                    <button onClick={() => setTab('projecten')}
-                      style={{ alignSelf: 'flex-start', background: 'none', border: 'none', cursor: 'pointer', fontSize: '.8rem', color: 'var(--p)', fontWeight: 600, padding: '2px 0' }}>
-                      Alle projecten → ({cProjecten.length})
-                    </button>
-                  )}
-                </div>
-              )}
-          </div>
-
           {/* Planning van alle werkbonnen van deze klant. */}
           <div className="card card-p">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
