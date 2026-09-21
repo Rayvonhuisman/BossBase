@@ -34,6 +34,10 @@ const toCustomer = (row, index = 0) => ({
   createdAt: row.created_at || null,
   moneybirdId: row.moneybird_id || null,
   snelstartId: row.snelstart_id || null,
+  // De kolom bestond al (customers.contactpersoon) maar kwam nergens in de code
+  // voor: niet in deze mapper, niet op de klantkaart. Het projectoverzicht toont
+  // en bewerkt hem, dus hij moet hier langs.
+  contactpersoon: row.contactpersoon || "",
   // UI helpers — synthesized, not stored:
   av: index,
   stage: "new_lead",
@@ -63,6 +67,7 @@ export function mapCustomerFormToPayload(form = {}) {
     iban: form.iban || null,
     notes: form.notes || null,
     logo_url: form.logo_url || form.logoUrl || null,
+    contactpersoon: form.contactpersoon || null,
   }
   if (form.company_id || form.companyId) {
     payload.company_id = form.company_id || form.companyId

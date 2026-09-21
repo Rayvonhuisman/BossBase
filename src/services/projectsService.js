@@ -6,6 +6,8 @@ import { logTijdlijnSafe } from './klantTijdlijnService'
 // toonde €133,10 waar €66,55 in rekening was gebracht.
 import { sumGefactureerd, sumOmzetExclBtw } from './customerTotalsService'
 import { alleRijen } from '../lib/alleRijen.js'
+// Foto's bij de aanvraag gaan door dezelfde verkleiner als de werkbonfoto's.
+import { comprimeerAfbeelding, FOTO_MAX_ZIJDE } from '../utils/afbeeldingComprimeren.js'
 
 // =============================================================================
 // projects / uren (werkbon_uren) / project_notes  service-laag
@@ -201,6 +203,101 @@ export async function getProjectByDeal(dealId) {
     throw error
   }
   return data?.length ? toProject(data[0]) : null
+}
+
+/**
+ * Waar de aanvraag vandaan kwam: 'bossbase_website', of null.
+ *
+ * deals heeft geen source-kolom; de bron staat op inquiries, de tabel die het
+ * websiteformulier vult (edge function public-website-inquiry, andere repo).
+ * inquiries_select eist 'verkoop', dus zonder dat recht komt hier niets terug —
+ * en dan hoort het veld leeg te blijven in plaats van "handmatig" te beweren.
+ * Geeft null bij geen rij én bij geen recht; de UI onderscheidt die twee zelf
+ * op can('verkoop').
+ */
+export async function getAanvraagBron(dealId) {
+  if (!dealId) return null
+  const { data, error } = await supabase
+    .from('inquiries')
+    .select('source, created_at')
+    .eq('deal_id', dealId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+  if (error) return null
+  return data?.length ? { bron: data[0].source || null, binnenOp: data[0].created_at || null } : null
+}
+
+// =============================================================================
+// FOTO'S BIJ DE AANVRAAG
+// Zelfde opzet als de werkbonfoto's (werkbonService): privébucket, alleen het
+// opslagpad in de tabel, en tonen via een tijdelijke signed URL. De helper
+// hieronder accepteert zowel een kaal pad als een url met token, zodat
+// verwijderen ook werkt op een rij die net uit getProjectFotos kwam.
+// =============================================================================
+
+const toProjectFoto = row => ({
+  id: row.id,
+  projectId: row.project_id,
+  companyId: row.company_id,
+  url: row.url,
+  categorie: row.categorie,
+  createdAt: row.created_at,
+})
+
+const fotoPadUit = (val) => {
+  const s = String(val || '').split('?')[0]
+  const marker = '/project-fotos/'
+  const i = s.indexOf(marker)
+  return i !== -1 ? s.slice(i + marker.length) : s
+}
+
+export async function getProjectFotos(projectId) {
+  if (!projectId) return []
+  const { data, error } = await supabase
+    .from('project_fotos')
+    .select('*')
+    .eq('project_id', projectId)
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  const rijen = data || []
+  const paden = rijen.map(r => fotoPadUit(r.url))
+  let signed = []
+  if (paden.length) {
+    const res = await supabase.storage.from('project-fotos').createSignedUrls(paden, 3600)
+    signed = res.data || []
+  }
+  return rijen.map((r, i) => toProjectFoto({ ...r, url: signed[i]?.signedUrl || r.url }))
+}
+
+export async function uploadProjectFoto(projectId, file, categorie = null) {
+  const companyId = await getCompanyId()
+  // Een telefoonfoto is zo vier megabyte; verkleinen vóór het uploaden scheelt
+  // opslag en wachttijd. Mislukt dat, dan gaat het origineel omhoog.
+  const { file: teUploaden } = await comprimeerAfbeelding(file, {
+    maxZijde: FOTO_MAX_ZIJDE,
+    kwaliteit: 0.82,
+  })
+  const ext = (teUploaden.name.split('.').pop() || 'jpg').toLowerCase()
+  const pad = `${companyId}/${projectId}/${crypto.randomUUID()}.${ext}`
+
+  const { error: uploadFout } = await supabase.storage
+    .from('project-fotos')
+    .upload(pad, teUploaden, { contentType: teUploaden.type || 'image/jpeg' })
+  if (uploadFout) throw uploadFout
+
+  const payload = await withCompanyId({ project_id: projectId, url: pad, categorie })
+  const { data, error } = await supabase.from('project_fotos').insert(payload).select().single()
+  if (error) throw error
+
+  const { data: signed } = await supabase.storage.from('project-fotos').createSignedUrl(pad, 3600)
+  return toProjectFoto({ ...data, url: signed?.signedUrl || data.url })
+}
+
+export async function deleteProjectFoto(id, url) {
+  const pad = fotoPadUit(url)
+  if (pad) await supabase.storage.from('project-fotos').remove([pad]).catch(() => {})
+  const { error } = await supabase.from('project_fotos').delete().eq('id', id)
+  if (error) throw error
 }
 
 export async function updateProject(projectId, patch) {

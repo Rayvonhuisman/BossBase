@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listLeveranciers } from '../../services/leverancierService.js';
-import { Maximize2, Minimize2, AlertTriangle, AlertOctagon } from 'lucide-react';
+import { Maximize2, Minimize2, AlertTriangle, AlertOctagon, Check, X, Edit2, Trash2 } from 'lucide-react';
+import { updateCustomer } from '../../services/customerService.js';
 import { I, ModalX, NotifyMailToggle, fmt, fmt0 } from '../../bb-shared.jsx';
 import { InfoTip, InfoUitklap } from '../../components/Uitleg.jsx';
 import { useToast } from '../../lib/toast.jsx';
@@ -18,6 +19,10 @@ import {
   getProjectInvoices,
   enrichProject,
   PROJECT_STATUS,
+  getProjectFotos,
+  uploadProjectFoto,
+  deleteProjectFoto,
+  getAanvraagBron,
 } from '../../services/projectsService.js';
 import { getWerkbonnenByProject } from '../../services/werkbonService.js';
 // De aanvraag achter dit project: fase, behandelaars, afronden en verloren
@@ -61,10 +66,9 @@ const fmtHours = h => `${Number(h || 0).toLocaleString('nl-NL', { minimumFractio
 
 const labelStyle = { fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 };
 
-function StatusBadge({ status }) {
-  const s = statusInfo(status, 'project');
-  return <span className={s.className}>{s.label}</span>;
-}
+// De afgeleide projectstatus wordt niet meer als badge getoond: op het overzicht
+// staat één status, en dat is de fase van de aanvraag. De kolom blijft bestaan
+// (de mobiele app leest hem), alleen de badge is uit beeld.
 
 
 // ── HEADER ───────────────────────────────────────────────────────────────────
@@ -82,15 +86,14 @@ function DrawerHeader({ project, onClose, fullscreen, onToggleFullscreen }) {
       </button>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--dk)', letterSpacing: '-.01em', wordBreak: 'break-word', overflowWrap: 'break-word' }}>{project.name}</div>
-        {/* "Uitvoering" erbij, want op het overzicht staat óók een badge: die
-            gaat over de fase in de pipeline. Twee badges die iets anders
-            zeggen leest als tegenspraak zolang er niet bij staat wát ze zeggen.
-            Deze volgt de werkbonnen, die volgt het verkoopverhaal. */}
+        {/* Eén status in beeld, en die staat op het overzicht: de fase van de
+            aanvraag. De afgeleide projectstatus (gepland/in uitvoering/afgerond)
+            blijft in de database bestaan — de mobiele app leest hem — maar hij
+            hoort hier niet naast, want dan staan er twee dingen die allebei
+            "de status" heten. */}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 600 }}>Uitvoering</span>
-          <StatusBadge status={project.status} />
           {project.customerName && (
-            <span style={{ fontSize: 12, color: 'var(--dl)' }}>· {project.customerName}</span>
+            <span style={{ fontSize: 12, color: 'var(--dl)' }}>{project.customerName}</span>
           )}
         </div>
       </div>
@@ -275,85 +278,152 @@ function OverviewTab({
     (project.dealId && o.dealId === project.dealId) || (project.offerteId && o.id === project.offerteId));
   const planning = planRegels(werkbonnen, naamVan);
   const komende = planning.filter(r => r.datum >= new Date().toISOString().slice(0, 10));
-  const aanvraagTekst = huidigeDeal?.raw?.description || huidigeDeal?.raw?.notes || project.description || '';
-  const klant = customers.find(c => c.id === project.customerId) || null;
+  // De aanvraagtekst staat sinds migratie 20260921201845 op het project zelf.
+  // Daardoor leest een medewerker hem via projects_select, zonder dat er ook
+  // maar één kolom van deals open hoeft. De deal is alleen nog terugval voor
+  // een rij die de migratie niet raakte.
+  const aanvraagTekst = project.description || huidigeDeal?.raw?.description || '';
+
+  // ── Klantgegevens: dezelfde klant, geen kopie ─────────────────────────────
+  // Bewerken schrijft naar customers, dus een wijziging hier staat ook op de
+  // klantkaart en andersom. Zelfde inline-patroon (cust-info-row) als daar.
+  const [klantLokaal, setKlantLokaal] = useState(null);
+  const klantUitLijst = customers.find(c => c.id === project.customerId) || null;
+  const klant = (klantLokaal && klantLokaal.id === project.customerId) ? klantLokaal : klantUitLijst;
+  const magKlantBewerken = magBewerken('klanten_bewerken');
+  const [klantVeld, setKlantVeld] = useState(null);
+  const [klantDraft, setKlantDraft] = useState('');
+  const [klantBezig, setKlantBezig] = useState(false);
+
+  const startKlantEdit = (key) => { setKlantVeld(key); setKlantDraft(klant?.[key] || ''); };
+  const stopKlantEdit = () => { setKlantVeld(null); setKlantDraft(''); };
+  const bewaarKlantVeld = async (key) => {
+    if (!klant) return;
+    setKlantBezig(true);
+    try {
+      const bij = await updateCustomer(klant.id, { ...klant, [key]: klantDraft });
+      setKlantLokaal(bij);
+      stopKlantEdit();
+      onChanged?.();
+    } catch (e) {
+      toast.error(e.message || 'Opslaan mislukt');
+    } finally {
+      setKlantBezig(false);
+    }
+  };
+
+  // ── Aanvraagtekst bewerken ────────────────────────────────────────────────
+  const [aanvraagOpen, setAanvraagOpen] = useState(false);
+  const [aanvraagDraft, setAanvraagDraft] = useState('');
+  const [aanvraagBezig, setAanvraagBezig] = useState(false);
+  const bewaarAanvraag = async () => {
+    setAanvraagBezig(true);
+    try {
+      await onSave({ description: aanvraagDraft });
+      setAanvraagOpen(false);
+      toast.success('Aanvraag bijgewerkt');
+    } catch (e) {
+      toast.error(e.message || 'Opslaan mislukt');
+    } finally {
+      setAanvraagBezig(false);
+    }
+  };
+
+  // ── Waar de aanvraag vandaan kwam ─────────────────────────────────────────
+  // Komt uit inquiries (deals heeft geen source-kolom). Zonder 'verkoop' geeft
+  // de policy niets terug; dan blijft dit null en toont het veld een streepje.
+  const [bron, setBron] = useState(null);
+  useEffect(() => {
+    let leeft = true;
+    if (!project.dealId) { setBron(null); return undefined; }
+    getAanvraagBron(project.dealId).then(b => { if (leeft) setBron(b); }).catch(() => {});
+    return () => { leeft = false; };
+  }, [project.dealId]);
+
+  // ── Foto's bij de aanvraag ────────────────────────────────────────────────
+  const [fotos, setFotos] = useState([]);
+  const [fotoBezig, setFotoBezig] = useState(false);
+  useEffect(() => {
+    let leeft = true;
+    getProjectFotos(project.id).then(f => { if (leeft) setFotos(f); }).catch(() => {});
+    return () => { leeft = false; };
+  }, [project.id]);
+
+  const voegFotosToe = async (files) => {
+    if (!files?.length) return;
+    setFotoBezig(true);
+    try {
+      for (const file of files) {
+        const f = await uploadProjectFoto(project.id, file);
+        setFotos(l => [...l, f]);
+      }
+    } catch (e) {
+      toast.error(e.message || 'Foto toevoegen mislukt');
+    } finally {
+      setFotoBezig(false);
+    }
+  };
+
+  const verwijderFoto = async (foto) => {
+    if (!window.confirm('Deze foto verwijderen?')) return;
+    try {
+      await deleteProjectFoto(foto.id, foto.url);
+      setFotos(l => l.filter(x => x.id !== foto.id));
+    } catch (e) {
+      toast.error(e.message || 'Verwijderen mislukt');
+    }
+  };
 
   return (
     <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14, overflow: 'hidden' }}>
       {/* ── De aanvraag: fase, wie het behandelt, en de twee eindacties ────── */}
       {huidigeDeal && (
         <div className="card card-p" style={{ padding: 14 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
-            <button type="button" className="kk-blok-titel" onClick={() => setPage?.('pipeline')}>
-              Aanvraag <span className="kk-pijl">→</span>
-            </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              {dealAfgerond
-                ? <span className="badge b-done">Afgerond</span>
-                : dealVerloren
-                  ? <span className="badge b-lost">Verloren</span>
-                  : magVerkoop && gesorteerdeStages.length ? (
-                    <select
-                      className="badge b-gray"
-                      style={{ border: '1px solid var(--border)', cursor: 'pointer', padding: '2px 6px', maxWidth: 190 }}
-                      value={huidigeDeal.stage || ''}
-                      disabled={faseBezig}
-                      aria-label="Fase van deze aanvraag"
-                      onChange={e => wijzigFase(e.target.value)}
-                    >
-                      {gesorteerdeStages.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                    </select>
-                  ) : (
-                    <span className="badge b-gray">{huidigeFase?.label || 'Loopt'}</span>
-                  )}
-              {magVerkoop && !dealVerloren && (
-                <>
-                  {!dealAfgerond && (
-                    <button className="btn btn-s btn-sm" style={{ color: '#dc2626' }} onClick={() => setToonVerloren(true)}>
-                      Verloren
-                    </button>
-                  )}
+          {/* Status en voltooien. Alleen met 'verkoop': deals_update eist dat,
+              dus zonder dat recht zou een keuzelijst stil weigeren. */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 190, flex: 1 }}>
+              <div style={labelStyle}>Status</div>
+              {dealVerloren ? (
+                <span className="badge b-lost">Verloren</span>
+              ) : dealAfgerond ? (
+                <span className="badge b-done">Voltooid</span>
+              ) : magVerkoop && gesorteerdeStages.length ? (
+                <select
+                  value={huidigeDeal.stage || ''}
+                  disabled={faseBezig}
+                  aria-label="Status van dit project"
+                  onChange={e => wijzigFase(e.target.value)}
+                  style={{ width: '100%', maxWidth: 260, height: 36, padding: '0 10px', border: '1px solid var(--bstrong)', borderRadius: 'var(--r8)', background: '#fff', fontSize: '.85rem', color: 'var(--dk)' }}
+                >
+                  {gesorteerdeStages.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                </select>
+              ) : (
+                <span className="badge b-gray">{huidigeFase?.label || 'Loopt'}</span>
+              )}
+            </div>
+            {magVerkoop && !dealVerloren && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  className={dealAfgerond ? 'btn btn-s btn-sm' : 'btn btn-p'}
+                  disabled={afrondBezig}
+                  onClick={() => zetAfgerond(!dealAfgerond)}
+                >
+                  {dealAfgerond ? 'Heropenen' : <>{I.check} Project voltooien</>}
+                </button>
+                {/* Verloren is zeldzaam en onomkeerbaar-achtig: geen knop naast
+                    de hoofdactie, maar een stille tekstlink eronder. */}
+                {!dealAfgerond && (
                   <button
-                    className={dealAfgerond ? 'btn btn-s btn-sm' : 'btn btn-p btn-sm'}
-                    disabled={afrondBezig}
-                    onClick={() => zetAfgerond(!dealAfgerond)}
+                    className="btn btn-ghost btn-xs"
+                    style={{ color: 'var(--dl)' }}
+                    onClick={() => setToonVerloren(true)}
                   >
-                    {dealAfgerond ? 'Heropenen' : <>{I.check} Afronden</>}
+                    Verloren
                   </button>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div style={{ fontSize: 13.5, color: aanvraagTekst ? 'var(--dk)' : 'var(--dl)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
-            {aanvraagTekst || 'Geen omschrijving bij deze aanvraag.'}
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginTop: 12 }}>
-            <div>
-              <div style={labelStyle}>Waar</div>
-              <div style={{ fontWeight: 600, fontSize: 13 }}>{klant?.address || '—'}</div>
-              {(klant?.postcode || klant?.city) && (
-                <div style={{ fontSize: 12, color: 'var(--dl)' }}>{[klant?.postcode, klant?.city].filter(Boolean).join(' ')}</div>
-              )}
-            </div>
-            <div>
-              <div style={labelStyle}>Wanneer</div>
-              <div style={{ fontWeight: 600, fontSize: 13 }}>
-                {project.startDate ? `Gestart ${fmtDate(project.startDate)}` : 'Nog niet ingepland'}
+                )}
               </div>
-            </div>
-            <div>
-              <div style={labelStyle}>Via</div>
-              <div style={{ fontWeight: 600, fontSize: 13 }}>{huidigeDeal?.raw?.source || 'Handmatig aangemaakt'}</div>
-              {huidigeDeal?.createdAt && (
-                <div style={{ fontSize: 12, color: 'var(--dl)' }}>binnen op {fmtDate(String(huidigeDeal.createdAt).slice(0, 10))}</div>
-              )}
-            </div>
-            <div>
-              <div style={labelStyle}>Contact</div>
-              <div style={{ fontWeight: 600, fontSize: 13 }}>{klant?.phone || klant?.email || '—'}</div>
-            </div>
+            )}
           </div>
 
           {/* Wie het behandelt. Dicht als knop met de namen erop: de lijst toont
@@ -377,6 +447,218 @@ function OverviewTab({
           )}
         </div>
       )}
+
+      {/* ── Klantgegevens ──────────────────────────────────────────────────── */}
+      {/* Dezelfde klant als op de klantkaart, geen kopie: bewerken schrijft naar
+          customers, dus het staat meteen op beide plekken. Lezen mag iedereen
+          van het bedrijf (customers_select); bewerken vraagt 'klanten_bewerken'. */}
+      {klant && (
+        <div className="card card-p">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <button type="button" className="kk-blok-titel" onClick={() => openCustomer?.(klant.id)}>
+              Klantgegevens <span className="kk-pijl">→</span>
+            </button>
+          </div>
+          <div>
+            {[
+              { key: 'name', label: 'Naam' },
+              { key: 'contactpersoon', label: 'Contactpersoon' },
+              { key: 'phone', label: 'Telefoon' },
+              { key: 'email', label: 'E-mail' },
+              { key: 'address', label: 'Adres' },
+            ].map(veld => {
+              const actief = klantVeld === veld.key;
+              return (
+                <div key={veld.key} className="cust-info-row" style={{ alignItems: 'center' }}>
+                  <span className="cust-info-label">{veld.label}</span>
+                  {actief ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
+                      <input
+                        autoFocus
+                        value={klantDraft}
+                        onChange={e => setKlantDraft(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') bewaarKlantVeld(veld.key); if (e.key === 'Escape') stopKlantEdit(); }}
+                        style={{ flex: 1, fontSize: '.82rem', padding: '2px 6px' }}
+                      />
+                      <button onClick={() => bewaarKlantVeld(veld.key)} disabled={klantBezig}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#15A34A', display: 'flex', alignItems: 'center', padding: 2 }}>
+                        <Check size={14} />
+                      </button>
+                      <button onClick={stopKlantEdit}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2 }}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
+                      <span className="cust-info-val" style={{ flex: 1, color: klant[veld.key] ? undefined : 'var(--dl)' }}>
+                        {klant[veld.key] || '—'}
+                      </span>
+                      {magKlantBewerken && (
+                        <button onClick={() => startKlantEdit(veld.key)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}>
+                          <Edit2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── De aanvraag ────────────────────────────────────────────────────── */}
+      {/* Het belangrijkste blok: wat wil de klant, waar, wanneer, waarvandaan,
+          met foto's. De tekst staat op het project, dus ook leesbaar voor een
+          medewerker zonder verkooprecht. */}
+      <div className="card card-p">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <div style={{ fontWeight: 700, fontSize: '.9rem' }}>De aanvraag</div>
+          {canManage && !aanvraagOpen && (
+            <button className="btn btn-s btn-xs" onClick={() => { setAanvraagDraft(aanvraagTekst); setAanvraagOpen(true); }}>
+              {I.edit} Bewerken
+            </button>
+          )}
+        </div>
+
+        {aanvraagOpen ? (
+          <div className="f">
+            <textarea
+              autoFocus
+              rows={6}
+              value={aanvraagDraft}
+              onChange={e => setAanvraagDraft(e.target.value)}
+              placeholder="Wat wil de klant? Wat is er aan de hand, wat moet er gebeuren, waar moet op gelet worden?"
+            />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+              <button className="btn btn-s btn-sm" onClick={() => setAanvraagOpen(false)}>Annuleren</button>
+              <button className="btn btn-p btn-sm" disabled={aanvraagBezig} onClick={bewaarAanvraag}>
+                {aanvraagBezig ? 'Opslaan…' : 'Opslaan'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ fontSize: 13.5, color: aanvraagTekst ? 'var(--dk)' : 'var(--dl)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+            {aanvraagTekst || 'Nog niets opgeschreven over deze aanvraag.'}
+          </div>
+        )}
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginTop: 14 }}>
+          <div>
+            <div style={labelStyle}>Waar</div>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{klant?.address || '—'}</div>
+            {(klant?.postcode || klant?.city) && (
+              <div style={{ fontSize: 12, color: 'var(--dl)' }}>{[klant?.postcode, klant?.city].filter(Boolean).join(' ')}</div>
+            )}
+          </div>
+          <div>
+            <div style={labelStyle}>Wanneer</div>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>
+              {project.startDate ? `Gestart ${fmtDate(project.startDate)}` : 'Nog niet ingepland'}
+            </div>
+            {project.deadline && (
+              <div style={{ fontSize: 12, color: 'var(--dl)' }}>deadline {fmtDate(project.deadline)}</div>
+            )}
+          </div>
+          <div>
+            <div style={labelStyle}>Via</div>
+            {/* De bron staat op inquiries, niet op de deal (die heeft geen
+                source-kolom). Zonder 'verkoop' komt die rij niet terug; dan
+                zeggen we niets in plaats van "handmatig" te beweren. */}
+            <div style={{ fontWeight: 600, fontSize: 13 }}>
+              {bron?.bron === 'bossbase_website' ? 'Websiteformulier'
+                : bron?.bron ? bron.bron
+                : magVerkoop ? 'Handmatig aangemaakt'
+                : '—'}
+            </div>
+            {(bron?.binnenOp || huidigeDeal?.createdAt) && (
+              <div style={{ fontSize: 12, color: 'var(--dl)' }}>
+                binnen op {fmtDate(String(bron?.binnenOp || huidigeDeal.createdAt).slice(0, 10))}
+              </div>
+            )}
+          </div>
+          <div>
+            <div style={labelStyle}>Contact</div>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{klant?.phone || klant?.email || '—'}</div>
+          </div>
+        </div>
+
+        {/* Foto's. Zelfde opzet als de werkbonfoto's: privébucket, verkleind bij
+            het uploaden, getoond via een tijdelijke link. */}
+        <div style={{ marginTop: 14 }}>
+          <div style={labelStyle}>Foto's</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {fotos.map(f => (
+              <div key={f.id} style={{ position: 'relative', width: 92, height: 70, borderRadius: 'var(--r8)', overflow: 'hidden', border: '1px solid var(--br)' }}>
+                <a href={f.url} target="_blank" rel="noreferrer">
+                  <img src={f.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                </a>
+                {canManage && (
+                  <button
+                    onClick={() => verwijderFoto(f)}
+                    title="Foto verwijderen"
+                    style={{ position: 'absolute', top: 2, right: 2, background: 'rgba(255,255,255,.9)', border: 'none', borderRadius: 6, cursor: 'pointer', padding: 3, display: 'flex', color: '#dc2626' }}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              </div>
+            ))}
+            {canManage && (
+              <label className="btn btn-s btn-sm" style={{ cursor: fotoBezig ? 'wait' : 'pointer' }}>
+                {fotoBezig ? 'Bezig…' : <>{I.plus} Foto</>}
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  disabled={fotoBezig}
+                  style={{ display: 'none' }}
+                  onChange={e => { voegFotosToe(Array.from(e.target.files || [])); e.target.value = ''; }}
+                />
+              </label>
+            )}
+            {!fotos.length && !canManage && (
+              <span style={{ fontSize: 12, color: 'var(--dl)' }}>Geen foto's bij deze aanvraag.</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Planning ───────────────────────────────────────────────────────── */}
+      <div className="card card-p">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Planning</div>
+        </div>
+        {planning.length === 0
+          ? <div className="kk-leeg">Nog niets ingepland voor dit project.</div>
+          : <PlanningRegels regels={(komende.length ? komende : planning).slice(0, 4)} onOpen={r => setPage?.('werkbonnen', { id: r.werkbon.id })} />}
+      </div>
+
+      {/* ── Werkbonnen ─────────────────────────────────────────────────────── */}
+      <div className="card card-p">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <button type="button" className="kk-blok-titel" onClick={() => setTab?.('werkbonnen')}>Werkbonnen <span className="kk-pijl">→</span></button>
+        </div>
+        {werkbonnen.length === 0
+          ? <div className="lsec-empty">Geen werkbonnen</div>
+          : (
+            <div className="lrows">
+              {[...werkbonnen]
+                .sort((a, b) => String(b.geplandOp || '').localeCompare(String(a.geplandOp || '')))
+                .map(w => (
+                  <div key={w.id} className="lrow" onClick={() => setPage?.('werkbonnen', { id: w.id, from: 'project', projectId: project.id, projectNaam: project.name })}>
+                    <div className="lrow-main">
+                      <div className="lrow-title">{w.titel || 'Werkbon'}</div>
+                      <div className="lrow-sub">{w.nummer || 'geen nummer'}{w.locatie ? ` · ${w.locatie}` : ''}</div>
+                    </div>
+                    {(() => { const s = statusInfo(w.status, 'werkbon'); return <span className={s.className}>{s.label}</span>; })()}
+                  </div>
+                ))}
+            </div>
+          )}
+      </div>
 
       {/* ── Offertes ───────────────────────────────────────────────────────── */}
       <div className="card card-p">
@@ -426,40 +708,6 @@ function OverviewTab({
             )}
         </div>
       )}
-
-      {/* ── Werkbonnen ─────────────────────────────────────────────────────── */}
-      <div className="card card-p">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <button type="button" className="kk-blok-titel" onClick={() => setTab?.('werkbonnen')}>Werkbonnen <span className="kk-pijl">→</span></button>
-        </div>
-        {werkbonnen.length === 0
-          ? <div className="lsec-empty">Geen werkbonnen</div>
-          : (
-            <div className="lrows">
-              {[...werkbonnen]
-                .sort((a, b) => String(b.geplandOp || '').localeCompare(String(a.geplandOp || '')))
-                .map(w => (
-                  <div key={w.id} className="lrow" onClick={() => setPage?.('werkbonnen', { id: w.id, from: 'project', projectId: project.id, projectNaam: project.name })}>
-                    <div className="lrow-main">
-                      <div className="lrow-title">{w.titel || 'Werkbon'}</div>
-                      <div className="lrow-sub">{w.nummer || 'geen nummer'}{w.locatie ? ` · ${w.locatie}` : ''}</div>
-                    </div>
-                    {(() => { const s = statusInfo(w.status, 'werkbon'); return <span className={s.className}>{s.label}</span>; })()}
-                  </div>
-                ))}
-            </div>
-          )}
-      </div>
-
-      {/* ── Planning ───────────────────────────────────────────────────────── */}
-      <div className="card card-p">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Planning</div>
-        </div>
-        {planning.length === 0
-          ? <div className="kk-leeg">Nog niets ingepland voor dit project.</div>
-          : <PlanningRegels regels={(komende.length ? komende : planning).slice(0, 4)} onOpen={r => setPage?.('werkbonnen', { id: r.werkbon.id })} />}
-      </div>
 
       {/* ── Projectcontrole (uren, budget, deadline) ───────────────────────── */}
       <div className="card card-p" style={{ padding: 14, background: '#fafafa' }}>
