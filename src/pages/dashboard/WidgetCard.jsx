@@ -1,13 +1,14 @@
-import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { I } from '../../bb-shared.jsx';
 import { getSupportedSizes } from '../../data/widgetRegistry.js';
 import { activiteitTypeLabel } from '../../services/activityService.js';
 import { statusInfo } from '../../utils/statusColors.js';
-import { buildStageIndex, dealStatus, firstStageId } from '../../utils/pipeline.js';
+import { buildStageIndex, dealStatus, firstStageId, standaardFunnelFasen } from '../../utils/pipeline.js';
 import { isRealFactuur, sumOmzetExclBtw } from '../../services/customerTotalsService.js';
 import { staatOpDagVoor } from '../../utils/werkbonDagen.js';
 import { kortBedrag, voluitBedrag } from '../../utils/bedrag.js';
+import { useEscapeSluit } from '../../hooks/useEscapeSluit.js';
 
 // ── Design tokens (BossBase widget redesign v2) ───────────────
 // CSS classes (.bb-widget, .bb-kpi, .feed-row, .chip, .pill-tabs, …)
@@ -122,11 +123,16 @@ function WidgetControls({ size, supportedSizes, onMoveUp, onMoveDown, onResize, 
   // schildert de volgende tegel over het menu heen — precies over
   // "Verwijderen", dat onderaan staat.
   const [menuOpen, setMenuOpenState] = useState(false);
-  const setMenuOpen = v => setMenuOpenState(prev => {
-    const next = typeof v === 'function' ? v(prev) : v;
-    onMenuToggle?.(next);
-    return next;
-  });
+  const setMenuOpen = v => setMenuOpenState(prev => (typeof v === 'function' ? v(prev) : v));
+
+  // Het melden gebeurt in een effect, en NIET in de updater hierboven. Zo'n
+  // updater draait tijdens het renderen, en een setState op WidgetCard vanuit
+  // die fase levert in de console op: "Cannot update a component (WidgetCard)
+  // while rendering a different component (WidgetControls)". Dezelfde fout is
+  // in beeld gezien bij de fasenkiezer van de conversiefunnel, die dit patroon
+  // had overgenomen; zie FunnelFasenKiezer.
+  useEffect(() => { onMenuToggle?.(menuOpen); }, [menuOpen, onMenuToggle]);
+
   const sizeOptions = SIZE_OPTIONS.filter(o => supportedSizes.includes(o.value));
   // Prevent the controls subtree from initiating an HTML5 drag on the
   // parent .dw-widget. draggable={false} suppresses drag-from-this-element;
@@ -233,6 +239,91 @@ function Seg({ options, active, onPick }) {
       {options.map(o => (
         <button key={o} className={`pill-tab sm${o === active ? ' active' : ''}`} onClick={() => onPick && onPick(o)}>{o}</button>
       ))}
+    </div>
+  );
+}
+
+// ── Fasenkiezer van de conversiefunnel ────────────────────────
+// Welke fasen als stap in de trechter staan, kies je hier: in de kop van de
+// tegel, buiten de aanpasmodus. De keuze staat per gebruiker én per tegel in
+// dashboard_widgets.settings.funnelStages, net als Alle/Mijn/Team op Actieve
+// deals, en wordt daarmee meteen opgeslagen — geen "Opslaan" nodig.
+//
+// Opgeslagen als stage_id en niet als naam: een fase hernoemen laat de selectie
+// heel.
+//
+// Het menu klapt naar beneden uit en valt over de tegel eronder. Alle tegels
+// zijn position:relative zonder z-index, dus de DOM-volgorde bepaalt wie
+// eroverheen schildert — exact de valkuil die in 1596b07 het optiemenu
+// onklikbaar maakte. Daarom meldt dit menu openen en sluiten via onMenuToggle,
+// zodat de tegel zichzelf optilt met dw-widget--menu-open.
+function FunnelFasenKiezer({ fasen, gekozen, onChange, onMenuToggle }) {
+  const [open, setOpenState] = useState(false);
+  const wrapRef = useRef(null);
+  // In een useCallback, zodat de buitenklik-useEffect hieronder een stabiele
+  // setOpen in zijn dependencies kan zetten. Zonder dat hangt die luisteraar
+  // zich elke render opnieuw op en weer af.
+  const setOpen = useCallback(v => {
+    setOpenState(prev => (typeof v === 'function' ? v(prev) : v));
+  }, []);
+
+  // De tegel eromheen optillen gebeurt in een effect, en NIET in de updater van
+  // setOpenState hierboven. Zo'n updater draait tijdens het renderen, en een
+  // setState op WidgetCard vanuit die fase levert precies deze fout op:
+  // "Cannot update a component (WidgetCard) while rendering a different
+  // component (FunnelFasenKiezer)". In de browser gezien op het moment dat dit
+  // menu openging.
+  useEffect(() => { onMenuToggle?.(open); }, [open, onMenuToggle]);
+
+  useEscapeSluit(() => setOpen(false), open);
+
+  // Klik ernaast sluit. Op mousedown en niet op click, zodat een klik op een
+  // andere tegel niet eerst hier blijft hangen.
+  useEffect(() => {
+    if (!open) return undefined;
+    const buiten = e => { if (!wrapRef.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', buiten);
+    return () => document.removeEventListener('mousedown', buiten);
+  }, [open, setOpen]);
+
+  const zet = id => {
+    const nieuw = gekozen.includes(id) ? gekozen.filter(x => x !== id) : [...gekozen, id];
+    // Altijd in pipelinevolgorde bewaren: de trechter loopt van voor naar
+    // achter, en de volgorde waarin je aanvinkt zegt daar niets over.
+    onChange(fasen.filter(f => nieuw.includes(f.id)).map(f => f.id));
+  };
+
+  return (
+    <div className="dw-funnelpick" ref={wrapRef}>
+      <button
+        type="button"
+        className="dw-funnelpick-trigger"
+        aria-haspopup="true"
+        aria-expanded={open}
+        title="Kies welke fasen in de trechter staan"
+        onClick={() => setOpen(v => !v)}
+      >
+        {gekozen.length} {gekozen.length === 1 ? 'fase' : 'fasen'}
+        <span className={`dw-funnelpick-chev${open ? ' is-open' : ''}`}>▾</span>
+      </button>
+      {open && (
+        <div className="dw-funnelpick-menu">
+          <div className="dw-funnelpick-kop">Fasen in de trechter</div>
+          {fasen.map(f => (
+            <label key={f.id} className="dw-funnelpick-opt">
+              <input
+                type="checkbox"
+                checked={gekozen.includes(f.id)}
+                onChange={() => zet(f.id)}
+              />
+              <span className="dw-funnelpick-label">{f.label}</span>
+            </label>
+          ))}
+          <div className="dw-funnelpick-voet">
+            "Afgeronde aanvragen" sluit de trechter altijd af.
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -372,7 +463,7 @@ const actIcoSvg = t => {
 };
 
 // ── Widget content renderer ───────────────────────────────────
-function renderContent(type, data, widget, setPage, openCustomer, onSettingsChange, ux, openDeal, openInvoice, openCalendarEvent) {
+function renderContent(type, data, widget, setPage, openCustomer, onSettingsChange, ux, openDeal, openInvoice, openCalendarEvent, onMenuToggle) {
   const { deals = [], stages = [], activities = [], customers = [], offertes = [], werkbonnen = [], calendarEvents = [], facturen = [], jobCosts = [], loading, currentUserId = null } = data;
   // Waar een deal staat komt uit deals.status (open | won | lost). De FASE is er
   // alleen nog voor de weergave, en voor de enige vraag die de status niet kan
@@ -1210,14 +1301,33 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     }
 
     case 'conversion_funnel': {
-      const d = charts.conversionFunnel || [];
+      // deriveCharts levert ÁLLE fasen aan; deze tegel kiest eruit. De slotstap
+      // draagt geen id (hij komt uit deals.afgerond_op, niet uit een fase) en
+      // blijft daarom altijd staan.
+      const alle = charts.conversionFunnel || [];
+      const keuzeFasen = alle.filter(s => s.id);
+      // Geen settings.funnelStages = nog nooit gekozen, dus de standaard. Een
+      // LEGE lijst is wél een keuze: dan blijft alleen de slotstap over. Dat
+      // verschil moet blijven bestaan — "dan maar alles tonen" zou een bewust
+      // leeggemaakte selectie er hetzelfde uit laten zien als geen selectie.
+      const bewaard = widget.settings?.funnelStages;
+      const gekozen = Array.isArray(bewaard) ? bewaard : standaardFunnelFasen(stages);
+      const d = alle.filter(s => !s.id || gekozen.includes(s.id));
       return (
         <div className="bb-widget">
           {/* Niet "win rate" noemen: de laatste stap is afgerónd werk, terwijl
               "Deals per fase" met win rate alle gewonnen deals bedoelt. Twee
               verschillende dingen, dus twee verschillende woorden. */}
           <WHead eyebrow="Trechter" title="Conversie funnel"
-            sub={d.length ? `${d[0].value} leads · ${d[d.length - 1].value} ${d[d.length - 1].label.toLowerCase()} (${d[d.length - 1].pct}%)` : null} />
+            sub={d.length ? `${d[0].value} leads · ${d[d.length - 1].value} ${d[d.length - 1].label.toLowerCase()} (${d[d.length - 1].pct}%)` : null}
+            right={onSettingsChange && keuzeFasen.length ? (
+              <FunnelFasenKiezer
+                fasen={keuzeFasen}
+                gekozen={gekozen}
+                onChange={ids => onSettingsChange({ ...widget.settings, funnelStages: ids })}
+                onMenuToggle={onMenuToggle}
+              />
+            ) : null} />
           {d.length ? (
             <div className="funnel">
               {d.map((s, i) => {
@@ -1635,7 +1745,7 @@ export function WidgetCard({
         </>
       )}
       <div className="card" style={{ height: '100%' }}>
-        {renderContent(widget.widget_type, data, widget, setPage, openCustomer, onSettingsChange, ux, openDeal, openInvoice, openCalendarEvent)}
+        {renderContent(widget.widget_type, data, widget, setPage, openCustomer, onSettingsChange, ux, openDeal, openInvoice, openCalendarEvent, setMenuOpen)}
       </div>
       {!editMode && tipState && (
         <div style={{

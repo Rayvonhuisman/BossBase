@@ -140,23 +140,33 @@ function deriveCharts({ deals = [], activities = [], offertes = [], customers = 
   // aanvraag mee zodra hij de fase heeft bereikt (order >=), en die volgorde
   // komt uit stageIndex, die op ALLE fasen is gebouwd. Vink je een tussenfase
   // uit, dan telt een aanvraag die daar staat gewoon door naar de dichtstbijzijnde
-  // aangevinkte stap ervoor — er valt dus niets buiten de boot.
+  // dichtstbijzijnde getoonde stap ervoor — er valt dus niets buiten de boot.
   //
-  // Geen terugval als er niets is aangevinkt: dan blijft alleen de slotstap
-  // staan. "Dan maar alles tonen" zou een bedrijf zonder selectie er precies
-  // hetzelfde uit laten zien als voorheen, en dat verbergt het probleem.
-  const funnelStages = orderedStages.filter(s => s.inFunnel && stageCategory(s.label) !== 'lost');
+  // Hier staan ALLE fasen. Wélke ervan als stap in beeld komen kiest de
+  // gebruiker op de tegel zelf (dashboard_widgets.settings.funnelStages), en dat
+  // filter zit daarom in WidgetCard en niet hier. Het kán hier ook niet:
+  // deriveCharts draait één keer voor het hele dashboard, terwijl twee
+  // funnel-tegels naast elkaar een andere selectie mogen hebben.
+  //
+  // Daarom draagt elke stap zijn `id` mee — daar filtert de tegel op. Koppelen
+  // op id en niet op naam betekent dat een fase hernoemen een selectie niet
+  // breekt.
+  const funnelStages = orderedStages.filter(s => stageCategory(s.label) !== 'lost');
   const leads = deals.length;
   const nietVerloren = deals.filter(d => dSt(d) !== 'lost');
   const fSteps = [
     ...funnelStages.map(st => ({
+      id: st.id,
       label: st.label,
       value: nietVerloren.filter(d => dealOrd(d) >= (stageIndex.get(st.id)?.order ?? 0)).length,
     })),
     // "Afgeronde aanvragen" en niet "Afgerond": een bedrijf mag een fase zo
     // noemen (deze heeft er een), en dan stonden er twee stappen met dezelfde
     // naam die iets anders betekenen.
-    { label: 'Afgeronde aanvragen', value: deals.filter(isAfgerond).length },
+    //
+    // id null: deze stap komt niet uit een fase maar uit deals.afgerond_op. De
+    // tegel kan hem daarom niet wegfilteren — hij sluit de trechter altijd af.
+    { id: null, label: 'Afgeronde aanvragen', value: deals.filter(isAfgerond).length },
   ];
   const conversionFunnel = leads ? fSteps.map(s => ({ ...s, pct: Math.round((s.value / leads) * 100) })) : [];
 

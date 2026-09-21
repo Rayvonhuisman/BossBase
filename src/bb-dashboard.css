@@ -2894,6 +2894,48 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
    6 = net boven de slepende tegel (5) en de droptarget (4). */
 .dw-grid .dw-widget.dw-widget--menu-open{ z-index:6 }
 
+/* Fasenkiezer van de conversiefunnel. Anders dan het optiemenu hierboven staat
+   deze in de KOP van de tegel en werkt hij juist buiten de aanpasmodus: je
+   kiest de fasen vanaf het dashboard zelf. Het uitklapmenu valt over de tegel
+   eronder, dus het gebruikt dezelfde dw-widget--menu-open hierboven om zijn
+   eigen tegel op te tillen. */
+.dw-grid .dw-funnelpick{ position:relative }
+.dw-grid .dw-funnelpick-trigger{
+  display:inline-flex; align-items:center; gap:5px;
+  padding:5px 9px; border-radius:var(--r999);
+  border:1px solid var(--border); background:#fff;
+  font-family:inherit; font-size:12px; font-weight:600;
+  color:var(--dm); cursor:pointer; white-space:nowrap;
+  transition:background .14s ease, border-color .14s ease;
+}
+.dw-grid .dw-funnelpick-trigger:hover{ background:var(--bgs) }
+.dw-grid .dw-funnelpick-chev{ font-size:10px; transition:transform .15s ease }
+.dw-grid .dw-funnelpick-chev.is-open{ transform:rotate(180deg) }
+.dw-grid .dw-funnelpick-menu{
+  position:absolute; top:calc(100% + 5px); right:0;
+  min-width:210px; max-height:280px; overflow-y:auto;
+  background:#fff; border:1px solid var(--border);
+  border-radius:var(--r12); box-shadow:0 12px 32px rgba(0,0,0,.12);
+  padding:6px; z-index:20; animation:fadeUp .15s ease both;
+}
+.dw-grid .dw-funnelpick-kop{
+  padding:4px 8px 6px; font-size:11px; font-weight:700;
+  color:var(--dl); text-transform:uppercase; letter-spacing:.04em;
+}
+.dw-grid .dw-funnelpick-opt{
+  display:flex; align-items:center; gap:8px;
+  padding:7px 8px; border-radius:8px; cursor:pointer;
+  font-size:13px; color:var(--dm);
+}
+.dw-grid .dw-funnelpick-opt:hover{ background:var(--bgs) }
+.dw-grid .dw-funnelpick-opt input{ cursor:pointer; accent-color:var(--p); flex-shrink:0 }
+.dw-grid .dw-funnelpick-label{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.dw-grid .dw-funnelpick-voet{
+  margin-top:4px; padding:6px 8px 2px;
+  border-top:1px solid var(--border);
+  font-size:11px; color:var(--dl);
+}
+
 /* The widget currently being dragged */
 .dw-grid .dw-widget.dw-widget--dragging{
   opacity:.85;

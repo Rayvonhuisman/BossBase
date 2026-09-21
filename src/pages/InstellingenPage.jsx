@@ -770,25 +770,6 @@ export function InstellingenPage() {
     setEditingStageColor(stageColToHex(stage.colorClass));
   };
 
-  // Een fase aan- of uitzetten als stap in de conversiefunnel op het dashboard.
-  // Dezelfde weg als hernoemen: updatePipelineStage, en de teruggegeven rij
-  // terug in de lijst zodat het vinkje toont wat de database heeft opgeslagen.
-  //
-  // Alleen admin: de policy pipeline_stages_update eist die rol, dus een vinkje
-  // voor iemand anders zou door de database stil worden geweigerd.
-  const toggleStageFunnel = async (stage) => {
-    const aan = !stage.inFunnel;
-    try {
-      const updated = await updatePipelineStage(stage.id, { in_funnel: aan });
-      setStages(s => s.map(st => st.id === stage.id ? updated : st));
-      toast.success(aan
-        ? `"${stage.name}" telt mee in de funnel`
-        : `"${stage.name}" staat niet meer in de funnel`);
-    } catch (err) {
-      toast.error(err.message || 'Bijwerken mislukt');
-    }
-  };
-
   const saveEditStage = async (id) => {
     if (!editingStageValue.trim()) { setEditingStageId(null); return; }
     try {
@@ -2642,16 +2623,13 @@ export function InstellingenPage() {
                   <th style={{ width: 40 }}>#</th>
                   <th>Naam</th>
                   <th>Kleur</th>
-                  <th style={{ width: 120 }}>
-                    In funnel <InfoTip tekst="De conversiefunnel op het dashboard toont alleen de aangevinkte fasen, in deze volgorde. De stap 'Afgeronde aanvragen' staat er altijd achter. Een aanvraag telt mee in een stap zodra hij die fase heeft bereikt, ook als je de fasen ertussen uitzet." />
-                  </th>
                   <th style={{ width: 100 }}></th>
                 </tr>
               </thead>
               <tbody>
                 {stages.length === 0 && (
                   <tr>
-                    <td colSpan={5} style={{ textAlign: 'center', color: 'var(--dl)', padding: 20 }}>
+                    <td colSpan={4} style={{ textAlign: 'center', color: 'var(--dl)', padding: 20 }}>
                       Nog geen pipelinefasen aangemaakt
                     </td>
                   </tr>
@@ -2683,18 +2661,6 @@ export function InstellingenPage() {
                           {stageColorLabel(stage.colorClass)}
                         </span>
                       )}
-                    </td>
-                    <td>
-                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: isAdmin ? 'pointer' : 'default' }}>
-                        <input
-                          type="checkbox"
-                          checked={stage.inFunnel}
-                          disabled={!isAdmin}
-                          onChange={() => toggleStageFunnel(stage)}
-                          aria-label={`${stage.name} meetellen in de conversiefunnel`}
-                        />
-                        <span style={{ fontSize: '.78rem', color: 'var(--dl)' }}>{stage.inFunnel ? 'Ja' : 'Nee'}</span>
-                      </label>
                     </td>
                     <td>
                       {isAdmin && (

@@ -74,3 +74,44 @@ export function dealOrder(deal, stageIndex) {
 export function firstStageId(stages = []) {
   return stages.length ? [...stages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0]?.id : null;
 }
+
+// De standaardselectie voor de conversiefunnel: welke fasen staan erin voor wie
+// zelf nog niets heeft gekozen. De keuze zelf is per gebruiker en per tegel
+// (dashboard_widgets.settings.funnelStages); dit is alleen de startwaarde.
+//
+// Drie momenten waarop een aanvraag een horde neemt: binnengekomen, prijs de
+// deur uit, ja gekregen. De vaste slotstap "Afgeronde aanvragen" komt niet uit
+// een fase (die komt uit deals.afgerond_op) en staat er dus altijd achter.
+//
+// De eerste stap gaat op POSITIE, niet op naam. Dat is bewust: migratie
+// 20260920170000 moest hiervoor op de stam 'nieuwe aanvra' matchen omdat zes
+// bedrijven "Nieuwe aanvragen" hebben en één "Nieuwe aanvraag" — het
+// Nederlandse meervoud laat de dubbele klinker vallen. Wie de eerste fase op
+// positie pakt heeft dat probleem niet, en werkt ook voor een bedrijf dat zijn
+// instroomfase heel anders noemt.
+//
+// Voor de andere twee bestaat zo'n structurele bron niet: stageCategory() kent
+// alleen open/paid/won/lost en heeft geen begrip van "offerte verstuurd", en de
+// semantische tabel pipeline_koppelingen komt niet tot op het dashboard. Dus
+// tóch op naam, met twee scherpe randen:
+//
+//   - "Akkoord" staat verankerd (^...$). Een losse test op 'akkoord' pakt ook
+//     "Wacht op akkoord", en dan staan er twee stappen die hetzelfde moment
+//     beschrijven.
+//   - Matcht er niets, dan blijft alleen de eerste fase over. Niet "dan maar
+//     alles tonen": een trechter van dertien stappen laat niets meer zien, en
+//     dat was nu juist de aanleiding.
+export function standaardFunnelFasen(stages = []) {
+  const nietVerloren = [...stages]
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    .filter(s => stageCategory(s.label) !== 'lost');
+  if (!nietVerloren.length) return [];
+
+  const offerte = nietVerloren.find(s => /offerte\s*(verstuurd|verzonden)/i.test(s.label || ''));
+  const akkoord = nietVerloren.find(s => /^\s*akkoord\s*$/i.test(s.label || ''));
+
+  // Op pipelinevolgorde teruggeven, niet op de volgorde waarin ze hier zijn
+  // gevonden — de funnel loopt van voor naar achter.
+  const gekozen = new Set([nietVerloren[0], offerte, akkoord].filter(Boolean).map(s => s.id));
+  return nietVerloren.filter(s => gekozen.has(s.id)).map(s => s.id);
+}

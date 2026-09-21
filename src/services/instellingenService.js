@@ -47,9 +47,6 @@ const toPipelineStage = row => ({
   name: row.name || "",
   position: Number(row.position ?? 0),
   colorClass: row.color_class || "b-gray",
-  // Zie toStage in dealService: dezelfde kolom, andere omzetting. Het dashboard
-  // leest die van dealService, dit scherm deze.
-  inFunnel: row.in_funnel === true,
   createdAt: row.created_at,
   raw: row,
 })
@@ -223,10 +220,6 @@ export async function createPipelineStage(input) {
     name: input.name,
     position: input.position != null ? Number(input.position) : nextPosition,
     color_class: input.color_class || "b-gray",
-    // Een zelfgemaakte fase staat standaard NIET in de funnel: die is bedoeld
-    // als korte trechter, en ongevraagd een stap toevoegen maakt hem langer
-    // zonder dat iemand daarom vroeg. Aanvinken kan meteen in dezelfde tabel.
-    in_funnel: input.in_funnel === true,
   }
   Object.keys(base).forEach(k => base[k] === null && delete base[k])
 
@@ -245,7 +238,6 @@ export async function updatePipelineStage(id, input) {
   if (input.name !== undefined) updates.name = input.name
   if (input.position !== undefined) updates.position = Number(input.position)
   if (input.color_class !== undefined) updates.color_class = input.color_class
-  if (input.in_funnel !== undefined) updates.in_funnel = input.in_funnel === true
 
   const { data, error } = await supabase
     .from("pipeline_stages")
