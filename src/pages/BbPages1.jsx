@@ -22,10 +22,11 @@ import { getOffertesByCustomer } from '../services/offerteService.js';
 import { getFacturenByCustomer } from '../services/factuurService.js';
 import { getProjectsByCustomer } from '../services/projectsService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
-import { listPipelineStages, updateDealStage, zetDealAfgerond } from '../services/dealService.js';
+import { listPipelineStages, updateDeal, updateDealStage, zetDealAfgerond } from '../services/dealService.js';
 import { buildStageIndex, dealStatus, isAfgerond } from '../utils/pipeline.js';
 import { korteDatum } from '../utils/werkbonDagen.js';
 import { PlanningRegels, losseRegels, planRegels, samenOpDatum } from '../components/PlanningBlok.jsx';
+import { MemberMultiSelect } from '../components/MemberMultiSelect.jsx';
 import { WerkbonModal } from './WerkbonPageV2.jsx';
 import { NewOfferteModal, OfferteBadge } from './OffertesPage.jsx';
 import { NewFactuurModal, FactuurBadge } from './FacturenPage.jsx';
@@ -253,6 +254,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   // Moet hier staan en niet verderop: de klantkaart heeft early returns, en een
   // hook daarna breekt de volgorde.
   const [faseBezig, setFaseBezig] = useState(false);
+  const [toewijzenBezig, setToewijzenBezig] = useState(false);
   const [showNewWerkbon, setShowNewWerkbon] = useState(false);
   const [showNewOfferte, setShowNewOfferte] = useState(false);
   const [showNewFactuur, setShowNewFactuur] = useState(false);
@@ -495,6 +497,32 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
       toast.error(e.message || 'Fase wijzigen is mislukt');
     } finally {
       setFaseBezig(false);
+    }
+  };
+
+  // Behandeld door: dezelfde weg als de fasekeuze hierboven — meteen in beeld,
+  // en bij een fout terug naar wat er stond. Schrijft naar assigned_to_ids, het
+  // veld waarop het pipelinebord filtert ("Behandeld door"), zodat dat filter
+  // meteen klopt.
+  //
+  // Geen melding bij succes: je vinkt vaak twee mensen achter elkaar aan en dan
+  // is een toast per klik alleen maar lawaai. Een fout meldt wel.
+  const wijzigToewijzing = async ids => {
+    if (!actieveDeal) return;
+    const vorige = actieveDeal.assignedToIds || [];
+    setToewijzenBezig(true);
+    setCDeals(list => list.map(d => (d.id === actieveDeal.id ? { ...d, assignedToIds: ids } : d)));
+    try {
+      // Ook assigned_to meeschrijven: createDeal zet dat veld bij het aanmaken
+      // op de eerste behandelaar, "voor wat daar nog op leest". Alleen de array
+      // bijwerken laat die kolom stil achterlopen.
+      await updateDeal(actieveDeal.id, { assigned_to_ids: ids, assigned_to: ids[0] || null });
+      bumpRefresh?.();
+    } catch (e) {
+      setCDeals(list => list.map(d => (d.id === actieveDeal.id ? { ...d, assignedToIds: vorige } : d)));
+      toast.error(e.message || 'Toewijzen is mislukt');
+    } finally {
+      setToewijzenBezig(false);
     }
   };
 
@@ -871,6 +899,21 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
                   : <div style={{ fontSize: '.83rem', color: 'var(--dl)' }}>Geen omschrijving bij deze aanvraag.</div>}
                 {aanvraag.waarde > 0 && (
                   <div style={{ fontSize: '.8rem', color: 'var(--dl)' }}>Verwachte waarde: <strong style={{ color: 'var(--dk)' }}>{fmt(aanvraag.waarde)}</strong></div>
+                )}
+                {/* Wie de aanvraag behandelt: dezelfde lijst als bij het
+                    aanmaken, hier direct aanpasbaar zonder venster — net als de
+                    fasekeuze in de kop. Alleen met verkooprecht. Een afgeronde
+                    aanvraag laat de namen wel zien, maar niet meer wijzigen. */}
+                {actieveDeal && magVerkoop && (
+                  <div style={{ marginTop: 4 }}>
+                    <div style={{ fontSize: '.75rem', fontWeight: 600, color: 'var(--dl)', marginBottom: 4 }}>Behandeld door</div>
+                    <MemberMultiSelect
+                      members={teamMembers}
+                      value={actieveDeal.assignedToIds || []}
+                      onChange={wijzigToewijzing}
+                      disabled={toewijzenBezig || aanvraagAfgerond}
+                    />
+                  </div>
                 )}
               </div>
             ) : (
