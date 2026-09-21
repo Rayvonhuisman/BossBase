@@ -72,7 +72,28 @@ const labelStyle = { fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTran
 
 // ── HEADER ───────────────────────────────────────────────────────────────────
 
-function DrawerHeader({ project, onClose, fullscreen, onToggleFullscreen }) {
+function DrawerHeader({ project, onClose, fullscreen, onToggleFullscreen, onSave, canManage }) {
+  const toast = useToast();
+  // De projectnaam staat in de kop en wordt daar ook gewijzigd. Hij stond
+  // eerder in het bewerkformulier onderaan het overzicht; dat is vervallen.
+  const [naamOpen, setNaamOpen] = useState(false);
+  const [naamDraft, setNaamDraft] = useState('');
+  const [naamBezig, setNaamBezig] = useState(false);
+  const bewaarNaam = async () => {
+    const schoon = naamDraft.trim();
+    // projects.name is NOT NULL en een naamloze kaart is onvindbaar in de
+    // lijst; leeg opslaan weigeren we daarom hier al.
+    if (!schoon) { toast.error('Een project moet een naam houden'); return; }
+    setNaamBezig(true);
+    try {
+      await onSave({ name: schoon });
+      setNaamOpen(false);
+    } catch (e) {
+      toast.error(e.message || 'Opslaan mislukt');
+    } finally {
+      setNaamBezig(false);
+    }
+  };
   return (
     <div style={{ padding: '16px 20px 12px', borderBottom: '1px solid var(--br)', display: 'flex', alignItems: 'flex-start', gap: 12, position: 'sticky', top: 0, background: '#fff', zIndex: 2 }}>
       <button
@@ -84,7 +105,37 @@ function DrawerHeader({ project, onClose, fullscreen, onToggleFullscreen }) {
         {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
       </button>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--dk)', letterSpacing: '-.01em', wordBreak: 'break-word', overflowWrap: 'break-word' }}>{project.name}</div>
+        {naamOpen ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <input
+              autoFocus
+              value={naamDraft}
+              onChange={e => setNaamDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') bewaarNaam(); if (e.key === 'Escape') setNaamOpen(false); }}
+              style={{ flex: 1, minWidth: 0, fontSize: 16, fontWeight: 700, padding: '2px 6px' }}
+            />
+            <button onClick={bewaarNaam} disabled={naamBezig}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#15A34A', display: 'flex', alignItems: 'center', padding: 2 }}>
+              <Check size={16} />
+            </button>
+            <button onClick={() => setNaamOpen(false)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2 }}>
+              <X size={16} />
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--dk)', letterSpacing: '-.01em', wordBreak: 'break-word', overflowWrap: 'break-word' }}>{project.name}</div>
+            {canManage && (
+              <button
+                title="Projectnaam wijzigen"
+                onClick={() => { setNaamDraft(project.name || ''); setNaamOpen(true); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2, marginTop: 4, flexShrink: 0 }}>
+                <Edit2 size={14} />
+              </button>
+            )}
+          </div>
+        )}
         {/* Eén status in beeld, en die staat op het overzicht: de fase van de
             aanvraag. De afgeleide projectstatus (gepland/in uitvoering/afgerond)
             blijft in de database bestaan — de mobiele app leest hem — maar hij
@@ -182,7 +233,8 @@ function OverviewTab({
     try {
       // Een leeggemaakt datumveld moet als NULL de database in: start_date en
       // deadline zijn van het type date en weigeren een lege tekst.
-      const waarde = key === 'quoted_hours' ? Number(projDraft || 0) : (projDraft || null);
+      const getalVeld = key === 'quoted_hours' || key === 'project_value';
+      const waarde = getalVeld ? Number(projDraft || 0) : (projDraft || null);
       await onSave({ [key]: waarde });
       stopProjEdit();
       toast.success('Project bijgewerkt');
@@ -268,6 +320,24 @@ function OverviewTab({
   const [klantVeld, setKlantVeld] = useState(null);
   const [klantDraft, setKlantDraft] = useState('');
   const [klantBezig, setKlantBezig] = useState(false);
+  // Een andere klant aan dit project hangen. Dat hangt aan canManage
+  // (projecten_bewerken) en niet aan klanten_bewerken: je wijzigt het project,
+  // niet de klant zelf.
+  const [klantWissel, setKlantWissel] = useState(false);
+  const [klantWisselBezig, setKlantWisselBezig] = useState(false);
+  const wisselKlant = async id => {
+    setKlantWisselBezig(true);
+    try {
+      await onSave({ customer_id: id || null });
+      setKlantLokaal(null);   // anders blijft de vorige klant in beeld staan
+      setKlantWissel(false);
+      toast.success('Klant gewijzigd');
+    } catch (e) {
+      toast.error(e.message || 'Klant wijzigen mislukt');
+    } finally {
+      setKlantWisselBezig(false);
+    }
+  };
 
   const startKlantEdit = (key) => { setKlantVeld(key); setKlantDraft(klant?.[key] || ''); };
   const stopKlantEdit = () => { setKlantVeld(null); setKlantDraft(''); };
@@ -285,6 +355,13 @@ function OverviewTab({
       setKlantBezig(false);
     }
   };
+
+  // ── Nieuwe offerte of factuur vanaf het overzicht ─────────────────────────
+  // Zelfde plusknop als op de klantkaart. De offerte krijgt de aanvraag mee
+  // (prefillDealId), anders zou hij na opslaan niet in het blok hieronder
+  // verschijnen: dat filtert op de aanvraag van dit project.
+  const [toonNieuweOfferte, setToonNieuweOfferte] = useState(false);
+  const [toonNieuweFactuur, setToonNieuweFactuur] = useState(false);
 
   // ── Aanvraagtekst bewerken ────────────────────────────────────────────────
   const [aanvraagOpen, setAanvraagOpen] = useState(false);
@@ -550,9 +627,27 @@ function OverviewTab({
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
           {[
-            { key: 'start_date',   label: 'Startdatum',   type: 'date',   waarde: project.startDate },
-            { key: 'deadline',     label: 'Einddatum',    type: 'date',   waarde: project.deadline },
-            { key: 'quoted_hours', label: 'Begrote uren', type: 'number', waarde: project.quotedHours },
+            { key: 'start_date',   label: 'Startdatum',   type: 'date',   waarde: project.startDate,   toon: v => fmtDate(v) },
+            { key: 'deadline',     label: 'Einddatum',    type: 'date',   waarde: project.deadline,    toon: v => fmtDate(v) },
+            { key: 'quoted_hours', label: 'Begrote uren', type: 'number', waarde: project.quotedHours, toon: v => fmtHours(v), step: '0.5' },
+            // Afgeleid uit de werkbonuren en dus niet te typen. Staat hier in
+            // de rij zodat begrote en gewerkte uren naast elkaar vallen.
+            {
+              key: 'gewerkte_uren', label: 'Gewerkte uren', alleenLezen: true, waarde: project.usedHours,
+              toon: v => (
+                <>
+                  {fmtHours(v)}
+                  {project.quotedHours > 0 && (
+                    <span style={{ color: (project.hoursPercentage || 0) > 1 ? '#dc2626' : (project.hoursPercentage || 0) >= 0.8 ? '#f59e0b' : 'var(--dl)', marginLeft: 6, fontSize: 12 }}>
+                      ({Math.round((project.hoursPercentage || 0) * 100)}%)
+                    </span>
+                  )}
+                </>
+              ),
+            },
+            // Alleen met recht op projectbedragen. Een monteur ziet hoe ver de
+            // klus is, niet wat hij opbrengt.
+            ...(magBedragen ? [{ key: 'project_value', label: 'Projectwaarde', type: 'number', waarde: project.projectValue, toon: v => fmt0(v), step: '0.01' }] : []),
           ].map(veld => {
             const actief = projVeld === veld.key;
             const leeg = veld.waarde === null || veld.waarde === undefined || veld.waarde === '';
@@ -565,7 +660,7 @@ function OverviewTab({
                       autoFocus
                       type={veld.type}
                       min={veld.type === 'number' ? '0' : undefined}
-                      step={veld.type === 'number' ? '0.5' : undefined}
+                      step={veld.step}
                       value={projDraft}
                       onChange={e => setProjDraft(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') bewaarProjVeld(veld.key); if (e.key === 'Escape') stopProjEdit(); }}
@@ -583,12 +678,10 @@ function OverviewTab({
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontWeight: 600, fontSize: 13, color: leeg ? 'var(--dl)' : (veld.key === 'deadline' && isOverdue ? '#dc2626' : 'inherit') }}>
-                      {veld.type === 'date'
-                        ? (leeg ? 'Niet ingevuld' : fmtDate(veld.waarde))
-                        : fmtHours(veld.waarde)}
+                      {veld.type === 'date' && leeg ? 'Niet ingevuld' : veld.toon(veld.waarde)}
                       {veld.key === 'deadline' && isOverdue && <span style={{ fontSize: 11, marginLeft: 6 }}>verlopen</span>}
                     </span>
-                    {canManage && (
+                    {canManage && !veld.alleenLezen && (
                       <button onClick={() => startProjEdit(veld.key, veld.waarde)}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}>
                         <Edit2 size={14} />
@@ -599,20 +692,6 @@ function OverviewTab({
               </div>
             );
           })}
-          {/* Afgeleid uit de werkbonuren; het percentage kleurt mee zodra het
-              tegen de begroting aanloopt. Blijft zichtbaar zonder recht op
-              bedragen: hoe ver de klus is mag een medewerker weten. */}
-          <div>
-            <div style={labelStyle}>Gewerkte uren</div>
-            <div style={{ fontWeight: 600, fontSize: 13 }}>
-              {fmtHours(project.usedHours)}
-              {project.quotedHours > 0 && (
-                <span style={{ color: (project.hoursPercentage || 0) > 1 ? '#dc2626' : (project.hoursPercentage || 0) >= 0.8 ? '#f59e0b' : 'var(--dl)', marginLeft: 6, fontSize: 12 }}>
-                  ({Math.round((project.hoursPercentage || 0) * 100)}%)
-                </span>
-              )}
-            </div>
-          </div>
         </div>
       </div>
 
@@ -654,6 +733,9 @@ function OverviewTab({
       <div className="card card-p">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <button type="button" className="kk-blok-titel" onClick={() => setTab?.('offerte')}>Offertes <span className="kk-pijl">→</span></button>
+          {canManage && (
+            <button className="btn-plus" title="Nieuwe offerte" onClick={() => setToonNieuweOfferte(true)}>{I.plus}</button>
+          )}
         </div>
         {projectOffertes.length === 0
           ? <div className="lsec-empty">Geen offertes</div>
@@ -678,6 +760,9 @@ function OverviewTab({
         <div className="card card-p">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <button type="button" className="kk-blok-titel" onClick={() => setTab?.('facturen')}>Facturen <span className="kk-pijl">→</span></button>
+            {canManage && (
+              <button className="btn-plus" title="Nieuwe factuur" onClick={() => setToonNieuweFactuur(true)}>{I.plus}</button>
+            )}
           </div>
           {invoices.length === 0
             ? <div className="lsec-empty">Geen facturen</div>
@@ -703,13 +788,38 @@ function OverviewTab({
       {/* Dezelfde klant als op de klantkaart, geen kopie: bewerken schrijft naar
           customers, dus het staat meteen op beide plekken. Lezen mag iedereen
           van het bedrijf (customers_select); bewerken vraagt 'klanten_bewerken'. */}
-      {klant && (
+      {(klant || canManage) && (
         <div className="card card-p">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <button type="button" className="kk-blok-titel" onClick={() => openCustomer?.(klant.id)}>
-              Klantgegevens <span className="kk-pijl">→</span>
-            </button>
+            {klant ? (
+              <button type="button" className="kk-blok-titel" onClick={() => openCustomer?.(klant.id)}>
+                Klantgegevens <span className="kk-pijl">→</span>
+              </button>
+            ) : (
+              <div style={{ fontWeight: 700, fontSize: '.9rem' }}>Klantgegevens</div>
+            )}
+            {canManage && !klantWissel && (
+              <button className="btn btn-s btn-xs" onClick={() => setKlantWissel(true)}>
+                {klant ? 'Andere klant' : 'Klant kiezen'}
+              </button>
+            )}
           </div>
+          {klantWissel && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+              <select
+                autoFocus
+                defaultValue={klant?.id || ''}
+                disabled={klantWisselBezig}
+                onChange={e => wisselKlant(e.target.value)}
+                style={{ flex: 1, minWidth: 0, height: 32, fontSize: '.82rem' }}
+              >
+                <option value="">— Geen klant —</option>
+                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <button className="btn btn-ghost btn-xs" onClick={() => setKlantWissel(false)}>Annuleren</button>
+            </div>
+          )}
+          {klant && (
           <div>
             {[
               { key: 'name', label: 'Naam' },
@@ -757,7 +867,29 @@ function OverviewTab({
               );
             })}
           </div>
+          )}
         </div>
+      )}
+
+      {toonNieuweOfferte && (
+        <NewOfferteModal
+          customers={customers}
+          deals={deals}
+          prefillDealId={project.dealId || null}
+          prefillCustomerId={project.customerId || null}
+          onClose={() => setToonNieuweOfferte(false)}
+          onSaved={() => { setToonNieuweOfferte(false); onChanged?.(); }}
+        />
+      )}
+
+      {toonNieuweFactuur && (
+        <NewFactuurModal
+          customers={customers}
+          projects={[{ id: project.id, name: project.name, customerId: project.customerId }]}
+          prefill={{ customer_id: project.customerId || '', project_id: project.id }}
+          onClose={() => setToonNieuweFactuur(false)}
+          onSaved={() => { setToonNieuweFactuur(false); onChanged?.(); }}
+        />
       )}
 
       {/* Verliezen vraagt om een reden; zelfde venster als op het pipelinebord. */}
@@ -1594,7 +1726,7 @@ export function ProjectDetailDrawer({
             <div style={{ padding: 32, textAlign: 'center', color: 'var(--dl)' }}>Project laden…</div>
           ) : (
             <>
-              <DrawerHeader project={project} onClose={onClose} fullscreen={fullscreen} onToggleFullscreen={() => setFullscreen(f => !f)} />
+              <DrawerHeader project={project} onClose={onClose} fullscreen={fullscreen} onToggleFullscreen={() => setFullscreen(f => !f)} onSave={handleSave} canManage={canManage} />
               <Tabs tab={tab} setTab={setTab} tabs={tabs} />
 
               {tab === 'overview' && (
