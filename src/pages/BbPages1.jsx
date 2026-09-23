@@ -27,7 +27,7 @@ import { PlanningRegels, losseRegels, planRegels, samenOpDatum } from '../compon
 import { WerkbonModal } from './WerkbonPageV2.jsx';
 import { NewOfferteModal, OfferteBadge } from './OffertesPage.jsx';
 import { NewFactuurModal, FactuurBadge } from './FacturenPage.jsx';
-import { NewProjectModal, ProjectBadge } from './ProjectsPage.jsx';
+import { NewProjectModal, KlusBadge } from './ProjectsPage.jsx';
 import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -857,7 +857,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                   {p.projectValue > 0 && <span style={{ fontWeight: 700 }}>{fmt(p.projectValue)}</span>}
-                  <ProjectBadge status={p.status} />
+                  <KlusBadge project={p} />
                 </div>
               </div>
             ))}
@@ -1101,7 +1101,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
                     <div className="lrow-main">
                       <div className="lrow-title">{p.name}</div>
                     </div>
-                    <ProjectBadge status={p.status} />
+                    <KlusBadge project={p} />
                     {p.projectValue > 0 && <div className="lrow-amount">{fmt(p.projectValue)}</div>}
                   </div>
                 ))}
@@ -1461,7 +1461,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
           offertes={cOffertes}
           prefillCustomerId={c.id}
           onClose={() => setShowNewProject(false)}
-          onSaved={saved => { setProjecten(ps => [saved, ...ps]); setShowNewProject(false); }}
+          onSaved={saved => { setProjecten(ps => [saved, ...ps.filter(p => p.id !== saved.id)]); setShowNewProject(false); }}
         />
       )}
     </div>

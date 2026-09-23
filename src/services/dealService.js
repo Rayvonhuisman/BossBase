@@ -150,6 +150,28 @@ export async function markDealLost(dealId, stageId, reason, note) {
   return deal
 }
 
+// Een verloren aanvraag terughalen, naar de fase die je kiest (standaard de
+// eerste). status: 'open' moet expliciet mee: bb_deal_status_uit_fase houdt
+// een deal op 'lost' zolang die status blijft staan, ook als de fase wijzigt.
+// Met 'open' rekent de trigger de status opnieuw uit de fase.
+export async function heropenVerlorenDeal(dealId, stageId) {
+  const { data, error } = await supabase
+    .from("deals")
+    .update({ stage_id: stageId, status: 'open', lost_reason: null })
+    .eq("id", dealId)
+    .select("*, customers!deals_customer_id_fkey(*)")
+    .single()
+  if (error) {
+    console.error("[bb:pipeline] heropenVerlorenDeal mislukt", { message: error.message, code: error.code, dealId, stage_id: stageId })
+    throw error
+  }
+  const deal = toDeal(data)
+  if (deal.custId) {
+    logTijdlijnSafe(deal.custId, 'deal_fase_gewijzigd', `Deal heropend: ${deal.title}`, { dealId: deal.id, stageId })
+  }
+  return deal
+}
+
 const isUuid = v => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
 
 export async function createDeal(input) {

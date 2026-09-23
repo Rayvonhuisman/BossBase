@@ -14,6 +14,7 @@ import { ProjectDetailDrawer } from './projects/ProjectDetailDrawer.jsx';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { getTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
 import { statusInfo } from '../utils/statusColors.js';
+import { isAfgerond } from '../utils/pipeline.js';
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -33,6 +34,21 @@ const fmtHours = h => {
 export function ProjectBadge({ status }) {
   const s = statusInfo(status, 'project');
   return <span className={s.className}>{s.label}</span>;
+}
+
+// De status zoals de projectkaart hem toont: verloren, voltooid, of de fase van
+// de aanvraag. ProjectBadge hierboven is de werkbonstatus (gepland/in
+// uitvoering/afgerond), en die noemde een verloren of net binnengekomen
+// aanvraag "Gepland". Zonder aanvraag, of als de deal niet leesbaar is (geen
+// verkooprecht), valt hij terug op de werkbonstatus.
+export function KlusBadge({ project }) {
+  const { deals = [], stages = [] } = useData();
+  const deal = project?.dealId ? deals.find(d => d.id === project.dealId) : null;
+  if (!deal) return <ProjectBadge status={project?.status} />;
+  if (deal.status === 'lost') return <span className="badge b-lost">Verloren</span>;
+  if (isAfgerond(deal)) return <span className="badge b-done">Voltooid</span>;
+  const fase = stages.find(s => s.id === deal.stage);
+  return fase ? <span className="badge b-gray">{fase.label}</span> : <ProjectBadge status={project?.status} />;
 }
 
 // ── NEW PROJECT MODAL ────────────────────────────────────────────────────────
@@ -98,7 +114,8 @@ export function NewProjectModal({ onClose, onSaved, customers, deals, offertes, 
         assigned_to: form.assigned_to || null,
       });
       notifyNewAssignees({ userIds: form.assigned_to ? [form.assigned_to] : [], members: teamMembers, sendMail: notifyMail, type: 'toewijzing_project', title: `Je bent toegewezen aan ${name}`, link: 'projecten', relatedType: 'project', relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
-      toast.success('Project aangemaakt');
+      // Bij een gekozen aanvraag is het bestaande project bijgewerkt (createProject).
+      toast.success(saved?.bestond ? 'Bijgewerkt: deze aanvraag had al een project' : 'Project aangemaakt');
       onSaved?.(saved);
       onClose();
     } catch (err) {

@@ -359,7 +359,7 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
       {(ev.custId || ev.dealId) && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
           {ev.custId && openCustomer && <button className="btn btn-s btn-sm" onClick={() => openCustomer(ev.custId)}>Open klant</button>}
-          {ev.dealId && openDeal && <button className="btn btn-s btn-sm" onClick={() => openDeal(ev.dealId)}>Open deal</button>}
+          {ev.dealId && openDeal && <button className="btn btn-s btn-sm" onClick={() => openDeal(ev.dealId)}>Open project</button>}
         </div>
       )}
 

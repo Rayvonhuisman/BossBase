@@ -166,6 +166,26 @@ export async function createProject(input) {
   // null-keys verwijderen zodat DB-defaults blijven gelden
   Object.keys(base).forEach(k => base[k] === null && delete base[k])
 
+  // Elke aanvraag heeft al een project (trigger bb_deal_project_aanmaken). Wie
+  // hier een aanvraag kiest, bedoelt dát project; een insert zou er een tweede
+  // naast zetten, en de pipeline opent dan het oudste. Dus bijwerken in plaats
+  // van aanmaken, en alleen met wat is ingevuld: een leeg of nul-veld in het
+  // formulier mag de bestaande waarde niet overschrijven. De status volgt de
+  // werkbonnen en blijft dus buiten de patch.
+  if (base.deal_id) {
+    const bestaand = await getProjectByDeal(base.deal_id)
+    if (bestaand) {
+      const patch = { ...base }
+      delete patch.created_by
+      delete patch.status
+      delete patch.deal_id
+      if (!patch.project_value) delete patch.project_value
+      if (!patch.quoted_hours) delete patch.quoted_hours
+      const bijgewerkt = await updateProject(bestaand.id, patch)
+      return { ...bijgewerkt, bestond: true }
+    }
+  }
+
   const payload = await withCompanyId(base)
   const { data, error } = await supabase
     .from('projects')

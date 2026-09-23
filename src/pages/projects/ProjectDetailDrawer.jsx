@@ -26,7 +26,7 @@ import {
 import { getWerkbonnenByProject } from '../../services/werkbonService.js';
 // De aanvraag achter dit project: fase, behandelaars, afronden en verloren
 // leven op de deal. Het project toont ze; de deal blijft de bron.
-import { listPipelineStages, updateDeal, updateDealStage, zetDealAfgerond } from '../../services/dealService.js';
+import { heropenVerlorenDeal, listPipelineStages, updateDeal, updateDealStage, zetDealAfgerond } from '../../services/dealService.js';
 import { isAfgerond } from '../../utils/pipeline.js';
 import { VerlorenModal } from '../../components/SharedModals.jsx';
 import { MemberMultiSelect } from '../../components/MemberMultiSelect.jsx';
@@ -277,6 +277,27 @@ function OverviewTab({
     }
   };
 
+  // Verloren terughalen naar de eerste fase, net zoals voltooien te heropenen
+  // is. De vorige fase is niet bewaard (markDealLost zet de Verloren-fase), dus
+  // de eerste is de enige eerlijke keuze; de keuzelijst staat daarna weer open.
+  const heropenVerloren = async () => {
+    const eerste = [...stages]
+      .filter(s => !/verlor|afgerond/i.test(s.label || ''))
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0];
+    if (!huidigeDeal || !eerste) return;
+    setAfrondBezig(true);
+    try {
+      const bij = await heropenVerlorenDeal(huidigeDeal.id, eerste.id);
+      setDealLokaal(bij);
+      toast.success('Aanvraag heropend');
+      onChanged?.();
+    } catch (e) {
+      toast.error(e.message || 'Heropenen is mislukt');
+    } finally {
+      setAfrondBezig(false);
+    }
+  };
+
   const wijzigToewijzing = async ids => {
     if (!huidigeDeal) return;
     setToewijzenBezig(true);
@@ -459,6 +480,9 @@ function OverviewTab({
                 <span className="badge b-gray">{huidigeFase?.label || 'Loopt'}</span>
               )}
             </div>
+            {magVerkoop && dealVerloren && (
+              <button className="btn btn-s btn-sm" disabled={afrondBezig} onClick={heropenVerloren}>Heropenen</button>
+            )}
             {magVerkoop && !dealVerloren && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <button
