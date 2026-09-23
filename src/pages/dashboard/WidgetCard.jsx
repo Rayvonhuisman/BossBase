@@ -507,14 +507,11 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
   const tip = (e, node) => ux && ux.tip && ux.tip(e, node);
   const off = () => ux && ux.off && ux.off();
   const hov = node => ({ onMouseMove: e => tip(e, node), onMouseLeave: off });
-  // openDeal komt nog als prop binnen, maar geen enkele tegel opent de deal-la
-  // meer: Nieuwe aanvragen én Actieve deals gaan naar de klantkaart. Vanuit de
-  // pipeline zelf blijft de la gewoon bereikbaar.
-  // Naar de klantkaart, tabblad Overzicht — daar staat het Aanvraag-blok. De
-  // sleutel is 'overview' (TAB_LABELS in BbPages1.jsx); een onbekende tab valt
-  // stil terug op de standaard, dus die naam moet exact kloppen.
-  const goKlantOverzicht = d => () => {
-    if (d && d.custId) openCustomer(d.custId, 'overview');
+  // Een aanvraag is een project: beide tegels (Nieuwe aanvragen, Actieve deals)
+  // openen de projectkaart, dezelfde als vanuit de pipeline. Eerder gingen ze
+  // naar de klantkaart, maar daar staat de aanvraag niet meer op.
+  const goAanvraag = d => () => {
+    if (d && d.id && openDeal) openDeal(d.id);
     else setPage('pipeline');
   };
   const goInvoice = o => () => { if (o && o.id && openInvoice) openInvoice(o.id); else setPage('revenue'); };
@@ -742,7 +739,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                 const name = c?.name || d.customerName || 'Onbekende klant';
                 const ago = relAgo(d.createdAt);
                 return (
-                  <button key={d.id} className="feed-row ic-lead" onClick={goKlantOverzicht(d)}>
+                  <button key={d.id} className="feed-row ic-lead" onClick={goAanvraag(d)}>
                     <span className="feed-icon"><AvatarSq name={name} /></span>
                     <div className="feed-main">
                       <div className="feed-title">{name}</div>
@@ -819,7 +816,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
                 const stageCol = stage?.col || (sm ? toneBadge[sm.tone] : null) || 'b-gray';
                 const nx = nextAct(d.custId);
                 return (
-                  <button key={d.id} className="feed-row ic-deal" onClick={goKlantOverzicht(d)}>
+                  <button key={d.id} className="feed-row ic-deal" onClick={goAanvraag(d)}>
                     <span className="feed-icon"><AvatarSq name={name} /></span>
                     <div className="feed-main">
                       <div className="feed-title">{name}</div>

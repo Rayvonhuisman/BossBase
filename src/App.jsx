@@ -72,6 +72,7 @@ import { listActivities } from './services/activityService.js';
 import { getOffertes } from './services/offerteService.js';
 import { getWerkbonnen } from './services/werkbonService.js';
 import { staatOpDag } from './utils/werkbonDagen.js';
+import { firstStageId } from './utils/pipeline.js';
 import { ActivityEditModal, NewActivityModal, NewLeadModal, ProfileModal } from './components/SharedModals.jsx';
 import { supabase } from './lib/supabase.js';
 import { listNotifications, markNotificationRead, markAllNotificationsRead } from './services/notificatieService.js';
@@ -406,8 +407,8 @@ function BossKnop({ onClick }) {
   );
 }
 
-function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, onLogout, openCustomer, openLeverancier, navigatePage, refreshKey, onOpenBoss }) {
-  const { customers: dCustomers, leveranciers: dLeveranciers = [], deals: dDeals, activities: dActivities, offertes: dOffertes, werkbonnen: dWerkbonnen, refresh: refreshData } = useData();
+function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, onLogout, openCustomer, openLeverancier, openDeal, navigatePage, refreshKey, onOpenBoss }) {
+  const { customers: dCustomers, leveranciers: dLeveranciers = [], deals: dDeals, stages: dStages = [], activities: dActivities, offertes: dOffertes, werkbonnen: dWerkbonnen, refresh: refreshData } = useData();
   const [openMenu, setOpenMenu] = useState(null);
   const [search, setSearch] = useState('');
   // Zoekbalk staat ingeklapt tot je op het icoon klikt. Escape of een klik
@@ -468,14 +469,17 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
   // Ephemere notificaties afgeleid uit gedeelde data — geen extra queries.
   const notifData = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
+    const eersteFase = firstStageId(dStages);
     return {
       overdue: dActivities.filter(a => a.status !== 'completed' && a.status !== 'done' && a.dueAt && a.dueAt.slice(0, 10) < today).slice(0, 5),
       today: dActivities.filter(a => a.dueAt?.slice(0, 10) === today && a.status !== 'completed' && a.status !== 'done').slice(0, 5),
-      leads: dDeals.filter(d => d.stage === 'new_lead').slice(0, 5),
+      // stage is een uuid; 'new_lead' matchte sinds de echte fasen nooit meer,
+      // waardoor hier nooit een nieuwe aanvraag verscheen.
+      leads: dDeals.filter(d => d.stage === eersteFase && d.status !== 'lost').slice(0, 5),
       offertes: dOffertes.filter(o => o.status === 'concept' || o.status === 'verzonden').slice(0, 3),
       werkbonnen: dWerkbonnen.filter(w => staatOpDag(w, today) && w.status !== 'afgerond').slice(0, 3),
     };
-  }, [dActivities, dDeals, dOffertes, dWerkbonnen]);
+  }, [dActivities, dDeals, dStages, dOffertes, dWerkbonnen]);
 
   // DB-notificaties (mentions/toewijzingen): pas laden wanneer de bel opent.
   const loadDbNotifs = useCallback(async () => {
@@ -622,8 +626,9 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
                     {deals.length > 0 && (
                       <>
                         <div className="tb-search-section">Deals</div>
+                        {/* Elke deal is een project: open de projectkaart, niet de klant. */}
                         {deals.map(d => (
-                          <button key={`d-${d.id}`} className="tb-pop-item" onClick={() => { close(); setSearch(''); navigatePage('pipeline'); if (d.custId) openCustomer(d.custId); }}>
+                          <button key={`d-${d.id}`} className="tb-pop-item" onClick={() => { close(); setSearch(''); openDeal(d.id); }}>
                             <div className="tb-pop-icon blue">{I.pipe}</div>
                             <div style={{ minWidth: 0, flex: 1 }}>
                               <div className="tb-pop-title">{d.title}</div>
@@ -757,7 +762,7 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
                   </button>
                 ))}
                 {notifData.leads.map(d => (
-                  <button key={`l-${d.id}`} className="tb-pop-item" onClick={() => { close(); navigatePage('pipeline'); }}>
+                  <button key={`l-${d.id}`} className="tb-pop-item" onClick={() => { close(); openDeal(d.id); }}>
                     <div className="tb-pop-icon blue">{I.plus}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="tb-pop-title">Nieuwe aanvraag: {d.title}</div>
@@ -875,7 +880,7 @@ function CustomerDrawer({ custId, initialTab, onClose, setPage, onTabChange }) {
 //
 // Blijft de opzoeking leeg (een deal van vóór de trigger die de bijvulling
 // gemist heeft), dan zeggen we dat, in plaats van een leeg paneel te tonen.
-function DealDrawer({ dealId, customers, deals, offertes, onClose, setPage, openCustomer, openInvoice }) {
+function DealDrawer({ dealId, customers, deals, offertes, onClose, onChanged, setPage, openCustomer, openInvoice }) {
   const [projectId, setProjectId] = useState(null);
   const [zoeken, setZoeken] = useState(true);
 
@@ -909,6 +914,9 @@ function DealDrawer({ dealId, customers, deals, offertes, onClose, setPage, open
       deals={deals}
       offertes={offertes}
       onClose={onClose}
+      /* Zonder dit bleef de pipeline achter de la op de oude stand staan: fase
+         gewijzigd of voltooid, maar de kaart stond nog in de vorige kolom. */
+      onChanged={onChanged}
       openCustomer={openCustomer}
       openInvoice={openInvoice}
       setPage={setPage}
@@ -1625,8 +1633,8 @@ function AppInner() {
       case 'planning':   return <PlanningPage openCustomer={openCustomer} />;
       case 'costs':       return <CostsPage />;
       case 'revenue':     return <RevenuePage />;
-      case 'facturen':    return <FacturenPage openCustomer={openCustomer} preOpenFactuurId={itemId} onItemOpen={id => gaNaar({ page: 'facturen', itemId: id })} onItemClose={() => sluitTerug(null, { page: 'facturen' })} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'facturen' ? backCtx : null} onBackKlant={goBack} />;
-      case 'offertes':    return <OffertesPage openCustomer={openCustomer} preOpenOfferteId={itemId} onItemOpen={id => gaNaar({ page: 'offertes', itemId: id })} onItemClose={() => sluitTerug(null, { page: 'offertes' })} preFillDealId={navIntent?.page === 'offertes' ? navIntent.dealId : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'offertes' ? backCtx : null} onBackKlant={goBack} />;
+      case 'facturen':    return <FacturenPage openCustomer={openCustomer} preOpenFactuurId={itemId} onItemOpen={id => gaNaar({ page: 'facturen', itemId: id })} onItemClose={() => sluitTerug(null, { page: 'facturen' })} onItemLeave={() => gaNaar({ page: 'facturen' }, { replace: true })} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'facturen' ? backCtx : null} onBackKlant={goBack} />;
+      case 'offertes':    return <OffertesPage openCustomer={openCustomer} preOpenOfferteId={itemId} onItemOpen={id => gaNaar({ page: 'offertes', itemId: id })} onItemClose={() => sluitTerug(null, { page: 'offertes' })} onItemLeave={() => gaNaar({ page: 'offertes' }, { replace: true })} preFillDealId={navIntent?.page === 'offertes' ? navIntent.dealId : null} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'offertes' ? backCtx : null} onBackKlant={goBack} />;
       case 'projecten':   return <ProjectsPage openCustomer={openCustomer} openInvoice={openInvoice} setPage={navigatePage} preOpenProjectId={itemId} onItemOpen={id => gaNaar({ page: 'projecten', itemId: id })} onItemClose={() => sluitTerug(null, { page: 'projecten' })} onNavConsumed={clearNavIntent} backKlant={backCtx?.page === 'projecten' ? backCtx : null} onBackKlant={goBack} />;
       case 'werkbonnen':  return <WerkbonPage preOpenWerkbonId={itemId} onItemOpen={id => gaNaar({ page: 'werkbonnen', itemId: id })} onItemClose={() => sluitTerug(null, { page: 'werkbonnen' })} onNavConsumed={clearNavIntent} setPage={navigatePage} openCustomer={openCustomer} backKlant={backCtx?.page === 'werkbonnen' ? backCtx : null} onBackKlant={goBack} />;
       case 'uren':        return <UrenPage navigatePage={navigatePage} />;
@@ -1859,6 +1867,7 @@ function AppInner() {
             onLogout={handleLogout}
             openCustomer={openCustomer}
             openLeverancier={openLeverancier}
+            openDeal={openDeal}
             navigatePage={navigatePage}
             refreshKey={refreshKey}
             onOpenBoss={() => setBossOpen(true)}
@@ -1953,6 +1962,7 @@ function AppInner() {
             deals={globalDeals}
             offertes={globalOffertes}
             onClose={closeDeal}
+            onChanged={bumpRefresh}
             setPage={navigatePage}
             openCustomer={openCustomer}
             openInvoice={openInvoice}

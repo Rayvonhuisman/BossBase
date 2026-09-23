@@ -656,7 +656,12 @@ function CopyOfferteModal({ offerte, customers, onClose, onCopied }) {
 
 // ── VIEW OFFERTE MODAL ───────────────────────────────────────────────────────
 
-function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMail, onCopy, onEdit, onDelete, openCustomer }) {
+function ViewOfferteModal({ offerte, customers, onClose, onSluitVoorActie, onMaakFactuur, onSendMail, onCopy, onEdit, onDelete, openCustomer }) {
+  // Vóór een actie (mailen, wijzigen, kopiëren, verwijderen) sluit de weergave
+  // zonder terug te gaan in de geschiedenis. Terug zou, als je hier vanaf een
+  // project kwam, de hele pagina verlaten - en daarmee het venster van de
+  // actie, dat dan nooit verschijnt.
+  const sluitVoorActie = onSluitVoorActie || onClose;
   const { company } = useProfile();
   const toast = useToast();
   const customerName = offerte.customerName || customers.find(c => c.id == offerte.customerId)?.name || '';
@@ -743,14 +748,14 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
     isGeaccepteerd && onMaakFactuur
       ? { label: 'Maak factuur', icon: I.brief, onClick: () => onMaakFactuur(offerte) }
     : onSendMail
-      ? { label: 'Verstuur per mail', icon: I.send, onClick: () => { onClose(); onSendMail(offerte); } }
+      ? { label: 'Verstuur per mail', icon: I.send, onClick: () => { sluitVoorActie(); onSendMail(offerte); } }
     : offerte.signedAt
       ? { label: 'Download getekende offerte', icon: I.paperclip, onClick: handleDownloadPdf }
       : null;
 
   const acties = [
     onSendMail && primair?.label !== 'Verstuur per mail' && {
-      label: 'Verstuur per mail', icon: I.send, onClick: () => { onClose(); onSendMail(offerte); },
+      label: 'Verstuur per mail', icon: I.send, onClick: () => { sluitVoorActie(); onSendMail(offerte); },
     },
     // Getekend bestand niet ook nog in het menu: de paperclip ernaast doet dat
     // al, en dezelfde actie twee keer aanbieden maakt het menu langer zonder
@@ -758,20 +763,20 @@ function ViewOfferteModal({ offerte, customers, onClose, onMaakFactuur, onSendMa
     onEdit && !isConceptOfferte && {
       // Bij een verstuurde offerte maakt opslaan een nieuwe VERSIE. Dat mag
       // hier: een offerte is geen boekstuk. Bij facturen is dat juist verboden.
-      label: 'Herzien (nieuwe versie)', icon: I.edit, onClick: () => { onClose(); onEdit(offerte); },
+      label: 'Herzien (nieuwe versie)', icon: I.edit, onClick: () => { sluitVoorActie(); onEdit(offerte); },
     },
     onEdit && isConceptOfferte && {
-      label: 'Offerte wijzigen', icon: I.edit, onClick: () => { onClose(); onEdit(offerte); },
+      label: 'Offerte wijzigen', icon: I.edit, onClick: () => { sluitVoorActie(); onEdit(offerte); },
     },
     onCopy && {
-      label: 'Kopiëren', icon: I.copy, onClick: () => { onClose(); onCopy(offerte); },
+      label: 'Kopiëren', icon: I.copy, onClick: () => { sluitVoorActie(); onCopy(offerte); },
     },
     isGeaccepteerd && onMaakFactuur && primair?.label !== 'Maak factuur' && {
       label: 'Maak factuur', icon: I.brief, onClick: () => onMaakFactuur(offerte),
     },
     onDelete && {
       label: 'Offerte verwijderen', icon: I.trash, gevaarlijk: true, scheiding: true,
-      onClick: () => { onClose(); onDelete(offerte); },
+      onClick: () => { sluitVoorActie(); onDelete(offerte); },
     },
   ].filter(Boolean);
 
@@ -1015,7 +1020,8 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
       await logSentEmail({ toEmail: form.to, subject: form.subject, bodyHtml: wrappedHtml, relatedType: 'offerte', relatedId: offerte.id, customerId: offerte.customerId });
       // Bij eerste verzending: bedrijfs-branding bevriezen op de offerte zodat
       // latere logo-/kleurwijzigingen deze verstuurde offerte niet veranderen.
-      await updateOfferte(offerte.id, { sent_to_email: form.to, ...(offerte.status === 'concept' ? { status: 'verzonden', ...buildCompanySnapshot(company) } : {}) });
+      // verzonden_op werd nergens gezet; alleen de testdata had hem.
+      await updateOfferte(offerte.id, { sent_to_email: form.to, ...(offerte.status === 'concept' ? { status: 'verzonden', verzonden_op: new Date().toISOString(), ...buildCompanySnapshot(company) } : {}) });
       logTijdlijnSafe(offerte.customerId, 'email_verstuurd', `E-mail verstuurd: ${form.subject}`, { to: form.to, subject: form.subject });
       toast.success('E-mail verstuurd');
       onSent?.();
@@ -1073,7 +1079,7 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
 // preOpenOfferteId komt uit de URL (/offertes/<id>) en is leidend: terug in de
 // browser sluit de offerte, vooruit opent hem weer. onItemOpen/onItemClose
 // zetten de geschiedenisstap; zonder die props werkt de pagina op eigen state.
-export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onItemClose, preFillDealId, onNavConsumed, backKlant, onBackKlant }) {
+export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onItemClose, onItemLeave, preFillDealId, onNavConsumed, backKlant, onBackKlant }) {
   const toast = useToast();
   const { profile, company } = useProfile();
   const canManageOffertes = profile?.role === 'admin' || profile?.role === 'planner';
@@ -1412,6 +1418,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
           offerte={viewOfferte}
           customers={customers}
           onClose={() => (onItemClose ? onItemClose() : setViewOfferte(null))}
+          onSluitVoorActie={() => (onItemLeave ? onItemLeave() : setViewOfferte(null))}
           onMaakFactuur={handleMaakFactuur}
           onSendMail={o => setSendMailOfferte(o)}
           onCopy={o => setCopySource(o)}

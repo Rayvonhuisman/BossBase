@@ -296,7 +296,13 @@ function OverviewTab({
     .filter(Boolean);
   const naamVan = id => teamMembers.find(m => m.id === id || m.profileId === id)?.fullName || '';
   // De fasen op volgorde, voor de keuzelijst in de kop.
-  const gesorteerdeStages = [...stages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  // Zonder de fase "Afgerond": die heeft geen kolom meer op het bord (afronden
+  // is Project voltooien, deals.afgerond_op), en een deal erin valt daar terug
+  // naar de eerste kolom. Staat dit project er nog in, dan blijft hij staan,
+  // anders toont de keuzelijst een fase die niet klopt.
+  const gesorteerdeStages = [...stages]
+    .filter(s => !/afgerond/i.test(s.label || '') || s.id === huidigeDeal?.stage)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   const huidigeFase = stages.find(s => s.id === huidigeDeal?.stage) || null;
   // De offertes van deze klus: alles wat aan dezelfde aanvraag hangt, plus de
   // offerte die expliciet aan het project is gekoppeld.
@@ -456,7 +462,7 @@ function OverviewTab({
             {magVerkoop && !dealVerloren && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <button
-                  className={dealAfgerond ? 'btn btn-s btn-sm' : 'btn btn-p'}
+                  className={dealAfgerond ? 'btn btn-s btn-sm' : 'btn wb2-complete-btn'}
                   disabled={afrondBezig}
                   onClick={() => zetAfgerond(!dealAfgerond)}
                 >

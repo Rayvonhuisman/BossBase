@@ -638,7 +638,12 @@ function paperclipCfg(factuur, heeftDocument) {
 
 // ── VIEW FACTUUR MODAL ────────────────────────────────────────────────────────
 
-function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail, onEdit, onDelete, onCopy }) {
+function ViewFactuurModal({ factuur, customers, onClose, onSluitVoorActie, onRefresh, onSendMail, onEdit, onDelete, onCopy }) {
+  // Vóór een actie (mailen, wijzigen, kopiëren, verwijderen) sluit de weergave
+  // zonder terug te gaan in de geschiedenis. Terug zou, als je hier vanaf een
+  // project kwam, de hele pagina verlaten - en daarmee het venster van de
+  // actie, dat dan nooit verschijnt.
+  const sluitVoorActie = onSluitVoorActie || onClose;
   // Deze component gebruikt toast op vijf plekken maar riep de hook nooit aan.
   // Elke foutmelding hier gaf daardoor een ReferenceError in plaats van de
   // melding zelf — onder meer achter "Origineel document uit de boekhouding
@@ -724,13 +729,13 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail, 
         : null)
     : magHerinnering1
       ? { label: 'Herinnering sturen', icon: <Send size={14} />,
-          onClick: guardFeature('betaalherinneringen', () => { onClose(); onSendMail(factuur, 'herinnering_1'); }) }
+          onClick: guardFeature('betaalherinneringen', () => { sluitVoorActie(); onSendMail(factuur, 'herinnering_1'); }) }
     : magHerinnering2
       ? { label: 'Tweede herinnering', icon: <Send size={14} />,
-          onClick: () => { onClose(); onSendMail(factuur, 'herinnering_2'); } }
+          onClick: () => { sluitVoorActie(); onSendMail(factuur, 'herinnering_2'); } }
     : magMailen && isConcept
       ? { label: 'Verstuur per mail', icon: <Send size={14} />,
-          onClick: () => { onClose(); onSendMail(factuur, 'factuur'); } }
+          onClick: () => { sluitVoorActie(); onSendMail(factuur, 'factuur'); } }
     : canManage && !uitBoekhouding && factuur.status === 'verzonden'
       ? { label: 'Markeer als betaald', icon: <CheckCircle2 size={15} />,
           onClick: async () => {
@@ -739,7 +744,7 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail, 
           } }
     : magMailen
       ? { label: 'Verstuur per mail', icon: <Send size={14} />,
-          onClick: () => { onClose(); onSendMail(factuur, 'factuur'); } }
+          onClick: () => { sluitVoorActie(); onSendMail(factuur, 'factuur'); } }
       : null;
 
   // Alles wat niet de primaire actie is. Bewust dezelfde voorwaarden, zodat een
@@ -747,24 +752,24 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail, 
   const acties = [
     magMailen && primair?.label !== 'Verstuur per mail' && {
       label: 'Verstuur per mail', icon: I.send,
-      onClick: () => { onClose(); onSendMail(factuur, 'factuur'); },
+      onClick: () => { sluitVoorActie(); onSendMail(factuur, 'factuur'); },
     },
     magHerinnering1 && primair?.label !== 'Herinnering sturen' && {
       label: 'Herinnering 1 sturen', icon: I.clock,
-      onClick: guardFeature('betaalherinneringen', () => { onClose(); onSendMail(factuur, 'herinnering_1'); }),
+      onClick: guardFeature('betaalherinneringen', () => { sluitVoorActie(); onSendMail(factuur, 'herinnering_1'); }),
     },
     magHerinnering2 && primair?.label !== 'Tweede herinnering' && {
       label: 'Herinnering 2 sturen', icon: I.clock,
-      onClick: () => { onClose(); onSendMail(factuur, 'herinnering_2'); },
+      onClick: () => { sluitVoorActie(); onSendMail(factuur, 'herinnering_2'); },
     },
     // Bewerken alleen zolang er niets verstuurd is. Daarna is de factuur een
     // boekstuk en is kopiëren naar een nieuwe het juiste gereedschap.
     canManage && !uitBoekhouding && !isFactuurLocked(factuur) && {
-      label: 'Factuur wijzigen', icon: I.edit, onClick: () => { onClose(); onEdit?.(factuur); },
+      label: 'Factuur wijzigen', icon: I.edit, onClick: () => { sluitVoorActie(); onEdit?.(factuur); },
     },
     canManage && !uitBoekhouding && {
       label: 'Kopiëren naar nieuwe factuur', icon: I.copy,
-      onClick: () => { onClose(); onCopy?.(factuur); },
+      onClick: () => { sluitVoorActie(); onCopy?.(factuur); },
     },
     // Vanaf hier apart: dit maakt iets kapot of onomkeerbaar.
     canCrediteer && {
@@ -773,7 +778,7 @@ function ViewFactuurModal({ factuur, customers, onClose, onRefresh, onSendMail, 
     },
     canManage && {
       label: 'Factuur verwijderen', icon: I.trash, gevaarlijk: true, scheiding: !canCrediteer,
-      onClick: () => { onClose(); onDelete?.(factuur); },
+      onClick: () => { sluitVoorActie(); onDelete?.(factuur); },
     },
   ].filter(Boolean);
 
@@ -1071,7 +1076,7 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
 // preOpenFactuurId komt uit de URL (/facturen/<id>) en is leidend: terug in de
 // browser sluit de factuur, vooruit opent hem weer. onItemOpen/onItemClose
 // zetten de geschiedenisstap; zonder die props werkt de pagina op eigen state.
-export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onItemClose, onNavConsumed, backKlant, onBackKlant }) {
+export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onItemClose, onItemLeave, onNavConsumed, backKlant, onBackKlant }) {
   const toast = useToast();
   const { profile, company } = useProfile();
   const canManage = profile?.role === 'admin' || profile?.role === 'planner';
@@ -1419,6 +1424,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
           factuur={viewFactuur}
           customers={customers}
           onClose={() => (onItemClose ? onItemClose() : setViewFactuur(null))}
+          onSluitVoorActie={() => (onItemLeave ? onItemLeave() : setViewFactuur(null))}
           onRefresh={load}
           onSendMail={(f, type) => { setSendMailFactuur({ factuur: f, templateType: type || 'factuur' }); setViewFactuur(null); }}
           onEdit={f => setEditFactuur(f)}
