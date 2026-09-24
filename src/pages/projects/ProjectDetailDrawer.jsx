@@ -211,6 +211,7 @@ function OverviewTab({
   // en beloofde dit ook, maar werd op de projectschermen nergens toegepast.
   const { can } = usePermissions();
   const magBedragen = can('projectbedragen');
+  const magOffertes = can('offertes');
   const [teamMembers, setTeamMembers] = useState([]);
   // ── Projectinformatie ─────────────────────────────────────────────────────
   // Startdatum, einddatum en begrote uren worden per veld opgeslagen, met
@@ -331,6 +332,17 @@ function OverviewTab({
     (project.dealId && o.dealId === project.dealId) || (project.offerteId && o.id === project.offerteId));
   const planning = planRegels(werkbonnen, naamVan);
   const komende = planning.filter(r => r.datum >= new Date().toISOString().slice(0, 10));
+  // "Wanneer" uit de echte planning van de werkbonnen, dezelfde dagen als het
+  // blok Planning. Eerder las dit alleen projects.start_date, en die vult
+  // niemand bij het inplannen: dan stond er "Nog niet ingepland" boven een
+  // ingeplande werkbon. De startdatum is nu alleen nog de terugval.
+  const wanneer = komende.length
+    ? `Ingepland ${fmtDate(komende[0].datum)}${komende.length > 1 ? ` (+${komende.length - 1} ${komende.length === 2 ? 'dag' : 'dagen'})` : ''}`
+    : planning.length
+      ? (planning.length === 1
+        ? fmtDate(planning[0].datum)
+        : `${fmtDate(planning[0].datum)} t/m ${fmtDate(planning[planning.length - 1].datum)}`)
+      : project.startDate ? `Gestart ${fmtDate(project.startDate)}` : 'Nog niet ingepland';
   // De aanvraagtekst staat sinds migratie 20260921201845 op het project zelf.
   // Daardoor leest een medewerker hem via projects_select, zonder dat er ook
   // maar één kolom van deals open hoeft. De deal is alleen nog terugval voor
@@ -576,7 +588,7 @@ function OverviewTab({
           <div>
             <div style={labelStyle}>Wanneer</div>
             <div style={{ fontWeight: 600, fontSize: 13 }}>
-              {project.startDate ? `Gestart ${fmtDate(project.startDate)}` : 'Nog niet ingepland'}
+              {wanneer}
             </div>
             {project.deadline && (
               <div style={{ fontSize: 12, color: 'var(--dl)' }}>deadline {fmtDate(project.deadline)}</div>
@@ -760,6 +772,11 @@ function OverviewTab({
       </div>
 
       {/* ── Offertes ───────────────────────────────────────────────────────── */}
+      {/* Zelfde toets als het tabblad Offertes (zichtbareTabs). Zonder het recht
+          geeft de database geen offertes terug, en dan stond hier "Geen
+          offertes" terwijl er wel een was. Net als Facturen: niet mogen zien is
+          het blok niet tonen, niet "er is niets". */}
+      {magOffertes && (
       <div className="card card-p">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <button type="button" className="kk-blok-titel" onClick={() => setTab?.('offerte')}>Offertes <span className="kk-pijl">→</span></button>
@@ -784,6 +801,7 @@ function OverviewTab({
             </div>
           )}
       </div>
+      )}
 
       {/* ── Facturen ───────────────────────────────────────────────────────── */}
       {magBedragen && (
