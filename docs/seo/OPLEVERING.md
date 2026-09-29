@@ -169,7 +169,20 @@ Preview: https://boss-base-git-seo-indexering-rayvonhuisman-2797s-projects.verce
   Production in Vercel), dus de app start daar niet. De code is gelijk aan
   productie op dit punt; de demo (zonder Supabase) werkt wel.
 
-## 8. Open punten
+## 8. Wit scherm op de preview en ingelogde test (29 september 2026)
+
+- **Oorzaak:** de previewbuild kreeg `VITE_SUPABASE_URL` en
+  `VITE_SUPABASE_ANON_KEY` niet mee; `supabase.js` stopte bij het laden en
+  niets ving dat op. Opgelost in `855f189` (publieke URL en anon-key als
+  terugval; omgevingsvariabele heeft voorrang) en `1e0031f` (melding met
+  herlaadknop in plaats van wit scherm bij een laadfout).
+- **Door de eigenaar getest op de Vercel-preview van `855f189`, geslaagd:**
+  inloggen en dashboard openen; dashboard vernieuwen; navigeren tussen
+  dashboardonderdelen; uitloggen en opnieuw inloggen; van de website naar de
+  app.
+
+## 9. Open punten
+
 
 
 Zie het eindrapport in het gesprek en `docs/juridisch/README.md` (invullijst).
