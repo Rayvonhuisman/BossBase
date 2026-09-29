@@ -16,7 +16,17 @@ in `privacyverklaring-CONCEPT.md` is een werkversie en mag zo niet online.
   dat je via info@bossbase.nl inzage of verwijdering kunt vragen. Ook staat erin
   dat de server inzendingen per IP- en e-mailadres telt, in gehashte vorm, tegen
   misbruik.
-- Het formulier stuurt `privacy_versie: "contactformulier-2026-09-29"` mee. Die
+- Het vinkje bevestigt dat de bezoeker de uitleg heeft gelezen; het is geen
+  toestemming als grondslag. De Edge Function eist het veld `privacy_akkoord`
+  nog; weghalen vraagt een wijziging in die functie.
+- **Registratie (`/register`, stap 1)** toont een korte tekst: welke gegevens,
+  waarvoor (account en dienst), de verificatiecode en de proefperiodemails, en
+  info@bossbase.nl voor vragen of verwijderen. Geen vinkje: de grondslag voor
+  een account is het leveren van de dienst. Er is geen aanvaarding van
+  algemene voorwaarden, omdat die nog niet bestaan.
+- Het formulier stuurt `privacy_versie: "contactformulier-2026-09-29-v2"` mee
+  (v1 was de tekst met "Ik ga ermee akkoord"; de testaanvraag van 29 september
+  heeft v1). Die
   waarde verwijst naar **die formuliertekst**, niet naar een privacyverklaring.
   Verandert de tekst, verander dan ook de versie in
   `src/pages/marketing/ContactPage.jsx` (constante `PRIVACY_VERSIE`).

@@ -19,7 +19,7 @@ const ENDPOINT = `${import.meta.env.VITE_SUPABASE_URL || "https://mawzqpnsluljxp
 // de privacytekst die hieronder bij het formulier staat; deze versie verwijst
 // naar díe tekst. Verander hem als die tekst verandert. Komt er een
 // privacyverklaring, verwijs daar dan naar en gebruik haar versiedatum.
-const PRIVACY_VERSIE = "contactformulier-2026-09-29"
+const PRIVACY_VERSIE = "contactformulier-2026-09-29-v2"
 
 const CONTACT_EMAIL = "info@bossbase.nl"
 
@@ -94,7 +94,10 @@ function naarFormulierFouten(fouten) {
     if (VAN_AANVRAAG[veld]) errors[VAN_AANVRAAG[veld]] = melding
   }
   // De gedeelde validatie spreekt van een privacyverklaring; die is er nog niet.
-  if (errors.privacy) errors.privacy = "Vink dit aan, anders kunnen we je bericht niet opslaan en beantwoorden."
+  // Het vinkje bevestigt dat de bezoeker de uitleg hierboven heeft gezien; het is
+  // geen toestemming als grondslag. De Edge Function eist het veld
+  // privacy_akkoord nog; weghalen vraagt een wijziging in die functie.
+  if (errors.privacy) errors.privacy = "Vink aan dat je hebt gelezen hoe we je gegevens gebruiken."
   return errors
 }
 
@@ -310,7 +313,7 @@ export default function ContactPage({ navigate }) {
                             aria-invalid={errors.privacy ? true : undefined}
                             aria-describedby={errors.privacy ? "contact-privacy-uitleg contact-privacy-fout" : "contact-privacy-uitleg"} />
                           <span>
-                            Ik ga ermee akkoord dat BossBase mijn gegevens zo gebruikt om op mijn bericht te reageren.
+                            Ik heb gelezen hoe BossBase mijn gegevens gebruikt om op mijn bericht te reageren.
                             <span className="req" aria-hidden="true"> *</span>
                           </span>
                         </label>

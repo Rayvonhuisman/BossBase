@@ -444,6 +444,15 @@ export function RegisterFlow({ onDone, onBack }) {
               <input type="password" value={form.password2} onChange={e => set('password2', e.target.value)} placeholder="Nogmaals je wachtwoord" />
               <PasswordMatch password={form.password} password2={form.password2} />
             </div>
+            {/* Informatie over het gebruik van gegevens, bewust zonder vinkje: de
+                grondslag voor een account is het leveren van de dienst, geen
+                toestemming. Komt er een gepubliceerde privacyverklaring (en
+                algemene voorwaarden), link die dan hier. Zie docs/juridisch. */}
+            <p className="auth-privacy" style={{ fontSize: '.78rem', lineHeight: 1.5, color: 'var(--dmu)', margin: '4px 0 10px' }}>
+              We gebruiken je naam, e-mailadres en bedrijfsgegevens om je account aan te maken en BossBase aan je te leveren.
+              Je krijgt een verificatiecode per e-mail en tijdens je proefperiode een paar e-mails over die proefperiode.
+              Vragen over je gegevens of verwijderen: <a href="mailto:info@bossbase.nl">info@bossbase.nl</a>.
+            </p>
           </>
         )}
         {step === 1 && (
