@@ -450,7 +450,8 @@ export function RegisterFlow({ onDone, onBack }) {
                 algemene voorwaarden), link die dan hier. Zie docs/juridisch. */}
             <p className="auth-privacy" style={{ fontSize: '.78rem', lineHeight: 1.5, color: 'var(--dmu)', margin: '4px 0 10px' }}>
               We gebruiken je naam, e-mailadres en bedrijfsgegevens om je account aan te maken en BossBase aan je te leveren.
-              Je krijgt een verificatiecode per e-mail en tijdens je proefperiode een paar e-mails over die proefperiode.
+              Je krijgt een verificatiecode per e-mail. Tijdens en kort na je proefperiode sturen we je enkele e-mails
+              over de proefperiode en over het kiezen van een abonnement.
               Vragen over je gegevens of verwijderen: <a href="mailto:info@bossbase.nl">info@bossbase.nl</a>.
             </p>
           </>

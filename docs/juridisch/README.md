@@ -1,71 +1,97 @@
 # Juridische pagina's: stand van zaken
 
-**Status: CONCEPT, niet gepubliceerd, niet juridisch getoetst.** Er bestaan geen
-goedgekeurde teksten voor een privacyverklaring, algemene voorwaarden, een
-cookieverklaring of een verwerkersovereenkomst. De website linkt daarom niet
-naar `/privacy` of `/voorwaarden`; die adressen geven een echte 404. Het concept
-in `privacyverklaring-CONCEPT.md` is een werkversie en mag zo niet online.
+**Status: CONCEPT, niet gepubliceerd, niet juridisch getoetst.** Er zijn geen
+goedgekeurde teksten. De website linkt niet naar `/privacy` of `/voorwaarden`
+(die geven een echte 404).
 
-## Hoe de website nu met privacy-informatie omgaat
+- `privacyverklaring-CONCEPT.md` — concept op basis van vastgestelde feiten.
+- `verwerkersovereenkomst-CONCEPT.md` — concept op basis van vastgestelde feiten.
+- Hieronder: wat de eigenaren moeten aanleveren (deel 1) en wat onderzocht is
+  (deel 2).
 
-- **Contactformulier (`/contact`).** Het formulier stuurt de aanvraag naar de
-  Edge Function `public-website-inquiry`, die hem opslaat in `public.inquiries`
-  bij het BossBase-bedrijf; in het dashboard staat hij onder "Aanvragen".
-- Er is **geen link** naar een privacyverklaring. Direct boven het vinkje staat
-  een korte, feitelijke tekst: welke gegevens worden opgeslagen, waarvoor, en
-  dat je via info@bossbase.nl inzage of verwijdering kunt vragen. Ook staat erin
-  dat de server inzendingen per IP- en e-mailadres telt, in gehashte vorm, tegen
-  misbruik.
-- Het vinkje bevestigt dat de bezoeker de uitleg heeft gelezen; het is geen
-  toestemming als grondslag. De Edge Function eist het veld `privacy_akkoord`
-  nog; weghalen vraagt een wijziging in die functie.
-- **Registratie (`/register`, stap 1)** toont een korte tekst: welke gegevens,
-  waarvoor (account en dienst), de verificatiecode en de proefperiodemails, en
-  info@bossbase.nl voor vragen of verwijderen. Geen vinkje: de grondslag voor
-  een account is het leveren van de dienst. Er is geen aanvaarding van
-  algemene voorwaarden, omdat die nog niet bestaan.
-- Het formulier stuurt `privacy_versie: "contactformulier-2026-09-29-v2"` mee
-  (v1 was de tekst met "Ik ga ermee akkoord"; de testaanvraag van 29 september
-  heeft v1). Die
-  waarde verwijst naar **die formuliertekst**, niet naar een privacyverklaring.
-  Verandert de tekst, verander dan ook de versie in
-  `src/pages/marketing/ContactPage.jsx` (constante `PRIVACY_VERSIE`).
-- Geen bewaartermijn genoemd: die is nog niet vastgesteld (zie invullijst).
-- `/cookieverklaring` is een lege placeholder uit de app. Hij krijgt `noindex`
-  en staat niet in de sitemap.
+## Privacy-informatie op de website nu
 
-## Invullijst — wat nodig is om af te ronden
+- **Contactformulier:** korte uitleg boven een vinkje "Ik heb gelezen hoe
+  BossBase mijn gegevens gebruikt …". Opgeslagen als
+  `inquiries.metadata.privacy = { akkoord: true, versie, akkoord_op }`. Het
+  veld heet "akkoord", maar betekent sinds versie
+  `contactformulier-2026-09-29-v2` alleen: uitleg gelezen. Het is geen
+  toestemming en wordt nergens voor andere doelen gebruikt. De inbox toont het
+  als "Uitleg gelezen". De eerste testaanvraag heeft versie
+  `contactformulier-2026-09-29` (de oude tekst "Ik ga ermee akkoord").
+- **Registratie:** korte uitleg zonder vinkje, inclusief dat er tijdens en kort
+  na de proefperiode mails komen over de proefperiode en het kiezen van een
+  abonnement.
 
-Vul in, laat toetsen door een jurist, en publiceer pas daarna.
+## Deel 1 — Van de eigenaren nodig
 
-| # | Gegeven of keuze | Nodig voor | Stand |
-| --- | --- | --- | --- |
-| 1 | Juridische naam en rechtsvorm van BossBase | Alle drie | Onbekend (alleen "BossBase B.V." in een ongebruikt, oud bestand) |
-| 2 | KvK-nummer | Alle drie, footer, contact | Onbekend |
-| 3 | Btw-id | Voorwaarden, facturen | Onbekend |
-| 4 | Vestigingsadres (of "geen bezoekadres") | Alle drie, contact | Twee verschillende adressen in oude code (Emmen en Amsterdam); niet bevestigd, daarom van de site gehaald |
-| 5 | Telefoonnummer voor klanten, ja of nee | Contact | Twee verschillende nummers in oude code; niet bevestigd, daarom van de site gehaald |
-| 6 | Contactpersoon of adres voor privacyverzoeken | Privacyverklaring | Voorstel: info@bossbase.nl |
-| 7 | Grondslag per verwerking (account, abonnement, contactformulier, proefperiodemails, Boss-chat) | Privacyverklaring | Te bepalen met jurist |
-| 8 | Bewaartermijnen: contactaanvragen, accounts na opzegging, abonnementsgegevens, chatberichten, telling tegen misbruik | Privacyverklaring | Niet vastgesteld |
-| 9 | Wat er gebeurt na "account verwijderen" (nu een soft delete) en na welke termijn gegevens echt weg zijn | Privacyverklaring, voorwaarden | Niet vastgesteld |
-| 10 | Regio's en doorgifte buiten de EER per subverwerker (Supabase, Vercel, Stripe, Resend, Anthropic) | Privacyverklaring, verwerkersovereenkomst | Te controleren in de accounts van die diensten |
-| 11 | Verwerkersovereenkomsten mét deze subverwerkers | Verwerkersovereenkomst | Te controleren |
-| 12 | Aansprakelijkheid en beschikbaarheid (geen garanties verzinnen) | Voorwaarden | Te bepalen met jurist |
-| 13 | Prijswijzigingen: hoe en met welke termijn aangekondigd | Voorwaarden | Te bepalen |
-| 14 | Keuze analysedienst en toestemming (zie `docs/seo/meting.md`) | Cookieverklaring, privacyverklaring | Open |
+1. Juridische naam en rechtsvorm.
+2. KvK-nummer en btw-id.
+3. Zakelijk vestigingsadres, en of dat ook een bezoekadres is.
+4. Een publiek telefoonnummer, als je dat wilt.
+5. E-mailadres voor contact en voor privacyverzoeken (voorstel: info@bossbase.nl
+   voor beide).
+6. Bewaartermijnen. Voorstellen:
+   - account en bedrijfsgegevens: zolang het account bestaat, daarna 2 jaar
+     (dat belooft de app nu al);
+   - financiële administratie: 7 jaar (fiscale bewaarplicht);
+   - contactaanvragen: 12 maanden na afhandeling;
+   - helpchatgesprekken: 12 maanden;
+   - verzonden-mailregistratie: 12 maanden;
+   - resettokens en verificatiecodes: direct na gebruik of verloop.
+7. Prijswijzigingen. Voorstel: minimaal 30 dagen vooraf per e-mail aankondigen;
+   bij een lopend jaarabonnement geldt de oude prijs tot het einde van de
+   looptijd.
+8. Beschikbaarheid. Voorstel: geen percentage beloven; "we doen ons best de
+   dienst beschikbaar te houden en melden gepland onderhoud vooraf".
+9. Aansprakelijkheid en meldtermijn voor datalekken (voorstel: 48 uur) —
+   met jurist.
+10. Proefperiodemails: afmeldlink toevoegen, of de commerciële mails (1 dag
+    vóór en 15 dagen na het einde) aanpassen — met jurist.
+11. Meldactie: automatische deelname behouden of een keuze toevoegen.
 
-Vastgesteld in de code en al bruikbaar: proefperiode (14 dagen, functies van
-Groei, geen betaalgegevens, daarna alleen-lezen), maand- en jaarabonnement,
-opzegging, downgraden, modules en prijzen. Zie `docs/seo/productfeiten.md`.
+## Deel 2 — Onderzocht (29 september 2026)
+
+Vastgesteld in de code en productie (alleen schema en aantallen):
+
+- **Gegevens per functie:** zie tabel §3 van het privacyconcept en §3 van de
+  verwerkersovereenkomst.
+- **Proefperiodemails:** vijf mails, 7 en 3 dagen vóór, 1 dag vóór, 1 dag na
+  en 15 dagen na het einde van de proefperiode, aan de oudste actieve beheerder.
+  De eerste twee zijn vooral informatief; de mail van 1 dag vóór het einde
+  bevat een aanbod, die van 15 dagen erna is vooral een herinnering om te
+  kopen. **Geen afmeldlink.** Uitsluiten kan alleen intern.
+- **Account verwijderen:** soft delete. Profiel inactief, inlogaccount en alle
+  gegevens en bestanden blijven. Beheerder opzeggen: bedrijf "opgezegd",
+  gebruikers inactief, alle bedrijfsdata blijft; het Stripe-abonnement wordt
+  daarbij niet automatisch gestopt. De belofte in de app ("na 2 jaar, financieel
+  na 7 jaar definitief verwijderd") is **niet gebouwd**.
+- **Leveranciers:** Supabase, Vercel, Stripe, Resend, Anthropic, PDOK (vanuit de
+  browser), Moneybird en SnelStart (alleen bij een koppeling). Google Agenda en
+  AFAS zijn verborgen in de app, maar er bestaat in productie elk één koppeling.
+- **Opslagregio:** Supabase-database in Central EU (Frankfurt).
+- **Cookies en browseropslag:** geen cookies uit de eigen code; wel
+  localStorage (inlogsessie, cookiekeuze, weergavevoorkeuren, filters) en
+  sessionStorage (gekozen bedrijf, aanmeldpakket). Geen tracking. De
+  cookiebannerkeuze heeft geen effect.
+
+**Niet vast te stellen met de beschikbare toegang (ONBEKEND):**
+
+- Regio van Supabase Edge Functions en logs; bewaartermijn van die logs.
+- Regio van de Vercel-functie en Vercel-logs.
+- Regio van het Resend-account.
+- Regio's en doorgiftemechanismen bij Stripe en Anthropic.
+- Of er met Supabase, Vercel, Stripe, Resend en Anthropic een
+  verwerkersovereenkomst is **afgesloten** (een beschikbaar standaarddocument
+  is geen bewijs).
+- Hoe lang Anthropic chatberichten bewaart.
+- Of Vercel of Stripe cookies op hun eigen domeinen zetten tijdens gebruik.
+- Of het Stripe-abonnement bij opzeggen elders wordt stopgezet.
 
 ## Na goedkeuring
 
-1. Voeg `/privacy` en `/voorwaarden` (en eventueel `/verwerkersovereenkomst`)
-   toe in `src/marketing/routes.jsx`, bijvoorbeeld als Markdown in
-   `src/content/juridisch/` met een eenvoudig sjabloon.
-2. Zet de links in de footer (`FOOTER_LINKS` in
-   `src/pages/marketing/MktShared.jsx`) en in het contactformulier.
+1. Voeg `/privacy` en `/voorwaarden` toe in `src/marketing/routes.jsx`.
+2. Zet de links in de footer, bij het contactformulier en bij de registratie.
 3. Zet `PRIVACY_VERSIE` in `ContactPage.jsx` op de versiedatum van de
    gepubliceerde privacyverklaring.
-4. `npm run build` controleert daarna dat alle links kloppen.
+4. `npm run build` controleert daarna alle links.

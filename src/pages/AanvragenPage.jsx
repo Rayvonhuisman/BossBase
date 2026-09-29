@@ -290,15 +290,19 @@ function AanvraagDrawer({ aanvraag, onClose, onGewijzigd, openCustomer, setPage 
             <Veld label="Testaanvraag">{aanvraag.isTest ? 'Ja — verstuurd vanaf een testomgeving' : 'Nee'}</Veld>
           </Sectie>
 
-          <Sectie titel="Privacytoestemming">
+          {/* Het vinkje op het formulier bevestigt dat de bezoeker de privacy-uitleg
+              heeft gelezen. Het is GEEN toestemming en mag niet worden gebruikt als
+              grondslag voor andere doelen, zoals marketing. Het veld heet in de
+              database nog "akkoord" (vastgelegd door public-website-inquiry). */}
+          <Sectie titel="Privacy-uitleg">
             {privacy?.akkoord ? (
               <>
-                <Veld label="Akkoord">Ja</Veld>
+                <Veld label="Uitleg gelezen">Ja (geen toestemming voor andere doelen)</Veld>
                 <Veld label="Tijdstip">{datum(privacy.akkoord_op)}</Veld>
                 <Veld label="Versie tekst">{privacy.versie || 'onbekend'}</Veld>
               </>
             ) : (
-              <Veld label="Akkoord">Niet vastgelegd</Veld>
+              <Veld label="Uitleg gelezen">Niet vastgelegd</Veld>
             )}
           </Sectie>
 
