@@ -141,6 +141,35 @@ volledige matrix staat in `linkmatrix.md`.
 - **Screenshot van het offerteoverzicht verwijderd** (demobedrijfsnamen mogelijk
   bestaand); werkbon en planning blijven.
 
-## 7. Open punten
+## 7. Getest op de Vercel-preview (29 september 2026, commit cf13c78)
+
+Preview: https://boss-base-git-seo-indexering-rayvonhuisman-2797s-projects.vercel.app
+(afgeschermd met Vercel-login; getest met een bypass-token).
+
+- **Gevonden en opgelost:** alle app-routes gaven een 404, omdat een rewrite
+  naar `/app.html` met `cleanUrls` niets vindt. Nu naar `/app`; de build en de
+  lokale testserver vangen deze fout voortaan.
+- 25 websitepagina's, desktop en mobiel: 200, één H1, `lang="nl"`, canonical
+  naar www.bossbase.nl, structured data, geen fouten, geen horizontale scroll.
+  Navigatie binnen de site en vernieuwen werken.
+- Redirects 308 (`/functies/`, `/registreer`, `/over-ons`, `/website`); echte
+  404 voor `/privacy`, `/voorwaarden` en onbekende paden.
+- App- en klantlinkroutes 200 met de app-shell en noindex (header én meta).
+- `/api/snelstart/webhook` wordt afgehandeld door de Vercel-functie (JSON 503
+  "Webhook niet geconfigureerd", want de preview heeft dat secret niet), niet
+  door de website.
+- robots.txt (text/plain) en sitemap (34 URL's).
+- Preview: `x-robots-tag: noindex` op elke URL. Productie krijgt onze regel
+  niet (die geldt alleen voor `*.vercel.app`); controleren na de deploy.
+- Contactformulier op de preview: faalt netjes met een foutmelding, omdat de
+  productiefunctie dat domein niet toestaat; er is niets opgeslagen.
+- **Niet te testen op de preview:** inloggen, registreren, wachtwoordherstel en
+  de offerte-, werkbon- en betaallinks. De previewbuild heeft geen
+  `VITE_SUPABASE_URL` en `VITE_SUPABASE_ANON_KEY` (alleen ingesteld voor
+  Production in Vercel), dus de app start daar niet. De code is gelijk aan
+  productie op dit punt; de demo (zonder Supabase) werkt wel.
+
+## 8. Open punten
+
 
 Zie het eindrapport in het gesprek en `docs/juridisch/README.md` (invullijst).
