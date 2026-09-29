@@ -4,9 +4,15 @@
 // Welke het wordt, bepaalt het pad. Zo laadt een bezoeker van de website geen
 // dashboardcode, en het dashboard geen websitecode.
 import { isAppPath } from './lib/appRoutes.js';
+import { installeerLaadfoutHerstel, isLaadfout, herlaadEenmaal, toonLaadfout } from './lib/laadfout.js';
 
-if (isAppPath(window.location.pathname)) {
-  import('./app-entry.jsx');
-} else {
-  import('./marketing/entry-client.jsx');
-}
+installeerLaadfoutHerstel();
+
+const ingang = isAppPath(window.location.pathname)
+  ? import('./app-entry.jsx')
+  : import('./marketing/entry-client.jsx');
+
+ingang.catch(fout => {
+  if (isLaadfout(fout) && herlaadEenmaal()) return;
+  toonLaadfout(fout);
+});
