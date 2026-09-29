@@ -1,8 +1,332 @@
 {
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "redirects": [
+    {
+      "source": "/registreer",
+      "destination": "/register",
+      "permanent": true
+    },
+    {
+      "source": "/over-ons",
+      "destination": "/over",
+      "permanent": true
+    },
+    {
+      "source": "/website",
+      "destination": "/",
+      "permanent": true
+    },
+    {
+      "source": "/index",
+      "destination": "/",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
-      "source": "/((?!api/).*)",
-      "destination": "/index.html"
+      "source": "/login",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/register",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/reset-password",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/betaald",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/betaling-geannuleerd",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/superadmin",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/cookieverklaring",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/dashboard",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/dashboard/:pad*",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/demo",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/demo/:pad*",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/uitnodiging",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/uitnodiging/:pad*",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/offerte",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/offerte/:pad*",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/werkbon",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/werkbon/:pad*",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/betaal",
+      "destination": "/app.html"
+    },
+    {
+      "source": "/betaal/:pad*",
+      "destination": "/app.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "(?<preview>.*)\\.vercel\\.app"
+        }
+      ],
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/login",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/register",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/reset-password",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/betaald",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/betaling-geannuleerd",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/superadmin",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/cookieverklaring",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/dashboard",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/dashboard/:pad*",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/demo",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/demo/:pad*",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/uitnodiging",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/uitnodiging/:pad*",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/offerte",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/offerte/:pad*",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/werkbon",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/werkbon/:pad*",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/betaal",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/betaal/:pad*",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/app",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/404",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex"
+        }
+      ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
+      ]
     }
   ]
 }

@@ -112,10 +112,10 @@ export const demoDb = {
     klant(K.vve,       'VvE Parkflat Assendorp',   'Zwolle',    'beheer@parkflat-assendorp.nl', '038 - 422 19 04', 'Assendorperdijk 88',  '8012 EH'),
     klant(K.bouwhof,   'Bouwhof Projecten BV',      'Kampen',    'planning@bouwhof.nl',          '038 - 331 72 10', 'Constructieweg 3',    '8263 BC'),
     klant(K.jansen,    'Familie Jansen',            'Hattem',    'h.jansen@ziggo.nl',            '06 - 2244 8871',  'Vijzelstraat 21',     '8051 HB'),
-    klant(K.gemeente,  'Gemeente Zwolle',           'Zwolle',    'vastgoed@zwolle.nl',           '14 038',          'Grote Kerkplein 15',  '8011 PK'),
+    klant(K.gemeente,  'Stichting Sportzalen Zuid',  'Zwolle',    'beheer@sportzalenzuid.nl',     '038 - 420 11 50', 'Sportlaan 12',        '8024 AA'),
     klant(K.dekker,    'Dekker Vastgoedbeheer',     'Deventer',  'onderhoud@dekkervastgoed.nl',  '0570 - 61 22 88', 'Snipperlingsdijk 4',  '7417 BJ'),
     klant(K.molenaar,  'Molenaar Bouw & Onderhoud', 'Raalte',    'info@molenaarbouw.nl',         '0572 - 35 11 20', 'Industrieweg 45',     '8102 HK'),
-    klant(K.zorggroep, 'Zorggroep IJssel-Vecht',    'Zwolle',    'facilitair@zorgijsselvecht.nl','038 - 456 30 00', 'Dokter Spanjaardweg 1','8025 BT'),
+    klant(K.zorggroep, 'Zorggroep IJssel-Vecht',    'Zwolle',    'facilitair@zorgijsselvecht.nl','038 - 456 30 00', 'Zorgpad 5',           '8025 AB'),
     klant(K.visser,    'Familie Visser',            'Wezep',     'vissernl@gmail.com',           '06 - 1180 3344',  'Heerderweg 7',        '8091 BD'),
   ],
 
@@ -159,7 +159,7 @@ export const demoDb = {
   ],
 
   werkbonnen: [
-    { id: 'demo-wb-1', company_id: BEDRIJF, customer_id: K.zorggroep, nummer: 'WB-2026-118', titel: 'Gangen 2e verdieping schilderen', omschrijving: 'Wanden en deurkozijnen, kleur RAL 9010. Let op: afdelingen blijven in gebruik.', status: 'gepland',      gepland_op: dagStr(0), starttijd: '07:30', eindtijd: '16:00', locatie: 'Dokter Spanjaardweg 1, Zwolle', assigned_to_ids: [P.wouter, P.tim], verantwoordelijke_ids: [P.wouter], created_at: d(-5) },
+    { id: 'demo-wb-1', company_id: BEDRIJF, customer_id: K.zorggroep, nummer: 'WB-2026-118', titel: 'Gangen 2e verdieping schilderen', omschrijving: 'Wanden en deurkozijnen, kleur RAL 9010. Let op: afdelingen blijven in gebruik.', status: 'gepland',      gepland_op: dagStr(0), starttijd: '07:30', eindtijd: '16:00', locatie: 'Zorgpad 5, Zwolle', assigned_to_ids: [P.wouter, P.tim], verantwoordelijke_ids: [P.wouter], created_at: d(-5) },
     { id: 'demo-wb-2', company_id: BEDRIJF, customer_id: K.jansen,    nummer: 'WB-2026-119', titel: 'Kozijnen voorgevel',              omschrijving: 'Houtrot uitboren, plamuren en aflakken.',                                   status: 'in_uitvoering', gepland_op: dagStr(0), starttijd: '08:00', eindtijd: '15:00', locatie: 'Vijzelstraat 21, Hattem',        assigned_to_ids: [P.iris],          verantwoordelijke_ids: [P.iris],   created_at: d(-3) },
     { id: 'demo-wb-3', company_id: BEDRIJF, customer_id: K.bouwhof,   nummer: 'WB-2026-120', titel: 'Woning 3 t/m 6 — binnenwerk',     omschrijving: 'Spuitwerk plafonds, daarna wanden.',                                        status: 'gepland',      gepland_op: dagStr(1), starttijd: '07:00', eindtijd: '16:30', locatie: 'Constructieweg 3, Kampen',       assigned_to_ids: [P.wouter, P.tim, P.iris], verantwoordelijke_ids: [P.tim], created_at: d(-2) },
     { id: 'demo-wb-4', company_id: BEDRIJF, customer_id: K.vve,       nummer: 'WB-2026-121', titel: 'Inmeten balkons',                 omschrijving: 'Opmeten voor offerte, foto’s van de schade maken.',                     status: 'gepland',      gepland_op: dagStr(2), starttijd: '09:00', eindtijd: '12:00', locatie: 'Assendorperdijk 88, Zwolle',     assigned_to_ids: [P.sander],        verantwoordelijke_ids: [P.sander], created_at: d(-1) },
@@ -226,7 +226,7 @@ export const demoDb = {
   ],
 
   calendar_events: [
-    { id: 'demo-ce-1', company_id: BEDRIJF, customer_id: K.zorggroep, title: 'Gangen 2e verdieping schilderen', start_at: d(0, 7, 30), end_at: d(0, 16, 0),  location: 'Dokter Spanjaardweg 1, Zwolle', type: null, werkbon_id: 'demo-wb-1', assigned_to: P.wouter },
+    { id: 'demo-ce-1', company_id: BEDRIJF, customer_id: K.zorggroep, title: 'Gangen 2e verdieping schilderen', start_at: d(0, 7, 30), end_at: d(0, 16, 0),  location: 'Zorgpad 5, Zwolle', type: null, werkbon_id: 'demo-wb-1', assigned_to: P.wouter },
     { id: 'demo-ce-2', company_id: BEDRIJF, customer_id: K.jansen,    title: 'Kozijnen voorgevel',              start_at: d(0, 8, 0),  end_at: d(0, 15, 0),  location: 'Vijzelstraat 21, Hattem',       type: null, werkbon_id: 'demo-wb-2', assigned_to: P.iris },
     { id: 'demo-ce-3', company_id: BEDRIJF, customer_id: K.bouwhof,   title: 'Woning 3 t/m 6 — binnenwerk',     start_at: d(1, 7, 0),  end_at: d(1, 16, 30), location: 'Constructieweg 3, Kampen',      type: null, werkbon_id: 'demo-wb-3', assigned_to: P.tim },
     { id: 'demo-ce-4', company_id: BEDRIJF, customer_id: K.vve,       title: 'Inmeten balkons',                 start_at: d(2, 9, 0),  end_at: d(2, 12, 0),  location: 'Assendorperdijk 88, Zwolle',    type: null, werkbon_id: 'demo-wb-4', assigned_to: IK },

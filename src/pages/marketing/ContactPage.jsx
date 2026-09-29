@@ -29,10 +29,26 @@ function Field({ label, name, req, error, children }) {
 }
 
 const FAQ_PREVIEW = [
-  { q: "Is BossBase gratis te proberen?", a: "Ja, 14 dagen gratis. Geen creditcard nodig." },
-  { q: "Kan ik importeren vanuit Excel?", a: "Ja, je kunt klanten en contacten importeren via CSV." },
-  { q: "Werkt BossBase op mijn telefoon?", a: "Ja, BossBase is volledig mobiel-vriendelijk." },
+  { q: "Is BossBase gratis te proberen?", a: "Ja, 14 dagen gratis met de functies van Groei. Je hoeft geen betaalgegevens in te vullen." },
+  { q: "Kan ik importeren vanuit Excel?", a: "Nee, een importfunctie is er niet. Je voert klanten zelf in. Exporteren naar Excel of CSV kan wel." },
+  { q: "Werkt BossBase op mijn telefoon?", a: "Het dashboard werkt op een tablet, laptop of computer (vanaf 768 pixels breed), niet op een smalle telefoon, en er is geen app. Klanten kunnen offertes en werkbonnen wel op hun telefoon ondertekenen." },
 ]
+
+// Er is (nog) geen verwerking van formulieren op de website. Het formulier zet
+// het bericht daarom klaar in het e-mailprogramma van de bezoeker; er wordt
+// niets via de website verstuurd of opgeslagen.
+function mailtoLink(form) {
+  const onderwerp = `${form.onderwerp || "Vraag"} — ${form.naam}${form.bedrijf ? ` (${form.bedrijf})` : ""}`
+  const regels = [
+    form.bericht,
+    "",
+    `Naam: ${form.naam}`,
+    form.bedrijf && `Bedrijf: ${form.bedrijf}`,
+    form.telefoon && `Telefoon: ${form.telefoon}`,
+    form.branche && `Branche: ${form.branche}`,
+  ].filter(r => r !== false && r !== undefined && r !== "")
+  return `mailto:info@bossbase.nl?subject=${encodeURIComponent(onderwerp)}&body=${encodeURIComponent(regels.join("\n"))}`
+}
 
 export default function ContactPage({ navigate }) {
   const [form, setForm] = useState({ naam: "", bedrijf: "", email: "", telefoon: "", branche: "", onderwerp: "", bericht: "" })
@@ -51,11 +67,13 @@ export default function ContactPage({ navigate }) {
     e.preventDefault()
     const errs = validate(form)
     if (Object.keys(errs).length) { setErrors(errs); return }
+    window.location.href = mailtoLink(form)
     setSent(true)
     setErrors({})
   }
 
   const go = (e, href) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
     e.preventDefault()
     if (navigate) navigate(href)
     else window.location.href = href
@@ -69,11 +87,9 @@ export default function ContactPage({ navigate }) {
         {/* Hero */}
         <section className="contact-hero">
           <div className="container">
-            <Reveal>
-              <span className="section-kicker">Contact</span>
-              <h1>We helpen je graag verder</h1>
-              <p>Vraag, opmerking of demo aanvragen? Stuur ons een bericht en we reageren binnen één werkdag.</p>
-            </Reveal>
+            <span className="section-kicker">Contact</span>
+            <h1>We helpen je graag verder</h1>
+            <p>Vraag over BossBase, je proefperiode of je abonnement? Mail of bel ons; we reageren op werkdagen.</p>
           </div>
         </section>
 
@@ -88,10 +104,13 @@ export default function ContactPage({ navigate }) {
                   {sent ? (
                     <div className="contact-toast">
                       {I.checkCircle}
-                      <span>Bericht ontvangen! We reageren binnen één werkdag.</span>
+                      <span>Je e-mailprogramma is geopend met je bericht. Verstuur het daar. Opende er niets? Mail dan direct naar <a href="mailto:info@bossbase.nl">info@bossbase.nl</a>.</span>
                     </div>
                   ) : (
                     <form onSubmit={submit} noValidate>
+                      <p style={{ fontSize: 14, color: "var(--dmu)", marginBottom: 16 }}>
+                        Dit formulier zet je bericht klaar in je eigen e-mailprogramma. Er wordt niets via de website verstuurd of opgeslagen.
+                      </p>
                       <div className="form-row-2">
                         <Field label="Naam" name="naam" req error={errors.naam}>
                           <input type="text" value={form.naam} onChange={e => set("naam", e.target.value)} placeholder="Jan Jansen" />
@@ -126,7 +145,7 @@ export default function ContactPage({ navigate }) {
                         <textarea value={form.bericht} onChange={e => set("bericht", e.target.value)} placeholder="Vertel ons hoe we je kunnen helpen..." rows={5} />
                       </Field>
                       <button type="submit" className="btn btn-p glow contact-submit btn-lg">
-                        Verstuur bericht {I.arrowRight}
+                        Open in mijn e-mailprogramma {I.arrowRight}
                       </button>
                     </form>
                   )}
@@ -141,7 +160,7 @@ export default function ContactPage({ navigate }) {
                     <div>
                       <div className="ci-title">E-mail</div>
                       <a href="mailto:info@bossbase.nl" className="ci-link">info@bossbase.nl</a>
-                      <div className="ci-sub">Reactie binnen één werkdag</div>
+                      <div className="ci-sub">We reageren op werkdagen</div>
                     </div>
                   </div>
                   <div className="contact-info-block">
@@ -159,22 +178,6 @@ export default function ContactPage({ navigate }) {
                       <div className="ci-val">Sodalietdreef 6</div>
                       <div className="ci-sub">7828 CR Emmen</div>
                     </div>
-                  </div>
-                  <div>
-                    <div className="ci-title" style={{ marginBottom: 10 }}>Volg ons</div>
-                    <div className="social-row">
-                      <a href="https://linkedin.com" className="social-btn" target="_blank" rel="noopener noreferrer">
-                        {I.linkedIn} LinkedIn
-                      </a>
-                      <a href="https://instagram.com" className="social-btn" target="_blank" rel="noopener noreferrer">
-                        {I.instagram} Instagram
-                      </a>
-                    </div>
-                  </div>
-                  <div className="map-placeholder">
-                    {I.mapPin}
-                    <div style={{ fontWeight: 600, color: "var(--dk)" }}>Amsterdam, Nederland</div>
-                    <div style={{ fontSize: 13, color: "var(--dmu)" }}>Herengracht 182 · 1016 BR</div>
                   </div>
                 </div>
               </Reveal>
@@ -219,7 +222,7 @@ export default function ContactPage({ navigate }) {
             <Reveal stagger>
               <div className="contact-cards choreo-body">
                 {[
-                  { icon: I.mail,     title: "E-mail",   desc: "info@bossbase.nl",  sub: "Reactie binnen 1 werkdag", href: "mailto:info@bossbase.nl" },
+                  { icon: I.mail,     title: "E-mail",   desc: "info@bossbase.nl",  sub: "We reageren op werkdagen", href: "mailto:info@bossbase.nl" },
                   { icon: I.phone,    title: "Telefoon", desc: "06 - 4200 5889",    sub: "Ma–Vr 09:00–17:00",        href: "tel:+31642005889" },
                 ].map(c => (
                   <a key={c.title} href={c.href} className="contact-card">

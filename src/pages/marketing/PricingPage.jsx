@@ -1,5 +1,4 @@
 import { useState, useEffect, Fragment } from "react"
-import { Star } from "lucide-react"
 import { Nav, Footer, Reveal, I, ScrollLine, initChoreo } from "./MktShared"
 import { tierLabel, tierPrice, extraUserLabel, YEARLY_FREE_MONTHS, WELKOMSTACTIES, welkomstactiesVoor } from "../../lib/tiers.js"
 import {
@@ -20,7 +19,7 @@ const limietRegel = (tier, key) => {
   const naam = def.label.toLowerCase()
   if (max == null) return `Onbeperkt ${naam}`
   if (max === 1) return `1 ${def.enkelvoud}`
-  return `Tot ${max} ${naam}${def.telwijze === 'periode' ? ' per maand' : ''}`
+  return `Tot ${max} ${naam}${def.telwijze === 'periode' ? ' per factuurperiode' : ''}`
 }
 
 // De featureregels van een plan: alles wat dit plan heeft en het vorige niet.
@@ -32,7 +31,7 @@ const nieuweFeatures = (tier, vorigeTier) =>
 
 const PLAN_CARDS = [
   {
-    id: "starter", who: "Perfect voor ZZP'ers", hasExtra: false, hot: false,
+    id: "starter", who: "Voor de zzp'er die net begint", hasExtra: false, hot: false,
     features: [
       limietRegel('starter', 'gebruikers'),
       limietRegel('starter', 'klanten'),
@@ -42,26 +41,24 @@ const PLAN_CARDS = [
       // nog eens als losse functie herhalen.
       ...nieuweFeatures('starter', null).filter(l =>
         !['Klanten', 'Offertes', 'Facturen'].includes(l)),
-      "E-mailondersteuning",
+      "Ondersteuning per e-mail",
     ],
   },
   {
-    id: "groei", who: "Voor groeiende bedrijven", hasExtra: true, hot: true,
+    id: "groei", who: "Voor de zzp'er of een bedrijf van twee", hasExtra: true, hot: true,
     features: [
       limietRegel('groei', 'gebruikers'),
       "Onbeperkt klanten, offertes en facturen",
       "Alles van Starter, plus:",
       ...nieuweFeatures('groei', 'starter'),
-      "Prioriteitsondersteuning",
     ],
   },
   {
-    id: "team", who: "Grotere teams & bedrijven", hasExtra: true, hot: false,
+    id: "team", who: "Voor bedrijven met meer mensen en bussen", hasExtra: true, hot: false,
     features: [
       limietRegel('team', 'gebruikers'),
       "Alles van Groei, plus:",
       ...nieuweFeatures('team', 'groei'),
-      "Telefonische ondersteuning",
     ],
   },
 ]
@@ -99,10 +96,8 @@ const CMP_CATS = [
     rows: [
       limietRij("Gebruikers", 'gebruikers'),
       limietRij("Klanten", 'klanten'),
-      limietRij("Offertes per maand", 'offertes'),
-      limietRij("Facturen per maand", 'facturen'),
-      { label: "Opslag",      starter: "5 GB", groei: "20 GB", team: "100 GB" },
-      { label: "Mobiele app", starter: true,   groei: true,    team: true },
+      limietRij("Offertes per factuurperiode", 'offertes'),
+      limietRij("Facturen per factuurperiode", 'facturen'),
     ],
   },
   {
@@ -154,10 +149,7 @@ const CMP_CATS = [
   {
     cat: "Ondersteuning",
     rows: [
-      { label: "E-mailondersteuning",        starter: true,  groei: true,  team: true },
-      { label: "Prioriteitsondersteuning",   starter: false, groei: true,  team: true },
-      { label: "Telefonische ondersteuning", starter: false, groei: false, team: true },
-      { label: "Persoonlijke onboarding",    starter: false, groei: false, team: true },
+      { label: "Ondersteuning per e-mail",   starter: true,  groei: true,  team: true },
     ],
   },
 ]
@@ -165,10 +157,10 @@ const CMP_CATS = [
 const FAQ_P = [
   { q: "Hoe zit het met opzeggen?", a: "Een maandabonnement is per maand opzegbaar. Een jaarabonnement loopt 12 maanden: je betaalt maandelijks en kunt tussentijds niet opzeggen, wel tegen het einde van die 12 maanden. Daarna loopt het maandelijks door en is het per maand opzegbaar." },
   { q: "Wat gebeurt er met mijn looptijd als ik overstap naar een groter pakket?", a: "Bij een jaarabonnement begint de looptijd van 12 maanden dan opnieuw, gerekend vanaf de overstap. Je ziet de nieuwe einddatum in het scherm voordat je bevestigt en gaat er expliciet mee akkoord. Modules bijkopen en teamleden toevoegen raken je looptijd niet — dat zijn bijbestellingen. Bij een maandabonnement verandert er niets: dat blijft per maand opzegbaar, ook na een upgrade." },
-  { q: "Wat gebeurt er na de proefperiode?", a: "Na 14 dagen word je gevraagd een abonnement te kiezen. Je data blijft behouden. Je kiest pas dan welk plan het beste bij je past." },
-  { q: "Kan ik van plan wisselen?", a: "Ja, upgraden kan direct. Downgraden gaat in aan het begin van je volgende factuurperiode. Er zijn geen extra kosten voor het wisselen van plan." },
-  { q: "Is BTW inbegrepen in de prijs?", a: "Nee, de getoonde prijzen zijn exclusief BTW. Als ondernemer kun je de BTW aftrekken als zakelijke kosten." },
-  { q: "Wat zijn de betaalmogelijkheden?", a: "We accepteren iDEAL, creditcard en SEPA-incasso. Jaarabonnementen kunnen ook per factuur worden betaald." },
+  { q: "Wat gebeurt er na de proefperiode?", a: "Tijdens de proefperiode werk je met de functies van Groei, zonder limieten. Na 14 dagen kies je een abonnement. Doe je dat niet, dan wordt je account alleen-lezen: je kunt je gegevens nog bekijken en exporteren, maar niets nieuws aanmaken." },
+  { q: "Kan ik van plan wisselen?", a: "Upgraden naar een groter pakket kan altijd. Naar een kleiner pakket gaan kan bij een maandabonnement; bij een jaarabonnement niet binnen de looptijd van 12 maanden. Zit je boven de limiet van het kleinere pakket (bijvoorbeeld meer dan 100 klanten bij Starter), dan kan het ook niet." },
+  { q: "Is BTW inbegrepen in de prijs?", a: "Nee, alle prijzen zijn exclusief btw. De btw komt er op je factuur bij." },
+  { q: "Wat zijn de betaalmogelijkheden?", a: "Je sluit het abonnement af en betaalt via Stripe, ook bij een jaarabonnement (in 12 maandtermijnen). Welke betaalmethoden je kunt kiezen, zie je bij het afrekenen." },
 ]
 
 function CmpCell({ val }) {
@@ -187,6 +179,7 @@ export default function PricingPage({ navigate }) {
   }, [])
 
   const go = (e, href) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
     e.preventDefault()
     if (navigate) navigate(href)
     else window.location.href = href
@@ -200,11 +193,9 @@ export default function PricingPage({ navigate }) {
         {/* Hero */}
         <section className="price-hero">
           <div className="container">
-            <Reveal>
-              <span className="section-kicker">Prijzen</span>
-              <h1>Duidelijke prijs.<br/>Geen verrassingen.</h1>
-              <p>Altijd 14 dagen gratis proberen. Geen creditcard nodig.</p>
-            </Reveal>
+            <span className="section-kicker">Prijzen</span>
+            <h1>Duidelijke prijs.<br/>Geen verrassingen.</h1>
+            <p>Prijzen per maand, exclusief btw. Probeer BossBase 14 dagen gratis met de functies van Groei; je hoeft geen betaalgegevens in te vullen.</p>
           </div>
         </section>
 
@@ -222,19 +213,19 @@ export default function PricingPage({ navigate }) {
               <div className="price-grid-full choreo-body">
                 {PLAN_CARDS.map(t => (
                   <div key={t.id} className={`price-card${t.hot ? " hot" : ""}`}>
-                    {t.hot && <div className="hot-badge" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Star size={12} fill="currentColor" /> Meest gekozen</div>}
+                    {t.hot && <div className="hot-badge" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>Hierop draait je proefperiode</div>}
                     <div className="tier">{tierLabel(t.id)}</div>
                     <div className="who">{t.who}</div>
                     <div className="amount">
                       <strong>€ {tierPrice(t.id)}</strong>
-                      <span>/ maand{yearly ? " · 12 maanden" : ""}</span>
+                      <span>/ maand{yearly ? " · 12 maandtermijnen" : " · per maand opzegbaar"}</span>
                     </div>
                     <div className="extra-user">{t.hasExtra ? extraUserLabel(t.id) : " "}</div>
                     <ul>{t.features.map(f => <li key={f}>{I.check} {f}</li>)}</ul>
-                    <a href="/registreer" className={`btn ${t.hot ? "btn-p glow" : "btn-s"}`}
+                    <a href="/register" className={`btn ${t.hot ? "btn-p glow" : "btn-s"}`}
                       style={{ width: "100%", justifyContent: "center" }}
-                      onClick={e => go(e, "/registreer")}>
-                      Gratis 14 dagen proberen
+                      onClick={e => go(e, "/register")}>
+                      Start 14 dagen gratis
                     </a>
                   </div>
                 ))}
@@ -306,7 +297,7 @@ export default function PricingPage({ navigate }) {
               </div>
             </Reveal>
             <p style={{ textAlign: "center", marginTop: 20, fontSize: 14, color: "var(--dmu)" }}>
-              Alle prijzen excl. BTW · Geen creditcard nodig
+              Alle prijzen exclusief btw · Proefperiode zonder betaalgegevens
             </p>
           </div>
         </div>
@@ -380,7 +371,7 @@ export default function PricingPage({ navigate }) {
                 <h2>Geen verborgen kosten. <span className="green">Gewoon eerlijk.</span></h2>
                 <p>Start vandaag gratis. Je kiest pas na 14 dagen een plan — als je wilt.</p>
                 <div className="hero-ctas" style={{ justifyContent: "center" }}>
-                  <a href="/registreer" className="btn btn-p glow btn-lg" onClick={e => go(e, "/registreer")}>
+                  <a href="/register" className="btn btn-p glow btn-lg" onClick={e => go(e, "/register")}>
                     Gratis proberen {I.arrowRight}
                   </a>
                   <a href="/contact" className="btn btn-s btn-lg" onClick={e => go(e, "/contact")}>

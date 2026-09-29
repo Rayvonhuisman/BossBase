@@ -16,3 +16,4 @@ supabase/tests/_dryrun_readonly.sql
 
 # Seedscript met testaccount-wachtwoord — repo is publiek
 scripts/seed-snelstart-test.sql
+dist-ssr/

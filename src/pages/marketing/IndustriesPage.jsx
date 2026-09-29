@@ -1,85 +1,66 @@
 import { useState, useEffect } from "react"
 import { Nav, Footer, Reveal, I, ScrollLine, initChoreo } from "./MktShared"
 
+// Per vakgebied: herkenbare problemen en alleen bevestigde functies
+// (docs/seo/productfeiten.md). Geen besparingscijfers: die hebben we niet.
 const BRANCHES = [
   {
-    id: "loodgieter", naam: "Loodgieter", icon: I.wrench,
-    tag: "Sanitair & installaties",
-    intro: "Als loodgieter werk je op afroep, vaak urgent. Offertes moeten snel de deur uit en klanten wil je goed bijhouden.",
-    pains: ["Offertes maken duurt te lang", "Klanten vergeten wie je bent", "Agenda-chaos bij spoedklussen", "Facturen blijven liggen"],
-    solves: ["Offerte in 2 minuten via sjabloon", "CRM met volledige klanthistorie", "Agenda met herinneringen", "Automatische factuurherinneringen"],
-    stats: [{ n: "42 min", lbl: "bespaard per dag" }, { n: "3×", lbl: "snellere offertes" }],
+    id: "installateur", naam: "Installateurs, loodgieters en elektriciens", icon: I.wrench,
+    tag: "Storingen, onderhoud en installaties", href: "/voor-wie/installateurs", kort: "installateurs",
+    intro: "Veel korte klussen op een dag, materiaal dat pas op locatie duidelijk wordt, en een klant die wil zien wat er is gedaan.",
+    pains: ["Gebruikt materiaal komt niet op de factuur", "Papieren bonnen komen pas aan het eind van de week binnen", "Klant niet thuis op de afspraak", "Facturen blijven liggen"],
+    solves: ["Werkbon met materiaal, foto's en uren", "Klant tekent ter plekke of via een link", "Afspraakherinnering per mail aan de klant", "Betalingsherinneringen (Groei en Team)"],
   },
   {
-    id: "schilder", naam: "Schilder", icon: I.tool,
-    tag: "Schilderwerk & afwerking",
-    intro: "Schilders werken aan meerdere projecten tegelijk. Wie is wanneer waar? Welke offerte wacht nog op akkoord?",
-    pains: ["Meerdere projecten tegelijk overzien", "Materiaalkosten bijhouden", "Klanten bellen op onhandige momenten", "Verloren offertes"],
-    solves: ["Pipeline per project", "Kostprijs in offerte verwerken", "Klant belt jou dankzij herinneringen", "Digitaal archief van alle offertes"],
-    stats: [{ n: "€ 1.200", lbl: "extra omzet/maand" }, { n: "18 min", lbl: "per offerte bespaard" }],
+    id: "schilder", naam: "Schilders en stukadoors", icon: I.paintRoller,
+    tag: "Schilderwerk en afwerking", href: "/voor-wie/schilders", kort: "schilders",
+    intro: "Bij schilderwerk staat of valt alles met de offerte, en met wat er gebeurt als je onderweg iets tegenkomt dat niet in de offerte stond.",
+    pains: ["Discussie over meerwerk achteraf", "Offertes die blijven liggen", "Klussen van meerdere dagen overzien", "Verschillende versies van een offerte"],
+    solves: ["Meerwerk op de werkbon, afgetekend door de klant", "Offerte online ondertekenen (Groei en Team)", "Meerdaagse werkbonnen met eigen ploeg per dag", "Nieuwe offerteversie vervangt de oude"],
   },
   {
-    id: "elektricien", naam: "Elektricien", icon: I.bolt,
-    tag: "Elektra & beveiliging",
-    intro: "Van kleine storingen tot complete installaties — als elektricien wil je je concentreren op het werk, niet op de administratie.",
-    pains: ["Werkbonnen kwijtraken", "Onduidelijke afspraken met klanten", "Te laat factureren", "Geen inzicht in winstmarges"],
-    solves: ["Digitale werkbonnen", "Afspraken met klantbevestiging", "Automatisch factureren na opdracht", "Omzet per klant inzichtelijk"],
-    stats: [{ n: "15 uur", lbl: "minder admin per maand" }, { n: "92%", lbl: "betaalt op tijd" }],
+    id: "hovenier", naam: "Hoveniers en groenvoorziening", icon: I.leaf,
+    tag: "Tuinaanleg en onderhoud", href: "/voor-wie/hoveniers", kort: "hoveniers",
+    intro: "In het seizoen wil iedereen tegelijk. Dan draait het om planning: welke ploeg, welke bus, welke tuin, en levert het op wat je dacht?",
+    pains: ["Ploegen en bussen plannen in de piek", "Een aanleg die uitloopt", "Materiaalkosten per tuin uit het oog", "Na afloop niet weten wat een klus opleverde"],
+    solves: ["Planning per medewerker en bus (Team of module)", "Waarschuwing bij 80% en 100% van de begrote uren", "Materiaal met inkoopprijs op de werkbon", "Nacalculatie per project (Groei en Team)"],
   },
   {
-    id: "aannemer", naam: "Aannemer", icon: I.package,
-    tag: "Bouw & renovatie",
-    intro: "Als aannemer manage je subcontractors, klanten en deadlines tegelijk. Overzicht is geen luxe, maar een must.",
-    pains: ["Veel partijen, weinig overzicht", "Grote offertes met veel regels", "Betalingsrisico bij grote projecten", "Teamcommunicatie loopt vast"],
-    solves: ["Projectpipeline met deadlines", "Gedetailleerde offertes met subregelitems", "Betalingsschema's in facturen", "Teamrollen en taakverdeling"],
-    stats: [{ n: "€ 8.400", lbl: "gem. offertebedrag" }, { n: "4", lbl: "projecten tegelijk" }],
+    id: "aannemer", naam: "Aannemers en klusbedrijven", icon: I.hammer,
+    tag: "Bouw, verbouw en renovatie", href: "/voor-wie/aannemers-en-klusbedrijven", kort: "aannemers en klusbedrijven",
+    intro: "Een verbouwing is een project: meerdere dagen, meerdere mensen, soms onderaannemers, en keuzes onderweg die de prijs veranderen.",
+    pains: ["Veel werkbonnen onder één project", "Waarschuwingen aan de klant niet vastgelegd", "Btw verlegd bij onderaanneming", "Geen zicht op de marge per project"],
+    solves: ["Project met offerte, werkbonnen en facturen", "Waarschuwing per mail vanuit de werkbon, vastgelegd", "Btw-regime per factuurregel, ook verlegd", "Uren en kosten per project"],
   },
   {
-    id: "installateur", naam: "Installateur", icon: I.tool,
-    tag: "Installatie & service",
-    intro: "Service-abonnementen, onderhoudsbeurten en storingen: als installateur heb je terugkerende klanten die goed bijgehouden moeten worden.",
-    pains: ["Onderhoudsmomenten vergeten", "Servicecontracten niet bijhouden", "Klanten zijn vergeten wie je bent", "Geen inzicht in uurtarief-omzet"],
-    solves: ["Terugkerende afspraken instellen", "Contracten per klant opslaan", "Automatische herinneringen", "Omzet per uurtarief inzichtelijk"],
-    stats: [{ n: "12×", lbl: "terugkerende klanten" }, { n: "0", lbl: "gemiste onderhoudsbeurten" }],
-  },
-  {
-    id: "tuinman", naam: "Tuinman / Groenvoorziening", icon: I.sparkle,
-    tag: "Tuin & groenonderhoud",
-    intro: "Tuinaanleg, onderhoud en seizoenswerk: als tuinman heb je een gevarieerde klantenkring die je goed wil bijhouden.",
-    pains: ["Seizoensdrukte vs. rustige periodes", "Klanten vergeten servicebeurt", "Materiaalkosten in offerte vergeten", "Geen terugkerende facturen"],
-    solves: ["Pipeline voor drukte en rustige periodes", "Herinneringen voor terugkerende diensten", "Kostprijs-calculatie in offerte", "Abonnementsfacturatie"],
-    stats: [{ n: "+34%", lbl: "meer terugkerende klanten" }, { n: "2×", lbl: "snellere offertes" }],
-  },
-  {
-    id: "schoonmaker", naam: "Schoonmaakbedrijf", icon: I.sparkle,
-    tag: "Schoonmaak & facilitair",
-    intro: "Vaste klanten, terugkerende diensten en meerdere medewerkers: schoonmaakbedrijven hebben eenvoudige maar robuuste tools nodig.",
-    pains: ["Roosters voor meerdere klanten bijhouden", "Facturen per klant afstemmen", "Medewerkers overzicht geven", "Klachten tracken"],
-    solves: ["Agenda per locatie en medewerker", "Automatische maandfacturering", "Teamrollen en taakverdeling", "Notities per klant voor feedback"],
-    stats: [{ n: "22", lbl: "gem. vaste klanten" }, { n: "100%", lbl: "facturen op tijd" }],
+    id: "schoonmaker", naam: "Schoonmaakbedrijven", icon: I.sparkles,
+    tag: "Schoonmaak en facilitair",
+    intro: "Schoonmaakbedrijven gebruiken BossBase voor klanten, offertes, werkbonnen en facturen. Eerlijk is eerlijk: vaste schema's die zichzelf elke week herhalen en automatische maandfacturen zitten er niet in.",
+    pains: ["Klantgegevens verspreid over lijstjes", "Offertes en facturen in losse bestanden", "Afspraken met klanten niet vastgelegd"],
+    solves: ["Klantkaart met historie en notities", "Offertes en facturen met je eigen logo", "Werkbon met handtekening van de klant"],
   },
 ]
 
 const PERSONAS = [
   {
     id: "zzp", label: "ZZP'er",
-    desc: "Jij bent je eigen baas. Geen personeel, maar wel alle verantwoordelijkheid. BossBase helpt je gefocust te blijven op je werk.",
+    desc: "Jij bent je eigen baas. Geen personeel, maar wel alle verantwoordelijkheid. BossBase houdt je administratie bij elkaar, zodat jij kunt werken.",
     features: [
-      { icon: I.signature, title: "Offertes in 2 minuten", desc: "Professioneel en snel, ook op je telefoon." },
-      { icon: I.calendar,  title: "Agenda met herinneringen", desc: "Nooit meer een afspraak vergeten of no-shows." },
-      { icon: I.chart,     title: "Inzicht in je omzet", desc: "Weet direct hoeveel je deze maand verdient." },
-      { icon: I.users,     title: "CRM zonder gedoe", desc: "Alle klantinfo op één plek, snel terug te vinden." },
+      { icon: I.signature, title: "Offertes met je eigen logo", desc: "Versturen per mail, online laten ondertekenen in Groei." },
+      { icon: I.calendar,  title: "Agenda met herinneringen", desc: "Je klant krijgt vooraf een afspraakherinnering per mail." },
+      { icon: I.chart,     title: "Zien wat er openstaat", desc: "Welke facturen betaald zijn, en welke nog niet." },
+      { icon: I.users,     title: "Klanten op één plek", desc: "Alle klantinfo en historie, snel terug te vinden." },
     ],
-    cta: "Ga als ZZP'er aan de slag",
+    cta: "Ga als zzp'er aan de slag",
   },
   {
     id: "bedrijf", label: "Bedrijf",
-    desc: "Je hebt een team en meerdere projecten tegelijk. BossBase houdt iedereen op de hoogte en het overzicht compleet.",
+    desc: "Je hebt een team en meerdere klussen tegelijk. BossBase houdt iedereen op de hoogte en het overzicht compleet.",
     features: [
-      { icon: I.users,     title: "Teamrollen & rechten", desc: "Iedereen heeft toegang tot wat hij nodig heeft." },
-      { icon: I.kanban,    title: "Pipeline voor elk project", desc: "Van aanvraag tot betaling, alles in beeld." },
-      { icon: I.chart,     title: "Rapportages per medewerker", desc: "Zie wie de meeste omzet genereert." },
-      { icon: I.building,  title: "Meerdere vestigingen", desc: "Beheer meerdere locaties in één account (Team plan)." },
+      { icon: I.users,     title: "Rollen en rechten", desc: "Per medewerker bepalen wat hij ziet en doet (Team)." },
+      { icon: I.kanban,    title: "Pipeline van aanvraag tot betaling", desc: "Elke klus in beeld, van aanvraag tot betaalde factuur." },
+      { icon: I.truck,     title: "Planning per medewerker en bus", desc: "Weekoverzicht met waarschuwing bij dubbel inplannen." },
+      { icon: I.clock,     title: "Uren per werkdag en per klus", desc: "Voor je loonadministratie en je nacalculatie." },
     ],
     cta: "Ga als bedrijf aan de slag",
   },
@@ -126,6 +107,7 @@ export default function IndustriesPage({ navigate }) {
   }, [])
 
   const go = (e, href) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
     e.preventDefault()
     if (navigate) navigate(href)
     else window.location.href = href
@@ -139,10 +121,10 @@ export default function IndustriesPage({ navigate }) {
         {/* Hero */}
         <section className="voorwie-page-hero">
           <div className="container">
-            <Reveal>
+            <div>
               <span className="section-kicker">Voor wie</span>
               <h1>Gebouwd voor de handen<br/>die Nederland laten draaien</h1>
-              <p>Of je nu zzp of bedrijf bent — BossBase past zich aan jouw branche en werkwijze aan.</p>
+              <p>Of je nu zzp&apos;er bent of een bedrijf met een team: kijk per vak hoe je met BossBase werkt.</p>
               <div style={{ display: "inline-flex", gap: 4, background: "#fff", border: "1px solid var(--bstrong)", borderRadius: 999, padding: 4, marginTop: 28 }}>
                 {PERSONAS.map(p => (
                   <button key={p.id}
@@ -157,7 +139,7 @@ export default function IndustriesPage({ navigate }) {
                   </button>
                 ))}
               </div>
-            </Reveal>
+            </div>
           </div>
         </section>
 
@@ -179,7 +161,7 @@ export default function IndustriesPage({ navigate }) {
                 ))}
               </div>
               <div style={{ textAlign: "center", marginTop: 32 }}>
-                <a href="/registreer" className="btn btn-p glow btn-lg" onClick={e => go(e, "/registreer")}>
+                <a href="/register" className="btn btn-p glow btn-lg" onClick={e => go(e, "/register")}>
                   {persona.cta} {I.arrowRight}
                 </a>
               </div>
@@ -194,7 +176,7 @@ export default function IndustriesPage({ navigate }) {
               <Reveal><div className="section-head choreo-head">
                 <span className="section-kicker">Per branche</span>
                 <h2>Speciaal voor jouw vakgebied</h2>
-                <p>BossBase kent de uitdagingen van jouw branche. Kijk hoe we die oplossen.</p>
+                <p>Herkenbare problemen per vak, en wat BossBase eraan doet.</p>
               </div></Reveal>
             </div>
           </div>
@@ -206,7 +188,7 @@ export default function IndustriesPage({ navigate }) {
                   <div className={`branche-layout choreo-body${i % 2 === 1 ? " flip" : ""}`}>
                     <div className="branche-copy">
                       <span className="branche-tag">{branch.icon} {branch.tag}</span>
-                      <h2>{branch.naam}</h2>
+                      <h2>{branch.href ? <a href={branch.href} style={{ color: "inherit" }}>{branch.naam}</a> : branch.naam}</h2>
                       <p className="intro">{branch.intro}</p>
                       <div className="two-cols-label">Jouw pijnpunten</div>
                       <ul className="pain-list">
@@ -224,6 +206,11 @@ export default function IndustriesPage({ navigate }) {
                           </li>
                         ))}
                       </ul>
+                      {branch.href && (
+                        <a href={branch.href} style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 20, fontWeight: 600 }}>
+                          Zo werkt BossBase voor {branch.kort} {I.arrowRight}
+                        </a>
+                      )}
                     </div>
                     <div className="branche-visual">
                       <BrancheVisual branch={branch} />
@@ -241,9 +228,9 @@ export default function IndustriesPage({ navigate }) {
             <Reveal>
               <div className="final-cta">
                 <h2>Klaar om te beginnen? <span className="green">Probeer het gratis.</span></h2>
-                <p>14 dagen gratis. Geen creditcard nodig.</p>
+                <p>14 dagen gratis met de functies van Groei. Geen betaalgegevens nodig.</p>
                 <div className="hero-ctas" style={{ justifyContent: "center" }}>
-                  <a href="/registreer" className="btn btn-p glow btn-lg" onClick={e => go(e, "/registreer")}>
+                  <a href="/register" className="btn btn-p glow btn-lg" onClick={e => go(e, "/register")}>
                     Gratis proberen {I.arrowRight}
                   </a>
                   <a href="/prijzen" className="btn btn-s btn-lg" onClick={e => go(e, "/prijzen")}>

@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { Mail, Briefcase, CreditCard, Bird } from "lucide-react"
+import { Briefcase, CreditCard, Bird } from "lucide-react"
 import { Nav, Footer, Reveal, I, initChoreo, ScrollLine } from "./MktShared"
 
 /* ── Feature visuals ── */
@@ -28,81 +28,8 @@ function CRMVisual() {
   )
 }
 
-function OffertesVisual() {
-  return (
-    <div className="feature-frame flip">
-      <div className="feature-frame-bar"><span className="dot-r"/><span className="dot-y"/><span className="dot-g"/>
-        <div className="feature-frame-urlbar">{I.shield} bossbase.nl/offertes</div>
-      </div>
-      <div className="feature-frame-body">
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>Offerte #2024-048</div>
-        {[
-          { desc: "Schilderwerk gevel",  price: "€ 2.400" },
-          { desc: "Materialen",          price: "€ 650" },
-          { desc: "Reiskosten",          price: "€ 90" },
-        ].map(r => (
-          <div key={r.desc} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 11px", display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-            <span style={{ fontSize: 13 }}>{r.desc}</span><span style={{ fontWeight: 700, fontSize: 13 }}>{r.price}</span>
-          </div>
-        ))}
-        <div style={{ borderTop: "1px solid var(--border)", marginTop: 10, paddingTop: 10, display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 13.5 }}>
-          <span>Totaal incl. BTW</span><span style={{ color: "var(--pd)" }}>€ 3.803</span>
-        </div>
-        <div className="btn btn-p" style={{ width: "100%", justifyContent: "center", marginTop: 10, fontSize: 13 }}>
-          Digitale handtekening aanvragen
-        </div>
-      </div>
-    </div>
-  )
-}
 
-function AgendaVisual() {
-  return (
-    <div className="feature-frame">
-      <div className="feature-frame-bar"><span className="dot-r"/><span className="dot-y"/><span className="dot-g"/>
-        <div className="feature-frame-urlbar">{I.shield} bossbase.nl/agenda</div>
-      </div>
-      <div className="feature-frame-body" style={{ display: "grid", gap: 7 }}>
-        {[
-          { time: "09:00", title: "Offerte opstellen — Jansen",       color: "#ecfdf5", col: "#0c7a38" },
-          { time: "11:30", title: "Afspraak: Peters Installatiewerk", color: "#dbeafe", col: "#1d4ed8" },
-          { time: "14:00", title: "Factuur versturen: Bakker",        color: "#fef3c7", col: "#b45309" },
-        ].map(e => (
-          <div key={e.time} style={{ background: e.color, color: e.col, borderRadius: 9, padding: "8px 11px" }}>
-            <div style={{ fontSize: 10.5, fontWeight: 500, opacity: 0.7 }}>{e.time}</div>
-            <div style={{ fontWeight: 700, fontSize: 13, marginTop: 2 }}>{e.title}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
 
-function OmzetVisual() {
-  const bars = [55, 68, 42, 78, 85, 61, 90, 72, 95, 64, 88, 100]
-  const months = ["J","F","M","A","M","J","J","A","S","O","N","D"]
-  return (
-    <div className="feature-frame flip">
-      <div className="feature-frame-bar"><span className="dot-r"/><span className="dot-y"/><span className="dot-g"/>
-        <div className="feature-frame-urlbar">{I.shield} bossbase.nl/omzet</div>
-      </div>
-      <div className="feature-frame-body">
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-          <span style={{ fontWeight: 700, fontSize: 13.5 }}>Omzet 2024</span>
-          <span style={{ color: "var(--pd)", fontWeight: 800, fontSize: 13.5 }}>€ 148.320</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 84 }}>
-          {bars.map((h, i) => (
-            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, height: "100%" }}>
-              <div style={{ width: "100%", borderRadius: "3px 3px 2px 2px", background: i === 11 ? "var(--p)" : "var(--pl)", height: `${h}%` }} />
-              <span style={{ fontSize: 9, color: "var(--dl)" }}>{months[i]}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
 
 function TeamVisual() {
   return (
@@ -137,9 +64,9 @@ function MailVisual() {
       </div>
       <div className="feature-frame-body" style={{ display: "grid", gap: 8 }}>
         {[
-          { subj: "Uw offerte is klaar",          badge: "Verstuurd",   cls: "badge-accepted" },
-          { subj: "Herinnering: offerte vervalt",  badge: "Automatisch", cls: "badge-sent" },
-          { subj: "Factuur betaald — dank u!",     badge: "Ontvangen",   cls: "badge-paid" },
+          { subj: "Offerte OF-2026-048",            badge: "Verstuurd",   cls: "badge-accepted" },
+          { subj: "Herinnering factuur BB-F-12",    badge: "Automatisch", cls: "badge-sent" },
+          { subj: "Betaalbevestiging BB-F-11",      badge: "Betaald",     cls: "badge-paid" },
         ].map(m => (
           <div key={m.subj} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 9, padding: "9px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
             <div style={{ fontWeight: 700, fontSize: 13 }}>{m.subj}</div>
@@ -151,68 +78,68 @@ function MailVisual() {
   )
 }
 
+// Elk blok verwijst naar de eigen functiepagina. Alleen bevestigde functies:
+// zie docs/seo/productfeiten.md.
 const BLOCKS = [
   {
-    kicker: "CRM", title: "Klanten bijhouden die jou bijhouden",
-    desc: "Nooit meer zoeken in je hoofd. BossBase onthoudt alles: contactgegevens, opdrachten, notities en volledige communicatiegeschiedenis.",
-    points: ["Klantenkaarten met volledige historie", "Notities en bijlagen per klant", "Segmenteer op sector, regio of omzet", "Automatische opvolgherinneringen"],
-    Visual: CRMVisual, flip: false,
+    kicker: "Klantbeheer", title: "Je klanten en aanvragen op één plek",
+    desc: "Een klantkaart met gegevens, offertes, werkbonnen, facturen en een tijdlijn. Aanvragen volg je in een pipeline, van eerste contact tot betaalde factuur.",
+    points: ["Klantkaart met historie", "Pipeline met automatisch doorschuivende fasen", "Activiteiten om op te volgen", "Export naar Excel of CSV"],
+    Visual: CRMVisual, flip: false, href: "/klantbeheer", link: "Meer over klantbeheer",
   },
   {
-    kicker: "Offertes & facturen", title: "Van offerte naar betaald in één klik",
-    desc: "Maak professionele offertes in 2 minuten. Klant tekent digitaal, jij converteert naar factuur met één klik. BTW wordt automatisch berekend.",
-    points: ["Huisstijl aanpassing", "Digitale handtekening", "Automatisch omzetten naar factuur", "BTW-aangifte export"],
-    Visual: OffertesVisual, flip: true,
+    kicker: "Offertes", title: "Offertes maken en online laten ondertekenen",
+    desc: "Offertes met je eigen logo en btw per regel. In Groei en Team tekent de klant online; daarna maak je met één klik de factuur.",
+    points: ["Eigen logo en huisstijlkleur", "Online ondertekenen (Groei en Team)", "Versies zonder verwarring", "Factuur vanuit de geaccepteerde offerte"],
+    beeld: { src: "/screens/offertes.webp", alt: "Het offerteoverzicht in BossBase" }, flip: true, href: "/offertes", link: "Meer over offertes",
   },
   {
-    kicker: "Agenda", title: "Plan slim, werk slimmer",
-    desc: "Koppel afspraken direct aan klanten en opdrachten. Stuur automatisch herinneringen en voorkom no-shows.",
-    points: ["Klantgekoppelde afspraken", "Automatische e-mailherinneringen", "Terugkerende afspraken"],
-    Visual: AgendaVisual, flip: false,
+    kicker: "Werkbonnen", title: "Werkbonnen die je klant ter plekke tekent",
+    desc: "Taken, meerwerk, materiaal, foto's en uren op één werkbon. De klant tekent op je tablet of via een link, en krijgt de werkbon als PDF.",
+    points: ["Meerwerk apart vastgelegd", "Materiaal met prijs en leverancier", "Foto's met de camera", "Handtekening van de klant, in elk pakket"],
+    beeld: { src: "/screens/werkbon.webp", alt: "Een werkbon in BossBase" }, flip: false, href: "/werkbonnen", link: "Meer over werkbonnen",
   },
   {
-    kicker: "Omzet & rapporten", title: "Weet precies hoe je er voor staat",
-    desc: "Realtime inzicht in omzet, openstaande facturen en beste klanten. Exporteer naar je accountant met één klik.",
-    points: ["Realtime omzetdashboard", "Openstaande en vervallen facturen", "Beste klanten en sectoren", "Export naar accountant (CSV/PDF)"],
-    Visual: OmzetVisual, flip: true,
+    kicker: "Planning", title: "Plannen per medewerker en voertuig",
+    desc: "Een dag- of weekoverzicht per medewerker of per bus. Sleep werkbonnen naar de juiste dag en krijg een waarschuwing bij dubbel inplannen.",
+    points: ["Dag- en weekweergave", "Waarschuwing bij dubbele boekingen", "Meldingen voor je team", "In Team, of als module bij Groei"],
+    beeld: { src: "/screens/planning.webp", alt: "De weekplanning in BossBase" }, flip: true, href: "/planning", link: "Meer over planning",
   },
   {
-    kicker: "Team", title: "Werk samen zonder gedoe",
-    desc: "Voeg medewerkers toe met de juiste rechten. Iedereen werkt in hetzelfde systeem, altijd up-to-date.",
-    points: ["Gebruikersrollen (admin/medewerker)", "Activiteitenlog", "Taakverdeling per klant", "Mobiel voor onderweg"],
-    Visual: TeamVisual, flip: false,
+    kicker: "Urenregistratie", title: "Uren per werkdag en per klus",
+    desc: "Werkdagen met begin, eind en pauze, en uren op de werkbon voor je nacalculatie. Twee soorten uren, bewust apart gehouden.",
+    points: ["Werkdaguren per medewerker", "Uren per werkbon en project", "Waarschuwing bij 80% en 100% van de begroting", "Nacalculatie in Groei en Team"],
+    Visual: TeamVisual, flip: false, href: "/urenregistratie", link: "Meer over urenregistratie",
   },
   {
-    kicker: "E-mail automatisering", title: "Nooit meer handmatig herinneringen sturen",
-    desc: "BossBase stuurt automatisch offertebevestigingen, herinneringen en bedankjes. Jij hoeft er niets aan te doen.",
-    points: ["Automatische offertebevestiging", "Betalingsherinnering na X dagen", "Bedankmail na betaling", "Eigen e-mailsjablonen"],
-    Visual: MailVisual, flip: true,
+    kicker: "Facturen", title: "Factureren en sneller betaald worden",
+    desc: "Facturen vanuit je offerte of project, met btw per regel. Herinneringen per mail en een betaallink met iDEAL.",
+    points: ["Btw per regel, ook verlegd", "Automatische herinneringen (Groei en Team)", "Betaallink met iDEAL (Team, of module)", "Koppeling met Moneybird of SnelStart"],
+    Visual: MailVisual, flip: true, href: "/facturen", link: "Meer over facturen",
   },
 ]
 
 const INTEGRATIONS = [
-  { name: "Gmail",     icon: <Mail size={20} />,       soon: false },
-  { name: "Outlook",   icon: <Mail size={20} />,       soon: false },
-  { name: "Moneybird", icon: <Bird size={20} />,       soon: false },
-  { name: "SnelStart", icon: <Briefcase size={20} />,  soon: false },
-  { name: "Stripe",    icon: <CreditCard size={20} />, soon: true },
+  { name: "Moneybird", icon: <Bird size={20} />,       href: "/integraties/moneybird" },
+  { name: "SnelStart", icon: <Briefcase size={20} />,  href: "/integraties/snelstart" },
+  { name: "Stripe (betaallink)", icon: <CreditCard size={20} />, href: "/integraties/stripe-betaallink" },
 ]
 
 const VROEGER = [
   "Offertes in losse Word-bestanden",
   "Klanten bijhouden in Excel",
+  "Werkbonnen op papier in de bus",
   "Agenda op papier of los in je telefoon",
-  "Omzet uitrekenen aan het einde van het kwartaal",
   "Herinneren via Post-it briefjes",
   "Facturen handmatig nummeren en versturen",
 ]
 const NU = [
-  "Offerte klaar in 2 minuten, digitaal ondertekend",
-  "CRM met volledige klanthistorie op één plek",
-  "Agenda gekoppeld aan klanten en opdrachten",
-  "Realtime omzetdashboard, altijd inzicht",
-  "Automatische herinneringen per e-mail",
-  "Factuur met één klik vanuit geaccepteerde offerte",
+  "Offertes met je logo, online te ondertekenen",
+  "Klantkaart met historie op één plek",
+  "Werkbon met handtekening van de klant",
+  "Agenda gekoppeld aan klanten en werkbonnen",
+  "Herinneringen per mail, automatisch in Groei en Team",
+  "Factuur vanuit de geaccepteerde offerte",
 ]
 
 export default function FeaturesPage({ navigate }) {
@@ -222,6 +149,7 @@ export default function FeaturesPage({ navigate }) {
   }, [])
 
   const go = (e, href) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
     e.preventDefault()
     if (navigate) navigate(href)
     else window.location.href = href
@@ -234,15 +162,13 @@ export default function FeaturesPage({ navigate }) {
       <main>
         <section className="functies-hero">
           <div className="container">
-            <Reveal>
-              <span className="section-kicker">Functies</span>
-              <h1>Alles wat je nodig hebt.<br/>Niets wat je niet nodig hebt.</h1>
-              <p>BossBase combineert CRM, offertes, agenda en financieel in één eenvoudige tool — speciaal voor zzp en bedrijven.</p>
-              <div className="hero-ctas" style={{ marginTop: 28 }}>
-                <a href="/registreer" className="btn btn-p glow btn-lg" onClick={e => go(e, "/registreer")}>Gratis proberen {I.arrowRight}</a>
-                <a href="/prijzen" className="btn btn-s btn-lg" onClick={e => go(e, "/prijzen")}>Bekijk prijzen</a>
-              </div>
-            </Reveal>
+            <span className="section-kicker">Functies</span>
+            <h1>Alle functies van BossBase</h1>
+            <p>Van eerste aanvraag tot betaalde factuur: klantbeheer, offertes, werkbonnen, planning, uren en facturen, aan elkaar gekoppeld. Kies een onderdeel voor de details.</p>
+            <div className="hero-ctas" style={{ marginTop: 28 }}>
+              <a href="/register" className="btn btn-p glow btn-lg" onClick={e => go(e, "/register")}>Start 14 dagen gratis {I.arrowRight}</a>
+              <a href="/prijzen" className="btn btn-s btn-lg" onClick={e => go(e, "/prijzen")}>Bekijk prijzen</a>
+            </div>
           </div>
         </section>
 
@@ -253,13 +179,20 @@ export default function FeaturesPage({ navigate }) {
                 <div className={`feature-row choreo-body${b.flip ? " flip" : ""}`}>
                   <div className="feature-copy">
                     <span className="section-kicker">{b.kicker}</span>
-                    <h2 style={{ fontSize: "clamp(24px,3vw,34px)", marginTop: 10 }}>{b.title}</h2>
+                    <h2 style={{ fontSize: "clamp(24px,3vw,34px)", marginTop: 10 }}><a href={b.href} style={{ color: "inherit" }}>{b.title}</a></h2>
                     <p style={{ marginTop: 12, fontSize: 16.5, color: "var(--dmu)", maxWidth: "30em" }}>{b.desc}</p>
                     <ul className="feature-points" style={{ marginTop: 18 }}>
                       {b.points.map(p => <li key={p}>{I.check} {p}</li>)}
                     </ul>
+                    <a href={b.href} style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 18, fontWeight: 600 }}>
+                      {b.link} {I.arrowRight}
+                    </a>
                   </div>
-                  <div><b.Visual /></div>
+                  <div>
+                    {b.beeld
+                      ? <img src={b.beeld.src} alt={b.beeld.alt} width="1600" height="1000" loading="lazy" decoding="async" style={{ width: "100%", height: "auto", borderRadius: 14, border: "1px solid var(--bstrong)", boxShadow: "var(--shadow-md)" }} />
+                      : <b.Visual />}
+                  </div>
                 </div>
               </Reveal>
             </div>
@@ -297,18 +230,18 @@ export default function FeaturesPage({ navigate }) {
             <Reveal><div className="section-head choreo-head">
               <span className="section-kicker">Integraties</span>
               <h2>Werkt samen met wat je al gebruikt</h2>
-              <p>BossBase integreert met jouw bestaande tools. Geen dubbel werk meer.</p>
+              <p>Koppel je boekhouding en laat klanten online betalen. <a href="/integraties">Alle koppelingen</a>.</p>
             </div></Reveal>
             <Reveal stagger className="choreo-body">
               <div className="integ-grid">
                 {INTEGRATIONS.map(integ => (
-                  <div key={integ.name} className={`integ-card${integ.soon ? " soon" : ""}`}>
+                  <a key={integ.name} href={integ.href} className="integ-card" style={{ color: "inherit" }}>
                     <div className="integ-dot">{integ.icon}</div>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 15 }}>{integ.name}</div>
-                      {integ.soon && <div style={{ fontSize: 12.5, color: "var(--dl)", marginTop: 2 }}>Binnenkort beschikbaar</div>}
+                      <div style={{ fontSize: 12.5, color: "var(--dmu)", marginTop: 2 }}>Bekijk de koppeling</div>
                     </div>
-                  </div>
+                  </a>
                 ))}
               </div>
             </Reveal>
@@ -320,9 +253,9 @@ export default function FeaturesPage({ navigate }) {
             <Reveal>
               <div className="final-cta">
                 <h2>Klaar om chaos achter je te laten? <span className="green">Probeer BossBase.</span></h2>
-                <p>14 dagen gratis. Geen creditcard. Geen gedoe.</p>
+                <p>14 dagen gratis met de functies van Groei. Geen betaalgegevens nodig.</p>
                 <div className="hero-ctas" style={{ justifyContent: "center" }}>
-                  <a href="/registreer" className="btn btn-p glow btn-lg" onClick={e => go(e, "/registreer")}>Gratis starten {I.arrowRight}</a>
+                  <a href="/register" className="btn btn-p glow btn-lg" onClick={e => go(e, "/register")}>Gratis starten {I.arrowRight}</a>
                   <a href="/prijzen" className="btn btn-s btn-lg" onClick={e => go(e, "/prijzen")}>Bekijk prijzen</a>
                 </div>
               </div>

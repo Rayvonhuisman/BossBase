@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react"
-import { Star } from "lucide-react"
 import { Nav, Footer, ScrollLine, Reveal, Wordmark, I, initChoreo, useReducedMotion, useScrollY } from "./MktShared"
 import { tierLabel, tierPrice, extraUserLabel, EXTRA_USER_PRICE } from "../../lib/tiers.js"
 import PortaalKader from "../../demo/PortaalKader.jsx"
@@ -103,14 +102,6 @@ function HeroStageD({ reduced, scrollY }) {
   )
 }
 
-/* ── HeroStar ── */
-function HeroStar() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="#1DDB62" aria-hidden="true">
-      <path d="M12 2.5l2.95 5.98 6.6.96-4.78 4.66 1.13 6.58L12 17.58l-5.9 3.1 1.13-6.58L2.45 9.44l6.6-.96L12 2.5z" />
-    </svg>
-  )
-}
 
 /* ── Logo bar ── */
 const BRANCHES_MARQUEE = [
@@ -185,7 +176,7 @@ function ProblemSolution() {
             </div>
             <div style={{ padding: 20, display: "grid", gap: 11 }}>
               {[
-                ["message", "Lead uit Mail staat in je pipeline", "badge-accepted", "Opgevolgd"],
+                ["message", "Nieuwe aanvraag staat in je pipeline", "badge-accepted", "Opgevolgd"],
                 ["fileText","Offerte Fam. Bakker — € 4.850",    "badge-accepted", "Geaccepteerd"],
                 ["calendar","Klus ingepland: ma 15 jun, 08:00", "badge-concept",  "Herinnering staat"],
                 ["euro",    "Factuur VvE Lindenhof",            "badge-paid",     "Betaald"],
@@ -294,7 +285,7 @@ function FeatureVisualTeam() {
       {[
         ["Bus 1 — Mark & Tim", "Fam. Bakker — badkamer",    "badge-accepted", "Onderweg"],
         ["Bus 2 — Sven",        "De Lange — schilderwerk",  "badge-sent",     "Gepland"],
-        ["Jeroen",              "Verlof t/m vrijdag",        "badge-concept",  "Afwezig"],
+        ["Bus 3 — Jeroen",      "Visser — kozijnen",         "badge-concept",  "Morgen"],
       ].map(([who, what, bcls, btxt]) => (
         <div className="mini-card" key={who} style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ color: "var(--pd)", display: "flex", flex: "none" }}>{I.truck}</span>
@@ -309,51 +300,62 @@ function FeatureVisualTeam() {
   )
 }
 
+// Alleen wat het product echt doet: zie docs/seo/productfeiten.md.
 const FEATURES = [
   {
     icon: I.kanban,
-    title: "CRM & pipeline",
-    desc: "Vang elke lead op uit je website en mail. Zie in één oogopslag welke klus in welke fase zit, en krijg een seintje als een offerte blijft liggen.",
-    points: ["Leads automatisch in je pipeline", "Seintje bij offertes die blijven liggen", "Hele klantgeschiedenis bij elke klus"],
+    title: "Klanten & pipeline",
+    desc: "Elke aanvraag wordt een kaart in je pipeline, van eerste contact tot betaalde factuur. Plan wanneer je terugbelt, en zie per klant alles wat je voor hem deed.",
+    points: ["Pipeline van aanvraag tot betaling", "Opvolgen met activiteiten en datums", "Hele klantgeschiedenis op de klantkaart"],
     Visual: FeatureVisualPipeline,
     flip: false,
     title4bar: "BossBase — Pipeline",
+    href: "/klantbeheer",
+    linkTekst: "Meer over klantbeheer",
   },
   {
     icon: I.signature,
-    title: "Offertes & ondertekenen",
-    desc: "Maak in minuten een professionele offerte als PDF met je eigen logo. Klant tekent digitaal online akkoord.",
-    points: ["Je eigen logo en huisstijl", "Digitaal ondertekenen, rechtsgeldig", "Calculatie op m², uren en materiaal"],
+    title: "Offertes & online akkoord",
+    desc: "Maak een offerte als PDF met je eigen logo en verstuur hem per mail. In Groei en Team tekent de klant online, en maak je daarna met één klik de factuur.",
+    points: ["Je eigen logo en huisstijlkleur", "Online ondertekenen (Groei en Team)", "Factuur vanuit de geaccepteerde offerte"],
     Visual: FeatureVisualOfferte,
     flip: true,
     title4bar: "BossBase — Offertes",
+    href: "/offertes",
+    linkTekst: "Meer over offertes",
   },
   {
     icon: I.calendar,
-    title: "Planning & uitvoering",
-    desc: "Plan klussen in de agenda, je medewerkers zien hun werkbonnen op hun telefoon, klanten krijgen automatisch een afspraakherinnering.",
-    points: ["Werkbonnen op de telefoon", "Automatische afspraakherinnering", "Foto's bij de klus"],
+    title: "Planning & werkbonnen",
+    desc: "Plan klussen in de agenda of, met meerdere mensen, per medewerker en bus. Op de werkbon staan taken, meerwerk, materiaal en foto's, en de klant tekent ter plekke.",
+    points: ["Werkbon met handtekening van de klant", "Automatische afspraakherinnering per mail", "Planning per medewerker en bus (Team)"],
     Visual: FeatureVisualAgenda,
     flip: false,
     title4bar: "BossBase — Agenda",
+    href: "/werkbonnen",
+    linkTekst: "Meer over werkbonnen",
   },
   {
     icon: I.chart,
-    title: "Uren, materialen & omzet",
-    desc: "Registreer uren en materialen per klus. Je omzetdashboard laat zien wat binnen is, wat openstaat en wat eraan komt.",
-    points: ["Uren en materialen per klus", "Binnen · openstaand · verwacht", "Nacalculatie: begroot vs. werkelijk"],
+    title: "Uren, facturen & omzet",
+    desc: "Registreer werkdagen en uren per klus. Verstuur facturen met herinneringen, en zie wat binnen is, wat openstaat en wat een project opleverde.",
+    points: ["Uren per werkdag en per klus", "Betalingsherinneringen (Groei en Team)", "Kosten en nacalculatie per project (Groei en Team)"],
     Visual: FeatureVisualOmzet,
     flip: true,
     title4bar: "BossBase — Omzet",
+    href: "/facturen",
+    linkTekst: "Meer over facturen",
   },
   {
     icon: I.users,
     title: "Team & rollen",
-    desc: "Werk je met meerdere bussen? Plan teams, beheer rollen en houd beschikbaarheid en verlof bij.",
-    points: ["Meerdere teams en bussen plannen", "Rollen en rechten per medewerker", "Beschikbaarheid en verlof"],
+    desc: "Werk je met een team? Nodig collega's uit, verdeel werkbonnen en bepaal per medewerker wat hij mag zien en doen.",
+    points: ["Collega's uitnodigen", "Rollen en rechten per medewerker (Team)", "Inkoopprijzen afschermen"],
     Visual: FeatureVisualTeam,
     flip: false,
     title4bar: "BossBase — Team",
+    href: "/planning",
+    linkTekst: "Meer over planning",
   },
 ]
 
@@ -376,6 +378,9 @@ function Features() {
                 <ul className="feature-points">
                   {f.points.map(p => <li key={p}>{I.check} {p}</li>)}
                 </ul>
+                <a href={f.href} style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 18, fontWeight: 600 }}>
+                  {f.linkTekst} {I.arrowRight}
+                </a>
               </div>
               <div className="feature-frame-wrap">
                 <div className="feature-visual">
@@ -492,7 +497,7 @@ const KLANTEN_DEMO = [
   ["Bouwhof Projecten BV",   "Aannemer · Kampen",     "12 woningen",         "€ 41.250"],
   ["Zorggroep IJssel-Vecht", "Bedrijf · Zwolle",      "Vaste opdrachtgever", "€ 33.900"],
   ["Familie Jansen",         "Particulier · Hattem",  "1 klus",              "€ 4.850"],
-  ["Gemeente Zwolle",        "Overheid · Zwolle",     "Aanvraag",            "€ 19.800"],
+  ["Stichting Sportzalen Zuid", "Sportzalen · Zwolle", "Aanvraag",         "€ 19.800"],
 ]
 
 const OMZET_MAANDEN = [
@@ -715,9 +720,9 @@ function DemoSection() {
   // dat niet: het portaal is voor een groot scherm gebouwd en zou daar tot
   // onleesbaar formaat teruggeschaald worden. Daar blijven de nagebouwde
   // schermen staan — die zijn juist voor dat formaat gemaakt.
-  const [breed, setBreed] = useState(
-    () => typeof window === "undefined" || window.innerWidth >= 768
-  )
+  // Begint als "breed", net als de vooraf gerenderde HTML; het effect hieronder
+  // stelt het na het laden bij. Zo kloppen server en browser bij het hydrateren.
+  const [breed, setBreed] = useState(true)
   useEffect(() => {
     const meet = () => setBreed(window.innerWidth >= 768)
     meet()
@@ -765,14 +770,14 @@ function DemoSection() {
 
 /* ── Voor wie (homepage) ── */
 const BRANCHES_HOME = [
-  { icon: I.paintRoller, name: "Schilders" },
-  { icon: I.leaf,        name: "Hoveniers" },
-  { icon: I.hammer,      name: "Klusbedrijven" },
-  { icon: I.wrench,      name: "Installateurs" },
+  { icon: I.paintRoller, name: "Schilders",     href: "/voor-wie/schilders" },
+  { icon: I.leaf,        name: "Hoveniers",     href: "/voor-wie/hoveniers" },
+  { icon: I.hammer,      name: "Klusbedrijven", href: "/voor-wie/aannemers-en-klusbedrijven" },
+  { icon: I.wrench,      name: "Installateurs", href: "/voor-wie/installateurs" },
   { icon: I.roof,        name: "Dakdekkers" },
   { icon: I.sparkles,    name: "Schoonmaak" },
-  { icon: I.trowel,      name: "Stukadoors" },
-  { icon: I.droplet,     name: "Loodgieters" },
+  { icon: I.trowel,      name: "Stukadoors",    href: "/voor-wie/schilders" },
+  { icon: I.droplet,     name: "Loodgieters",   href: "/voor-wie/installateurs" },
 ]
 
 function VoorWie({ navigate }) {
@@ -784,7 +789,12 @@ function VoorWie({ navigate }) {
           <h2>Gemaakt voor mensen die met hun handen werken</h2>
         </div></Reveal>
         <Reveal className="branche-grid stagger choreo-body">
-          {BRANCHES_HOME.map(b => (
+          {BRANCHES_HOME.map(b => b.href ? (
+            <a key={b.name} href={b.href} className="branche-card" style={{ color: "inherit" }}>
+              <span className="ic">{b.icon}</span>
+              {b.name}
+            </a>
+          ) : (
             <div key={b.name} className="branche-card">
               <span className="ic">{b.icon}</span>
               {b.name}
@@ -793,7 +803,7 @@ function VoorWie({ navigate }) {
         </Reveal>
         <Reveal>
           <p className="branche-note">
-            Werk je voor particulieren, bedrijven, VvE&apos;s of aannemers? BossBase past zich aan jouw manier van werken aan.
+            Werk je voor particulieren, bedrijven, VvE&apos;s of aannemers? <a href="/voor-wie">Bekijk per vak hoe je met BossBase werkt</a>.
           </p>
         </Reveal>
       </div>
@@ -804,26 +814,28 @@ function VoorWie({ navigate }) {
 /* ── Pricing ── */
 // Prijzen/tiernamen komen uit ../../lib/tiers.js (enige bron). Hier staat alleen
 // de presentatie per plan.
+// De functies per pakket volgen src/lib/features.js (TIER_FEATURES en
+// TIER_LIMITS). Pas dit aan als die matrix verandert.
 const TIERS_HOME = [
   {
-    id: "starter", who: "De startende eenpitter",
-    extra: "1 gebruiker inbegrepen",
+    id: "starter", who: "Voor de zzp'er die net begint",
+    extra: "1 gebruiker",
     inherit: null,
-    items: ["CRM-pipeline: leads & klanten", "Offertes maken & versturen als PDF", "Agenda & planning", "1 gebruiker"],
+    items: ["Klanten (tot 100) en pipeline", "Offertes en facturen (20 per periode)", "Werkbonnen met handtekening van de klant", "Agenda, uren en afspraakherinneringen"],
     hot: false, btn: "btn-s",
   },
   {
-    id: "groei", who: "De ZZP'er of een bedrijf van 2",
+    id: "groei", who: "Voor de zzp'er of een bedrijf van twee",
     extra: extraUserLabel("groei"),
-    inherit: "Alles van Starter, plus:",
-    items: ["Digitaal ondertekenen", "Calculatie: m² / uren / materiaal", "Urenregistratie", "Omzetdashboard", "Foto's bij de klus", "Automatische afspraakherinneringen"],
+    inherit: "Alles van Starter, zonder limieten, plus:",
+    items: ["Offertes online laten ondertekenen", "Automatische betalingsherinneringen", "Koppeling met Moneybird of SnelStart", "Kosten en nacalculatie per project", "Btw-overzicht", "Los bij te nemen: planning, voertuigen, betaallink"],
     hot: true, btn: "btn-p glow",
   },
   {
-    id: "team", who: "Grotere bedrijven met meerdere bussen",
+    id: "team", who: "Voor bedrijven met meer mensen en bussen",
     extra: extraUserLabel("team"),
     inherit: "Alles van Groei, plus:",
-    items: ["Team & rollen", "Meerdere teams / bussen plannen", "Beschikbaarheid & verlof", "Nacalculatie: begroot vs. werkelijk"],
+    items: ["Onbeperkt gebruikers", "Planning per medewerker en voertuig", "Rollen en rechten per medewerker", "Betaallink met iDEAL (via Stripe)"],
     hot: false, btn: "btn-s",
   },
 ]
@@ -832,6 +844,7 @@ function Pricing({ navigate }) {
   const [yearly, setYearly] = useState(false)
   const [showAll, setShowAll] = useState({})
   const go = useCallback((e, href) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
     e.preventDefault()
     if (navigate) navigate(href)
     else window.location.href = href
@@ -849,7 +862,7 @@ function Pricing({ navigate }) {
               <button className={yearly ? "on" : ""} onClick={() => setYearly(true)} aria-pressed={yearly}>Jaarlijks</button>
             </div>
             <span className={`bill-hook${yearly ? " pop" : ""}`} style={{ visibility: yearly ? "visible" : "hidden" }}>
-              {I.sparkles} Bij jaarlijks: gratis website erbij
+              {I.sparkles} Bij jaarlijks: 2 maanden gratis óf een gratis website (vanaf Groei)
             </span>
           </div>
         </div></Reveal>
@@ -859,7 +872,7 @@ function Pricing({ navigate }) {
               const expanded = !!showAll[t.id]
               return (
                 <div key={t.id} className={`price-card${t.hot ? " hot" : ""}${expanded ? " expanded" : ""}`}>
-                  {t.hot && <span className="hot-badge" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Star size={12} fill="currentColor" /> Meest gekozen</span>}
+                  {t.hot && <span className="hot-badge" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>Hierop draait je proefperiode</span>}
                   <div className="tier">{tierLabel(t.id)}</div>
                   <div className="who">{t.who}</div>
                   {/* Jaarabonnement is geen andere prijs: dezelfde maandprijs,
@@ -884,12 +897,12 @@ function Pricing({ navigate }) {
                     </button>
                   )}
                   <a
-                    href="/registreer"
+                    href="/register"
                     className={`btn ${t.btn}`}
                     style={{ width: "100%", justifyContent: "center" }}
-                    onClick={e => go(e, "/registreer")}
+                    onClick={e => go(e, "/register")}
                   >
-                    Start gratis
+                    Start 14 dagen gratis
                   </a>
                 </div>
               )
@@ -897,7 +910,7 @@ function Pricing({ navigate }) {
         </Reveal>
         <Reveal>
           <p className="price-foot">
-            Alle abonnementen 14 dagen gratis te proberen, geen creditcard nodig. Maandabonnement per maand opzegbaar; een jaarabonnement loopt 12 maanden, en bij een overstap naar een groter pakket begint die looptijd opnieuw.
+            Prijzen per maand, exclusief btw. Probeer BossBase 14 dagen gratis met de functies van Groei, zonder betaalgegevens. Een maandabonnement is per maand opzegbaar. Een jaarabonnement betaal je in 12 maandtermijnen; het is niet tussentijds opzegbaar en loopt daarna per maand door. Bij een overstap naar een groter pakket begint de looptijd opnieuw. <a href="/prijzen">Bekijk alle prijzen en modules</a>.
           </p>
         </Reveal>
       </div>
@@ -905,53 +918,20 @@ function Pricing({ navigate }) {
   )
 }
 
-/* ── Testimonials ── */
-const QUOTES = [
-  ["Ik ben 's avonds geen uur meer kwijt aan administratie. Offerte maken doe ik nu in de bus, tussen twee klussen door.", "Mark",   "Van Dijk Schilderwerken", "MD"],
-  ["Klanten tekenen 's avonds nog akkoord op hun telefoon. Vroeger wachtte ik soms weken op een handtekening.",           "Samira", "Helder Schoonmaak",       "SH"],
-  ["Mijn jongens zien 's ochtends gewoon op hun telefoon waar ze moeten zijn. Geen gebel meer om half zeven.",            "Erik",   "GroenRijk Hoveniers",     "EG"],
-]
-
-function Testimonials() {
-  return (
-    <div className="section">
-      <div className="container">
-        <Reveal><div className="section-head choreo-head">
-          <span className="section-kicker">Vakmensen aan het woord</span>
-          <h2>Minder gedoe, meer klussen</h2>
-        </div></Reveal>
-        <div className="quote-grid choreo-body">
-          {QUOTES.map(([q, nm, co, init], i) => (
-            <Reveal className="quote-card" key={nm} delay={i * 90}>
-              <blockquote>&ldquo;{q}&rdquo;</blockquote>
-              <div className="quote-who">
-                <span className="quote-avatar" aria-hidden="true">{init}</span>
-                <span>
-                  <span className="nm" style={{ display: "block" }}>{nm}</span>
-                  <span className="co">{co}</span>
-                </span>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 /* ── FAQ ── */
 const FAQ_HOME = [
-  ["Heb ik technische kennis nodig?",       "Nee. BossBase is gemaakt voor vakmensen, niet voor IT'ers. Als je WhatsApp kunt gebruiken, kun je BossBase gebruiken. Je bent binnen 5 minuten klaar voor je eerste offerte."],
-  ["Kan ik mijn eigen logo op offertes zetten?", "Ja. Je uploadt één keer je logo en bedrijfsgegevens, en elke offerte en factuur gaat automatisch in jouw huisstijl de deur uit."],
-  ["Werkt het op mijn telefoon?",           "Ja, BossBase werkt op telefoon, tablet en computer. Je medewerkers zien hun werkbonnen gewoon op hun telefoon — niks installeren."],
-  ["Hoe zit het met opzeggen?",             "Een maandabonnement is per maand opzegbaar. Een jaarabonnement loopt 12 maanden en is daarna per maand opzegbaar. Je gegevens kun je meenemen."],
+  ["Heb ik technische kennis nodig?",       "Nee. BossBase is gemaakt voor vakmensen, niet voor IT'ers. Na het aanmelden voer je je eerste klant in en maak je je eerste offerte; installeren hoeft niet."],
+  ["Kan ik mijn eigen logo op offertes zetten?", "Ja. Je uploadt één keer je logo en bedrijfsgegevens, en je offertes en facturen krijgen je eigen logo en huisstijlkleur."],
+  ["Werkt het op mijn telefoon?",           "Deels. Het dashboard werkt in de browser op een tablet, laptop of computer (vanaf 768 pixels breed); op een smalle telefoon niet, en er is geen app. Je klant kan offertes en werkbonnen wel op elke telefoon ondertekenen."],
+  ["Hoe zit het met opzeggen?",             "Een maandabonnement is per maand opzegbaar. Een jaarabonnement loopt 12 maanden en daarna per maand. Je klanten exporteer je als Excel of CSV, en je offertes en facturen als PDF."],
   ["Wat als ik overstap naar een groter pakket?", "Bij een jaarabonnement begint de looptijd van 12 maanden opnieuw vanaf de overstap; je ziet de nieuwe einddatum voordat je bevestigt. Modules of teamleden bijkopen raakt je looptijd niet, en een maandabonnement blijft gewoon per maand opzegbaar."],
-  ["Wat krijg ik bij een jaarabonnement?",  "Bij een jaarabonnement bouwen we gratis een professionele website voor je bedrijf, met een offerteformulier dat direct in je BossBase-pipeline binnenkomt."],
+  ["Wat krijg ik bij een jaarabonnement?",  "Je kiest één welkomstactie: 2 maanden gratis, of (vanaf Groei) een gratis website met een formulier waarvan de aanvragen in je BossBase-pipeline binnenkomen. Voor de hosting van die website betaal je € 5 per maand."],
 ]
 
 function FaqHome({ navigate }) {
   const [open, setOpen] = useState(-1)
   const go = useCallback((e, href) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
     e.preventDefault()
     if (navigate) navigate(href)
     else window.location.href = href
@@ -986,6 +966,7 @@ function FaqHome({ navigate }) {
 /* ── Slot CTA ── */
 function FinalCta({ navigate }) {
   const go = useCallback((e, href) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
     e.preventDefault()
     if (navigate) navigate(href)
     else window.location.href = href
@@ -996,9 +977,9 @@ function FinalCta({ navigate }) {
         <Reveal>
           <div className="final-cta choreo-body">
             <h2>Klaar om de <span className="green">baas</span> te zijn over je bedrijf?</h2>
-            <p>14 dagen gratis. Geen creditcard nodig. Binnen 5 minuten je eerste offerte.</p>
+            <p>14 dagen gratis met de functies van Groei. Je hoeft geen betaalgegevens in te vullen.</p>
             <div className="hero-ctas" style={{ marginTop: 30, justifyContent: "center" }}>
-              <a href="/registreer" className="btn btn-p btn-lg glow" onClick={e => go(e, "/registreer")}>
+              <a href="/register" className="btn btn-p btn-lg glow" onClick={e => go(e, "/register")}>
                 Start gratis proefperiode
               </a>
               <a href="#demo" className="btn btn-s btn-lg" onClick={e => { e.preventDefault(); document.getElementById("demo")?.scrollIntoView({ behavior: "smooth" }) }}>
@@ -1039,8 +1020,8 @@ export default function HomePage({ navigate }) {
                 BossBase brengt klanten, leads, planning, offertes, werkbonnen en omzet samen in één scherp dashboard. Gebouwd voor vakbedrijven die overzicht willen, zonder gedoe.
               </p>
               <div className="hero-ctas">
-                <a href="/registreer" className="btn btn-p glow btn-lg"
-                  onClick={e => { if (navigate) { e.preventDefault(); navigate("/registreer") } }}>
+                <a href="/register" className="btn btn-p glow btn-lg"
+                  onClick={e => { if (navigate) { e.preventDefault(); navigate("/register") } }}>
                   Start 14 dagen gratis
                 </a>
                 <a href="#demo" className="btn btn-s btn-lg"
@@ -1050,17 +1031,7 @@ export default function HomePage({ navigate }) {
               </div>
               <div className="hero-trust">
                 {I.checkCircle}
-                <span>Geen creditcard nodig · binnen 5 minuten klaar · maandabonnement per maand opzegbaar</span>
-              </div>
-              <div className="hero-stats">
-                <div className="hero-stat">
-                  <span className="num">200+</span>
-                  <span className="lbl">vakbedrijven<br />gebruiken BossBase</span>
-                </div>
-                <div className="hero-stat">
-                  <span className="num">4.9 <HeroStar /></span>
-                  <span className="lbl">gemiddelde<br />beoordeling</span>
-                </div>
+                <span>Geen betaalgegevens nodig · 14 dagen de functies van Groei · maandabonnement per maand opzegbaar</span>
               </div>
             </div>
             <HeroStageD reduced={reduced} scrollY={scrollY} />
@@ -1073,7 +1044,6 @@ export default function HomePage({ navigate }) {
         <DemoSection />
         <VoorWie navigate={navigate} />
         <Pricing navigate={navigate} />
-        <Testimonials />
         <FaqHome navigate={navigate} />
         <FinalCta navigate={navigate} />
       </main>

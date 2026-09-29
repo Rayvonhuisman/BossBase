@@ -35,13 +35,6 @@ const DatabasePage = lazy(() => import('./pages/DatabasePage.jsx').then(m => ({ 
 const LeveranciersPage = lazy(() => import('./pages/LeveranciersPage.jsx'));
 const LeverancierPage  = lazy(() => import('./pages/LeverancierPage.jsx'));
 const MaterialenPage   = lazy(() => import('./pages/MaterialenPage.jsx'));
-import MarketingWebsite from './pages/MarketingWebsite.jsx';
-import FeaturesPage from './pages/marketing/FeaturesPage.jsx';
-import PricingPage from './pages/marketing/PricingPage.jsx';
-import IndustriesPage from './pages/marketing/IndustriesPage.jsx';
-import AboutPage from './pages/marketing/AboutPage.jsx';
-import ContactPage from './pages/marketing/ContactPage.jsx';
-import FaqPage from './pages/marketing/FaqPage.jsx';
 import { SuperAdminPage } from './pages/SuperAdminPage.jsx';
 import { createMissingProfile, getSession, logout, onAuthStateChange } from './services/authService.js';
 import { getCurrentUserContext } from './services/profileService.js';
@@ -77,6 +70,8 @@ import { ActivityEditModal, NewActivityModal, NewLeadModal, ProfileModal } from 
 import { supabase } from './lib/supabase.js';
 import { listNotifications, markNotificationRead, markAllNotificationsRead } from './services/notificatieService.js';
 import { isDemo } from './lib/supabase.js';
+import { isAppPath } from './lib/appRoutes.js';
+import { meet } from './lib/meting.js';
 import { DEMO_SESSION, DEMO_USER, DEMO_PROFILE, DEMO_COMPANY, DEMO_PLAN_STATUS, DEMO_PERMISSIONS } from './demo/demoSessie.js';
 
 // Basispad van de app-shell. Eén constante, zodat het pad op één plek staat in
@@ -1296,6 +1291,13 @@ function AppInner() {
 
   const navigate = (path, replace = false) => {
     const nextPath = path === '/website' ? '/' : path === '/registreer' ? '/register' : path;
+    // De website is een eigen, vooraf gerenderde bundle (src/marketing). Een
+    // pad buiten de app laadt dus gewoon die pagina van de server.
+    if (!isAppPath(nextPath.split(/[?#]/)[0])) {
+      if (replace) window.location.replace(nextPath);
+      else window.location.assign(nextPath);
+      return;
+    }
     const changed = window.location.pathname !== nextPath;
     if (changed) {
       // Ook buiten het dashboard de teller doorzetten: het verschil tussen twee
@@ -1304,9 +1306,9 @@ function AppInner() {
       schrijfEntry(nextPath, { replace, vensters: {} });
     }
     setRoute(nextPath);
-    // Reset scroll when entering a public marketing page so each route
-    // starts at the top, mirroring real multi-page navigation.
-    const PUBLIC = ['/', '/functies', '/prijzen', '/voor-wie', '/over-ons', '/over', '/contact', '/faq', '/demo', '/login', '/register', '/betaald', '/betaling-geannuleerd'];
+    // Reset scroll when entering a public page so each route starts at the
+    // top, mirroring real multi-page navigation.
+    const PUBLIC = ['/demo', '/login', '/register', '/betaald', '/betaling-geannuleerd'];
     if (changed && PUBLIC.includes(nextPath)) {
       window.scrollTo({ top: 0, left: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
     }
@@ -1649,38 +1651,6 @@ function AppInner() {
     return <div className="auth-shell"><div className="auth-card afu"><div className="auth-logo"><Logo /></div><div className="auth-title">BossBase laden...</div></div></div>;
   }
 
-  if (route === '/') {
-    return <MarketingWebsite navigate={navigate} isAuthenticated={Boolean(session)} />;
-  }
-
-  if (route === '/functies') {
-    return <FeaturesPage navigate={navigate} isAuthenticated={Boolean(session)} />;
-  }
-
-  if (route === '/prijzen') {
-    return <PricingPage navigate={navigate} isAuthenticated={Boolean(session)} />;
-  }
-
-  if (route === '/voor-wie') {
-    return <IndustriesPage navigate={navigate} isAuthenticated={Boolean(session)} />;
-  }
-
-  if (route === '/over-ons' || route === '/over') {
-    return <AboutPage navigate={navigate} isAuthenticated={Boolean(session)} />;
-  }
-
-  if (route === '/contact') {
-    return <ContactPage navigate={navigate} isAuthenticated={Boolean(session)} />;
-  }
-
-  if (route === '/faq') {
-    return <FaqPage navigate={navigate} isAuthenticated={Boolean(session)} />;
-  }
-
-  // Geen losse demo-omgeving: wie het product wil zien, klikt door het
-  // voorbeeldscherm op de homepage of vraagt een proefaccount aan. /demo valt
-  // daarom door naar de marketingsite.
-
   if (route === '/cookieverklaring') {
     return <CookieverklaringPage navigate={navigate} />;
   }
@@ -1725,6 +1695,7 @@ function AppInner() {
     return (
     <RegisterFlow
       onDone={async () => {
+        meet('proefaccount_aangemaakt');
         await refreshProfile();
         navigate('/dashboard', true);
       }}

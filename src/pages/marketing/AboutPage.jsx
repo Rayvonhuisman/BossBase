@@ -23,6 +23,7 @@ const OPRICHTERS = [
 
 export default function AboutPage({ navigate }) {
   const go = (e, href) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
     e.preventDefault()
     if (navigate) navigate(href)
     else window.location.href = href
@@ -41,11 +42,9 @@ export default function AboutPage({ navigate }) {
         {/* Hero */}
         <section className="over-hero">
           <div className="container">
-            <Reveal>
-              <span className="section-kicker">Over ons</span>
-              <h1>Gebouwd door ondernemers,<br/>voor ondernemers</h1>
-              <p>BossBase ontstond uit frustratie. De frustratie van een vakman die na een lange werkdag nog uren kwijt is aan administratie. Dat kan anders.</p>
-            </Reveal>
+            <span className="section-kicker">Over ons</span>
+            <h1>Gebouwd door ondernemers,<br/>voor ondernemers</h1>
+            <p>BossBase ontstond uit frustratie. De frustratie van een vakman die na een lange werkdag nog uren kwijt is aan administratie. Dat kan anders.</p>
           </div>
         </section>
 
@@ -134,9 +133,9 @@ export default function AboutPage({ navigate }) {
             <Reveal>
               <div className="final-cta">
                 <h2>Klaar om kennis te maken? <span className="green">Begin vandaag.</span></h2>
-                <p>14 dagen gratis. Geen creditcard nodig.</p>
+                <p>14 dagen gratis met de functies van Groei. Geen betaalgegevens nodig.</p>
                 <div className="hero-ctas" style={{ justifyContent: "center" }}>
-                  <a href="/registreer" className="btn btn-p glow btn-lg" onClick={e => go(e, "/registreer")}>
+                  <a href="/register" className="btn btn-p glow btn-lg" onClick={e => go(e, "/register")}>
                     Gratis proberen {I.arrowRight}
                   </a>
                   <a href="/contact" className="btn btn-s btn-lg" onClick={e => go(e, "/contact")}>

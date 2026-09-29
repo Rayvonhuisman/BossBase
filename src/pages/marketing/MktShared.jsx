@@ -334,10 +334,10 @@ export function Reveal({ children, className = "", stagger = false, delay = 0 })
 
 /* ── Nav ── */
 const NAV_LINKS = [
-  { label: "Home",       href: "/" },
   { label: "Functies",   href: "/functies" },
-  { label: "Prijzen",    href: "/prijzen" },
   { label: "Voor wie",   href: "/voor-wie" },
+  { label: "Prijzen",    href: "/prijzen" },
+  { label: "Kennisbank", href: "/kennisbank" },
   { label: "Over",       href: "/over" },
   { label: "Contact",    href: "/contact" },
 ]
@@ -356,6 +356,8 @@ export function Nav({ navigate }) {
   }, [])
 
   const go = useCallback((e, href) => {
+    // Ctrl/cmd-klik: de browser opent een nieuw tabblad.
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
     e.preventDefault()
     setOpen(false)
     setActive(href)
@@ -384,7 +386,7 @@ export function Nav({ navigate }) {
             </ul>
             <div className="nav-right">
               <a href="/login" className="btn btn-ghost" onClick={e => go(e, "/login")}>Inloggen</a>
-              <a href="/registreer" className="btn btn-p" onClick={e => go(e, "/registreer")}>Gratis proberen</a>
+              <a href="/register" className="btn btn-p" onClick={e => go(e, "/register")}>Gratis proberen</a>
               <button className="hamburger" aria-label="Menu" onClick={() => setOpen(o => !o)}>
                 {open ? I.x : I.menu}
               </button>
@@ -396,7 +398,7 @@ export function Nav({ navigate }) {
         {NAV_LINKS.map(l => (
           <a key={l.href} href={l.href} onClick={e => go(e, l.href)}>{l.label}</a>
         ))}
-        <a href="/registreer" className="btn btn-p mobile-menu-cta" onClick={e => go(e, "/registreer")}>
+        <a href="/register" className="btn btn-p mobile-menu-cta" onClick={e => go(e, "/register")}>
           Gratis proberen
         </a>
       </div>
@@ -405,26 +407,45 @@ export function Nav({ navigate }) {
 }
 
 /* ── Footer ── */
+// Alleen pagina's die bestaan. scripts/prerender.mjs controleert elke link.
 const FOOTER_LINKS = {
   Product: [
-    { label: "Functies",  href: "/functies" },
-    { label: "Prijzen",   href: "/prijzen" },
-    { label: "Voor wie",  href: "/voor-wie" },
-    { label: "Demo",      href: "/registreer" },
+    { label: "Alle functies",   href: "/functies" },
+    { label: "Werkbonnen",      href: "/werkbonnen" },
+    { label: "Offertes",        href: "/offertes" },
+    { label: "Planning",        href: "/planning" },
+    { label: "Urenregistratie", href: "/urenregistratie" },
+    { label: "Facturen",        href: "/facturen" },
+    { label: "Klantbeheer",     href: "/klantbeheer" },
+    { label: "Koppelingen",     href: "/integraties" },
+    { label: "Prijzen",         href: "/prijzen" },
+  ],
+  "Voor wie": [
+    { label: "Installateurs",   href: "/voor-wie/installateurs" },
+    { label: "Schilders",       href: "/voor-wie/schilders" },
+    { label: "Hoveniers",       href: "/voor-wie/hoveniers" },
+    { label: "Aannemers en klusbedrijven", href: "/voor-wie/aannemers-en-klusbedrijven" },
+    { label: "Alle vakgebieden", href: "/voor-wie" },
+  ],
+  Kennisbank: [
+    { label: "Wat moet er op een werkbon?", href: "/kennisbank/wat-moet-er-op-een-werkbon-staan" },
+    { label: "Offerte maken",   href: "/kennisbank/offerte-maken-vakbedrijf" },
+    { label: "Wat moet er op een factuur?", href: "/kennisbank/wat-moet-er-op-een-factuur" },
+    { label: "Alle artikelen",  href: "/kennisbank" },
   ],
   Bedrijf: [
-    { label: "Over ons",  href: "/over" },
-    { label: "Contact",   href: "/contact" },
-    { label: "FAQ",       href: "/faq" },
-  ],
-  Juridisch: [
-    { label: "Privacy",   href: "/privacy" },
-    { label: "Voorwaarden", href: "/voorwaarden" },
+    { label: "Over BossBase",   href: "/over" },
+    { label: "Contact",         href: "/contact" },
+    { label: "Veelgestelde vragen", href: "/faq" },
+    { label: "Demo bekijken",   href: "/#demo" },
+    { label: "Inloggen",        href: "/login" },
   ],
 }
 
 export function Footer({ navigate }) {
   const go = useCallback((e, href) => {
+    // Ctrl/cmd-klik: de browser opent een nieuw tabblad.
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
     e.preventDefault()
     if (navigate) navigate(href)
     else window.location.href = href
@@ -538,13 +559,11 @@ export function initChoreo() {
 
 /* ── useReducedMotion ── */
 export function useReducedMotion() {
-  const [reduced, setReduced] = useState(() =>
-    typeof window !== "undefined"
-      ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      : false
-  )
+  // Start op false, net als de vooraf gerenderde HTML; daarna de echte waarde.
+  const [reduced, setReduced] = useState(false)
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)")
+    setReduced(mq.matches)
     const handler = e => setReduced(e.matches)
     mq.addEventListener("change", handler)
     return () => mq.removeEventListener("change", handler)

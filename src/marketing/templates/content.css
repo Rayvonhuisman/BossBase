@@ -1,0 +1,154 @@
+/* Opmaak voor de functie-, branche-, integratie- en kennisbankpagina's.
+   Bouwt voort op de tokens en klassen uit bossbase-mkt.css (alles onder .bm). */
+
+/* ── Kop van de pagina ── */
+.bm .bb-hero {
+  padding: 112px 0 48px;
+  background:
+    radial-gradient(640px 420px at 78% 10%, rgba(29,219,98,0.12), transparent 65%),
+    var(--bg);
+}
+.bm .bb-hero h1 { font-size: clamp(34px, 4.6vw, 56px); font-weight: 900; letter-spacing: -0.04em; max-width: 17em; }
+.bm .bb-hero .bb-lead { margin-top: 18px; font-size: 19px; color: var(--dm); max-width: 38em; }
+.bm .bb-hero .hero-ctas { margin-top: 28px; }
+.bm .bb-hero .bb-hero-note { margin-top: 14px; font-size: 14px; color: var(--dm); }
+
+/* ── Kruimelpad ── */
+.bm .bb-crumbs { margin-bottom: 22px; font-size: 14px; color: var(--dm); }
+.bm .bb-crumbs ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.bm .bb-crumbs li { display: inline-flex; align-items: center; gap: 6px; }
+.bm .bb-crumbs li + li::before { content: '›'; color: var(--dl); }
+.bm .bb-crumbs a { color: var(--dm); text-decoration: underline; text-underline-offset: 2px; }
+.bm .bb-crumbs a:hover { color: var(--dk); text-decoration: underline; }
+.bm .bb-crumbs [aria-current] { color: var(--dk); font-weight: 600; }
+
+/* ── Kaarten (kernpunten, overzichten) ── */
+.bm .bb-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.bm .bb-cards.two { grid-template-columns: repeat(2, 1fr); }
+.bm .bb-card {
+  background: #fff; border: 1px solid var(--border); border-radius: var(--r16);
+  padding: 24px 22px; box-shadow: var(--shadow-sm);
+}
+.bm .bb-card h3 { font-size: 18px; letter-spacing: -0.015em; }
+.bm .bb-card p { margin-top: 8px; font-size: 15.5px; color: var(--dmu); }
+.bm a.bb-card { display: block; color: inherit; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+.bm a.bb-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-color: var(--pl); }
+.bm a.bb-card .bb-card-more { display: inline-flex; align-items: center; gap: 6px; margin-top: 14px; font-size: 14.5px; font-weight: 600; color: var(--pd); }
+.bm .bb-card .bb-card-tag { display: inline-block; font-size: 12.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--pd); margin-bottom: 8px; }
+.bm .bb-card .bb-card-status { display: inline-block; margin-top: 12px; font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: var(--r999); background: var(--pll); color: var(--pd); }
+.bm .bb-card .bb-card-status.gepland { background: var(--bgx); color: var(--dm); }
+
+/* ── Stappen ── */
+.bm .bb-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; counter-reset: stap; max-width: 820px; }
+.bm .bb-steps li {
+  counter-increment: stap; position: relative; background: #fff; border: 1px solid var(--border);
+  border-radius: var(--r14); padding: 18px 20px 18px 66px;
+}
+.bm .bb-steps li::before {
+  content: counter(stap); position: absolute; left: 18px; top: 16px; width: 32px; height: 32px;
+  border-radius: 50%; background: var(--dk); color: var(--p); font-weight: 800; font-size: 15px;
+  display: flex; align-items: center; justify-content: center;
+}
+.bm .bb-steps h3 { font-size: 17px; }
+.bm .bb-steps p { margin-top: 4px; font-size: 15px; color: var(--dmu); }
+
+/* ── Productbeeld ── */
+.bm .bb-shot { margin: 0; }
+.bm .bb-shot img {
+  display: block; width: 100%; height: auto; border-radius: var(--r14);
+  border: 1px solid var(--bstrong); box-shadow: var(--shadow-md); background: #fff;
+}
+.bm .bb-shot figcaption { margin-top: 10px; font-size: 14px; color: var(--dm); text-align: center; }
+
+/* ── Lopende tekst (markdown) ── */
+.bm .bb-prose { max-width: 740px; font-size: 17px; line-height: 1.7; color: var(--dm); }
+.bm .bb-prose > * + * { margin-top: 18px; }
+.bm .bb-prose h2 { font-size: clamp(24px, 2.6vw, 30px); margin-top: 44px; scroll-margin-top: 90px; }
+.bm .bb-prose h3 { font-size: 20px; margin-top: 30px; scroll-margin-top: 90px; }
+.bm .bb-prose h2 + *, .bm .bb-prose h3 + * { margin-top: 12px; }
+.bm .bb-prose a { color: var(--pd); text-decoration: underline; text-underline-offset: 2px; }
+.bm .bb-prose a:hover { color: var(--dk); }
+.bm .bb-prose strong { color: var(--dk); }
+.bm .bb-prose ul, .bm .bb-prose ol { padding-left: 1.3em; }
+.bm .bb-prose li + li { margin-top: 6px; }
+.bm .bb-prose li > ul, .bm .bb-prose li > ol { margin-top: 6px; }
+.bm .bb-prose input[type="checkbox"] { margin-right: 8px; accent-color: var(--pd); }
+.bm .bb-prose li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.3em; }
+.bm .bb-prose hr { border: 0; border-top: 1px solid var(--bstrong); margin: 36px 0; }
+.bm .bb-prose code { font-size: .92em; background: var(--bgs); padding: 1px 5px; border-radius: 5px; }
+.bm .bb-table-wrap { overflow-x: auto; border: 1px solid var(--bstrong); border-radius: var(--r12); background: #fff; }
+.bm .bb-prose table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.bm .bb-prose th, .bm .bb-prose td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.bm .bb-prose th { background: var(--bgs); color: var(--dk); font-weight: 700; }
+.bm .bb-prose tr:last-child td { border-bottom: 0; }
+.bm .bb-callout {
+  margin-left: 0; margin-right: 0; padding: 18px 20px; border-radius: var(--r14);
+  background: var(--pll); border: 1px solid var(--pl); color: var(--dm);
+}
+.bm .bb-callout > * + * { margin-top: 10px; }
+.bm .bb-callout p:first-child strong:first-child { color: var(--pd); }
+
+/* ── Artikel ── */
+.bm .bb-article-head { padding: 112px 0 8px; }
+.bm .bb-article-head h1 { font-size: clamp(32px, 4.2vw, 50px); font-weight: 900; letter-spacing: -0.035em; max-width: 18em; }
+.bm .bb-meta { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14.5px; color: var(--dm); }
+.bm .bb-answer {
+  margin-top: 26px; max-width: 740px; background: #fff; border: 1px solid var(--border);
+  border-left: 4px solid var(--p); border-radius: var(--r14); padding: 18px 22px; box-shadow: var(--shadow-sm);
+}
+.bm .bb-answer strong { display: block; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--pd); margin-bottom: 6px; }
+.bm .bb-answer p { font-size: 17px; color: var(--dk); }
+.bm .bb-article-layout { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 48px; align-items: start; }
+.bm .bb-toc { position: sticky; top: 92px; font-size: 14.5px; }
+.bm .bb-toc h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--dmu); margin-bottom: 10px; }
+.bm .bb-toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; border-left: 2px solid var(--bstrong); }
+.bm .bb-toc a { display: block; padding-left: 12px; color: var(--dm); line-height: 1.4; }
+.bm .bb-toc a:hover { color: var(--pd); }
+.bm .bb-sources { margin-top: 44px; max-width: 740px; padding-top: 24px; border-top: 1px solid var(--bstrong); }
+.bm .bb-sources h2 { font-size: 20px; }
+.bm .bb-sources ul { margin: 12px 0 0; padding-left: 1.2em; font-size: 15px; }
+.bm .bb-sources li + li { margin-top: 6px; }
+.bm .bb-sources a { color: var(--pd); text-decoration: underline; text-underline-offset: 2px; }
+.bm .bb-sources .bb-note { margin-top: 12px; font-size: 14px; color: var(--dmu); }
+.bm .bb-inline-cta {
+  margin-top: 40px; max-width: 740px; background: var(--dk); color: #d1d5db; border-radius: var(--r16);
+  padding: 26px 26px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px;
+}
+.bm .bb-inline-cta h2 { color: #fff; font-size: 21px; }
+.bm .bb-inline-cta p { margin-top: 6px; font-size: 15.5px; }
+
+/* ── Veelgestelde vragen (details/summary: werkt ook zonder JavaScript) ── */
+.bm .bb-faq { max-width: 780px; display: grid; gap: 10px; }
+.bm .bb-faq details { background: #fff; border: 1px solid var(--bstrong); border-radius: var(--r14); }
+.bm .bb-faq details[open] { border-color: var(--pl); box-shadow: var(--shadow-sm); }
+.bm .bb-faq summary { cursor: pointer; list-style: none; padding: 16px 20px; font-weight: 600; color: var(--dk); display: flex; justify-content: space-between; gap: 16px; }
+.bm .bb-faq summary::-webkit-details-marker { display: none; }
+.bm .bb-faq summary::after { content: '+'; color: var(--pd); font-weight: 700; font-size: 20px; line-height: 1; }
+.bm .bb-faq details[open] summary::after { content: '–'; }
+.bm .bb-faq details > div { padding: 0 20px 18px; color: var(--dmu); font-size: 15.5px; }
+
+/* ── Kopjes van secties op contentpagina's ── */
+.bm .bb-section-title { font-size: clamp(26px, 3vw, 36px); max-width: 22em; }
+.bm .bb-section-intro { margin-top: 12px; font-size: 17px; color: var(--dmu); max-width: 40em; }
+.bm .bb-section-title + .bb-cards, .bm .bb-section-intro + .bb-cards,
+.bm .bb-section-title + .bb-steps, .bm .bb-section-intro + .bb-steps,
+.bm .bb-section-title + .bb-faq { margin-top: 26px; }
+
+/* ── 404 ── */
+.bm .bb-404 { padding: 140px 0 40px; }
+.bm .bb-404 .bb-code { font-size: 15px; font-weight: 700; color: var(--pd); letter-spacing: .08em; }
+
+@media (max-width: 1020px) {
+  .bm .bb-cards { grid-template-columns: repeat(2, 1fr); }
+  .bm .bb-article-layout { grid-template-columns: 1fr; }
+  .bm .bb-toc { display: none; }
+}
+@media (max-width: 720px) {
+  .bm .bb-hero, .bm .bb-article-head { padding-top: 96px; }
+  .bm .bb-hero .bb-lead { font-size: 17px; }
+  .bm .bb-cards, .bm .bb-cards.two { grid-template-columns: 1fr; }
+  .bm .bb-prose { font-size: 16.5px; }
+  .bm .bb-steps li { padding-left: 60px; }
+  .bm .bb-hero .hero-ctas { flex-direction: column; align-items: stretch; }
+  .bm .bb-hero .hero-ctas .btn { justify-content: center; }
+}
