@@ -5,7 +5,7 @@
 //       structured data en de gerenderde inhoud in #root;
 //   dist/404.html   de foutpagina (Vercel geeft hem met status 404);
 //   dist/app.html   de lege app-shell voor dashboard, inloggen en klantlinks
-//                   (vercel.json stuurt die paden hierheen), met noindex;
+//                   (vercel.json stuurt die paden naar /app), met noindex;
 //   dist/sitemap.xml
 //
 // En het controleert het resultaat. Bij een kapotte interne link, een dubbele
@@ -163,9 +163,14 @@ for (const r of inSitemap) {
   if (r.path !== '/' && !gelinkt.has(r.path)) fouten.push(`${r.path}: nergens naartoe gelinkt (alleen via sitemap vindbaar)`);
 }
 
-// vercel.json moet elke app-route naar app.html sturen, anders krijgt die een 404.
+// vercel.json moet elke app-route naar /app (app.html) sturen, anders krijgt die een 404.
 const vercel = JSON.parse(lees(path.join(ROOT, 'vercel.json')));
-const bronnen = new Set((vercel.rewrites || []).filter(r => r.destination === '/app.html').map(r => r.source));
+// Met cleanUrls bedient Vercel app.html als /app. Een rewrite naar /app.html
+// vindt dan niets (404 op elke app-route); vandaar /app.
+const bronnen = new Set((vercel.rewrites || []).filter(r => r.destination === '/app').map(r => r.source));
+if ((vercel.rewrites || []).some(r => r.destination.endsWith('.html')) && vercel.cleanUrls) {
+  fouten.push('vercel.json: rewrite naar een .html-bestand werkt niet met cleanUrls; gebruik het pad zonder .html');
+}
 for (const p of APP_PATHS) if (!bronnen.has(p)) fouten.push(`vercel.json: rewrite voor ${p} ontbreekt`);
 for (const p of APP_PREFIXES) {
   if (!bronnen.has(p) || !bronnen.has(`${p}/:pad*`)) fouten.push(`vercel.json: rewrites voor ${p} en ${p}/:pad* ontbreken`);

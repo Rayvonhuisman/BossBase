@@ -1,5 +1,5 @@
 // Lokale test van dist/ met dezelfde regels als Vercel (vercel.json):
-// redirects, cleanUrls, trailingSlash: false, rewrites naar app.html, headers
+// redirects, cleanUrls, trailingSlash: false, rewrites naar /app (app.html), headers
 // en 404.html met status 404. Alleen voor testen; Vercel zelf gebruikt dit niet.
 //
 //   npm run build && node scripts/serve-dist.mjs [poort]
@@ -63,6 +63,13 @@ http.createServer((req, res) => {
   // Bestanden eerst (zoals Vercel), met cleanUrls.
   const f = bestand(pad) || (pad === '/' ? bestand('/index.html') : bestand(`${pad}.html`));
   if (f) return stuur(res, 200, f, extra);
-  for (const r of rewrites) if (r.re.test(pad)) return stuur(res, 200, bestand(r.destination), extra);
+  // Zoals Vercel: een rewrite-doel wordt opgezocht als bestand, met cleanUrls.
+  // Een doel dat niet bestaat geeft een 404 (zo vangt deze server ook een
+  // rewrite naar "/app.html", die op Vercel met cleanUrls niets vindt).
+  for (const r of rewrites) {
+    if (!r.re.test(pad)) continue;
+    const doel = cfg.cleanUrls && r.destination.endsWith('.html') ? null : (bestand(r.destination) || bestand(`${r.destination}.html`));
+    return doel ? stuur(res, 200, doel, extra) : stuur(res, 404, bestand('/404.html'), extra);
+  }
   stuur(res, 404, bestand('/404.html'), extra);
 }).listen(POORT, () => console.log(`dist/ op http://localhost:${POORT} (Vercel-regels uit vercel.json)`));

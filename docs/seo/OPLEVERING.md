@@ -53,7 +53,7 @@ Agenda-pagina (koppeling niet beschikbaar voor klanten).
 - **Twee bundels.** Website (`src/marketing/entry-client.jsx`) en app
   (`src/app-entry.jsx`); `src/main.jsx` kiest op pad. Eén lijst app-routes:
   `src/lib/appRoutes.js`.
-- **vercel.json:** alleen app-routes naar `app.html` (met noindex); de rest is
+- **vercel.json:** alleen app-routes naar `/app` (het bestand `app.html`, met noindex); de rest is
   een bestaande pagina of een echte 404. `cleanUrls`, `trailingSlash: false`,
   308-redirects (`/registreer`, `/over-ons`, `/website`, `/index`),
   `X-Robots-Tag: noindex` op app-, login- en klantlinkroutes en op

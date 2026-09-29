@@ -4,7 +4,7 @@
 // Eén lijst, gebruikt door drie plekken die het eens moeten zijn:
 //   - src/main.jsx kiest hiermee welke bundle hij laadt;
 //   - scripts/prerender.mjs controleert dat vercel.json precies deze paden naar
-//     app.html stuurt (en dus niet naar een 404);
+//     de app-shell (/app, het bestand app.html) stuurt (en dus niet naar een 404);
 //   - App.jsx stuurt alles wat hier níet in staat terug naar de website.
 //
 // Alles wat niet in deze lijst staat is website: een gerenderde pagina, of een

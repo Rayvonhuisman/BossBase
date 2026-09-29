@@ -26,79 +26,79 @@
   "rewrites": [
     {
       "source": "/login",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/register",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/reset-password",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/betaald",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/betaling-geannuleerd",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/superadmin",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/cookieverklaring",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/dashboard",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/dashboard/:pad*",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/demo",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/demo/:pad*",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/uitnodiging",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/uitnodiging/:pad*",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/offerte",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/offerte/:pad*",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/werkbon",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/werkbon/:pad*",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/betaal",
-      "destination": "/app.html"
+      "destination": "/app"
     },
     {
       "source": "/betaal/:pad*",
-      "destination": "/app.html"
+      "destination": "/app"
     }
   ],
   "headers": [
