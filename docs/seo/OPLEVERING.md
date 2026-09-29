@@ -115,7 +115,32 @@ op alle subpagina's. 222 contextuele links in de lopende tekst en de "Lees
 ook"-blokken; elke pagina heeft er minstens twee van buiten de navigatie. De
 volledige matrix staat in `linkmatrix.md`.
 
-## 6. Open punten
+## 6. Tweede ronde (29 september 2026)
 
-Zie het eindrapport in het gesprek; dezelfde lijst staat in
-`uitrol-en-search-console.md` (stappen) en `docs/juridisch/README.md`.
+- **Contactformulier echt aangesloten.** Overgenomen uit
+  `feature/website-aanvragen-schoon` (niet de hele branch):
+  `src/pages/AanvragenPage.jsx`, `src/services/aanvraagService.js`, de broncode
+  van `supabase/functions/public-website-inquiry` en `_shared/websiteAanvraag*.ts`
+  (byte-gelijk aan wat op productie draait, v3), de tests, en migratie
+  `20260915180001` (staat al op productie; `db push --dry-run`: "Remote database
+  is up to date"). Formulier op `/contact` post naar de functie; "Aanvragen" in
+  het dashboard (recht `verkoop`) met badge en melding.
+- **Redesignbranch** niet samengevoegd (ander kleurenpalet). Wel overgenomen:
+  het woordmerk volgens het goedgekeurde logo (Boss donker, Base groen).
+- **Contrast:** `--pd` #0F7535 en `--dmu` #5b6270 (≥ 4,5:1 op beige);
+  footerkoppen h2; label in illustratie donkerder.
+- **Adres en telefoonnummer** van de site gehaald: twee branches noemden
+  verschillende nummers en adressen; niets bevestigd.
+- **Datums:** geen vaste releasedatum meer. Artikelen hebben pas een datum na
+  `npm run publicatiedatum -- JJJJ-MM-DD`; sitemap `lastmod` alleen bij een
+  echte datum.
+- **Bronnen inhoudelijk getoetst** (niet alleen HTTP 200): 10 formuleringen
+  genuanceerd, 2 uitspraken zonder bron voorzien van "voor zover wij weten" of
+  een extra bron (BW 7:757a). Rentepercentages verwijderd; verwijzing naar de
+  Rijksoverheid.
+- **Screenshot van het offerteoverzicht verwijderd** (demobedrijfsnamen mogelijk
+  bestaand); werkbon en planning blijven.
+
+## 7. Open punten
+
+Zie het eindrapport in het gesprek en `docs/juridisch/README.md` (invullijst).

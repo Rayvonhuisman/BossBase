@@ -21,8 +21,10 @@ export default function ArticleTemplate({ inhoud, navigate }) {
           <h1>{meta.h1}</h1>
           <p className="bb-meta">
             <span>Door {meta.auteur || `de redactie van ${SITE_NAAM}`}</span>
-            <span>Gepubliceerd <time dateTime={meta.gepubliceerd}>{datumTekst(meta.gepubliceerd)}</time></span>
-            {meta.gewijzigd !== meta.gepubliceerd && (
+            {meta.gepubliceerd && (
+              <span>Gepubliceerd <time dateTime={meta.gepubliceerd}>{datumTekst(meta.gepubliceerd)}</time></span>
+            )}
+            {meta.gewijzigd && meta.gewijzigd !== meta.gepubliceerd && (
               <span>Bijgewerkt <time dateTime={meta.gewijzigd}>{datumTekst(meta.gewijzigd)}</time></span>
             )}
             <span>{meta.leestijd} min lezen</span>

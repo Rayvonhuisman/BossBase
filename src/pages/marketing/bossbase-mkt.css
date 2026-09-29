@@ -35,7 +35,9 @@ html.choreo-js .bm .choreo-body { animation: none !important; }
 /* ── Root scope: alle tokens ── */
 .bm {
   --p: #1DDB62;
-  --pd: #15A34A;
+  /* Iets donkerder dan het oorspronkelijke #15A34A: als tekstkleur haalde dat
+     maar 2,6:1 op de beige achtergrond. #0F7535 haalt 4,6:1 (WCAG AA). */
+  --pd: #0F7535;
   --pl: #d1fae5;
   --pll: #f0fdf4;
   --dk: #0D0D0D;
@@ -46,7 +48,8 @@ html.choreo-js .bm .choreo-body { animation: none !important; }
   --bgs: #f5f4f1;
   --bgx: #dedad4;
   --dm: #374151;
-  --dmu: #6b7280;
+  /* Was #6b7280 (3,8:1 op beige); #5b6270 haalt ruim 4,5:1. */
+  --dmu: #5b6270;
   --dl: #9ca3af;
   --border: #f0ede9;
   --bstrong: #e5e7eb;
@@ -128,8 +131,12 @@ html.choreo-js .bm .choreo-body { animation: none !important; }
 .bm .nav-links a.active { color: var(--dk); font-weight: 600; }
 .bm .nav-right { display: flex; align-items: center; gap: 10px; }
 .bm .wordmark { font-weight: 800; font-size: 21.5px; letter-spacing: -0.03em; color: var(--dk); display: inline-flex; text-decoration: none; }
-.bm .wordmark .b1 { color: var(--p); }
-.bm .wordmark.on-dark { color: #fff; }
+/* Zoals het goedgekeurde logo (public/brand/logo-bossbase.svg): "Boss" donker,
+   "Base" groen. Op donker: "Boss" wit. */
+.bm .wordmark { color: var(--p); }
+.bm .wordmark .b1 { color: var(--dk); }
+.bm .wordmark.on-dark { color: var(--p); }
+.bm .wordmark.on-dark .b1 { color: #fff; }
 .bm .hamburger { display: none; background: none; border: none; padding: 10px; border-radius: var(--r8); color: var(--dk); }
 .bm .mobile-menu {
   display: none; position: fixed; top: 68px; left: 0; right: 0; z-index: 99;
@@ -183,7 +190,7 @@ html.choreo-js .bm .choreo-body { animation: none !important; }
   position: absolute; background: #fff; border: 1px solid var(--border);
   border-radius: var(--r16); box-shadow: var(--shadow-md); padding: 16px 18px; will-change: transform;
 }
-.bm .fc-label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dl); }
+.bm .fc-label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dmu); }
 .bm .fc-title { font-size: 14.5px; font-weight: 600; color: var(--dk); margin-top: 2px; }
 .bm .fc-amount { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: var(--dk); }
 
@@ -588,7 +595,7 @@ html.choreo-js .bm .choreo-body { animation: none !important; }
 /* ── Footer ── */
 .bm .footer { background: var(--dk); color: var(--dl); margin-top: 72px; padding: 56px 0 32px; position: relative; z-index: 10; }
 .bm .footer-grid { display: grid; grid-template-columns: 1.4fr repeat(4, 1fr); gap: 32px; }
-.bm .footer h4 { color: #fff; font-size: 13.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 16px; }
+.bm .footer h4, .bm .footer .footer-kop { color: #fff; font-size: 13.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 16px; }
 .bm .footer ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .bm .footer a { color: var(--dl); font-size: 14.5px; transition: color 0.15s ease; }
 .bm .footer a:hover { color: var(--p); }
@@ -738,6 +745,21 @@ html.choreo-js .bm .choreo-body { animation: none !important; }
 .bm .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .bm .contact-submit { width: 100%; margin-top: 8px; }
 .bm .contact-toast { display: flex; align-items: center; gap: 10px; background: var(--pll); border: 1px solid var(--pl); border-radius: var(--r12); padding: 14px 18px; margin-top: 16px; color: var(--pd); font-weight: 600; font-size: 14.5px; }
+.bm .contact-toast:focus { outline: 2px solid var(--pd); outline-offset: 2px; }
+.bm .contact-opnieuw { margin-top: 12px; padding: 0; background: none; border: 0; color: var(--pd); font-weight: 600; font-size: 14px; text-decoration: underline; cursor: pointer; }
+.bm .form-field [aria-invalid="true"] { border-color: var(--danger); }
+.bm .contact-privacy { font-size: 13.5px; line-height: 1.55; color: var(--dm); background: var(--bgs); border: 1px solid var(--border); border-radius: var(--r12); padding: 12px 14px; margin: 4px 0 14px; }
+.bm .contact-privacy a { color: var(--pd); text-decoration: underline; }
+.bm .form-check-wrap { margin: 2px 0 18px; }
+.bm .form-check { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.5; color: var(--dm); cursor: pointer; }
+.bm .form-check input { width: 18px; height: 18px; margin-top: 2px; flex: none; accent-color: var(--pd); cursor: pointer; }
+.bm .form-check-wrap .form-error { margin-top: 6px; padding-left: 28px; }
+.bm .contact-alert { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: var(--r12); padding: 12px 16px; font-size: 14px; font-weight: 500; margin-bottom: 12px; }
+.bm .contact-submit[disabled] { opacity: 0.75; cursor: progress; }
+.bm .contact-spinner { width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; display: inline-block; animation: bb-contact-spin 0.7s linear infinite; }
+@keyframes bb-contact-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .bm .contact-spinner { animation-duration: 2.4s; } }
+.bm .bb-sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .bm .contact-info { display: grid; gap: 20px; }
 .bm .contact-info-block { display: flex; align-items: flex-start; gap: 14px; }
 .bm .ci-icon { width: 44px; height: 44px; border-radius: var(--r12); background: var(--pll); color: var(--pd); display: flex; align-items: center; justify-content: center; flex: none; }

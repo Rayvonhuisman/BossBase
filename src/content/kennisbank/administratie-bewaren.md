@@ -23,7 +23,7 @@
   "cta": { "titel": "Je offertes en facturen bij de hand", "tekst": "In BossBase exporteer je je offerte- en factuur-PDF's als ZIP en je klanten als Excel of CSV.", "label": "Gratis proberen", "href": "/register" }
 }
 ---
-Je bent verplicht je administratie 7 jaar te bewaren. Voor gegevens over onroerende zaken en rechten op onroerende zaken is dat 10 jaar. Dat staat zowel bij de [Belastingdienst](https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/btw/administratie_bijhouden/administratie_bewaren/) als in het Burgerlijk Wetboek. Je mag digitaal bewaren en papier scannen, maar dan moeten de gegevens juist en volledig blijven en binnen redelijke tijd te controleren zijn.
+Je bent verplicht je administratie 7 jaar te bewaren. Voor gegevens over onroerende zaken en rechten op onroerende zaken is dat 10 jaar. Dat staat bij de [Belastingdienst](https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/btw/administratie_bijhouden/administratie_bewaren/). De 7 jaar staat ook in het Burgerlijk Wetboek; de langere termijn voor onroerende zaken komt uit de btw-wetgeving. Je mag digitaal bewaren en papier scannen, maar dan moeten de gegevens juist en volledig blijven en binnen redelijke tijd te controleren zijn.
 
 ## De bewaartermijnen op een rij
 
@@ -38,7 +38,7 @@ De Belastingdienst geeft [dit overzicht](https://www.belastingdienst.nl/wps/wcm/
 
 Voor facturen zegt de Belastingdienst hetzelfde: [facturen bewaar je 7 jaar, facturen over onroerende zaken 10 jaar](https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/btw/administratie_bijhouden/facturen_maken/uw_facturen_bewaren). Gebruik je de Unieregeling of de Invoerregeling van het eenloketsysteem, dan geldt voor die leveringen en diensten ook 10 jaar.
 
-Twijfel je of iets onder "onroerende zaken" valt, bijvoorbeeld bij werk aan een pand of als je zelf een bedrijfsruimte koopt? Leg het dan voor aan de Belastingdienst of je boekhouder. Bewaren tot je het zeker weet kost weinig; te vroeg weggooien kan niet worden teruggedraaid.
+De langere termijn geldt vooral voor een pand of grond die je zelf koopt of gebruikt. Twijfel je of hij ook geldt voor facturen voor werk aan het pand van een klant? Leg het dan voor aan de Belastingdienst of je boekhouder. Bewaren tot je het zeker weet kost weinig; te vroeg weggooien kan niet worden teruggedraaid.
 
 ### De 7 jaar komt ook uit het Burgerlijk Wetboek
 

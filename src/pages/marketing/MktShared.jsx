@@ -462,7 +462,7 @@ export function Footer({ navigate }) {
           </div>
           {Object.entries(FOOTER_LINKS).map(([title, links]) => (
             <div key={title}>
-              <h4>{title}</h4>
+              <h2 className="footer-kop">{title}</h2>
               <ul>
                 {links.map(l => (
                   <li key={l.href}>

@@ -53,3 +53,9 @@ verify_jwt = false
 # check-herinneringen en trial-mails: geen gebruikerssessie in het spel.
 [functions.planning-samenvatting]
 verify_jwt = false
+
+# Contactformulier van een (klant)website: de bezoeker is niet ingelogd. Het
+# company_id komt uit het formulier op het openbare token; de functie
+# valideert, begrenst (IP/formulier/e-mail) en schrijft met de service-role.
+[functions.public-website-inquiry]
+verify_jwt = false

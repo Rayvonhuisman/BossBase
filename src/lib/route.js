@@ -21,11 +21,11 @@
 export const PAGINAS = [
   'pipeline', 'customers', 'leveranciers', 'materialen', 'activities', 'calendar',
   'planning', 'projecten', 'werkbonnen', 'uren', 'costs', 'revenue', 'facturen',
-  'offertes', 'database', 'team', 'instellingen', 'abonnement',
+  'offertes', 'database', 'team', 'instellingen', 'abonnement', 'aanvragen',
 ];
 
 // Pagina's die een detail-id in het pad mogen dragen.
-export const ITEM_IN_PAD = ['werkbonnen', 'projecten', 'offertes', 'facturen', 'activities'];
+export const ITEM_IN_PAD = ['werkbonnen', 'projecten', 'offertes', 'facturen', 'activities', 'aanvragen'];
 
 // De drawers, met hun queryparameter.
 export const DRAWERS = { klant: 'klant', deal: 'deal', lev: 'lev', agenda: 'agenda' };

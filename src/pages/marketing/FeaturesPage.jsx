@@ -31,6 +31,34 @@ function CRMVisual() {
 
 
 
+function OffertesVisual() {
+  return (
+    <div className="feature-frame flip">
+      <div className="feature-frame-bar"><span className="dot-r"/><span className="dot-y"/><span className="dot-g"/>
+        <div className="feature-frame-urlbar">{I.shield} bossbase.nl/offertes</div>
+      </div>
+      <div className="feature-frame-body">
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>Offerte #2026-048</div>
+        {[
+          { desc: "Schilderwerk gevel",  price: "€ 2.400" },
+          { desc: "Materialen",          price: "€ 650" },
+          { desc: "Reiskosten",          price: "€ 90" },
+        ].map(r => (
+          <div key={r.desc} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 11px", display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <span style={{ fontSize: 13 }}>{r.desc}</span><span style={{ fontWeight: 700, fontSize: 13 }}>{r.price}</span>
+          </div>
+        ))}
+        <div style={{ borderTop: "1px solid var(--border)", marginTop: 10, paddingTop: 10, display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 13.5 }}>
+          <span>Totaal incl. btw</span><span style={{ color: "var(--pd)" }}>€ 3.799,40</span>
+        </div>
+        <div className="btn btn-p" style={{ width: "100%", justifyContent: "center", marginTop: 10, fontSize: 13 }}>
+          Versturen met link om te ondertekenen
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function TeamVisual() {
   return (
     <div className="feature-frame">
@@ -91,7 +119,7 @@ const BLOCKS = [
     kicker: "Offertes", title: "Offertes maken en online laten ondertekenen",
     desc: "Offertes met je eigen logo en btw per regel. In Groei en Team tekent de klant online; daarna maak je met één klik de factuur.",
     points: ["Eigen logo en huisstijlkleur", "Online ondertekenen (Groei en Team)", "Versies zonder verwarring", "Factuur vanuit de geaccepteerde offerte"],
-    beeld: { src: "/screens/offertes.webp", alt: "Het offerteoverzicht in BossBase" }, flip: true, href: "/offertes", link: "Meer over offertes",
+    Visual: OffertesVisual, flip: true, href: "/offertes", link: "Meer over offertes",
   },
   {
     kicker: "Werkbonnen", title: "Werkbonnen die je klant ter plekke tekent",

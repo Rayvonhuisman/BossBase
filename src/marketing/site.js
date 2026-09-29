@@ -12,13 +12,11 @@ export const CONTACT_EMAIL = 'info@bossbase.nl';
 // Afbeelding voor social previews (1200 × 630).
 export const OG_BEELD = { src: '/og/bossbase.png', width: 1200, height: 630, alt: 'BossBase — software voor zzp\'ers en vakbedrijven' };
 
-// Datum waarop de pagina's van deze release inhoudelijk zijn bijgewerkt of
-// gepubliceerd. Wordt gebruikt voor <lastmod> in de sitemap en voor de
-// publicatie- en wijzigingsdatum van de kennisbankartikelen.
-//
-// ZET DEZE OP DE DAG VAN DE PRODUCTIEPUBLICATIE. Een datum in het verleden
-// zou een artikel terugdateren.
-export const RELEASE_DATUM = '2026-09-29';
+// Publicatie- en wijzigingsdatums staan per artikel in de kop van het
+// Markdown-bestand ("gepubliceerd", "gewijzigd"). Zolang een artikel geen
+// publicatiedatum heeft, toont de site geen datum. Zet de datum op de dag van
+// publicatie met: npm run publicatiedatum -- JJJJ-MM-DD
+// "gewijzigd" zet je alleen met de hand, bij een echte inhoudelijke wijziging.
 
 export function absoluteUrl(pad) {
   return pad === '/' ? `${SITE_URL}/` : `${SITE_URL}${pad}`;

@@ -88,14 +88,14 @@ Let op de uitzonderingen: de regeling geldt niet voor ontwerpwerk (zoals archite
 
 Gebruik je de KOR, dan lever je vrijgesteld van btw. Je bent dan [niet verplicht een factuur uit te reiken](https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/btw/administratie_bijhouden/facturen_maken/factuureisen/aangepaste_regels_facturen/u_maakt_gebruik_van_de_kleineondernemersregeling). Doe je het toch, dan vermeld je op de factuur dat je gebruikmaakt van de kleineondernemersregeling, en zet je er geen btw op.
 
-## Handig, maar niet verplicht
+## Geen factuureis, maar wel verstandig
 
 Deze gegevens staan niet in de factuureisen van de Belastingdienst, maar helpen wel om sneller betaald te krijgen:
 
 - **Betaaltermijn of vervaldatum.** Zo weet je klant wanneer hij moet betalen, en jij wanneer je een herinnering stuurt.
 - **Hoe de klant kan betalen**, bijvoorbeeld je rekeningnummer of een betaallink.
 - **Een verwijzing naar de offerte of het project**, zodat de klant de factuur makkelijk kan plaatsen.
-- **Een melding over wettelijke rente.** Volgens Ondernemersplein moet je je klant laten weten dat je [wettelijke rente berekent als de betaaldatum verstrijkt](https://ondernemersplein.overheid.nl/wetten-en-regels/betalingstermijn-incassokosten-en-wettelijke-rente/), bijvoorbeeld op je factuur of in je betalingsherinnering.
+- **Een melding over wettelijke rente.** Dit is geen factuureis van de Belastingdienst, maar volgens Ondernemersplein moet je je klant wel laten weten dat je [wettelijke rente berekent als de betaaldatum verstrijkt](https://ondernemersplein.overheid.nl/wetten-en-regels/betalingstermijn-incassokosten-en-wettelijke-rente/), bijvoorbeeld op je factuur of in je betalingsherinnering.
 
 Wat je doet als er toch niet betaald wordt, staat in [betalingsherinnering sturen: stappen en voorbeeldtekst](/kennisbank/betalingsherinnering-sturen).
 

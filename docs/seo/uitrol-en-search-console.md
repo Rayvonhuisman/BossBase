@@ -1,114 +1,122 @@
-# Uitrol naar productie en daarna Google Search Console
+# Publicatiechecklist en Google Search Console
 
-Search Console is geen keuring. Het laat zien wat Google van de site kent.
-Drie begrippen die je uit elkaar houdt:
+Branch: `seo/indexering` in `/Users/macbook/BossBase-seo`. De definitieve
+commit staat in `docs/seo/OPLEVERING.md`.
 
-- **Crawlen**: Google haalt een URL op. Hiervoor zorgen robots.txt, de sitemap
-  en gewone links.
-- **Indexeren**: Google besluit een pagina op te nemen. Een sitemap of een
-  indexeringsverzoek garandeert dat niet.
-- **Ranken**: waar een pagina verschijnt voor een zoekopdracht. Daar is geen
-  knop voor; dat volgt uit inhoud, relevantie en tijd.
+Drie begrippen die je uit elkaar houdt: **crawlen** (Google haalt een URL op),
+**indexeren** (Google neemt een pagina op; een sitemap of verzoek garandeert dat
+niet) en **ranken** (de positie voor een zoekopdracht; daar is geen knop voor).
 
-## A. Vóór de publicatie
+## 1. Vóór de merge
 
-1. **Datum zetten.** In `src/marketing/site.js` staat `RELEASE_DATUM`. Zet die
-   op de dag van publicatie. Hij wordt gebruikt als publicatie- en
-   wijzigingsdatum van de artikelen en als `lastmod` in de sitemap.
-2. **Inhoud nalopen.** Laat iemand die de app goed kent de functie-, branche- en
-   integratiepagina's lezen tegen `docs/seo/productfeiten.md`.
-3. **Build en controles lokaal:**
-   ```
-   npm ci
-   npm run build        # faalt bij kapotte links, dubbele titels of H1-fouten
-   npm run seo:check    # head, structured data, sitemap, geheimen
-   node scripts/serve-dist.mjs 4173   # bootst vercel.json na
-   ```
+- [ ] Branch gepusht en de Vercel-preview gebouwd (zie `OPLEVERING.md`, GitHub).
+- [ ] Preview getest met de lijst in stap 2.
+- [ ] Iemand die de app kent heeft de functie-, branche- en koppelingspagina's
+      gelezen tegen `docs/seo/productfeiten.md`.
 
-## B. Previewdeploy op Vercel controleren
+## 2. Test op de Vercel-preview
 
-Push de branch; Vercel bouwt een preview. Controleer op de preview-URL:
+Open de preview-URL uit Vercel. **Dien een preview-URL nooit in bij Google.**
 
-- `/`, `/werkbonnen`, `/kennisbank/wat-moet-er-op-een-factuur`: status 200 en de
-  eigen title (bekijk de paginabron, niet alleen het scherm).
-- `/functies/` geeft een 308 naar `/functies`; `/registreer` een 308 naar
-  `/register`; `/over-ons` naar `/over`.
-- `/bestaat-niet` en `/privacy` geven **404** met de foutpagina.
-- `/login`, `/register`, `/dashboard`, `/demo`, `/offerte/x`, `/werkbon/x`,
-  `/betaal/x`: de app laadt, met header `X-Robots-Tag: noindex, nofollow`.
-- `/api/snelstart/webhook` werkt nog (Vercel-functie; de rewrites raken `/api`
-  niet).
-- Preview-URL's zelf: Vercel zet op `*.vercel.app`-previews standaard
-  `X-Robots-Tag: noindex`. Controleer dat met `curl -I`. Alle canonicals wijzen
-  naar `https://www.bossbase.nl`, dus de preview is nooit de canonieke versie.
-  **Dien nooit een preview-URL in bij Google.**
-- Inloggen, registreren, wachtwoord herstellen, een uitnodigingslink, een
-  offerte- en werkbonlink en een betaallink van een testaccount.
+- [ ] `curl -sI <preview>/` toont `x-robots-tag: noindex` (zowel de standaard
+      van Vercel als onze eigen regel voor `*.vercel.app`).
+- [ ] Openbare routes direct openen én vernieuwen: `/`, `/functies`,
+      `/werkbonnen`, `/offertes`, `/planning`, `/urenregistratie`, `/facturen`,
+      `/klantbeheer`, `/prijzen`, `/voor-wie`, de vier `/voor-wie/…`,
+      `/integraties` en de drie `/integraties/…`, `/kennisbank` en een artikel,
+      `/over`, `/contact`, `/faq`.
+- [ ] Redirects (308): `/functies/` → `/functies`, `/registreer` → `/register`,
+      `/over-ons` → `/over`, `/website` → `/`.
+- [ ] Echte 404: `/bestaat-niet`, `/privacy`, `/voorwaarden`.
+- [ ] App-routes laden de app, met `x-robots-tag: noindex, nofollow`:
+      `/login`, `/register`, `/reset-password?token=x`, `/dashboard`,
+      `/dashboard/aanvragen`, `/demo`, `/offerte/x`, `/werkbon/x`, `/betaal/x`,
+      `/uitnodiging/x`.
+- [ ] `POST <preview>/api/snelstart/webhook` komt bij de Vercel-functie uit (geen
+      HTML van de website terug).
+- [ ] Paginabron van `/werkbonnen`: eigen `<title>`, `description`, canonical
+      `https://www.bossbase.nl/werkbonnen`, JSON-LD.
+- [ ] `/robots.txt` (text/plain) en `/sitemap.xml` (34 URL's).
+- [ ] Mobiel (390 px) en desktop: menu, footer, een artikel, de prijzen.
+- [ ] Inloggen, registreren (tot het formulier), wachtwoord vergeten.
+- [ ] Contactformulier: op de preview geeft het de melding "Het formulier is
+      vanaf dit adres niet beschikbaar". Dat is juist: de toegestane herkomsten
+      van het formulier zijn `https://bossbase.nl`, `https://www.bossbase.nl` en
+      localhost. Wil je het op de preview testen, voeg dan het previewdomein toe
+      aan `website_forms.allowed_domains` (een productiewijziging; alleen als je
+      dat wilt).
 
-## C. Publiceren
+## 3. Publiceren
 
-1. Merge naar `main`; Vercel bouwt productie. Er zijn geen databasemigraties
-   en geen edge functions in deze release.
-2. **Vercel-instelling (niet in code):** Project → Settings → Domains →
-   `bossbase.nl` → "Redirect to www.bossbase.nl" met **308 Permanent
-   Redirect** (nu 307 tijdelijk).
-3. Controleer na de deploy met `curl -I`:
-   - `https://www.bossbase.nl/robots.txt` → 200, `text/plain`
-   - `https://www.bossbase.nl/sitemap.xml` → 200, 34 URL's
-   - `https://www.bossbase.nl/bestaat-niet` → 404
-   - `http://bossbase.nl/` → permanente redirect naar `https://www.bossbase.nl/`
-   - productiepagina's hebben **geen** `X-Robots-Tag: noindex`.
+- [ ] `npm run publicatiedatum -- JJJJ-MM-DD` met de datum van vandaag; commit.
+      Dat zet de publicatiedatum in de twaalf artikelen. Een build doet dat nooit
+      zelf.
+- [ ] Merge `seo/indexering` naar `main`. Vercel bouwt productie.
+      Geen databasemigratie en geen Edge Function nodig: wat het
+      contactformulier gebruikt, staat al op productie (migratie
+      20260915180001, functie `public-website-inquiry` v3). De
+      `supabase db push --dry-run` op deze branch meldt "Remote database is up
+      to date".
+- [ ] Geen omgevingsvariabele nodig. `VITE_BOSSBASE_FORM_TOKEN` mag, maar het
+      openbare formuliertoken staat al in de code.
+- [ ] **Vercel-instelling (niet in code):** Project → Settings → Domains →
+      `bossbase.nl` → redirect naar `www.bossbase.nl` met **308 Permanent**
+      (nu 307).
 
-## D. Search Console
+## 4. Controle productie na de deploy
 
-Mijn controle (29 september 2026): in de DNS staat geen
-`google-site-verification`-record en in de HTML geen verificatietag. Dat
-bewijst niet dat er geen property is: verificatie kan ook via een ander account
-of via een HTML-bestand zijn gedaan. Kijk eerst of er al een property bestaat.
+- [ ] `curl -sI https://www.bossbase.nl/` bevat **geen** `x-robots-tag`.
+- [ ] `curl -sI https://www.bossbase.nl/werkbonnen` → 200, geen noindex.
+- [ ] `curl -sI https://www.bossbase.nl/bestaat-niet` → 404.
+- [ ] `curl -sI http://bossbase.nl/` → één permanente redirect naar
+      `https://www.bossbase.nl/`.
+- [ ] `https://www.bossbase.nl/robots.txt` en
+      `https://www.bossbase.nl/sitemap.xml` bereikbaar.
+- [ ] Contactformulier één keer echt invullen (met "TEST" in het bericht) en
+      controleren dat de aanvraag onder Aanvragen in het dashboard staat. Zet hem
+      daarna op spam of afgewezen.
 
-1. Ga naar https://search.google.com/search-console en log in met het account
-   dat de beheerder van BossBase gebruikt.
-2. **Bestaat er al een property** voor `bossbase.nl` of
-   `https://www.bossbase.nl/`? Gebruik die. Staat er alleen een
-   URL-voorvoegsel-property, voeg dan ook een domeinproperty toe.
-3. **Nieuwe domeinproperty:** "Property toevoegen" → "Domein" → vul
-   `bossbase.nl` in (zonder www). Google toont een TXT-record van de vorm
-   `google-site-verification=…`. **Gebruik exact die waarde.**
-4. Zet dat TXT-record bij de DNS-beheerder van bossbase.nl. Wie dat is, zie je
-   via de registrar van het domein of met `dig NS bossbase.nl`. Laat het record
-   na verificatie staan.
-5. Klik in Search Console op "Verifiëren". DNS-wijzigingen kunnen even duren.
-6. Voeg een tweede eigenaar toe (Instellingen → Gebruikers en rechten).
-7. **Sitemap indienen:** Sitemaps → `https://www.bossbase.nl/sitemap.xml` →
-   Indienen. Status moet "Geslaagd" worden.
-8. **URL-inspectie** van deze adressen. Kies "Live URL testen" en bekijk de
-   gerenderde HTML en de screenshot. Controleer: "URL kan worden geïndexeerd",
-   de door Google gekozen canonical is gelijk aan de door jou opgegeven
-   canonical, en title en inhoud kloppen.
+## 5. Google Search Console
+
+**Definitieve sitemap:** `https://www.bossbase.nl/sitemap.xml`
+
+1. Ga naar https://search.google.com/search-console en kijk of er al een
+   property is voor `bossbase.nl` (domein) of `https://www.bossbase.nl/`.
+   Ontbrekende verificatiecodes in DNS of HTML bewijzen niet dat er geen is.
+2. **Geen domeinproperty?** "Property toevoegen" → "Domein" → `bossbase.nl`
+   (zonder www). Google toont een TXT-record `google-site-verification=…`.
+   Gebruik exact die waarde; zet hem als TXT-record op `bossbase.nl` bij de
+   beheerder van de DNS (opzoeken met `dig NS bossbase.nl` of bij de registrar).
+   Klik op Verifiëren. Laat het record staan. Voeg een tweede eigenaar toe.
+3. Sitemaps → `https://www.bossbase.nl/sitemap.xml` → Indienen.
+4. URL-inspectie → "Live URL testen" → gerenderde HTML en screenshot bekijken,
+   daarna "Indexering aanvragen" (daglimiet):
    - `https://www.bossbase.nl/`
-   - `/functies`, `/werkbonnen`, `/offertes`, `/prijzen`
-   - `/voor-wie/installateurs`, `/integraties/moneybird`, `/kennisbank`
-   - één artikel, bijvoorbeeld `/kennisbank/wat-moet-er-op-een-factuur`
-9. **Indexering aanvragen** voor de homepage en de nieuwe commerciële pagina's
-   (er geldt een daglimiet; de rest vindt Google via de sitemap en de links).
-10. **Nulmeting** (de eerste dag): exporteer Prestaties (laatste 3 maanden) en
-    het rapport Pagina-indexering.
+   - `https://www.bossbase.nl/functies`
+   - `https://www.bossbase.nl/werkbonnen`
+   - `https://www.bossbase.nl/offertes`
+   - `https://www.bossbase.nl/prijzen`
+   - `https://www.bossbase.nl/voor-wie/installateurs`
+   - `https://www.bossbase.nl/integraties/moneybird`
+   - `https://www.bossbase.nl/kennisbank`
+   - `https://www.bossbase.nl/kennisbank/wat-moet-er-op-een-factuur`
+5. Nulmeting: exporteer Prestaties (3 maanden) en Pagina-indexering.
+6. Wekelijks, de eerste 8 weken: soft 404's, duplicaten, "gecrawld, niet
+   geïndexeerd", geen `/dashboard`-, `/demo`-, `/offerte/`- of
+   `/werkbon/`-URL's in de index; klikken en vertoningen zonder "bossbase" in
+   de zoekopdracht.
 
-## E. Volgen
+## 6. Herstelprocedure
 
-**Wekelijks de eerste 8 weken:**
-
-- Pagina-indexering: aantal geïndexeerd, "Soft 404", "Duplicaat zonder door
-  gebruiker geselecteerde canonieke versie", "Gecrawld – momenteel niet
-  geïndexeerd". Oude URL's (zoals `/over-ons`) mogen als "Pagina met
-  omleiding" verschijnen; dat is goed.
-- Controleer dat er geen `/dashboard`-, `/offerte/`-, `/werkbon/`- of
-  `/demo`-URL's in de index komen.
-- Prestaties: klikken, vertoningen, CTR en positie per pagina. Filter op
-  zoekopdrachten **zonder** "bossbase" voor het niet-merkverkeer.
-
-**Maandelijks daarna.** Proefaccounts per landingspagina meten vraagt een
-analysedienst: zie `docs/seo/meting.md`.
+- **Snel terug:** Vercel → Deployments → de vorige productie-deployment →
+  "Promote to Production" (Instant Rollback). De website staat dan binnen een
+  minuut weer op de vorige versie. Er is niets in de database of in Edge
+  Functions veranderd, dus daar hoeft niets terug.
+- **Blijvend terug:** `git revert -m 1 <merge-commit>` op `main` en pushen.
+- **Alleen één pagina fout:** corrigeer het Markdown-bestand of de pagina,
+  `npm run build` (controleert links en titels), pushen.
+- Na een rollback: niets in Search Console hoeft teruggedraaid; de sitemap
+  wordt opnieuw gelezen bij de volgende publicatie.
 
 ## Officiële bronnen
 
@@ -116,6 +124,5 @@ analysedienst: zie `docs/seo/meting.md`.
 - Sitemaps-rapport: https://support.google.com/webmasters/answer/7451001
 - URL-inspectie: https://support.google.com/webmasters/answer/9012289
 - Pagina-indexering: https://support.google.com/webmasters/answer/7440203
-- Prestaties: https://support.google.com/webmasters/answer/7576553
 - JavaScript SEO: https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics
-- robots.txt: https://developers.google.com/search/docs/crawling-indexing/robots/intro
+- Vercel Instant Rollback: https://vercel.com/docs/instant-rollback

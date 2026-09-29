@@ -10,14 +10,12 @@
   "h1": "Wat moet er op een werkbon staan? Checklist en voorbeeld",
   "samenvatting": "Er bestaat geen wettelijk voorgeschreven werkbon. Een goede werkbon legt vast wat je later nodig hebt voor de factuur (wat je hebt gedaan, hoeveel en wanneer) en wat je met de klant hebt afgesproken, inclusief meerwerk, en laat de klant dat aftekenen.",
   "bronnenGecontroleerd": "2026-09-29",
-  "bronnen": [
-    { "titel": "Aan welke eisen moeten facturen voldoen voor uw btw-administratie?", "uitgever": "Belastingdienst", "url": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/btw/administratie_bijhouden/facturen_maken/factuureisen/factuureisen" }
-  ],
+  "bronnen": [{"titel": "Aan welke eisen moeten facturen voldoen voor uw btw-administratie?", "uitgever": "Belastingdienst", "url": "https://www.belastingdienst.nl/wps/wcm/connect/bldcontentnl/belastingdienst/zakelijk/btw/administratie_bijhouden/facturen_maken/factuureisen/factuureisen"}, {"titel": "Burgerlijk Wetboek Boek 7, artikel 757a", "uitgever": "Overheid.nl", "url": "https://wetten.overheid.nl/BWBR0005290/2026-07-01/0/Boek7/Titeldeel12/Afdeling1/Artikel757a"}],
   "gerelateerd": ["/kennisbank/wat-moet-er-op-een-factuur", "/kennisbank/meerwerk-vastleggen", "/kennisbank/uren-en-materialen-per-klus", "/kennisbank/van-offerte-naar-factuur"],
   "cta": { "titel": "Werkbonnen digitaal laten aftekenen", "tekst": "Maak werkbonnen met taken, materiaal, foto's en uren en laat de klant ter plekke tekenen.", "label": "Probeer BossBase 14 dagen", "href": "/register" }
 }
 ---
-Er is geen wet die voorschrijft hoe een werkbon eruitziet of wat erop moet staan. Een werkbon is een werkdocument: je legt vast wat je op een adres hebt gedaan, met welk materiaal en in hoeveel tijd, en je laat de klant zien dat het klaar is. Wat er wél aan regels vastzit, is de factuur die je daarna maakt. Een goede werkbon bevat dus in elk geval de gegevens die je voor die factuur nodig hebt, plus de afspraken die je met de klant wilt kunnen aantonen.
+Voor zover wij weten schrijft geen wet voor hoe een werkbon eruitziet of wat erop moet staan. (Bij aanneming van een bouwwerk moet je bij de oplevering wel een dossier aan de klant geven, volgens [artikel 7:757a BW](https://wetten.overheid.nl/BWBR0005290/2026-07-01/0/Boek7/Titeldeel12/Afdeling1/Artikel757a); dat is iets anders dan een werkbon.) Een werkbon is een werkdocument: je legt vast wat je op een adres hebt gedaan, met welk materiaal en in hoeveel tijd, en je laat de klant zien dat het klaar is. Wat er wél aan regels vastzit, is de factuur die je daarna maakt. Een goede werkbon bevat dus in elk geval de gegevens die je voor die factuur nodig hebt, plus de afspraken die je met de klant wilt kunnen aantonen.
 
 ## Waarom de factuureisen bepalen wat op je werkbon hoort
 
@@ -121,7 +119,7 @@ Werk je met papier, gebruik dan een vast formulier met dezelfde vakken als de ch
 
 ## Aftekenen: waarom en hoe
 
-Een handtekening van de klant legt vast dat het werk is uitgevoerd zoals op de werkbon staat en dat het meerwerk besproken is. Dat is niet wettelijk verplicht, maar het is je sterkste punt als er later discussie komt over wat er is gedaan.
+Een handtekening van de klant legt vast dat het werk is uitgevoerd zoals op de werkbon staat en dat het meerwerk besproken is. Voor zover wij weten is dat niet wettelijk verplicht, maar het is je sterkste punt als er later discussie komt over wat er is gedaan.
 
 Laat tekenen zodra het werk klaar is en de klant het heeft kunnen bekijken. Is de klant er niet, dan kun je de werkbon achteraf laten tekenen, of noteren waarom er geen handtekening is. Zorg dat vastligt wélke versie getekend is, zodat niemand daarna nog iets kan wijzigen zonder dat het opvalt.
 

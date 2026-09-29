@@ -43,7 +43,7 @@ Zet de termijn daarom altijd op je offerte, factuur of in je voorwaarden. Wat ve
 
 ## Stappenplan bij een onbetaalde factuur
 
-Het [stappenplan van KVK en Belastingdienst](https://ondernemersplein.overheid.nl/geldzaken-en-belastingen/cashflow/stappenplan-klant-betaalt-factuur-niet/) begint klein en loopt op.
+Het [stappenplan van Ondernemersplein](https://ondernemersplein.overheid.nl/geldzaken-en-belastingen/cashflow/stappenplan-klant-betaalt-factuur-niet/) begint klein en loopt op.
 
 ### 1. Bel je klant
 
@@ -63,7 +63,7 @@ Kan de klant niet in één keer betalen, spreek dan een regeling af en zet die o
 
 ### 5. Schakel hulp in
 
-Lukt het niet, dan kun je een incassobureau, deurwaarder of incasso-advocaat inschakelen. Een incassobureau stuurt brieven maar mag niet dwingen; een deurwaarder kan met een vonnis beslag leggen. Kies je een incassobureau, controleer dan of het geregistreerd is: volgens de Rijksoverheid hoeft een schuldenaar [vanaf 1 oktober 2026 geen incassokosten en rente te betalen als de incassodienstverlener niet geregistreerd is](https://www.rijksoverheid.nl/actueel/nieuws/2026/09/21/geen-incassokosten-bij-niet-geregistreerde-incassodienstverlener). De oorspronkelijke schuld blijft wel verschuldigd.
+Lukt het niet, dan kun je een incassobureau, deurwaarder of incasso-advocaat inschakelen. Een incassobureau stuurt brieven maar mag niet dwingen; een deurwaarder kan met een vonnis beslag leggen. Kies je een incassobureau, controleer dan of het geregistreerd is: volgens de Rijksoverheid hoeft een schuldenaar [vanaf 1 oktober 2026 geen incassokosten en oplopende rente te betalen als de incassodienstverlener niet geregistreerd is](https://www.rijksoverheid.nl/actueel/nieuws/2026/09/21/geen-incassokosten-bij-niet-geregistreerde-incassodienstverlener). Deurwaarders en advocaten hoeven zich daarvoor niet apart te registreren. De oorspronkelijke schuld blijft wel verschuldigd.
 
 ## Zakelijke klant of particulier: het verschil
 
@@ -76,7 +76,7 @@ Lukt het niet, dan kun je een incassobureau, deurwaarder of incasso-advocaat ins
 
 ### De 14-dagenbrief bij particulieren
 
-De KVK noemt deze brief ook de [veertiendagenbrief of Wik-brief](https://www.kvk.nl/wetten-en-regels/incassobureau-inschakelen-hier-let-je-op/). Hij is verplicht als je klant een consument is. Volgens het stappenplan van Ondernemersplein telt een betalingsherinnering als kosteloze aanmaning. Zorg dat je brief in elk geval dit bevat:
+De KVK noemt deze brief ook de [veertiendagenbrief of Wik-brief](https://www.kvk.nl/wetten-en-regels/incassobureau-inschakelen-hier-let-je-op/). Hij is verplicht als je klant een consument is. Een betalingsherinnering kan als deze kosteloze aanmaning tellen, maar alleen als hij aan alle punten hieronder voldoet. De eerste, vriendelijke herinnering verderop in dit artikel doet dat bewust niet; de tweede wel. Zorg dat je brief in elk geval dit bevat:
 
 - [ ] geen extra kosten: je rekent geen aanmaningskosten
 - [ ] 14 dagen betaaltijd, gerekend vanaf de dag na ontvangst van de brief, en dat staat er ook in
@@ -97,15 +97,15 @@ De incassokosten zijn een percentage van het openstaande bedrag. De [Rijksoverhe
 | Over de volgende € 190.000 | 1% |
 | Boven € 200.000 | 0,5% |
 
-Er geldt een minimum van € 40 en volgens Ondernemersplein een maximum van € 6.775. Naast incassokosten mag je geen aparte aanmaningskosten, herinneringskosten of administratiekosten rekenen. Btw over incassokosten mag alleen als je zelf niet btw-plichtig bent.
+Er geldt een minimum van € 40 en volgens Ondernemersplein een maximum van € 6.775. Bij een particuliere klant mag je naast de incassokosten geen aparte aanmaningskosten, herinneringskosten of administratiekosten rekenen. Bij een zakelijke klant geldt dat ook, tenzij je in een contract iets anders hebt afgesproken. Btw over incassokosten mag alleen als je zelf niet btw-plichtig bent.
 
 ### Wettelijke rente
 
-De wettelijke rente verschilt per soort klant en wordt periodiek aangepast. Volgens de [Rijksoverheid](https://www.rijksoverheid.nl/vraag-en-antwoord/schulden/hoogte-wettelijke-rente) is de rente voor handelstransacties (bedrijven en overheden) sinds 1 juli 2026 10,4%, en die voor niet-handelstransacties (particulieren) sinds 1 januari 2026 4%. Controleer het actuele percentage op die pagina voordat je gaat rekenen.
+De wettelijke rente verschilt per soort klant: de wettelijke rente voor handelstransacties geldt voor bedrijven en overheden, die voor niet-handelstransacties voor particulieren. Beide percentages worden periodiek aangepast. Zoek het percentage dat op dat moment geldt op bij de [Rijksoverheid](https://www.rijksoverheid.nl/vraag-en-antwoord/schulden/hoogte-wettelijke-rente) voordat je gaat rekenen; we noemen het hier bewust niet, omdat het snel veroudert.
 
 ### Let op verjaring
 
-Een factuur verjaart. Volgens het stappenplan van Ondernemersplein na 2 jaar bij consumenten (bij diensten en reizen 5 jaar) en na 5 jaar na afloop van de betaaltermijn bij zakelijke klanten. Een herinnering vóór het einde van die termijn laat de termijn opnieuw ingaan.
+Een factuur verjaart. Volgens het stappenplan van Ondernemersplein na 2 jaar bij consumenten als je alleen producten verkocht, en na 5 jaar bij diensten, zoals de meeste klussen. Bij zakelijke klanten is dat 5 jaar na afloop van de betaaltermijn. Een schriftelijke herinnering vóór het einde van die termijn laat de termijn opnieuw ingaan.
 
 ## Voorbeeldteksten
 

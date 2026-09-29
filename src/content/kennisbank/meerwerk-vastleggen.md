@@ -19,7 +19,7 @@
   "cta": { "titel": "Meerwerk op de werkbon, afgetekend door de klant", "tekst": "Markeer taken als meerwerk en laat de klant de werkbon ter plekke of per mail tekenen.", "label": "Bekijk werkbonnen", "href": "/werkbonnen" }
 }
 ---
-Meerwerk is werk dat de klant er tijdens de klus bij wil, bovenop wat in de offerte staat. Discussie ontstaat bijna altijd op hetzelfde punt: de klant wist niet dat het extra zou kosten, of weet achteraf niet meer dat hij erom vroeg. De oplossing is een vaste volgorde: meerwerk vooraf bespreken, inclusief de prijs, het vastleggen op de werkbon, de klant laten aftekenen en het daarna op de factuur zetten. De wet sluit daarop aan: je moet de klant tijdig wijzen op een prijsverhoging.
+Meerwerk is werk dat de klant er tijdens de klus bij wil, bovenop wat in de offerte staat. Discussie ontstaat bijna altijd op hetzelfde punt: de klant wist niet dat het extra zou kosten, of weet achteraf niet meer dat hij erom vroeg. De oplossing is een vaste volgorde: meerwerk vooraf bespreken, inclusief de prijs, het vastleggen op de werkbon, de klant laten aftekenen en het daarna op de factuur zetten. De wet sluit daarop aan: wil je meerwerk in rekening brengen, dan moet je de klant tijdig wijzen op de prijsverhoging, tenzij de klant dat zelf had moeten begrijpen.
 
 ## Wat is meerwerk (en wat niet)?
 

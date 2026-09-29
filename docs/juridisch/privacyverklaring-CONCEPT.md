@@ -29,6 +29,8 @@ gevestigd te [[adres]]. Contact over privacy: info@bossbase.nl.
 | E-mails die BossBase namens de klant verstuurt (offertes, facturen, herinneringen) | Uitvoering dienst | Als verwerker | [[ ]] |
 | Berichten aan de helpchat "Boss" | Beantwoorden van gebruiksvragen | [[ ]] | [[ ]] |
 | E-mail aan info@bossbase.nl | Beantwoorden van vragen | [[ ]] | [[ ]] |
+| Contactformulier op bossbase.nl: naam, e-mailadres, bericht en optioneel bedrijfsnaam, telefoon, branche en onderwerp, plus het adres van de pagina (zonder querystring) | Beantwoorden van het bericht; opgeslagen als aanvraag in het dashboard | [[ ]] | [[ ]] |
+| Telling tegen misbruik van het formulier: HMAC-hash van IP-adres en e-mailadres, per tijdvenster | Beperken van spam en misbruik | [[ ]] | [[ ]] |
 | Proefperiodemails (dag 7, 11, 14, 15 en 30) | Informeren over de proefperiode | [[ ]] | — |
 
 ## Met wie we gegevens delen (subverwerkers, vastgesteld in de code)

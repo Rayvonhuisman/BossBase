@@ -34,7 +34,7 @@ Een getekende offerte is het begin van het werk, niet het eind van het verkooppr
 
 Volgens [Ondernemersplein van KVK](https://ondernemersplein.overheid.nl/een-offerte-maken/) is een offerte een bindend contract zodra de opdrachtgever hem accepteert en ondertekend terugstuurt. Leg daarom vast wélke versie is getekend. Heb je de offerte na het eerste gesprek nog aangepast, dan wil je later niet discussiëren over welke prijs geldt.
 
-Een "ja hoor, doe maar" aan de telefoon is lastiger te bewijzen. Vraag in dat geval om een bevestiging per mail, of stuur zelf een mail met "zoals afgesproken voer ik offerte X uit".
+Een mondeling akkoord, zoals een "ja hoor, doe maar" aan de telefoon, is ook bindend, maar lastiger te bewijzen. Vraag in dat geval om een bevestiging per mail, of stuur zelf een mail met "zoals afgesproken voer ik offerte X uit".
 
 ### 2. Inplannen
 

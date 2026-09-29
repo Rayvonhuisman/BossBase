@@ -74,7 +74,8 @@ for (const f of paginas) {
       const type = it['@type'];
       if (JSON.stringify(it).match(/aggregateRating|"review"/)) fouten.push(`${naam}: ${type} bevat beoordelingen`);
       if (type === 'Article') {
-        for (const v of ['headline', 'datePublished', 'dateModified', 'author', 'image', 'publisher']) if (!it[v]) fouten.push(`${naam}: Article mist ${v}`);
+        for (const v of ['headline', 'author', 'image', 'publisher']) if (!it[v]) fouten.push(`${naam}: Article mist ${v}`);
+        if (!it.datePublished) meldingen.push(`${naam}: Article zonder datePublished (nog geen publicatiedatum gezet)`);
         if (it.headline?.length > 110) meldingen.push(`${naam}: Article-headline is ${it.headline.length} tekens`);
       }
       if (type === 'BreadcrumbList') {

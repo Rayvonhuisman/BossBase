@@ -89,8 +89,12 @@ of staat het onder "Bestaat niet", dan beloven we het niet.
   werkbon, project en factuur kunnen de fase automatisch doorzetten
   (instelbaar). Verloren-redenen. Activiteiten: bellen, e-mail, bezoek, taak,
   opvolgen. Leveranciers als relatie.
-- Aanvragen van websites die BossBase bouwt komen binnen als lead. Er is geen
-  formulier dat een klant zelf op een eigen website kan plaatsen.
+- Aanvragen via het contactformulier van bossbase.nl (en van websites die
+  BossBase bouwt) komen binnen onder "Aanvragen" in het dashboard (recht
+  `verkoop`), met status nieuw, in behandeling, gekwalificeerd, afgewezen of
+  spam, en zijn om te zetten naar een klant en eventueel een aanvraag in de
+  pipeline. Er is geen formulier dat een klant zelf op een eigen website kan
+  plaatsen.
 - **Geen import van klanten uit Excel of CSV.** Wel export (zie onder).
 
 ## Koppelingen (boekhouding vanaf Groei)

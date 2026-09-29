@@ -28,7 +28,7 @@ if (!fs.existsSync(SJABLOON)) fs.copyFileSync(path.join(DIST, 'index.html'), SJA
 const template = lees(SJABLOON);
 const manifest = JSON.parse(lees(path.join(DIST, '.vite/manifest.json')));
 const ssr = await import(pathToFileURL(path.join(ROOT, 'dist-ssr/entry-server.js')).href);
-const { ROUTES, NIET_GEVONDEN, SITE_URL, RELEASE_DATUM } = ssr;
+const { ROUTES, NIET_GEVONDEN, SITE_URL } = ssr;
 
 if (!template.includes('<!--bb:head-->') || !template.includes('<!--bb:root-->')) {
   throw new Error('Het sjabloon (index.html uit de Vite-build) mist de <!--bb:head--> of <!--bb:root--> markering');
@@ -109,10 +109,14 @@ schrijf(path.join(DIST, 'app.html'), appHtml);
 const inSitemap = ROUTES.filter(r => !r.noindex);
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${inSitemap.map(r => `  <url>
-    <loc>${r.path === '/' ? `${SITE_URL}/` : SITE_URL + r.path}</loc>
-    <lastmod>${r.doc?.gewijzigd || RELEASE_DATUM}</lastmod>
-  </url>`).join('\n')}
+${inSitemap.map(r => {
+  // lastmod alleen als er een echte inhoudelijke datum is (zie site.js).
+  const datum = r.doc?.gewijzigd || r.doc?.gepubliceerd;
+  return `  <url>
+    <loc>${r.path === '/' ? `${SITE_URL}/` : SITE_URL + r.path}</loc>${datum ? `
+    <lastmod>${datum}</lastmod>` : ''}
+  </url>`;
+}).join('\n')}
 </urlset>
 `;
 schrijf(path.join(DIST, 'sitemap.xml'), sitemap);
@@ -165,6 +169,11 @@ const bronnen = new Set((vercel.rewrites || []).filter(r => r.destination === '/
 for (const p of APP_PATHS) if (!bronnen.has(p)) fouten.push(`vercel.json: rewrite voor ${p} ontbreekt`);
 for (const p of APP_PREFIXES) {
   if (!bronnen.has(p) || !bronnen.has(`${p}/:pad*`)) fouten.push(`vercel.json: rewrites voor ${p} en ${p}/:pad* ontbreken`);
+}
+
+const zonderDatum = ROUTES.filter(r => r.type === 'artikel' && !r.doc.gepubliceerd).length;
+if (zonderDatum) {
+  console.warn(`let op  ${zonderDatum} artikel(en) zonder publicatiedatum. Zet die op de publicatiedag: npm run publicatiedatum -- JJJJ-MM-DD`);
 }
 
 if (fouten.length) {

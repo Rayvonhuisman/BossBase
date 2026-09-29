@@ -12,7 +12,6 @@
   "cta": { "label": "Maak je eerste offerte", "href": "/register" },
   "cta2": { "label": "Bekijk prijzen", "href": "/prijzen" },
   "noot": "Offertes maken en versturen kan in elk pakket. Online laten ondertekenen kan in Groei en Team, en tijdens de proefperiode.",
-  "beeld": { "src": "/screens/offertes.webp", "width": 1600, "height": 1000, "alt": "Het offerteoverzicht in BossBase met totalen per status en een lijst van offertes", "bijschrift": "Het offerteoverzicht. Voorbeeld uit de demo, met fictieve gegevens." },
   "puntenTitel": "Wat je met offertes in BossBase doet",
   "punten": [
     { "titel": "Regels zoals jij rekent", "tekst": "Uren, kilometers, vaste posten of je eigen eenheden. Per regel het btw-tarief: 21%, 9%, vrijgesteld of verlegd." },

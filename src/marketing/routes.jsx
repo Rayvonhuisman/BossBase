@@ -10,7 +10,6 @@
 // Contentpagina's (functies, branches, integraties, kennisbank) komen uit
 // src/content/**/*.md; hun title en beschrijving staan in de JSON-kop.
 
-import { RELEASE_DATUM } from './site.js';
 
 const HOME = { naam: 'Home', pad: '/' };
 
@@ -121,9 +120,8 @@ const OUDER = {
 function contentRoute(bestand, meta) {
   const sjabloon = SJABLONEN[meta.type];
   if (!sjabloon) throw new Error(`${bestand}: onbekend type "${meta.type}"`);
-  const doc = meta.type === 'artikel'
-    ? { ...meta, gepubliceerd: meta.gepubliceerd || RELEASE_DATUM, gewijzigd: meta.gewijzigd || meta.gepubliceerd || RELEASE_DATUM }
-    : meta;
+  // Datums alleen zoals ze in het bestand staan: nooit afgeleid van de build.
+  const doc = meta;
   const breadcrumbs = [HOME, OUDER[meta.type], { naam: meta.kruimel, pad: meta.path }];
   return {
     path: meta.path,

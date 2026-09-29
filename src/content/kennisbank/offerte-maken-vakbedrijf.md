@@ -19,7 +19,7 @@
   "cta": { "titel": "Offertes in je eigen huisstijl", "tekst": "Maak offertes met regels per type, btw per regel en je eigen logo, en verstuur ze direct per mail.", "label": "Bekijk offertes", "href": "/offertes" }
 }
 ---
-Een offerte is je voorstel aan de klant: dit ga ik doen, voor deze prijs, onder deze voorwaarden. Volgens [Ondernemersplein van KVK](https://ondernemersplein.overheid.nl/een-offerte-maken/) staan er in een offerte in elk geval je bedrijfsgegevens, de gegevens van de klant, de datum, een offertenummer, een samenvatting van de werkzaamheden, je tarief of projectprijs, de geldigheidsduur, eventuele afspraken over een aanbetaling en een verwijzing naar je algemene voorwaarden. En belangrijk om te weten: "Op het moment dat de opdrachtgever de offerte accepteert en ondertekend terugstuurt, is de offerte juridisch een bindend contract." Wat je in de offerte zet, moet je dus ook kunnen waarmaken.
+Een offerte is je voorstel aan de klant: dit ga ik doen, voor deze prijs, onder deze voorwaarden. Volgens [Ondernemersplein van KVK](https://ondernemersplein.overheid.nl/een-offerte-maken/) bepaal je zelf hoe je een offerte opstelt, maar neem je bijvoorbeeld deze gegevens op: je bedrijfsgegevens, de gegevens van de klant, de datum, een offertenummer, een samenvatting van de werkzaamheden, je tarief of projectprijs, de geldigheidsduur, eventuele afspraken over een aanbetaling en een verwijzing naar je algemene voorwaarden. En belangrijk om te weten: "Op het moment dat de opdrachtgever de offerte accepteert en ondertekend terugstuurt, is de offerte juridisch een bindend contract." Wat je in de offerte zet, moet je dus ook kunnen waarmaken.
 
 Hieronder het stappenplan, toegespitst op vakwerk, met een uitgewerkte voorbeeldofferte.
 
@@ -65,7 +65,7 @@ Bijna elke klus levert iets extra's op. Zet in de offerte hoe je dat afrekent, b
 
 **Geldigheidsduur.** Zet een datum in de offerte tot wanneer je aanbod geldt. Materiaalprijzen en je planning veranderen; zonder einddatum kan een klant maanden later terugkomen op een oude prijs. Ondernemersplein noemt de geldigheidsduur als vast onderdeel, maar schrijft geen termijn voor. Die kies je zelf.
 
-**Aanbetaling.** Vraag je een aanbetaling, zet dat dan in de offerte. Ondernemersplein vermeldt: "Verkoopt u een product aan consumenten? Dan mag u maximaal 50% van het aankoopbedrag als aanbetaling vragen." Tussen bedrijven geldt geen maximum.
+**Aanbetaling.** Vraag je een aanbetaling, zet dat dan in de offerte. Ondernemersplein vermeldt: "Verkoopt u een product aan consumenten? Dan mag u maximaal 50% van het aankoopbedrag als aanbetaling vragen." Die 50%-grens komt uit de regels voor de verkoop van producten aan consumenten; voor een klus aan een particulier is het verstandig een vergelijkbare, redelijke aanbetaling aan te houden. Tussen bedrijven geldt geen maximum.
 
 **Algemene voorwaarden.** Je bent [niet verplicht om algemene voorwaarden op te stellen](https://ondernemersplein.overheid.nl/bedrijfsvoering/juridische-zaken/algemene-voorwaarden-opstellen/), maar heb je ze, dan moet de klant ervan weten en ze vooraf kunnen lezen: "Laat uw klant weten dat er algemene voorwaarden zijn en geef de kans deze te lezen voor de verkoop. Anders zijn de algemene voorwaarden niet geldig." Stuur ze daarom mee met de offerte en verwijs er in de tekst naar.
 
