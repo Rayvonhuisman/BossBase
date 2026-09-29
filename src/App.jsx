@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Wrench, AlertTriangle } from 'lucide-react';
+import { Analytics } from '@vercel/analytics/react';
 import { I, Logo, initials } from './bb-shared.jsx';
 import { LoginPage, RegisterFlow, EmailVerificationScreen } from './pages/BbAuth.jsx';
 import { ResetPasswordPage } from './pages/ResetPasswordPage.jsx';
@@ -2026,6 +2027,7 @@ export default function App() {
     <ToastProvider>
       <UploadProvider>
         <AppInner />
+        <Analytics />
       </UploadProvider>
     </ToastProvider>
   );
