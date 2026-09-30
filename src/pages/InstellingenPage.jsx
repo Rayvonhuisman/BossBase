@@ -1870,7 +1870,7 @@ export function InstellingenPage() {
                   {zegtBedrijfOp ? (
                     <ul style={{ fontSize: '.86rem', color: 'var(--dk)', lineHeight: 1.55, margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <li>Je abonnement wordt opgezegd. Een maandabonnement stopt aan het einde van de lopende maand. Een jaarabonnement stopt aan het einde van de looptijd; tot dan loopt de incasso door.</li>
-                      <li>Jij en alle teamleden worden <strong>direct uitgelogd</strong> en kunnen niet meer inloggen.</li>
+                      <li>Jij en alle teamleden worden <strong>direct uitgelogd</strong> en kunnen niet meer inloggen, <strong>ook niet in de periode die al betaald is</strong> of nog betaald wordt. Wil je BossBase tot het einde van de periode blijven gebruiken, zeg dan op via Instellingen → Abonnement en gebruik deze knop later.</li>
                       <li>De gegevens van het bedrijf worden nu <strong>niet verwijderd</strong>, zodat je kunt terugkeren. Wil je dat we ze verwijderen, mail dan naar info@bossbase.nl.</li>
                       <li>Je facturen en btw-gegevens moet je zelf 7 jaar bewaren. Exporteer ze voordat je opzegt.</li>
                     </ul>

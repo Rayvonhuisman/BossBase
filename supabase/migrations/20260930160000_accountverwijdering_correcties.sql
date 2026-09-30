@@ -1,8 +1,10 @@
 -- ── Waarom ──────────────────────────────────────────────────────────────────
 -- Correcties op "Account verwijderen" en de opschoonjob (20260930083452).
--- Getest in een geïsoleerde database met de productiestructuur (PGlite, zie
--- supabase/tests/accountverwijdering_test.mjs); niets hiervan is op productie
--- uitgeprobeerd.
+-- Getest in geïsoleerde omgevingen met de productiestructuur: PGlite
+-- (supabase/tests/accountverwijdering) en lokale Postgres + PostgREST + de echte
+-- Edge Functions (supabase/tests/lokaal). Op productie alleen als droogloop in
+-- een teruggedraaide transactie. Terugdraaien:
+-- supabase/rollback/20260930160000_accountverwijdering_correcties.rollback.sql.
 --
 -- 1. Toegang eindigt niet echt. delete_own_account en cancel_company_account
 --    zetten alleen profiles.actief = false. De app logt dan uit, maar het
@@ -40,6 +42,9 @@
 --    verwijzing naar dezelfde bucket en precies dat pad wijzen, en blijft een
 --    bestand staan waar een ander bedrijf ook naar verwijst. Een verwijzing die
 --    als JSON-lijst is opgeslagen (kosten-bijlagen) telt nog steeds mee.
+--
+-- 7. Een beheerder kon via de API zichzelf eigenaar maken, of het bedrijf als
+--    opgezegd markeren (zie bb_companies_bewaken hieronder).
 --
 -- 6. anon had EXECUTE op delete_own_account en cancel_company_account (zonder
 --    gevolg, auth.uid() is dan leeg, maar niet de bedoeling).
@@ -119,6 +124,39 @@ begin
   perform public.bb_toegang_beeindigen(v_users);
 end;
 $$;
+
+-- ── Eigenaar en opzegstatus alleen via de server ────────────────────────────
+-- De policy "Users can update own company" laat elke beheerder de eigen
+-- bedrijfsrij wijzigen, dus ook eigenaar_id (zichzelf eigenaar maken en dan
+-- opzeggen) en status/opgezegd_op (een bedrijf als opgezegd markeren, met een
+-- datum die de opschoonjob laat meetellen). Geen scherm in de app doet dat;
+-- alleen de superbeheerderspagina zet status. Via de API mag het dus alleen voor
+-- een superbeheerder. Serverfuncties (security definer, service_role) draaien
+-- niet als anon/authenticated en worden niet geraakt.
+-- Bewust GEEN security definer: dan is current_user altijd de eigenaar van de
+-- functie en zou de controle nooit afgaan.
+create or replace function public.bb_companies_bewaken()
+returns trigger
+language plpgsql
+set search_path to 'public'
+as $$
+begin
+  if current_user in ('anon', 'authenticated')
+     and (new.eigenaar_id is distinct from old.eigenaar_id
+          or new.status is distinct from old.status
+          or new.opgezegd_op is distinct from old.opgezegd_op)
+     and not coalesce((select p.is_super_admin from public.profiles p where p.id = auth.uid()), false)
+  then
+    raise exception 'Eigenaar en opzegstatus van een bedrijf kun je hier niet wijzigen.'
+      using errcode = 'insufficient_privilege';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists bb_companies_bewaken on public.companies;
+create trigger bb_companies_bewaken before update on public.companies
+  for each row execute function public.bb_companies_bewaken();
 
 -- ── Bestanden van een bedrijf ────────────────────────────────────────────────
 -- Wijst verwijzing u naar bestand (bucket, naam)? Een verwijzing is een
@@ -214,6 +252,7 @@ $$;
 
 -- ── Rechten ─────────────────────────────────────────────────────────────────
 revoke all on function public.bb_toegang_beeindigen(uuid[])        from public, anon, authenticated;
+revoke all on function public.bb_companies_bewaken()               from public, anon, authenticated;
 revoke all on function public.bb_verwijst_naar(text, text, text)   from public, anon, authenticated;
 revoke all on function public.bb_opschoning_bestanden(uuid)        from public, anon, authenticated;
 revoke all on function public.bb_opschoning_verwijder(uuid, int)   from public, anon, authenticated;

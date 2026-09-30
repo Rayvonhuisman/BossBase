@@ -216,7 +216,14 @@ export function AbonnementSectie() {
             niet over gaat. Alle abonnementswijzigingen lopen via ons eigen
             scherm, met onze regels erop: de downgradegrendel boven de limiet,
             de jaarlooptijd en de looptijdreset bij een upgrade. */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {/* Alleen de eigenaar beheert het abonnement; de server (billing-*)
+            weigert anderen al vóór er iets naar Stripe gaat. */}
+        {!stand.magBeheren && (
+          <p style={{ fontSize: '.84rem', color: 'var(--dmu)', margin: 0 }}>
+            Alleen de eigenaar van het bedrijf kan het abonnement wijzigen of opzeggen.
+          </p>
+        )}
+        {stand.magBeheren && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {stand.heeftStripe ? (
             <>
               <button className="btn btn-p" onClick={() => gaNaarAbonnement(null, { soort: 'abonnement' })} disabled={bezig}>
@@ -240,11 +247,11 @@ export function AbonnementSectie() {
               Abonnement afsluiten
             </button>
           )}
-        </div>
+        </div>}
 
         {/* Zeggen wat achter welke knop zit, zodat niemand het portal in gaat
             om iets te doen wat daar niet kan. */}
-        {stand.heeftStripe && (
+        {stand.heeftStripe && stand.magBeheren && (
           <p style={{ fontSize: '.8rem', color: 'var(--dmu)', marginTop: 10, marginBottom: 0 }}>
             Van pakket wisselen, modules bij- of afkopen en teamleden toevoegen doe je onder
             <strong> Abonnement wijzigen</strong>. Onder <strong>Facturen en betaalmethode</strong>
