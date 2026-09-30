@@ -140,7 +140,8 @@
 
 @media (max-width: 1020px) {
   .bm .bb-cards { grid-template-columns: repeat(2, 1fr); }
-  .bm .bb-article-layout { grid-template-columns: 1fr; }
+  /* minmax(0, 1fr): anders houdt een brede tabel de kolom breder dan het scherm (horizontale overloop). */
+  .bm .bb-article-layout { grid-template-columns: minmax(0, 1fr); }
   .bm .bb-toc { display: none; }
 }
 @media (max-width: 720px) {
