@@ -4,8 +4,19 @@
 goedgekeurde teksten. De website linkt niet naar `/privacy` of `/voorwaarden`
 (die geven een echte 404).
 
+> **Let op (30 september 2026):** in `algemene-voorwaarden.md`,
+> `cookiebeleid.md`, `privacyverklaring-CONCEPT.md` en
+> `verwerkersovereenkomst-CONCEPT.md` staan bedrijfsgegevens van een B.V. en
+> termijnen (2 jaar, 48 uur). Die zijn **niet bevestigd**: er wordt ook
+> onderzocht of BossBase onder een bestaande eenmanszaak valt. Naam,
+> rechtsvorm, adres en nummers pas definitief maken na bevestiging (deel 1).
+> Termijnen: zie `voorstellen-termijnen.md`.
+
 - `privacyverklaring-CONCEPT.md` — concept op basis van vastgestelde feiten.
 - `verwerkersovereenkomst-CONCEPT.md` — concept op basis van vastgestelde feiten.
+- `voorstellen-termijnen.md` — bewaartermijnen, datalekmelding en
+  prijswijzigingen, met onderbouwing; niet goedgekeurd.
+- `verwijderverzoeken.md` — hoe een verwijderverzoek wordt afgehandeld.
 - Hieronder: wat de eigenaren moeten aanleveren (deel 1) en wat onderzocht is
   (deel 2).
 
@@ -23,32 +34,25 @@ goedgekeurde teksten. De website linkt niet naar `/privacy` of `/voorwaarden`
   na de proefperiode mails komen over de proefperiode en het kiezen van een
   abonnement.
 
-## Deel 1 — Van de eigenaren nodig
+## Deel 1 — Invullijst (pas invullen na bevestiging)
 
-1. Juridische naam en rechtsvorm.
-2. KvK-nummer en btw-id.
-3. Zakelijk vestigingsadres, en of dat ook een bezoekadres is.
-4. Een publiek telefoonnummer, als je dat wilt.
-5. E-mailadres voor contact en voor privacyverzoeken (voorstel: info@bossbase.nl
-   voor beide).
-6. Bewaartermijnen. Voorstellen:
-   - account en bedrijfsgegevens: zolang het account bestaat, daarna 2 jaar
-     (de app belooft sinds 30 september 2026 géén termijn meer; zie deel 2);
-   - financiële administratie: 7 jaar (fiscale bewaarplicht);
-   - contactaanvragen: 12 maanden na afhandeling;
-   - helpchatgesprekken: 12 maanden;
-   - verzonden-mailregistratie: 12 maanden;
-   - resettokens en verificatiecodes: direct na gebruik of verloop.
-7. Prijswijzigingen. Voorstel: minimaal 30 dagen vooraf per e-mail aankondigen;
-   bij een lopend jaarabonnement geldt de oude prijs tot het einde van de
-   looptijd.
-8. Beschikbaarheid. Voorstel: geen percentage beloven; "we doen ons best de
-   dienst beschikbaar te houden en melden gepland onderhoud vooraf".
-9. Aansprakelijkheid en meldtermijn voor datalekken (voorstel: 48 uur) —
-   met jurist.
-10. Proefperiodemails: afmeldlink toevoegen, of de commerciële mails (1 dag
-    vóór en 15 dagen na het einde) aanpassen — met jurist.
-11. Meldactie: automatische deelname behouden of een keuze toevoegen.
+1. Rechtsvorm: eenmanszaak of B.V. (wordt onderzocht).
+2. Juridische naam, en of "BossBase" als handelsnaam is ingeschreven.
+3. KvK-nummer.
+4. Btw-id (bij een eenmanszaak niet het BSN-nummer; het btw-id staat los
+   daarvan).
+5. Zakelijk vestigingsadres, en of dat ook een bezoekadres is. Bij een
+   eenmanszaak met een woonadres: kies of dat adres gepubliceerd mag worden
+   (KvK kan het afschermen; een publiek adres is wel verplicht voor
+   webwinkels en aanbieders van diensten op afstand).
+6. Publiek telefoonnummer, als je dat wilt.
+7. Contactadres voor privacyverzoeken (voorstel: info@bossbase.nl).
+8. Wie verzoeken en datalekken afhandelt, en wie de vervanger is.
+9. Welke verwerkersovereenkomsten echt zijn afgesloten (Supabase, Vercel,
+   Resend, Stripe, Anthropic).
+
+Keuzes (termijnen, datalekmelding, prijswijzigingen, proefperiodemails):
+zie `voorstellen-termijnen.md` en deel 2.
 
 ## Deel 2 — Onderzocht (29 september 2026)
 
