@@ -90,13 +90,14 @@ export function AbonnementSectie() {
         ? `per ${fmtDatum(stand.verplichtingTot)} (einde looptijd)`
         : 'aan het einde van de lopende maand';
       // Opzeggen stopt alleen de verlenging. Toegang blijft tot het einde van de
-      // betaalde periode; daarna wordt het account alleen-lezen (bb_readonly_reden),
-      // zodat de gegevens te bekijken en te exporteren blijven. Accounts worden
-      // hier niet gedeactiveerd: dat is "Bedrijf sluiten" onder Mijn profiel.
+      // betaalde periode; daarna blokkeert bb_readonly_reden nieuw werk en
+      // versturen (zie docs/uitrol-accountverwijdering.md voor wat precies).
+      // Accounts worden hier niet gedeactiveerd: dat is "Bedrijf sluiten".
       if (!window.confirm(
         `Abonnement opzeggen ${wanneer}?\n\n`
-        + 'Jij en je team kunnen tot die datum gewoon doorwerken. Daarna kun je je gegevens nog bekijken '
-        + 'en exporteren, maar niets nieuws vastleggen. Je gegevens worden niet verwijderd.',
+        + 'Jij en je team kunnen tot die datum gewoon doorwerken. Daarna kun je geen nieuwe klanten, '
+        + 'offertes, facturen, werkbonnen, uren of afspraken meer vastleggen en niets meer versturen. '
+        + 'Je gegevens blijven staan en worden niet verwijderd.',
       )) return;
     }
     setBezig(true);

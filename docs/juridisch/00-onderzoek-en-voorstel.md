@@ -36,7 +36,7 @@
 | 5 | Pagina's `/privacy`, `/voorwaarden`, `/verwerkersovereenkomst`, `/subverwerkers`, `/cookieverklaring` | `/subverwerkers` bestaat (30-09, gelinkt in de footer). `/cookieverklaring` is nog een lege placeholder; de rest bestaat niet | De overige toevoegen in `src/marketing/routes.jsx` na goedkeuring van de teksten |
 
 Keuzes die nog tussen haken staan in de algemene voorwaarden: betaaltermijn vóór
-alleen-lezen (5.3), reactietijd (6.3), vergoeding voor een export door ons (9.2),
+de blokkade van nieuw werk (5.3), reactietijd (6.3), vergoeding voor een export door ons (9.2),
 termijn om aansprakelijkheid te melden (10.5).
 
 > Wat hieronder staat is het oorspronkelijke onderzoek van 23 september. Waar het

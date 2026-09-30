@@ -2,7 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
-import { verwijzing, kortLink } from '../_shared/documentLink.ts'
+import { opslagWaarde } from '../_shared/documentLink.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -139,9 +139,10 @@ serve(async (req) => {
     }
 
     // De signatures-bucket is privé. Vroeger stond hier een ondertekende URL van
-    // 10 jaar; nu alleen een verwijzing. Een link maakt document-url op het
-    // moment van openen, na controle, 10 minuten geldig (_shared/documentLink.ts).
-    const signatureUrl = verwijzing('signatures', sigFilename)
+    // 10 jaar; nu een van 24 uur (overgang voor oude app-tabbladen). De app
+    // vraagt bij het openen een link van 10 minuten op via document-url
+    // (_shared/documentLink.ts).
+    const signatureUrl = await opslagWaarde(admin, 'signatures', sigFilename)
 
     // ── STAP 3: Company ophalen (branding voor snapshot + response) ──────────
     let company: Record<string, unknown> = {}
@@ -204,9 +205,9 @@ serve(async (req) => {
         if (pdfUploadErr) {
           warnings.push(`PDF upload mislukt (signed-offertes): ${pdfUploadErr.message}`)
         } else {
-          // De bucket is privé. We bewaren een verwijzing; offerte-pdf-url en
-          // document-url maken bij het openen een korte link.
-          const signedPdfUrl = verwijzing('signed-offertes', pdfPad)
+          // De bucket is privé. Opgeslagen: een link van 24 uur (overgang);
+          // offerte-pdf-url en document-url maken bij het openen een korte link.
+          const signedPdfUrl = await opslagWaarde(admin, 'signed-offertes', pdfPad)
           if (signedPdfUrl) {
             const { error: urlUpdateErr } = await admin.from('offertes')
               .update({ signed_pdf_url: signedPdfUrl })

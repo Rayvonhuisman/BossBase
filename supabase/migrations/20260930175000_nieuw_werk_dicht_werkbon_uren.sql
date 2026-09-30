@@ -1,5 +1,5 @@
 -- ── Waarom ──────────────────────────────────────────────────────────────────
--- Alleen-lezen (20260803120000) sluit "uren boeken" voor een bedrijf zonder
+-- De beperking na afloop (20260803120000, "readonly" in de code) sluit "uren boeken" voor een bedrijf zonder
 -- geldig abonnement, via een restrictive INSERT-policy met bb_mag_schrijven()
 -- op urenregistratie. werkbon_uren bestond toen nog niet en kreeg die policy
 -- nooit: na afloop van een opgezegd abonnement kon je daar nog uren boeken

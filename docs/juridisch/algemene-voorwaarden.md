@@ -83,7 +83,8 @@ Je krijgt van ons een factuur.
 
 5.3 Mislukt een betaling, dan proberen we het opnieuw en laten we het je weten.
 Staat een bedrag na [14 dagen] na een herinnering nog open, dan mogen we je
-account op alleen-lezen zetten tot het betaald is. Je gegevens blijven dan staan.
+het vastleggen van nieuw werk en het versturen van documenten blokkeren tot het
+betaald is. Je gegevens blijven dan staan.
 
 5.4 We mogen onze prijzen wijzigen. We laten het je minstens **[30 dagen — nog te besluiten] van
 tevoren** weten. Tijdens een jaarperiode verandert je prijs niet. Ben je het niet

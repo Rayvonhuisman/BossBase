@@ -113,4 +113,4 @@ BossBase is software om je werk en je facturen mee te regelen; het is geen archi
 
 Werk je met een boekhoudkoppeling (vanaf Groei), dan komen je [facturen](/facturen) ook in je boekhoudpakket terecht: bij [Moneybird](/integraties/moneybird) zodra een factuur betaald is, bij [SnelStart](/integraties/snelstart) als verkoopboeking met PDF. Controleer bij je boekhoudpakket hoe dat met bewaren omgaat.
 
-Na de proefperiode van 14 dagen is je account alleen-lezen tot je een abonnement kiest: je kunt dan nog bekijken en exporteren. Verwijder je je account, dan worden gegevens niet direct gewist, maar maak ook dan eerst zelf een export.
+Na de proefperiode van 14 dagen kun je geen nieuw werk meer vastleggen of versturen tot je een abonnement kiest; je gegevens blijven staan en je kunt ze nog exporteren. Verwijder je je account, dan worden gegevens niet direct gewist, maar maak ook dan eerst zelf een export.

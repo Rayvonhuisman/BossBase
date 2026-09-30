@@ -6,7 +6,7 @@ Branch `fix/accountverwijdering-bv`. Niets hiervan staat op productie.
 
 | Actie | Wie | Wat er gebeurt | Veld |
 | --- | --- | --- | --- |
-| **Abonnement opzeggen** (Instellingen → Abonnement) | Alleen de eigenaar | Verlenging stopt. Iedereen werkt door tot het einde van de betaalde periode. Daarna meldt Stripe `canceled` en wordt het bedrijf **alleen-lezen** (bekijken en exporteren, niets nieuws vastleggen). Niemand wordt gedeactiveerd. | `subscriptions.stripe_status` / `status` (webhook) |
+| **Abonnement opzeggen** (Instellingen → Abonnement) | Alleen de eigenaar | Verlenging stopt. Iedereen werkt door tot het einde van de betaalde periode. Daarna meldt Stripe `canceled` en blokkeert de server **nieuw werk en versturen** (zie hieronder wat precies). Niemand wordt gedeactiveerd. | `subscriptions.stripe_status` / `status` (webhook) |
 | **Bedrijf sluiten** (Mijn profiel → Gevarenzone) | Alleen de eigenaar | Toegang van het hele team stopt direct (ook in een betaalde periode), verlenging wordt gestopt, gegevens blijven. | `companies.status = 'opgezegd'`, `opgezegd_op` |
 | **Account deactiveren** (Mijn profiel → Gevarenzone) | Iedereen, alleen voor zichzelf | Eigen toegang stopt direct; het bedrijf en het werk blijven. | `profiles.actief`, `verwijderd_op` |
 | **Verwijdering aanvragen** | Iedereen | Een e-mail naar info@bossbase.nl; afhandeling volgens de procedure. Niets automatisch. | — |
@@ -16,25 +16,28 @@ De webhook schrijft nooit `companies.status`; `cancel_company_account` nooit
 een opgezegd abonnement staat alleen in `subscriptions`. Een aparte status was
 daarom niet nodig; de verwarring zat in de knop, die beide deed.
 
-## Alleen-lezen na afloop van een opgezegd abonnement
+## Na afloop van een opgezegd abonnement: wat blijft, wat stopt
 
-Wat de server afdwingt (lokaal getest met echte PostgREST en functiecode,
-`supabase/tests/lokaal/test_functies.mjs`, groep "alleen-lezen"):
+Dit is **geen** alleen-lezen: bestaande gegevens wijzigen en verwijderen kan nog.
+In de code heet het "readonly" (`bb_readonly_reden`); in teksten voor klanten
+noemen we het zo niet. Het bestaande gedrag blijft voorlopig zo; een bredere
+blokkade vraagt een besluit.
 
-| Route | Na afloop |
+Getest lokaal (echte PostgREST en functiecode; `test_functies.mjs` en
+`test.mjs`, groep "na afloop"):
+
+| Blijft beschikbaar | Wordt geblokkeerd |
 | --- | --- |
-| Lezen (database, RPC) | Werkt — bekijken en exporteren blijven mogelijk |
-| Nieuw werk vastleggen (INSERT op 28 tabellen en Storage-upload, `bb_mag_schrijven`) | Geweigerd |
-| Uren boeken op een werkbon (`werkbon_uren`) | **Was open**; nu geweigerd door `20260930175000_alleen_lezen_werkbon_uren.sql` |
-| Offerte/factuur op "verzonden" zetten (trigger `bb_blokkeer_versturen`) | Geweigerd |
-| Mail versturen (Edge Function `send-email`) | Geweigerd |
-| Bestaande gegevens wijzigen of verwijderen (UPDATE/DELETE) | **Niet geblokkeerd** (zo ontworpen: alleen nieuw werk dicht) |
-| Overige Edge Functions en RPC's met security definer | Niet apart op alleen-lezen gecontroleerd |
-| Opnieuw abonneren (`billing-checkout`, eigenaar) | Blijft mogelijk (getest) |
-| Verwijdering aanvragen | Blijft mogelijk (e-mail, buiten de app om) |
+| Gegevens lezen, zoeken en exporteren (database, RPC) | Nieuwe rijen in 28 tabellen: klanten, leveranciers, offertes en regels, facturen en regels, werkbonnen met taken/materiaal/dagen/foto's/notities, projecten met kosten/notities/foto's, deals en notities, activiteiten, agenda, uren (urenregistratie), materialen, voertuigen, teamleden uitnodigen |
+| Bestaande gegevens **wijzigen en verwijderen** (UPDATE/DELETE) | Uren boeken op een werkbon (`werkbon_uren`) — **was open**, dicht door `20260930175000_nieuw_werk_dicht_werkbon_uren.sql` |
+| Facturen op betaald zetten; creditfactuur (uitzonderingen van 20260803120000) | Bestanden uploaden in de buckets van werkbonfoto's, kostenbijlagen en projectfoto's |
+| Binnenkomende aanvragen van de eigen website (service_role) | Een offerte of factuur op "verzonden" zetten (trigger `bb_blokkeer_versturen`) |
+| Opnieuw abonneren (`billing-checkout`, eigenaar) | Mail versturen via `send-email` |
+| Verwijdering aanvragen (e-mail) | |
+| Overige Edge Functions en RPC's met security definer: **niet** apart op deze beperking gecontroleerd | |
 
-Hoe lang alleen-lezen duurt, is **geen vastgesteld beleid**. Er is nu geen
-einddatum en geen automatische verwijdering; dat is ook geen toezegging.
+Hoe lang dit duurt, is **niet besloten**. Er is geen einddatum en geen
+automatische verwijdering, en de app belooft ook geen onbeperkte toegang.
 
 ## Wat direct geblokkeerd is en wat (nog) niet bewezen is
 
@@ -108,7 +111,7 @@ beperkingen hierboven:**
 | F5 | `document-url`, sign-functies en `getekende-pdf-nazenden` zonder lange links | FE (de app moet korte links kunnen opvragen vóór nieuwe rijen alleen een verwijzing hebben) |
 | M2 | `20260930160000` | F1 |
 | M3 | `20260930170000` | niets |
-| M4 | `20260930175000`: alleen-lezen ook voor `werkbon_uren` | niets |
+| M4 | `20260930175000`: nieuw werk ook dicht voor `werkbon_uren` | niets |
 | FE | Frontend | vóór F5 |
 
 **Apart, expliciet, niet in deze release:** M1b (destructief, vier voorwaarden

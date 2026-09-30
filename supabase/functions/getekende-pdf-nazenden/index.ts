@@ -19,7 +19,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
 import { inactiefReden } from '../_shared/actieveGebruiker.ts'
-import { verwijzing } from '../_shared/documentLink.ts'
+import { opslagWaarde } from '../_shared/documentLink.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -146,9 +146,9 @@ serve(async (req) => {
       return json({ error: 'De PDF kon niet worden opgeslagen.' }, 500)
     }
 
-    // De bucket is privé: een verwijzing bewaren, geen lange link
+    // De bucket is privé: een link van 24 uur bewaren (overgang), geen lange link
     // (_shared/documentLink.ts).
-    const url = verwijzing(cfg.bucket, pad)
+    const url = await opslagWaarde(admin, cfg.bucket, pad)
 
     // ── Claim: wie deze update wint, verstuurt de mails ─────────────────────
     const { data: geclaimd } = await admin

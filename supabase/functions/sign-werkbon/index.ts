@@ -17,7 +17,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
-import { verwijzing, kortLink } from '../_shared/documentLink.ts'
+import { opslagWaarde, kortLink } from '../_shared/documentLink.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -146,9 +146,9 @@ serve(async (req) => {
       .upload(sigNaam, sigBytes, { contentType: 'image/png', upsert: true })
     if (sigErr) return json({ success: false, error: `Handtekening opslaan mislukt: ${sigErr.message}` }, 500)
 
-    // Alleen een verwijzing bewaren; links maakt document-url kort geldig bij het
-    // openen (_shared/documentLink.ts). Vroeger: een ondertekende URL van 10 jaar.
-    const sigVerwijzing = verwijzing('signatures', sigNaam)
+    // Opgeslagen: een link van 24 uur (overgang, _shared/documentLink.ts); de app
+    // vraagt bij het openen een korte link op via document-url. Vroeger: 10 jaar.
+    const sigVerwijzing = await opslagWaarde(admin, 'signatures', sigNaam)
 
     // ── Bedrijfsgegevens (branding + notificatieadres) ───────────────────────
     let company: Record<string, unknown> = {}
@@ -194,8 +194,8 @@ serve(async (req) => {
         if (upErr) {
           warnings.push(`PDF opslaan mislukt: ${upErr.message}`)
         } else {
-          // De bucket is privé: verwijzing bewaren, geen lange link.
-          pdfUrl = verwijzing('signed-werkbonnen', bestand)
+          // De bucket is privé: een link van 24 uur bewaren, geen lange link.
+          pdfUrl = await opslagWaarde(admin, 'signed-werkbonnen', bestand)
           if (pdfUrl) {
             const { error: urlErr } = await admin.from('werkbonnen')
               .update({ ondertekende_pdf_url: pdfUrl }).eq('id', werkbon.id)

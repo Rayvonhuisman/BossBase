@@ -104,10 +104,37 @@ async function bevestig(page) {
   await s.page.locator('button', { hasText: /^Opzeggen$/ }).first().click();
   await s.page.waitForTimeout(2500);
   const nieuw = fs.readFileSync(stripeLog, 'utf8').trim().split('\n').filter(Boolean).slice(n).map(JSON.parse);
-  check('abonnement opzeggen: bevestiging zegt doorwerken tot de einddatum, daarna alleen-lezen', /tot die datum gewoon doorwerken/.test(bevestiging) && /bekijken\s+en exporteren/.test(bevestiging), bevestiging);
+  check('abonnement opzeggen: bevestiging zegt doorwerken tot de einddatum, daarna geen nieuw werk en niets versturen', /tot die datum gewoon doorwerken/.test(bevestiging) && /niets meer versturen/.test(bevestiging) && !/alleen-lezen|bekijken en exporteren/.test(bevestiging), bevestiging);
   check('abonnement opzeggen: Stripe krijgt de opzegging', nieuw.some(a => a.methode === 'POST' && a.url.startsWith('/v1/subscriptions/')), nieuw);
   check('abonnement opzeggen: niemand geblokkeerd, bedrijf blijft actief', sql(`select status from companies where id='${X}'`)[0] === 'actief'
     && ['E', 'A2'].every(k => staat(U[k]).actief && !staat(U[k]).geband), { E: staat(U.E), A2: staat(U.A2) });
+
+  // Volledige route "Ondertekende bon": knop → document-url → juiste document.
+  // De rij heeft een opgeslagen link zoals de nieuwe sign-werkbon hem maakt
+  // (24 uur); de app vraagt een link van 10 minuten op en opent die.
+  const WB = crypto.randomUUID();
+  sql(`insert into storage.buckets (id, name, public) values ('signed-werkbonnen','signed-werkbonnen',false) on conflict do nothing;
+       insert into storage.objects (bucket_id, name) values ('signed-werkbonnen', '${X}/werkbon-UI-${WB.slice(0, 6)}.pdf');
+       insert into werkbonnen (id, company_id, titel, nummer, status, ondertekende_pdf_url) values
+         ('${WB}', '${X}', 'UI-bon', 'WB-UI', 'afgerond', 'http://localhost:54321/storage/v1/object/sign/signed-werkbonnen/${X}/werkbon-UI-${WB.slice(0, 6)}.pdf?token=opgeslagen');
+       update werkbonnen set ondertekend_op = now(), ondertekend_door_naam = 'Klant UI' where id = '${WB}'`);
+  await s.page.goto(`http://localhost:4174/dashboard/werkbonnen/${WB}`);
+  await s.page.waitForTimeout(3000);
+  const knop = s.page.locator('button', { hasText: /^Ondertekende bon$/ }).first();
+  const heeftKnop = await knop.count() > 0;
+  let popupUrl = '', popupTekst = '';
+  if (heeftKnop) {
+    const [popup] = await Promise.all([s.page.waitForEvent('popup', { timeout: 10000 }), knop.click()]);
+    await popup.waitForLoadState().catch(() => {});
+    await popup.waitForTimeout(1500);
+    popupUrl = popup.url(); popupTekst = await popup.locator('body').innerText().catch(() => '');
+    await popup.close();
+  }
+  check('ondertekende bon: knop aanwezig', heeftKnop);
+  check('ondertekende bon: nieuwe korte link (10 min) aangevraagd, niet de opgeslagen link', /geldig=600/.test(popupUrl) && !/token=opgeslagen/.test(popupUrl), popupUrl);
+  check('ondertekende bon: het juiste document geopend', popupTekst.trim() === `document:signed-werkbonnen/${X}/werkbon-UI-${WB.slice(0, 6)}.pdf`, popupTekst);
+  await s.page.goto('http://localhost:4174/dashboard/instellingen?tab=abonnement');
+  await s.page.waitForTimeout(1500);
 
   // Daarna, apart: het bedrijf sluiten.
   await s.page.goto('http://localhost:4174/dashboard/instellingen');

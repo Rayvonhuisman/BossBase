@@ -253,7 +253,7 @@ check('toegang', 'vóór: medewerker ziet klanten, profielen en bestanden van A'
   sql(`update companies set status = 'actief' where id = '${B}'`);
 }
 
-// ── 7. Na afloop van een opgezegd abonnement: alleen-lezen, niet geblokkeerd ─
+// ── 7. Na afloop van een opgezegd abonnement: nieuw werk dicht, niemand geblokkeerd
 {
   sql(`update subscriptions set stripe_subscription_id = 'sub_b', stripe_customer_id = 'cus_b', status = 'actief', stripe_status = 'active' where company_id = '${B}'`);
   const voor = await alsToken(S.Eb.sessie.access_token).from('customers').insert({ company_id: B, name: 'Nieuw tijdens looptijd' }).select('id');
@@ -263,7 +263,7 @@ check('toegang', 'vóór: medewerker ziet klanten, profielen en bestanden van A'
   const lees = await alsToken(S.Eb.sessie.access_token).from('customers').select('name');
   const schrijf = await alsToken(S.Eb.sessie.access_token).from('customers').insert({ company_id: B, name: 'Na afloop' }).select('id');
   check('na afloop', 'na afloop: gegevens nog leesbaar', !lees.error && lees.data?.length >= 2, lees.error?.message);
-  check('na afloop', 'na afloop: niets nieuws vastleggen (alleen-lezen)', !!schrijf.error, schrijf.data);
+  check('na afloop', 'na afloop: niets nieuws vastleggen', !!schrijf.error, schrijf.data);
   check('na afloop', 'na afloop: gebruikers niet gedeactiveerd, bedrijf niet gesloten', staat(U.Eb).actief && !staat(U.Eb).geband && sql(`select status from companies where id='${B}'`)[0] === 'actief');
 }
 

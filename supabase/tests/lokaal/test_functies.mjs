@@ -1,5 +1,5 @@
 // Gerichte test van de statuscontrole in Edge Functions met service_role
-// (_shared/actieveGebruiker.ts) en van alleen-lezen aan de serverkant.
+// (_shared/actieveGebruiker.ts) en van de beperking na afloop aan de serverkant.
 //
 // Per functie drie aanroepers: actieve gebruiker, gedeactiveerd profiel met nog
 // geldige sessie, en een actief lid van een gesloten bedrijf. Bij een weigering
@@ -101,28 +101,28 @@ for (const [naam, body] of Object.entries(FUNCTIES)) {
   check('functie', `${naam}: actieve gebruiker komt langs de controle (${a.status})`, !(a.status === 403 && ONZE.test(String(a.fout))) && a.status !== 401, a);
 }
 
-// ── Alleen-lezen na afloop van een opgezegd abonnement (serverkant) ─────────
+// ── Na afloop van een opgezegd abonnement: wat de server blokkeert ─────────
 {
   sql(`update subscriptions set stripe_subscription_id = 'sub_ro_${A.slice(0, 6)}', stripe_customer_id = 'cus_ro_${A.slice(0, 6)}', status = 'opgezegd', stripe_status = 'canceled' where company_id = '${A}';
        insert into customers (id, company_id, name) values ('${A}', '${A}', 'Bestaande klant')`);
   const c = createClient(URL_, env.ANON, { auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${S.actief}` } } });
   const ro = await c.rpc('bb_is_readonly');
-  check('alleen-lezen', 'bb_is_readonly = true na afloop', ro.data === true, ro);
+  check('na afloop', 'bb_is_readonly = true na afloop', ro.data === true, ro);
   const lees = await c.from('customers').select('id, name');
-  check('alleen-lezen', 'bekijken werkt (klanten lezen)', !lees.error && lees.data?.length === 1, lees.error?.message);
+  check('na afloop', 'bekijken werkt (klanten lezen)', !lees.error && lees.data?.length === 1, lees.error?.message);
   const ins = await c.from('customers').insert({ company_id: A, name: 'Nieuw' }).select('id');
-  check('alleen-lezen', 'database: nieuwe klant geweigerd', !!ins.error, ins.data);
+  check('na afloop', 'database: nieuwe klant geweigerd', !!ins.error, ins.data);
   const W = id();
   sql(`insert into werkbonnen (id, company_id, titel) values ('${W}', '${A}', 'Bestaande werkbon')`);
   const uren = await c.from('werkbon_uren').insert({ company_id: A, werkbon_id: W, profile_id: U.actief, datum: '2026-09-30', uren: 1 }).select('id');
-  check('alleen-lezen', 'database: uren boeken op een werkbon geweigerd', !!uren.error, uren.data);
+  check('na afloop', 'database: uren boeken op een werkbon geweigerd', !!uren.error, uren.data);
   const upd = await c.from('customers').update({ name: 'Gewijzigd' }).eq('id', A).select('id');
-  check('alleen-lezen (vastgelegd, niet geblokkeerd)', 'bestaande klant wijzigen is NIET geblokkeerd (ontwerp: alleen nieuw werk dicht)', !upd.error && upd.data?.length === 1, upd);
+  check('na afloop (vastgelegd, niet geblokkeerd)', 'bestaande klant wijzigen is NIET geblokkeerd (ontwerp: alleen nieuw werk dicht)', !upd.error && upd.data?.length === 1, upd);
   const verstuur = await roep('send-email', S.actief, { to: 'x@example.test', subject: 't', html: 't' });
-  check('alleen-lezen', 'Edge Function send-email: versturen geweigerd', verstuur.status >= 400 && /abonnement|readonly|alleen/i.test(String(verstuur.fout)), verstuur);
+  check('na afloop', 'Edge Function send-email: versturen geweigerd', verstuur.status >= 400 && /abonnement|readonly|alleen/i.test(String(verstuur.fout)), verstuur);
   const e0 = extern();
   const checkout = await roep('billing-checkout', S.actief, { tier: 'team', interval: 'month' });
-  check('alleen-lezen', 'opnieuw abonneren (billing-checkout) blijft mogelijk voor de eigenaar', checkout.status !== 403, { checkout, stripe: extern() - e0 });
+  check('na afloop', 'opnieuw abonneren (billing-checkout) blijft mogelijk voor de eigenaar', checkout.status !== 403, { checkout, stripe: extern() - e0 });
 }
 
 // ── document-url: korte links, alleen na controle ───────────────────────────
@@ -151,6 +151,18 @@ for (const [naam, body] of Object.entries(FUNCTIES)) {
   check('document-url', 'klantlink met verkeerd token: niet gevonden', fout.status === 404, fout);
   const zonder = await doc(env.ANON, { soort: 'werkbon_pdf', id: W });
   check('document-url', 'anon zonder token, met id: geweigerd', zonder.status === 401, zonder);
+  // Token-isolatie: een teken-token geeft alleen toegang tot zijn eigen document.
+  const W2 = id(), T2 = id();
+  sql(`insert into storage.objects (bucket_id, name) values ('signed-werkbonnen', '${A}/werkbon-${W2}.pdf');
+       insert into werkbonnen (id, company_id, titel, sign_token, ondertekende_pdf_url) values ('${W2}', '${A}', 'Doc-test 2', '${T2}', 'signed-werkbonnen/${A}/werkbon-${W2}.pdf')`);
+  const t1 = await doc(env.ANON, { soort: 'werkbon_pdf', token: T });
+  const t2 = await doc(env.ANON, { soort: 'werkbon_pdf', token: T2 });
+  check('document-url', 'token van werkbon 1 geeft precies de PDF van werkbon 1', t1.status === 200 && t1.body.url.includes(`werkbon-${W}.pdf`) && !t1.body.url.includes(W2), t1);
+  check('document-url', 'token van werkbon 2 geeft precies de PDF van werkbon 2', t2.status === 200 && t2.body.url.includes(`werkbon-${W2}.pdf`), t2);
+  const kruis = await doc(env.ANON, { soort: 'offerte_pdf', token: T });
+  check('document-url', 'werkbon-token werkt niet voor een offerte', kruis.status === 404, kruis);
+  const metId = await doc(env.ANON, { soort: 'werkbon_pdf', token: T, id: W2 });
+  check('document-url', 'token + id van een ander document: token wint, alleen eigen document', metId.status === 200 && metId.body.url.includes(`werkbon-${W}.pdf`) && !metId.body.url.includes(W2), metId);
   const oud = await doc(S.actief, { soort: 'werkbon_handtekening', id: Wb });
   check('document-url', 'oude rij met lange URL: pad eruit gehaald, korte link', oud.status === 200 && /werkbon-oud-/.test(oud.body?.url || '') && /geldig=600/.test(oud.body.url), oud);
 }

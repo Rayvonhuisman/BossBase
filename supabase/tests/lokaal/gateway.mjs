@@ -148,6 +148,14 @@ const server = http.createServer(async (req, res) => {
                      select coalesce(json_agg(json_build_object('name', name)), '[]') from weg`, claims);
       return stuur(res, 200, JSON.parse(r[0] || '[]'));
     }
+    const getekendLezen = url.pathname.match(/^\/storage\/v1\/object\/sign\/([^/]+)\/(.+)$/);
+    if (getekendLezen && req.method === 'GET') {
+      // Een ondertekende link openen: het document zelf (hier: zijn bucket en pad).
+      const r = sql(`select count(*) from storage.objects where bucket_id = ${dq(getekendLezen[1])} and name = ${dq(decodeURIComponent(getekendLezen[2]))}`);
+      if (r[0] !== '1') return stuur(res, 400, { statusCode: '404', error: 'not_found' });
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      return res.end(`document:${getekendLezen[1]}/${decodeURIComponent(getekendLezen[2])}`);
+    }
     const lezen = url.pathname.match(/^\/storage\/v1\/object\/(?:authenticated\/)?([^/]+)\/(.+)$/);
     if (lezen && req.method === 'GET') {
       const r = sql(`select count(*) from storage.objects where bucket_id = ${dq(lezen[1])} and name = ${dq(decodeURIComponent(lezen[2]))}`, claims);
