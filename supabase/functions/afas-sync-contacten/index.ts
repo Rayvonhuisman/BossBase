@@ -237,11 +237,12 @@ serve(async (req) => {
 
       if (byName.has(norm(name))) {
         skippedAfas++
-        console.log(`AFAS→BB SKIP "${name}" (email: "${email || '-'}") — match op: naam`)
+        // Geen namen of e-mailadressen in de logs; de tellers aan het eind volstaan.
+        console.log('AFAS→BB SKIP — match op naam')
         continue
       }
 
-      console.log(`AFAS→BB NIEUW  "${name}" (email: "${email || '-'}")`)
+      console.log('AFAS→BB NIEUW')
 
       const phone = (org.PhoneNumber ?? org.phoneNumber ?? org.Phone ?? org.phone ?? '').trim()
       const address = (org._address ?? '').trim()
@@ -287,7 +288,7 @@ serve(async (req) => {
     if (testCustomer) {
       const body: Record<string, string> = { Name: testCustomer.name }
       if (testCustomer.email) body.EmailAddress = testCustomer.email
-      console.log(`TEST export eerste klant: "${testCustomer.name}", body: ${JSON.stringify(body)}`)
+      console.log(`TEST export eerste klant: ${testCustomer.id}`)
       const postRes = await fetch(exportUrl, { method: 'POST', headers: exportHeaders, body: JSON.stringify(body) })
       const resText = await postRes.text().catch(() => '')
       console.log(`POST /api/organisation HTTP ${postRes.status}: ${resText.substring(0, 2000)}`)

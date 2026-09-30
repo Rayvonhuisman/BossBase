@@ -74,9 +74,9 @@ Vastgesteld in de code en productie (alleen schema en aantallen):
 - **Opslagregio:** Supabase-database in Central EU (Frankfurt).
 - **Cookies en browseropslag:** geen cookies uit de eigen code; wel
   localStorage (inlogsessie, cookiekeuze, weergavevoorkeuren, filters) en
-  sessionStorage (gekozen bedrijf, aanmeldpakket). Geen tracking. De banner
-  is sinds 30 september 2026 alleen informatief (één knop "Begrepen"), omdat er
-  niets te kiezen valt.
+  sessionStorage (gekozen bedrijf, aanmeldpakket). Sinds 30 september 2026
+  (commit 9c1df8b op main): geen cookiebanner meer, wel Vercel Web Analytics
+  zonder cookies; zie `cookiebeleid.md`.
 
 **Niet vast te stellen met de beschikbare toegang (ONBEKEND):**
 

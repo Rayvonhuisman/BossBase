@@ -50,7 +50,6 @@ import { featureLabel } from './lib/features.js';
 import { clearCompanyId, setCompanyId } from './lib/currentCompany.js';
 import { ToastProvider, useToast } from './lib/toast.jsx';
 import { UploadProvider } from './lib/uploadContext.jsx';
-import { CookieBanner } from './components/CookieBanner.jsx';
 import { UrenHerinneringModal } from './components/UrenHerinneringModal.jsx';
 import { CookieverklaringPage } from './pages/CookieverklaringPage.jsx';
 import { BetaalStatusPage } from './pages/BetaalStatusPage.jsx';
@@ -2004,7 +2003,6 @@ function AppInner() {
           />
         )}
       </div>
-      <CookieBanner navigate={navigate} />
       <UrenHerinneringModal navigatePage={navigatePage} />
       </DataContext.Provider>
     </ProfileContext.Provider>
