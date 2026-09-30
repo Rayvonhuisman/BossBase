@@ -31,7 +31,7 @@
 |---|---|---|---|
 | 1 | Na opzeggen 2 jaar bewaren, daarna definitief weg, ook bestanden | Opzeggen zet alleen een vlag; geen opschoonjob | Opschoonjob bouwen, inclusief de opslag |
 | 2 | Vercel Web Analytics zonder persoonsgegevens | Gebouwd en getest (geen cookies, geen opslag, tokens en id's uit de URL). Nog niet gedeployd | Web Analytics aanzetten in het Vercel-project; na deploy controleren dat er data binnenkomt |
-| 3 | Alleen opslag die nodig is | Gecontroleerd: klopt. Alleen het Clearbit-logo op het scherm Integraties gaat nog naar een derde (IP-adres) | Logo zelf hosten, dan kan de regel uit het cookiebeleid |
+| 3 | Alleen opslag die nodig is | Gecontroleerd: klopt. Het AFAS-logo staat sinds 30-09 lokaal (`public/brand/afas.png`); logo.clearbit.com bestond ook niet meer | Gedaan |
 | 4 | Akkoord met voorwaarden vastgelegd | Registratie toont alleen uitleg, geen vinkje | Vinkje en tabel `juridisch_akkoord` (zie §2.2) |
 | 5 | Pagina's `/privacy`, `/voorwaarden`, `/verwerkersovereenkomst`, `/subverwerkers`, `/cookieverklaring` | Alleen `/cookieverklaring` bestaat (app-route, lege placeholder) | Toevoegen in `src/marketing/routes.jsx` (zie de README van de compagnon) |
 

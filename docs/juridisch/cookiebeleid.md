@@ -122,11 +122,9 @@ eigen cookiebeleid.
 - **PDOK (Rijksoverheid):** bij het invullen van een adres in de app zoeken we het
   adres op bij de adresdienst van de overheid. Die ontvangt het getypte adres en
   je IP-adres, en zet geen cookies.
-- **Clearbit:** op het scherm Integraties in de app komt het logo van AFAS van de
-  server van Clearbit. Clearbit ontvangt daarbij je IP-adres.
 
-De lettertypes van de site en de app staan op onze eigen server. Daarvoor gaat er
-niets naar een andere partij.
+De lettertypes en logo's van de site en de app staan op onze eigen server.
+Daarvoor gaat er niets naar een andere partij.
 
 ## Verwijderen
 

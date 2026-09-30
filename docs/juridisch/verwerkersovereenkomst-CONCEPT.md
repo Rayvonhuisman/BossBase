@@ -11,8 +11,8 @@
 
 1. **Verwerkingsverantwoordelijke:** de klant die BossBase gebruikt ("de
    Klant").
-2. **Verwerker:** [[juridische naam]], [[rechtsvorm]], [[zakelijk
-   vestigingsadres]], KvK [[nummer]] ("BossBase").
+2. **Verwerker:** BossBase, handelsnaam van NG E-Commerce B.V., Sodalietdreef 6,
+   7828 CR Emmen, KvK 91856396 ("BossBase").
 
 ## 1. Onderwerp en duur
 
@@ -47,13 +47,11 @@ overeenkomst daarmee omgaat.
 - Alleen verwerken op gedocumenteerde instructie van de Klant (de instellingen
   en het gebruik van de dienst gelden als instructie).
 - Geheimhouding door iedereen die toegang heeft.
-- Passende beveiliging: [[alleen opnemen wat aantoonbaar is]]. Vastgesteld:
-  scheiding per bedrijf met databaseregels (RLS); niet-openbare opslag voor
-  handtekeningen, ondertekende documenten, facturen en foto's; ondertekenlinks
-  met een onraadbaar token.
+- Passende beveiliging. Vastgesteld: scheiding per bedrijf met databaseregels
+  (RLS); niet-openbare opslag voor handtekeningen, ondertekende documenten,
+  facturen en foto's; ondertekenlinks met een onraadbaar token; zie de bijlage.
 - Bijstand bij verzoeken van betrokkenen en bij datalekken.
-- Melden van een datalek aan de Klant binnen [[termijn, bijvoorbeeld 48 uur]]
-  na ontdekking.
+- Melden van een datalek aan de Klant binnen 48 uur na ontdekking.
 - Medewerking aan audits: [[JURIST]].
 
 ## 5. Subverwerkers
@@ -63,12 +61,13 @@ wijzigingen [[termijn]] van tevoren.
 
 | Subverwerker | Waarvoor | Regio | Overeenkomst met BossBase |
 | --- | --- | --- | --- |
-| Supabase | Database, inloggen, opslag, serverfuncties | Database: Central EU (Frankfurt), vastgesteld; functies en logs [[TE CONTROLEREN]] | [[TE CONTROLEREN]] |
-| Vercel | Hosting van de app | [[TE CONTROLEREN]] | [[TE CONTROLEREN]] |
-| Resend | E-mail namens de Klant (offertes, facturen, herinneringen, afspraakherinneringen) | [[TE CONTROLEREN]] | [[TE CONTROLEREN]] |
-| Stripe | Alleen bij de betaallink: bedrag en factuurnummer; de betaling loopt via het eigen Stripe-account van de Klant | [[TE CONTROLEREN]] | [[JURIST]]: Stripe is hier vermoedelijk een partij van de Klant zelf |
+| Supabase | Database, inloggen, opslag, serverfuncties | Database: Central EU (Frankfurt), vastgesteld; serverfuncties voor verzoeken uit Nederland in Frankfurt (eu-central-1, gemeten); logs 1 dag bewaard (Free-abonnement). Supabase Pte. Ltd. (Singapore) | [[TE CONTROLEREN]] |
+| Vercel | Hosting van de app | Vercel Inc., VS; website via het netwerk van Vercel (voor Nederland Frankfurt), serverfunctie in Washington, VS (iad1, gemeten) | [[TE CONTROLEREN]] |
+| Resend | E-mail namens de Klant (offertes, facturen, herinneringen, afspraakherinneringen) | Plus Five Five, Inc., VS; account, metadata en logs in de VS; verzendregio [[TE CONTROLEREN]] | [[TE CONTROLEREN]] |
+| Stripe | Alleen bij de betaallink: bedrag en factuurnummer; de betaling loopt via het eigen Stripe-account van de Klant | Stripe Payments Europe, Ltd. (Ierland); verwerking ook buiten de EU | [[JURIST]]: Stripe is hier vermoedelijk een partij van de Klant zelf |
 | Moneybird / SnelStart | Alleen als de Klant de koppeling aanzet, met de eigen administratie van de Klant | n.v.t. | [[JURIST]]: vermoedelijk geen subverwerker van BossBase |
-| Anthropic | Helpchat voor de gebruiker; er gaan geen gegevens van klanten van de Klant mee, tenzij de gebruiker ze zelf in de chat typt | [[TE CONTROLEREN]] | [[TE CONTROLEREN]] |
+| Anthropic | Helpchat voor de gebruiker; er gaan geen gegevens van klanten van de Klant mee, tenzij de gebruiker ze zelf in de chat typt | Anthropic Ireland, Ltd.; verwerking ook in de VS; geen training op klantdata, na 30 dagen verwijderd | [[TE CONTROLEREN]] |
+| Vercel (Web Analytics) | Gebruiksstatistieken van de app: welke pagina's gebruikers van de Klant bekijken, met apparaat, browser en land. Tokens en id's (van klanten, projecten, facturen) worden vóór verzending uit het adres gehaald; geen namen, e-mailadressen of klantgegevens | Vercel Inc., VS; EU-US Data Privacy Framework + standaardcontractbepalingen | [[TE CONTROLEREN]] |
 
 Een standaard verwerkersovereenkomst bij een leverancier betekent niet dat die
 is afgesloten. Of BossBase met elk van deze partijen een overeenkomst heeft
@@ -76,7 +75,9 @@ gesloten, is **niet vastgesteld**.
 
 ## 6. Doorgifte buiten de EER
 
-[[TE CONTROLEREN]] per subverwerker; [[JURIST]]: passend mechanisme vastleggen
+Per subverwerker: Vercel, Resend en Stripe op basis van het EU-US Data Privacy
+Framework en standaardcontractbepalingen; Supabase en Anthropic op basis van
+standaardcontractbepalingen. [[JURIST]]: passend mechanisme vastleggen
 (adequaatheidsbesluit of modelcontractbepalingen).
 
 ## 7. Bijstand en rechten van betrokkenen
@@ -87,16 +88,34 @@ documenten als ZIP.
 
 ## 8. Einde van de overeenkomst
 
-[[JURIST en eigenaren]]: wat BossBase na afloop teruggeeft en binnen welke
-termijn het verwijdert. **Feitelijke stand:** opzeggen zet het bedrijf op
-"opgezegd" en de gebruikers op inactief; alle gegevens en bestanden blijven
+Na het einde van het abonnement bewaart BossBase de gegevens nog 2 jaar, gelijk
+aan de algemene voorwaarden; in die tijd kan de Klant terugkomen of exporteren.
+Daarna worden de gegevens verwijderd, ook de bestanden.
+
+**Feitelijke stand:** opzeggen zet het bedrijf op "opgezegd" en de gebruikers op
+inactief; alle gegevens en bestanden blijven
 staan; automatische verwijdering bestaat niet. Dit moet in lijn gebracht
 worden met wat hier wordt afgesproken.
 
 ## 9. Aansprakelijkheid
 
-[[JURIST]]
+Voor aansprakelijkheid geldt artikel 10 van de algemene voorwaarden.
 
 ## Bijlage — technische en organisatorische maatregelen
 
-[[Alleen aantoonbare maatregelen; op te stellen met de ontwikkelaars.]]
+Alleen maatregelen die in de code of de configuratie zijn vastgesteld
+(30 september 2026):
+
+- Scheiding per bedrijf met databaseregels (row level security), ook binnen een
+  bedrijf rechten per medewerker.
+- Niet-openbare opslag voor handtekeningen, ondertekende documenten, facturen en
+  foto's; alleen bereikbaar via tijdelijke, ondertekende links.
+- Ondertekenlinks met een onraadbaar token.
+- Wachtwoorden niet door BossBase zelf opgeslagen (inlogdienst van Supabase);
+  verificatiecodes en resettokens alleen gehasht opgeslagen; begrensd aantal
+  pogingen.
+- Versleutelde verbindingen (https).
+- Database in de EU (Frankfurt).
+- Logs van serverfuncties zonder e-mailadressen en tokens.
+- 2 personen met beheerderstoegang tot de productieomgeving.
+- Geen automatische back-ups (Supabase Free-abonnement).

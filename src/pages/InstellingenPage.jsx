@@ -1620,7 +1620,7 @@ export function InstellingenPage() {
       id: 'afas',
       naam: 'AFAS',
       omschrijving: 'Koppel je AFAS administratie met BossBase',
-      logo: { img: 'https://logo.clearbit.com/afas.nl', alt: 'AFAS' },
+      logo: { img: '/brand/afas.png', alt: 'AFAS' },
       verborgen: true,
       status: {
         actief: afasTested,

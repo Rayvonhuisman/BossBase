@@ -91,7 +91,9 @@ function Beeldmerk({ logo, naam, groot = false }) {
   const stijl = groot ? { ...INTEG_LOGO_STYLE, height: 26, marginBottom: 0 } : INTEG_LOGO_STYLE;
   if (logo?.src) return <img src={logo.src} alt={logo.alt || naam} style={stijl} />;
   if (logo?.img) {
-    // Extern logo (clearbit): valt weg als het niet laadt, de naam ernaast blijft.
+    // Vierkant icoon met de naam ernaast. Lokaal in public/brand: het kwam
+    // eerst van logo.clearbit.com, dat het IP-adres van de gebruiker ontving en
+    // inmiddels niet meer bestaat. Valt weg als het niet laadt; de naam blijft.
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: groot ? 0 : 8 }}>
         <img
