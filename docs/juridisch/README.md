@@ -25,9 +25,16 @@ goedgekeurde teksten. De website linkt niet naar `/privacy` of `/voorwaarden`
 
 ## Deel 1 — Van de eigenaren nodig
 
-1. Juridische naam en rechtsvorm.
-2. KvK-nummer en btw-id.
-3. Zakelijk vestigingsadres, en of dat ook een bezoekadres is.
+Exploitant bevestigd (30 september 2026): **BossBase is een handelsnaam van
+NG E-Commerce B.V.**, Sodalietdreef 6, 7828 CR Emmen, KvK 91856396. Staat in de
+concepten, op /subverwerkers, in de footer, op de contactpagina, bij de
+registratie en in de voettekst van BossBase-mails. Er is geen "BossBase B.V.".
+
+Nog open:
+
+1. ~~Juridische naam en rechtsvorm.~~ Bevestigd.
+2. ~~KvK-nummer~~ (bevestigd) en **btw-id** (ontbreekt nog).
+3. ~~Zakelijk vestigingsadres~~ (bevestigd); is het ook een bezoekadres?
 4. Een publiek telefoonnummer, als je dat wilt.
 5. E-mailadres voor contact en voor privacyverzoeken (voorstel: info@bossbase.nl
    voor beide).

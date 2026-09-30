@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { Nav, Footer, Reveal, I, ScrollLine, initChoreo } from "./MktShared"
+import { EXPLOITANT } from "../../marketing/site.js"
 import { leesAanvraag, HONEYPOT_VELD, AANVRAAG_LIMIETEN } from "../../../supabase/functions/_shared/websiteAanvraag.ts"
 
 // ── Waar het formulier naartoe gaat ─────────────────────────────────────────
@@ -349,6 +350,17 @@ export default function ContactPage({ navigate }) {
                       <div className="ci-title">Al klant?</div>
                       <div className="ci-val">Stel je vraag aan Boss</div>
                       <div className="ci-sub">De helpchat in het dashboard beantwoordt vragen over het gebruik.</div>
+                    </div>
+                  </div>
+                  <div className="contact-info-block">
+                    <div className="ci-icon">{I.building}</div>
+                    <div>
+                      <div className="ci-title">Bedrijfsgegevens</div>
+                      <div className="ci-val">{EXPLOITANT.naam}</div>
+                      <div className="ci-sub">
+                        BossBase is een handelsnaam van {EXPLOITANT.naam}.<br />
+                        {EXPLOITANT.adres} · KvK {EXPLOITANT.kvk}
+                      </div>
                     </div>
                   </div>
                 </div>

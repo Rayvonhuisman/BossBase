@@ -3,6 +3,7 @@
 // Bijlage/art. 5 van docs/juridisch/verwerkersovereenkomst-CONCEPT.md en §4 van
 // de privacyverklaring; een wijziging kondigen we 30 dagen vooraf aan.
 import { PaginaSchil, PaginaKop, Sectie } from '../../marketing/templates/Onderdelen.jsx';
+import { EXPLOITANT_REGEL } from '../../marketing/site.js';
 
 const STAND = '30 september 2026';
 
@@ -43,7 +44,7 @@ export default function SubverwerkersPage({ navigate }) {
         kruimels={[{ naam: 'Home', pad: '/' }, { naam: 'Subverwerkers', pad: '/subverwerkers' }]}
         kicker="Privacy"
         h1="Subverwerkers"
-        lead={`Deze bedrijven helpen ons BossBase te leveren en verwerken daarbij gegevens voor ons. Met allemaal hebben we afspraken die minstens zo streng zijn als onze verwerkersovereenkomst. Stand: ${STAND}.`}
+        lead={`Deze bedrijven helpen ons BossBase te leveren en verwerken daarbij gegevens voor ons. Stand: ${STAND}.`}
       />
       <Sectie titel="Subverwerkers van BossBase">
         <Tabel
@@ -51,8 +52,7 @@ export default function SubverwerkersPage({ navigate }) {
           rijen={SUBVERWERKERS.map(s => [s.naam, s.waarvoor, s.waar, s.waarborg])}
         />
         <p className="bb-section-intro" style={{ marginTop: 18 }}>
-          Komt er een subverwerker bij of verandert er een, dan laten we het klanten minstens 30 dagen van tevoren
-          per mail weten.
+          Verandert deze lijst, dan passen we deze pagina en de datum hierboven aan.
         </p>
       </Sectie>
       <Sectie titel="Koppelingen die je zelf aanzet" intro="Dit zijn geen subverwerkers van BossBase. Met deze partijen heb je zelf een overeenkomst; BossBase stuurt gegevens alleen door als jij de koppeling aanzet." grijs>
@@ -60,8 +60,7 @@ export default function SubverwerkersPage({ navigate }) {
       </Sectie>
       <Sectie>
         <p className="bb-section-intro">
-          BossBase is een handelsnaam van NG E-Commerce B.V., Sodalietdreef 6, 7828 CR Emmen, KvK 91856396.
-          Vragen? Mail <a href="mailto:info@bossbase.nl">info@bossbase.nl</a>.
+          {EXPLOITANT_REGEL} Vragen? Mail <a href="mailto:info@bossbase.nl">info@bossbase.nl</a>.
         </p>
       </Sectie>
     </PaginaSchil>

@@ -6,13 +6,14 @@
 // Structured data bevat alleen wat ook zichtbaar op de pagina staat. Geen
 // beoordelingen of klantaantallen: die hebben we niet aantoonbaar.
 
-import { SITE_URL, SITE_NAAM, CONTACT_EMAIL, OG_BEELD, absoluteUrl } from './site.js';
+import { SITE_URL, SITE_NAAM, CONTACT_EMAIL, OG_BEELD, EXPLOITANT, absoluteUrl } from './site.js';
 import { TIERS } from '../lib/tiers.js';
 
 const ORGANISATIE = {
   '@type': 'Organization',
   '@id': `${SITE_URL}/#organisatie`,
   name: SITE_NAAM,
+  legalName: EXPLOITANT.naam,
   url: `${SITE_URL}/`,
   logo: `${SITE_URL}/brand/icon-512.png`,
   email: CONTACT_EMAIL,

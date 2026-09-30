@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import "./bossbase-mkt.css"
+import { EXPLOITANT } from "../../marketing/site.js"
 
 /* ── Icons ── */
 export const I = {
@@ -475,7 +476,7 @@ export function Footer({ navigate }) {
           ))}
         </div>
         <div className="footer-bottom">
-          <span>© 2026 BossBase</span>
+          <span>© 2026 BossBase, een handelsnaam van {EXPLOITANT.naam} · KvK {EXPLOITANT.kvk}</span>
           <span>Gemaakt in Nederland</span>
         </div>
       </div>
