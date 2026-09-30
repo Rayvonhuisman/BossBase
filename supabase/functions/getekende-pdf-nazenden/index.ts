@@ -19,6 +19,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
 import { inactiefReden } from '../_shared/actieveGebruiker.ts'
+import { verwijzing } from '../_shared/documentLink.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -145,12 +146,9 @@ serve(async (req) => {
       return json({ error: 'De PDF kon niet worden opgeslagen.' }, 500)
     }
 
-    // De bucket is privé: een ondertekende link met lange looptijd, zoals bij
-    // het gewone ondertekenpad.
-    const { data: ondertekend } = await admin.storage
-      .from(cfg.bucket).createSignedUrl(pad, 60 * 60 * 24 * 365 * 10)
-    const url = ondertekend?.signedUrl
-    if (!url) return json({ error: 'Kon geen link naar de PDF maken.' }, 500)
+    // De bucket is privé: een verwijzing bewaren, geen lange link
+    // (_shared/documentLink.ts).
+    const url = verwijzing(cfg.bucket, pad)
 
     // ── Claim: wie deze update wint, verstuurt de mails ─────────────────────
     const { data: geclaimd } = await admin

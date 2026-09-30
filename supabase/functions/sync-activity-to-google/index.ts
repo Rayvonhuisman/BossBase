@@ -59,7 +59,9 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_ANON_KEY")!,
       { global: { headers: { authorization: authHeader } } },
     )
-    const { data: { user }, error: authErr } = await supabase.auth.getUser()
+    // getUser() zonder argument leest in een Edge Function geen sessie en gaf dus
+    // altijd "Niet ingelogd" (zie google-calendar-auth-url). Token meegeven.
+    const { data: { user }, error: authErr } = await supabase.auth.getUser(authHeader.replace(/^Bearer\s+/i, ""))
     if (authErr || !user) return json({ error: "Niet ingelogd" }, 401)
     // service_role omzeilt RLS: zelf controleren dat account en bedrijf actief zijn.
     const inactief = await inactiefReden(user.id)

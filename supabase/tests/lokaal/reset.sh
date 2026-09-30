@@ -11,7 +11,7 @@ if [ -f "$L/config.json" ]; then
     $PG/psql -h "$L" -p 55432 -U postgres -q -c "insert into public.$t select * from json_populate_recordset(null::public.$t, (\$\$$(python3 -c "import json,sys; print(json.dumps(json.load(open('$L/config.json'))['$t'] or []))")\$\$)::json) on conflict do nothing" 2>&1 | grep -i error
   done
 fi
-for m in 20260930120000_resettoken_afronding 20260930160000_accountverwijdering_correcties 20260930170000_toegang_na_deactivatie; do
+for m in 20260930120000_resettoken_afronding 20260930160000_accountverwijdering_correcties 20260930170000_toegang_na_deactivatie 20260930175000_alleen_lezen_werkbon_uren; do
   $PG/psql -h "$L" -p 55432 -U postgres -v ON_ERROR_STOP=1 -q -f "$M/$m.sql" > /dev/null 2>"$L/mig_$m.err" && echo "migratie $m: ok" || { echo "migratie $m: FOUT"; cat "$L/mig_$m.err"; }
 done
 (postgrest "$L/postgrest.conf" > "$L/postgrest.log" 2>&1 &) ; sleep 3; tail -1 "$L/postgrest.log"

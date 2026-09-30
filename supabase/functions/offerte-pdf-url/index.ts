@@ -31,6 +31,8 @@ const json = (body: unknown, status = 200) =>
 /** Haalt het opslagpad uit een eerder bewaarde URL (publiek of ondertekend). */
 function padUitUrl(url: string | null): string | null {
   if (!url) return null
+  // Nieuwe rijen bewaren een verwijzing "<bucket>/<pad>" (_shared/documentLink.ts).
+  if (String(url).startsWith(`${BUCKET}/`)) return String(url).slice(BUCKET.length + 1) || null
   const zonderQuery = String(url).split('?')[0]
   const merk = `/${BUCKET}/`
   const i = zonderQuery.indexOf(merk)

@@ -8,6 +8,14 @@ const LOG = Deno.env.get('STRIPE_LOG')!
 const echteFetch = globalThis.fetch
 globalThis.fetch = async (input: any, init?: any) => {
   const url = typeof input === 'string' ? input : input.url
+  // Alle andere externe diensten (Resend, Anthropic, Google, Moneybird, AFAS,
+  // SnelStart): vastleggen en een leeg antwoord. Zo is te zien of een geweigerd
+  // verzoek toch iets naar buiten stuurde.
+  const host = (() => { try { return new URL(url).host } catch { return '' } })()
+  if (host && !/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host) && !url.startsWith('https://api.stripe.com')) {
+    await Deno.writeTextFile(LOG, JSON.stringify({ methode: init?.method || 'GET', url: `${host}${new URL(url).pathname}`, functie: (globalThis as any).__huidige, extern: true }) + '\n', { append: true })
+    return new Response(JSON.stringify({ id: 'nep', data: [], content: [{ type: 'text', text: 'ok' }] }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  }
   if (url.startsWith('https://api.stripe.com')) {
     await Deno.writeTextFile(LOG, JSON.stringify({ methode: init?.method || 'GET', url: url.replace('https://api.stripe.com', ''), functie: (globalThis as any).__huidige }) + '\n', { append: true })
     const nu = Math.floor(Date.now() / 1000)

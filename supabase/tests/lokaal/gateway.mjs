@@ -132,6 +132,14 @@ const server = http.createServer(async (req, res) => {
                       where bucket_id = ${dq(lijst[1])} and name like ${dq((p.prefix || '') + '%')}`, claims);
       return stuur(res, 200, JSON.parse(r[0] || '[]'));
     }
+    const teken = url.pathname.match(/^\/storage\/v1\/object\/sign\/([^/]+)\/(.+)$/);
+    if (teken && req.method === 'POST') {
+      // createSignedUrl: alleen als het object bestaat en de rol het mag zien.
+      const p = JSON.parse(body || '{}');
+      const r = sql(`select count(*) from storage.objects where bucket_id = ${dq(teken[1])} and name = ${dq(decodeURIComponent(teken[2]))}`, claims);
+      if (r[0] !== '1') return stuur(res, 400, { statusCode: '404', error: 'not_found', message: 'Object not found' });
+      return stuur(res, 200, { signedURL: `/object/sign/${teken[1]}/${teken[2]}?token=lokaal&geldig=${p.expiresIn}` });
+    }
     const verwijder = url.pathname.match(/^\/storage\/v1\/object\/([^/]+)$/);
     if (verwijder && req.method === 'DELETE') {
       const p = JSON.parse(body || '{}');

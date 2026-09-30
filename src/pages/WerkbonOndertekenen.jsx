@@ -124,6 +124,8 @@ export default function WerkbonOndertekenen({ token }) {
       // bezoek komt hij als opgeslagen link uit get_werkbon_by_sign_token.
       handtekeningDataUrl: ondertekening?.dataUrl || null,
       handtekeningUrl: werkbon.handtekening_url || null,
+      // Voor de korte link naar de handtekening (document-url, klantroute).
+      signToken: token,
       uitvoerders,
       ...extra,
     },

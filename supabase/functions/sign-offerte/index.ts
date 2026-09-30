@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
+import { verwijzing, kortLink } from '../_shared/documentLink.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -137,19 +138,10 @@ serve(async (req) => {
       })
     }
 
-    // De signatures-bucket is privé (PII-bescherming). We slaan een signed URL
-    // op met lange geldigheid (10 jaar) i.p.v. een publieke URL, zodat de
-    // handtekening niet zonder token via de publieke endpoint te benaderen is.
-    let signatureUrl: string
-    const { data: signed, error: signErr } = await admin.storage
-      .from('signatures')
-      .createSignedUrl(sigFilename, 60 * 60 * 24 * 365 * 10) // ~10 jaar
-    if (signErr || !signed?.signedUrl) {
-      return new Response(JSON.stringify({ success: false, error: `Signed URL maken mislukt: ${signErr?.message || 'onbekend'}` }), {
-        status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
-      })
-    }
-    signatureUrl = signed.signedUrl
+    // De signatures-bucket is privé. Vroeger stond hier een ondertekende URL van
+    // 10 jaar; nu alleen een verwijzing. Een link maakt document-url op het
+    // moment van openen, na controle, 10 minuten geldig (_shared/documentLink.ts).
+    const signatureUrl = verwijzing('signatures', sigFilename)
 
     // ── STAP 3: Company ophalen (branding voor snapshot + response) ──────────
     let company: Record<string, unknown> = {}
@@ -212,14 +204,9 @@ serve(async (req) => {
         if (pdfUploadErr) {
           warnings.push(`PDF upload mislukt (signed-offertes): ${pdfUploadErr.message}`)
         } else {
-          // De bucket is PRIVÉ. getPublicUrl leverde hier een dode link op ("Bucket
-          // not found", HTTP 400), waardoor de bulk-download in de app stilletjes
-          // een opnieuw gegenereerde PDF zónder handtekening teruggaf. Zelfde
-          // oplossing als in sign-werkbon: een ondertekende URL met lange looptijd.
-          const { data: pdfSigned } = await admin.storage
-            .from('signed-offertes')
-            .createSignedUrl(pdfPad, 60 * 60 * 24 * 365 * 10)
-          const signedPdfUrl = pdfSigned?.signedUrl || null
+          // De bucket is privé. We bewaren een verwijzing; offerte-pdf-url en
+          // document-url maken bij het openen een korte link.
+          const signedPdfUrl = verwijzing('signed-offertes', pdfPad)
           if (signedPdfUrl) {
             const { error: urlUpdateErr } = await admin.from('offertes')
               .update({ signed_pdf_url: signedPdfUrl })

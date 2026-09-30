@@ -29,6 +29,10 @@ supabase/tests/lokaal/start.sh           # gateway (54321) en functies (54330)
 
 cd supabase/tests/lokaal
 node test.mjs                            # opzeggen, rechten, toegang na deactivatie, opschonen
+FUNCTIES=afas-import-kosten,afas-sync-contacten,boss-chat,create-notification,getekende-pdf-nazenden,google-calendar-auth-url,moneybird-update-contact,offerte-pdf-url,send-email,stripe-connect-start,stripe-connection-status,sync-activity-to-google,stripe-create-payment-link,meldpunt,document-url,billing-checkout \
+  ./start.sh                             # (opnieuw, met alle functies voor de volgende test)
+node test_functies.mjs                   # statuscontrole per functie, alleen-lezen, document-url
+                                         # (legt lokaal een schrijflog-trigger op elke tabel)
 set -a; . "$LOKAAL/sleutels.env"; set +a
 (cd ../../.. && VITE_SUPABASE_URL=http://localhost:54321 VITE_SUPABASE_ANON_KEY=$ANON npx vite build --outDir "$LOKAAL/dist" --emptyOutDir)
 PLAYWRIGHT=<pad naar playwright-core> DIST="$LOKAAL/dist" OUT="$LOKAAL" node ui_test.mjs

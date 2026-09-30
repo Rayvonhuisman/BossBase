@@ -16,63 +16,113 @@ De webhook schrijft nooit `companies.status`; `cancel_company_account` nooit
 een opgezegd abonnement staat alleen in `subscriptions`. Een aparte status was
 daarom niet nodig; de verwarring zat in de knop, die beide deed.
 
-Productbesluit (open): na afloop van een opgezegd abonnement blijft het bedrijf
-onbeperkt alleen-lezen bereikbaar (zo ontworpen in 20260803120000, om gegevens
-te kunnen exporteren). Wil je dat de toegang na een bepaalde tijd stopt, dan is
-dat een besluit en een aparte wijziging.
+## Alleen-lezen na afloop van een opgezegd abonnement
 
-## Wat direct geblokkeerd is en wat geldig blijft tot een vervaltijd
+Wat de server afdwingt (lokaal getest met echte PostgREST en functiecode,
+`supabase/tests/lokaal/test_functies.mjs`, groep "alleen-lezen"):
 
-Na "Account deactiveren" of "Bedrijf sluiten" (M2 + M3 uitgerold):
+| Route | Na afloop |
+| --- | --- |
+| Lezen (database, RPC) | Werkt — bekijken en exporteren blijven mogelijk |
+| Nieuw werk vastleggen (INSERT op 28 tabellen en Storage-upload, `bb_mag_schrijven`) | Geweigerd |
+| Uren boeken op een werkbon (`werkbon_uren`) | **Was open**; nu geweigerd door `20260930175000_alleen_lezen_werkbon_uren.sql` |
+| Offerte/factuur op "verzonden" zetten (trigger `bb_blokkeer_versturen`) | Geweigerd |
+| Mail versturen (Edge Function `send-email`) | Geweigerd |
+| Bestaande gegevens wijzigen of verwijderen (UPDATE/DELETE) | **Niet geblokkeerd** (zo ontworpen: alleen nieuw werk dicht) |
+| Overige Edge Functions en RPC's met security definer | Niet apart op alleen-lezen gecontroleerd |
+| Opnieuw abonneren (`billing-checkout`, eigenaar) | Blijft mogelijk (getest) |
+| Verwijdering aanvragen | Blijft mogelijk (e-mail, buiten de app om) |
 
-| Route | Wanneer geblokkeerd | Bron |
-| --- | --- | --- |
-| Opnieuw inloggen | Direct | account geblokkeerd; GoTrue `token.go` (lokaal: nagebootst) |
-| Refresh token | Direct | sessies verwijderd; GoTrue `tokens/service.go` (nagebootst) |
-| Bestaand access token → database, RPC (PostgREST) | Direct | restrictive policies + pre-request (lokaal met echte PostgREST getest) |
-| Bestaand access token → Edge Functions | Direct | `auth.getUser` faalt zonder sessie (GoTrue `auth.go`); functies met service_role controleren daarnaast zelf profiel en bedrijf (`_shared/actieveGebruiker.ts`, getest) |
-| Bestaand access token → Storage, geautoriseerd verzoek | Direct, volgens de policy op `storage.objects` | policy getest; de echte storage-api niet |
-| Bestaand Realtime-kanaal | Verwacht direct voor nieuwe wijzigingen (RLS per wijziging), kanaal zelf tot het token verloopt | **niet getest** |
-| Het access token zelf | Blijft cryptografisch geldig tot de vervaltijd (standaard 1 uur; de ingestelde waarde is niet uitgelezen) | — |
-| **Bestaande signed URLs** | **Niet geblokkeerd tot hun vervaltijd.** Handtekeningen en ondertekende PDF's krijgen 10 jaar, overige 10 minuten tot 1 uur | signed URLs controleren geen gebruiker |
-| **Openbare buckets** (`avatars`, `bedrijf-logos`) | Nooit: iedereen met de link | publiek by design |
+Hoe lang alleen-lezen duurt, is **geen vastgesteld beleid**. Er is nu geen
+einddatum en geen automatische verwijdering; dat is ook geen toezegging.
 
-Beloof dus geen "onmiddellijke" blokkade van bestanden: een eerder gekopieerde
-link naar een handtekening of ondertekende PDF blijft werken.
+## Wat direct geblokkeerd is en wat (nog) niet bewezen is
+
+Na "Account deactiveren" of "Bedrijf sluiten" (M2 + M3 uitgerold). "Bewezen"
+betekent hier: lokaal getest met echte PostgREST en echte functiecode. Een
+controle tegen de broncode of met een stand-in is geen integratietest.
+
+| Route | Status |
+| --- | --- |
+| Database en RPC (PostgREST), ook met een eerder uitgegeven access token | **Bewezen direct geblokkeerd** |
+| Edge Functions met service_role (15 functies, incl. `document-url`): gedeactiveerd profiel of gesloten bedrijf | **Bewezen geweigerd**, vóór elke externe aanroep of databasewijziging (exact gemeten met een schrijflog-trigger) |
+| Opnieuw inloggen | Niet bevestigd — alleen broncode (GoTrue `token.go`) en stand-in |
+| Refresh token | Niet bevestigd — alleen broncode (`tokens/service.go`) en stand-in |
+| `auth.getUser` met een token zonder sessie | Niet bevestigd — alleen broncode (`auth.go`) en stand-in |
+| Storage API, geautoriseerd verzoek | Niet bevestigd — de policy op `storage.objects` is getest, de echte storage-api niet |
+| Bestaand Realtime-kanaal | Niet bevestigd — niet getest |
+| Het access token zelf | Blijft geldig tot de vervaltijd (standaard 1 uur; ingestelde waarde niet uitgelezen) |
+| **Bestaande signed URLs** | **Blijven geldig tot hun vervaltijd** (zie hieronder, tot 10 jaar) |
+| Openbare buckets (`avatars`, `bedrijf-logos`) | Nooit geblokkeerd: publiek |
+
+## Links van tien jaar
+
+**Waar ze ontstonden** (tot deze branch): `sign-offerte` (handtekening →
+`offertes.signature_url`, PDF → `offertes.signed_pdf_url`), `sign-werkbon`
+(handtekening → `werkbonnen.handtekening_url`, PDF →
+`werkbonnen.ondertekende_pdf_url`) en `getekende-pdf-nazenden` (PDF). Klanten
+krijgen de PDF als **bijlage** per mail, niet als link.
+
+**Waar ze gebruikt werden:** de knop "Ondertekende bon" (link rechtstreeks),
+het tekenen van de handtekening in een opnieuw gemaakte PDF (app en
+klantpagina), en `offerte-pdf-url` (haalt alleen het pad eruit en geeft al een
+link van 10 minuten).
+
+**Voorkomen van nieuwe lange links (deze branch):**
+- De sign-functies en `getekende-pdf-nazenden` bewaren alleen nog een
+  verwijzing `<bucket>/<pad>`; de klant die net tekent krijgt korte links.
+- Nieuwe Edge Function `document-url`: link van 10 minuten, alleen voor een
+  actief profiel van hetzelfde bedrijf, of met het teken-token van dat document
+  (klantlink). Getest: eigen bedrijf, ander bedrijf, gesloten bedrijf, juist en
+  verkeerd token, oude rij met lange URL.
+- De app vraagt links op het moment van openen op (`documentService.js`). Voor
+  oude rijen valt hij terug op de opgeslagen lange link zolang de korte route
+  faalt.
+
+**Intrekken van al uitgegeven links: niet gedaan.** Een kortere geldigheid voor
+nieuwe links trekt bestaande links niet in. Ze verlopen pas na 10 jaar. Opties,
+alle drie met gevolgen en alleen na overleg:
+1. De bestanden verplaatsen naar een nieuw pad en de verwijzingen bijwerken
+   (oude links geven dan 404). Wijzigt productieobjecten.
+2. De JWT-sleutel van het project roteren: trekt alle signed URLs in, maar ook
+   alle sessies en de anon- en service-sleutels. Zwaar.
+3. De oude URL's in de database vervangen door verwijzingen: voorkomt dat de
+   app ze nog toont, maar wie de link al heeft, houdt toegang.
 
 ## Onderdelen
 
-**Zelfstandig uit te rollen, geen beleidsbesluit nodig:**
+**Nu al uitrolbaar, bewezen, los van de rest: `fix/billing-eigenaar`** (commit
+2aa72d1, alleen `_shared/billing.ts`). Dicht de bestaande billingrechtenfout.
+Geen migratie nodig; getest op de huidige productiestructuur (8/8).
+
+**Op `fix/accountverwijdering-bv`, geen beleidsbesluit nodig, wel nog de
+beperkingen hierboven:**
 
 | Code | Wat | Afhankelijk van |
 | --- | --- | --- |
-| F1 | `billing-cancel`, `-portal`, `-checkout`, `-wijzig` (`_shared/billing.ts`): alleen de eigenaar, vóór elke Stripe-aanroep | niets — dicht de bestaande billingrechtenfout |
-| M1 | `20260930120000`: `email` optioneel, tabelrechten weg (alleen uitbreidend) | niets |
-| F2 | `request-password-reset`, `apply-password-reset` | M1 |
+| F1 | billing (identiek aan `fix/billing-eigenaar`) | niets |
+| M1 | `20260930120000`: `email` optioneel, tabelrechten weg | niets |
+| F2 | resetfuncties | M1 |
 | F3 | AFAS-functies: geen relatiegegevens of tokens in logs | niets |
-| F4 | 14 functies met service_role controleren profiel en bedrijf (`_shared/actieveGebruiker.ts`) | niets |
-| M2 | `20260930160000`: blokkeren bij deactiveren, eigenaarregel, bewaking eigenaar/status, correcties opschoonjob (die pas iets doen als de cron ooit aangaat) | F1 |
-| M3 | `20260930170000`: policies, pre-request, `bb_mag_abonnement_beheren` | niets |
-| FE | Frontend: drie acties gescheiden, teksten, demo-correctie | liefst na F1 |
+| F4 | 14 functies met service_role controleren profiel en bedrijf | niets |
+| F5 | `document-url`, sign-functies en `getekende-pdf-nazenden` zonder lange links | FE (de app moet korte links kunnen opvragen vóór nieuwe rijen alleen een verwijzing hebben) |
+| M2 | `20260930160000` | F1 |
+| M3 | `20260930170000` | niets |
+| M4 | `20260930175000`: alleen-lezen ook voor `werkbon_uren` | niets |
+| FE | Frontend | vóór F5 |
 
-**Apart, expliciet, niet in deze release:**
-
-- **M1b** `20260930120500_resettoken_opruimen.sql.pending` (destructief). Alleen
-  als de vier voorwaarden in dat bestand aantoonbaar gelden.
-- **Opschooncron** `20260930083835_opschonen_cron.sql.pending`. Vereist een besluit
-  over de termijn(en), een beoordeelde droogloop via de echte functie en
-  duidelijkheid over back-ups.
+**Apart, expliciet, niet in deze release:** M1b (destructief, vier voorwaarden
+in het bestand) en de opschooncron (besluit over termijnen).
 
 ## Volgorde
 
-1. **F1** deployen (eventueel meteen, los van de rest).
-2. `supabase db push --dry-run` → alleen **M1** → push → `npm run migratie:check -- password_reset_tokens`.
-3. **F2**, **F3** en **F4** deployen.
-4. `supabase db push --dry-run` → **M2** en **M3** → push →
-   `npm run migratie:check -- companies profiles customers`; controleer dat een
-   gewone ingelogde gebruiker gegevens ziet (pre-request actief).
-5. **FE**: merge naar `main`.
-6. Later en apart: M1b (voorwaarden), cron (besluit).
+1. **`fix/billing-eigenaar`**: `supabase functions deploy billing-cancel billing-portal billing-checkout billing-wijzig`.
+2. `supabase db push --dry-run` → **M1** → push → `npm run migratie:check -- password_reset_tokens`.
+3. **F2, F3, F4** deployen.
+4. `supabase db push --dry-run` → **M2, M3, M4** → push → `npm run migratie:check -- companies profiles customers werkbon_uren`; controleer dat een gewone ingelogde gebruiker gegevens ziet.
+5. **FE** (merge naar `main`).
+6. **F5** deployen (`document-url`, `sign-offerte`, `sign-werkbon`, `getekende-pdf-nazenden`, `offerte-pdf-url`).
+7. Later en apart: M1b, cron, en eventueel het intrekken van oude links.
 
 ## Gemengde versies
 
@@ -101,4 +151,9 @@ weigeringen; rijen 4–5 zijn afgeleid.
   rolinstelling, dan de functie. Weigert PostgREST alles:
   `alter role authenticator reset pgrst.db_pre_request; notify pgrst, 'reload config';`
 - **FE:** vorige deployment terugzetten in Vercel.
+- **F5 terugzetten:** de vorige sign-functies maken weer lange links. Rijen die
+  intussen alleen een verwijzing kregen, werken dan alleen met de nieuwe FE
+  (korte link via `document-url`); zet FE dus niet terug zonder F5 ook terug te
+  zetten en `document-url` te laten staan.
+- **M4 terugzetten:** `drop policy readonly_werkbon_uren on public.werkbon_uren;`
 - **M1b en de opschoonjob:** niet terug te draaien; alleen uit een back-up.
