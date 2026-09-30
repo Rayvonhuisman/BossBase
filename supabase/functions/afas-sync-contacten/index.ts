@@ -13,7 +13,8 @@ async function tryAfasEndpoint(url: string, headers: Record<string, string>, lab
   try {
     const res = await fetch(url, { headers })
     const text = await res.text()
-    console.log(`${label} HTTP ${res.status}, body: ${text.substring(0, 2000)}`)
+    // Alleen status en lengte: de body bevat namen, adressen en bankgegevens van relaties.
+    console.log(`${label} HTTP ${res.status}, ${text.length} tekens`)
     if (!res.ok) { console.log(`${label} mislukt HTTP ${res.status}`); return [] }
     const data = JSON.parse(text)
     const rows: any[] = data?.Result ?? data?.result ??
@@ -93,7 +94,7 @@ serve(async (req) => {
     const orgRes = await fetch(orgUrl, { headers: afasHeaders })
     const orgText = await orgRes.text()
     console.log('AFAS response status:', orgRes.status)
-    console.log('AFAS response body (volledig):', orgText.substring(0, 2000))
+    console.log('AFAS response lengte:', orgText.length)
 
     if (!orgRes.ok) {
       throw new Error(`AFAS /api/organisations HTTP ${orgRes.status}: ${orgText.substring(0, 200)}`)
@@ -131,7 +132,6 @@ serve(async (req) => {
     for (const rel of salesRows) {
       const relId = rel.RelationId ?? rel.relationId
       const relType = (rel.RelationType ?? rel.relationType ?? '').toLowerCase()
-      const relName = rel.RelationDescription ?? rel.relationDescription ?? ''
       if (!relId) { extraRows.push(rel); continue }
 
       let enriched: any = rel
@@ -139,11 +139,11 @@ serve(async (req) => {
       // Personen via /api/persons/{id}, organisaties via /api/organisations/{id}
       const detailEndpoint = relType === 'person' ? 'persons' : 'organisations'
       const detailUrl = `${relBase}/${detailEndpoint}/${relId}`
-      console.log(`Detail ophalen voor "${relName}" (${relType}): ${detailUrl}`)
+      console.log(`Detail ophalen voor relatie ${relId} (${relType})`)
       try {
         const detailRes = await fetch(detailUrl, { headers: headers10 })
         const detailText = await detailRes.text()
-        console.log(`${detailEndpoint}/${relId} HTTP ${detailRes.status}: ${detailText.substring(0, 1000)}`)
+        console.log(`${detailEndpoint}/${relId} HTTP ${detailRes.status}`)
         if (detailRes.ok) {
           const d = JSON.parse(detailText)
           const obj = Array.isArray(d) ? d[0] : (d?.Result?.[0] ?? d?.result?.[0] ?? d)
@@ -153,11 +153,11 @@ serve(async (req) => {
 
       // Adres ophalen
       const addrUrl = `${relBase}/addresses?filter=RelationId eq '${relId}'`
-      console.log(`Adres ophalen voor "${relName}": ${addrUrl}`)
+      console.log(`Adres ophalen voor relatie ${relId}`)
       try {
         const addrRes = await fetch(addrUrl, { headers: headers10 })
         const addrText = await addrRes.text()
-        console.log(`addresses HTTP ${addrRes.status}: ${addrText.substring(0, 500)}`)
+        console.log(`addresses HTTP ${addrRes.status}`)
         if (addrRes.ok) {
           const ad = JSON.parse(addrText)
           const addrs: any[] = ad?.Result ?? ad?.result ?? (Array.isArray(ad) ? ad : [])
@@ -172,11 +172,11 @@ serve(async (req) => {
 
       // Bankrekening ophalen
       const bankUrl = `${relBase}/bankaccounts?filter=RelationId eq '${relId}'`
-      console.log(`Bankrekening ophalen voor "${relName}": ${bankUrl}`)
+      console.log(`Bankrekening ophalen voor relatie ${relId}`)
       try {
         const bankRes = await fetch(bankUrl, { headers: headers10 })
         const bankText = await bankRes.text()
-        console.log(`bankaccounts HTTP ${bankRes.status}: ${bankText.substring(0, 500)}`)
+        console.log(`bankaccounts HTTP ${bankRes.status}`)
         if (bankRes.ok) {
           const bk = JSON.parse(bankText)
           const banks: any[] = bk?.Result ?? bk?.result ?? (Array.isArray(bk) ? bk : [])
@@ -248,7 +248,6 @@ serve(async (req) => {
       const address = (org._address ?? '').trim()
       const postcode = (org._postcode ?? '').trim()
       const city = (org._city ?? '').trim()
-      console.log(`  → phone: "${phone}", address: "${address}", postcode: "${postcode}", city: "${city}"`)
 
       const { data: newCustomer } = await supabase.from('customers').insert({
         company_id: companyId,
@@ -265,7 +264,7 @@ serve(async (req) => {
       if (newCustomer) {
         importedFromAfas++
         byName.set(norm(name), newCustomer)
-        console.log(`AFAS→BB AANGEMAAKT "${name}"`)
+        console.log('AFAS→BB AANGEMAAKT')
       }
     }
     console.log(`AFAS → BossBase: ${importedFromAfas} aangemaakt, ${skippedAfas} al aanwezig`)
@@ -291,9 +290,9 @@ serve(async (req) => {
       console.log(`TEST export eerste klant: ${testCustomer.id}`)
       const postRes = await fetch(exportUrl, { method: 'POST', headers: exportHeaders, body: JSON.stringify(body) })
       const resText = await postRes.text().catch(() => '')
-      console.log(`POST /api/organisation HTTP ${postRes.status}: ${resText.substring(0, 2000)}`)
-      if (postRes.ok) { exportedToAfas++; console.log(`BB→AFAS geslaagd: "${testCustomer.name}"`) }
-      else { exportFailures++; console.log(`BB→AFAS MISLUKT: "${testCustomer.name}"`) }
+      console.log(`POST /api/organisation HTTP ${postRes.status}${postRes.ok ? '' : `: ${resText.substring(0, 300)}`}`)
+      if (postRes.ok) { exportedToAfas++; console.log(`BB→AFAS geslaagd: ${testCustomer.id}`) }
+      else { exportFailures++; console.log(`BB→AFAS MISLUKT: ${testCustomer.id}`) }
     }
 
     return new Response(
