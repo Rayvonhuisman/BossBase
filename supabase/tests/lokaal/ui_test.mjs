@@ -49,11 +49,11 @@ async function sessie(k) {
   return { ctx, page, fout };
 }
 async function gevarenzone(page) {
-  const knop = page.locator('button', { hasText: /^(Bedrijf opzeggen|Account deactiveren)$/ }).first();
+  const knop = page.locator('button', { hasText: /^(Bedrijf sluiten|Account deactiveren)$/ }).first();
   return (await knop.count()) ? (await knop.innerText()).trim() : 'geen knop';
 }
 async function bevestig(page) {
-  await page.locator('button', { hasText: /^(Bedrijf opzeggen|Account deactiveren)$/ }).first().click();
+  await page.locator('button', { hasText: /^(Bedrijf sluiten|Account deactiveren)$/ }).first().click();
   await page.waitForTimeout(400);
   const tekst = await page.locator('.modal').innerText().catch(() => '');
   await page.fill('.modal input[type="text"]', 'VERWIJDEREN');
@@ -81,7 +81,7 @@ async function bevestig(page) {
 // Tweede beheerder
 {
   const s = await sessie('A2');
-  check('niet-eigenaar-beheerder ziet "Account deactiveren", niet "Bedrijf opzeggen"', await gevarenzone(s.page) === 'Account deactiveren', await gevarenzone(s.page));
+  check('niet-eigenaar-beheerder ziet "Account deactiveren", niet "Bedrijf sluiten"', await gevarenzone(s.page) === 'Account deactiveren', await gevarenzone(s.page));
   await s.page.goto('http://localhost:4174/dashboard/instellingen?tab=abonnement');
   await s.page.waitForTimeout(2500);
   const ab = await s.page.locator('body').innerText();
@@ -91,13 +91,36 @@ async function bevestig(page) {
 // Eigenaar
 {
   const s = await sessie('E');
-  check('eigenaar ziet "Bedrijf opzeggen"', await gevarenzone(s.page) === 'Bedrijf opzeggen', await gevarenzone(s.page));
-  const t0 = await (async () => { await s.page.locator('button', { hasText: /^Bedrijf opzeggen$/ }).first().click(); await s.page.waitForTimeout(300); const t = await s.page.locator('.modal').innerText(); await s.page.keyboard.press('Escape'); await s.page.locator('.modal .btn-ghost').click().catch(() => {}); await s.page.waitForTimeout(300); return t; })();
-  check('eigenaar: vóór bevestigen staat er dat toegang direct stopt, ook in de betaalde periode', /ook niet in de periode die al betaald is/.test(t0), t0);
+  check('eigenaar ziet "Bedrijf sluiten"', await gevarenzone(s.page) === 'Bedrijf sluiten', await gevarenzone(s.page));
+
+  // Eerst alleen het abonnement opzeggen (Abonnement-tab): verlenging stopt,
+  // niemand wordt geblokkeerd, het bedrijf blijft actief.
+  const stripeLog = `${process.env.LOKAAL}/stripe_aanroepen.jsonl`;
+  const n = fs.existsSync(stripeLog) ? fs.readFileSync(stripeLog, 'utf8').trim().split('\n').filter(Boolean).length : 0;
+  let bevestiging = '';
+  s.page.once('dialog', d => { bevestiging = d.message(); d.accept(); });
+  await s.page.goto('http://localhost:4174/dashboard/instellingen?tab=abonnement');
+  await s.page.waitForTimeout(2500);
+  await s.page.locator('button', { hasText: /^Opzeggen$/ }).first().click();
+  await s.page.waitForTimeout(2500);
+  const nieuw = fs.readFileSync(stripeLog, 'utf8').trim().split('\n').filter(Boolean).slice(n).map(JSON.parse);
+  check('abonnement opzeggen: bevestiging zegt doorwerken tot de einddatum, daarna alleen-lezen', /tot die datum gewoon doorwerken/.test(bevestiging) && /bekijken\s+en exporteren/.test(bevestiging), bevestiging);
+  check('abonnement opzeggen: Stripe krijgt de opzegging', nieuw.some(a => a.methode === 'POST' && a.url.startsWith('/v1/subscriptions/')), nieuw);
+  check('abonnement opzeggen: niemand geblokkeerd, bedrijf blijft actief', sql(`select status from companies where id='${X}'`)[0] === 'actief'
+    && ['E', 'A2'].every(k => staat(U[k]).actief && !staat(U[k]).geband), { E: staat(U.E), A2: staat(U.A2) });
+
+  // Daarna, apart: het bedrijf sluiten.
+  await s.page.goto('http://localhost:4174/dashboard/instellingen');
+  await s.page.waitForTimeout(2000);
+  const tab = s.page.getByText('Mijn profiel', { exact: false }).first();
+  if (await tab.count()) await tab.click().catch(() => {});
+  await s.page.waitForTimeout(800);
+  const t0 = await (async () => { await s.page.locator('button', { hasText: /^Bedrijf sluiten$/ }).first().click(); await s.page.waitForTimeout(300); const t = await s.page.locator('.modal').innerText(); await s.page.locator('.modal .btn-ghost').click().catch(() => {}); await s.page.waitForTimeout(300); return t; })();
+  check('bedrijf sluiten: vóór bevestigen staat er dat toegang direct stopt, ook in de betaalde periode', /ook niet in de periode die al betaald is/.test(t0), t0);
   const t = await bevestig(s.page);
   await s.page.screenshot({ path: `${OUT}/ui-eigenaar-na.png` });
-  check('eigenaar: dialoog noemt einde van de periode, direct uitloggen, niet verwijderd en 7 jaar', /einde van de lopende maand/.test(t) && /direct uitgelogd/.test(t) && /niet verwijderd/.test(t) && /7 jaar/.test(t), t);
-  check('eigenaar: bedrijf opgezegd, eigenaar en beheerder geblokkeerd', sql(`select status from companies where id='${X}'`)[0] === 'opgezegd'
+  check('bedrijf sluiten: dialoog noemt toegang, abonnement (einde periode) en gegevens (niet verwijderd, 7 jaar)', /einde van de lopende maand/.test(t) && /direct uitgelogd/.test(t) && /niet verwijderd/.test(t) && /7 jaar/.test(t), t);
+  check('bedrijf sluiten: bedrijf gesloten (status opgezegd), eigenaar en beheerder geblokkeerd', sql(`select status from companies where id='${X}'`)[0] === 'opgezegd'
     && ['E', 'A2'].every(k => JSON.stringify(staat(U[k])) === '{"actief":false,"geband":true,"sessies":0}'), { E: staat(U.E), A2: staat(U.A2) });
   check('eigenaar: geen JavaScript-fouten', s.fout.length === 0, s.fout);
   await s.ctx.close();

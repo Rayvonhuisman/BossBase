@@ -19,6 +19,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { stuurBossBaseMail } from '../_shared/billing.ts'
 import { internMeldingMail, bevestigingMail, type Melding } from '../_shared/meldpuntMail.ts'
+import { inactiefReden } from '../_shared/actieveGebruiker.ts'
 
 // Waar meldingen binnenkomen. Overschrijfbaar zonder deploy via een secret.
 const MELDPUNT_ADRES = () => Deno.env.get('MELDPUNT_EMAIL') || 'info@bossbase.nl'
@@ -62,6 +63,9 @@ serve(async (req) => {
     })
     const { data: { user }, error: userErr } = await userClient.auth.getUser()
     if (userErr || !user) return json({ error: 'Ongeldige sessie' }, 401)
+    // service_role omzeilt RLS: zelf controleren dat account en bedrijf actief zijn.
+    const inactief = await inactiefReden(user.id)
+    if (inactief) return json({ error: inactief }, 403)
 
     const admin = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 

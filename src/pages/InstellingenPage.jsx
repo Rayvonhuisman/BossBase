@@ -1290,7 +1290,7 @@ export function InstellingenPage() {
         await deleteOwnAccount();
       }
       toast.success(zegtBedrijfOp
-        ? `Je bedrijf is opgezegd.${stopBericht} Terugkeren of de gegevens laten verwijderen? Mail info@bossbase.nl.`
+        ? `Je bedrijf is gesloten.${stopBericht} Terugkeren of de gegevens laten verwijderen? Mail info@bossbase.nl.`
         : 'Je account is gedeactiveerd.');
       // Uitloggen → onAuthStateChange in App.jsx redirect naar /login.
       await supabase.auth.signOut();
@@ -1841,16 +1841,26 @@ export function InstellingenPage() {
             <div className="label" style={{ marginBottom: 'var(--sp-2)', color: '#b91c1c' }}>Gevarenzone</div>
             <p style={{ fontSize: '.82rem', color: 'var(--dl)', lineHeight: 1.5, marginBottom: 'var(--sp-3)', maxWidth: 560 }}>
               {zegtBedrijfOp
-                ? 'Je bent de eigenaar. Hiermee zeg je het hele bedrijf op: het abonnement stopt en alle teamleden verliezen toegang.'
+                ? <>Je bent de eigenaar. <strong>Bedrijf sluiten</strong> beëindigt direct de toegang van jou en je hele team. Wil je alleen stoppen met betalen en tot het einde van de betaalde periode blijven werken, zeg dan je abonnement op onder <button type="button" onClick={() => setTab('abonnement')} style={{ background: 'none', border: 0, padding: 0, color: 'var(--pd)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}>Abonnement</button>.</>
                 : 'Hiermee deactiveer je alleen je eigen account. Je verliest direct toegang; het bedrijf en de gegevens van het team blijven bestaan.'}
             </p>
-            <button
-              type="button"
-              onClick={() => { setDelConfirm(''); setDelOpen(true); }}
-              style={{ background: 'none', border: '1px solid #fecaca', borderRadius: 'var(--r8)', padding: '7px 14px', cursor: 'pointer', color: '#b91c1c', fontWeight: 600, fontSize: '.84rem' }}
-            >
-              {zegtBedrijfOp ? 'Bedrijf opzeggen' : 'Account deactiveren'}
-            </button>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => { setDelConfirm(''); setDelOpen(true); }}
+                style={{ background: 'none', border: '1px solid #fecaca', borderRadius: 'var(--r8)', padding: '7px 14px', cursor: 'pointer', color: '#b91c1c', fontWeight: 600, fontSize: '.84rem' }}
+              >
+                {zegtBedrijfOp ? 'Bedrijf sluiten' : 'Account deactiveren'}
+              </button>
+              {/* Verwijderen is een verzoek, geen knop: er is (nog) geen
+                  geautomatiseerde verwijdering die we hier kunnen beloven. */}
+              <a
+                href={`mailto:info@bossbase.nl?subject=${encodeURIComponent(zegtBedrijfOp ? 'Verzoek: gegevens van mijn bedrijf verwijderen' : 'Verzoek: mijn gegevens verwijderen')}`}
+                style={{ color: 'var(--dl)', fontSize: '.84rem', textDecoration: 'underline' }}
+              >
+                Verwijdering aanvragen
+              </a>
+            </div>
           </div>
 
           {delOpen && (
@@ -1858,7 +1868,7 @@ export function InstellingenPage() {
               <div className="modal">
                 <div className="modal-hd">
                   <div>
-                    <div className="modal-title">{zegtBedrijfOp ? 'Bedrijf opzeggen' : 'Account deactiveren'}</div>
+                    <div className="modal-title">{zegtBedrijfOp ? 'Bedrijf sluiten' : 'Account deactiveren'}</div>
                     <div className="modal-sub">Lees dit goed door — deze actie heeft gevolgen.</div>
                   </div>
                   <ModalX onClose={() => !deleting && setDelOpen(false)} />
@@ -1869,10 +1879,9 @@ export function InstellingenPage() {
                       beloven zolang die niet is vastgesteld en uitgevoerd. */}
                   {zegtBedrijfOp ? (
                     <ul style={{ fontSize: '.86rem', color: 'var(--dk)', lineHeight: 1.55, margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <li>Je abonnement wordt opgezegd. Een maandabonnement stopt aan het einde van de lopende maand. Een jaarabonnement stopt aan het einde van de looptijd; tot dan loopt de incasso door.</li>
-                      <li>Jij en alle teamleden worden <strong>direct uitgelogd</strong> en kunnen niet meer inloggen, <strong>ook niet in de periode die al betaald is</strong> of nog betaald wordt. Wil je BossBase tot het einde van de periode blijven gebruiken, zeg dan op via Instellingen → Abonnement en gebruik deze knop later.</li>
-                      <li>De gegevens van het bedrijf worden nu <strong>niet verwijderd</strong>, zodat je kunt terugkeren. Wil je dat we ze verwijderen, mail dan naar info@bossbase.nl.</li>
-                      <li>Je facturen en btw-gegevens moet je zelf 7 jaar bewaren. Exporteer ze voordat je opzegt.</li>
+                      <li><strong>Toegang:</strong> jij en alle teamleden worden direct uitgelogd en kunnen niet meer inloggen, ook niet in de periode die al betaald is.</li>
+                      <li><strong>Abonnement:</strong> de verlenging wordt gestopt, zodat je niet blijft betalen voor een gesloten bedrijf. Een maandabonnement stopt aan het einde van de lopende maand; een jaarabonnement aan het einde van de looptijd, en tot dan loopt de incasso door. Al betaalde periodes worden niet terugbetaald.</li>
+                      <li><strong>Gegevens:</strong> worden nu <strong>niet verwijderd</strong>, zodat je kunt terugkeren. Verwijdering vraag je apart aan (link onder Gevarenzone). Je facturen en btw-gegevens moet je zelf 7 jaar bewaren; exporteer ze vóór je sluit.</li>
                     </ul>
                   ) : (
                     <ul style={{ fontSize: '.86rem', color: 'var(--dk)', lineHeight: 1.55, margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -1900,7 +1909,7 @@ export function InstellingenPage() {
                     onClick={handleDeleteAccount}
                     disabled={deleting || delConfirm.trim().toUpperCase() !== 'VERWIJDEREN'}
                   >
-                    {deleting ? 'Bezig…' : (zegtBedrijfOp ? 'Bedrijf opzeggen' : 'Account deactiveren')}
+                    {deleting ? 'Bezig…' : (zegtBedrijfOp ? 'Bedrijf sluiten' : 'Account deactiveren')}
                   </button>
                 </div>
               </div>

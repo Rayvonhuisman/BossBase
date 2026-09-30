@@ -1,17 +1,28 @@
 -- ── Waarom ──────────────────────────────────────────────────────────────────
--- Stap 2 van 2. PAS UITROLLEN als de nieuwe request-password-reset en
--- apply-password-reset (commit 7f462bd of later) in productie draaien en daarna
--- minstens één uur (de geldigheid van een resetlink) zonder fouten zijn gebruikt.
--- Hernoem dan naar .sql en `supabase db push`.
+-- Stap 2 van 2 na 20260930120000. DESTRUCTIEF en een aparte, expliciete
+-- uitrolactie: kolom `token` weg, `email` leeg. Niet terug te draaien.
 --
--- - Kolom `token` weg: sinds 20260930080504 leeg en door geen enkele functie
---   meer gelezen of geschreven (ook niet door de versie die nu draait).
--- - `email` leegmaken: de nieuwe functie schrijft het niet meer; oude rijen
---   met een adres verdwijnen anders pas na 24 uur (opschonen).
+-- Pas hernoemen naar .sql en pushen als ALLE voorwaarden hieronder aantoonbaar
+-- gelden (resultaten bewaren bij de uitrolnotities):
 --
--- Niet terug te draaien: de kolom en de adressen zijn daarna weg. Dat is de
--- bedoeling, maar controleer vóór het draaien dat niets de kolom nog gebruikt:
---   grep -rn "token'" supabase/functions/*password*
+-- 1. Alle nieuwe resetfuncties draaien. Vergelijk de productieversies met de
+--    branch:
+--      supabase functions download request-password-reset --use-api
+--      supabase functions download apply-password-reset --use-api
+--    en diff tegen supabase/functions/{request,apply}-password-reset en
+--    supabase/functions/_shared/wachtwoordReset.ts.
+-- 2. Oude geldige resetlinks zijn verlopen of aantoonbaar compatibel. Sinds
+--    20260930080504 is de kolom `token` voor elke rij leeg (gemeten 30-09-2026:
+--    0 rijen met een token) en zoeken alle functieversies op token_hash; een
+--    link blijft dus werken ongeacht deze kolom. Controleer opnieuw:
+--      select count(*) from public.password_reset_tokens where token is not null;  -- moet 0 zijn
+-- 3. Geen actieve code gebruikt de oude kolom (30-09-2026: geen treffers):
+--      grep -rnE "\.token\b|'token'|\"token\"" supabase/functions/*password*/index.ts supabase/functions/_shared/wachtwoordReset.ts
+--    en in de gedownloade productieversies uit stap 1 hetzelfde.
+-- 4. De afgesproken herstelmogelijkheid hangt niet van deze kolom af: het
+--    terugzetten van de resetfuncties gaat naar de versie van main (1e55125),
+--    die al alleen token_hash gebruikt. Is er intussen een andere herstelversie
+--    afgesproken, controleer die ook.
 
 begin;
 

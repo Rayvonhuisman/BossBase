@@ -211,6 +211,62 @@ check('toegang', 'vóór: medewerker ziet klanten, profielen en bestanden van A'
   check('opschonen', 'bedrijf B volledig intact', sql(`select (select count(*) from customers where company_id='${B}') || '/' || (select count(*) from werkbonnen where company_id='${B}') || '/' || (select count(*) from profiles where company_id='${B}')`)[0] === '1/1/2');
 }
 
+// ── 6. Normale werking: geen onbedoelde blokkade ────────────────────────────
+{
+  // Klantlink (anon): offerte van bedrijf B via het teken-token.
+  const O = id(), T = id();
+  sql(`insert into offertes (id, company_id, nummer, status, sign_token) values ('${O}', '${B}', 'OF-001', 'verstuurd', '${T}')`);
+  const anon = await client().rpc('get_offerte_by_sign_token', { p_token: T });
+  check('normaal', 'klantlink (anon): offerte via token leesbaar', !anon.error && anon.data?.length === 1, anon.error?.message);
+  const ingelogd = await alsToken(S.Eb.sessie.access_token).rpc('get_offerte_by_sign_token', { p_token: T });
+  check('normaal', 'klantlink geopend door een actieve ingelogde gebruiker: werkt', !ingelogd.error && ingelogd.data?.length === 1, ingelogd.error?.message);
+
+  // Registratie: inlogaccount zonder profiel (nog geen bedrijf).
+  const N = id();
+  sql(`insert into auth.users (id, email, aud, role) values ('${N}', 'test-nieuw-${N.slice(0, 6)}@example.test', 'authenticated', 'authenticated')`);
+  const nieuw = await client().auth.signInWithPassword({ email: `test-nieuw-${N.slice(0, 6)}@example.test`, password: 'test-wachtwoord' });
+  const np = await alsToken(nieuw.data.session.access_token).from('profiles').select('id');
+  const nr = await alsToken(nieuw.data.session.access_token).rpc('get_billing_status');
+  check('normaal', 'nieuwe gebruiker zonder profiel: REST en RPC niet geweigerd', !np.error && !nr.error, { rest: np.error?.message, rpc: nr.error?.message });
+
+  // Serverfuncties: service_role wordt niet door pre-request of policies geraakt.
+  const sr = await createClient(URL_, env.SERVICE, { auth: { persistSession: false } }).from('companies').select('id').eq('id', B);
+  check('normaal', 'service_role (cron, serverfuncties): leest gewoon', !sr.error && sr.data?.length === 1, sr.error?.message);
+
+  // Actieve gebruiker van een ander bedrijf: alles werkt.
+  const eb = await alsToken(S.Eb.sessie.access_token).from('customers').select('name');
+  const ebr = await alsToken(S.Eb.sessie.access_token).rpc('get_billing_status');
+  check('normaal', 'actieve gebruiker: tabellen en RPC werken', !eb.error && eb.data?.length === 1 && !ebr.error, { t: eb.error?.message, r: ebr.error?.message });
+
+  // Edge Function met service_role (stripe-connection-status, _shared/actieveGebruiker.ts).
+  const ok = await functie('stripe-connection-status', S.Eb.sessie.access_token);
+  check('edge', 'actieve gebruiker: functie met service_role werkt', ok.status === 200, ok);
+  // Inactief gemaakt buiten de nieuwe route om (sessie bestaat nog): de functie zelf weigert.
+  sql(`update profiles set actief = false where id = '${U.Mb}'`);
+  const mb = await functie('stripe-connection-status', S.Mb.sessie.access_token);
+  check('edge', 'inactief profiel met geldige sessie: functie weigert (403)', mb.status === 403 && /gedeactiveerd/.test(mb.body?.error || ''), mb);
+  sql(`update profiles set actief = true where id = '${U.Mb}'`);
+  // Gesloten bedrijf met een nog actief lid: de functie weigert.
+  sql(`update companies set status = 'opgezegd' where id = '${B}'`);
+  const eb2 = await functie('stripe-connection-status', S.Eb.sessie.access_token);
+  check('edge', 'lid van gesloten bedrijf: functie weigert (403)', eb2.status === 403 && /gesloten/.test(eb2.body?.error || ''), eb2);
+  sql(`update companies set status = 'actief' where id = '${B}'`);
+}
+
+// ── 7. Na afloop van een opgezegd abonnement: alleen-lezen, niet geblokkeerd ─
+{
+  sql(`update subscriptions set stripe_subscription_id = 'sub_b', stripe_customer_id = 'cus_b', status = 'actief', stripe_status = 'active' where company_id = '${B}'`);
+  const voor = await alsToken(S.Eb.sessie.access_token).from('customers').insert({ company_id: B, name: 'Nieuw tijdens looptijd' }).select('id');
+  check('na afloop', 'tijdens de betaalde periode (opgezegd, nog active): schrijven werkt', !voor.error, voor.error?.message);
+  // Stripe meldt na de einddatum customer.subscription.deleted → stripe_status 'canceled'.
+  sql(`update subscriptions set stripe_status = 'canceled', status = 'opgezegd' where company_id = '${B}'`);
+  const lees = await alsToken(S.Eb.sessie.access_token).from('customers').select('name');
+  const schrijf = await alsToken(S.Eb.sessie.access_token).from('customers').insert({ company_id: B, name: 'Na afloop' }).select('id');
+  check('na afloop', 'na afloop: gegevens nog leesbaar', !lees.error && lees.data?.length >= 2, lees.error?.message);
+  check('na afloop', 'na afloop: niets nieuws vastleggen (alleen-lezen)', !!schrijf.error, schrijf.data);
+  check('na afloop', 'na afloop: gebruikers niet gedeactiveerd, bedrijf niet gesloten', staat(U.Eb).actief && !staat(U.Eb).geband && sql(`select status from companies where id='${B}'`)[0] === 'actief');
+}
+
 fs.writeFileSync(`${process.env.LOKAAL}/resultaat.json`, JSON.stringify(resultaten, null, 1));
 console.log(fouten ? `\n${fouten} controle(s) mislukt van ${resultaten.length}` : `\nAlle ${resultaten.length} controles geslaagd`);
 process.exit(fouten ? 1 : 0);

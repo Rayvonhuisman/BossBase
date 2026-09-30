@@ -1,5 +1,5 @@
 -- ── Waarom ──────────────────────────────────────────────────────────────────
--- Na "Account deactiveren" of "Bedrijf opzeggen" blokkeert 20260930160000 het
+-- Na "Account deactiveren" of "Bedrijf sluiten" blokkeert 20260930160000 het
 -- inlogaccount en verwijdert het de sessies. Volgens de broncode van Supabase
 -- Auth (GoTrue) houdt dat tegen: opnieuw inloggen (token.go: IsBanned),
 -- vernieuwen (tokens/service.go: IsBanned en "No Valid Session Found") en elke

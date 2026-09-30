@@ -41,7 +41,7 @@ resettokens 0, aanmeldcodes 2 (ouder dan 24 uur).
 ## Wat opvalt
 
 - De 6 bedrijven zonder Stripe-abonnement vallen nooit onder de regel, ook niet
-  als ze stoppen. Pas als een beheerder "Bedrijf opzeggen" gebruikt, telt
+  als ze stoppen. Pas als de eigenaar "Bedrijf sluiten" gebruikt, telt
   `opgezegd_op`.
 - 9 bestanden horen bij geen enkel bedrijf aantoonbaar; de job laat ze staan.
   Uitzoeken wat het zijn vraagt inzage in bestandsnamen en valt buiten deze

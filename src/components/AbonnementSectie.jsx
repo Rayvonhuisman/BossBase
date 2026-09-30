@@ -89,7 +89,15 @@ export function AbonnementSectie() {
       const wanneer = stand.heeftVerplichting
         ? `per ${fmtDatum(stand.verplichtingTot)} (einde looptijd)`
         : 'aan het einde van de lopende maand';
-      if (!window.confirm(`Abonnement opzeggen ${wanneer}?`)) return;
+      // Opzeggen stopt alleen de verlenging. Toegang blijft tot het einde van de
+      // betaalde periode; daarna wordt het account alleen-lezen (bb_readonly_reden),
+      // zodat de gegevens te bekijken en te exporteren blijven. Accounts worden
+      // hier niet gedeactiveerd: dat is "Bedrijf sluiten" onder Mijn profiel.
+      if (!window.confirm(
+        `Abonnement opzeggen ${wanneer}?\n\n`
+        + 'Jij en je team kunnen tot die datum gewoon doorwerken. Daarna kun je je gegevens nog bekijken '
+        + 'en exporteren, maar niets nieuws vastleggen. Je gegevens worden niet verwijderd.',
+      )) return;
     }
     setBezig(true);
     try {

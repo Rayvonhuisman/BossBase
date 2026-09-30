@@ -13,6 +13,10 @@ echo "1. structuur van productie exporteren (alleen lezen)"
 python3 -c "
 import json,sys; d=json.load(open('$LOKAAL/raw.json')); r=d['rows'][0]['r']
 json.dump(json.loads(r) if isinstance(r,str) else r, open('$LOKAAL/prod_structuur.json','w'))"
+echo "1b. configuratie van de abonnementsmatrix (geen klantgegevens)"
+( cd "$REPO" && supabase db query --linked -f "$HIER/export_config.sql" ) 2>/dev/null | python3 -c "
+import json,sys; d=json.load(sys.stdin)['rows'][0]['r']
+json.dump(json.loads(d) if isinstance(d,str) else d, open('$LOKAAL/config.json','w'))"
 echo "2. Postgres op poort 55432"
 [ -d "$LOKAAL/pgdata" ] || $PG/initdb -D "$LOKAAL/pgdata" -U postgres --auth=trust -E UTF8 --locale=C >/dev/null
 $PG/pg_ctl -D "$LOKAAL/pgdata" -o "-p 55432 -k $LOKAAL" -l "$LOKAAL/pg.log" status >/dev/null || $PG/pg_ctl -D "$LOKAAL/pgdata" -o "-p 55432 -k $LOKAAL" -l "$LOKAAL/pg.log" start >/dev/null

@@ -16,6 +16,7 @@
 //   3. het oude pad in de wortel van de bucket.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { inactiefReden } from '../_shared/actieveGebruiker.ts'
 
 const BUCKET = 'signed-offertes'
 const GELDIG_SECONDEN = 60 * 10
@@ -55,6 +56,9 @@ serve(async (req) => {
     })
     const { data: { user }, error: userErr } = await userClient.auth.getUser()
     if (userErr || !user) return json({ error: 'Ongeldige sessie' }, 401)
+    // service_role omzeilt RLS: zelf controleren dat account en bedrijf actief zijn.
+    const inactief = await inactiefReden(user.id)
+    if (inactief) return json({ error: inactief }, 403)
 
     const body = await req.json().catch(() => ({}))
     const offerteId = String(body?.offerte_id || '')

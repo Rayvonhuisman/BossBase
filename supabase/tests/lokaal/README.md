@@ -1,10 +1,16 @@
 # Lokale testomgeving voor opzeggen, deactiveren en opschonen
 
-Zonder Docker (Docker Desktop start op deze machine niet). Wat er draait:
+**Dit is geen volledige Supabase-integratietest.** Database en PostgREST zijn
+echt; Auth en Storage zijn stand-ins. Een echte geïsoleerde Supabase was niet
+beschikbaar: Docker Desktop start op deze machine niet (VM-fout, weinig
+schijfruimte) en de organisatie heeft al twee projecten, dus een derde vraagt
+een betaald plan of het pauzeren van een ander project.
+
+Zonder Docker. Wat er draait:
 
 | Onderdeel | Hoe | Echt of nagebootst |
 | --- | --- | --- |
-| Database | Postgres 17 met de **structuur** van productie: tabellen, constraints, functies, triggers, RLS, policies, rechten (`export.sql`, alleen lezen, geen rijen) plus de migraties van deze branch | Echt |
+| Database | Postgres 17 met de **structuur** van productie en de configuratie van de abonnementsmatrix (`export_config.sql`, geen klantgegevens): tabellen, constraints, functies, triggers, RLS, policies, rechten (`export.sql`, alleen lezen, geen rijen) plus de migraties van deze branch | Echt |
 | REST en RPC | PostgREST 16 met een eigen JWT-geheim; rollen `anon`, `authenticated`, `service_role`, `authenticator` zoals bij Supabase | Echt |
 | Edge Functions | De code uit `supabase/functions/` in Deno (`router.ts`); `std/http/server` wordt via een import map vervangen zodat meerdere functies in één proces draaien | Echte code |
 | Stripe | Elke aanroep naar `api.stripe.com` wordt vastgelegd en krijgt een nep-antwoord | Nagebootst |

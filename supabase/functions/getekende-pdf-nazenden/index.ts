@@ -18,6 +18,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
+import { inactiefReden } from '../_shared/actieveGebruiker.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -94,6 +95,9 @@ serve(async (req) => {
     })
     const { data: { user }, error: userErr } = await userClient.auth.getUser()
     if (userErr || !user) return json({ error: 'Ongeldige sessie' }, 401)
+    // service_role omzeilt RLS: zelf controleren dat account en bedrijf actief zijn.
+    const inactief = await inactiefReden(user.id)
+    if (inactief) return json({ error: inactief }, 403)
 
     const body = await req.json().catch(() => ({}))
     const soort = body?.soort === 'offerte' || body?.soort === 'werkbon' ? body.soort : null

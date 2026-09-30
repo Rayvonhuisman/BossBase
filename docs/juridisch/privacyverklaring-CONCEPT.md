@@ -83,7 +83,7 @@ worden ze verwijderd, ook de bestanden.
 
 Feitelijke stand (30 september 2026):
 
-- "Bedrijf opzeggen" (eigenaar) zet het bedrijf op opgezegd en de teamleden op
+- "Bedrijf sluiten" (eigenaar) zet het bedrijf op opgezegd (gesloten) en de teamleden op
   inactief; "Account deactiveren" (andere gebruikers) alleen het eigen profiel.
   Gegevens en bestanden blijven staan. Op branch fix/accountverwijdering-bv
   (nog niet live) worden de inlogaccounts daarbij ook geblokkeerd en de sessies
