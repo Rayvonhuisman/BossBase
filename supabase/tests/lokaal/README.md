@@ -1,0 +1,53 @@
+# Lokale testomgeving voor opzeggen, deactiveren en opschonen
+
+**Dit is geen volledige Supabase-integratietest.** Database en PostgREST zijn
+echt; Auth en Storage zijn stand-ins. Een echte geïsoleerde Supabase was niet
+beschikbaar: Docker Desktop start op deze machine niet (VM-fout, weinig
+schijfruimte) en de organisatie heeft al twee projecten, dus een derde vraagt
+een betaald plan of het pauzeren van een ander project.
+
+Zonder Docker. Wat er draait:
+
+| Onderdeel | Hoe | Echt of nagebootst |
+| --- | --- | --- |
+| Database | Postgres 17 met de **structuur** van productie en de configuratie van de abonnementsmatrix (`export_config.sql`, geen klantgegevens): tabellen, constraints, functies, triggers, RLS, policies, rechten (`export.sql`, alleen lezen, geen rijen) plus de migraties van deze branch | Echt |
+| REST en RPC | PostgREST 16 met een eigen JWT-geheim; rollen `anon`, `authenticated`, `service_role`, `authenticator` zoals bij Supabase | Echt |
+| Edge Functions | De code uit `supabase/functions/` in Deno (`router.ts`); `std/http/server` wordt via een import map vervangen zodat meerdere functies in één proces draaien | Echte code |
+| Stripe | Elke aanroep naar `api.stripe.com` wordt vastgelegd en krijgt een nep-antwoord | Nagebootst |
+| Supabase Auth | `gateway.mjs`: wachtwoordlogin, refresh, `GET /user`, admin-delete. Volgt de broncode van GoTrue (`internal/api/token.go` IsBanned, `internal/tokens/service.go` IsBanned en "No Valid Session Found", `internal/api/auth.go` session_not_found) | **Nagebootst** |
+| Storage | `gateway.mjs`: lijst, lezen, verwijderen, uitgevoerd met de rol en claims uit het JWT, zodat de echte policies op `storage.objects` gelden | **Nagebootst** (de HTTP-laag van storage-api niet) |
+| Frontend | `vite build` van deze branch tegen de gateway, in Chrome (Playwright) | Echt |
+
+## Opzetten en draaien
+
+```bash
+brew install postgresql@17 postgrest deno
+export LOKAAL=~/bossbase-lokaal          # buiten git
+supabase/tests/lokaal/opzetten.sh        # structuur exporteren en laden
+supabase/tests/lokaal/reset.sh           # verse database + migraties, start PostgREST
+supabase/tests/lokaal/start.sh           # gateway (54321) en functies (54330)
+
+cd supabase/tests/lokaal
+node test.mjs                            # opzeggen, rechten, toegang na deactivatie, opschonen
+FUNCTIES=afas-import-kosten,afas-sync-contacten,boss-chat,create-notification,getekende-pdf-nazenden,google-calendar-auth-url,moneybird-update-contact,offerte-pdf-url,send-email,stripe-connect-start,stripe-connection-status,sync-activity-to-google,stripe-create-payment-link,meldpunt,document-url,billing-checkout \
+  ./start.sh                             # (opnieuw, met alle functies voor de volgende test)
+node test_functies.mjs                   # statuscontrole per functie, beperking na afloop, document-url
+                                         # (legt lokaal een schrijflog-trigger op elke tabel)
+set -a; . "$LOKAAL/sleutels.env"; set +a
+(cd ../../.. && VITE_SUPABASE_URL=http://localhost:54321 VITE_SUPABASE_ANON_KEY=$ANON npx vite build --outDir "$LOKAAL/dist" --emptyOutDir)
+PLAYWRIGHT=<pad naar playwright-core> DIST="$LOKAAL/dist" OUT="$LOKAAL" node ui_test.mjs
+./gemengd.sh                             # gemengde versies voor de uitrolvolgorde
+```
+
+`reset.sh` zet de rolinstelling `pgrst.db_pre_request` niet terug; `gemengd.sh`
+doet dat wel voor de database zonder migraties. Die instelling geldt voor het
+hele cluster, niet per database.
+
+## Wat dit niet bewijst
+
+- De echte Supabase Auth-server: login, refresh en `/user` zijn nagebootst
+  volgens de broncode, niet uitgevoerd.
+- De HTTP-laag van storage-api (paden, signed URLs, caching). Alleen de
+  policies op `storage.objects` worden echt geraakt.
+- Supabase-specifieke onderdelen: Realtime, pg_net, pg_cron, vault (gestubd).
+- De productieversie van GoTrue kan afwijken van de gelezen broncode.

@@ -89,7 +89,16 @@ export function AbonnementSectie() {
       const wanneer = stand.heeftVerplichting
         ? `per ${fmtDatum(stand.verplichtingTot)} (einde looptijd)`
         : 'aan het einde van de lopende maand';
-      if (!window.confirm(`Abonnement opzeggen ${wanneer}?`)) return;
+      // Opzeggen stopt alleen de verlenging. Toegang blijft tot het einde van de
+      // betaalde periode; daarna blokkeert bb_readonly_reden nieuw werk en
+      // versturen (zie docs/uitrol-accountverwijdering.md voor wat precies).
+      // Accounts worden hier niet gedeactiveerd: dat is "Bedrijf sluiten".
+      if (!window.confirm(
+        `Abonnement opzeggen ${wanneer}?\n\n`
+        + 'Jij en je team kunnen tot die datum gewoon doorwerken. Daarna kun je geen nieuwe klanten, '
+        + 'offertes, facturen, werkbonnen, uren of afspraken meer vastleggen en niets meer versturen. '
+        + 'Je gegevens blijven staan en worden niet verwijderd.',
+      )) return;
     }
     setBezig(true);
     try {
@@ -216,7 +225,14 @@ export function AbonnementSectie() {
             niet over gaat. Alle abonnementswijzigingen lopen via ons eigen
             scherm, met onze regels erop: de downgradegrendel boven de limiet,
             de jaarlooptijd en de looptijdreset bij een upgrade. */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {/* Alleen de eigenaar beheert het abonnement; de server (billing-*)
+            weigert anderen al vóór er iets naar Stripe gaat. */}
+        {!stand.magBeheren && (
+          <p style={{ fontSize: '.84rem', color: 'var(--dmu)', margin: 0 }}>
+            Alleen de eigenaar van het bedrijf kan het abonnement wijzigen of opzeggen.
+          </p>
+        )}
+        {stand.magBeheren && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {stand.heeftStripe ? (
             <>
               <button className="btn btn-p" onClick={() => gaNaarAbonnement(null, { soort: 'abonnement' })} disabled={bezig}>
@@ -240,11 +256,11 @@ export function AbonnementSectie() {
               Abonnement afsluiten
             </button>
           )}
-        </div>
+        </div>}
 
         {/* Zeggen wat achter welke knop zit, zodat niemand het portal in gaat
             om iets te doen wat daar niet kan. */}
-        {stand.heeftStripe && (
+        {stand.heeftStripe && stand.magBeheren && (
           <p style={{ fontSize: '.8rem', color: 'var(--dmu)', marginTop: 10, marginBottom: 0 }}>
             Van pakket wisselen, modules bij- of afkopen en teamleden toevoegen doe je onder
             <strong> Abonnement wijzigen</strong>. Onder <strong>Facturen en betaalmethode</strong>

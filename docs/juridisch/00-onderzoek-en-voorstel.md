@@ -29,14 +29,14 @@
 
 | # | Het document zegt | Nu | Te doen |
 |---|---|---|---|
-| 1 | Na opzeggen 2 jaar bewaren, daarna definitief weg, ook bestanden | Opzeggen zet alleen een vlag; geen opschoonjob | Opschoonjob bouwen, inclusief de opslag |
+| 1 | Na opzeggen 2 jaar bewaren, daarna definitief weg, ook bestanden; losse termijnen (contact 1 jaar, Boss 12 maanden, meldpunt 2 jaar, mails met de klant, tokens 24 uur) | Gebouwd: migratie 20260930083452 en edge function `opschonen`. Droogloop 30-09: 0 bedrijven, 2 verlopen aanmeldcodes | Gedaan: draait sinds 30-09 dagelijks om 03:30 (eerste run: 2 verlopen aanmeldcodes weg, 0 fouten) |
 | 2 | Vercel Web Analytics zonder persoonsgegevens | Gebouwd en getest (geen cookies, geen opslag, tokens en id's uit de URL). Nog niet gedeployd | Web Analytics aanzetten in het Vercel-project; na deploy controleren dat er data binnenkomt |
 | 3 | Alleen opslag die nodig is | Gecontroleerd: klopt. Het AFAS-logo staat sinds 30-09 lokaal (`public/brand/afas.png`); logo.clearbit.com bestond ook niet meer | Gedaan |
 | 4 | Akkoord met voorwaarden vastgelegd | Registratie toont alleen uitleg, geen vinkje | Vinkje en tabel `juridisch_akkoord` (zie §2.2) |
-| 5 | Pagina's `/privacy`, `/voorwaarden`, `/verwerkersovereenkomst`, `/subverwerkers`, `/cookieverklaring` | Alleen `/cookieverklaring` bestaat (app-route, lege placeholder) | Toevoegen in `src/marketing/routes.jsx` (zie de README van de compagnon) |
+| 5 | Pagina's `/privacy`, `/voorwaarden`, `/verwerkersovereenkomst`, `/subverwerkers`, `/cookieverklaring` | `/subverwerkers` bestaat (30-09, gelinkt in de footer). `/cookieverklaring` is nog een lege placeholder; de rest bestaat niet | De overige toevoegen in `src/marketing/routes.jsx` na goedkeuring van de teksten |
 
 Keuzes die nog tussen haken staan in de algemene voorwaarden: betaaltermijn vóór
-alleen-lezen (5.3), reactietijd (6.3), vergoeding voor een export door ons (9.2),
+de blokkade van nieuw werk (5.3), reactietijd (6.3), vergoeding voor een export door ons (9.2),
 termijn om aansprakelijkheid te melden (10.5).
 
 > Wat hieronder staat is het oorspronkelijke onderzoek van 23 september. Waar het

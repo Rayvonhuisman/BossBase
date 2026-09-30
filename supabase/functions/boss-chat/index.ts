@@ -18,6 +18,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { BOSS_INSTRUCTIE, BOSS_KENNIS } from '../_shared/bossKennis.ts'
 import { stuurBossBaseMail, INTERN_ADRES } from '../_shared/billing.ts'
 import { doorzetMail } from '../_shared/bossDoorzetMail.ts'
+import { inactiefReden } from '../_shared/actieveGebruiker.ts'
 
 const MODEL       = 'claude-haiku-4-5-20251001'
 const MAX_TOKENS  = 1024
@@ -95,6 +96,9 @@ serve(async (req) => {
     })
     const { data: { user }, error: userErr } = await userClient.auth.getUser()
     if (userErr || !user) return json({ error: 'Ongeldige sessie' }, 401)
+    // service_role omzeilt RLS: zelf controleren dat account en bedrijf actief zijn.
+    const inactief = await inactiefReden(user.id)
+    if (inactief) return json({ error: inactief }, 403)
 
     const admin = createClient(supabaseUrl, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },

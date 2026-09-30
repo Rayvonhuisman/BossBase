@@ -106,6 +106,10 @@ export function bouwPdfData({ taken = [], uren = [], materialen = [], meerwerk =
  */
 export function bouwPdfWerkbon(werkbon, extra = {}) {
   return {
+    // id (ingelogd) of signToken (klantlink): voor de korte link naar de
+    // handtekening via document-url.
+    id: werkbon.id,
+    signToken: werkbon.signToken || werkbon.sign_token || null,
     nummer: werkbon.nummer,
     titel: werkbon.titel,
     omschrijving: werkbon.omschrijving,

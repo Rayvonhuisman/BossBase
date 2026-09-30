@@ -4,6 +4,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
+import { hashToken } from '../_shared/wachtwoordReset.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -14,11 +15,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
 
 // Alleen de hash van het token gaat de database in; het token zelf staat
-// uitsluitend in de link in de mail. Zelfde functie als in apply-password-reset.
-async function sha256Hex(tekst: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(tekst))
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')
-}
+// uitsluitend in de link in de mail. Zelfde hash als apply-password-reset gebruikt.
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
@@ -93,8 +90,7 @@ serve(async (req) => {
 
     const { error: insertErr } = await supabase.from('password_reset_tokens').insert({
       user_id: userId,
-      email: email.toLowerCase(),
-      token_hash: await sha256Hex(token),
+      token_hash: await hashToken(token),
       expires_at: expiresAt,
     })
     if (insertErr) throw new Error(`Token opslaan mislukt: ${insertErr.message}`)

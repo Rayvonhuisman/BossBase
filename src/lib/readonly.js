@@ -17,14 +17,14 @@ export const READONLY_REDENEN = {
   },
   betaling_mislukt: {
     titel: 'Je laatste betaling is niet gelukt',
-    uitleg: 'Daardoor staat je account tijdelijk op alleen-lezen. Werk je betaalgegevens '
-          + 'bij en alles gaat direct weer open.',
+    uitleg: 'Daardoor kun je tijdelijk geen nieuw werk vastleggen of versturen. Werk je '
+          + 'betaalgegevens bij en alles gaat direct weer open.',
     knop: 'Betaalgegevens bijwerken',
   },
   opgezegd: {
     titel: 'Je abonnement is gestopt',
-    uitleg: 'Je gegevens staan er nog gewoon en blijven bewaard. Je kunt ze bekijken en '
-          + 'exporteren; nieuw werk vastleggen kan weer met een abonnement.',
+    uitleg: 'Je gegevens staan er nog gewoon. Nieuwe klanten, offertes, facturen, werkbonnen, '
+          + 'uren en afspraken vastleggen en iets versturen kan weer met een abonnement.',
     knop: 'Opnieuw abonneren',
   },
 }
@@ -33,8 +33,8 @@ export const READONLY_REDENEN = {
 // een nieuwe reden kent die de frontend nog niet heeft — dan liever een nette
 // algemene tekst dan een lege banner.
 export const READONLY_ALGEMEEN = {
-  titel: 'Je account staat op alleen-lezen',
-  uitleg: 'Je kunt alles bekijken, zoeken en exporteren. Nieuw werk vastleggen kan weer '
+  titel: 'Nieuw werk vastleggen staat stil',
+  uitleg: 'Je gegevens staan er nog gewoon. Nieuw werk vastleggen en versturen kan weer '
         + 'zodra er een lopend abonnement is.',
   knop: 'Abonnement regelen',
 }
@@ -44,7 +44,9 @@ export function readonlyTekst(reden) {
 }
 
 // Wat blijft er werken? Dit noemen we expliciet, want de eerste gedachte bij
-// "alleen-lezen" is "ben ik mijn gegevens kwijt?". Het antwoord is nee.
+// een geblokkeerd account is "ben ik mijn gegevens kwijt?". Het antwoord is nee.
+// Geen volledige lijst en geen "alleen dit": ook bestaande gegevens wijzigen
+// blijft op dit moment mogelijk (zie docs/uitrol-accountverwijdering.md).
 export const READONLY_BLIJFT_WERKEN = [
   'Alles bekijken, zoeken en filteren',
   'Exporteren naar CSV of Excel',
@@ -81,9 +83,8 @@ export function isReadonlyFout(error) {
 const PLAN_FOUT =
   'Dit past niet binnen je huidige abonnement. Kijk bij Instellingen → Abonnement.'
 const READONLY_FOUT =
-  'Je account staat op alleen-lezen. Bekijken en exporteren kan gewoon; '
-  + 'nieuw werk vastleggen kan weer zodra je abonnement loopt. '
-  + 'Regel het bij Instellingen → Abonnement.'
+  'Nieuw werk vastleggen of versturen kan nu niet: er loopt geen abonnement. '
+  + 'Je gegevens staan er nog gewoon. Regel het bij Instellingen → Abonnement.'
 
 export function nettePlanFout(bericht) {
   const tekst = String(bericht ?? '')

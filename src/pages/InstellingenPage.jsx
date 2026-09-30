@@ -34,6 +34,7 @@ import {
   deletePipelineStage,
 } from '../services/instellingenService.js';
 import { getLostReasons, createLostReason, updateLostReason, deleteLostReason } from '../services/lostReasonService.js';
+import { getTeamMembers } from '../services/teamService.js';
 import { getVoertuigen, createVoertuig, updateVoertuig, deleteVoertuig } from '../services/voertuigService.js';
 import { getEigenEenheden, createEigenEenheid, updateEigenEenheid, deleteEigenEenheid } from '../services/eigenEenheidService.js';
 import { updateCompany, updateProfile, deleteOwnAccount, cancelCompanyAccount } from '../services/profileService.js';
@@ -159,6 +160,11 @@ export function InstellingenPage() {
   const { can } = usePermissions();
   const { startUpload } = useUploads();
   const isAdmin = profile?.role === 'admin';
+  // Het hele bedrijf opzeggen mag alleen de eigenaar (of een beheerder als er
+  // geen eigenaar is vastgelegd); de database dwingt hetzelfde af in
+  // cancel_company_account. Een andere beheerder deactiveert alleen zichzelf.
+  const eigenaarId = company?.raw?.eigenaar_id || null;
+  const zegtBedrijfOp = isAdmin && (!eigenaarId || eigenaarId === profile?.id);
   // Bedrijfsinstellingen-tabs zijn voor admins (of medewerkers met het recht);
   // iedereen kan z'n eigen "Mijn profiel" beheren (incl. account verwijderen).
   const canCompanySettings = can('instellingen');
@@ -201,8 +207,17 @@ export function InstellingenPage() {
     agenda_start_uur: 7,
     agenda_eind_uur: 20,
     uren_herinnering_interval_min: 60,
+    uren_herinnering_moment: 'volgende_ochtend',
+    uren_herinnering_dagen: [1, 2, 3, 4, 5, 6, 7],
+    uren_herinnering_mail: false,
+    uren_herinnering_uitgesloten: [],
   });
   const [savingStandaard, setSavingStandaard] = useState(false);
+  // Urenherinnering: "per medewerker" is een keuze in het scherm; opgeslagen
+  // wordt alleen wie er GEEN krijgt. De lijst zijn de actieve medewerkers — de
+  // admin krijgt de herinnering sowieso niet.
+  const [herinneringPerMedewerker, setHerinneringPerMedewerker] = useState(false);
+  const [herinneringTeam, setHerinneringTeam] = useState([]);
 
   // Eigen prijzen / eenheden
   const [eenheden, setEenheden] = useState([]);
@@ -380,6 +395,9 @@ export function InstellingenPage() {
     setLoading(true);
     getEigenEenheden().then(setEenheden).catch(() => {});
     getLostReasons().then(setLostReasons).catch(() => {});
+    getTeamMembers()
+      .then(ms => setHerinneringTeam((ms || []).filter(m => m.profileId && m.status === 'actief' && m.role !== 'admin' && m.fullName)))
+      .catch(() => {});
     Promise.all([getBedrijfsinstellingen(), getEmailTemplates(), getPipelineStages(), getConnection(), getConnection('snelstart'), getConnection('afas')])
       .then(([instellingen, emailTemplates, pipelineStages, mbConn, ssConn, afasConn]) => {
         if (instellingen) {
@@ -389,10 +407,15 @@ export function InstellingenPage() {
             btw_pct: instellingen.btwPct ?? 21,
             offerte_geldig_dagen: instellingen.offerteGeldigDagen ?? 14,
             uren_herinnering_interval_min: instellingen.urenHerinneringIntervalMin ?? 60,
+            uren_herinnering_moment: instellingen.urenHerinneringMoment,
+            uren_herinnering_dagen: instellingen.urenHerinneringDagen,
+            uren_herinnering_mail: instellingen.urenHerinneringMail,
+            uren_herinnering_uitgesloten: instellingen.urenHerinneringUitgesloten,
             agenda_start_uur: instellingen.agendaStartUur ?? 7,
             agenda_eind_uur: instellingen.agendaEindUur ?? 20,
             btw_stelsel: instellingen.btwStelsel ?? 'factuur',
           });
+          setHerinneringPerMedewerker(instellingen.urenHerinneringUitgesloten.length > 0);
         }
         setTemplates(emailTemplates);
         const forms = {};
@@ -589,6 +612,13 @@ export function InstellingenPage() {
       setSavingBedrijf(false);
     }
   };
+
+  // Aan- of uitvinken van één waarde in een lijst op het standaardformulier
+  // (weekdagen en uitgesloten medewerkers van de urenherinnering).
+  const wisselInLijst = (k, waarde, erin) => setStandaardForm(f => {
+    const zonder = (f[k] || []).filter(x => x !== waarde);
+    return { ...f, [k]: erin ? [...zonder, waarde] : zonder };
+  });
 
   const saveStandaard = async () => {
     setSavingStandaard(true);
@@ -1266,7 +1296,7 @@ export function InstellingenPage() {
     setDeleting(true);
     try {
       let stopBericht = '';
-      if (isAdmin) {
+      if (zegtBedrijfOp) {
         // Eerst het Stripe-abonnement opzeggen. Zonder dit werd het bedrijf
         // gedeactiveerd maar liep de incasso gewoon door. billing-cancel houdt
         // de looptijd aan: een jaarabonnement stopt aan het einde van de 12
@@ -1284,7 +1314,9 @@ export function InstellingenPage() {
       } else {
         await deleteOwnAccount();
       }
-      toast.success(`Je account is verwijderd. Je kunt binnen 2 jaar terugkeren door contact op te nemen.${stopBericht}`);
+      toast.success(zegtBedrijfOp
+        ? `Je bedrijf is gesloten.${stopBericht} Terugkeren of de gegevens laten verwijderen? Mail info@bossbase.nl.`
+        : 'Je account is gedeactiveerd.');
       // Uitloggen → onAuthStateChange in App.jsx redirect naar /login.
       await supabase.auth.signOut();
     } catch (err) {
@@ -1833,17 +1865,27 @@ export function InstellingenPage() {
           <div style={{ marginTop: 'var(--sp-6)', paddingTop: 'var(--sp-5)', borderTop: '1px solid #fecaca' }}>
             <div className="label" style={{ marginBottom: 'var(--sp-2)', color: '#b91c1c' }}>Gevarenzone</div>
             <p style={{ fontSize: '.82rem', color: 'var(--dl)', lineHeight: 1.5, marginBottom: 'var(--sp-3)', maxWidth: 560 }}>
-              {isAdmin
-                ? 'Je bent beheerder. Je account verwijderen zegt het hele bedrijf op: alle teamleden verliezen toegang en alle bedrijfsgegevens worden gedeactiveerd.'
-                : 'Je verwijdert alleen je eigen account uit het team. Je verliest direct toegang.'}
+              {zegtBedrijfOp
+                ? <>Je bent de eigenaar. <strong>Bedrijf sluiten</strong> beëindigt direct de toegang van jou en je hele team. Wil je alleen stoppen met betalen en tot het einde van de betaalde periode blijven werken, zeg dan je abonnement op onder <button type="button" onClick={() => setTab('abonnement')} style={{ background: 'none', border: 0, padding: 0, color: 'var(--pd)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}>Abonnement</button>.</>
+                : 'Hiermee deactiveer je alleen je eigen account. Je verliest direct toegang; het bedrijf en de gegevens van het team blijven bestaan.'}
             </p>
-            <button
-              type="button"
-              onClick={() => { setDelConfirm(''); setDelOpen(true); }}
-              style={{ background: 'none', border: '1px solid #fecaca', borderRadius: 'var(--r8)', padding: '7px 14px', cursor: 'pointer', color: '#b91c1c', fontWeight: 600, fontSize: '.84rem' }}
-            >
-              Account verwijderen
-            </button>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => { setDelConfirm(''); setDelOpen(true); }}
+                style={{ background: 'none', border: '1px solid #fecaca', borderRadius: 'var(--r8)', padding: '7px 14px', cursor: 'pointer', color: '#b91c1c', fontWeight: 600, fontSize: '.84rem' }}
+              >
+                {zegtBedrijfOp ? 'Bedrijf sluiten' : 'Account deactiveren'}
+              </button>
+              {/* Verwijderen is een verzoek, geen knop: er is (nog) geen
+                  geautomatiseerde verwijdering die we hier kunnen beloven. */}
+              <a
+                href={`mailto:info@bossbase.nl?subject=${encodeURIComponent(zegtBedrijfOp ? 'Verzoek: gegevens van mijn bedrijf verwijderen' : 'Verzoek: mijn gegevens verwijderen')}`}
+                style={{ color: 'var(--dl)', fontSize: '.84rem', textDecoration: 'underline' }}
+              >
+                Verwijdering aanvragen
+              </a>
+            </div>
           </div>
 
           {delOpen && (
@@ -1851,22 +1893,28 @@ export function InstellingenPage() {
               <div className="modal">
                 <div className="modal-hd">
                   <div>
-                    <div className="modal-title">{isAdmin ? 'Bedrijf opzeggen' : 'Account verwijderen'}</div>
+                    <div className="modal-title">{zegtBedrijfOp ? 'Bedrijf sluiten' : 'Account deactiveren'}</div>
                     <div className="modal-sub">Lees dit goed door — deze actie heeft gevolgen.</div>
                   </div>
                   <ModalX onClose={() => !deleting && setDelOpen(false)} />
                 </div>
                 <div style={{ padding: '4px 24px 8px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {isAdmin && (
-                    <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 'var(--r8)', padding: '10px 12px', fontSize: '.84rem', color: '#991b1b' }}>
-                      Let op: je bent beheerder. Hiermee zeg je het <strong>hele bedrijf</strong> op. Alle teamleden verliezen direct toegang.
-                    </div>
+                  {/* Beschrijft wat de knop echt doet (cancel_company_account /
+                      delete_own_account, billing-cancel); geen bewaartermijn
+                      beloven zolang die niet is vastgesteld en uitgevoerd. */}
+                  {zegtBedrijfOp ? (
+                    <ul style={{ fontSize: '.86rem', color: 'var(--dk)', lineHeight: 1.55, margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <li><strong>Toegang:</strong> jij en alle teamleden worden direct uitgelogd en kunnen niet meer inloggen, ook niet in de periode die al betaald is.</li>
+                      <li><strong>Abonnement:</strong> de verlenging wordt gestopt, zodat je niet blijft betalen voor een gesloten bedrijf. Een maandabonnement stopt aan het einde van de lopende maand; een jaarabonnement aan het einde van de looptijd, en tot dan loopt de incasso door. Al betaalde periodes worden niet terugbetaald.</li>
+                      <li><strong>Gegevens:</strong> worden nu <strong>niet verwijderd</strong>, zodat je kunt terugkeren. Verwijdering vraag je apart aan (link onder Gevarenzone). Je facturen en btw-gegevens moet je zelf 7 jaar bewaren; exporteer ze vóór je sluit.</li>
+                    </ul>
+                  ) : (
+                    <ul style={{ fontSize: '.86rem', color: 'var(--dk)', lineHeight: 1.55, margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <li>Je wordt <strong>direct uitgelogd</strong> en kunt niet meer inloggen.</li>
+                      <li>Wat je in BossBase hebt vastgelegd (uren, werkbonnen, notities) hoort bij het bedrijf en blijft daar staan.</li>
+                      <li>Je profiel wordt <strong>niet verwijderd</strong>, zodat een beheerder je later weer kan activeren. Wil je dat je naam en e-mailadres worden verwijderd, mail dan naar info@bossbase.nl.</li>
+                    </ul>
                   )}
-                  <p style={{ fontSize: '.86rem', color: 'var(--dk)', lineHeight: 1.55, margin: 0 }}>
-                    Je account wordt gedeactiveerd en je wordt uitgelogd. Je gegevens blijven <strong>2 jaar</strong> bewaard
-                    zodat je kunt terugkeren. Financiële administratie (facturen, BTW) bewaren we wettelijk <strong>7 jaar</strong>.
-                    Na deze termijnen worden gegevens definitief verwijderd.
-                  </p>
                   <div className="f">
                     <label>Typ <strong>VERWIJDEREN</strong> om te bevestigen</label>
                     <input
@@ -1886,7 +1934,7 @@ export function InstellingenPage() {
                     onClick={handleDeleteAccount}
                     disabled={deleting || delConfirm.trim().toUpperCase() !== 'VERWIJDEREN'}
                   >
-                    {deleting ? 'Verwijderen…' : (isAdmin ? 'Bedrijf definitief opzeggen' : 'Account definitief verwijderen')}
+                    {deleting ? 'Bezig…' : (zegtBedrijfOp ? 'Bedrijf sluiten' : 'Account deactiveren')}
                   </button>
                 </div>
               </div>
@@ -2097,22 +2145,129 @@ export function InstellingenPage() {
                 <label htmlFor="uren-herinnering">Uren-herinnering</label>
                 <InfoUitklap
                   id="uitleg-uren-herinnering"
-                  tekst="De pop-up verschijnt alleen bij medewerkers met een verstreken geplande dag zonder geboekte uren, en keert op dit interval terug tot de uren zijn ingevuld."
+                  tekst="Medewerkers die gepland stonden en nog geen werkdag hebben ingevuld, krijgen de melding 'Vul je werkdag in'. De beheerder krijgt hem zelf niet."
                 />
               </div>
               <select
                 id="uren-herinnering"
-                value={standaardForm.uren_herinnering_interval_min}
-                onChange={e => setStandaard('uren_herinnering_interval_min', e.target.value)}
+                value={Number(standaardForm.uren_herinnering_interval_min) > 0 ? 'aan' : 'uit'}
+                onChange={e => setStandaard('uren_herinnering_interval_min', e.target.value === 'aan' ? 60 : 0)}
               >
-                <option value={0}>Uit</option>
-                <option value={15}>Elke 15 minuten</option>
-                <option value={30}>Elke 30 minuten</option>
-                <option value={60}>Elk uur</option>
-                <option value={120}>Elke 2 uur</option>
-                <option value={240}>Elke 4 uur</option>
+                <option value="aan">Aan</option>
+                <option value="uit">Uit</option>
               </select>
             </div>
+            {Number(standaardForm.uren_herinnering_interval_min) > 0 && (
+              <>
+                <div className="f">
+                  <div className="f-label-rij">
+                    <label htmlFor="uren-herinnering-herhalen">Herhalen</label>
+                    <InfoUitklap
+                      id="uitleg-uren-herinnering-herhalen"
+                      tekst="De melding in de app kan worden weggeklikt en keert op dit interval terug tot de werkdag is ingevuld. Een mail gaat één keer per werkdag."
+                    />
+                  </div>
+                  <select
+                    id="uren-herinnering-herhalen"
+                    value={standaardForm.uren_herinnering_interval_min}
+                    onChange={e => setStandaard('uren_herinnering_interval_min', e.target.value)}
+                  >
+                    <option value={15}>Elke 15 minuten</option>
+                    <option value={30}>Elke 30 minuten</option>
+                    <option value={60}>Elk uur</option>
+                    <option value={120}>Elke 2 uur</option>
+                    <option value={240}>Elke 4 uur</option>
+                  </select>
+                </div>
+                <div className="f">
+                  <label htmlFor="uren-herinnering-voor-wie">Voor wie</label>
+                  <select
+                    id="uren-herinnering-voor-wie"
+                    value={herinneringPerMedewerker ? 'per' : 'alle'}
+                    onChange={e => {
+                      const per = e.target.value === 'per';
+                      setHerinneringPerMedewerker(per);
+                      if (!per) setStandaard('uren_herinnering_uitgesloten', []);
+                    }}
+                  >
+                    <option value="alle">Alle medewerkers</option>
+                    <option value="per">Per medewerker instellen</option>
+                  </select>
+                </div>
+                <div className="f">
+                  <div className="f-label-rij">
+                    <label htmlFor="uren-herinnering-moment">Wanneer</label>
+                    <InfoUitklap
+                      id="uitleg-uren-herinnering-moment"
+                      tekst="Na afloop van de werkdag: vanaf de eindtijd die voor de medewerker gepland staat (zonder eindtijd 17:00). Einde van de dag: vanaf 17:00. De volgende ochtend: de dag erna, per mail om 07:00."
+                    />
+                  </div>
+                  <select
+                    id="uren-herinnering-moment"
+                    value={standaardForm.uren_herinnering_moment}
+                    onChange={e => setStandaard('uren_herinnering_moment', e.target.value)}
+                  >
+                    <option value="na_werkdag">Na afloop van de ingeplande werkdag</option>
+                    <option value="einde_dag">Aan het einde van de dag</option>
+                    <option value="volgende_ochtend">De volgende ochtend</option>
+                  </select>
+                </div>
+                {herinneringPerMedewerker && (
+                  <div className="f s2">
+                    <label>Medewerkers die de herinnering krijgen</label>
+                    {herinneringTeam.length === 0 && (
+                      <div style={{ color: 'var(--dl)', fontSize: '.86rem' }}>Er zijn nog geen medewerkers.</div>
+                    )}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 18px' }}>
+                      {herinneringTeam.map(m => (
+                        <label key={m.profileId} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '.83rem', fontWeight: 500, color: 'var(--dm)', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            style={{ accentColor: 'var(--p)' }}
+                            checked={!standaardForm.uren_herinnering_uitgesloten.includes(m.profileId)}
+                            onChange={e => wisselInLijst('uren_herinnering_uitgesloten', m.profileId, !e.target.checked)}
+                          />
+                          {m.fullName}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="f s2">
+                  <div className="f-label-rij">
+                    <label>Op welke dagen</label>
+                    <InfoUitklap
+                      id="uitleg-uren-herinnering-dagen"
+                      tekst="De dagen waarop medewerkers herinnerd worden. Staat een dag uit, dan komt de herinnering op de eerstvolgende dag die aan staat."
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 18px' }}>
+                    {['Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag', 'Zondag'].map((naam, i) => (
+                      <label key={naam} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '.83rem', fontWeight: 500, color: 'var(--dm)', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          style={{ accentColor: 'var(--p)' }}
+                          checked={standaardForm.uren_herinnering_dagen.includes(i + 1)}
+                          onChange={e => wisselInLijst('uren_herinnering_dagen', i + 1, e.target.checked)}
+                        />
+                        {naam}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="f">
+                  <label htmlFor="uren-herinnering-hoe">Hoe</label>
+                  <select
+                    id="uren-herinnering-hoe"
+                    value={standaardForm.uren_herinnering_mail ? 'mail' : 'app'}
+                    onChange={e => setStandaard('uren_herinnering_mail', e.target.value === 'mail')}
+                  >
+                    <option value="app">Melding in de app</option>
+                    <option value="mail">Melding in de app en per mail</option>
+                  </select>
+                </div>
+              </>
+            )}
           </div>
           <div className="fa">
             <button className="btn btn-p" onClick={saveStandaard} disabled={savingStandaard}>

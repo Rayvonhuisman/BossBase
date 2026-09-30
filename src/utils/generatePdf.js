@@ -562,7 +562,10 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     if (document.signatureDataUrl) {
       sigImgData = document.signatureDataUrl;
     } else if (document.signatureUrl) {
-      sigImgData = await imgToBase64(document.signatureUrl);
+      // Korte link op het moment van gebruik (document-url); zie documentService.
+      const { documentUrl } = await import('../services/documentService.js');
+      const url = await documentUrl({ soort: 'offerte_handtekening', id: document.id, token: document.sign_token || document.signToken, opgeslagen: document.signatureUrl });
+      if (url) sigImgData = await imgToBase64(url);
     } else {
       const signToken = document.sign_token || document.signToken;
       if (signToken) {

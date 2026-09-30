@@ -1,0 +1,39 @@
+-- ── Waarom ──────────────────────────────────────────────────────────────────
+-- Stap 2 van 2 na 20260930180000. DESTRUCTIEF en een aparte, expliciete
+-- uitrolactie: kolom `token` weg, `email` leeg. Niet terug te draaien.
+--
+-- Pas hernoemen naar .sql en pushen als ALLE voorwaarden hieronder aantoonbaar
+-- gelden (resultaten bewaren bij de uitrolnotities):
+--
+-- 1. Alle nieuwe resetfuncties draaien. Vergelijk de productieversies met de
+--    branch:
+--      supabase functions download request-password-reset --use-api
+--      supabase functions download apply-password-reset --use-api
+--    en diff tegen supabase/functions/{request,apply}-password-reset en
+--    supabase/functions/_shared/wachtwoordReset.ts.
+-- 2. Oude geldige resetlinks zijn verlopen of aantoonbaar compatibel. Sinds
+--    20260930080504 is de kolom `token` voor elke rij leeg (gemeten 30-09-2026:
+--    0 rijen met een token) en zoeken alle functieversies op token_hash; een
+--    link blijft dus werken ongeacht deze kolom. Controleer opnieuw:
+--      select count(*) from public.password_reset_tokens where token is not null;  -- moet 0 zijn
+-- 3. Geen actieve code gebruikt de oude kolom (30-09-2026: geen treffers):
+--      grep -rnE "\.token\b|'token'|\"token\"" supabase/functions/*password*/index.ts supabase/functions/_shared/wachtwoordReset.ts
+--    en in de gedownloade productieversies uit stap 1 hetzelfde.
+-- 4. De afgesproken herstelmogelijkheid hangt niet van deze kolom af: het
+--    terugzetten van de resetfuncties gaat naar de versie van main (1e55125),
+--    die al alleen token_hash gebruikt. Is er intussen een andere herstelversie
+--    afgesproken, controleer die ook.
+
+begin;
+
+alter table public.password_reset_tokens drop column if exists token;
+update public.password_reset_tokens set email = null where email is not null;
+
+select
+  (select count(*) from information_schema.columns
+    where table_schema = 'public' and table_name = 'password_reset_tokens' and column_name = 'token') as token_kolom,
+  (select count(*) from public.password_reset_tokens where email is not null) as met_email;
+
+commit;
+
+notify pgrst, 'reload schema';

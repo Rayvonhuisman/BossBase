@@ -71,8 +71,6 @@ import { listNotifications, markNotificationRead, markAllNotificationsRead } fro
 import { isDemo } from './lib/supabase.js';
 import { isAppPath } from './lib/appRoutes.js';
 import { meet } from './lib/meting.js';
-import { AanvragenPage } from './pages/AanvragenPage.jsx';
-import { telNieuweAanvragen } from './services/aanvraagService.js';
 import { DEMO_SESSION, DEMO_USER, DEMO_PROFILE, DEMO_COMPANY, DEMO_PLAN_STATUS, DEMO_PERMISSIONS } from './demo/demoSessie.js';
 
 // Basispad van de app-shell. Eén constante, zodat het pad op één plek staat in
@@ -104,7 +102,6 @@ const NAV = [
   { id: 'pipeline',    label: 'Pipeline',     icon: 'pipe',    section: 'main', permission: 'verkoop' },
   // Websiteaanvragen (contactformulier): zelfde recht als de pipeline, net als
   // de RLS op inquiries.
-  { id: 'aanvragen',   label: 'Aanvragen',    icon: 'mail',    section: 'main', permission: 'verkoop' },
   // Relaties is een groep: klanten en leveranciers zijn allebei relaties en
   // gaan allebei als relatiesoort naar de boekhouding.
   { id: 'relaties',    label: 'Relaties',     icon: 'cust',    section: 'main',
@@ -708,7 +705,12 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
                       // weggegooid, waardoor je op de lijst belandde; met id
                       // opent de pagina meteen het item zelf.
                       const [pagina, id] = n.link.split('/');
-                      if (pagina) navigatePage(pagina, id ? { id } : undefined);
+                      // Websiteaanvragen staan als project in de pipeline
+                      // ('deal/<id>'). Oude meldingen wezen naar de vervallen
+                      // pagina Aanvragen; die gaan naar de pipeline.
+                      if (pagina === 'deal' && id) openDeal(id);
+                      else if (pagina === 'aanvragen') navigatePage('pipeline');
+                      else if (pagina) navigatePage(pagina, id ? { id } : undefined);
                     }
                   };
                   const ago = (() => {
@@ -1272,7 +1274,7 @@ function AppInner() {
         if (stopped || pErr) return;
         if (prof && prof.actief === false) {
           forceLogout(prof.verwijderd_op
-            ? 'Je account is verwijderd. Je kunt binnen 2 jaar terugkeren door contact op te nemen.'
+            ? 'Je account is gedeactiveerd. Terugkeren of je gegevens laten verwijderen? Mail info@bossbase.nl.'
             : 'Je account is gedeactiveerd. Je bent uitgelogd.');
         }
       } catch {
@@ -1424,7 +1426,7 @@ function AppInner() {
   const navigatePage  = (p, intent) => {
     // Een paginawissel is een nieuwe stap; een detail-id gaat mee in het pad
     // zodat /werkbonnen/<id> deelbaar is en terug de lijst teruggeeft.
-    const inPad = ['werkbonnen', 'projecten', 'offertes', 'facturen', 'activities', 'aanvragen'].includes(p);
+    const inPad = ['werkbonnen', 'projecten', 'offertes', 'facturen', 'activities'].includes(p);
     gaNaar({ page: p, itemId: inPad && intent?.id ? intent.id : null });
     const hasIntent = intent && (intent.id || intent.dealId);
     setNavIntent(hasIntent ? { page: p, ...intent } : null);
@@ -1600,24 +1602,12 @@ function AppInner() {
     }
   }, [page, profile, userPermissions, permissionsLoaded, planStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Badge bij "Aanvragen": echte aanvragen (geen tests) met status nieuw. De
-  // pagina zelf werkt het getal bij zodra daar een status verandert.
-  const [aanvragenNieuw, setAanvragenNieuw] = useState(0);
-  const magAanvragen = profile?.role === 'admin' || userPermissions.includes('verkoop');
-  useEffect(() => {
-    if (!session || !magAanvragen) return;
-    let actief = true;
-    telNieuweAanvragen().then(n => { if (actief) setAanvragenNieuw(n); }).catch(() => {});
-    return () => { actief = false; };
-  }, [session, magAanvragen, refreshKey]);
-
   const renderPage = () => {
     const props = { setPage: navigatePage, openCustomer, openDeal, openInvoice, openCalendarEvent };
     switch (page) {
       case 'dashboard':  return <DashboardHome {...props} />;
       case 'abonnement': return <AbonnementPage {...props} />;
       case 'pipeline':   return <Pipeline openCustomer={openCustomer} openDeal={openDeal} setPage={navigatePage} />;
-      case 'aanvragen':  return <AanvragenPage openCustomer={openCustomer} setPage={navigatePage} preOpenAanvraagId={itemId || (navIntent?.page === 'aanvragen' ? navIntent.id : null)} onNavConsumed={clearNavIntent} onAantalNieuw={setAanvragenNieuw} />;
       case 'customers':
         return drawerCust !== null ? (
           <div className="cust-split">
@@ -1781,7 +1771,6 @@ function AppInner() {
 
   const sidebarBadges = {
     pipeline: globalDeals.filter(d => d.stage === 'new_lead').length,
-    aanvragen: magAanvragen ? aanvragenNieuw : 0,
     // Openstaand = vandaag + te laat. Gebruik dezelfde, in de service (lokale
     // tijdzone) berekende status als de Activiteiten-pagina — één bron. De oude
     // eigen UTC-datumvergelijking (toISOString) miste op de dag-/tijdzonegrens

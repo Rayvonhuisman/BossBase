@@ -38,6 +38,7 @@ import {
 // Omschrijving en klantnotities komen uit de notitie-editor en zijn dus HTML.
 // Zonder deze omzetting stonden de tags letterlijk in de PDF.
 import { htmlToPdfText } from '../lib/noteFormat.js';
+import { documentUrl } from '../services/documentService.js';
 
 const W = 210, M = 16, CW = W - 2 * M;
 const PAGE_BOTTOM = 272; // onder deze y past niets meer; footer staat op 282
@@ -468,7 +469,11 @@ async function buildWerkbonPdf(doc, werkbon, data, customer, company) {
     const naam = werkbon.ondertekendDoorNaam || werkbon.ondertekend_door_naam || '';
     const email = werkbon.ondertekendDoorEmail || werkbon.ondertekend_door_email || '';
     let sigData = werkbon.handtekeningDataUrl || null;
-    if (!sigData && werkbon.handtekeningUrl) sigData = await imgToBase64(werkbon.handtekeningUrl);
+    if (!sigData && werkbon.handtekeningUrl) {
+      // Korte link op het moment van gebruik (document-url); zie documentService.
+      const url = await documentUrl({ soort: 'werkbon_handtekening', id: werkbon.id, token: werkbon.signToken, opgeslagen: werkbon.handtekeningUrl });
+      if (url) sigData = await imgToBase64(url);
+    }
 
     const hasImg = Boolean(sigData);
     const blokH = hasImg ? 52 : 42;

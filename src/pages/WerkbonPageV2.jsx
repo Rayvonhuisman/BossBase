@@ -58,6 +58,7 @@ import { InkopenKaart, useInkopenBewerken, RegelKnoppen } from '../components/Ko
 import { bouwKostenOverzicht, getWerkbonKostenBron } from '../services/kostenOverzichtService.js';
 import { createProjectKost } from '../services/projectKostenService.js';
 import { usePlan } from '../hooks/usePlan.js';
+import { documentUrl } from '../services/documentService.js';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 
@@ -2338,15 +2339,21 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
                     </div>
                   </div>
                   {detail.ondertekendePdfUrl ? (
-                    <a
+                    <button
+                      type="button"
                       className="wb2-card-action"
-                      href={detail.ondertekendePdfUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ flexShrink: 0, textDecoration: 'none' }}
+                      // Korte link (10 min) op het moment van openen, via
+                      // document-url; de database bewaart geen lange link meer.
+                      onClick={async () => {
+                        const venster = window.open('', '_blank');
+                        const url = await documentUrl({ soort: 'werkbon_pdf', id: detail.id, opgeslagen: detail.ondertekendePdfUrl });
+                        if (url && venster) venster.location.href = url;
+                        else { venster?.close(); toast.error('De ondertekende bon kon niet worden geopend.'); }
+                      }}
+                      style={{ flexShrink: 0, textDecoration: 'none', cursor: 'pointer' }}
                     >
                       Ondertekende bon
-                    </a>
+                    </button>
                   ) : (
                     // Getekend, maar het bestand ontbreekt: de PDF wordt in de
                     // browser van de klant gemaakt en dat kan mislukken. Zeg het,

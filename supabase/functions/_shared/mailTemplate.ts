@@ -83,7 +83,7 @@ export function mailTemplate({
   }
 
   const footerLine = isSystem
-    ? `BossBase &middot; <a href="https://www.bossbase.nl" style="color:#9ca3af;">bossbase.nl</a>`
+    ? `BossBase, een handelsnaam van NG E-Commerce B.V. &middot; KvK 91856396 &middot; <a href="https://www.bossbase.nl" style="color:#9ca3af;">bossbase.nl</a>`
     : `Verstuurd met <a href="https://www.bossbase.nl" style="color:#9ca3af;text-decoration:none;font-weight:600;">BossBase</a>`
 
   const accentText = readableTextColor(accent)

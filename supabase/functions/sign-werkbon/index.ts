@@ -17,6 +17,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
+import { opslagWaarde, kortLink } from '../_shared/documentLink.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -145,12 +146,9 @@ serve(async (req) => {
       .upload(sigNaam, sigBytes, { contentType: 'image/png', upsert: true })
     if (sigErr) return json({ success: false, error: `Handtekening opslaan mislukt: ${sigErr.message}` }, 500)
 
-    const { data: sigSigned, error: sigUrlErr } = await admin.storage
-      .from('signatures')
-      .createSignedUrl(sigNaam, 60 * 60 * 24 * 365 * 10) // ~10 jaar
-    if (sigUrlErr || !sigSigned?.signedUrl) {
-      return json({ success: false, error: `Link naar handtekening maken mislukt: ${sigUrlErr?.message || 'onbekend'}` }, 500)
-    }
+    // Opgeslagen: een link van 24 uur (overgang, _shared/documentLink.ts); de app
+    // vraagt bij het openen een korte link op via document-url. Vroeger: 10 jaar.
+    const sigVerwijzing = await opslagWaarde(admin, 'signatures', sigNaam)
 
     // ── Bedrijfsgegevens (branding + notificatieadres) ───────────────────────
     let company: Record<string, unknown> = {}
@@ -171,7 +169,7 @@ serve(async (req) => {
     const nu = new Date().toISOString()
     const update: Record<string, unknown> = {
       ondertekend_op: nu,
-      handtekening_url: sigSigned.signedUrl,
+      handtekening_url: sigVerwijzing,
       ondertekend_door_naam: name,
       ondertekend_door_email: email,
       status: 'afgerond',
@@ -196,11 +194,8 @@ serve(async (req) => {
         if (upErr) {
           warnings.push(`PDF opslaan mislukt: ${upErr.message}`)
         } else {
-          // De bucket is privé; een publieke URL zou een dode link zijn.
-          const { data: pdfSigned } = await admin.storage
-            .from('signed-werkbonnen')
-            .createSignedUrl(bestand, 60 * 60 * 24 * 365 * 10)
-          pdfUrl = pdfSigned?.signedUrl || null
+          // De bucket is privé: een link van 24 uur bewaren, geen lange link.
+          pdfUrl = await opslagWaarde(admin, 'signed-werkbonnen', bestand)
           if (pdfUrl) {
             const { error: urlErr } = await admin.from('werkbonnen')
               .update({ ondertekende_pdf_url: pdfUrl }).eq('id', werkbon.id)
@@ -290,8 +285,9 @@ Datum en tijd: ${esc(new Date(nu).toLocaleString('nl-NL'))}</p>
       company_name: (company?.name as string) || 'BossBase',
       ondertekend_op: nu,
       ondertekend_door_naam: name,
-      handtekening_url: sigSigned.signedUrl,
-      ondertekende_pdf_url: pdfUrl,
+      // Voor de klant die net tekende: korte links (10 minuten), niet bewaard.
+      handtekening_url: await kortLink(admin, 'signatures', sigVerwijzing),
+      ondertekende_pdf_url: pdfUrl ? await kortLink(admin, 'signed-werkbonnen', pdfUrl) : null,
     }
     if (warnings.length) antwoord.warnings = warnings
     return json(antwoord)

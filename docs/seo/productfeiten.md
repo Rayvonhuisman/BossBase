@@ -159,6 +159,7 @@ of staat het onder "Bestaat niet", dan beloven we het niet.
 ## Bedrijfsgegevens
 
 - E-mail: info@bossbase.nl. Oprichters: Niels Grevink en Rayvon Huisman.
-- Niet bevestigd, dus niet gebruiken in structured data: rechtsvorm,
-  KvK-nummer, btw-id. Adres en telefoonnummer staan op de contactpagina zoals
-  de eigenaar ze daar zette; laten bevestigen.
+- Exploitant (bevestigd 30-09-2026): BossBase is een handelsnaam van
+  NG E-Commerce B.V., Sodalietdreef 6, 7828 CR Emmen, KvK 91856396. Staat in
+  `src/marketing/site.js` (EXPLOITANT) en als legalName in de structured data.
+- Nog niet bekend: btw-id. Geen telefoonnummer op de site.

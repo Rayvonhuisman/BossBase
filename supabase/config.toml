@@ -49,6 +49,10 @@ verify_jwt = false
 [functions.trial-mails]
 verify_jwt = false
 
+# Draait dagelijks op de cron; eist zelf het cron_secret uit de vault (verwijdert gegevens).
+[functions.opschonen]
+verify_jwt = false
+
 # Draait op de cron (18:00) met de sleutel uit de vault, net als
 # check-herinneringen en trial-mails: geen gebruikerssessie in het spel.
 [functions.planning-samenvatting]
@@ -58,4 +62,9 @@ verify_jwt = false
 # company_id komt uit het formulier op het openbare token; de functie
 # valideert, begrenst (IP/formulier/e-mail) en schrijft met de service-role.
 [functions.public-website-inquiry]
+verify_jwt = false
+
+# Draait elk kwartier op de cron met de sleutel uit de vault. Neemt geen
+# ontvanger of datum aan: wie er gemaild wordt bepaalt de database.
+[functions.uren-herinnering]
 verify_jwt = false

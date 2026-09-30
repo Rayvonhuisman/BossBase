@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { Nav, Footer, Reveal, I, ScrollLine, initChoreo } from "./MktShared"
+import { EXPLOITANT } from "../../marketing/site.js"
 import { leesAanvraag, HONEYPOT_VELD, AANVRAAG_LIMIETEN } from "../../../supabase/functions/_shared/websiteAanvraag.ts"
 
 // ── Waar het formulier naartoe gaat ─────────────────────────────────────────
@@ -13,7 +14,7 @@ import { leesAanvraag, HONEYPOT_VELD, AANVRAAG_LIMIETEN } from "../../../supabas
 // de browser stuurt nooit een company_id. VITE_BOSSBASE_FORM_TOKEN kan het
 // overschrijven (bijvoorbeeld voor een ander formulier in een testomgeving).
 const FORM_TOKEN = import.meta.env.VITE_BOSSBASE_FORM_TOKEN || "wf_43e9d08800d44b9d9ef13b64e33d9829332dfad5b56e4fb88438362db9d86330"
-const ENDPOINT = `${import.meta.env.VITE_SUPABASE_URL || "https://mawzqpnsluljxpbarhng.supabase.co"}/functions/v1/public-website-inquiry`
+const ENDPOINT = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-website-inquiry`
 
 // Er is nog geen gepubliceerde privacyverklaring. De bezoeker gaat akkoord met
 // de privacytekst die hieronder bij het formulier staat; deze versie verwijst
@@ -349,6 +350,17 @@ export default function ContactPage({ navigate }) {
                       <div className="ci-title">Al klant?</div>
                       <div className="ci-val">Stel je vraag aan Boss</div>
                       <div className="ci-sub">De helpchat in het dashboard beantwoordt vragen over het gebruik.</div>
+                    </div>
+                  </div>
+                  <div className="contact-info-block">
+                    <div className="ci-icon">{I.building}</div>
+                    <div>
+                      <div className="ci-title">Bedrijfsgegevens</div>
+                      <div className="ci-val">{EXPLOITANT.naam}</div>
+                      <div className="ci-sub">
+                        BossBase is een handelsnaam van {EXPLOITANT.naam}<br />
+                        {EXPLOITANT.adres} · KvK {EXPLOITANT.kvk}
+                      </div>
                     </div>
                   </div>
                 </div>

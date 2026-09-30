@@ -24,6 +24,10 @@ const toProject = row => ({
   description: row.description || '',
   status: row.status || 'gepland',
   projectValue: Number(row.project_value || 0),
+  // Waar de projectwaarde vandaan komt (migratie 20260930152713): de som van de
+  // geaccepteerde offertes, de schatting uit de aanvraag, of met de hand.
+  waardeBron: row.waarde_bron || 'aanvraag',
+  geschatteWaarde: row.geschatte_waarde == null ? null : Number(row.geschatte_waarde),
   quotedHours: Number(row.quoted_hours || 0),
   // Geen usedHours hier: die wordt live berekend uit werkbon_uren (zie
   // getProjectHoursMap + enrichProject). De kolom projects.used_hours was een
@@ -150,6 +154,9 @@ export async function createProject(input) {
     deal_id: input.deal_id || input.dealId || null,
     offerte_id: input.offerte_id || input.offerteId || null,
     project_value: Number(input.project_value ?? input.projectValue ?? 0),
+    // Een ingevulde waarde bij het aanmaken is met de hand gekozen; zonder
+    // waarde rekent de database hem uit (offertes, anders de schatting).
+    waarde_bron: Number(input.project_value ?? input.projectValue ?? 0) > 0 ? 'handmatig' : undefined,
     quoted_hours: Number(input.quoted_hours ?? input.quotedHours ?? 0),
     start_date: input.start_date || input.startDate || null,
     deadline: input.deadline || null,
@@ -335,6 +342,8 @@ export async function updateProject(projectId, patch) {
     offerte_id: 'offerte_id',
     projectValue: 'project_value',
     project_value: 'project_value',
+    waarde_bron: 'waarde_bron',
+    geschatte_waarde: 'geschatte_waarde',
     quotedHours: 'quoted_hours',
     quoted_hours: 'quoted_hours',
     startDate: 'start_date',
@@ -541,7 +550,9 @@ export function enrichProject(project, { timeEntries = [], invoices = [], usedHo
   // verschillende bedragen. Zie de toelichting in customerTotalsService.
   const omzetExclBtw = sumOmzetExclBtw(invoices)
   const value = Number(project.projectValue || 0)
-  const remainingToInvoice = Math.max(0, value - invoicedAmount)
+  // Projectwaarde is excl. btw (migratie 20260930160546), dus te factureren ook:
+  // waarde min de gefactureerde omzet excl. btw.
+  const remainingToInvoice = Math.max(0, value - omzetExclBtw)
 
   return {
     ...project,

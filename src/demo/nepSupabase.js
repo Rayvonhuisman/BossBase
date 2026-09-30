@@ -256,7 +256,8 @@ const RPC_ANTWOORDEN = {
   },
   get_company_tier: 'team',
   get_billing_status: { status: 'actief', tier: 'team' },
-  get_accounting_status: { connected: false },
+  // Echte RPC geeft een lijst (één rij per koppeling); geen koppelingen = [].
+  get_accounting_status: [],
   google_calendar_status: { connected: false },
   bb_downgrade_blokkades: [],
   bb_mag_wisselen: true,

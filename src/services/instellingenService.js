@@ -15,6 +15,19 @@ const toBedrijfsinstellingen = row => ({
   offerteGeldigDagen: Number(row.offerte_geldig_dagen || 14),
   // Interval (min) waarmee de uren-herinnering-pop-up terugkeert. 0 = uit.
   urenHerinneringIntervalMin: Number(row.uren_herinnering_interval_min ?? 60),
+  // Wanneer een werkdag gaat meetellen: 'na_werkdag', 'einde_dag' of
+  // 'volgende_ochtend'. De standaarden hieronder zijn het gedrag van vóór deze
+  // instellingen, ook voor een bedrijf zonder rij.
+  urenHerinneringMoment: row.uren_herinnering_moment || 'volgende_ochtend',
+  // ISO-weekdagen waarop herinnerd wordt (1 = maandag … 7 = zondag).
+  urenHerinneringDagen: Array.isArray(row.uren_herinnering_dagen)
+    ? row.uren_herinnering_dagen.map(Number)
+    : [1, 2, 3, 4, 5, 6, 7],
+  urenHerinneringMail: Boolean(row.uren_herinnering_mail),
+  // Profielen die GEEN herinnering krijgen; leeg = iedereen.
+  urenHerinneringUitgesloten: Array.isArray(row.uren_herinnering_uitgesloten)
+    ? row.uren_herinnering_uitgesloten
+    : [],
   // Zichtbaar uurvenster in de agenda. De agenda beslaat altijd 24 uur; dit
   // bepaalt welk deel standaard in beeld staat.
   agendaStartUur: Number(row.agenda_start_uur ?? 7),
@@ -92,6 +105,13 @@ export async function upsertBedrijfsinstellingen(input) {
     btw_pct: btw != null ? Number(btw) : undefined,
     offerte_geldig_dagen: geldig != null ? Number(geldig) : undefined,
     uren_herinnering_interval_min: herinnering != null ? Number(herinnering) : undefined,
+    uren_herinnering_moment: ['na_werkdag', 'einde_dag', 'volgende_ochtend'].includes(input.uren_herinnering_moment)
+      ? input.uren_herinnering_moment : undefined,
+    uren_herinnering_dagen: Array.isArray(input.uren_herinnering_dagen)
+      ? [...new Set(input.uren_herinnering_dagen.map(Number))].sort((a, b) => a - b) : undefined,
+    uren_herinnering_mail: typeof input.uren_herinnering_mail === 'boolean' ? input.uren_herinnering_mail : undefined,
+    uren_herinnering_uitgesloten: Array.isArray(input.uren_herinnering_uitgesloten)
+      ? input.uren_herinnering_uitgesloten : undefined,
     agenda_start_uur: agStart != null ? Number(agStart) : undefined,
     agenda_eind_uur: agEind != null ? Number(agEind) : undefined,
     btw_stelsel: stelsel === 'kas' || stelsel === 'factuur' ? stelsel : undefined,
@@ -260,7 +280,7 @@ export async function deletePipelineStage(id) {
 // database stage_id op NULL (ON DELETE SET NULL) en toont Instellingen dat het
 // moment niet meer gekoppeld is.
 export const PIPELINE_MOMENTEN = [
-  { key: 'akkoord',       label: 'Akkoord (gewonnen)', uitleg: 'Vanaf deze fase telt de deal als gewonnen. Ook bereikt als de klant de offerte ondertekent. Sleep je hem terug naar een eerdere fase, dan staat hij weer open.' },
+  { key: 'akkoord',       label: 'Akkoord', uitleg: 'Vanaf deze fase telt de aanvraag in de cijfers als binnengehaald. Ook bereikt als de klant de offerte ondertekent. Sleep je hem terug naar een eerdere fase, dan staat hij weer open.' },
   { key: 'gepland',       label: 'Werkbon gepland',    uitleg: 'Zodra een werkbon voor dit project is ingepland.' },
   { key: 'in_uitvoering', label: 'Klus gestart',       uitleg: 'Zodra iemand op "Start klus" drukt.' },
   // 'afgerond' stond hier ook. Vervallen: een aanvraag afronden is sinds

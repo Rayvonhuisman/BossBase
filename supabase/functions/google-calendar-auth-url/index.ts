@@ -5,6 +5,7 @@
 // ============================================================================
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { inactiefReden } from '../_shared/actieveGebruiker.ts'
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -61,6 +62,9 @@ serve(async (req) => {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       })
     }
+    // service_role omzeilt RLS: zelf controleren dat account en bedrijf actief zijn.
+    const inactief = await inactiefReden(user.id)
+    if (inactief) return new Response(JSON.stringify({ error: inactief }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
     const { data: profile } = await supabase
       .from("profiles").select("company_id").eq("id", user.id).single()
