@@ -15,7 +15,7 @@ async function getAccessToken(environmentId: string, appToken: string): Promise<
   })
   const text = await res.text()
   console.log('Token exchange status:', res.status)
-  console.log('Token exchange response:', text.substring(0, 300))
+  // Niet de response loggen: die bevat bij succes het access_token.
   if (!res.ok) throw new Error(`Token exchange HTTP ${res.status}: ${text.substring(0, 200)}`)
   let data: Record<string, string>
   try { data = JSON.parse(text) } catch { throw new Error(`Token exchange: geen JSON: ${text.substring(0, 200)}`) }

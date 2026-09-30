@@ -84,7 +84,7 @@ serve(async (req) => {
       const res = await fetch(url, { headers: reqHeaders })
       const text = await res.text()
       console.log(`${ep} → HTTP ${res.status}`)
-      console.log(`${ep} → body: ${text.substring(0, 3000)}`)
+      console.log(`${ep} → ${text.length} tekens`)
       attempts.push({ url, status: res.status })
 
       if (res.ok) {
