@@ -72,7 +72,7 @@ const labelStyle = { fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTran
 
 // ── HEADER ───────────────────────────────────────────────────────────────────
 
-function DrawerHeader({ project, onClose, fullscreen, onToggleFullscreen, onSave, canManage }) {
+function DrawerHeader({ project, onClose, fullscreen, onToggleFullscreen, onSave, canManage, openCustomer }) {
   const toast = useToast();
   // De projectnaam staat in de kop en wordt daar ook gewijzigd. Hij stond
   // eerder in het bewerkformulier onderaan het overzicht; dat is vervallen.
@@ -142,9 +142,20 @@ function DrawerHeader({ project, onClose, fullscreen, onToggleFullscreen, onSave
             hoort hier niet naast, want dan staan er twee dingen die allebei
             "de status" heten. */}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
-          {project.customerName && (
+          {/* De klant is een link naar de klantkaart, en ziet er ook zo uit:
+              grijze tekst werd niet als aanklikbaar herkend. */}
+          {project.customerName && (project.customerId && openCustomer ? (
+            <button
+              type="button"
+              onClick={() => openCustomer(project.customerId)}
+              title="Open klantkaart"
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600, color: 'var(--pd)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            >
+              {project.customerName} <span aria-hidden="true">→</span>
+            </button>
+          ) : (
             <span style={{ fontSize: 12, color: 'var(--dl)' }}>{project.customerName}</span>
-          )}
+          ))}
         </div>
       </div>
       <ModalX onClose={onClose} />
@@ -1774,7 +1785,7 @@ export function ProjectDetailDrawer({
             <div style={{ padding: 32, textAlign: 'center', color: 'var(--dl)' }}>Project laden…</div>
           ) : (
             <>
-              <DrawerHeader project={project} onClose={onClose} fullscreen={fullscreen} onToggleFullscreen={() => setFullscreen(f => !f)} onSave={handleSave} canManage={canManage} />
+              <DrawerHeader project={project} onClose={onClose} fullscreen={fullscreen} onToggleFullscreen={() => setFullscreen(f => !f)} onSave={handleSave} canManage={canManage} openCustomer={openCustomer} />
               <Tabs tab={tab} setTab={setTab} tabs={tabs} />
 
               {tab === 'overview' && (
