@@ -153,7 +153,9 @@ export const CORS = {
 export const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
 
-// ── AUTORISATIE: ALLEEN DE EIGENAAR/ADMIN ────────────────────────────────────
+// ── AUTORISATIE: ALLEEN DE EIGENAAR ──────────────────────────────────────────
+// Geldt voor elke functie die Stripe muteert (checkout, portal, wijzig, cancel)
+// en wordt gecontroleerd vóór de eerste Stripe-aanroep.
 // Een APARTE gate, los van het rechtensysteem. Dat systeem gaat over werk; dit
 // gaat over geld. Een medewerker met alle werkrechten hoort hier niet bij te
 // kunnen — ook niet met een rechtstreekse API-aanroep, en daarom staat de check
@@ -171,15 +173,35 @@ export async function eisAbonnementsbeheerder(
     .eq('id', user.id)
     .maybeSingle()
 
-  if (!profile?.company_id) return json({ error: 'Geen bedrijf gekoppeld' }, 400)
-  if (profile.actief === false) return json({ error: 'Account is gedeactiveerd' }, 403)
-  if (profile.role !== 'admin') {
-    return json({
+  const { data: bedrijf } = profile?.company_id
+    ? await admin.from('companies').select('eigenaar_id').eq('id', profile.company_id).maybeSingle()
+    : { data: null }
+
+  const weigering = weigerAbonnementsbeheer(user.id, profile, bedrijf?.eigenaar_id ?? null)
+  if (weigering) return json({ error: weigering.error, code: weigering.code }, weigering.status)
+  return { userId: user.id, companyId: profile!.company_id }
+}
+
+// De beslissing zelf, los van de database, zodat hij te testen is
+// (supabase/tests/lokaal/test.mjs, groep "stripe"). Het abonnement is van het bedrijf:
+// alleen de eigenaar beheert het. Is er (nog) geen eigenaar vastgelegd, dan een
+// beheerder. Dezelfde regel staat in de database (bb_mag_abonnement_beheren,
+// cancel_company_account), zodat de app de knoppen alleen aan hem toont.
+export function weigerAbonnementsbeheer(
+  userId: string,
+  profile: { company_id?: string | null; role?: string | null; actief?: boolean | null } | null,
+  eigenaarId: string | null,
+): { status: number; error: string; code: string } | null {
+  if (!profile?.company_id) return { status: 400, error: 'Geen bedrijf gekoppeld', code: 'geen_bedrijf' }
+  if (profile.actief === false) return { status: 403, error: 'Account is gedeactiveerd', code: 'gedeactiveerd' }
+  if (profile.role !== 'admin' || (eigenaarId && eigenaarId !== userId)) {
+    return {
+      status: 403,
       error: 'Alleen de eigenaar van het bedrijf kan het abonnement beheren.',
       code: 'geen_abonnementsbeheerder',
-    }, 403)
+    }
   }
-  return { userId: user.id, companyId: profile.company_id }
+  return null
 }
 
 // ── SUBSCRIPTION-ITEMS DUIDEN ────────────────────────────────────────────────
