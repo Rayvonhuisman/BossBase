@@ -29,7 +29,7 @@
 
 | # | Het document zegt | Nu | Te doen |
 |---|---|---|---|
-| 1 | Na opzeggen 2 jaar bewaren, daarna definitief weg, ook bestanden; losse termijnen (contact 1 jaar, Boss 12 maanden, meldpunt 2 jaar, mails met de klant, tokens 24 uur) | Gebouwd: migratie 20260930083452 en edge function `opschonen`. Droogloop 30-09: 0 bedrijven, 2 verlopen aanmeldcodes | Cron aanzetten: `…_opschonen_cron.sql.pending` hernoemen naar `.sql` en pushen |
+| 1 | Na opzeggen 2 jaar bewaren, daarna definitief weg, ook bestanden; losse termijnen (contact 1 jaar, Boss 12 maanden, meldpunt 2 jaar, mails met de klant, tokens 24 uur) | Gebouwd: migratie 20260930083452 en edge function `opschonen`. Droogloop 30-09: 0 bedrijven, 2 verlopen aanmeldcodes | Gedaan: draait sinds 30-09 dagelijks om 03:30 (eerste run: 2 verlopen aanmeldcodes weg, 0 fouten) |
 | 2 | Vercel Web Analytics zonder persoonsgegevens | Gebouwd en getest (geen cookies, geen opslag, tokens en id's uit de URL). Nog niet gedeployd | Web Analytics aanzetten in het Vercel-project; na deploy controleren dat er data binnenkomt |
 | 3 | Alleen opslag die nodig is | Gecontroleerd: klopt. Het AFAS-logo staat sinds 30-09 lokaal (`public/brand/afas.png`); logo.clearbit.com bestond ook niet meer | Gedaan |
 | 4 | Akkoord met voorwaarden vastgelegd | Registratie toont alleen uitleg, geen vinkje | Vinkje en tabel `juridisch_akkoord` (zie §2.2) |

@@ -89,8 +89,8 @@ Feitelijke stand (30 september 2026):
   bestanden in de opslag en de inlogaccounts van het bedrijf. Dezelfde job past
   de termijnen in §3 toe. De app zegt nu hetzelfde: 2 jaar, daarna alles weg, ook
   facturen; de wettelijke bewaarplicht van 7 jaar ligt bij de gebruiker zelf.
-  De droogloop van 30 september: 0 bedrijven, 2 verlopen aanmeldcodes. De
-  dagelijkse uitvoering gaat aan na akkoord op die droogloop.
+  De job draait sinds 30 september dagelijks om 03:30. De eerste run
+  verwijderde 2 verlopen aanmeldcodes; nog geen bedrijf kwam in aanmerking.
 - Opzeggen door een beheerder ("Account verwijderen") zegt sinds 30 september
   2026 eerst het Stripe-abonnement op; een jaarabonnement stopt aan het einde
   van de looptijd.

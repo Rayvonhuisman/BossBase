@@ -1,7 +1,7 @@
 -- ── Waarom ──────────────────────────────────────────────────────────────────
 -- Zet de opschoonjob (edge function `opschonen`, migratie 20260930083452) op de
--- dagelijkse cron. Staat als .pending tot de droogloop is bekeken; hernoemen
--- naar .sql en `supabase db push` om hem aan te zetten.
+-- dagelijkse cron. Stond als .pending tot de droogloop was bekeken; aangezet
+-- op 30-09-2026 na een tweede droogloop (zelfde uitkomst).
 --
 -- Droogloop 30-09-2026 via de echte functie: 0 bedrijven, 2 verlopen
 -- aanmeldcodes. Geen fouten.

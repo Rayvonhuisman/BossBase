@@ -98,7 +98,7 @@ Daarna worden de gegevens verwijderd, ook de bestanden.
 **Feitelijke stand (30 september 2026):** opzeggen zet het bedrijf op "opgezegd"
 en de gebruikers op inactief. Na 2 jaar verwijdert de opschoonjob (edge function
 `opschonen`) de rijen, de bestanden in de opslag en de inlogaccounts van het
-bedrijf. De dagelijkse uitvoering gaat aan na akkoord op de droogloop.
+bedrijf. De job draait sinds 30 september 2026 dagelijks om 03:30.
 
 ## 9. Aansprakelijkheid
 
