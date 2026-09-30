@@ -282,7 +282,7 @@ function OverviewTab({
     try {
       const bij = await zetDealAfgerond(huidigeDeal.id, aan);
       setDealLokaal(bij);
-      toast.success(aan ? 'Aanvraag afgerond' : 'Aanvraag heropend');
+      toast.success(aan ? 'Project voltooid' : 'Project heropend');
       onChanged?.();
     } catch (e) {
       toast.error(e.message || (aan ? 'Afronden is mislukt' : 'Heropenen is mislukt'));
@@ -490,7 +490,7 @@ function OverviewTab({
               {dealVerloren ? (
                 <span className="badge b-lost">Verloren</span>
               ) : dealAfgerond ? (
-                <span className="badge b-done">Voltooid</span>
+                <span className="badge b-done">Project voltooid</span>
               ) : magVerkoop && gesorteerdeStages.length ? (
                 <select
                   value={huidigeDeal.stage || ''}

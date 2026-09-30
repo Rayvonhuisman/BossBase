@@ -320,7 +320,7 @@ function FunnelFasenKiezer({ fasen, gekozen, onChange, onMenuToggle }) {
             </label>
           ))}
           <div className="dw-funnelpick-voet">
-            "Afgeronde aanvragen" sluit de trechter altijd af.
+            "Projecten voltooid" sluit de trechter altijd af.
           </div>
         </div>
       )}
@@ -1144,7 +1144,7 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
             { key: 'contact', label: 'Contact', c: '#60a5fa', count: deals.filter(d => d.stage === 'contact').length },
             { key: 'quote_sent', label: 'Offerte gestuurd', c: '#a78bfa', count: deals.filter(d => d.stage === 'quote_sent').length },
             { key: 'approved', label: 'Akkoord', c: '#fb923c', count: deals.filter(d => d.stage === 'approved').length },
-            { key: 'completed', label: 'Gewonnen', c: C.green, count: deals.filter(d => d.stage === 'completed').length },
+            { key: 'completed', label: 'Project voltooid', c: C.green, count: deals.filter(d => d.stage === 'completed').length },
           ]);
       const max = Math.max(...rows.map(r => r.count), 1);
       const totalLeads = deals.length;
@@ -1175,7 +1175,9 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
               </div>
             ))}
           </div>
-          <WFoot meta={`Win rate ${conv}%`} linkText="Open pipeline" onLink={() => setPage('pipeline')} />
+          {/* Akkoord of verder telt als binnengehaald; het woord "gewonnen"
+              komt niet meer in beeld (besluit 30-09-2026). */}
+          <WFoot meta={`Binnengehaald ${conv}%`} linkText="Open pipeline" onLink={() => setPage('pipeline')} />
         </div>
       );
     }
@@ -1312,9 +1314,9 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       const d = alle.filter(s => !s.id || gekozen.includes(s.id));
       return (
         <div className="bb-widget">
-          {/* Niet "win rate" noemen: de laatste stap is afgerónd werk, terwijl
-              "Deals per fase" met win rate alle gewonnen deals bedoelt. Twee
-              verschillende dingen, dus twee verschillende woorden. */}
+          {/* Niet "binnengehaald" noemen: de laatste stap is voltooid werk,
+              terwijl "Deals per fase" met binnengehaald alles vanaf Akkoord
+              bedoelt. Twee verschillende dingen, dus twee verschillende woorden. */}
           <WHead eyebrow="Trechter" title="Conversie funnel"
             sub={d.length ? `${d[0].value} leads · ${d[d.length - 1].value} ${d[d.length - 1].label.toLowerCase()} (${d[d.length - 1].pct}%)` : null}
             right={onSettingsChange && keuzeFasen.length ? (

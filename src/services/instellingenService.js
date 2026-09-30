@@ -260,7 +260,7 @@ export async function deletePipelineStage(id) {
 // database stage_id op NULL (ON DELETE SET NULL) en toont Instellingen dat het
 // moment niet meer gekoppeld is.
 export const PIPELINE_MOMENTEN = [
-  { key: 'akkoord',       label: 'Akkoord (gewonnen)', uitleg: 'Vanaf deze fase telt de deal als gewonnen. Ook bereikt als de klant de offerte ondertekent. Sleep je hem terug naar een eerdere fase, dan staat hij weer open.' },
+  { key: 'akkoord',       label: 'Akkoord', uitleg: 'Vanaf deze fase telt de aanvraag in de cijfers als binnengehaald. Ook bereikt als de klant de offerte ondertekent. Sleep je hem terug naar een eerdere fase, dan staat hij weer open.' },
   { key: 'gepland',       label: 'Werkbon gepland',    uitleg: 'Zodra een werkbon voor dit project is ingepland.' },
   { key: 'in_uitvoering', label: 'Klus gestart',       uitleg: 'Zodra iemand op "Start klus" drukt.' },
   // 'afgerond' stond hier ook. Vervallen: een aanvraag afronden is sinds

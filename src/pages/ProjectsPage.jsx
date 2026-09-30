@@ -46,7 +46,7 @@ export function KlusBadge({ project }) {
   const deal = project?.dealId ? deals.find(d => d.id === project.dealId) : null;
   if (!deal) return <ProjectBadge status={project?.status} />;
   if (deal.status === 'lost') return <span className="badge b-lost">Verloren</span>;
-  if (isAfgerond(deal)) return <span className="badge b-done">Voltooid</span>;
+  if (isAfgerond(deal)) return <span className="badge b-done">Project voltooid</span>;
   const fase = stages.find(s => s.id === deal.stage);
   return fase ? <span className="badge b-gray">{fase.label}</span> : <ProjectBadge status={project?.status} />;
 }
@@ -483,7 +483,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
               icon={I.brief}
               title={projects.length === 0 ? 'Nog geen projecten' : 'Geen projecten gevonden'}
               subtitle={projects.length === 0
-                ? 'Maak je eerste project aan zodra een deal of offerte is gewonnen.'
+                ? 'Elke nieuwe aanvraag wordt hier vanzelf een project.'
                 : 'Pas de filters of zoekterm aan om meer projecten te zien.'}
               action={projects.length === 0 && canManage && (
                 <button className="btn btn-p" onClick={guardSchrijven('Een project aanmaken', () => setShowNew(true))}>{I.plus} Eerste project</button>
