@@ -38,11 +38,14 @@ export function toonLaadfout(fout) {
   const kader = document.createElement('div');
   kader.setAttribute('role', 'alert');
   kader.style.cssText = 'max-width:520px;margin:12vh auto;padding:28px;font-family:Inter,system-ui,sans-serif;color:#0D0D0D;background:#fff;border:1px solid #e5e7eb;border-radius:14px;box-shadow:0 4px 16px rgba(0,0,0,.06)';
+  const configuratie = fout?.name === 'ConfiguratieFout';
   const kop = document.createElement('h1');
-  kop.textContent = 'BossBase kon niet goed laden';
+  kop.textContent = configuratie ? 'BossBase is niet goed ingesteld' : 'BossBase kon niet goed laden';
   kop.style.cssText = 'font-size:20px;margin:0 0 10px';
   const tekst = document.createElement('p');
-  tekst.textContent = 'Waarschijnlijk is er net een nieuwe versie verschenen, of was de verbinding even weg. Laad de pagina opnieuw. Blijft dit gebeuren, mail dan naar info@bossbase.nl.';
+  tekst.textContent = configuratie
+    ? 'Deze omgeving mist de instellingen voor de verbinding met de database. Dit is geen fout aan jouw kant; meld het aan info@bossbase.nl.'
+    : 'Waarschijnlijk is er net een nieuwe versie verschenen, of was de verbinding even weg. Laad de pagina opnieuw. Blijft dit gebeuren, mail dan naar info@bossbase.nl.';
   tekst.style.cssText = 'margin:0 0 18px;line-height:1.55;color:#374151';
   const knop = document.createElement('button');
   knop.type = 'button';

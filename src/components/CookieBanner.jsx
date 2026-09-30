@@ -28,7 +28,7 @@ export function openCookieBanner() {
 }
 
 // ── Banner-component ─────────────────────────────────────────────────────────
-export function CookieBanner({ navigate }) {
+export function CookieBanner() {
   const [open, setOpen] = useState(() => !readConsent());
 
   useEffect(() => {
@@ -44,27 +44,21 @@ export function CookieBanner({ navigate }) {
 
   if (!open) return null;
 
-  const goVerklaring = (e) => {
-    if (navigate) {
-      e.preventDefault();
-      navigate('/cookieverklaring');
-    }
-  };
-
+  // Eerlijk over wat er gebeurt: er is geen tracking en niets dat een
+  // toestemming aan- of uitzet. Alleen noodzakelijke opslag (inlogsessie) en
+  // voorkeuren. Daarom informeren, geen schijnkeuze. Komt er ooit analytics die
+  // toestemming vraagt, zet dan hier weer een keuze en gebruik hasConsent().
+  // Geen link naar /cookieverklaring zolang die pagina geen inhoud heeft.
   return (
-    <div className="cookie-banner" role="dialog" aria-label="Cookievoorkeuren" aria-live="polite">
+    <div className="cookie-banner" role="dialog" aria-label="Opslag in je browser" aria-live="polite">
       <div className="cookie-banner-inner">
         <div className="cookie-banner-txt">
-          We gebruiken cookies om BossBase goed te laten werken en je ervaring te
-          verbeteren. Functionele cookies zijn altijd actief.{' '}
-          <a href="/cookieverklaring" onClick={goVerklaring}>Lees meer in onze cookieverklaring</a>.
+          BossBase gebruikt geen tracking- of advertentiecookies. In je browser bewaren we alleen wat nodig is:
+          je inlogsessie en je voorkeuren, zoals hoe je lijsten wilt zien.
         </div>
         <div className="cookie-banner-actions">
-          <button type="button" className="btn btn-s" onClick={() => choose('necessary')}>
-            Alleen noodzakelijk
-          </button>
-          <button type="button" className="btn btn-p" onClick={() => choose('all')}>
-            Alles accepteren
+          <button type="button" className="btn btn-p" onClick={() => choose('necessary')}>
+            Begrepen
           </button>
         </div>
       </div>

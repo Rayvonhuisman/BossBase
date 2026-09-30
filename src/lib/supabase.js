@@ -13,20 +13,19 @@ import { nepSupabase } from "../demo/nepSupabase.js"
 export const isDemo = typeof window !== "undefined"
   && window.location.pathname.startsWith("/demo")
 
-// Het productieproject. URL en anon-key zijn publiek: ze staan in elke
-// browserbundel en geven alleen toegang binnen de databaseregels (RLS). Ze staan
-// hier als terugval, zodat een build zonder VITE_-variabelen (zoals een
-// Vercel-preview waar ze ontbraken) niet stil een wit scherm oplevert. Een
-// omgevingsvariabele heeft altijd voorrang, bijvoorbeeld voor een testproject.
-// De service-role key hoort hier NOOIT: die blijft server-side.
-const PRODUCTIE_URL = "https://mawzqpnsluljxpbarhng.supabase.co"
-const PRODUCTIE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hd3pxcG5zbHVsanhwYmFyaG5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc5ODQzMTYsImV4cCI6MjA5MzU2MDMxNn0.yJeP2p0go9wttF9hAiNgYd1fMi71KIcnb7KbEdhrNaw"
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || PRODUCTIE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || PRODUCTIE_ANON_KEY
+// Configuratie per omgeving, expliciet via omgevingsvariabelen: lokaal in
+// .env.local, op Vercel per omgeving (Production, Preview) in de projectinstellingen.
+// Er is bewust GEEN terugval naar een ander project: ontbreekt de configuratie,
+// dan stopt de app met een duidelijke melding (zie lib/laadfout.js), en een build
+// op Vercel stopt al eerder (zie vite.config.js).
+// Alleen de URL en de publieke anon-key horen hier; de service-role key nooit.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 if (!isDemo && (!supabaseUrl || !supabaseAnonKey)) {
-  throw new Error("Missing Supabase environment variables")
+  const fout = new Error("Configuratie ontbreekt: VITE_SUPABASE_URL en/of VITE_SUPABASE_ANON_KEY zijn niet ingesteld voor deze omgeving.")
+  fout.name = "ConfiguratieFout"
+  throw fout
 }
 
 // Geen login, geen mails, geen opslag. Schrijfacties landen in het geheugen,

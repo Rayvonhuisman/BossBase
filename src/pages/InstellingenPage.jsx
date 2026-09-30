@@ -1267,7 +1267,7 @@ export function InstellingenPage() {
     try {
       if (isAdmin) await cancelCompanyAccount();
       else await deleteOwnAccount();
-      toast.success('Je account is verwijderd. Je kunt binnen 2 jaar terugkeren door contact op te nemen.');
+      toast.success('Je account is gedeactiveerd. Terugkeren of je gegevens laten verwijderen? Mail info@bossbase.nl.');
       // Uitloggen → onAuthStateChange in App.jsx redirect naar /login.
       await supabase.auth.signOut();
     } catch (err) {
@@ -1843,9 +1843,9 @@ export function InstellingenPage() {
                     </div>
                   )}
                   <p style={{ fontSize: '.86rem', color: 'var(--dk)', lineHeight: 1.55, margin: 0 }}>
-                    Je account wordt gedeactiveerd en je wordt uitgelogd. Je gegevens blijven <strong>2 jaar</strong> bewaard
-                    zodat je kunt terugkeren. Financiële administratie (facturen, BTW) bewaren we wettelijk <strong>7 jaar</strong>.
-                    Na deze termijnen worden gegevens definitief verwijderd.
+                    Je account wordt gedeactiveerd en je wordt uitgelogd. Je gegevens worden daarbij <strong>niet
+                    automatisch verwijderd</strong>: ze blijven bewaard, zodat je kunt terugkeren. Wil je dat we je
+                    gegevens verwijderen, mail dan naar info@bossbase.nl.
                   </p>
                   <div className="f">
                     <label>Typ <strong>VERWIJDEREN</strong> om te bevestigen</label>
