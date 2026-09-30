@@ -33,7 +33,7 @@ goedgekeurde teksten. De website linkt niet naar `/privacy` of `/voorwaarden`
    voor beide).
 6. Bewaartermijnen. Voorstellen:
    - account en bedrijfsgegevens: zolang het account bestaat, daarna 2 jaar
-     (dat belooft de app nu al);
+     (de app belooft sinds 30 september 2026 géén termijn meer; zie deel 2);
    - financiële administratie: 7 jaar (fiscale bewaarplicht);
    - contactaanvragen: 12 maanden na afhandeling;
    - helpchatgesprekken: 12 maanden;
@@ -64,16 +64,19 @@ Vastgesteld in de code en productie (alleen schema en aantallen):
 - **Account verwijderen:** soft delete. Profiel inactief, inlogaccount en alle
   gegevens en bestanden blijven. Beheerder opzeggen: bedrijf "opgezegd",
   gebruikers inactief, alle bedrijfsdata blijft; het Stripe-abonnement wordt
-  daarbij niet automatisch gestopt. De belofte in de app ("na 2 jaar, financieel
-  na 7 jaar definitief verwijderd") is **niet gebouwd**.
+  daarbij niet automatisch gestopt. De oude belofte in de app ("na 2 jaar, financieel
+  na 7 jaar definitief verwijderd") was niet gebouwd en is op 30 september 2026
+  vervangen door: gegevens worden niet automatisch verwijderd; verwijdering
+  aanvragen via info@bossbase.nl.
 - **Leveranciers:** Supabase, Vercel, Stripe, Resend, Anthropic, PDOK (vanuit de
   browser), Moneybird en SnelStart (alleen bij een koppeling). Google Agenda en
   AFAS zijn verborgen in de app, maar er bestaat in productie elk één koppeling.
 - **Opslagregio:** Supabase-database in Central EU (Frankfurt).
 - **Cookies en browseropslag:** geen cookies uit de eigen code; wel
   localStorage (inlogsessie, cookiekeuze, weergavevoorkeuren, filters) en
-  sessionStorage (gekozen bedrijf, aanmeldpakket). Geen tracking. De
-  cookiebannerkeuze heeft geen effect.
+  sessionStorage (gekozen bedrijf, aanmeldpakket). Geen tracking. De banner
+  is sinds 30 september 2026 alleen informatief (één knop "Begrepen"), omdat er
+  niets te kiezen valt.
 
 **Niet vast te stellen met de beschikbare toegang (ONBEKEND):**
 
