@@ -57,15 +57,18 @@ overeenkomst daarmee omgaat.
 ## 5. Subverwerkers
 
 De Klant geeft algemene toestemming voor deze subverwerkers. BossBase meldt
-wijzigingen [[termijn]] van tevoren.
+wijzigingen 30 dagen van tevoren, per e-mail. De actuele lijst staat op
+bossbase.nl/subverwerkers.
 
 | Subverwerker | Waarvoor | Regio | Overeenkomst met BossBase |
 | --- | --- | --- | --- |
 | Supabase | Database, inloggen, opslag, serverfuncties | Database: Central EU (Frankfurt), vastgesteld; serverfuncties voor verzoeken uit Nederland in Frankfurt (eu-central-1, gemeten); logs 1 dag bewaard (Free-abonnement). Supabase Pte. Ltd. (Singapore) | [[TE CONTROLEREN]] |
-| Vercel | Hosting van de app | Vercel Inc., VS; website via het netwerk van Vercel (voor Nederland Frankfurt), serverfunctie in Washington, VS (iad1, gemeten) | [[TE CONTROLEREN]] |
+| Vercel | Hosting van de app | Vercel Inc., VS; website via het netwerk van Vercel (voor Nederland Frankfurt), serverfunctie in Frankfurt (fra1, sinds 30-09-2026) | [[TE CONTROLEREN]] |
 | Resend | E-mail namens de Klant (offertes, facturen, herinneringen, afspraakherinneringen) | Plus Five Five, Inc., VS; account, metadata en logs in de VS; verzendregio [[TE CONTROLEREN]] | [[TE CONTROLEREN]] |
 | Stripe | Alleen bij de betaallink: bedrag en factuurnummer; de betaling loopt via het eigen Stripe-account van de Klant | Stripe Payments Europe, Ltd. (Ierland); verwerking ook buiten de EU | [[JURIST]]: Stripe is hier vermoedelijk een partij van de Klant zelf |
-| Moneybird / SnelStart | Alleen als de Klant de koppeling aanzet, met de eigen administratie van de Klant | n.v.t. | [[JURIST]]: vermoedelijk geen subverwerker van BossBase |
+| Moneybird / SnelStart / AFAS | Alleen als de Klant de koppeling aanzet, met de eigen administratie van de Klant | n.v.t. | [[JURIST]]: vermoedelijk geen subverwerker van BossBase |
+| Google Agenda | Alleen als de Klant de koppeling aanzet: afspraken met titel, notities en adres van de klant, naar de eigen agenda van de gebruiker | n.v.t. | [[JURIST]]: vermoedelijk geen subverwerker van BossBase |
+| PDOK (Kadaster) | Adres opzoeken tijdens het typen in de app; de getypte zoektekst gaat vanuit de browser naar PDOK | Nederland | Overheidsdienst; niet nodig binnen de EU [[JURIST]] |
 | Anthropic | Helpchat voor de gebruiker; er gaan geen gegevens van klanten van de Klant mee, tenzij de gebruiker ze zelf in de chat typt | Anthropic Ireland, Ltd.; verwerking ook in de VS; geen training op klantdata, na 30 dagen verwijderd | [[TE CONTROLEREN]] |
 | Vercel (Web Analytics) | Gebruiksstatistieken van de app: welke pagina's gebruikers van de Klant bekijken, met apparaat, browser en land. Tokens en id's (van klanten, projecten, facturen) worden vóór verzending uit het adres gehaald; geen namen, e-mailadressen of klantgegevens | Vercel Inc., VS; EU-US Data Privacy Framework + standaardcontractbepalingen | [[TE CONTROLEREN]] |
 
@@ -92,10 +95,10 @@ Na het einde van het abonnement bewaart BossBase de gegevens nog 2 jaar, gelijk
 aan de algemene voorwaarden; in die tijd kan de Klant terugkomen of exporteren.
 Daarna worden de gegevens verwijderd, ook de bestanden.
 
-**Feitelijke stand:** opzeggen zet het bedrijf op "opgezegd" en de gebruikers op
-inactief; alle gegevens en bestanden blijven
-staan; automatische verwijdering bestaat niet. Dit moet in lijn gebracht
-worden met wat hier wordt afgesproken.
+**Feitelijke stand (30 september 2026):** opzeggen zet het bedrijf op "opgezegd"
+en de gebruikers op inactief. Na 2 jaar verwijdert de opschoonjob (edge function
+`opschonen`) de rijen, de bestanden in de opslag en de inlogaccounts van het
+bedrijf. De dagelijkse uitvoering gaat aan na akkoord op de droogloop.
 
 ## 9. Aansprakelijkheid
 

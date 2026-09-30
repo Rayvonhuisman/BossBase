@@ -49,6 +49,10 @@ verify_jwt = false
 [functions.trial-mails]
 verify_jwt = false
 
+# Draait dagelijks op de cron; eist zelf het cron_secret uit de vault (verwijdert gegevens).
+[functions.opschonen]
+verify_jwt = false
+
 # Draait op de cron (18:00) met de sleutel uit de vault, net als
 # check-herinneringen en trial-mails: geen gebruikerssessie in het spel.
 [functions.planning-samenvatting]

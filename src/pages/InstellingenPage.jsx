@@ -1864,8 +1864,8 @@ export function InstellingenPage() {
                   )}
                   <p style={{ fontSize: '.86rem', color: 'var(--dk)', lineHeight: 1.55, margin: 0 }}>
                     Je account wordt gedeactiveerd en je wordt uitgelogd. Je gegevens blijven <strong>2 jaar</strong> bewaard
-                    zodat je kunt terugkeren. Financiële administratie (facturen, BTW) bewaren we wettelijk <strong>7 jaar</strong>.
-                    Na deze termijnen worden gegevens definitief verwijderd.
+                    zodat je kunt terugkeren. Daarna worden ze definitief verwijderd, ook je facturen en btw-gegevens.
+                    Je moet je administratie zelf <strong>7 jaar</strong> bewaren: exporteer die op tijd.
                   </p>
                   <div className="f">
                     <label>Typ <strong>VERWIJDEREN</strong> om te bevestigen</label>

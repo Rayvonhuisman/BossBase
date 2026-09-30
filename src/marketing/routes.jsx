@@ -88,6 +88,14 @@ const PAGINAS = [
     load: () => import('../pages/marketing/FaqPage.jsx'),
     breadcrumbs: [HOME, { naam: 'Veelgestelde vragen', pad: '/faq' }],
   },
+  {
+    path: '/subverwerkers',
+    title: 'Subverwerkers | BossBase',
+    description: 'Welke bedrijven gegevens voor BossBase verwerken, waarvoor, waar de gegevens staan en met welke waarborg. Plus de koppelingen die je zelf aanzet.',
+    src: ['src/pages/marketing/SubverwerkersPage.jsx'],
+    load: () => import('../pages/marketing/SubverwerkersPage.jsx'),
+    breadcrumbs: [HOME, { naam: 'Subverwerkers', pad: '/subverwerkers' }],
+  },
 ];
 
 export const NIET_GEVONDEN = {

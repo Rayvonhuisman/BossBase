@@ -437,6 +437,7 @@ const FOOTER_LINKS = {
     { label: "Over BossBase",   href: "/over" },
     { label: "Contact",         href: "/contact" },
     { label: "Veelgestelde vragen", href: "/faq" },
+    { label: "Subverwerkers",   href: "/subverwerkers" },
     { label: "Demo bekijken",   href: "/#demo" },
     { label: "Inloggen",        href: "/login" },
   ],
