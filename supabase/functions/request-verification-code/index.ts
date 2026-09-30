@@ -57,7 +57,8 @@ serve(async (req) => {
       const windowMs = new Date(attempt.window_start).getTime()
       const withinWindow = nowMs - windowMs < WINDOW
       if ((nowMs - lastMs < 60 * 1000) || (withinWindow && attempt.send_count >= 3)) {
-        console.log('[request-verification-code] Throttled (geen mail):', { to: email })
+        // Geen e-mailadres in de logs: logs zijn geen plek voor persoonsgegevens.
+        console.log('[request-verification-code] Throttled (geen mail):', { user: userId })
         return json({ success: true }) // geen enumeratie / geen mail
       }
       await admin.from('email_verification_attempts').update({
@@ -117,7 +118,7 @@ serve(async (req) => {
       throw new Error(resendData.message || 'Mail versturen mislukt')
     }
 
-    console.log('[request-verification-code] Code verstuurd ✓', { to: email, message_id: resendData.id })
+    console.log('[request-verification-code] Code verstuurd ✓', { user: userId, message_id: resendData.id })
     return json({ success: true })
   } catch (err) {
     console.error('[request-verification-code] Fout:', err)

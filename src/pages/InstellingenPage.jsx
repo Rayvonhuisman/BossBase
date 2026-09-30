@@ -17,7 +17,6 @@ import { getStripeConnection, startStripeOnboarding, refreshStripeStatus, discon
 import { usePermissions } from '../hooks/usePermissions.js';
 import { useUrlTab } from '../hooks/useUrlTab.js';
 import { useUploads } from '../lib/uploadContext.jsx';
-import { openCookieBanner } from '../components/CookieBanner.jsx';
 import { InfoTip, InfoUitklap } from '../components/Uitleg.jsx';
 import {
   getBedrijfsinstellingen,
@@ -38,6 +37,7 @@ import { getLostReasons, createLostReason, updateLostReason, deleteLostReason } 
 import { getVoertuigen, createVoertuig, updateVoertuig, deleteVoertuig } from '../services/voertuigService.js';
 import { getEigenEenheden, createEigenEenheid, updateEigenEenheid, deleteEigenEenheid } from '../services/eigenEenheidService.js';
 import { updateCompany, updateProfile, deleteOwnAccount, cancelCompanyAccount } from '../services/profileService.js';
+import { zegOp } from '../services/billingService.js';
 import { changePassword } from '../services/authService.js';
 import { uploadProfileAvatar, removeProfileAvatar } from '../services/avatarService.js';
 import { AvatarUpload } from '../components/AvatarUpload.jsx';
@@ -1265,9 +1265,26 @@ export function InstellingenPage() {
     if (delConfirm.trim().toUpperCase() !== 'VERWIJDEREN') return;
     setDeleting(true);
     try {
-      if (isAdmin) await cancelCompanyAccount();
-      else await deleteOwnAccount();
-      toast.success('Je account is verwijderd. Je kunt binnen 2 jaar terugkeren door contact op te nemen.');
+      let stopBericht = '';
+      if (isAdmin) {
+        // Eerst het Stripe-abonnement opzeggen. Zonder dit werd het bedrijf
+        // gedeactiveerd maar liep de incasso gewoon door. billing-cancel houdt
+        // de looptijd aan: een jaarabonnement stopt aan het einde van de 12
+        // maanden, een maandabonnement aan het einde van de maand. Geen
+        // abonnement (proefperiode) is geen fout. Mislukt het opzeggen, dan
+        // verwijderen we het account niet: liever een foutmelding dan een
+        // account dat niemand kan gebruiken maar wel betaalt.
+        try {
+          const r = await zegOp();
+          stopBericht = r?.bericht ? ` ${r.bericht}` : '';
+        } catch (e) {
+          if (e.code !== 'geen_abonnement') throw new Error(`Je abonnement kon niet worden opgezegd, dus je account is niet verwijderd. ${e.message || ''}`.trim());
+        }
+        await cancelCompanyAccount();
+      } else {
+        await deleteOwnAccount();
+      }
+      toast.success(`Je account is verwijderd. Je kunt binnen 2 jaar terugkeren door contact op te nemen.${stopBericht}`);
       // Uitloggen → onAuthStateChange in App.jsx redirect naar /login.
       await supabase.auth.signOut();
     } catch (err) {
@@ -1800,13 +1817,16 @@ export function InstellingenPage() {
 
           {/* Overig */}
           <div style={{ marginTop: 'var(--sp-6)', paddingTop: 'var(--sp-5)', borderTop: '1px solid var(--border)' }}>
-            <button
-              type="button"
-              onClick={openCookieBanner}
-              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--pd)', fontWeight: 600, fontSize: '.84rem', textDecoration: 'underline' }}
+            {/* Er is geen cookiekeuze meer (geen cookies die toestemming vragen);
+                wel de uitleg over wat er in de browser staat. */}
+            <a
+              href="/cookieverklaring"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'var(--pd)', fontWeight: 600, fontSize: '.84rem', textDecoration: 'underline' }}
             >
-              Cookievoorkeuren wijzigen
-            </button>
+              Cookiebeleid
+            </a>
           </div>
 
           {/* ── Gevarenzone: account verwijderen ── */}

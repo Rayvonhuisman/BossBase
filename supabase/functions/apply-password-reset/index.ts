@@ -11,6 +11,12 @@ const CORS = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
 
+// De database bewaart alleen de hash van het token (zie request-password-reset).
+async function sha256Hex(tekst: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(tekst))
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
@@ -27,7 +33,7 @@ serve(async (req) => {
     const { data: resetToken } = await supabase
       .from('password_reset_tokens')
       .select('id, user_id, expires_at, used_at')
-      .eq('token', token)
+      .eq('token_hash', await sha256Hex(String(token)))
       .maybeSingle()
 
     if (!resetToken) {

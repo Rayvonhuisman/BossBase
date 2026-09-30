@@ -13,6 +13,13 @@ const CORS = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
 
+// Alleen de hash van het token gaat de database in; het token zelf staat
+// uitsluitend in de link in de mail. Zelfde functie als in apply-password-reset.
+async function sha256Hex(tekst: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(tekst))
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
@@ -53,7 +60,8 @@ serve(async (req) => {
       const withinHour = nowMs - windowMs < 60 * 60 * 1000
       // Te snel achter elkaar (< 60s) of meer dan 3 binnen het uurvenster?
       if ((nowMs - lastMs < 60 * 1000) || (withinHour && attempt.attempt_count >= 3)) {
-        console.log('[request-password-reset] Throttled (geen mail):', { to: normEmail })
+        // Geen e-mailadres in de logs: logs zijn geen plek voor persoonsgegevens.
+        console.log('[request-password-reset] Throttled (geen mail):', { user: userId })
         return json({ success: true })
       }
       // Reset het uurvenster als het verlopen is.
@@ -73,6 +81,12 @@ serve(async (req) => {
       })
     }
 
+    // Verlopen of gebruikte tokens van deze gebruiker opruimen: ze hebben geen
+    // nut meer en de tabel hoeft geen geschiedenis te bewaren.
+    await supabase.from('password_reset_tokens').delete()
+      .eq('user_id', userId)
+      .or(`used_at.not.is.null,expires_at.lt.${new Date(nowMs).toISOString()}`)
+
     // Genereer token, 1 uur geldig
     const token = crypto.randomUUID()
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
@@ -80,7 +94,7 @@ serve(async (req) => {
     const { error: insertErr } = await supabase.from('password_reset_tokens').insert({
       user_id: userId,
       email: email.toLowerCase(),
-      token,
+      token_hash: await sha256Hex(token),
       expires_at: expiresAt,
     })
     if (insertErr) throw new Error(`Token opslaan mislukt: ${insertErr.message}`)
@@ -122,7 +136,7 @@ serve(async (req) => {
 
     // Bewust GEEN resetUrl/token loggen: wie logtoegang heeft kon anders binnen
     // het geldigheidsvenster een reset-token buitmaken en accounts overnemen.
-    console.log('[request-password-reset] Mail verstuurd ✓', { to: email, message_id: resendData.id })
+    console.log('[request-password-reset] Mail verstuurd ✓', { user: userId, message_id: resendData.id })
     return json({ success: true })
   } catch (err) {
     console.error('[request-password-reset] Fout:', err)
