@@ -550,7 +550,9 @@ export function enrichProject(project, { timeEntries = [], invoices = [], usedHo
   // verschillende bedragen. Zie de toelichting in customerTotalsService.
   const omzetExclBtw = sumOmzetExclBtw(invoices)
   const value = Number(project.projectValue || 0)
-  const remainingToInvoice = Math.max(0, value - invoicedAmount)
+  // Projectwaarde is excl. btw (migratie 20260930160546), dus te factureren ook:
+  // waarde min de gefactureerde omzet excl. btw.
+  const remainingToInvoice = Math.max(0, value - omzetExclBtw)
 
   return {
     ...project,

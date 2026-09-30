@@ -86,7 +86,7 @@ export function NewProjectModal({ onClose, onSaved, customers, deals, offertes, 
       customer_id: f.customer_id || o.customerId || '',
       deal_id: f.deal_id || o.dealId || '',
       project_value: f.project_value === '' || f.project_value === 0
-        ? (o.totaalIncl || 0)
+        ? (o.totaalExcl || 0)
         : f.project_value,
       quoted_hours: f.quoted_hours === '' || f.quoted_hours === 0
         ? (o.arbeidsuren || 0)
@@ -183,7 +183,7 @@ export function NewProjectModal({ onClose, onSaved, customers, deals, offertes, 
             </select>
           </div>
           <div className="f">
-            <label>Projectwaarde (incl. BTW)</label>
+            <label>Projectwaarde (excl. btw)</label>
             <input
               type="number" min="0" step="0.01"
               placeholder="0,00"
@@ -270,7 +270,7 @@ function ProjectCard({ p, onOpen }) {
       {magBedragen && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
           <div style={{ fontSize: 11, color: 'var(--dl)' }}>
-            {p.invoicedAmount > 0 ? `${fmt(p.invoicedAmount)} gefactureerd` : 'Nog niet gefactureerd'}
+            {p.invoicedAmount > 0 ? `${fmt(p.omzetExclBtw)} gefactureerd` : 'Nog niet gefactureerd'}
           </div>
         </div>
       )}
@@ -532,7 +532,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
                         {magBedragen && <td className="td" style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(p.projectValue)}</td>}
                         {magBedragen && (
                           <td className="td" style={{ textAlign: 'right' }}>
-                            <div>{fmt(p.invoicedAmount)}</div>
+                            <div>{fmt(p.omzetExclBtw)}</div>
                             {p.remainingToInvoice > 0 && (
                               <div style={{ fontSize: 11, color: '#f59e0b' }}>nog {fmt(p.remainingToInvoice)}</div>
                             )}

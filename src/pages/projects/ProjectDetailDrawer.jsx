@@ -748,7 +748,7 @@ function OverviewTab({
                     terug naar automatisch; dan rekent de database opnieuw. */}
                 {veld.key === 'project_value' && !actief && (
                   <div style={{ fontSize: 11, color: 'var(--dl)', marginTop: 2 }}>
-                    {project.waardeBron === 'offertes' && 'Som van de geaccepteerde offertes'}
+                    {project.waardeBron === 'offertes' && 'Som van de geaccepteerde offertes, excl. btw'}
                     {project.waardeBron === 'aanvraag' && 'Geschat in de aanvraag'}
                     {project.waardeBron === 'handmatig' && (
                       <>
@@ -1480,8 +1480,9 @@ function FacturenTab({ project, invoices, openInvoice, setPage, customers, compa
             <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(project.projectValue)}</div>
           </div>
           <div>
+            {/* Excl. btw, net als de projectwaarde ernaast. */}
             <div style={labelStyle}>Gefactureerd</div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(project.invoicedAmount)}</div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(project.omzetExclBtw)}</div>
           </div>
           <div>
             <div style={labelStyle}>Te factureren</div>
