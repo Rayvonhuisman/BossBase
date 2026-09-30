@@ -46,7 +46,7 @@ pdf, zodat je ze kunt bewaren.
 geven.
 
 3.2 Na de proefperiode kies je een abonnement. Doe je dat niet, dan kun je niet
-meer werken in je account. We bewaren je gegevens dan nog 2 jaar, zodat je
+meer werken in je account. We bewaren je gegevens dan nog [2 jaar — termijn nog te besluiten], zodat je
 alsnog kunt beginnen of kunt exporteren. Daarna verwijderen we ze.
 
 ## 4. Abonnement en looptijd
@@ -85,7 +85,7 @@ Je krijgt van ons een factuur.
 Staat een bedrag na [14 dagen] na een herinnering nog open, dan mogen we je
 account op alleen-lezen zetten tot het betaald is. Je gegevens blijven dan staan.
 
-5.4 We mogen onze prijzen wijzigen. We laten het je minstens **30 dagen van
+5.4 We mogen onze prijzen wijzigen. We laten het je minstens **[30 dagen — nog te besluiten] van
 tevoren** weten. Tijdens een jaarperiode verandert je prijs niet. Ben je het niet
 eens met een nieuwe prijs, dan mag je opzeggen tegen de datum waarop hij ingaat.
 
@@ -154,9 +154,9 @@ verbeteren. Daaruit is niet af te leiden wie jij of je klanten zijn.
 
 ## 9. Einde van de overeenkomst
 
-*Kort: na het opzeggen bewaren we je gegevens nog 2 jaar; daarna zijn ze weg.*
+*Kort: na het opzeggen bewaren we je gegevens nog [2 jaar — termijn nog te besluiten]; daarna zijn ze weg.*
 
-9.1 Na het einde van je abonnement bewaren we jouw gegevens nog **2 jaar**. In die
+9.1 Na het einde van je abonnement bewaren we jouw gegevens nog **[2 jaar — termijn nog te besluiten]**. In die
 tijd kun je terugkomen en verder werken waar je gebleven was, of je gegevens
 exporteren.
 
@@ -164,7 +164,7 @@ exporteren.
 gangbaar bestandsformaat (zoals CSV of Excel en de bestanden zelf). [Gratis / tegen
 een vergoeding van €…] 
 
-9.3 Na die 2 jaar verwijderen we je account en jouw gegevens definitief, ook
+9.3 Na die termijn verwijderen we je account en jouw gegevens definitief, ook
 foto's, handtekeningen en andere bestanden. Onze eigen facturen aan jou bewaren we 7 jaar, omdat
 de wet dat eist.
 
@@ -216,7 +216,7 @@ Dat geldt ook na het einde van de overeenkomst.
 
 ## 13. Wijzigen van deze voorwaarden
 
-13.1 We mogen deze voorwaarden wijzigen. We melden het je minstens **30 dagen van
+13.1 We mogen deze voorwaarden wijzigen. We melden het je minstens **[30 dagen — nog te besluiten] van
 tevoren** per mail en in de app.
 
 13.2 Is een wijziging in je nadeel, dan mag je opzeggen tegen de datum waarop de

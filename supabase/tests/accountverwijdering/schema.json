@@ -1,0 +1,6644 @@
+{
+"fks": [
+{
+"def": "FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE",
+"n": "profiles_id_fkey",
+"t": "profiles"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "profiles_company_id_fkey",
+"t": "profiles"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "customers_company_id_fkey",
+"t": "customers"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "pipeline_stages_company_id_fkey",
+"t": "pipeline_stages"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "deals_company_id_fkey",
+"t": "deals"
+},
+{
+"def": "FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE",
+"n": "deals_customer_id_fkey",
+"t": "deals"
+},
+{
+"def": "FOREIGN KEY (stage_id) REFERENCES pipeline_stages(id)",
+"n": "deals_stage_id_fkey",
+"t": "deals"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "activities_company_id_fkey",
+"t": "activities"
+},
+{
+"def": "FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE",
+"n": "activities_customer_id_fkey",
+"t": "activities"
+},
+{
+"def": "FOREIGN KEY (deal_id) REFERENCES deals(id) ON DELETE CASCADE",
+"n": "activities_deal_id_fkey",
+"t": "activities"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "calendar_events_company_id_fkey",
+"t": "calendar_events"
+},
+{
+"def": "FOREIGN KEY (customer_id) REFERENCES customers(id)",
+"n": "calendar_events_customer_id_fkey",
+"t": "calendar_events"
+},
+{
+"def": "FOREIGN KEY (deal_id) REFERENCES deals(id)",
+"n": "calendar_events_deal_id_fkey",
+"t": "calendar_events"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "job_costs_company_id_fkey",
+"t": "job_costs"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "bedrijfsinstellingen_company_id_fkey",
+"t": "bedrijfsinstellingen"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "email_templates_company_id_fkey",
+"t": "email_templates"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "company_members_company_id_fkey",
+"t": "company_members"
+},
+{
+"def": "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE",
+"n": "company_members_profile_id_fkey",
+"t": "company_members"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "offertes_company_id_fkey",
+"t": "offertes"
+},
+{
+"def": "FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL",
+"n": "offertes_customer_id_fkey",
+"t": "offertes"
+},
+{
+"def": "FOREIGN KEY (deal_id) REFERENCES deals(id) ON DELETE SET NULL",
+"n": "offertes_deal_id_fkey",
+"t": "offertes"
+},
+{
+"def": "FOREIGN KEY (offerte_id) REFERENCES offertes(id) ON DELETE CASCADE",
+"n": "offerte_items_offerte_id_fkey",
+"t": "offerte_items"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "offerte_items_company_id_fkey",
+"t": "offerte_items"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "werkbonnen_company_id_fkey",
+"t": "werkbonnen"
+},
+{
+"def": "FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL",
+"n": "werkbonnen_customer_id_fkey",
+"t": "werkbonnen"
+},
+{
+"def": "FOREIGN KEY (deal_id) REFERENCES deals(id) ON DELETE SET NULL",
+"n": "werkbonnen_deal_id_fkey",
+"t": "werkbonnen"
+},
+{
+"def": "FOREIGN KEY (offerte_id) REFERENCES offertes(id) ON DELETE SET NULL",
+"n": "werkbonnen_offerte_id_fkey",
+"t": "werkbonnen"
+},
+{
+"def": "FOREIGN KEY (assigned_to) REFERENCES profiles(id) ON DELETE SET NULL",
+"n": "werkbonnen_assigned_to_fkey",
+"t": "werkbonnen"
+},
+{
+"def": "FOREIGN KEY (werkbon_id) REFERENCES werkbonnen(id) ON DELETE CASCADE",
+"n": "werkbon_taken_werkbon_id_fkey",
+"t": "werkbon_taken"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "werkbon_taken_company_id_fkey",
+"t": "werkbon_taken"
+},
+{
+"def": "FOREIGN KEY (werkbon_id) REFERENCES werkbonnen(id) ON DELETE CASCADE",
+"n": "werkbon_materialen_werkbon_id_fkey",
+"t": "werkbon_materialen"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "werkbon_materialen_company_id_fkey",
+"t": "werkbon_materialen"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "urenregistratie_company_id_fkey",
+"t": "urenregistratie"
+},
+{
+"def": "FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE",
+"n": "urenregistratie_profile_id_fkey",
+"t": "urenregistratie"
+},
+{
+"def": "FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL",
+"n": "fk_deals_customer",
+"t": "deals"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "fk_deals_company",
+"t": "deals"
+},
+{
+"def": "FOREIGN KEY (stage_id) REFERENCES pipeline_stages(id) ON DELETE SET NULL",
+"n": "fk_deals_stage",
+"t": "deals"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "facturen_company_id_fkey",
+"t": "facturen"
+},
+{
+"def": "FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL",
+"n": "facturen_customer_id_fkey",
+"t": "facturen"
+},
+{
+"def": "FOREIGN KEY (factuur_id) REFERENCES facturen(id) ON DELETE CASCADE",
+"n": "factuur_regels_factuur_id_fkey",
+"t": "factuur_regels"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "factuur_regels_company_id_fkey",
+"t": "factuur_regels"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "accounting_connections_company_id_fkey",
+"t": "accounting_connections"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "google_calendar_connections_company_id_fkey",
+"t": "google_calendar_connections"
+},
+{
+"def": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE",
+"n": "google_calendar_connections_user_id_fkey",
+"t": "google_calendar_connections"
+},
+{
+"def": "FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL",
+"n": "job_costs_customer_id_fkey",
+"t": "job_costs"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "projects_company_id_fkey",
+"t": "projects"
+},
+{
+"def": "FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL",
+"n": "projects_customer_id_fkey",
+"t": "projects"
+},
+{
+"def": "FOREIGN KEY (deal_id) REFERENCES deals(id) ON DELETE SET NULL",
+"n": "projects_deal_id_fkey",
+"t": "projects"
+},
+{
+"def": "FOREIGN KEY (offerte_id) REFERENCES offertes(id) ON DELETE SET NULL",
+"n": "projects_offerte_id_fkey",
+"t": "projects"
+},
+{
+"def": "FOREIGN KEY (owner_id) REFERENCES profiles(id) ON DELETE SET NULL",
+"n": "projects_owner_id_fkey",
+"t": "projects"
+},
+{
+"def": "FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL",
+"n": "projects_created_by_fkey",
+"t": "projects"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "project_notes_company_id_fkey",
+"t": "project_notes"
+},
+{
+"def": "FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE",
+"n": "project_notes_project_id_fkey",
+"t": "project_notes"
+},
+{
+"def": "FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL",
+"n": "project_notes_created_by_fkey",
+"t": "project_notes"
+},
+{
+"def": "FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL",
+"n": "facturen_project_id_fkey",
+"t": "facturen"
+},
+{
+"def": "FOREIGN KEY (credit_van_factuur_id) REFERENCES facturen(id)",
+"n": "facturen_credit_van_factuur_id_fkey",
+"t": "facturen"
+},
+{
+"def": "FOREIGN KEY (werkbon_id) REFERENCES werkbonnen(id) ON DELETE CASCADE",
+"n": "werkbon_fotos_werkbon_id_fkey",
+"t": "werkbon_fotos"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id)",
+"n": "werkbon_fotos_company_id_fkey",
+"t": "werkbon_fotos"
+},
+{
+"def": "FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL",
+"n": "werkbonnen_project_id_fkey",
+"t": "werkbonnen"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "klant_tijdlijn_company_id_fkey",
+"t": "klant_tijdlijn"
+},
+{
+"def": "FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE",
+"n": "klant_tijdlijn_customer_id_fkey",
+"t": "klant_tijdlijn"
+},
+{
+"def": "FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL",
+"n": "klant_tijdlijn_created_by_fkey",
+"t": "klant_tijdlijn"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "sent_emails_company_id_fkey",
+"t": "sent_emails"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "btw_periodes_company_id_fkey",
+"t": "btw_periodes"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "notifications_company_id_fkey",
+"t": "notifications"
+},
+{
+"def": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE",
+"n": "notifications_user_id_fkey",
+"t": "notifications"
+},
+{
+"def": "FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL",
+"n": "notifications_created_by_fkey",
+"t": "notifications"
+},
+{
+"def": "FOREIGN KEY (assigned_to) REFERENCES profiles(id) ON DELETE SET NULL",
+"n": "activities_assigned_to_fkey",
+"t": "activities"
+},
+{
+"def": "FOREIGN KEY (assigned_to) REFERENCES profiles(id) ON DELETE SET NULL",
+"n": "deals_assigned_to_fkey",
+"t": "deals"
+},
+{
+"def": "FOREIGN KEY (assigned_to) REFERENCES profiles(id) ON DELETE SET NULL",
+"n": "projects_assigned_to_fkey",
+"t": "projects"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "voertuigen_company_id_fkey",
+"t": "voertuigen"
+},
+{
+"def": "FOREIGN KEY (activity_id) REFERENCES activities(id) ON DELETE SET NULL",
+"n": "werkbonnen_activity_id_fkey",
+"t": "werkbonnen"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "user_permissions_company_id_fkey",
+"t": "user_permissions"
+},
+{
+"def": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE",
+"n": "user_permissions_user_id_fkey",
+"t": "user_permissions"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "subscriptions_company_id_fkey",
+"t": "subscriptions"
+},
+{
+"def": "FOREIGN KEY (werkbon_id) REFERENCES werkbonnen(id) ON DELETE CASCADE",
+"n": "calendar_events_werkbon_id_fkey",
+"t": "calendar_events"
+},
+{
+"def": "FOREIGN KEY (activiteit_id) REFERENCES activities(id) ON DELETE CASCADE",
+"n": "calendar_events_activiteit_id_fkey",
+"t": "calendar_events"
+},
+{
+"def": "FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL",
+"n": "job_costs_project_id_fkey",
+"t": "job_costs"
+},
+{
+"def": "FOREIGN KEY (werkbon_id) REFERENCES werkbonnen(id) ON DELETE SET NULL",
+"n": "job_costs_werkbon_id_fkey",
+"t": "job_costs"
+},
+{
+"def": "FOREIGN KEY (deal_id) REFERENCES deals(id) ON DELETE SET NULL",
+"n": "job_costs_deal_id_fkey",
+"t": "job_costs"
+},
+{
+"def": "FOREIGN KEY (werkbon_materiaal_id) REFERENCES werkbon_materialen(id) ON DELETE CASCADE",
+"n": "job_costs_werkbon_materiaal_id_fkey",
+"t": "job_costs"
+},
+{
+"def": "FOREIGN KEY (assigned_to) REFERENCES profiles(id) ON DELETE SET NULL",
+"n": "calendar_events_assigned_to_fkey",
+"t": "calendar_events"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "eigen_eenheden_company_id_fkey",
+"t": "eigen_eenheden"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "lost_reasons_company_id_fkey",
+"t": "lost_reasons"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "stripe_connections_company_id_fkey",
+"t": "stripe_connections"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "werkbon_notities_company_id_fkey",
+"t": "werkbon_notities"
+},
+{
+"def": "FOREIGN KEY (werkbon_id) REFERENCES werkbonnen(id) ON DELETE CASCADE",
+"n": "werkbon_notities_werkbon_id_fkey",
+"t": "werkbon_notities"
+},
+{
+"def": "FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL",
+"n": "werkbon_notities_created_by_fkey",
+"t": "werkbon_notities"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "activiteit_notities_company_id_fkey",
+"t": "activiteit_notities"
+},
+{
+"def": "FOREIGN KEY (activity_id) REFERENCES activities(id) ON DELETE CASCADE",
+"n": "activiteit_notities_activity_id_fkey",
+"t": "activiteit_notities"
+},
+{
+"def": "FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL",
+"n": "activiteit_notities_created_by_fkey",
+"t": "activiteit_notities"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "company_modules_company_id_fkey",
+"t": "company_modules"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "plan_usage_events_company_id_fkey",
+"t": "plan_usage_events"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "upgrade_requests_company_id_fkey",
+"t": "upgrade_requests"
+},
+{
+"def": "FOREIGN KEY (aangevraagd_door) REFERENCES profiles(id) ON DELETE SET NULL",
+"n": "upgrade_requests_aangevraagd_door_fkey",
+"t": "upgrade_requests"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE SET NULL",
+"n": "stripe_billing_events_company_id_fkey",
+"t": "stripe_billing_events"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "website_aanvragen_company_id_fkey",
+"t": "website_aanvragen"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "trial_mails_company_id_fkey",
+"t": "trial_mails"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "boss_conversations_company_id_fkey",
+"t": "boss_conversations"
+},
+{
+"def": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE",
+"n": "boss_conversations_user_id_fkey",
+"t": "boss_conversations"
+},
+{
+"def": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE",
+"n": "boss_rate_limit_user_id_fkey",
+"t": "boss_rate_limit"
+},
+{
+"def": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE",
+"n": "boss_doorzet_limiet_user_id_fkey",
+"t": "boss_doorzet_limiet"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "leveranciers_company_id_fkey",
+"t": "leveranciers"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "leverancier_tijdlijn_company_id_fkey",
+"t": "leverancier_tijdlijn"
+},
+{
+"def": "FOREIGN KEY (leverancier_id) REFERENCES leveranciers(id) ON DELETE CASCADE",
+"n": "leverancier_tijdlijn_leverancier_id_fkey",
+"t": "leverancier_tijdlijn"
+},
+{
+"def": "FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL",
+"n": "leverancier_tijdlijn_created_by_fkey",
+"t": "leverancier_tijdlijn"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "materialen_company_id_fkey",
+"t": "materialen"
+},
+{
+"def": "FOREIGN KEY (leverancier_id) REFERENCES leveranciers(id) ON DELETE SET NULL",
+"n": "materialen_leverancier_id_fkey",
+"t": "materialen"
+},
+{
+"def": "FOREIGN KEY (materiaal_id) REFERENCES materialen(id) ON DELETE SET NULL",
+"n": "werkbon_materialen_materiaal_id_fkey",
+"t": "werkbon_materialen"
+},
+{
+"def": "FOREIGN KEY (leverancier_id) REFERENCES leveranciers(id) ON DELETE SET NULL",
+"n": "werkbon_materialen_leverancier_id_fkey",
+"t": "werkbon_materialen"
+},
+{
+"def": "FOREIGN KEY (materiaal_id) REFERENCES materialen(id) ON DELETE CASCADE",
+"n": "materiaal_inkoop_materiaal_id_fkey",
+"t": "materiaal_inkoop"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "materiaal_inkoop_company_id_fkey",
+"t": "materiaal_inkoop"
+},
+{
+"def": "FOREIGN KEY (werkbon_materiaal_id) REFERENCES werkbon_materialen(id) ON DELETE CASCADE",
+"n": "werkbon_materiaal_inkoop_werkbon_materiaal_id_fkey",
+"t": "werkbon_materiaal_inkoop"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "werkbon_materiaal_inkoop_company_id_fkey",
+"t": "werkbon_materiaal_inkoop"
+},
+{
+"def": "FOREIGN KEY (leverancier_id) REFERENCES leveranciers(id) ON DELETE RESTRICT",
+"n": "job_costs_leverancier_id_fkey",
+"t": "job_costs"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "grootboek_voorkeuren_company_id_fkey",
+"t": "grootboek_voorkeuren"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "kosten_categorieen_company_id_fkey",
+"t": "kosten_categorieen"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "import_genegeerd_company_id_fkey",
+"t": "import_genegeerd"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "accounting_sync_runs_company_id_fkey",
+"t": "accounting_sync_runs"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "werkbon_uren_company_id_fkey",
+"t": "werkbon_uren"
+},
+{
+"def": "FOREIGN KEY (werkbon_id) REFERENCES werkbonnen(id) ON DELETE CASCADE",
+"n": "werkbon_uren_werkbon_id_fkey",
+"t": "werkbon_uren"
+},
+{
+"def": "FOREIGN KEY (profile_id) REFERENCES profiles(id)",
+"n": "werkbon_uren_profile_id_fkey",
+"t": "werkbon_uren"
+},
+{
+"def": "FOREIGN KEY (werkbon_id) REFERENCES werkbonnen(id) ON DELETE SET NULL",
+"n": "urenregistratie_werkbon_id_fkey",
+"t": "urenregistratie"
+},
+{
+"def": "FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL",
+"n": "urenregistratie_customer_id_fkey",
+"t": "urenregistratie"
+},
+{
+"def": "FOREIGN KEY (deal_id) REFERENCES deals(id) ON DELETE SET NULL",
+"n": "urenregistratie_deal_id_fkey",
+"t": "urenregistratie"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "werkbon_dagen_company_id_fkey",
+"t": "werkbon_dagen"
+},
+{
+"def": "FOREIGN KEY (werkbon_id) REFERENCES werkbonnen(id) ON DELETE CASCADE",
+"n": "werkbon_dagen_werkbon_id_fkey",
+"t": "werkbon_dagen"
+},
+{
+"def": "FOREIGN KEY (werkbon_dag_id) REFERENCES werkbon_dagen(id) ON DELETE CASCADE",
+"n": "calendar_events_werkbon_dag_id_fkey",
+"t": "calendar_events"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "deal_notities_company_id_fkey",
+"t": "deal_notities"
+},
+{
+"def": "FOREIGN KEY (deal_id) REFERENCES deals(id) ON DELETE CASCADE",
+"n": "deal_notities_deal_id_fkey",
+"t": "deal_notities"
+},
+{
+"def": "FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL",
+"n": "deal_notities_created_by_fkey",
+"t": "deal_notities"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "project_kosten_company_id_fkey",
+"t": "project_kosten"
+},
+{
+"def": "FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE",
+"n": "project_kosten_project_id_fkey",
+"t": "project_kosten"
+},
+{
+"def": "FOREIGN KEY (leverancier_id) REFERENCES leveranciers(id) ON DELETE SET NULL",
+"n": "project_kosten_leverancier_id_fkey",
+"t": "project_kosten"
+},
+{
+"def": "FOREIGN KEY (bijgewerkt_door) REFERENCES auth.users(id) ON DELETE SET NULL",
+"n": "platform_instellingen_bijgewerkt_door_fkey",
+"t": "platform_instellingen"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE SET NULL",
+"n": "meldingen_company_id_fkey",
+"t": "meldingen"
+},
+{
+"def": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE SET NULL",
+"n": "meldingen_user_id_fkey",
+"t": "meldingen"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "website_forms_company_id_fkey",
+"t": "website_forms"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "inquiries_company_id_fkey",
+"t": "inquiries"
+},
+{
+"def": "FOREIGN KEY (form_id) REFERENCES website_forms(id) ON DELETE SET NULL",
+"n": "inquiries_form_id_fkey",
+"t": "inquiries"
+},
+{
+"def": "FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL",
+"n": "inquiries_customer_id_fkey",
+"t": "inquiries"
+},
+{
+"def": "FOREIGN KEY (deal_id) REFERENCES deals(id) ON DELETE SET NULL",
+"n": "inquiries_deal_id_fkey",
+"t": "inquiries"
+},
+{
+"def": "FOREIGN KEY (assigned_to) REFERENCES profiles(id) ON DELETE SET NULL",
+"n": "inquiries_assigned_to_fkey",
+"t": "inquiries"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE SET NULL",
+"n": "mail_fouten_company_id_fkey",
+"t": "mail_fouten"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "planning_wijzigingen_company_id_fkey",
+"t": "planning_wijzigingen"
+},
+{
+"def": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE",
+"n": "planning_wijzigingen_user_id_fkey",
+"t": "planning_wijzigingen"
+},
+{
+"def": "FOREIGN KEY (werkbon_id) REFERENCES werkbonnen(id) ON DELETE SET NULL",
+"n": "planning_wijzigingen_werkbon_id_fkey",
+"t": "planning_wijzigingen"
+},
+{
+"def": "FOREIGN KEY (eigenaar_id) REFERENCES profiles(id) ON DELETE SET NULL",
+"n": "companies_eigenaar_id_fkey",
+"t": "companies"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "pipeline_koppelingen_company_id_fkey",
+"t": "pipeline_koppelingen"
+},
+{
+"def": "FOREIGN KEY (stage_id) REFERENCES pipeline_stages(id) ON DELETE SET NULL",
+"n": "pipeline_koppelingen_stage_id_fkey",
+"t": "pipeline_koppelingen"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "snelstart_referenties_company_id_fkey",
+"t": "snelstart_referenties"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE SET NULL",
+"n": "snelstart_webhook_log_company_id_fkey",
+"t": "snelstart_webhook_log"
+},
+{
+"def": "FOREIGN KEY (werkbon_id) REFERENCES werkbonnen(id) ON DELETE CASCADE",
+"n": "project_kosten_werkbon_id_fkey",
+"t": "project_kosten"
+},
+{
+"def": "FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE",
+"n": "project_fotos_project_id_fkey",
+"t": "project_fotos"
+},
+{
+"def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+"n": "project_fotos_company_id_fkey",
+"t": "project_fotos"
+},
+{
+"def": "FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE",
+"n": "sent_emails_customer_id_fkey",
+"t": "sent_emails"
+}
+],
+"tabellen": [
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "name",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "kvk",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "btw_number",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "email",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "phone",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "address",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "city",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "postal_code",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "website",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "logo_url",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "'#f97316'::text",
+"n": "branding_color",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "'actief'::text",
+"n": "status",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "reply_to_email",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "opgezegd_op",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "periode_start",
+"nn": false,
+"ty": "date"
+},
+{
+"def": "false",
+"n": "trial_mails_uitgesloten",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": null,
+"n": "eigenaar_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": "false",
+"n": "is_testbedrijf",
+"nn": true,
+"ty": "boolean"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "companies"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "full_name",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "'admin'::text",
+"n": "role",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "avatar_url",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "false",
+"n": "is_super_admin",
+"nn": false,
+"ty": "boolean"
+},
+{
+"def": null,
+"n": "email_verified_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "true",
+"n": "actief",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": null,
+"n": "deactivated_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "verwijderd_op",
+"nn": false,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "profiles"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "name",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "email",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "phone",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "address",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "city",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "logo_url",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "notes",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "moneybird_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "postcode",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "kvk_number",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "btw_number",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "iban",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "notities",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "snelstart_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "contactpersoon",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "website",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "betaaltermijn_dagen",
+"nn": false,
+"ty": "integer"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "customers"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "name",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "position",
+"nn": true,
+"ty": "integer"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "'b-gray'::text",
+"n": "color_class",
+"nn": true,
+"ty": "text"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "pipeline_stages"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "customer_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "stage_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "title",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "description",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "0",
+"n": "expected_revenue",
+"nn": false,
+"ty": "numeric"
+},
+{
+"def": null,
+"n": "final_revenue",
+"nn": false,
+"ty": "numeric"
+},
+{
+"def": "'open'::text",
+"n": "status",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "assigned_to",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": "'med'::text",
+"n": "priority",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "lost_reason",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "'{}'::uuid[]",
+"n": "assigned_to_ids",
+"nn": true,
+"ty": "uuid[]"
+},
+{
+"def": null,
+"n": "afgerond_op",
+"nn": false,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "deals"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "customer_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "deal_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "title",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "'task'::text",
+"n": "type",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "due_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "false",
+"n": "completed",
+"nn": false,
+"ty": "boolean"
+},
+{
+"def": null,
+"n": "notes",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "'normaal'::text",
+"n": "priority",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "google_event_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "google_calendar_synced_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "'not_synced'::text",
+"n": "google_sync_status",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "google_sync_error",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "assigned_to",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "end_time",
+"nn": false,
+"ty": "time without time zone"
+},
+{
+"def": null,
+"n": "location",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "'{}'::uuid[]",
+"n": "assigned_to_ids",
+"nn": true,
+"ty": "uuid[]"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "activities"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "customer_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "deal_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "title",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "start_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "end_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "location",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "notes",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "type",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "werkbon_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": "'[]'::jsonb",
+"n": "comments",
+"nn": true,
+"ty": "jsonb"
+},
+{
+"def": null,
+"n": "activiteit_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "assigned_to",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": "'zelf'::text",
+"n": "herkomst",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "werkbon_dag_id",
+"nn": false,
+"ty": "uuid"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "calendar_events"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "deal_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "description",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "0",
+"n": "amount",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": null,
+"n": "category",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "bijlage_url",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "'klant'::text",
+"n": "klant_type",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "cost_date",
+"nn": false,
+"ty": "date"
+},
+{
+"def": null,
+"n": "externe_referentie",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "customer_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "btw_inclusief",
+"nn": false,
+"ty": "boolean"
+},
+{
+"def": null,
+"n": "moneybird_document_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "project_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "werkbon_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": "21",
+"n": "btw_percentage",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": null,
+"n": "werkbon_materiaal_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "snelstart_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "leverancier",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "leverancier_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": "false",
+"n": "snelstart_bijlage_gesynct",
+"nn": true,
+"ty": "boolean"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "job_costs"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": "55",
+"n": "uurtarief",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "0.23",
+"n": "reiskosten_per_km",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "25",
+"n": "standaard_marge",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "21",
+"n": "btw_pct",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "14",
+"n": "offerte_geldig_dagen",
+"nn": true,
+"ty": "integer"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "true",
+"n": "auto_sync_google_calendar",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": "60",
+"n": "uren_herinnering_interval_min",
+"nn": true,
+"ty": "integer"
+},
+{
+"def": "7",
+"n": "agenda_start_uur",
+"nn": true,
+"ty": "integer"
+},
+{
+"def": "20",
+"n": "agenda_eind_uur",
+"nn": true,
+"ty": "integer"
+},
+{
+"def": "'factuur'::text",
+"n": "btw_stelsel",
+"nn": true,
+"ty": "text"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "bedrijfsinstellingen"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "type",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "onderwerp",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "body",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "true",
+"n": "actief",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "''::text",
+"n": "name",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "''::text",
+"n": "body_html",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "false",
+"n": "is_default",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": "false",
+"n": "auto_versturen",
+"nn": false,
+"ty": "boolean"
+},
+{
+"def": "7",
+"n": "auto_dagen",
+"nn": false,
+"ty": "integer"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "email_templates"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "profile_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "email",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "full_name",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "phone",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "'medewerker'::text",
+"n": "role",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "'uitgenodigd'::text",
+"n": "status",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "0",
+"n": "hours_per_week",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "now()",
+"n": "invited_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "accepted_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "avatar_url",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "invite_token",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "invite_expires_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "invite_company_name",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "invite_email_failed_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "invite_email_error",
+"nn": false,
+"ty": "text"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "company_members"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "customer_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "deal_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "nummer",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "omschrijving",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "'concept'::text",
+"n": "status",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "0",
+"n": "arbeidsuren",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "55",
+"n": "uurtarief",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "0",
+"n": "materiaalkosten",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "0",
+"n": "reiskosten",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "25",
+"n": "marge_pct",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "21",
+"n": "btw_pct",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "0",
+"n": "totaal_excl",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "0",
+"n": "totaal_incl",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": null,
+"n": "geldig_tot",
+"nn": false,
+"ty": "date"
+},
+{
+"def": null,
+"n": "verzonden_op",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "geaccepteerd_op",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "notes",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "gen_random_uuid()",
+"n": "sign_token",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "signed_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "signature_url",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "signed_by_name",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "signed_by_email",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "signed_pdf_url",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "sent_to_email",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "snapshot_logo_url",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "snapshot_branding_color",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "snapshot_bedrijfsnaam",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "snapshot_adres",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "snapshot_postcode",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "snapshot_plaats",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "snapshot_email",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "snapshot_kvk",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "snapshot_btw",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "vervangen_op",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "vervangen_door_nummer",
+"nn": false,
+"ty": "text"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "offertes"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "offerte_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "omschrijving",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "eenheid",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "1",
+"n": "aantal",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "0",
+"n": "prijs_per",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "0",
+"n": "subtotaal",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "0",
+"n": "volgorde",
+"nn": true,
+"ty": "integer"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "type",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "btw_pct",
+"nn": false,
+"ty": "numeric"
+},
+{
+"def": "'normaal'::text",
+"n": "btw_regime",
+"nn": true,
+"ty": "text"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "offerte_items"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "customer_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "deal_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "offerte_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "assigned_to",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "titel",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "omschrijving",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "'gepland'::text",
+"n": "status",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "gepland_op",
+"nn": false,
+"ty": "date"
+},
+{
+"def": null,
+"n": "starttijd",
+"nn": false,
+"ty": "time without time zone"
+},
+{
+"def": null,
+"n": "eindtijd",
+"nn": false,
+"ty": "time without time zone"
+},
+{
+"def": null,
+"n": "locatie",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "notes",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "werkbon_notities",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "afgerond_op",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "project_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "activity_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": "'{}'::uuid[]",
+"n": "assigned_to_ids",
+"nn": true,
+"ty": "uuid[]"
+},
+{
+"def": "'{}'::uuid[]",
+"n": "verantwoordelijke_ids",
+"nn": true,
+"ty": "uuid[]"
+},
+{
+"def": null,
+"n": "gestart_op",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "nummer",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "gen_random_uuid()",
+"n": "sign_token",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "ondertekend_op",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "handtekening_url",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "ondertekend_door_naam",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "ondertekend_door_email",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "ondertekende_pdf_url",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "verstuurd_naar_email",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "verstuurd_op",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "'{}'::uuid[]",
+"n": "voertuig_ids",
+"nn": true,
+"ty": "uuid[]"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "werkbonnen"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "werkbon_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "omschrijving",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "false",
+"n": "afgerond",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": "0",
+"n": "volgorde",
+"nn": true,
+"ty": "integer"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "false",
+"n": "is_meerwerk",
+"nn": true,
+"ty": "boolean"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "werkbon_taken"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "werkbon_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "naam",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "eenheid",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "1",
+"n": "aantal",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "0",
+"n": "prijs_per",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "0",
+"n": "subtotaal",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "materiaal_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "leverancier_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": "21",
+"n": "btw_percentage",
+"nn": true,
+"ty": "numeric"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "werkbon_materialen"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "profile_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "datum",
+"nn": true,
+"ty": "date"
+},
+{
+"def": null,
+"n": "start_tijd",
+"nn": false,
+"ty": "time without time zone"
+},
+{
+"def": null,
+"n": "eind_tijd",
+"nn": false,
+"ty": "time without time zone"
+},
+{
+"def": null,
+"n": "uren",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "'arbeid'::text",
+"n": "type",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "notitie",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "0",
+"n": "pauze_minuten",
+"nn": true,
+"ty": "integer"
+},
+{
+"def": null,
+"n": "reis_km",
+"nn": false,
+"ty": "numeric"
+},
+{
+"def": null,
+"n": "werkbon_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "customer_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "deal_id",
+"nn": false,
+"ty": "uuid"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "urenregistratie"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "customer_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "nummer",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "CURRENT_DATE",
+"n": "factuurdatum",
+"nn": true,
+"ty": "date"
+},
+{
+"def": null,
+"n": "vervaldatum",
+"nn": false,
+"ty": "date"
+},
+{
+"def": null,
+"n": "betalingskenmerk",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "'concept'::text",
+"n": "status",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "notities",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "0",
+"n": "totaal_excl",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "0",
+"n": "totaal_incl",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": null,
+"n": "betaald_op",
+"nn": false,
+"ty": "date"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "project_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "externe_referentie",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "moneybird_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "false",
+"n": "is_credit",
+"nn": false,
+"ty": "boolean"
+},
+{
+"def": null,
+"n": "credit_van_factuur_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": "false",
+"n": "gecrediteerd",
+"nn": false,
+"ty": "boolean"
+},
+{
+"def": "14",
+"n": "betaaltermijn_dagen",
+"nn": false,
+"ty": "integer"
+},
+{
+"def": null,
+"n": "herinnering_1_verstuurd_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "herinnering_2_verstuurd_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "snapshot_logo_url",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "snapshot_branding_color",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "snapshot_bedrijfsnaam",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "snapshot_adres",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "snapshot_postcode",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "snapshot_plaats",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "snapshot_email",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "snapshot_kvk",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "snapshot_btw",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "stripe_payment_intent_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "stripe_checkout_session_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "stripe_payment_url",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "stripe_payment_status",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "moneybird_payment_registered_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "stripe_payment_token",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "snelstart_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "false",
+"n": "snelstart_bijlage_gesynct",
+"nn": true,
+"ty": "boolean"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "facturen"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "factuur_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": "'stuks'::text",
+"n": "type",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "omschrijving",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "1",
+"n": "aantal",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "0",
+"n": "eenheidsprijs",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "21",
+"n": "btw_pct",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "0",
+"n": "regelprijs",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "0",
+"n": "volgorde",
+"nn": true,
+"ty": "integer"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "'normaal'::text",
+"n": "btw_regime",
+"nn": true,
+"ty": "text"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "factuur_regels"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": "'moneybird'::text",
+"n": "provider",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "api_token",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "administration_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "last_synced_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "afas_environment_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "afas_token",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "false",
+"n": "is_connected",
+"nn": false,
+"ty": "boolean"
+},
+{
+"def": null,
+"n": "client_key",
+"nn": false,
+"ty": "text"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "accounting_connections"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "user_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "widget_type",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "title",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "0",
+"n": "position",
+"nn": true,
+"ty": "integer"
+},
+{
+"def": "'medium'::text",
+"n": "size",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "'{}'::jsonb",
+"n": "settings",
+"nn": true,
+"ty": "jsonb"
+},
+{
+"def": "true",
+"n": "is_visible",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": false,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "dashboard_widgets"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "user_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "google_email",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "'primary'::text",
+"n": "google_calendar_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "access_token",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "refresh_token",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "token_expiry",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "true",
+"n": "is_connected",
+"nn": false,
+"ty": "boolean"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": false,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "google_calendar_connections"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "customer_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "deal_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "offerte_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "name",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "description",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "'gepland'::text",
+"n": "status",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "0",
+"n": "project_value",
+"nn": true,
+"ty": "numeric(12,2)"
+},
+{
+"def": "0",
+"n": "quoted_hours",
+"nn": true,
+"ty": "numeric(10,2)"
+},
+{
+"def": null,
+"n": "start_date",
+"nn": false,
+"ty": "date"
+},
+{
+"def": null,
+"n": "deadline",
+"nn": false,
+"ty": "date"
+},
+{
+"def": null,
+"n": "owner_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "created_by",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "assigned_to",
+"nn": false,
+"ty": "uuid"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "projects"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "project_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "created_by",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "note",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "project_notes"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "werkbon_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "url",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "categorie",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "werkbon_fotos"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "customer_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": "'notitie_toegevoegd'::text",
+"n": "type",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "omschrijving",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "aangemaakt_op",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "created_by",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "meta",
+"nn": false,
+"ty": "jsonb"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "klant_tijdlijn"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "to_email",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "subject",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "related_type",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "related_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": "now()",
+"n": "sent_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "'sent'::text",
+"n": "status",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "appointment_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "customer_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "body_html",
+"nn": false,
+"ty": "text"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "sent_emails"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "periode_type",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "periode_label",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "periode_start",
+"nn": true,
+"ty": "date"
+},
+{
+"def": null,
+"n": "periode_eind",
+"nn": true,
+"ty": "date"
+},
+{
+"def": "0",
+"n": "btw_ontvangen_21",
+"nn": false,
+"ty": "numeric"
+},
+{
+"def": "0",
+"n": "btw_ontvangen_9",
+"nn": false,
+"ty": "numeric"
+},
+{
+"def": "0",
+"n": "omzet_0_tarief",
+"nn": false,
+"ty": "numeric"
+},
+{
+"def": "0",
+"n": "btw_betaald_21",
+"nn": false,
+"ty": "numeric"
+},
+{
+"def": "0",
+"n": "btw_betaald_9",
+"nn": false,
+"ty": "numeric"
+},
+{
+"def": "now()",
+"n": "last_synced_at",
+"nn": false,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "btw_periodes"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "user_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "type",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "title",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "body",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "link",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "related_type",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "related_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "created_by",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "read_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": false,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "notifications"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "user_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "email",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "token",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "expires_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "used_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "token_hash",
+"nn": false,
+"ty": "text"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "password_reset_tokens"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "naam",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "kenteken",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "'#1DDB62'::text",
+"n": "kleur",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "true",
+"n": "actief",
+"nn": false,
+"ty": "boolean"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "zitplaatsen",
+"nn": false,
+"ty": "integer"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "voertuigen"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "user_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "permission",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "true",
+"n": "granted",
+"nn": false,
+"ty": "boolean"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "user_permissions"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": "'trial'::text",
+"n": "plan",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "'trial'::text",
+"n": "status",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "0",
+"n": "price_per_month",
+"nn": false,
+"ty": "numeric"
+},
+{
+"def": "(now() + '14 days'::interval)",
+"n": "trial_ends_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "started_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "cancelled_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "notes",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "stripe_customer_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "stripe_subscription_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "stripe_price_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "stripe_status",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "'maand'::text",
+"n": "billing_interval",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "0",
+"n": "extra_gebruikers",
+"nn": true,
+"ty": "integer"
+},
+{
+"def": null,
+"n": "current_period_start",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "current_period_end",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "false",
+"n": "cancel_at_period_end",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": null,
+"n": "welkomstactie",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "welkomstactie_gekozen_op",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "stripe_schedule_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "verplichting_tot",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "false",
+"n": "stopt_na_looptijd",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": null,
+"n": "stopt_op",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "welkomstmail_op",
+"nn": false,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "subscriptions"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "email",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "last_attempt",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "1",
+"n": "attempt_count",
+"nn": false,
+"ty": "integer"
+},
+{
+"def": "now()",
+"n": "window_start",
+"nn": false,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (email)",
+"t": "password_reset_attempts"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "user_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "email",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "code_hash",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "expires_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "verified_at",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "0",
+"n": "attempts",
+"nn": false,
+"ty": "integer"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": false,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "email_verification_codes"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "email",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "last_sent",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "1",
+"n": "send_count",
+"nn": false,
+"ty": "integer"
+},
+{
+"def": "now()",
+"n": "window_start",
+"nn": false,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (email)",
+"t": "email_verification_attempts"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "naam",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "0",
+"n": "standaard_prijs",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": null,
+"n": "eenheid_label",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "btw_pct",
+"nn": false,
+"ty": "numeric"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "eigen_eenheden"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "label",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "0",
+"n": "position",
+"nn": true,
+"ty": "integer"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "lost_reasons"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "stripe_account_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "false",
+"n": "charges_enabled",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": "false",
+"n": "payouts_enabled",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": "false",
+"n": "details_submitted",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": "'pending'::text",
+"n": "onboarding_status",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "stripe_connections"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "user_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": "now()",
+"n": "last_attempt",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": "1",
+"n": "attempt_count",
+"nn": false,
+"ty": "integer"
+},
+{
+"def": "now()",
+"n": "window_start",
+"nn": false,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (user_id)",
+"t": "email_send_attempts"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "werkbon_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "created_by",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "note",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "false",
+"n": "voor_klant",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": null,
+"n": "gevolg",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "waarschuwing_verzonden_op",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "waarschuwing_verzonden_naar",
+"nn": false,
+"ty": "text"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "werkbon_notities"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "activity_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "created_by",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "note",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "activiteit_notities"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "feature",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "label",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "''::text",
+"n": "uitleg",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "false",
+"n": "intern",
+"nn": true,
+"ty": "boolean"
+}
+],
+"pk": "PRIMARY KEY (feature)",
+"t": "plan_feature_defs"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "plan",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "feature",
+"nn": true,
+"ty": "text"
+}
+],
+"pk": "PRIMARY KEY (plan, feature)",
+"t": "plan_features"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "plan",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "limit_key",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "limit_value",
+"nn": false,
+"ty": "integer"
+},
+{
+"def": null,
+"n": "telwijze",
+"nn": true,
+"ty": "text"
+}
+],
+"pk": "PRIMARY KEY (plan, limit_key)",
+"t": "plan_limits"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "module_key",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "label",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "feature",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "0",
+"n": "price",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": null,
+"n": "vereist",
+"nn": false,
+"ty": "text"
+}
+],
+"pk": "PRIMARY KEY (module_key)",
+"t": "plan_modules"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "plan",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "module_key",
+"nn": true,
+"ty": "text"
+}
+],
+"pk": "PRIMARY KEY (plan, module_key)",
+"t": "plan_module_tiers"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "module_key",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "true",
+"n": "actief",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "stripe_item_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "stripe_price_id",
+"nn": false,
+"ty": "text"
+}
+],
+"pk": "PRIMARY KEY (company_id, module_key)",
+"t": "company_modules"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "soort",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "periode_start",
+"nn": true,
+"ty": "date"
+},
+{
+"def": null,
+"n": "ref_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "plan_usage_events"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "aangevraagd_door",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "gewenst_plan",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "'{}'::text[]",
+"n": "gewenste_modules",
+"nn": true,
+"ty": "text[]"
+},
+{
+"def": null,
+"n": "aanleiding",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "'open'::text",
+"n": "status",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "upgrade_requests"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "event_id",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "type",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": "now()",
+"n": "verwerkt_op",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "resultaat",
+"nn": false,
+"ty": "text"
+}
+],
+"pk": "PRIMARY KEY (event_id)",
+"t": "stripe_billing_events"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": "'open'::text",
+"n": "status",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "aangevraagd_op",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "mail_verstuurd_op",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "opgeleverd_op",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "notitie",
+"nn": false,
+"ty": "text"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "website_aanvragen"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "mail",
+"nn": true,
+"ty": "smallint"
+},
+{
+"def": "now()",
+"n": "verstuurd_op",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "naar",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "message_id",
+"nn": false,
+"ty": "text"
+}
+],
+"pk": "PRIMARY KEY (company_id, mail)",
+"t": "trial_mails"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "user_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": "'[]'::jsonb",
+"n": "messages",
+"nn": true,
+"ty": "jsonb"
+},
+{
+"def": null,
+"n": "titel",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "doorzet_verstuurd_op",
+"nn": false,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "boss_conversations"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "user_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": "now()",
+"n": "window_start",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "0",
+"n": "aantal",
+"nn": true,
+"ty": "integer"
+}
+],
+"pk": "PRIMARY KEY (user_id)",
+"t": "boss_rate_limit"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "user_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": "now()",
+"n": "window_start",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "0",
+"n": "aantal",
+"nn": true,
+"ty": "integer"
+}
+],
+"pk": "PRIMARY KEY (user_id)",
+"t": "boss_doorzet_limiet"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "naam",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "contactpersoon",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "email",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "telefoon",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "mobiel",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "website",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "address",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "postcode",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "city",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "kvk_number",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "btw_number",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "iban",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "betaaltermijn_dagen",
+"nn": false,
+"ty": "integer"
+},
+{
+"def": null,
+"n": "notities",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "true",
+"n": "actief",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": null,
+"n": "snelstart_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "moneybird_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "leveranciers"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "leverancier_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": "'notitie'::text",
+"n": "type",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "omschrijving",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "meta",
+"nn": false,
+"ty": "jsonb"
+},
+{
+"def": null,
+"n": "created_by",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": "now()",
+"n": "aangemaakt_op",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "leverancier_tijdlijn"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "naam",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "'stuk'::text",
+"n": "eenheid",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "verkoopprijs",
+"nn": false,
+"ty": "numeric"
+},
+{
+"def": null,
+"n": "leverancier_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": "21",
+"n": "btw_pct",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": null,
+"n": "artikelnummer",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "true",
+"n": "actief",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "materialen"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "materiaal_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "inkoopprijs",
+"nn": false,
+"ty": "numeric"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (materiaal_id)",
+"t": "materiaal_inkoop"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "werkbon_materiaal_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "inkoopprijs_per",
+"nn": false,
+"ty": "numeric"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (werkbon_materiaal_id)",
+"t": "werkbon_materiaal_inkoop"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": "'snelstart'::text",
+"n": "provider",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "sleutel",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "grootboek_nummer",
+"nn": true,
+"ty": "integer"
+},
+{
+"def": null,
+"n": "grootboek_id",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "omschrijving",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (company_id, provider, sleutel)",
+"t": "grootboek_voorkeuren"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "naam",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "false",
+"n": "standaard",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": "true",
+"n": "actief",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": "true",
+"n": "bon_verplicht",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": "100",
+"n": "volgorde",
+"nn": true,
+"ty": "integer"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "kosten_categorieen"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": "'snelstart'::text",
+"n": "provider",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "soort",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "externe_id",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "reden",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (company_id, provider, soort, externe_id)",
+"t": "import_genegeerd"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "provider",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "onderdeel",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "'handmatig'::text",
+"n": "bron",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "gestart_op",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "klaar_op",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "gelukt",
+"nn": false,
+"ty": "boolean"
+},
+{
+"def": null,
+"n": "fout",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "'[]'::jsonb",
+"n": "fouten",
+"nn": true,
+"ty": "jsonb"
+},
+{
+"def": "'[]'::jsonb",
+"n": "meldingen",
+"nn": true,
+"ty": "jsonb"
+},
+{
+"def": null,
+"n": "samenvatting",
+"nn": false,
+"ty": "jsonb"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "accounting_sync_runs"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "werkbon_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "profile_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "datum",
+"nn": true,
+"ty": "date"
+},
+{
+"def": null,
+"n": "start_tijd",
+"nn": false,
+"ty": "time without time zone"
+},
+{
+"def": null,
+"n": "eind_tijd",
+"nn": false,
+"ty": "time without time zone"
+},
+{
+"def": "0",
+"n": "pauze_minuten",
+"nn": true,
+"ty": "integer"
+},
+{
+"def": null,
+"n": "uren",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": null,
+"n": "reis_km",
+"nn": false,
+"ty": "numeric"
+},
+{
+"def": null,
+"n": "notitie",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "werkbon_uren"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "werkbon_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "datum",
+"nn": true,
+"ty": "date"
+},
+{
+"def": null,
+"n": "starttijd",
+"nn": false,
+"ty": "time without time zone"
+},
+{
+"def": null,
+"n": "eindtijd",
+"nn": false,
+"ty": "time without time zone"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "medewerker_ids",
+"nn": false,
+"ty": "uuid[]"
+},
+{
+"def": null,
+"n": "medewerker_tijden",
+"nn": false,
+"ty": "jsonb"
+},
+{
+"def": null,
+"n": "voertuig_ids",
+"nn": false,
+"ty": "uuid[]"
+},
+{
+"def": null,
+"n": "voertuig_tijden",
+"nn": false,
+"ty": "jsonb"
+},
+{
+"def": null,
+"n": "medewerker_voertuig",
+"nn": false,
+"ty": "jsonb"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "werkbon_dagen"
+},
+{
+"kol": [
+{
+"def": "true",
+"n": "id",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": "false",
+"n": "actief",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": "2",
+"n": "facturen_per_dag_max",
+"nn": true,
+"ty": "smallint"
+},
+{
+"def": "2",
+"n": "kosten_per_dag_max",
+"nn": true,
+"ty": "smallint"
+},
+{
+"def": null,
+"n": "laatste_run",
+"nn": false,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "cert_testdata_instellingen"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "soort",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "record_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "omschrijving",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "aangemaakt_op",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "cert_testdata_log"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "deal_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": "auth.uid()",
+"n": "created_by",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "note",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "deal_notities"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "project_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": "CURRENT_DATE",
+"n": "datum",
+"nn": true,
+"ty": "date"
+},
+{
+"def": null,
+"n": "naam",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "eenheid",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "1",
+"n": "aantal",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "0",
+"n": "prijs_per",
+"nn": true,
+"ty": "numeric"
+},
+{
+"def": "round((aantal * prijs_per), 2)",
+"n": "bedrag",
+"nn": false,
+"ty": "numeric"
+},
+{
+"def": null,
+"n": "leverancier_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "werkbon_id",
+"nn": false,
+"ty": "uuid"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "project_kosten"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "sleutel",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "waarde",
+"nn": true,
+"ty": "jsonb"
+},
+{
+"def": "now()",
+"n": "bijgewerkt_op",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "bijgewerkt_door",
+"nn": false,
+"ty": "uuid"
+}
+],
+"pk": "PRIMARY KEY (sleutel)",
+"t": "platform_instellingen"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "nummer",
+"nn": true,
+"ty": "bigint"
+},
+{
+"def": null,
+"n": "soort",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "omschrijving",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "'nieuw'::text",
+"n": "status",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "user_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "bedrijf_naam",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "gebruiker_naam",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "gebruiker_email",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "gebruiker_rol",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "abonnement",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "pagina",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "pagina_url",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "browser",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "user_agent",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "scherm",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "screenshot_pad",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "false",
+"n": "actie_deelname",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": null,
+"n": "mail_verstuurd_op",
+"nn": false,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "notitie",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "aangemaakt_op",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "meldingen"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "name",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "(('wf_'::text || replace((gen_random_uuid())::text, '-'::text, ''::text)) || replace((gen_random_uuid())::text, '-'::text, ''::text))",
+"n": "public_token",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "true",
+"n": "is_active",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": "'{}'::text[]",
+"n": "allowed_domains",
+"nn": true,
+"ty": "text[]"
+},
+{
+"def": "'{}'::jsonb",
+"n": "settings",
+"nn": true,
+"ty": "jsonb"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "website_forms"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "form_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "customer_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "deal_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "assigned_to",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "name",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "company_name",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "email",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "phone",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "subject",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "message",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "'website'::text",
+"n": "source",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "source_url",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "'nieuw'::text",
+"n": "status",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "false",
+"n": "is_test",
+"nn": true,
+"ty": "boolean"
+},
+{
+"def": null,
+"n": "submission_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": "'{}'::jsonb",
+"n": "metadata",
+"nn": true,
+"ty": "jsonb"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "inquiries"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "sleutel",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "window_start",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "0",
+"n": "aantal",
+"nn": true,
+"ty": "integer"
+}
+],
+"pk": "PRIMARY KEY (sleutel)",
+"t": "website_inquiry_attempts"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": "now()",
+"n": "opgetreden_op",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": "'onbekend'::text",
+"n": "soort",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "ontvanger",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "bedrijf_naam",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "fout",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "'onbekend'::text",
+"n": "bron",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "gerelateerd_type",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "gerelateerd_id",
+"nn": false,
+"ty": "uuid"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "mail_fouten"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "user_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "werkbon_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "werkbon_nummer",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "titel",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "klant",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "soort",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "oude_datum",
+"nn": false,
+"ty": "date"
+},
+{
+"def": null,
+"n": "oude_start",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "oude_eind",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "nieuwe_datum",
+"nn": false,
+"ty": "date"
+},
+{
+"def": null,
+"n": "nieuwe_start",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "nieuwe_eind",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "aangemaakt_op",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "verwerkt_op",
+"nn": false,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "planning_wijzigingen"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "moment",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "stage_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": "now()",
+"n": "updated_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (company_id, moment)",
+"t": "pipeline_koppelingen"
+},
+{
+"kol": [
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "reference_key",
+"nn": true,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "aangemaakt_op",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (company_id)",
+"t": "snelstart_referenties"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": "now()",
+"n": "ontvangen_op",
+"nn": true,
+"ty": "timestamp with time zone"
+},
+{
+"def": null,
+"n": "actie",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": false,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "bedrijf_naam",
+"nn": false,
+"ty": "text"
+},
+{
+"def": null,
+"n": "uitkomst",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "http_status",
+"nn": true,
+"ty": "integer"
+},
+{
+"def": null,
+"n": "melding",
+"nn": false,
+"ty": "text"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "snelstart_webhook_log"
+},
+{
+"kol": [
+{
+"def": "gen_random_uuid()",
+"n": "id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "project_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "company_id",
+"nn": true,
+"ty": "uuid"
+},
+{
+"def": null,
+"n": "url",
+"nn": true,
+"ty": "text"
+},
+{
+"def": null,
+"n": "categorie",
+"nn": false,
+"ty": "text"
+},
+{
+"def": "now()",
+"n": "created_at",
+"nn": true,
+"ty": "timestamp with time zone"
+}
+],
+"pk": "PRIMARY KEY (id)",
+"t": "project_fotos"
+}
+],
+"triggers": [
+"CREATE TRIGGER bb_werkbon_dagen_na AFTER INSERT OR DELETE OR UPDATE ON public.werkbon_dagen FOR EACH ROW EXECUTE FUNCTION bb_werkbon_dagen_na()",
+"CREATE TRIGGER bb_profiel_bewaken BEFORE DELETE OR UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION bb_profiel_bewaken()",
+"CREATE TRIGGER trg_factuur_regels_totalen AFTER INSERT OR DELETE OR UPDATE ON public.factuur_regels FOR EACH ROW EXECUTE FUNCTION bb_factuurtotalen_bij_regel()",
+"CREATE TRIGGER trg_offerte_items_totalen AFTER INSERT OR DELETE OR UPDATE ON public.offerte_items FOR EACH ROW EXECUTE FUNCTION bb_offertetotalen_bij_regel()",
+"CREATE TRIGGER bb_werkbon_uren_op_slot BEFORE INSERT OR DELETE OR UPDATE ON public.werkbon_uren FOR EACH ROW EXECUTE FUNCTION bb_werkbon_op_slot()",
+"CREATE TRIGGER bb_werkbon_taken_op_slot BEFORE INSERT OR DELETE OR UPDATE ON public.werkbon_taken FOR EACH ROW EXECUTE FUNCTION bb_werkbon_op_slot()",
+"CREATE TRIGGER bb_werkbon_materialen_op_slot BEFORE INSERT OR DELETE OR UPDATE ON public.werkbon_materialen FOR EACH ROW EXECUTE FUNCTION bb_werkbon_op_slot()",
+"CREATE TRIGGER bb_werkbon_status_gevolgen AFTER INSERT OR DELETE OR UPDATE ON public.werkbonnen FOR EACH ROW EXECUTE FUNCTION bb_werkbon_status_gevolgen()",
+"CREATE TRIGGER bb_werkbon_dag_op_slot BEFORE INSERT OR DELETE OR UPDATE ON public.werkbon_dagen FOR EACH ROW EXECUTE FUNCTION bb_werkbon_dag_op_slot()",
+"CREATE TRIGGER bb_voertuig_verwijderd BEFORE DELETE ON public.voertuigen FOR EACH ROW EXECUTE FUNCTION bb_voertuig_verwijderd()"
+],
+"uniek": [
+{
+"def": "UNIQUE (reference_key)",
+"n": "snelstart_referenties_reference_key_key",
+"t": "snelstart_referenties"
+},
+{
+"def": "UNIQUE (werkbon_id, datum)",
+"n": "werkbon_dagen_uniek",
+"t": "werkbon_dagen"
+},
+{
+"def": "UNIQUE (company_id)",
+"n": "bedrijfsinstellingen_company_id_key",
+"t": "bedrijfsinstellingen"
+},
+{
+"def": "UNIQUE (company_id, type)",
+"n": "email_templates_company_type_key",
+"t": "email_templates"
+},
+{
+"def": "UNIQUE (company_id, email)",
+"n": "company_members_company_email_key",
+"t": "company_members"
+},
+{
+"def": "UNIQUE (public_token)",
+"n": "website_forms_public_token_key",
+"t": "website_forms"
+},
+{
+"def": "UNIQUE (company_id, provider)",
+"n": "accounting_connections_company_id_provider_key",
+"t": "accounting_connections"
+},
+{
+"def": "UNIQUE (user_id)",
+"n": "google_calendar_connections_user_id_key",
+"t": "google_calendar_connections"
+},
+{
+"def": "UNIQUE (company_id, \"position\")",
+"n": "pipeline_stages_company_position_key",
+"t": "pipeline_stages"
+},
+{
+"def": "UNIQUE (company_id, periode_start, periode_type)",
+"n": "btw_periodes_company_id_periode_start_periode_type_key",
+"t": "btw_periodes"
+},
+{
+"def": "UNIQUE (token)",
+"n": "password_reset_tokens_token_key",
+"t": "password_reset_tokens"
+},
+{
+"def": "UNIQUE (company_id)",
+"n": "website_aanvragen_company_id_key",
+"t": "website_aanvragen"
+},
+{
+"def": "UNIQUE (user_id, permission)",
+"n": "user_permissions_user_id_permission_key",
+"t": "user_permissions"
+},
+{
+"def": "UNIQUE (company_id)",
+"n": "subscriptions_company_id_key",
+"t": "subscriptions"
+},
+{
+"def": "UNIQUE (company_id, label)",
+"n": "lost_reasons_company_label_key",
+"t": "lost_reasons"
+},
+{
+"def": "UNIQUE (company_id, naam)",
+"n": "kosten_categorieen_company_id_naam_key",
+"t": "kosten_categorieen"
+},
+{
+"def": "UNIQUE (company_id)",
+"n": "stripe_connections_company_id_key",
+"t": "stripe_connections"
+},
+{
+"def": "UNIQUE (nummer)",
+"n": "meldingen_nummer_key",
+"t": "meldingen"
+}
+]
+}

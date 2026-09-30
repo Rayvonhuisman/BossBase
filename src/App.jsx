@@ -1272,7 +1272,7 @@ function AppInner() {
         if (stopped || pErr) return;
         if (prof && prof.actief === false) {
           forceLogout(prof.verwijderd_op
-            ? 'Je account is verwijderd. Je kunt binnen 2 jaar terugkeren door contact op te nemen.'
+            ? 'Je account is gedeactiveerd. Terugkeren of je gegevens laten verwijderen? Mail info@bossbase.nl.'
             : 'Je account is gedeactiveerd. Je bent uitgelogd.');
         }
       } catch {

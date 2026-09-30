@@ -159,6 +159,11 @@ export function InstellingenPage() {
   const { can } = usePermissions();
   const { startUpload } = useUploads();
   const isAdmin = profile?.role === 'admin';
+  // Het hele bedrijf opzeggen mag alleen de eigenaar (of een beheerder als er
+  // geen eigenaar is vastgelegd); de database dwingt hetzelfde af in
+  // cancel_company_account. Een andere beheerder deactiveert alleen zichzelf.
+  const eigenaarId = company?.raw?.eigenaar_id || null;
+  const zegtBedrijfOp = isAdmin && (!eigenaarId || eigenaarId === profile?.id);
   // Bedrijfsinstellingen-tabs zijn voor admins (of medewerkers met het recht);
   // iedereen kan z'n eigen "Mijn profiel" beheren (incl. account verwijderen).
   const canCompanySettings = can('instellingen');
@@ -1266,7 +1271,7 @@ export function InstellingenPage() {
     setDeleting(true);
     try {
       let stopBericht = '';
-      if (isAdmin) {
+      if (zegtBedrijfOp) {
         // Eerst het Stripe-abonnement opzeggen. Zonder dit werd het bedrijf
         // gedeactiveerd maar liep de incasso gewoon door. billing-cancel houdt
         // de looptijd aan: een jaarabonnement stopt aan het einde van de 12
@@ -1284,7 +1289,9 @@ export function InstellingenPage() {
       } else {
         await deleteOwnAccount();
       }
-      toast.success(`Je account is verwijderd. Je kunt binnen 2 jaar terugkeren door contact op te nemen.${stopBericht}`);
+      toast.success(zegtBedrijfOp
+        ? `Je bedrijf is opgezegd.${stopBericht} Terugkeren of de gegevens laten verwijderen? Mail info@bossbase.nl.`
+        : 'Je account is gedeactiveerd.');
       // Uitloggen → onAuthStateChange in App.jsx redirect naar /login.
       await supabase.auth.signOut();
     } catch (err) {
@@ -1833,16 +1840,16 @@ export function InstellingenPage() {
           <div style={{ marginTop: 'var(--sp-6)', paddingTop: 'var(--sp-5)', borderTop: '1px solid #fecaca' }}>
             <div className="label" style={{ marginBottom: 'var(--sp-2)', color: '#b91c1c' }}>Gevarenzone</div>
             <p style={{ fontSize: '.82rem', color: 'var(--dl)', lineHeight: 1.5, marginBottom: 'var(--sp-3)', maxWidth: 560 }}>
-              {isAdmin
-                ? 'Je bent beheerder. Je account verwijderen zegt het hele bedrijf op: alle teamleden verliezen toegang en alle bedrijfsgegevens worden gedeactiveerd.'
-                : 'Je verwijdert alleen je eigen account uit het team. Je verliest direct toegang.'}
+              {zegtBedrijfOp
+                ? 'Je bent de eigenaar. Hiermee zeg je het hele bedrijf op: het abonnement stopt en alle teamleden verliezen toegang.'
+                : 'Hiermee deactiveer je alleen je eigen account. Je verliest direct toegang; het bedrijf en de gegevens van het team blijven bestaan.'}
             </p>
             <button
               type="button"
               onClick={() => { setDelConfirm(''); setDelOpen(true); }}
               style={{ background: 'none', border: '1px solid #fecaca', borderRadius: 'var(--r8)', padding: '7px 14px', cursor: 'pointer', color: '#b91c1c', fontWeight: 600, fontSize: '.84rem' }}
             >
-              Account verwijderen
+              {zegtBedrijfOp ? 'Bedrijf opzeggen' : 'Account deactiveren'}
             </button>
           </div>
 
@@ -1851,22 +1858,29 @@ export function InstellingenPage() {
               <div className="modal">
                 <div className="modal-hd">
                   <div>
-                    <div className="modal-title">{isAdmin ? 'Bedrijf opzeggen' : 'Account verwijderen'}</div>
+                    <div className="modal-title">{zegtBedrijfOp ? 'Bedrijf opzeggen' : 'Account deactiveren'}</div>
                     <div className="modal-sub">Lees dit goed door — deze actie heeft gevolgen.</div>
                   </div>
                   <ModalX onClose={() => !deleting && setDelOpen(false)} />
                 </div>
                 <div style={{ padding: '4px 24px 8px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {isAdmin && (
-                    <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 'var(--r8)', padding: '10px 12px', fontSize: '.84rem', color: '#991b1b' }}>
-                      Let op: je bent beheerder. Hiermee zeg je het <strong>hele bedrijf</strong> op. Alle teamleden verliezen direct toegang.
-                    </div>
+                  {/* Beschrijft wat de knop echt doet (cancel_company_account /
+                      delete_own_account, billing-cancel); geen bewaartermijn
+                      beloven zolang die niet is vastgesteld en uitgevoerd. */}
+                  {zegtBedrijfOp ? (
+                    <ul style={{ fontSize: '.86rem', color: 'var(--dk)', lineHeight: 1.55, margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <li>Je abonnement wordt opgezegd. Een maandabonnement stopt aan het einde van de lopende maand. Een jaarabonnement stopt aan het einde van de looptijd; tot dan loopt de incasso door.</li>
+                      <li>Jij en alle teamleden worden <strong>direct uitgelogd</strong> en kunnen niet meer inloggen.</li>
+                      <li>De gegevens van het bedrijf worden nu <strong>niet verwijderd</strong>, zodat je kunt terugkeren. Wil je dat we ze verwijderen, mail dan naar info@bossbase.nl.</li>
+                      <li>Je facturen en btw-gegevens moet je zelf 7 jaar bewaren. Exporteer ze voordat je opzegt.</li>
+                    </ul>
+                  ) : (
+                    <ul style={{ fontSize: '.86rem', color: 'var(--dk)', lineHeight: 1.55, margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <li>Je wordt <strong>direct uitgelogd</strong> en kunt niet meer inloggen.</li>
+                      <li>Wat je in BossBase hebt vastgelegd (uren, werkbonnen, notities) hoort bij het bedrijf en blijft daar staan.</li>
+                      <li>Je profiel wordt <strong>niet verwijderd</strong>, zodat een beheerder je later weer kan activeren. Wil je dat je naam en e-mailadres worden verwijderd, mail dan naar info@bossbase.nl.</li>
+                    </ul>
                   )}
-                  <p style={{ fontSize: '.86rem', color: 'var(--dk)', lineHeight: 1.55, margin: 0 }}>
-                    Je account wordt gedeactiveerd en je wordt uitgelogd. Je gegevens blijven <strong>2 jaar</strong> bewaard
-                    zodat je kunt terugkeren. Daarna worden ze definitief verwijderd, ook je facturen en btw-gegevens.
-                    Je moet je administratie zelf <strong>7 jaar</strong> bewaren: exporteer die op tijd.
-                  </p>
                   <div className="f">
                     <label>Typ <strong>VERWIJDEREN</strong> om te bevestigen</label>
                     <input
@@ -1886,7 +1900,7 @@ export function InstellingenPage() {
                     onClick={handleDeleteAccount}
                     disabled={deleting || delConfirm.trim().toUpperCase() !== 'VERWIJDEREN'}
                   >
-                    {deleting ? 'Verwijderen…' : (isAdmin ? 'Bedrijf definitief opzeggen' : 'Account definitief verwijderen')}
+                    {deleting ? 'Bezig…' : (zegtBedrijfOp ? 'Bedrijf opzeggen' : 'Account deactiveren')}
                   </button>
                 </div>
               </div>

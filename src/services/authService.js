@@ -52,6 +52,10 @@ export function onAuthStateChange(callback) {
 
 export async function loginWithEmail(email, password) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+  // Gedeactiveerde en opgezegde accounts zijn ook in Auth geblokkeerd.
+  if (error && (error.code === 'user_banned' || /banned/i.test(error.message || ''))) {
+    throw new Error('Je account is gedeactiveerd. Neem contact op met je beheerder, of mail info@bossbase.nl.')
+  }
   if (error) throw error
   // Gedeactiveerd account weigeren: meteen weer uitloggen en blokkeren.
   // (Een verwijderd account kan sowieso niet inloggen — auth.users bestaat niet meer.)

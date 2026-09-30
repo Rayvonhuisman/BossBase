@@ -78,19 +78,26 @@ verwijderd: er is niets meer waarvoor toestemming nodig is.
 ## 6. Bewaren en verwijderen
 
 Bewaartermijnen staan per regel in §3. Na het einde van het abonnement bewaren we
-de gegevens van een bedrijf nog 2 jaar, gelijk aan de algemene voorwaarden. Daarna
+de gegevens van een bedrijf nog [2 jaar — termijn nog te besluiten], gelijk aan de algemene voorwaarden. Daarna
 worden ze verwijderd, ook de bestanden.
 
 Feitelijke stand (30 september 2026):
 
-- "Account verwijderen" zet het account op inactief; gegevens, het
-  inlogaccount en bestanden blijven 2 jaar bestaan.
-- Daarna verwijdert de opschoonjob (edge function `opschonen`) de rijen, de
-  bestanden in de opslag en de inlogaccounts van het bedrijf. Dezelfde job past
-  de termijnen in §3 toe. De app zegt nu hetzelfde: 2 jaar, daarna alles weg, ook
-  facturen; de wettelijke bewaarplicht van 7 jaar ligt bij de gebruiker zelf.
-  De droogloop van 30 september: 0 bedrijven, 2 verlopen aanmeldcodes. De
-  dagelijkse uitvoering gaat aan na akkoord op die droogloop.
+- "Bedrijf opzeggen" (eigenaar) zet het bedrijf op opgezegd en de teamleden op
+  inactief; "Account deactiveren" (andere gebruikers) alleen het eigen profiel.
+  Gegevens en bestanden blijven staan. Op branch fix/accountverwijdering-bv
+  (nog niet live) worden de inlogaccounts daarbij ook geblokkeerd en de sessies
+  ingetrokken. Op productie krijgt een gedeactiveerde gebruiker bij inloggen
+  nog een geldige sessie; alleen de app logt hem direct weer uit.
+- De opschoonjob (edge function `opschonen`) staat klaar maar draait **nog
+  niet**: de dagelijkse cron is niet ingeschakeld. Er wordt dus nog niets
+  automatisch verwijderd. De app belooft daarom geen termijn meer.
+- Losse gebruikers (niet het hele bedrijf) vallen niet onder de opschoonjob;
+  hun profiel blijft tot het bedrijf zelf wordt opgeschoond, of tot een
+  verwijderverzoek.
+- De wettelijke bewaarplicht van 7 jaar voor de eigen administratie van de
+  gebruiker ligt bij de gebruiker zelf. BossBase bewaart zijn eigen facturen aan
+  de gebruiker (in Stripe) 7 jaar.
 - Opzeggen door een beheerder ("Account verwijderen") zegt sinds 30 september
   2026 eerst het Stripe-abonnement op; een jaarabonnement stopt aan het einde
   van de looptijd.

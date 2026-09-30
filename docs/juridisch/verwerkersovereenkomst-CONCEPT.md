@@ -51,13 +51,13 @@ overeenkomst daarmee omgaat.
   (RLS); niet-openbare opslag voor handtekeningen, ondertekende documenten,
   facturen en foto's; ondertekenlinks met een onraadbaar token; zie de bijlage.
 - Bijstand bij verzoeken van betrokkenen en bij datalekken.
-- Melden van een datalek aan de Klant binnen 48 uur na ontdekking.
+- Melden van een datalek aan de Klant binnen [48 uur — nog te besluiten] na ontdekking.
 - Medewerking aan audits: [[JURIST]].
 
 ## 5. Subverwerkers
 
 De Klant geeft algemene toestemming voor deze subverwerkers. BossBase meldt
-wijzigingen 30 dagen van tevoren, per e-mail. De actuele lijst staat op
+wijzigingen [30 dagen — nog te besluiten] van tevoren, per e-mail. De actuele lijst staat op
 bossbase.nl/subverwerkers.
 
 | Subverwerker | Waarvoor | Regio | Overeenkomst met BossBase |
@@ -91,14 +91,15 @@ documenten als ZIP.
 
 ## 8. Einde van de overeenkomst
 
-Na het einde van het abonnement bewaart BossBase de gegevens nog 2 jaar, gelijk
+Na het einde van het abonnement bewaart BossBase de gegevens nog [2 jaar — termijn nog te besluiten], gelijk
 aan de algemene voorwaarden; in die tijd kan de Klant terugkomen of exporteren.
 Daarna worden de gegevens verwijderd, ook de bestanden.
 
 **Feitelijke stand (30 september 2026):** opzeggen zet het bedrijf op "opgezegd"
-en de gebruikers op inactief. Na 2 jaar verwijdert de opschoonjob (edge function
-`opschonen`) de rijen, de bestanden in de opslag en de inlogaccounts van het
-bedrijf. De dagelijkse uitvoering gaat aan na akkoord op de droogloop.
+en de gebruikers op inactief. De opschoonjob (edge function `opschonen`) die
+daarna verwijdert, staat klaar maar draait nog niet (cron niet ingeschakeld).
+Eerst moeten de termijn en de correcties op branch fix/accountverwijdering-bv
+worden goedgekeurd.
 
 ## 9. Aansprakelijkheid
 
