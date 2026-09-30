@@ -358,7 +358,7 @@ export default function ContactPage({ navigate }) {
                       <div className="ci-title">Bedrijfsgegevens</div>
                       <div className="ci-val">{EXPLOITANT.naam}</div>
                       <div className="ci-sub">
-                        BossBase is een handelsnaam van {EXPLOITANT.naam}.<br />
+                        BossBase is een handelsnaam van {EXPLOITANT.naam}<br />
                         {EXPLOITANT.adres} · KvK {EXPLOITANT.kvk}
                       </div>
                     </div>
