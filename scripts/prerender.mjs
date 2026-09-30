@@ -56,13 +56,20 @@ function sleutelVoor(bron) {
   return kandidaten[0];
 }
 
-const lettertype = fs.readdirSync(path.join(DIST, 'assets')).find(f => /^inter-latin-wght-normal-.*\.woff2$/.test(f));
+// Het hoofdlettertype vooraf laden: de app-shell gebruikt Inter, de website
+// Plus Jakarta Sans (herontwerp 2026).
+const assets = fs.readdirSync(path.join(DIST, 'assets'));
+const lettertypen = {
+  app: assets.find(f => /^inter-latin-wght-normal-.*\.woff2$/.test(f)),
+  site: assets.find(f => /^plus-jakarta-sans-latin-wght-normal-.*\.woff2$/.test(f)),
+};
 
 function bronLinks(sleutels) {
   const js = new Set();
   const css = new Set();
   for (const s of sleutels) verzamel(sleutelVoor(s), js, css);
   const regels = [];
+  const lettertype = sleutels.includes('src/app-entry.jsx') ? lettertypen.app : lettertypen.site;
   if (lettertype) regels.push(`<link rel="preload" href="/assets/${lettertype}" as="font" type="font/woff2" crossorigin />`);
   css.forEach(f => regels.push(`<link rel="stylesheet" href="/${f}" />`));
   js.forEach(f => regels.push(`<link rel="modulepreload" href="/${f}" />`));

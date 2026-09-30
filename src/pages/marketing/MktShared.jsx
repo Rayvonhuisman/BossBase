@@ -300,14 +300,31 @@ export const I = {
 }
 
 /* ── Wordmark ── */
+export function LogoIcoon({ size = 32 }) {
+  // Zelfde tekening als public/brand/logo-icon.svg.
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true" className="logo-icoon">
+      <rect width="64" height="64" rx="22" fill="#0D0D0D" />
+      <rect x="14" y="14" width="9" height="36" rx="2.5" fill="#FFFFFF" />
+      <rect x="26" y="14" width="11" height="14" rx="2.5" fill="#FFFFFF" />
+      <rect x="40" y="14" width="10" height="14" rx="2.5" fill="#1DDB62" />
+      <rect x="26" y="31" width="20" height="3" rx="1.5" fill="#FFFFFF" opacity=".55" />
+      <rect x="26" y="36" width="11" height="14" rx="2.5" fill="#FFFFFF" />
+      <rect x="40" y="36" width="10" height="14" rx="2.5" fill="#FFFFFF" />
+    </svg>
+  )
+}
+
 export function Wordmark({ onDark, navigate }) {
   return (
     <a
       href="/"
       className={`wordmark${onDark ? " on-dark" : ""}`}
+      aria-label="BossBase, naar de startpagina"
       onClick={e => { if (navigate) { e.preventDefault(); navigate("/") } }}
     >
-      <span className="b1">Boss</span>Base
+      <LogoIcoon />
+      <span className="wordmark-tekst"><span className="b1">Boss</span>Base</span>
     </a>
   )
 }
@@ -387,7 +404,7 @@ export function Nav({ navigate }) {
             </ul>
             <div className="nav-right">
               <a href="/login" className="btn btn-ghost" onClick={e => go(e, "/login")}>Inloggen</a>
-              <a href="/register" className="btn btn-p" onClick={e => go(e, "/register")}>Gratis proberen</a>
+              <a href="/register" className="btn btn-p" onClick={e => go(e, "/register")}>Start nu gratis</a>
               <button className="hamburger" aria-label="Menu" onClick={() => setOpen(o => !o)}>
                 {open ? I.x : I.menu}
               </button>
@@ -400,7 +417,7 @@ export function Nav({ navigate }) {
           <a key={l.href} href={l.href} onClick={e => go(e, l.href)}>{l.label}</a>
         ))}
         <a href="/register" className="btn btn-p mobile-menu-cta" onClick={e => go(e, "/register")}>
-          Gratis proberen
+          Start nu gratis
         </a>
       </div>
     </>
@@ -439,7 +456,7 @@ const FOOTER_LINKS = {
     { label: "Contact",         href: "/contact" },
     { label: "Veelgestelde vragen", href: "/faq" },
     { label: "Subverwerkers",   href: "/subverwerkers" },
-    { label: "Demo bekijken",   href: "/#demo" },
+    { label: "Demo bekijken",   href: "/demo" },
     { label: "Inloggen",        href: "/login" },
   ],
 }
@@ -458,7 +475,7 @@ export function Footer({ navigate }) {
       <div className="container">
         <div className="footer-grid">
           <div>
-            <Wordmark onDark navigate={navigate} />
+            <Wordmark navigate={navigate} />
             <p className="footer-tag">Jij de baas, wij de basis. Het complete systeem voor vakmensen in Nederland.</p>
             <a href="mailto:info@bossbase.nl" className="footer-email">info@bossbase.nl</a>
           </div>
