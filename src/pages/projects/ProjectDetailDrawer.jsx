@@ -247,7 +247,9 @@ function OverviewTab({
       // deadline zijn van het type date en weigeren een lege tekst.
       const getalVeld = key === 'quoted_hours' || key === 'project_value';
       const waarde = getalVeld ? Number(projDraft || 0) : (projDraft || null);
-      await onSave({ [key]: waarde });
+      // Een projectwaarde die je zelf typt, blijft staan: de database rekent hem
+      // dan niet meer uit de offertes (waarde_bron 'handmatig').
+      await onSave(key === 'project_value' ? { project_value: waarde, waarde_bron: 'handmatig' } : { [key]: waarde });
       stopProjEdit();
       toast.success('Project bijgewerkt');
     } catch (e) {
@@ -739,6 +741,34 @@ function OverviewTab({
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}>
                         <Edit2 size={14} />
                       </button>
+                    )}
+                  </div>
+                )}
+                {/* Waar de projectwaarde vandaan komt. Met de hand ingesteld kan
+                    terug naar automatisch; dan rekent de database opnieuw. */}
+                {veld.key === 'project_value' && !actief && (
+                  <div style={{ fontSize: 11, color: 'var(--dl)', marginTop: 2 }}>
+                    {project.waardeBron === 'offertes' && 'Som van de geaccepteerde offertes'}
+                    {project.waardeBron === 'aanvraag' && 'Geschat in de aanvraag'}
+                    {project.waardeBron === 'handmatig' && (
+                      <>
+                        Met de hand ingesteld
+                        {canManage && (
+                          <>
+                            {' · '}
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try { await onSave({ waarde_bron: 'aanvraag' }); toast.success('Projectwaarde wordt weer automatisch berekend'); }
+                                catch (e) { toast.error(e.message || 'Opslaan mislukt'); }
+                              }}
+                              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, color: 'var(--pd)', textDecoration: 'underline' }}
+                            >
+                              automatisch berekenen
+                            </button>
+                          </>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
