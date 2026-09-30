@@ -2,7 +2,9 @@
 
 **Alleen lezen, alleen aantallen.** Uitgevoerd met
 `supabase/tests/opschonen_droogloop.sql` tegen productie. Geen namen,
-e-mailadressen of id's. De cron staat **uit** en gaat niet aan zonder apart
+e-mailadressen of id's. Bij deze droogloop stond de cron **uit**. Sindsdien (30-09-2026 16:08,
+migratie 20260930160803) draait hij dagelijks om 03:30, zonder dat de termijnen
+zijn goedgekeurd; zie docs/uitrol-accountverwijdering.md. Oorspronkelijke tekst: gaat niet aan zonder apart
 besluit.
 
 ## Selectiecriteria
@@ -47,10 +49,10 @@ resettokens 0, aanmeldcodes 2 (ouder dan 24 uur).
   Uitzoeken wat het zijn vraagt inzage in bestandsnamen en valt buiten deze
   droogloop.
 
-## Voor de cron aan kan
+## Wat vóór aanzetten nodig was (en nog openstaat)
 
 1. Besluit over de termijn(en).
-2. M2 (`20260930160000`) uitgerold; zonder die correcties faalt de job op
+2. M2 (`20260930181000`) uitgerold; zonder die correcties faalt de job op
    bedrijven met een actieve beheerder en kiest hij bestanden te ruim.
 3. Een droogloop via de echte functie (`{"droogloop": true}`) na de uitrol,
    beoordeeld.

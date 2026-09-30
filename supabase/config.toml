@@ -63,3 +63,8 @@ verify_jwt = false
 # valideert, begrenst (IP/formulier/e-mail) en schrijft met de service-role.
 [functions.public-website-inquiry]
 verify_jwt = false
+
+# Draait elk kwartier op de cron met de sleutel uit de vault. Neemt geen
+# ontvanger of datum aan: wie er gemaild wordt bepaalt de database.
+[functions.uren-herinnering]
+verify_jwt = false

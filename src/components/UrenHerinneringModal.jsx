@@ -7,7 +7,7 @@ import { getBedrijfsinstellingen } from '../services/instellingenService.js';
 import { getUrenregistratie, createUrenregel, berekenUren } from '../services/urenService.js';
 import { getTeamMembers } from '../services/notificatieService.js';
 import { PauzeKnoppen, rondAfOpVijf } from './UrenVelden.jsx';
-import { werkbonDagen, ploegOpDag } from '../utils/werkbonDagen.js';
+import { werkbonDagen, ploegOpDag, tijdenVoorPersoon } from '../utils/werkbonDagen.js';
 
 // ── Uren-herinnering-pop-up ───────────────────────────────────────────────────
 // Herinnert personeel eraan hun WERKDAG in te vullen — het getal waar de
@@ -30,26 +30,50 @@ import { werkbonDagen, ploegOpDag } from '../utils/werkbonDagen.js';
 //   • gepland  = werkbonnen (elke geplande dag + de ploeg van die dag) ∪ activiteiten (due_at → lokale datum + assigned_to_ids)
 //   • geboekt  = werkdaguren in urenregistratie (profile_id + datum)
 // Geen parallel systeem — dezelfde list-functies die de agenda/uren-pagina ook gebruiken.
+//
+// Wat de admin in Instellingen kan zetten: aan/uit en het herhaalinterval, voor
+// wie (uitsluitlijst), wanneer (moment), op welke weekdagen, en of er ook een
+// mail gaat. De mail komt van de cron (edge function uren-herinnering); de
+// regels daar staan in bb_uren_herinnering_kandidaten en moeten gelijk blijven
+// aan wat hier gebeurt.
 
 // Hoe ver terug we kijken. Voorkomt eindeloos zeuren over lang vervlogen dagen.
 const LOOKBACK_DAYS = 14;
+
+// "Einde van de dag", en de terugval voor "na afloop van de werkdag" als er
+// geen eindtijd gepland staat. Zelfde tijd als in bb_uren_herinnering_kandidaten.
+const EINDE_DAG = '17:00';
 
 const pad = n => String(n).padStart(2, '0');
 const toIso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 // Bouwt per verstreken geplande dag (zonder geboekte uren) een invulregel met
 // context (werkbon/activiteit) en een voorgevulde start/eindtijd waar bekend.
-function computeMissingEntries(uid, werkbonnen, activities, urenRows) {
-  const today = new Date();
+//
+// `moment` bepaalt vanaf wanneer een dag meetelt:
+//   volgende_ochtend → pas de dag erna (het gedrag van vóór de instelling);
+//   einde_dag        → vandaag al, vanaf EINDE_DAG;
+//   na_werkdag       → vandaag al, vanaf het laatste geplande eind van die dag.
+function computeMissingEntries(uid, werkbonnen, activities, urenRows, moment = 'volgende_ochtend') {
+  const nu = new Date();
+  const nuTijd = `${pad(nu.getHours())}:${pad(nu.getMinutes())}`;
+  const today = new Date(nu);
   today.setHours(0, 0, 0, 0);
   const todayIso = toIso(today);
   const min = new Date(today);
   min.setDate(min.getDate() - LOOKBACK_DAYS);
   const minIso = toIso(min);
-  // Alleen reeds verstreken dagen (< vandaag) binnen het terugkijk-venster.
-  const inWindow = d => !!d && d >= minIso && d < todayIso;
+  // Verstreken dagen binnen het terugkijk-venster, plus vandaag: of vandaag al
+  // meetelt hangt van het moment af en wordt onderaan beslist.
+  const inWindow = d => !!d && d >= minIso && d <= todayIso;
 
   const planned = new Map();
+  // Laatste geplande eindtijd per dag, over álle klussen en afspraken van die dag.
+  const eindPerDag = new Map();
+  const telEind = (datum, t) => {
+    const eind = t ? String(t).slice(0, 5) : '';
+    if (eind && eind > (eindPerDag.get(datum) || '')) eindPerDag.set(datum, eind);
+  };
   for (const w of (werkbonnen || [])) {
     // Élke geplande dag van de werkbon telt, niet alleen de eerste — maar alleen
     // de dagen waarop deze medewerker in de (dag)ploeg staat. Wie op woensdag is
@@ -57,8 +81,10 @@ function computeMissingEntries(uid, werkbonnen, activities, urenRows) {
     for (const dag of werkbonDagen(w)) {
       const { datum } = dag;
       if (!ploegOpDag(w, dag).includes(uid)) continue;
+      if (!inWindow(datum)) continue;
+      telEind(datum, tijdenVoorPersoon(w, dag, uid).eindtijd);
       // Eerste werkbon van die dag levert de context.
-      if (!inWindow(datum) || planned.has(datum)) continue;
+      if (planned.has(datum)) continue;
       planned.set(datum, {
         date: datum,
         werkbonId: w.id,
@@ -72,7 +98,9 @@ function computeMissingEntries(uid, werkbonnen, activities, urenRows) {
   }
   for (const a of (activities || [])) {
     // a.date = lokale datum van due_at (splitDueAt), zodat de tijdzone al klopt.
-    if (inWindow(a.date) && Array.isArray(a.assignedToIds) && a.assignedToIds.includes(uid) && !planned.has(a.date)) {
+    if (!inWindow(a.date) || !Array.isArray(a.assignedToIds) || !a.assignedToIds.includes(uid)) continue;
+    telEind(a.date, a.endTime);
+    if (!planned.has(a.date)) {
       planned.set(a.date, {
         date: a.date,
         werkbonId: null,
@@ -88,8 +116,15 @@ function computeMissingEntries(uid, werkbonnen, activities, urenRows) {
     if (r.profileId === uid && Number(r.uren) > 0 && r.datum) booked.add(r.datum);
   }
 
+  const isAanDeBeurt = datum => {
+    if (datum < todayIso) return true;
+    if (moment === 'einde_dag') return nuTijd >= EINDE_DAG;
+    if (moment === 'na_werkdag') return nuTijd >= (eindPerDag.get(datum) || EINDE_DAG);
+    return false;
+  };
+
   return [...planned.values()]
-    .filter(e => !booked.has(e.date))
+    .filter(e => !booked.has(e.date) && isAanDeBeurt(e.date))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
@@ -118,7 +153,12 @@ export function UrenHerinneringModal({ navigatePage }) {
   const toonHerinnering = isPersoneel && heeftPersoneel;
 
   const [intervalMin, setIntervalMin] = useState(0);
+  const [moment, setMoment] = useState('volgende_ochtend');
   const [entries, setEntries] = useState([]);
+  // Wat de laatste load ophaalde. Bij "einde van de dag" en "na afloop van de
+  // werkdag" komt vandaag er in de loop van de dag bij; dat rekenen we elke
+  // minuut opnieuw uit op deze gegevens, zonder opnieuw op te halen.
+  const bronRef = useRef(null);
   const [snoozed, setSnoozed] = useState(false);
   const timerRef = useRef(null);
 
@@ -136,8 +176,19 @@ export function UrenHerinneringModal({ navigatePage }) {
     return () => { alive = false; };
   }, [isPersoneel, refreshKey]);
 
+  // Rekent de open dagen opnieuw uit. Een dag die al in beeld staat houdt zijn
+  // ingetypte tijden.
+  const herbereken = useCallback(() => {
+    const bron = bronRef.current;
+    if (!bron) return;
+    const found = bron.actief
+      ? computeMissingEntries(uid, werkbonnen, activities, bron.uren, bron.moment)
+      : [];
+    setEntries(es => found.map(e => es.find(x => x.date === e.date) || { ...e, saving: false }));
+  }, [uid, werkbonnen, activities]);
+
   const load = useCallback(async () => {
-    if (!toonHerinnering || !uid) { setEntries([]); setIntervalMin(0); return; }
+    if (!toonHerinnering || !uid) { bronRef.current = null; setEntries([]); setIntervalMin(0); return; }
     try {
       // Werkbonnen en activiteiten komen uit de gedeelde dataset. Deze modal
       // staat altijd gemount (App.jsx), dus hij haalde die twee lijsten op ÉLKE
@@ -146,20 +197,32 @@ export function UrenHerinneringModal({ navigatePage }) {
         getBedrijfsinstellingen().catch(() => null),
         getUrenregistratie({ profileId: uid }).catch(() => []),
       ]);
-      const wbs = werkbonnen;
-      const acts = activities;
       const iv = Number(inst?.urenHerinneringIntervalMin ?? 0);
       setIntervalMin(iv);
-      const found = iv > 0 ? computeMissingEntries(uid, wbs, acts, uren) : [];
-      // Elke regel krijgt lokale, bewerkbare velden voor de inline invoer.
-      setEntries(found.map(e => ({ ...e, saving: false })));
+      const mom = inst?.urenHerinneringMoment || 'volgende_ochtend';
+      setMoment(mom);
+      // Staat de herinnering voor deze medewerker uit, of is vandaag geen dag
+      // waarop herinnerd wordt, dan is er niets te tonen. (1 = maandag … 7 = zondag.)
+      const weekdag = new Date().getDay() || 7;
+      const actief = iv > 0
+        && !(inst?.urenHerinneringUitgesloten || []).includes(uid)
+        && (inst?.urenHerinneringDagen || [1, 2, 3, 4, 5, 6, 7]).includes(weekdag);
+      bronRef.current = { uren, moment: mom, actief };
+      herbereken();
     } catch {
       // Stil falen — een herinnering mag nooit de app blokkeren.
     }
-  }, [toonHerinnering, uid, werkbonnen, activities]);
+  }, [toonHerinnering, uid, herbereken]);
 
   // (Her)laad bij mount, rolwissel en globale refresh (o.a. ná uren boeken).
   useEffect(() => { load(); }, [load, refreshKey]);
+
+  // Vandaag kan er in de loop van de dag bij komen; bij "volgende ochtend" niet.
+  useEffect(() => {
+    if (!toonHerinnering || intervalMin <= 0 || moment === 'volgende_ochtend') return undefined;
+    const t = setInterval(herbereken, 60 * 1000);
+    return () => clearInterval(t);
+  }, [toonHerinnering, intervalMin, moment, herbereken]);
 
   // Herstel een lopende snooze na een page-reload zodat we niet meteen weer poppen.
   useEffect(() => {
@@ -208,6 +271,8 @@ export function UrenHerinneringModal({ navigatePage }) {
         werkbon_id: entry.werkbonId || null,
       });
       toast.success(`${uren} uur geboekt voor ${fmtDag(entry.date)}`);
+      // Ook in de bron, anders zet de volgende herberekening de dag terug.
+      bronRef.current?.uren.push({ profileId: uid, datum: entry.date, uren });
       // Dag wegstrepen; laatste dag → visible wordt false en de pop-up sluit.
       setEntries(es => es.filter(e => e.date !== entry.date));
     } catch (err) {

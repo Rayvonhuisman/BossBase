@@ -1,7 +1,7 @@
 // Controle voor Edge Functions die met service_role werken.
 //
 // De service_role omzeilt RLS, dus de databaseblokkade voor gedeactiveerde
-// gebruikers (20260930170000) geldt daar niet. Auth weigert een token al zodra
+// gebruikers (20260930182000) geldt daar niet. Auth weigert een token al zodra
 // de sessie weg is (GoTrue: session_not_found), maar een account dat op een
 // andere manier inactief is geworden, of een lid van een gesloten bedrijf,
 // moet hier ook worden tegengehouden. Roep dit aan direct na auth.getUser().

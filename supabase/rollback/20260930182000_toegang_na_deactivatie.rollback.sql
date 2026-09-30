@@ -1,4 +1,4 @@
--- ── Terugdraaien van 20260930170000_toegang_na_deactivatie ──────────────────
+-- ── Terugdraaien van 20260930182000_toegang_na_deactivatie ──────────────────
 -- VOLGORDE IS BELANGRIJK: eerst de pre-request-instelling van de rol
 -- authenticator weghalen, dan de functie. Die instelling geldt voor de hele
 -- database-cluster; staat hij nog en is de functie weg, dan weigert PostgREST

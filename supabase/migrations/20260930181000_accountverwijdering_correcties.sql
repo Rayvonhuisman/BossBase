@@ -4,7 +4,7 @@
 -- (supabase/tests/accountverwijdering) en lokale Postgres + PostgREST + de echte
 -- Edge Functions (supabase/tests/lokaal). Op productie alleen als droogloop in
 -- een teruggedraaide transactie. Terugdraaien:
--- supabase/rollback/20260930160000_accountverwijdering_correcties.rollback.sql.
+-- supabase/rollback/20260930181000_accountverwijdering_correcties.rollback.sql.
 --
 -- 1. Toegang eindigt niet echt. delete_own_account en cancel_company_account
 --    zetten alleen profiles.actief = false. De app logt dan uit, maar het
@@ -49,9 +49,10 @@
 -- 6. anon had EXECUTE op delete_own_account en cancel_company_account (zonder
 --    gevolg, auth.uid() is dan leeg, maar niet de bedoeling).
 --
--- Wat deze migratie NIET doet: de termijn van 2 jaar wijzigen of de dagelijkse
--- cron aanzetten (20260930083835_opschonen_cron.sql.pending). Dat zijn
--- beleidskeuzes.
+-- Wat deze migratie NIET doet: de termijn van 2 jaar wijzigen. De dagelijkse
+-- cron (20260930160803_opschonen_cron.sql) draait sinds 30-09-2026; deze
+-- migratie verandert daar niets aan, alleen aan wat de job doet zodra een
+-- bedrijf in aanmerking komt (op zijn vroegst augustus 2028).
 
 begin;
 

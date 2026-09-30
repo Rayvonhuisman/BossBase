@@ -96,10 +96,11 @@ aan de algemene voorwaarden; in die tijd kan de Klant terugkomen of exporteren.
 Daarna worden de gegevens verwijderd, ook de bestanden.
 
 **Feitelijke stand (30 september 2026):** opzeggen zet het bedrijf op "opgezegd"
-en de gebruikers op inactief. De opschoonjob (edge function `opschonen`) die
-daarna verwijdert, staat klaar maar draait nog niet (cron niet ingeschakeld).
-Eerst moeten de termijn en de correcties op branch fix/accountverwijdering-bv
-worden goedgekeurd.
+en de gebruikers op inactief. De opschoonjob (edge function `opschonen`) draait
+sinds 30 september 2026 dagelijks om 03:30 en zou een bedrijf na
+[[2 jaar — termijn nog te besluiten]] verwijderen; die termijn is niet
+goedgekeurd. De correcties op de job (branch fix/accountverwijdering-bv) staan
+nog niet op productie.
 
 ## 9. Aansprakelijkheid
 

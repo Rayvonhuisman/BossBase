@@ -519,7 +519,7 @@ export function Pipeline({ openDeal, setPage }) {
     try {
       const updated = await zetDealAfgerond(deal.id, true);
       setDeals(ds => ds.map(d => d.id === deal.id ? updated : d));
-      toast.success('Aanvraag afgerond');
+      toast.success('Project voltooid');
     } catch (err) {
       console.error('[bb:pipeline] aanvraag afronden mislukt', err);
       toast.error(err.message || 'Afronden mislukt');
@@ -671,8 +671,7 @@ export function Pipeline({ openDeal, setPage }) {
             <label>Status</label>
             <select value={filter.status} onChange={e => setFilter(f => ({ ...f, status: e.target.value }))}>
               <option value="open">Open trajecten</option>
-              <option value="won">Gewonnen</option>
-              <option value="done">Afgerond</option>
+              <option value="done">Project voltooid</option>
               <option value="lost">Verloren</option>
               <option value="any">Alles tonen</option>
             </select>
@@ -923,7 +922,7 @@ export function Pipeline({ openDeal, setPage }) {
                     className="card-menu-item"
                     onClick={() => menuDeal && markAfgerond(menuDeal)}
                   >
-                    {I.check} Markeer als afgerond
+                    {I.check} Project voltooien
                   </button>
                   <button
                     className="card-menu-item card-menu-item-danger"

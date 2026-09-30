@@ -12,7 +12,7 @@
 --   rechten.
 --
 -- Stap 2 (kolom `token` weg, `email` leeg) staat in
--- 20260930120500_resettoken_opruimen.sql.pending en gaat pas mee als de nieuwe
+-- 20260930180500_resettoken_opruimen.sql.pending en gaat pas mee als de nieuwe
 -- resetfuncties draaien.
 --
 -- Terugdraaien: `alter column email set not null` kan alleen zolang er geen

@@ -5,7 +5,7 @@
 // Bouwt een database in het geheugen met de structuur van productie (tabellen,
 // foreign keys in productievolgorde, delete-triggers; zie opbouw.mjs) en laadt
 // daarop de opschoonmigratie 20260930083452. Draait dezelfde scenario's twee
-// keer: zonder en met de correctiemigratie 20260930160000. Alle gegevens zijn
+// keer: zonder en met de correctiemigratie 20260930181000. Alle gegevens zijn
 // verzonnen.
 import { bouw, migratie } from './opbouw.mjs';
 import path from 'node:path';
@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 const HIER = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIES = process.env.MIGRATIES || path.resolve(HIER, '../../migrations');
 const OPSCHONING = path.join(MIGRATIES, '20260930083452_opschoning_bewaartermijnen.sql');
-const CORRECTIE = path.join(MIGRATIES, '20260930160000_accountverwijdering_correcties.sql');
+const CORRECTIE = path.join(MIGRATIES, '20260930181000_accountverwijdering_correcties.sql');
 
 let fouten = 0;
 const verwacht = [];
@@ -168,7 +168,7 @@ async function scenario(label, gecorrigeerd) {
 }
 
 const oud = await scenario('Huidige productieversie (20260930083452)', false);
-const nieuw = await scenario('Met correctie (20260930160000)', true);
+const nieuw = await scenario('Met correctie (20260930181000)', true);
 
 console.log('\nHuidige productieversie — vastgestelde fouten:');
 console.log(`  proefbedrijf, beheerder nog actief:  ${oud.proefFout ?? 'verwijderd'}`);

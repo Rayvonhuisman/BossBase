@@ -1,5 +1,5 @@
 -- ── Waarom ──────────────────────────────────────────────────────────────────
--- Na "Account deactiveren" of "Bedrijf sluiten" blokkeert 20260930160000 het
+-- Na "Account deactiveren" of "Bedrijf sluiten" blokkeert 20260930181000 het
 -- inlogaccount en verwijdert het de sessies. Volgens de broncode van Supabase
 -- Auth (GoTrue) houdt dat tegen: opnieuw inloggen (token.go: IsBanned),
 -- vernieuwen (tokens/service.go: IsBanned en "No Valid Session Found") en elke
@@ -22,7 +22,7 @@
 --    cancel_company_account, zodat de app de abonnementsknoppen alleen aan de
 --    eigenaar toont.
 --
--- Superbeheerders: worden door opzeggen niet gedeactiveerd (20260930160000) en
+-- Superbeheerders: worden door opzeggen niet gedeactiveerd (20260930181000) en
 -- houden dus hun toegang; een gewone gebruiker van een opgezegd bedrijf niet.
 -- Een gebruiker zonder profiel (net geregistreerd) wordt niet geblokkeerd.
 --

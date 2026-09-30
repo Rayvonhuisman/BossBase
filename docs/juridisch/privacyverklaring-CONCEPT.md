@@ -89,9 +89,13 @@ Feitelijke stand (30 september 2026):
   (nog niet live) worden de inlogaccounts daarbij ook geblokkeerd en de sessies
   ingetrokken. Op productie krijgt een gedeactiveerde gebruiker bij inloggen
   nog een geldige sessie; alleen de app logt hem direct weer uit.
-- De opschoonjob (edge function `opschonen`) staat klaar maar draait **nog
-  niet**: de dagelijkse cron is niet ingeschakeld. Er wordt dus nog niets
-  automatisch verwijderd. De app belooft daarom geen termijn meer.
+- De opschoonjob (edge function `opschonen`) draait sinds 30 september 2026
+  dagelijks om 03:30. De eerste run verwijderde 2 verlopen aanmeldcodes; nog
+  geen bedrijf kwam in aanmerking (de eerste op zijn vroegst in augustus 2028).
+  De termijnen die hij toepast ([[2 jaar — termijn nog te besluiten]] en de
+  losse termijnen in §3) zijn **voorstellen, niet goedgekeurd**. De correcties
+  op de job (branch fix/accountverwijdering-bv) staan nog niet op productie.
+  De app belooft geen termijn.
 - Losse gebruikers (niet het hele bedrijf) vallen niet onder de opschoonjob;
   hun profiel blijft tot het bedrijf zelf wordt opgeschoond, of tot een
   verwijderverzoek.

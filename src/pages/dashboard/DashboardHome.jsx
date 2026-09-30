@@ -166,7 +166,7 @@ function deriveCharts({ deals = [], activities = [], offertes = [], customers = 
     //
     // id null: deze stap komt niet uit een fase maar uit deals.afgerond_op. De
     // tegel kan hem daarom niet wegfilteren — hij sluit de trechter altijd af.
-    { id: null, label: 'Afgeronde aanvragen', value: deals.filter(isAfgerond).length },
+    { id: null, label: 'Projecten voltooid', value: deals.filter(isAfgerond).length },
   ];
   const conversionFunnel = leads ? fSteps.map(s => ({ ...s, pct: Math.round((s.value / leads) * 100) })) : [];
 

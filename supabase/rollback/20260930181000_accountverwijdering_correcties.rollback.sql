@@ -1,4 +1,4 @@
--- ── Terugdraaien van 20260930160000_accountverwijdering_correcties ──────────
+-- ── Terugdraaien van 20260930181000_accountverwijdering_correcties ──────────
 -- Zet de functies terug zoals ze op productie stonden vóór deze migratie
 -- (letterlijk uit de catalogus, 30-09-2026) en haalt de nieuwe objecten weg.
 --

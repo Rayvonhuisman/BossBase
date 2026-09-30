@@ -72,7 +72,7 @@ const labelStyle = { fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTran
 
 // ── HEADER ───────────────────────────────────────────────────────────────────
 
-function DrawerHeader({ project, onClose, fullscreen, onToggleFullscreen, onSave, canManage }) {
+function DrawerHeader({ project, onClose, fullscreen, onToggleFullscreen, onSave, canManage, openCustomer }) {
   const toast = useToast();
   // De projectnaam staat in de kop en wordt daar ook gewijzigd. Hij stond
   // eerder in het bewerkformulier onderaan het overzicht; dat is vervallen.
@@ -142,9 +142,20 @@ function DrawerHeader({ project, onClose, fullscreen, onToggleFullscreen, onSave
             hoort hier niet naast, want dan staan er twee dingen die allebei
             "de status" heten. */}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 6, flexWrap: 'wrap' }}>
-          {project.customerName && (
+          {/* De klant is een link naar de klantkaart, en ziet er ook zo uit:
+              grijze tekst werd niet als aanklikbaar herkend. */}
+          {project.customerName && (project.customerId && openCustomer ? (
+            <button
+              type="button"
+              onClick={() => openCustomer(project.customerId)}
+              title="Open klantkaart"
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600, color: 'var(--pd)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            >
+              {project.customerName} <span aria-hidden="true">→</span>
+            </button>
+          ) : (
             <span style={{ fontSize: 12, color: 'var(--dl)' }}>{project.customerName}</span>
-          )}
+          ))}
         </div>
       </div>
       <ModalX onClose={onClose} />
@@ -236,7 +247,9 @@ function OverviewTab({
       // deadline zijn van het type date en weigeren een lege tekst.
       const getalVeld = key === 'quoted_hours' || key === 'project_value';
       const waarde = getalVeld ? Number(projDraft || 0) : (projDraft || null);
-      await onSave({ [key]: waarde });
+      // Een projectwaarde die je zelf typt, blijft staan: de database rekent hem
+      // dan niet meer uit de offertes (waarde_bron 'handmatig').
+      await onSave(key === 'project_value' ? { project_value: waarde, waarde_bron: 'handmatig' } : { [key]: waarde });
       stopProjEdit();
       toast.success('Project bijgewerkt');
     } catch (e) {
@@ -269,7 +282,7 @@ function OverviewTab({
     try {
       const bij = await zetDealAfgerond(huidigeDeal.id, aan);
       setDealLokaal(bij);
-      toast.success(aan ? 'Aanvraag afgerond' : 'Aanvraag heropend');
+      toast.success(aan ? 'Project voltooid' : 'Project heropend');
       onChanged?.();
     } catch (e) {
       toast.error(e.message || (aan ? 'Afronden is mislukt' : 'Heropenen is mislukt'));
@@ -477,7 +490,7 @@ function OverviewTab({
               {dealVerloren ? (
                 <span className="badge b-lost">Verloren</span>
               ) : dealAfgerond ? (
-                <span className="badge b-done">Voltooid</span>
+                <span className="badge b-done">Project voltooid</span>
               ) : magVerkoop && gesorteerdeStages.length ? (
                 <select
                   value={huidigeDeal.stage || ''}
@@ -728,6 +741,34 @@ function OverviewTab({
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}>
                         <Edit2 size={14} />
                       </button>
+                    )}
+                  </div>
+                )}
+                {/* Waar de projectwaarde vandaan komt. Met de hand ingesteld kan
+                    terug naar automatisch; dan rekent de database opnieuw. */}
+                {veld.key === 'project_value' && !actief && (
+                  <div style={{ fontSize: 11, color: 'var(--dl)', marginTop: 2 }}>
+                    {project.waardeBron === 'offertes' && 'Som van de geaccepteerde offertes, excl. btw'}
+                    {project.waardeBron === 'aanvraag' && 'Geschat in de aanvraag'}
+                    {project.waardeBron === 'handmatig' && (
+                      <>
+                        Met de hand ingesteld
+                        {canManage && (
+                          <>
+                            {' · '}
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try { await onSave({ waarde_bron: 'aanvraag' }); toast.success('Projectwaarde wordt weer automatisch berekend'); }
+                                catch (e) { toast.error(e.message || 'Opslaan mislukt'); }
+                              }}
+                              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, color: 'var(--pd)', textDecoration: 'underline' }}
+                            >
+                              automatisch berekenen
+                            </button>
+                          </>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -1439,8 +1480,9 @@ function FacturenTab({ project, invoices, openInvoice, setPage, customers, compa
             <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(project.projectValue)}</div>
           </div>
           <div>
+            {/* Excl. btw, net als de projectwaarde ernaast. */}
             <div style={labelStyle}>Gefactureerd</div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(project.invoicedAmount)}</div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{fmt0(project.omzetExclBtw)}</div>
           </div>
           <div>
             <div style={labelStyle}>Te factureren</div>
@@ -1774,7 +1816,7 @@ export function ProjectDetailDrawer({
             <div style={{ padding: 32, textAlign: 'center', color: 'var(--dl)' }}>Project laden…</div>
           ) : (
             <>
-              <DrawerHeader project={project} onClose={onClose} fullscreen={fullscreen} onToggleFullscreen={() => setFullscreen(f => !f)} onSave={handleSave} canManage={canManage} />
+              <DrawerHeader project={project} onClose={onClose} fullscreen={fullscreen} onToggleFullscreen={() => setFullscreen(f => !f)} onSave={handleSave} canManage={canManage} openCustomer={openCustomer} />
               <Tabs tab={tab} setTab={setTab} tabs={tabs} />
 
               {tab === 'overview' && (

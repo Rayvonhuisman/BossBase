@@ -1,5 +1,5 @@
 -- ── Waarom ──────────────────────────────────────────────────────────────────
--- Stap 2 van 2 na 20260930120000. DESTRUCTIEF en een aparte, expliciete
+-- Stap 2 van 2 na 20260930180000. DESTRUCTIEF en een aparte, expliciete
 -- uitrolactie: kolom `token` weg, `email` leeg. Niet terug te draaien.
 --
 -- Pas hernoemen naar .sql en pushen als ALLE voorwaarden hieronder aantoonbaar

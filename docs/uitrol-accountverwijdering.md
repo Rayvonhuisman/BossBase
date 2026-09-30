@@ -29,7 +29,7 @@ Getest lokaal (echte PostgREST en functiecode; `test_functies.mjs` en
 | Blijft beschikbaar | Wordt geblokkeerd |
 | --- | --- |
 | Gegevens lezen, zoeken en exporteren (database, RPC) | Nieuwe rijen in 28 tabellen: klanten, leveranciers, offertes en regels, facturen en regels, werkbonnen met taken/materiaal/dagen/foto's/notities, projecten met kosten/notities/foto's, deals en notities, activiteiten, agenda, uren (urenregistratie), materialen, voertuigen, teamleden uitnodigen |
-| Bestaande gegevens **wijzigen en verwijderen** (UPDATE/DELETE) | Uren boeken op een werkbon (`werkbon_uren`) — **was open**, dicht door `20260930175000_nieuw_werk_dicht_werkbon_uren.sql` |
+| Bestaande gegevens **wijzigen en verwijderen** (UPDATE/DELETE) | Uren boeken op een werkbon (`werkbon_uren`) — **was open**, dicht door `20260930183000_nieuw_werk_dicht_werkbon_uren.sql` |
 | Facturen op betaald zetten; creditfactuur (uitzonderingen van 20260803120000) | Bestanden uploaden in de buckets van werkbonfoto's, kostenbijlagen en projectfoto's |
 | Binnenkomende aanvragen van de eigen website (service_role) | Een offerte of factuur op "verzonden" zetten (trigger `bb_blokkeer_versturen`) |
 | Opnieuw abonneren (`billing-checkout`, eigenaar) | Mail versturen via `send-email` |
@@ -71,26 +71,33 @@ het tekenen van de handtekening in een opnieuw gemaakte PDF (app en
 klantpagina), en `offerte-pdf-url` (haalt alleen het pad eruit en geeft al een
 link van 10 minuten).
 
-**Voorkomen van nieuwe lange links (deze branch):**
-- De sign-functies en `getekende-pdf-nazenden` bewaren alleen nog een
-  verwijzing `<bucket>/<pad>`; de klant die net tekent krijgt korte links.
-- Nieuwe Edge Function `document-url`: link van 10 minuten, alleen voor een
-  actief profiel van hetzelfde bedrijf, of met het teken-token van dat document
-  (klantlink). Getest: eigen bedrijf, ander bedrijf, gesloten bedrijf, juist en
-  verkeerd token, oude rij met lange URL.
-- De app vraagt links op het moment van openen op (`documentService.js`). Voor
-  oude rijen valt hij terug op de opgeslagen lange link zolang de korte route
-  faalt.
+**Nieuwe lange links voorkomen (deze branch):**
+- `document-url` (nieuw): link van 10 minuten, alleen voor een actief profiel
+  van hetzelfde bedrijf, of met het teken-token van precies dat document.
+  Werkt ook met oude rijen: het pad wordt uit de lange URL gehaald.
+- De app vraagt links op het moment van openen op (`documentService.js`), met
+  terugval op de opgeslagen link zolang die geldig is.
+- `sign-offerte`, `sign-werkbon` en `getekende-pdf-nazenden` zetten in de
+  database een ondertekende link van **24 uur** in plaats van 10 jaar. Tijdelijke
+  compatibiliteit: een app-tabblad van vóór de nieuwe frontend gebruikt die
+  waarde rechtstreeks en breekt dus niet; de nieuwe app en `document-url` halen
+  er het pad uit.
 
-**Intrekken van al uitgegeven links: niet gedaan.** Een kortere geldigheid voor
-nieuwe links trekt bestaande links niet in. Ze verlopen pas na 10 jaar. Opties,
-alle drie met gevolgen en alleen na overleg:
-1. De bestanden verplaatsen naar een nieuw pad en de verwijzingen bijwerken
-   (oude links geven dan 404). Wijzigt productieobjecten.
-2. De JWT-sleutel van het project roteren: trekt alle signed URLs in, maar ook
-   alle sessies en de anon- en service-sleutels. Zwaar.
-3. De oude URL's in de database vervangen door verwijzingen: voorkomt dat de
-   app ze nog toont, maar wie de link al heeft, houdt toegang.
+**Getest (lokaal, stand-ins voor Auth en Storage):** de volledige route
+"Ondertekende bon" in de app (knop → `document-url` → het juiste document, met
+een nieuwe link van 10 minuten); een teken-token geeft alleen toegang tot zijn
+eigen document (niet tot een ander document, niet tot een offerte).
+
+**Oude links niet meer gebruiken ≠ intrekken.** Er is niets ingetrokken.
+- *Niet meer gebruiken* (kan zonder risico): de app opent documenten via
+  `document-url`, niet via de opgeslagen lange link. Ook het vervangen van de
+  opgeslagen waarden in de database valt hieronder: de app toont ze dan niet
+  meer, maar **een eerder gekopieerde link blijft werken** tot zijn vervaltijd.
+- *Werkelijk intrekken* (niet gedaan, alleen na overleg):
+  1. het bestand naar een nieuw pad verplaatsen en de verwijzing bijwerken; de
+     oude link geeft dan 404. Wijzigt productieobjecten.
+  2. de JWT-sleutel van het project roteren: trekt alle ondertekende links in,
+     maar ook alle sessies en de anon- en service-sleutels.
 
 ## Onderdelen
 
@@ -104,28 +111,79 @@ beperkingen hierboven:**
 | Code | Wat | Afhankelijk van |
 | --- | --- | --- |
 | F1 | billing (identiek aan `fix/billing-eigenaar`) | niets |
-| M1 | `20260930120000`: `email` optioneel, tabelrechten weg | niets |
+| M1 | `20260930180000`: `email` optioneel, tabelrechten weg | niets |
 | F2 | resetfuncties | M1 |
 | F3 | AFAS-functies: geen relatiegegevens of tokens in logs | niets |
 | F4 | 14 functies met service_role controleren profiel en bedrijf | niets |
-| F5 | `document-url`, sign-functies en `getekende-pdf-nazenden` zonder lange links | FE (de app moet korte links kunnen opvragen vóór nieuwe rijen alleen een verwijzing hebben) |
-| M2 | `20260930160000` | F1 |
-| M3 | `20260930170000` | niets |
-| M4 | `20260930175000`: nieuw werk ook dicht voor `werkbon_uren` | niets |
-| FE | Frontend | vóór F5 |
+| F5a | `document-url` (nieuw) | niets — vóór de FE |
+| F5b | `sign-offerte`, `sign-werkbon`, `getekende-pdf-nazenden`, `offerte-pdf-url`: links van 24 uur i.p.v. 10 jaar | FE |
+| M2 | `20260930181000` | F1 |
+| M3 | `20260930182000` | niets |
+| M4 | `20260930183000`: nieuw werk ook dicht voor `werkbon_uren` | niets |
+| FE | Frontend | na F5a, vóór F5b |
 
 **Apart, expliciet, niet in deze release:** M1b (destructief, vier voorwaarden
-in het bestand) en de opschooncron (besluit over termijnen).
+in het bestand).
+
+**Let op, al op productie:** de opschooncron draait sinds 30-09-2026 dagelijks om
+03:30 (Niels, migratie `20260930160803`). Hij verwijdert nu verlopen
+aanmeldcodes en resettokens (24 uur) en zou oude contactformulieren (1 jaar),
+Boss-gesprekken (12 maanden) en meldingen (2 jaar) verwijderen — voorstellen,
+niet goedgekeurd. Een bedrijf komt op zijn vroegst in augustus 2028 in
+aanmerking; vóór dat moment moet M2 (correcties op de job) live staan.
+
+## Billingfix los uitrollen: `fix/billing-eigenaar`
+
+- **Commit:** `2aa72d1` (bovenop main `cfbd7d1`). Eén bestand:
+  `supabase/functions/_shared/billing.ts`.
+- **Deployen (vier functies, volledige namen):**
+  `supabase functions deploy billing-cancel billing-portal billing-checkout billing-wijzig`
+- **Nemen alle vier de helper mee?** Ja: elk importeert
+  `eisAbonnementsbeheerder` uit `../_shared/billing.ts` en roept hem aan vóór de
+  eerste Stripe-aanroep; de CLI bundelt `_shared` mee. `billing-webhook` gebruikt
+  de helper niet en hoeft niet mee.
+- **Meegenomen van main:** productie draait nog een oudere `_shared/billing.ts`
+  (zonder het vastleggen van mislukte mails in `stuurBossBaseMail`, main
+  a9e6876). Die komt nu mee; de vier functies gebruiken `stuurBossBaseMail` niet
+  en de tabel `mail_fouten` bestaat. `stripe.ts` en de vier `index.ts` zijn
+  gelijk aan productie (vergeleken 30-09-2026).
+- **Controle na deployment** (alleen aangewezen testaccounts, geen echt
+  abonnement opzeggen):
+  1. `supabase functions list`: de vier hebben een nieuw versienummer;
+     `supabase functions download billing-cancel --use-api` bevat
+     `weigerAbonnementsbeheer`.
+  2. Als tweede beheerder van het testbedrijf: Instellingen → Abonnement →
+     "Facturen en betaalmethode" (billing-portal). Verwacht: melding "Alleen de
+     eigenaar van het bedrijf kan het abonnement beheren", geen Stripe-portal.
+  3. Als eigenaar van hetzelfde testbedrijf: dezelfde knop. Verwacht: geen
+     eigenaarsmelding (een testbedrijf zonder Stripe-klant krijgt een andere,
+     inhoudelijke melding; dat is goed).
+  4. Stripe-dashboard: geen nieuwe portalsessie of wijziging bij stap 2.
+- **Herstel:** vanaf main (`cfbd7d1`) dezelfde vier functies opnieuw deployen.
+  Alleen code; geen gegevens of migraties.
 
 ## Volgorde
 
-1. **`fix/billing-eigenaar`**: `supabase functions deploy billing-cancel billing-portal billing-checkout billing-wijzig`.
-2. `supabase db push --dry-run` → **M1** → push → `npm run migratie:check -- password_reset_tokens`.
-3. **F2, F3, F4** deployen.
-4. `supabase db push --dry-run` → **M2, M3, M4** → push → `npm run migratie:check -- companies profiles customers werkbon_uren`; controleer dat een gewone ingelogde gebruiker gegevens ziet.
+1. **`fix/billing-eigenaar`** (zie het billingoverzicht hieronder).
+2. `supabase db push` pusht alles wat klaarstaat. Hernoem voor deze stap
+   `181000`, `182000` en `183000` tijdelijk naar `.sql.pending`; dan
+   `supabase db push --dry-run` (moet alleen **M1**, `20260930180000`, tonen) →
+   push → `npm run migratie:check -- password_reset_tokens`. Daarna terug naar
+   `.sql`. (Gecontroleerd 30-09: zonder hernoemen toont de dry-run precies de
+   vier migraties van deze branch.)
+3. **F2, F3, F4** deployen, en **`document-url`** (nieuw; werkt met bestaande
+   gegevens, raakt niets).
+4. `supabase db push --dry-run` → **M2, M3, M4** (`181000`, `182000`, `183000`) → push →
+   `npm run migratie:check -- companies profiles customers werkbon_uren`; controleer dat een gewone ingelogde gebruiker gegevens ziet.
 5. **FE** (merge naar `main`).
-6. **F5** deployen (`document-url`, `sign-offerte`, `sign-werkbon`, `getekende-pdf-nazenden`, `offerte-pdf-url`).
-7. Later en apart: M1b, cron, en eventueel het intrekken van oude links.
+6. **F5**: `sign-offerte`, `sign-werkbon`, `getekende-pdf-nazenden`,
+   `offerte-pdf-url` (slaan links van 24 uur op).
+7. Later en apart: M1b; eventueel oude links niet meer gebruiken of intrekken.
+
+Gemengde versies bij de documenten: `document-url` vóór de FE is veilig (de oude
+app roept hem niet aan); de nieuwe FE met de oude sign-functies werkt (pad uit
+de lange link); de oude FE met de nieuwe sign-functies werkt 24 uur per nieuw
+document (daarna de pagina herladen = nieuwe FE).
 
 ## Gemengde versies
 
@@ -147,16 +205,15 @@ weigeringen; rijen 4–5 zijn afgeleid.
 - **F1–F4 terugzetten:** vorige versie uit `main` opnieuw deployen (alleen code).
 - **M1 terugzetten:** rechten terug met `grant`; `email` weer verplicht kan alleen
   zonder rijen zonder e-mailadres (tokens verlopen binnen 24 uur).
-- **M2 terugzetten:** `supabase/rollback/20260930160000_…rollback.sql` (lokaal
+- **M2 terugzetten:** `supabase/rollback/20260930181000_…rollback.sql` (lokaal
   getest). Accounts die intussen zijn gedeactiveerd blijven geblokkeerd; per
   account heractiveren.
-- **M3 terugzetten:** `supabase/rollback/20260930170000_…rollback.sql`: eerst de
+- **M3 terugzetten:** `supabase/rollback/20260930182000_…rollback.sql`: eerst de
   rolinstelling, dan de functie. Weigert PostgREST alles:
   `alter role authenticator reset pgrst.db_pre_request; notify pgrst, 'reload config';`
 - **FE:** vorige deployment terugzetten in Vercel.
-- **F5 terugzetten:** de vorige sign-functies maken weer lange links. Rijen die
-  intussen alleen een verwijzing kregen, werken dan alleen met de nieuwe FE
-  (korte link via `document-url`); zet FE dus niet terug zonder F5 ook terug te
-  zetten en `document-url` te laten staan.
+- **F5b terugzetten:** de vorige sign-functies maken weer links van 10 jaar;
+  rijen met een link van 24 uur werken met de nieuwe FE (via `document-url`).
+  Laat `document-url` staan als de FE nieuw blijft.
 - **M4 terugzetten:** `drop policy readonly_werkbon_uren on public.werkbon_uren;`
 - **M1b en de opschoonjob:** niet terug te draaien; alleen uit een back-up.

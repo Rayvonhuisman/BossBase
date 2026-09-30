@@ -35,6 +35,30 @@ serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   )
 
+  const body = await req.json().catch(() => ({}))
+
+  // ── Status van een aanvraag via bossbase.nl wijzigen ─────────────────────
+  // Alleen aanvragen van formulieren met bestemming 'superadmin': zo kan deze
+  // actie nooit een aanvraag van een klant van BossBase aanraken.
+  if (body?.actie === 'aanvraag_status') {
+    const STATUSSEN = ['nieuw', 'in_behandeling', 'gekwalificeerd', 'afgewezen', 'spam']
+    if (!STATUSSEN.includes(body.status)) return json({ error: 'Onbekende status' }, 400)
+    const { data: formulieren } = await svc.from('website_forms').select('id').eq('settings->>bestemming', 'superadmin')
+    const { data, error } = await svc.from('inquiries')
+      .update({ status: body.status })
+      .eq('id', body.id)
+      .in('form_id', (formulieren || []).map((f: any) => f.id))
+      .select('id, status')
+      .maybeSingle()
+    if (error) return json({ error: error.message }, 500)
+    if (!data) return json({ error: 'Aanvraag niet gevonden' }, 404)
+    return json({ aanvraag: data })
+  }
+
+  // Aanvragen via bossbase.nl (formulieren met bestemming 'superadmin').
+  const { data: saFormulieren } = await svc.from('website_forms').select('id').eq('settings->>bestemming', 'superadmin')
+  const saFormIds = (saFormulieren || []).map((f: any) => f.id)
+
   // Alle queries parallel
   const [
     companiesRes, subsRes, profilesRes, usersRes,
@@ -54,6 +78,14 @@ serve(async (req) => {
     svc.from('activities').select('company_id, created_at'),
     svc.from('facturen').select('id, company_id').eq('status', 'betaald'),
   ])
+
+  const { data: inquiries } = saFormIds.length
+    ? await svc.from('inquiries')
+        .select('id, name, company_name, email, phone, subject, message, source_url, status, is_test, metadata, created_at')
+        .in('form_id', saFormIds)
+        .order('created_at', { ascending: false })
+        .limit(200)
+    : { data: [] }
 
   // Omzet: som van regelprijs van betaalde facturen
   const betaaldIds = (betaaldFactRes.data || []).map((f: any) => f.id)
@@ -126,6 +158,13 @@ serve(async (req) => {
         trialEndsAt: sub.trial_ends_at,
         startedAt: sub.started_at,
         notes: sub.notes || '',
+        interval: sub.billing_interval || null,
+        stripeStatus: sub.stripe_status || null,
+        heeftStripe: !!sub.stripe_subscription_id,
+        periodeEinde: sub.current_period_end || null,
+        stoptOp: sub.stopt_op || (sub.cancel_at_period_end ? sub.current_period_end : null),
+        verplichtingTot: sub.verplichting_tot || null,
+        opgezegdOp: sub.cancelled_at || null,
       } : null,
       stats: {
         klanten:           countBy(custRes.data, company.id),
@@ -139,5 +178,20 @@ serve(async (req) => {
     }
   })
 
-  return json({ companies: result })
+  const aanvragen = (inquiries || []).map((a: any) => ({
+    id: a.id,
+    naam: a.name,
+    bedrijf: a.company_name || '',
+    email: a.email,
+    telefoon: a.phone || '',
+    onderwerp: a.subject || '',
+    bericht: a.message || '',
+    pagina: a.source_url || '',
+    branche: a.metadata?.branche || '',
+    status: a.status,
+    isTest: !!a.is_test,
+    ontvangenOp: a.created_at,
+  }))
+
+  return json({ companies: result, aanvragen })
 })

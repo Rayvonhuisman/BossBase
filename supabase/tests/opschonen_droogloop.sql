@@ -3,7 +3,7 @@
 --   supabase db query --linked -f supabase/tests/opschonen_droogloop.sql
 --
 -- Gebruikt de selectieregels van 20260930083452 (einde abonnement) en de
--- gecorrigeerde bestandsregel van 20260930160000 (inline, want die migratie is
+-- gecorrigeerde bestandsregel van 20260930181000 (inline, want die migratie is
 -- nog niet uitgerold). Termijn: 2 jaar (voorstel, niet goedgekeurd).
 with einde as (
   select c.id,
