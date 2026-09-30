@@ -1,14 +1,10 @@
-// Meetpunten voor de website en de aanmelding. Staat UIT.
+// Meetpunten voor de website en de aanmelding.
 //
-// Er is nog geen analysedienst gekozen en er is geen toestemmingsbesluit (zie
-// docs/seo/meting.md). Daarom verstuurt en bewaart dit bestand niets: zonder
-// aangesloten dienst doet meet() niets. Er worden geen cookies gezet en niets
-// in localStorage of sessionStorage geschreven.
-//
-// Een dienst aansluiten = één functie registreren:
-//   window.bbMeter = (gebeurtenis, gegevens) => { ... }
-// bijvoorbeeld een wrapper om Plausible, Vercel Web Analytics of GA4 (die
-// laatste alleen na toestemming via de cookiebanner).
+// Aangesloten op Vercel Web Analytics via window.bbMeter (lib/analytics.js,
+// gekozen 30-09-2026). Zonder die functie doet meet() niets. Er worden geen
+// cookies gezet en niets in localStorage of sessionStorage geschreven. Stuur
+// hier nooit persoonsgegevens mee: dan vervalt de reden dat er geen
+// cookiebanner nodig is.
 //
 // Gebeurtenissen:
 //   registratie_klik        een klik op een link naar /register (géén aanmelding!)

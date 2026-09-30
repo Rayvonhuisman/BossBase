@@ -5,8 +5,11 @@
 // dashboardcode, en het dashboard geen websitecode.
 import { isAppPath } from './lib/appRoutes.js';
 import { installeerLaadfoutHerstel, isLaadfout, herlaadEenmaal, toonLaadfout } from './lib/laadfout.js';
+import { startAnalytics } from './lib/analytics.js';
 
 installeerLaadfoutHerstel();
+// Website én app: Vercel Web Analytics, zonder cookies, met geschoonde URL's.
+startAnalytics();
 
 const ingang = isAppPath(window.location.pathname)
   ? import('./app-entry.jsx')
