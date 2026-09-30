@@ -1,0 +1,28 @@
+-- ── Waarom ──────────────────────────────────────────────────────────────────
+-- Stap 2 van 2. PAS UITROLLEN als de nieuwe request-password-reset en
+-- apply-password-reset (commit 7f462bd of later) in productie draaien en daarna
+-- minstens één uur (de geldigheid van een resetlink) zonder fouten zijn gebruikt.
+-- Hernoem dan naar .sql en `supabase db push`.
+--
+-- - Kolom `token` weg: sinds 20260930080504 leeg en door geen enkele functie
+--   meer gelezen of geschreven (ook niet door de versie die nu draait).
+-- - `email` leegmaken: de nieuwe functie schrijft het niet meer; oude rijen
+--   met een adres verdwijnen anders pas na 24 uur (opschonen).
+--
+-- Niet terug te draaien: de kolom en de adressen zijn daarna weg. Dat is de
+-- bedoeling, maar controleer vóór het draaien dat niets de kolom nog gebruikt:
+--   grep -rn "token'" supabase/functions/*password*
+
+begin;
+
+alter table public.password_reset_tokens drop column if exists token;
+update public.password_reset_tokens set email = null where email is not null;
+
+select
+  (select count(*) from information_schema.columns
+    where table_schema = 'public' and table_name = 'password_reset_tokens' and column_name = 'token') as token_kolom,
+  (select count(*) from public.password_reset_tokens where email is not null) as met_email;
+
+commit;
+
+notify pgrst, 'reload schema';
