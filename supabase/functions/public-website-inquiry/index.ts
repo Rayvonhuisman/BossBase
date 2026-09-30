@@ -16,6 +16,7 @@
 // Env: SUPABASE_URL en SUPABASE_SERVICE_ROLE_KEY (door Supabase geïnjecteerd).
 // Geen extra secrets nodig.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { mailTemplate } from '../_shared/mailTemplate.ts'
 import {
   kiesOntvangers,
   verwerkVerzoek,
@@ -41,6 +42,52 @@ let herkomsten: { set: Set<string>; tot: number } | null = null
 const hmacSleutel = crypto.subtle.importKey(
   'raw', new TextEncoder().encode(serviceKey), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
 )
+
+// ── Aanvragen voor BossBase zelf (formulier op bossbase.nl) ─────────────────
+// Die komen binnen in de superadmin en gaan per mail naar ons, met alle
+// gegevens en een link. Geen pipeline, geen melding in een bedrijf.
+const MELD_ADRES = 'info@bossbase.nl'
+
+const esc = (t: unknown) => String(t ?? '').replace(/[&<>"']/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
+
+async function mailNaarBossBase(inquiryId: string) {
+  const { data: a, error } = await admin
+    .from('inquiries')
+    .select('name, company_name, email, phone, subject, message, source_url, metadata, is_test, created_at')
+    .eq('id', inquiryId)
+    .single()
+  if (error) throw error
+
+  const siteUrl = Deno.env.get('SITE_URL') || 'https://www.bossbase.nl'
+  const link = `${siteUrl}/superadmin?aanvraag=${inquiryId}`
+  const rij = (k: string, v: unknown) => v ? `<tr><td style="padding:4px 12px 4px 0;color:#6b7280;vertical-align:top">${k}</td><td style="padding:4px 0">${esc(v)}</td></tr>` : ''
+  const branche = (a.metadata as Record<string, unknown> | null)?.branche
+  const html = mailTemplate({
+    title: a.is_test ? 'Testaanvraag via bossbase.nl' : 'Nieuwe aanvraag via bossbase.nl',
+    preheader: `${a.name}${a.company_name ? ` (${a.company_name})` : ''}${a.subject ? ` · ${a.subject}` : ''}`,
+    body: `<table style="border-collapse:collapse;font-size:15px">
+             ${rij('Naam', a.name)}${rij('Bedrijf', a.company_name)}${rij('E-mail', a.email)}${rij('Telefoon', a.phone)}
+             ${rij('Onderwerp', a.subject)}${rij('Branche', branche)}${rij('Pagina', a.source_url)}
+           </table>
+           <p style="margin-top:16px;white-space:pre-wrap">${esc(a.message)}</p>`,
+    buttonText: 'Open in de superadmin',
+    buttonUrl: link,
+  })
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${Deno.env.get('RESEND_API_KEY')}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: `BossBase <${Deno.env.get('RESEND_FROM_EMAIL') || 'noreply@bossbase.nl'}>`,
+      to: MELD_ADRES,
+      reply_to: a.email,
+      subject: `${a.is_test ? '[TEST] ' : ''}Aanvraag via bossbase.nl: ${a.company_name || a.name}${a.subject ? ` · ${a.subject}` : ''}`,
+      html,
+    }),
+  })
+  if (!res.ok) throw new Error(`Resend gaf status ${res.status}`)
+}
 
 const opslag: AanvraagOpslag = {
   async bekendeHerkomsten() {
@@ -80,6 +127,20 @@ const opslag: AanvraagOpslag = {
   },
 
   async meld(companyId, melding) {
+    // Welk formulier, en is er door de trigger al een deal van gemaakt
+    // (bb_websiteaanvraag_naar_pipeline)?
+    const { data: inq, error: inqFout } = await admin
+      .from('inquiries')
+      .select('deal_id, website_forms(settings)')
+      .eq('id', melding.inquiryId)
+      .single()
+    if (inqFout) throw inqFout
+    const bestemming = (inq?.website_forms as { settings?: Record<string, unknown> } | null)?.settings?.bestemming
+    if (bestemming === 'superadmin') {
+      await mailNaarBossBase(melding.inquiryId)
+      return
+    }
+
     const { data: profielen, error } = await admin
       .from('profiles')
       .select('id, role')
@@ -106,9 +167,10 @@ const opslag: AanvraagOpslag = {
       type:         'website_aanvraag',
       title:        melding.titel,
       body:         melding.tekst,
-      link:         `aanvragen/${melding.inquiryId}`,
-      related_type: 'inquiry',
-      related_id:   melding.inquiryId,
+      // De aanvraag staat als project in de pipeline; de melding opent dat.
+      link:         inq?.deal_id ? `deal/${inq.deal_id}` : 'pipeline',
+      related_type: inq?.deal_id ? 'deal' : 'inquiry',
+      related_id:   inq?.deal_id ?? melding.inquiryId,
     })))
     if (insFout) throw insFout
   },

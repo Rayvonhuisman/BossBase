@@ -3,7 +3,6 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   Camera,
-  ClipboardList,
   Globe2,
   FileText,
   KanbanSquare,
@@ -21,7 +20,6 @@ import { Logo } from '../bb-shared.jsx';
 export const navItems = [
   { path: '/website',     label: 'Website',           icon: Globe2,            group: 'Publiek' },
   { path: '/dashboard',   label: 'Dashboard',         icon: LayoutDashboard,   group: 'Vandaag' },
-  { path: '/aanvragen',   label: 'Aanvragen',         icon: ClipboardList,     group: 'Werk' },
   { path: '/pipeline',    label: 'Pipeline',          icon: KanbanSquare,      group: 'Werk' },
   { path: '/klanten',     label: 'Klanten',           icon: Users,             group: 'Werk' },
   { path: '/offertes',    label: 'Offertes',          icon: FileText,          group: 'Werk' },
