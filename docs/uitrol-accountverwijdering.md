@@ -162,6 +162,32 @@ aanmerking; vóór dat moment moet M2 (correcties op de job) live staan.
 - **Herstel:** vanaf main (`cfbd7d1`) dezelfde vier functies opnieuw deployen.
   Alleen code; geen gegevens of migraties.
 
+## Echte productietests (30-09-2026, TEST-bedrijven, geen Stripe)
+
+Twee TEST-bedrijven in productie (namen beginnen met "TEST BossBase …
+(niet gebruiken)"): eigenaar, tweede beheerder en medewerker; tweede bedrijf
+met eigenaar en medewerker. Abonnement handmatig actief zonder Stripe (geen
+trialmails), adressen op `example.test`, wachtwoorden alleen lokaal.
+
+**Billingfix (uitgerold, main 9178624) — bewezen met echte Auth en functies:**
+medewerker en tweede beheerder krijgen bij alle vier billingfuncties 403
+`geen_abonnementsbeheerder` (ook met rechtstreekse verzoeken, en in de app bij
+"Afrekenen"); de eigenaar komt door de controle en stopt daarna vóór Stripe
+("geen abonnement", "geen Stripe-klant", "Onbekend pakket"). Geen Stripe-klant
+of -abonnement ontstaan. De eigenaarstest bewijst alleen dat de
+bevoegdheidscontrole de eigenaar doorlaat, niet dat een echte opzegging of
+portalsessie daarna werkt.
+
+**Nulmeting accountroute (productie zónder deze branch):** na "Account
+verwijderen" van de testmedewerker werkten opnieuw inloggen, refresh, database,
+RPC en een Edge Function met het oude token nog allemaal. Dat is het gat dat
+M2/M3/F4 dichten; het bewijst niets over de branch zelf.
+
+**Realtime:** de publicatie `supabase_realtime` bevat in productie geen
+tabellen. Een kanaal abonneert wel, maar er komen geen wijzigingen door (ook
+niet vóór deactivatie). Via Realtime lekt dus nu niets; de live meldingen in de
+app werken daardoor ook niet (bestaand, buiten deze release).
+
 ## Volgorde
 
 1. **`fix/billing-eigenaar`** (zie het billingoverzicht hieronder).
