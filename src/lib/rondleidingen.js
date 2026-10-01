@@ -237,6 +237,24 @@ export const RONDLEIDINGEN = {
       tekst: 'Versturen, een herinnering sturen, kopiëren of crediteren.',
     },
   ],
+
+  costs: [
+    {
+      doel: 'kosten-nieuw',
+      titel: 'Kosten toevoegen',
+      tekst: 'Een bon of inkoopfactuur, met leverancier en een foto of pdf erbij.',
+    },
+    {
+      doel: 'kosten-weergave',
+      titel: 'Twee soorten kosten',
+      tekst: 'Geboekte kosten tellen mee in je kosten en btw. Kosten op werkbonnen tellen mee in de brutowinst van een project.',
+    },
+    {
+      doel: 'kosten-periode',
+      titel: 'Periode',
+      tekst: 'Kies week, maand, kwartaal of jaar en blader met de pijltjes.',
+    },
+  ],
 };
 
 /** Alle pagina's met een rondleiding (voor "geen rondleidingen meer"). */

@@ -1247,7 +1247,7 @@ export function CostsPage() {
       <div className="page-hd afu">
         <div><h1>Kosten</h1><p>Kosten bijhouden per klant en opdracht</p></div>
         <div className="page-hd-actions">
-          <button className="btn btn-p btn-sm" onClick={guardSchrijven('Kosten toevoegen', () => setShowNew(true))}>{I.plus} Kosten toevoegen</button>
+          <button className="btn btn-p btn-sm" data-rl="kosten-nieuw" onClick={guardSchrijven('Kosten toevoegen', () => setShowNew(true))}>{I.plus} Kosten toevoegen</button>
         </div>
       </div>
       {loading && <div className="card card-p">Kosten laden...</div>}
@@ -1311,11 +1311,11 @@ export function CostsPage() {
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
             {/* Dezelfde bediening als de periodekeuze bij de btw-indicatie op
                 Financiën: tabs voor de keuze, zodat het vertrouwd oogt. */}
-            <div className="tabs">
+            <div className="tabs" data-rl="kosten-weergave">
               <button className={`tab${!toontMateriaal ? ' active' : ''}`} onClick={() => kiesWeergave('kosten')}>Geboekte kosten</button>
               <button className={`tab${toontMateriaal ? ' active' : ''}`} onClick={() => kiesWeergave('materiaal')}>Kosten op werkbonnen</button>
             </div>
-            <div className="tabs">
+            <div className="tabs" data-rl="kosten-periode">
               {PERIODE_TYPES.map(p => (
                 <button key={p.id} className={`tab${periodeType === p.id ? ' active' : ''}`} onClick={() => kiesPeriodeType(p.id)}>{p.label}</button>
               ))}
