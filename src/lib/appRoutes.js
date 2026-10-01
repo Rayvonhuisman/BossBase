@@ -19,7 +19,6 @@ export const APP_PATHS = [
   '/betaald',
   '/betaling-geannuleerd',
   '/superadmin',
-  '/cookieverklaring',
 ];
 
 // Paden met alles eronder. '/dashboard' matcht '/dashboard' en

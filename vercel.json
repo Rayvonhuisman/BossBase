@@ -50,10 +50,6 @@
       "destination": "/app"
     },
     {
-      "source": "/cookieverklaring",
-      "destination": "/app"
-    },
-    {
       "source": "/dashboard",
       "destination": "/app"
     },
@@ -165,15 +161,6 @@
     },
     {
       "source": "/superadmin",
-      "headers": [
-        {
-          "key": "X-Robots-Tag",
-          "value": "noindex, nofollow"
-        }
-      ]
-    },
-    {
-      "source": "/cookieverklaring",
       "headers": [
         {
           "key": "X-Robots-Tag",

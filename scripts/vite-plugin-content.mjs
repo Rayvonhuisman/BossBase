@@ -13,6 +13,8 @@
 // lijst van pagina's zonder alle teksten in de eerste bundle te laden.
 
 import { Marked } from 'marked';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 
 export function slugify(tekst) {
   return String(tekst)
@@ -78,12 +80,63 @@ export function renderMarkdown(body) {
   return { html, toc };
 }
 
+// ── Juridische documenten ────────────────────────────────────────────────────
+// docs/juridisch/*.md is de bron; de pagina's op de site importeren het bestand
+// met ?juridisch. Zonder JSON-kop: de titel is de eerste kop, de versie staat op
+// de regel "**Versie JJJJ-MM · geldig vanaf …**".
+//
+// De build weigert een document dat nog niet af is: een concept-markering of
+// een plek tussen [vierkante haken] (links en `code` tellen niet mee). En voor
+// de documenten waarmee je bij registratie akkoord gaat, moet de versie gelijk
+// zijn aan die in supabase/functions/_shared/akkoord.ts; dat is de versie die
+// bij het akkoord wordt vastgelegd.
+const AKKOORD_SLEUTEL = {
+  'algemene-voorwaarden': 'algemene_voorwaarden',
+  'verwerkersovereenkomst': 'verwerkersovereenkomst',
+  'privacyverklaring': 'privacyverklaring',
+};
+
+function akkoordVersies() {
+  const bron = readFileSync(path.resolve('supabase/functions/_shared/akkoord.ts'), 'utf8');
+  return Object.fromEntries([...bron.matchAll(/^\s*(\w+):\s*'([^']+)'/gm)].map(m => [m[1], m[2]]));
+}
+
+export function juridischDocument(bron, id) {
+  const naam = path.basename(id, '.md');
+  const titel = bron.match(/^# (.+)$/m)?.[1];
+  const versieRegel = bron.match(/^\*\*Versie (\S+) · geldig vanaf ([^*]+)\*\*\s*$/m);
+  if (!titel) throw new Error(`${id}: eerste kop (# Titel) ontbreekt`);
+  if (!versieRegel) throw new Error(`${id}: regel "**Versie JJJJ-MM · geldig vanaf …**" ontbreekt`);
+  const [, versie, geldigVanaf] = versieRegel;
+
+  if (/CONCEPT/.test(bron)) throw new Error(`${id}: bevat nog een concept-markering`);
+  const zonderCodeEnLinks = bron.replace(/`[^`]*`/g, '').replace(/\[[^\]]*\]\([^)]*\)/g, '');
+  const open = zonderCodeEnLinks.match(/\[[^\]]*\]/g);
+  if (open) throw new Error(`${id}: nog niet ingevuld: ${[...new Set(open)].join(', ')}`);
+
+  const sleutel = AKKOORD_SLEUTEL[naam.replace(/-CONCEPT$/, '')];
+  if (sleutel) {
+    const vastgelegd = akkoordVersies()[sleutel];
+    if (vastgelegd !== versie) {
+      throw new Error(`${id}: versie ${versie} op de pagina, maar bij het akkoord wordt ${vastgelegd} vastgelegd (supabase/functions/_shared/akkoord.ts)`);
+    }
+  }
+
+  const body = bron.replace(/^# .+\n+/m, '').replace(versieRegel[0], '').trim();
+  const { html } = renderMarkdown(body);
+  return { titel, versie, geldigVanaf: geldigVanaf.trim(), html };
+}
+
 export default function contentPlugin() {
   return {
     name: 'bb-content',
     transform(code, id) {
       const [pad, query = ''] = id.split('?');
       if (!pad.endsWith('.md')) return null;
+      if (query.includes('juridisch')) {
+        const doc = juridischDocument(code, pad);
+        return { code: `export default ${JSON.stringify(doc)};`, map: null };
+      }
       const { meta: kop, body } = splitDoc(code, pad);
       // Leestijd: ongeveer 200 woorden per minuut.
       const woorden = body.replace(/[#>*_|`\[\]()-]/g, ' ').split(/\s+/).filter(Boolean).length;

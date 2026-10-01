@@ -1849,16 +1849,26 @@ export function InstellingenPage() {
 
           {/* Overig */}
           <div style={{ marginTop: 'var(--sp-6)', paddingTop: 'var(--sp-5)', borderTop: '1px solid var(--border)' }}>
-            {/* Er is geen cookiekeuze meer (geen cookies die toestemming vragen);
-                wel de uitleg over wat er in de browser staat. */}
-            <a
-              href="/cookieverklaring"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'var(--pd)', fontWeight: 600, fontSize: '.84rem', textDecoration: 'underline' }}
-            >
-              Cookiebeleid
-            </a>
+            {/* De juridische documenten die op de site staan. Er is geen
+                cookiekeuze (geen cookies die toestemming vragen). Algemene
+                voorwaarden, verwerkersovereenkomst en privacyverklaring komen
+                erbij zodra ze online staan. */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-4)' }}>
+              {[
+                { href: '/subverwerkers', label: 'Subverwerkers' },
+                { href: '/cookieverklaring', label: 'Cookiebeleid' },
+              ].map(l => (
+                <a
+                  key={l.href}
+                  href={l.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: 'var(--pd)', fontWeight: 600, fontSize: '.84rem', textDecoration: 'underline' }}
+                >
+                  {l.label}
+                </a>
+              ))}
+            </div>
           </div>
 
           {/* ── Gevarenzone: account verwijderen ── */}

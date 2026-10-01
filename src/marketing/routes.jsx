@@ -96,6 +96,14 @@ const PAGINAS = [
     load: () => import('../pages/marketing/SubverwerkersPage.jsx'),
     breadcrumbs: [HOME, { naam: 'Subverwerkers', pad: '/subverwerkers' }],
   },
+  {
+    path: '/cookieverklaring',
+    title: 'Cookiebeleid | BossBase',
+    description: 'BossBase zet geen cookies. Wat we meten met Vercel Web Analytics, wat de app in je browser bewaart en waarom er geen cookiebanner is.',
+    src: ['src/pages/marketing/juridisch/CookiebeleidPage.jsx'],
+    load: () => import('../pages/marketing/juridisch/CookiebeleidPage.jsx'),
+    breadcrumbs: [HOME, { naam: 'Cookiebeleid', pad: '/cookieverklaring' }],
+  },
 ];
 
 export const NIET_GEVONDEN = {

@@ -51,7 +51,6 @@ import { clearCompanyId, setCompanyId } from './lib/currentCompany.js';
 import { ToastProvider, useToast } from './lib/toast.jsx';
 import { UploadProvider } from './lib/uploadContext.jsx';
 import { UrenHerinneringModal } from './components/UrenHerinneringModal.jsx';
-import { CookieverklaringPage } from './pages/CookieverklaringPage.jsx';
 import { BetaalStatusPage } from './pages/BetaalStatusPage.jsx';
 import { BetaalPage } from './pages/BetaalPage.jsx';
 import { ProfileContext, displayName, profileInitials } from './lib/profileContext.jsx';
@@ -1656,10 +1655,6 @@ function AppInner() {
 
   if (!authReady) {
     return <div className="auth-shell"><div className="auth-card afu"><div className="auth-logo"><Logo /></div><div className="auth-title">BossBase laden...</div></div></div>;
-  }
-
-  if (route === '/cookieverklaring') {
-    return <CookieverklaringPage navigate={navigate} />;
   }
 
   // Publieke, permanente betaallink → tussenpagina die de verse sessie regelt.
