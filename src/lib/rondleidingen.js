@@ -106,6 +106,24 @@ export const RONDLEIDINGEN = {
       tekst: 'Kies hoe je de lijst ziet. Je keuze blijft bewaard.',
     },
   ],
+
+  activities: [
+    {
+      selector: '.act2-summary',
+      titel: 'Wat er openstaat',
+      tekst: 'Te laat, vandaag en de rest van de week. Klik op een teller om alleen die te zien.',
+    },
+    {
+      selector: '.act2-tabs',
+      titel: 'Filteren',
+      tekst: 'Wissel tussen alles, open, vandaag, te laat en afgerond.',
+    },
+    {
+      selector: '[title="Markeer als gereed"]',
+      titel: 'Afvinken',
+      tekst: 'Klaar met een activiteit? Vink hem hier af. Klik op de regel zelf om hem te openen.',
+    },
+  ],
 };
 
 /** Alle pagina's met een rondleiding (voor "geen rondleidingen meer"). */
