@@ -194,6 +194,13 @@ serve(async (req) => {
       'automatic_tax[enabled]': 'true',
       'customer_update[address]': 'auto',
       'billing_address_collection': 'required',
+      // Een zakelijke klant kan zijn btw-nummer invullen ("Ik koop als
+      // bedrijf"). Stripe Tax controleert het en verlegt de btw voor een bedrijf
+      // in een ander EU-land; het nummer komt op de klant en op de factuur.
+      // Bij een bestaande klant eist Stripe dan dat de bedrijfsnaam mag worden
+      // bijgewerkt, vandaar customer_update[name].
+      'tax_id_collection[enabled]': 'true',
+      'customer_update[name]': 'auto',
       // Let op het /dashboard-voorvoegsel: de instellingenpagina leeft binnen de
       // app-shell (/dashboard/<pagina>). Zonder dat voorvoegsel landt de klant na
       // het betalen op de marketingsite in plaats van bij zijn abonnement.
