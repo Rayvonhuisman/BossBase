@@ -125,9 +125,10 @@ beperkingen hierboven:**
 **Apart, expliciet, niet in deze release:** M1b (destructief, vier voorwaarden
 in het bestand).
 
-**Let op, al op productie:** de opschooncron draait sinds 30-09-2026 dagelijks om
-03:30 (Niels, migratie `20260930160803`). Hij verwijdert nu verlopen
-aanmeldcodes en resettokens (24 uur) en zou oude contactformulieren (1 jaar),
+**Let op, al op productie:** de opschooncron is op 30-09-2026 aangemaakt (Niels,
+migratie `20260930160803`) en dezelfde dag **gepauzeerd** (migratie
+`20260930170500`); hij draait nu niet. Aangezet verwijdert hij verlopen
+aanmeldcodes en resettokens (24 uur) en oude contactformulieren (1 jaar),
 Boss-gesprekken (12 maanden) en meldingen (2 jaar) verwijderen — voorstellen,
 niet goedgekeurd. Een bedrijf komt op zijn vroegst in augustus 2028 in
 aanmerking; vóór dat moment moet M2 (correcties op de job) live staan.
