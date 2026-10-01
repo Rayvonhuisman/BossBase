@@ -160,6 +160,24 @@ export const RONDLEIDINGEN = {
       tekst: 'De stand van het werk: gepland, in uitvoering of afgerond. Die volgt vanzelf uit de werkbonnen.',
     },
   ],
+
+  werkbonnen: [
+    {
+      doel: 'werkbonnen-nieuw',
+      titel: 'Nieuwe werkbon',
+      tekst: 'Wie, wanneer en waar: maak een werkbon en plan hem meteen in.',
+    },
+    {
+      doel: 'werkbonnen-filters',
+      titel: 'Filteren',
+      tekst: 'Toon alleen geplande werkbonnen, of wat in uitvoering of afgerond is.',
+    },
+    {
+      selector: '.wb2-list-card',
+      titel: 'Een werkbon',
+      tekst: 'Klik om hem te openen. Daar boek je uren, vink je taken af, voeg je foto\'s toe en laat je de klant tekenen.',
+    },
+  ],
 };
 
 /** Alle pagina's met een rondleiding (voor "geen rondleidingen meer"). */

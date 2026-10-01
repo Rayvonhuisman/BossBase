@@ -2629,7 +2629,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
         </div>
         <div className="wb2-head-spacer" />
         {canManage && (
-          <button className="btn btn-p" onClick={guardSchrijven('Een werkbon aanmaken', () => setShowNew(true))} type="button">
+          <button className="btn btn-p" data-rl="werkbonnen-nieuw" onClick={guardSchrijven('Een werkbon aanmaken', () => setShowNew(true))} type="button">
             {I.plus} Nieuwe werkbon
           </button>
         )}
@@ -2644,7 +2644,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
         />
       </div>
 
-      <div className="wb2-chips">
+      <div className="wb2-chips" data-rl="werkbonnen-filters">
         {[
           ['all', 'Alle', counts.all, null],
           ['gepland', 'Gepland', counts.gepland, statusInfo('gepland', 'werkbon').dot],
