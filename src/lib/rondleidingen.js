@@ -88,6 +88,24 @@ export const RONDLEIDINGEN = {
       tekst: 'Offertes, facturen, uren, kosten, werkbonnen en notities van dit project staan in deze tabbladen.',
     },
   ],
+
+  customers: [
+    {
+      doel: 'klanten-nieuw',
+      titel: 'Nieuwe klant',
+      tekst: 'Alleen de naam is verplicht. Na het opslaan opent de klantkaart.',
+    },
+    {
+      doel: 'klanten-zoeken',
+      titel: 'Zoeken',
+      tekst: 'Zoek op naam of bedrijf. Klik op een klant om de klantkaart te openen.',
+    },
+    {
+      doel: 'klanten-weergave',
+      titel: 'Kaarten of tabel',
+      tekst: 'Kies hoe je de lijst ziet. Je keuze blijft bewaard.',
+    },
+  ],
 };
 
 /** Alle pagina's met een rondleiding (voor "geen rondleidingen meer"). */

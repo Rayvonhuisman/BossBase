@@ -1521,15 +1521,15 @@ export function CustomersPage({ openCustomer }) {
           </p>
         </div>
         <div className="page-hd-actions">
-          <div className="tabs">
+          <div className="tabs" data-rl="klanten-weergave">
             <button className={`tab${view === 'grid' ? ' active' : ''}`} onClick={() => { setView('grid'); localStorage.setItem('customers_view', 'grid'); }}>Kaarten</button>
             <button className={`tab${view === 'table' ? ' active' : ''}`} onClick={() => { setView('table'); localStorage.setItem('customers_view', 'table'); }}>Tabel</button>
           </div>
-          <button className="btn btn-p btn-sm" onClick={guardLimiet('klanten', () => setShowNew(true))}>{I.plus} Nieuwe klant</button>
+          <button className="btn btn-p btn-sm" data-rl="klanten-nieuw" onClick={guardLimiet('klanten', () => setShowNew(true))}>{I.plus} Nieuwe klant</button>
         </div>
       </div>
       {error && <div className="card card-p" style={{ color: '#dc2626', marginBottom: 14 }}>{error}</div>}
-      <div className="search afu2" style={{ maxWidth: 360, marginBottom: 14 }}>
+      <div className="search afu2" data-rl="klanten-zoeken" style={{ maxWidth: 360, marginBottom: 14 }}>
         {I.search}
         <input placeholder="Zoek op naam of bedrijf…" value={search} onChange={e => setSearch(e.target.value)} />
       </div>
