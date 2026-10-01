@@ -1742,19 +1742,56 @@ export function RevenuePage() {
     finally { setBtwSyncing(false); }
   };
 
-  const handleExport = () => {
+  // Exporteert de tabel "Per klant / opdracht" als Excel-bestand, met dezelfde
+  // kolommen en dezelfde getallen als op het scherm. Hier stond een CSV-export
+  // die nog r.costs las, een veld dat sinds de kostenherziening niet meer
+  // bestaat: toFixed() op undefined gooide een fout en de knop deed niets.
+  // Excel in plaats van CSV: een CSV met punten als decimaalteken komt in een
+  // Nederlandse Excel in één kolom terecht, of met bedragen als tekst.
+  const handleExport = async () => {
     if (rows.length === 0) { toast.info('Geen financiële data om te exporteren'); return; }
-    const headers = ['Klant', 'Stad', 'Gefactureerd (€)', 'Kosten (€)', 'Betaald (€)', 'Openstaand (€)', 'Nettoresultaat (€)', 'Marge (%)', 'Status'];
-    const escape = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const csvRows = [
-      headers.map(escape).join(','),
-      ...rows.map(r => [r.name, r.city || '', r.total.toFixed(2), r.costs.toFixed(2), r.paid.toFixed(2), r.openstaand.toFixed(2), r.profit.toFixed(2), r.margin, r.stage === 'completed' || r.stage === 'paid' ? 'Afgerond' : 'In uitvoering'].map(escape).join(',')),
-    ];
-    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `bossbase-financien-export-${TODAY}.csv`; a.click();
-    URL.revokeObjectURL(url);
-    toast.success('Export gedownload');
+    if (!kostenPerKlant) { toast.info('De kosten per klant worden nog geladen. Probeer het zo opnieuw.'); return; }
+    try {
+      const { default: ExcelJS } = await import('exceljs');
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Per klant');
+      const euro = '"€" #,##0.00;[Red]-"€" #,##0.00';
+      ws.columns = [
+        { header: 'Klant', key: 'klant', width: 32 },
+        { header: 'Plaats', key: 'plaats', width: 18 },
+        { header: 'Gefactureerd', key: 'gefactureerd', width: 16, style: { numFmt: euro } },
+        { header: 'Materiaal', key: 'materiaal', width: 14, style: { numFmt: euro } },
+        { header: 'Inkopen', key: 'inkopen', width: 14, style: { numFmt: euro } },
+        { header: 'Uren', key: 'uren', width: 10, style: { numFmt: '0.00' } },
+        { header: 'Betaald', key: 'betaald', width: 14, style: { numFmt: euro } },
+        { header: 'Openstaand', key: 'openstaand', width: 14, style: { numFmt: euro } },
+        { header: 'Brutowinst vóór arbeid', key: 'brutowinst', width: 22, style: { numFmt: euro } },
+        { header: 'Marge (%)', key: 'marge', width: 11 },
+      ];
+      ws.getRow(1).font = { bold: true };
+      const getal = v => Math.round((Number(v) || 0) * 100) / 100;
+      rows.forEach(r => ws.addRow({
+        klant: r.name, plaats: r.city || '',
+        gefactureerd: getal(r.total), materiaal: getal(r.materiaal), inkopen: getal(r.inkopen),
+        uren: getal(r.uren), betaald: getal(r.paid), openstaand: getal(r.openstaand),
+        brutowinst: getal(r.profit), marge: r.margin,
+      }));
+      const totaal = ws.addRow({
+        klant: 'Totaal', plaats: '',
+        gefactureerd: totaalRij.total, materiaal: totaalRij.materiaal, inkopen: totaalRij.inkopen,
+        uren: totaalRij.uren, betaald: totaalRij.paid, openstaand: totaalRij.openstaand,
+        brutowinst: totaalRij.profit,
+      });
+      totaal.font = { bold: true };
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `BossBase-financien-${TODAY}.xlsx`; a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Export gedownload');
+    } catch (err) {
+      toast.error('Exporteren mislukt: ' + (err.message || ''));
+    }
   };
 
   const CHART_MODES = [
