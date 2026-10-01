@@ -352,7 +352,7 @@ export function Reveal({ children, className = "", stagger = false, delay = 0 })
 
 /* ── Nav ── */
 const NAV_LINKS = [
-  { label: "Functies",   href: "/functies" },
+  { label: "Functies",   href: "/functies", uitklap: true },
   { label: "Voor wie",   href: "/voor-wie" },
   { label: "Prijzen",    href: "/prijzen" },
   { label: "Kennisbank", href: "/kennisbank" },
@@ -360,25 +360,67 @@ const NAV_LINKS = [
   { label: "Contact",    href: "/contact" },
 ]
 
+// Uitklapmenu onder "Functies": rechtstreeks naar het onderwerp. Alleen
+// pagina's die bestaan; scripts/prerender.mjs controleert elke link.
+export const FUNCTIE_LINKS = [
+  { label: "Klantbeheer",     sub: "Klantkaart en pipeline",               href: "/klantbeheer",     icon: "users" },
+  { label: "Offertes",        sub: "Maken en online laten tekenen",        href: "/offertes",        icon: "fileText" },
+  { label: "Werkbonnen",      sub: "Met handtekening van de klant",        href: "/werkbonnen",      icon: "signature" },
+  { label: "Planning",        sub: "Per medewerker en voertuig",           href: "/planning",        icon: "calendar" },
+  { label: "Urenregistratie", sub: "Per werkdag en per klus",              href: "/urenregistratie", icon: "clock" },
+  { label: "Facturen",        sub: "Met herinneringen en iDEAL",           href: "/facturen",        icon: "euro" },
+  { label: "Koppelingen",     sub: "Moneybird, SnelStart, AFAS en Stripe", href: "/integraties",     icon: "zap" },
+]
+
+// Welk menu-item bij een pad hoort, ook voor onderliggende pagina's:
+// /klantbeheer hoort bij Functies, /voor-wie/schilders bij Voor wie.
+function actiefItem(path) {
+  if (path === "/functies" || FUNCTIE_LINKS.some(f => f.href === path)) return "/functies"
+  const l = NAV_LINKS.find(l => path === l.href || path.startsWith(`${l.href}/`))
+  return l ? l.href : path
+}
+
 export function Nav({ navigate }) {
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
+  const [uitklap, setUitklap] = useState(false)
   const [active, setActive] = useState("/")
+  const uitklapRef = useRef(null)
 
   useEffect(() => {
     const path = window.location.pathname
-    setActive(path === "" ? "/" : path)
+    setActive(actiefItem(path === "" ? "/" : path))
     const onScroll = () => setScrolled(window.scrollY > 24)
     window.addEventListener("scroll", onScroll, { passive: true })
     return () => window.removeEventListener("scroll", onScroll)
   }, [])
+
+  // Het uitklapmenu (opengeklikt op een aanraakscherm) sluit bij een klik
+  // erbuiten of op Escape. Met de muis werkt het op hover, via CSS.
+  useEffect(() => {
+    if (!uitklap) return
+    const onDoc = e => { if (!uitklapRef.current?.contains(e.target)) setUitklap(false) }
+    const onKey = e => {
+      if (e.key !== "Escape") return
+      setUitklap(false)
+      // Zolang de focus in het menu staat, houdt CSS (:focus-within) het open.
+      if (uitklapRef.current?.contains(document.activeElement)) document.activeElement.blur()
+    }
+    document.addEventListener("pointerdown", onDoc)
+    document.addEventListener("keydown", onKey)
+    return () => {
+      document.removeEventListener("pointerdown", onDoc)
+      document.removeEventListener("keydown", onKey)
+    }
+  }, [uitklap])
 
   const go = useCallback((e, href) => {
     // Ctrl/cmd-klik: de browser opent een nieuw tabblad.
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
     e.preventDefault()
     setOpen(false)
-    setActive(href)
+    setUitklap(false)
+    setActive(actiefItem(href))
     if (navigate) navigate(href)
     else window.location.href = href
   }, [navigate])
@@ -391,7 +433,7 @@ export function Nav({ navigate }) {
             <Wordmark navigate={navigate} />
             <ul className="nav-links">
               {NAV_LINKS.map(l => (
-                <li key={l.href}>
+                <li key={l.href} className={l.uitklap ? `nav-dd${uitklap ? " open" : ""}` : undefined} ref={l.uitklap ? uitklapRef : undefined}>
                   <a
                     href={l.href}
                     className={active === l.href ? "active" : ""}
@@ -399,13 +441,40 @@ export function Nav({ navigate }) {
                   >
                     {l.label}
                   </a>
+                  {l.uitklap && (
+                    <>
+                      <button
+                        type="button"
+                        className="nav-dd-knop"
+                        aria-expanded={uitklap}
+                        aria-controls="nav-functies"
+                        aria-label={`${l.label}: onderwerpen tonen`}
+                        onClick={() => setUitklap(o => !o)}
+                      >
+                        {I.chevronDown}
+                      </button>
+                      <div className="nav-dd-menu" id="nav-functies">
+                        <div className="nav-dd-panel">
+                          {FUNCTIE_LINKS.map(f => (
+                            <a key={f.href} href={f.href} onClick={e => go(e, f.href)}>
+                              <i>{I[f.icon]}</i>
+                              <span>{f.label}<small>{f.sub}</small></span>
+                            </a>
+                          ))}
+                          <div className="nav-dd-alle">
+                            <a href="/functies" onClick={e => go(e, "/functies")}>Alle functies {I.arrowRight}</a>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </li>
               ))}
             </ul>
             <div className="nav-right">
               <a href="/login" className="btn btn-ghost" onClick={e => go(e, "/login")}>Inloggen</a>
               <a href="/register" className="btn btn-p" onClick={e => go(e, "/register")}>Start nu gratis</a>
-              <button className="hamburger" aria-label="Menu" onClick={() => setOpen(o => !o)}>
+              <button className="hamburger" aria-label="Menu" aria-expanded={open} onClick={() => setOpen(o => !o)}>
                 {open ? I.x : I.menu}
               </button>
             </div>
@@ -414,7 +483,16 @@ export function Nav({ navigate }) {
       </nav>
       <div className={`mobile-menu${open ? " open" : ""}`}>
         {NAV_LINKS.map(l => (
-          <a key={l.href} href={l.href} onClick={e => go(e, l.href)}>{l.label}</a>
+          <div key={l.href} className="mobile-menu-item">
+            <a href={l.href} className={active === l.href ? "active" : ""} onClick={e => go(e, l.href)}>{l.label}</a>
+            {l.uitklap && (
+              <div className="mobile-menu-sub">
+                {FUNCTIE_LINKS.map(f => (
+                  <a key={f.href} href={f.href} onClick={e => go(e, f.href)}>{f.label}</a>
+                ))}
+              </div>
+            )}
+          </div>
         ))}
         <a href="/register" className="btn btn-p mobile-menu-cta" onClick={e => go(e, "/register")}>
           Start nu gratis
