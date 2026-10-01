@@ -477,7 +477,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
           <button className="btn btn-s btn-sm" onClick={goPrev} aria-label={view === 'month' ? 'Vorige maand' : 'Vorige week'}>{I.chev_l}</button>
           <button className="btn btn-s btn-sm" onClick={goToday}>Vandaag</button>
           <button className="btn btn-s btn-sm" onClick={goNext} aria-label={view === 'month' ? 'Volgende maand' : 'Volgende week'}>{I.chev_r}</button>
-          <div className="tabs">
+          <div className="tabs" data-rl="agenda-weergave">
             {['day','week','month'].map(v => (
               <button key={v} className={`tab${view === v ? ' active' : ''}`} onClick={() => setView(v)}>
                 {v === 'day' ? 'Dag' : v === 'week' ? 'Week' : 'Maand'}
@@ -487,7 +487,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
           {canPlanFromAgenda && (
             <button className="btn btn-s btn-sm" onClick={guardSchrijven('Een werkbon inplannen', () => setShowPlanWerkbon(true))}>{I.plus} Werkbon inplannen</button>
           )}
-          <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een afspraak inplannen', () => setShowNew(true))}>{I.plus} Toevoegen</button>
+          <button className="btn btn-p btn-sm" data-rl="agenda-toevoegen" onClick={guardSchrijven('Een afspraak inplannen', () => setShowNew(true))}>{I.plus} Toevoegen</button>
         </div>
       </div>
 
@@ -540,7 +540,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
       )}
 
       {!loading && !error && view === 'week' && (
-        <div className="afu3" style={{ overflowX: 'auto' }}>
+        <div className="afu3" data-rl="agenda-rooster" style={{ overflowX: 'auto' }}>
           <AgendaTimeline dates={weekDates} events={events} todayKey={todayKey} onEventClick={handleEventClick} startUur={agendaUren.start} eindUur={agendaUren.eind} />
         </div>
       )}

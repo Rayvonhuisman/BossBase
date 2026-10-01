@@ -124,6 +124,24 @@ export const RONDLEIDINGEN = {
       tekst: 'Klaar met een activiteit? Vink hem hier af. Klik op de regel zelf om hem te openen.',
     },
   ],
+
+  calendar: [
+    {
+      doel: 'agenda-weergave',
+      titel: 'Dag, week of maand',
+      tekst: 'Kies hoeveel je in één keer ziet. Met de pijltjes blader je verder.',
+    },
+    {
+      doel: 'agenda-toevoegen',
+      titel: 'Afspraak toevoegen',
+      tekst: 'Zet een afspraak, opname of klus in je agenda.',
+    },
+    {
+      doel: 'agenda-rooster',
+      titel: 'Vanzelf in je agenda',
+      tekst: 'Werkbonnen waarop jij staat ingepland, verschijnen hier vanzelf. Klik erop om de werkbon te openen.',
+    },
+  ],
 };
 
 /** Alle pagina's met een rondleiding (voor "geen rondleidingen meer"). */
