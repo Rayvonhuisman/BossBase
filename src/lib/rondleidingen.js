@@ -196,6 +196,24 @@ export const RONDLEIDINGEN = {
       tekst: 'Bekijk alles, of een dag, week of maand.',
     },
   ],
+
+  offertes: [
+    {
+      doel: 'offertes-nieuw',
+      titel: 'Nieuwe offerte',
+      tekst: 'Kies een klant, voeg regels toe en verstuur hem per mail.',
+    },
+    {
+      doel: 'offertes-filters',
+      titel: 'Per status',
+      tekst: 'Concept, verzonden, geaccepteerd of afgewezen. Zoeken kan op nummer, omschrijving of klant.',
+    },
+    {
+      selector: 'table.dt tbody button[title="Meer acties"]',
+      titel: 'Acties',
+      tekst: 'Versturen, herzien, kopiëren of een factuur maken van een geaccepteerde offerte.',
+    },
+  ],
 };
 
 /** Alle pagina's met een rondleiding (voor "geen rondleidingen meer"). */

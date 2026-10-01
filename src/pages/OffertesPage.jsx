@@ -1274,7 +1274,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
         </div>
         <div className="page-hd-actions">
           {canManageOffertes && (
-            <button className="btn btn-p" onClick={guardLimiet('offertes', () => setShowNew(true))}>
+            <button className="btn btn-p" data-rl="offertes-nieuw" onClick={guardLimiet('offertes', () => setShowNew(true))}>
               {I.plus} Nieuwe offerte
             </button>
           )}
@@ -1314,7 +1314,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
         </div>
 
         <div className="card">
-          <div className="tw-filter">
+          <div className="tw-filter" data-rl="offertes-filters">
             <div className="bb-filter-tabs">
               {filters.map(f => (
                 <button
