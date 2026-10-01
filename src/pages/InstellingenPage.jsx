@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import { resetGezien } from '../services/rondleidingService.js';
+import { RL_RESET } from '../lib/rondleidingen.js';
 import { I, ModalX, STAGE_COLOR_OPTIONS, stageColToHex, stageColorLabel, stageBadgeStyle } from '../bb-shared.jsx';
 import { supabase } from '../lib/supabase.js';
 import GrootboekIndeling from '../components/GrootboekIndeling.jsx';
@@ -1845,6 +1847,25 @@ export function InstellingenPage() {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Rondleiding: alles weer als niet gezien, zodat elke pagina hem de
+              volgende keer opnieuw toont. Per gebruiker, dus ook op een andere
+              computer. */}
+          <div style={{ marginTop: 'var(--sp-6)', paddingTop: 'var(--sp-5)', borderTop: '1px solid var(--border)' }}>
+            <div className="label" style={{ marginBottom: 'var(--sp-2)' }}>Rondleiding</div>
+            <p style={{ fontSize: '.82rem', color: 'var(--dl)', lineHeight: 1.5, marginBottom: 'var(--sp-3)', maxWidth: 560 }}>
+              Elke pagina laat de eerste keer zien waar je wat vindt. Wil je dat nog eens zien, start de rondleidingen dan opnieuw.
+            </p>
+            <button className="btn btn-s" onClick={async () => {
+              try {
+                await resetGezien();
+                window.dispatchEvent(new Event(RL_RESET));
+                toast.success('De rondleidingen starten weer op elke pagina.');
+              } catch (e) {
+                toast.error(e.message || 'Opnieuw starten mislukt');
+              }
+            }}>Rondleidingen opnieuw starten</button>
           </div>
 
           {/* Overig */}

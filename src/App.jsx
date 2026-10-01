@@ -69,6 +69,8 @@ import { ActivityEditModal, NewActivityModal, NewLeadModal, ProfileModal } from 
 import { supabase } from './lib/supabase.js';
 import { listNotifications, markNotificationRead, markAllNotificationsRead } from './services/notificatieService.js';
 import { isDemo } from './lib/supabase.js';
+import Rondleiding from './components/Rondleiding.jsx';
+import { RL_START } from './lib/rondleidingen.js';
 import { isAppPath } from './lib/appRoutes.js';
 import { meet } from './lib/meting.js';
 import { DEMO_SESSION, DEMO_USER, DEMO_PROFILE, DEMO_COMPANY, DEMO_PLAN_STATUS, DEMO_PERMISSIONS } from './demo/demoSessie.js';
@@ -272,7 +274,7 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, compan
           )}
         </div>
 
-        <nav className="sb-nav" ref={navRef}
+        <nav className="sb-nav" ref={navRef} data-rl="menu"
           onMouseEnter={e => e.currentTarget.classList.add('hov')}
           onMouseLeave={e => e.currentTarget.classList.remove('hov')}>
           {SECTIONS.map(sec => {
@@ -395,7 +397,7 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, compan
 function BossKnop({ onClick }) {
   const [mislukt, setMislukt] = useState(false);
   return (
-    <button className="tb-boss" title="Vraag het Boss" aria-label="Vraag het Boss" onClick={onClick}>
+    <button className="tb-boss" title="Vraag het Boss" aria-label="Vraag het Boss" data-rl="boss" onClick={onClick}>
       {mislukt
         ? <span className="tb-boss-val" aria-hidden="true">B</span>
         : <img src="/boss-avatar.png" alt="" onError={() => setMislukt(true)} />}
@@ -661,7 +663,7 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
         <MeldKnop pagina={pageMeta.title} />
         <BossKnop onClick={onOpenBoss} />
         <div className="tb-anchor">
-          <button className="ib" title="Meldingen" onClick={() => setOpenMenu(m => m === 'notif' ? null : 'notif')}>
+          <button className="ib" title="Meldingen" data-rl="meldingen" onClick={() => setOpenMenu(m => m === 'notif' ? null : 'notif')}>
             {I.bell}
             {hasUnread && <span className="ndot" />}
           </button>
@@ -832,6 +834,7 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
               <div className="tb-pop-menu">
                 <button onClick={() => { close(); onOpenProfile(); }}>{I.cust} Mijn profiel</button>
                 <button onClick={() => { close(); navigatePage('revenue'); }}>{I.chart} Financiën</button>
+                <button onClick={() => { close(); window.dispatchEvent(new Event(RL_START)); }}>{I.info} Rondleiding</button>
                 <div className="menu-divider" />
                 <button className="danger" onClick={() => { close(); onLogout(); }}>{I.logout} Uitloggen</button>
               </div>
@@ -1915,6 +1918,7 @@ function AppInner() {
                 <Suspense fallback={<div style={{ padding: 24, color: 'var(--dl)' }}>Laden…</div>}>
                   {renderPage()}
                 </Suspense>
+                <Rondleiding pagina={page} />
               </PageErrorBoundary>
             )}
           </div>

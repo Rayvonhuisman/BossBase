@@ -3495,3 +3495,19 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .bb-mailframe{display:block;width:100%;height:420px;border:0;background:#fff;border-radius:var(--r8)}
 @media(max-width:900px){.bb-mailframe{height:320px}}
 @media(max-width:640px){.bb-mailframe{height:260px}}
+
+/* ── Rondleiding (onboarding) ─────────────────────────────────────────────── */
+/* Boven alles behalve de cookiebanner: de spot dimt de pagina met een grote
+   schaduw en laat het aangewezen element vrij. */
+.rl-laag{position:fixed;inset:0;z-index:1500}
+.rl-vanger{position:absolute;inset:0}
+.rl-spot{position:fixed;border-radius:var(--r12);box-shadow:0 0 0 9999px rgba(13,13,13,.45),0 0 0 2px var(--p);pointer-events:none;transition:top .2s ease,left .2s ease,width .2s ease,height .2s ease}
+.rl-kaart{position:fixed;background:var(--bg);border-radius:var(--r16);padding:18px 18px 12px;box-shadow:0 24px 64px rgba(0,0,0,.18);animation:fadeUp .2s cubic-bezier(.22,1,.36,1) both}
+.rl-teller{font-size:.72rem;font-weight:700;color:var(--dmu);letter-spacing:.02em;margin-bottom:4px}
+.rl-titel{font-size:1rem;font-weight:800;letter-spacing:-.01em;color:var(--dk);margin-bottom:6px}
+.rl-tekst{font-size:.84rem;line-height:1.45;color:var(--dm);margin:0 0 10px}
+.rl-noot{color:var(--dmu);font-size:.78rem}
+.rl-knoppen{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}
+.rl-knoppen .btn-ghost{padding-left:0}
+.rl-geen-meer{display:block;margin-top:8px;font-size:.72rem;color:var(--dl);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline}
+.rl-geen-meer:hover{color:var(--dmu)}
