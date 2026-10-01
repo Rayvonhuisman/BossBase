@@ -108,6 +108,10 @@ export const AVAILABLE_PERMISSIONS = PERMISSION_GROUPS.flatMap(g => g.subs)
 // vraagt apart om 'projecten_bewerken', en de bedragen zitten achter
 // 'projectbedragen'. Wat overblijft is de klus zelf — en een standaard die elke
 // beheerder meteen weer aanzet, is de verkeerde standaard.
+//
+// Toegepast door de database (trigger bb_standaardrechten_medewerker, migratie
+// 20261001140105) zodra iemand medewerker wordt. Pas je deze lijst aan, pas dan
+// die functie mee aan.
 export const DEFAULT_MEDEWERKER_PERMISSIONS = ['projecten']
 
 // Alle recht-keys (voor admin of "alles aan").
