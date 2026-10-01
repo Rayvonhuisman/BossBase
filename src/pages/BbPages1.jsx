@@ -7,7 +7,7 @@ import {
   I, CUSTOMERS_DATA, DEALS, ACTIVITIES_DATA, QUOTES_DATA, COSTS_DATA,
   fmt, custById, stageLabel, stageCol, Av, StatusBadge, ModalX, CostCategoryBadge,
 } from '../bb-shared.jsx';
-import { createCustomer, deleteCustomer, getCustomer, listCustomers, updateCustomer } from '../services/customerService.js';
+import { createCustomer, deleteCustomer, getCustomer, listCustomers, updateCustomer, KLANT_TYPES } from '../services/customerService.js';
 import { customerTotals, listCustomersWithTotals } from '../services/customerTotalsService.js';
 import { getKlantNotities, addKlantNotitie, getTijdlijnByCustomer, logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { NoteEditor, renderNote } from '../components/NoteEditor.jsx';
@@ -44,7 +44,7 @@ import { mailTemplate } from '../utils/mailTemplate.js';
 import { getEmailTemplates } from '../services/instellingenService.js';
 
 // Customer form keeps friendly UI fields; service-layer maps to real DB columns.
-// `type` and `source` are local-only display state for now (no DB columns yet).
+// `type` en `source` worden opgeslagen (customers.type / customers.source).
 const emptyCustomerForm = { name: '', company: '', email: '', phone: '', city: '', address: '', postcode: '', kvkNumber: '', btwNumber: '', iban: '', type: 'Zakelijk', source: 'Handmatig', notes: '' };
 
 // Zelfde datumweergave als de project-tab (ProjectDetailDrawer) zodat de
@@ -1339,7 +1339,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
             { key: 'kvkNumber', label: 'KvK-nummer',  type: 'input' },
             { key: 'btwNumber', label: 'BTW-nummer',  type: 'input' },
             { key: 'iban',      label: 'IBAN',        type: 'input' },
-            { key: 'type',      label: 'Type',        type: 'select', options: ['Particulier', 'Bedrijf', 'VvE', 'Aannemer'] },
+            { key: 'type',      label: 'Type',        type: 'select', options: KLANT_TYPES },
             { key: 'source',    label: 'Bron',        type: 'input' },
           ].map(field => {
             const isActive = editingField === field.key;

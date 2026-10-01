@@ -3,7 +3,7 @@ import { I, ModalX, NotifyMailToggle, PIPELINE_STAGES, fmt } from '../bb-shared.
 import { InfoTip } from './Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { supabase } from '../lib/supabase';
-import { createCustomer } from '../services/customerService.js';
+import { createCustomer, KLANT_TYPES } from '../services/customerService.js';
 import { createDeal, markDealLost } from '../services/dealService.js';
 import { getLostReasons } from '../services/lostReasonService.js';
 import { createActivity, updateActivity, deleteActivity, buildDueAt, getActiviteitNotities, addActiviteitNotitie } from '../services/activityService.js';
@@ -67,7 +67,8 @@ async function compressImage(file) {
 }
 
 // Customer form keeps friendly UI fields. customerService.mapCustomerFormToPayload
-// strips anything Supabase doesn't actually have (source, type, company_name).
+// zet ze om naar kolommen; type en source worden opgeslagen, company_name gaat
+// op in de naam.
 
 // ── NEW CUSTOMER MODAL ───────────────────────────────────────
 export function NewCustomerModal({ onClose, onSaved }) {
@@ -169,8 +170,7 @@ export function NewCustomerModal({ onClose, onSaved }) {
           <div className="f">
             <label>Type</label>
             <select value={form.type} onChange={e => set('type', e.target.value)}>
-              <option value="Zakelijk">Zakelijk</option>
-              <option value="Particulier">Particulier</option>
+              {KLANT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
           <div className="f">
