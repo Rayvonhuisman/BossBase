@@ -65,6 +65,29 @@ export const RONDLEIDINGEN = {
       tekst: 'Zet hier een nieuwe klus op het bord. Aanvragen van je websiteformulier komen er vanzelf bij.',
     },
   ],
+
+  projectkaart: [
+    {
+      doel: 'pk-status',
+      titel: 'Status',
+      tekst: 'De fase van de klus. Kies hier een andere fase, of zet de aanvraag op verloren.',
+    },
+    {
+      doel: 'pk-voltooien',
+      titel: 'Project voltooien',
+      tekst: 'Is de klus klaar en betaald? Klik hier. Het project gaat dan van het bord en is later terug te vinden.',
+    },
+    {
+      doel: 'pk-behandeld',
+      titel: 'Behandeld door',
+      tekst: 'Kies wie deze klus oppakt. Wat je aanvinkt, wordt meteen opgeslagen.',
+    },
+    {
+      doel: 'pk-tabs',
+      titel: 'Alles van de klus',
+      tekst: 'Offertes, facturen, uren, kosten, werkbonnen en notities van dit project staan in deze tabbladen.',
+    },
+  ],
 };
 
 /** Alle pagina's met een rondleiding (voor "geen rondleidingen meer"). */

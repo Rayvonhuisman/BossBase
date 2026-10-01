@@ -44,6 +44,7 @@ import { WerkbonModal } from '../WerkbonPageV2.jsx';
 import NotitieLog, { toLogItem } from '../../components/NotitieLog.jsx';
 import { getTeamMembers, createMentionNotifications } from '../../services/notificatieService.js';
 import { statusInfo } from '../../utils/statusColors.js';
+import Rondleiding from '../../components/Rondleiding.jsx';
 
 const TABS = [
   { id: 'overview',   label: 'Overzicht' },
@@ -182,7 +183,7 @@ function zichtbareTabs(can, plan) {
 
 function Tabs({ tab, setTab, tabs = TABS }) {
   return (
-    <div className="tabs kk-tabs" style={{ padding: '8px 16px', borderBottom: '1px solid var(--br)' }}>
+    <div className="tabs kk-tabs" data-rl="pk-tabs" style={{ padding: '8px 16px', borderBottom: '1px solid var(--br)' }}>
       {tabs.map(t => (
         <button
           key={t.id}
@@ -481,7 +482,7 @@ function OverviewTab({
     <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14, overflow: 'hidden' }}>
       {/* ── De aanvraag: fase, wie het behandelt, en de twee eindacties ────── */}
       {huidigeDeal && (
-        <div className="card card-p" style={{ padding: 14 }}>
+        <div className="card card-p" data-rl="pk-status" style={{ padding: 14 }}>
           {/* Status en voltooien. Alleen met 'verkoop': deals_update eist dat,
               dus zonder dat recht zou een keuzelijst stil weigeren. */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
@@ -512,6 +513,7 @@ function OverviewTab({
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <button
                   className={dealAfgerond ? 'btn btn-s btn-sm' : 'btn wb2-complete-btn'}
+                  data-rl="pk-voltooien"
                   disabled={afrondBezig}
                   onClick={() => zetAfgerond(!dealAfgerond)}
                 >
@@ -535,7 +537,7 @@ function OverviewTab({
           {/* Wie het behandelt. Dicht als knop met de namen erop: de lijst toont
               alle teamleden en zou het blok anders uit elkaar duwen. */}
           {magVerkoop && (
-            <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 12 }} data-rl="pk-behandeld">
               <div style={labelStyle}>Behandeld door</div>
               {toonToewijzen ? (
                 <MemberMultiSelect
@@ -1818,6 +1820,7 @@ export function ProjectDetailDrawer({
             <>
               <DrawerHeader project={project} onClose={onClose} fullscreen={fullscreen} onToggleFullscreen={() => setFullscreen(f => !f)} onSave={handleSave} canManage={canManage} openCustomer={openCustomer} />
               <Tabs tab={tab} setTab={setTab} tabs={tabs} />
+              <Rondleiding pagina="projectkaart" inLa />
 
               {tab === 'overview' && (
                 <OverviewTab
