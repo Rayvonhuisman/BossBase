@@ -425,7 +425,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
 
       <div className="afu2">
         {/* KPI cards */}
-        <div className="stats-row" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 20 }}>
+        <div className="stats-row" data-rl="projecten-tellers" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 20 }}>
           <div className="sc">
             <div className="sc-top"><div className="sc-icon">{I.projects}</div></div>
             <div className="sc-val">{kpi.active}</div>
@@ -453,7 +453,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
         </div>
 
         <div className="card">
-          <div className="tw-filter">
+          <div className="tw-filter" data-rl="projecten-filters">
             <div className="bb-filter-tabs">
               {filterTabs.map(f => (
                 <button
@@ -500,7 +500,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
                   <tr>
                     <th className="th">Project</th>
                     <th className="th">Klant</th>
-                    <th className="th">Status</th>
+                    <th className="th" data-rl="projecten-status">Status</th>
                     {magBedragen && <th className="th">Waarde</th>}
                     {magBedragen && <th className="th">Gefactureerd</th>}
                     <th className="th">Uren</th>

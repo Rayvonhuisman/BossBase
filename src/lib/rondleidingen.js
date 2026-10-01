@@ -142,6 +142,24 @@ export const RONDLEIDINGEN = {
       tekst: 'Werkbonnen waarop jij staat ingepland, verschijnen hier vanzelf. Klik erop om de werkbon te openen.',
     },
   ],
+
+  projecten: [
+    {
+      doel: 'projecten-tellers',
+      titel: 'In één oogopslag',
+      tekst: 'Hoeveel projecten er lopen, wat ze waard zijn, wat nog gefactureerd moet worden en hoeveel uur er is gewerkt.',
+    },
+    {
+      doel: 'projecten-filters',
+      titel: 'Filteren',
+      tekst: 'Toon projecten per stand van het werk, of alleen wat nog gefactureerd moet worden.',
+    },
+    {
+      doel: 'projecten-status',
+      titel: 'Status',
+      tekst: 'De stand van het werk: gepland, in uitvoering of afgerond. Die volgt vanzelf uit de werkbonnen.',
+    },
+  ],
 };
 
 /** Alle pagina's met een rondleiding (voor "geen rondleidingen meer"). */
