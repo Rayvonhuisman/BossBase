@@ -33,12 +33,13 @@ const json = (body: unknown, status = 200) =>
   })
 
 import { logMailFout } from '../_shared/mailFout.ts'
+import { afmeldLinks } from '../_shared/afmelden.ts'
 
 // Rechtstreeks naar Resend, net als check-herinneringen. Niet via send-email:
 // die functie eist een ingelogde gebruiker of het interne secret, en weigert
 // bovendien post van een read-only account — precies de bedrijven die mail 15
 // en 30 moeten krijgen.
-async function verstuur(to: string, subject: string, html: string, soort = 'trial'): Promise<string | null> {
+async function verstuur(to: string, subject: string, html: string, soort = 'trial', eenKlikAfmelden?: string): Promise<string | null> {
   const apiKey = Deno.env.get('RESEND_API_KEY')
   const fromEmail = Deno.env.get('RESEND_FROM_EMAIL') || 'noreply@bossbase.nl'
   if (!apiKey) { console.warn('RESEND_API_KEY niet ingesteld — mail overgeslagen'); return null }
@@ -52,6 +53,13 @@ async function verstuur(to: string, subject: string, html: string, soort = 'tria
       subject,
       html,
       reply_to: TRIAL_REPLY_TO,
+      // Afmelden met één klik vanuit het mailprogramma (RFC 8058).
+      ...(eenKlikAfmelden ? {
+        headers: {
+          'List-Unsubscribe': `<${eenKlikAfmelden}>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        },
+      } : {}),
     }),
   })
   const data = await res.json().catch(() => ({}))
@@ -118,11 +126,13 @@ serve(async (req) => {
     // raakt geen enkel bedrijf — puur om te zien hoe ze eruitzien.
     if (bekijken) {
       const overMorgen = new Date(Date.now() + 3 * 86400_000).toISOString()
+      const voorbeeld = await afmeldLinks(appUrl, '00000000-0000-4000-8000-000000000000')
       for (const nummer of TRIAL_MAIL_NUMMERS) {
         const m = trialMail(nummer as TrialMailNummer, {
           naam: 'Niels',
           trialEindigt: overMorgen,
           appUrl,
+          afmeldUrl: voorbeeld.pagina,
         })
         const id = await verstuur(internAdres, `[dag ${nummer}] ${m.subject}`, m.html, `trial_${nummer}_bekijk`)
         if (id) { uitslag.verstuurd++; uitslag.details.push(`dag ${nummer} → ${internAdres}`) }
@@ -150,13 +160,15 @@ serve(async (req) => {
         continue
       }
 
+      const afmelden = await afmeldLinks(appUrl, k.company_id)
       const m = trialMail(k.mail as TrialMailNummer, {
         naam: k.naam,
         trialEindigt: k.trial_eindigt,
         appUrl,
+        afmeldUrl: afmelden.pagina,
       })
 
-      const messageId = await verstuur(k.naar, m.subject, m.html, `trial_${k.mail}`)
+      const messageId = await verstuur(k.naar, m.subject, m.html, `trial_${k.mail}`, afmelden.eenKlik)
       if (messageId) {
         await db.rpc('bb_trial_mail_verstuurd', {
           p_company_id: k.company_id, p_mail: k.mail, p_message_id: messageId,

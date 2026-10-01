@@ -50,6 +50,10 @@
       "destination": "/app"
     },
     {
+      "source": "/afmelden",
+      "destination": "/app"
+    },
+    {
       "source": "/dashboard",
       "destination": "/app"
     },
@@ -161,6 +165,15 @@
     },
     {
       "source": "/superadmin",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/afmelden",
       "headers": [
         {
           "key": "X-Robots-Tag",

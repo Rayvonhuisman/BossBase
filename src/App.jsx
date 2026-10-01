@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Wrench, AlertTriangle } from 'lucide-react';
 import { I, Logo, initials } from './bb-shared.jsx';
 import { LoginPage, RegisterFlow, EmailVerificationScreen } from './pages/BbAuth.jsx';
+import { AfmeldenPage } from './pages/AfmeldenPage.jsx';
 import { ResetPasswordPage } from './pages/ResetPasswordPage.jsx';
 import { UitnodigingPage } from './pages/UitnodigingPage.jsx';
 import OfferteSigneren from './pages/OfferteSigneren.jsx';
@@ -1673,6 +1674,10 @@ function AppInner() {
   // Publieke bedankpagina's ná een Stripe-betaling (klanten van onze gebruikers).
   if (route === '/betaald') {
     return <BetaalStatusPage status="success" />;
+  }
+  // Afmelden voor de proefperiodemails (link onderaan de mail). Zonder login.
+  if (route === '/afmelden') {
+    return <AfmeldenPage />;
   }
   if (route === '/betaling-geannuleerd') {
     return <BetaalStatusPage status="cancelled" />;
