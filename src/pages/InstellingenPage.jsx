@@ -1214,7 +1214,7 @@ export function InstellingenPage() {
     { id: 'profiel', label: 'Mijn profiel' },
     ...(canCompanySettings ? [
       { id: 'bedrijf', label: 'Bedrijfsprofiel' },
-      { id: 'standaard', label: 'Standaardwaarden' },
+      { id: 'standaard', label: 'Algemeen' },
       { id: 'templates', label: 'E-mailtemplates' },
       { id: 'pipeline', label: 'Pipeline' },
       // Voertuigen is een feature uit de matrix (Team, of module bij Groei).
@@ -2067,7 +2067,7 @@ export function InstellingenPage() {
         <div className="card card-p afu3">
           <div className="card-hd" style={{ marginBottom: 18 }}>
             <div className="card-title">
-              Standaardwaarden <InfoTip tekst="Wordt vooringevuld bij nieuwe offertes en werkbonnen." />
+              Algemeen <InfoTip tekst="Wordt vooringevuld bij nieuwe offertes en werkbonnen." />
             </div>
           </div>
           <div className="fg">
