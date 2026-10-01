@@ -146,7 +146,16 @@ serve(async (req) => {
 
     if (action === 'activate') {
       if (pid) {
-        await admin.from('profiles').update({ actief: true, deactivated_at: null }).eq('id', pid)
+        // Eerst het profiel: daar telt de database de gebruikerslimiet
+        // (trigger bb_gebruikerslimiet). Past het niet, dan blijft de ban staan
+        // en krijgt de beheerder de melding met de weg naar upgraden.
+        const { error: actErr } = await admin.from('profiles').update({ actief: true, deactivated_at: null }).eq('id', pid)
+        if (actErr) {
+          if (actErr.hint === 'gebruikerslimiet') {
+            return json({ success: false, error: actErr.message, code: 'gebruikerslimiet' }, 409)
+          }
+          throw new Error(`Heractiveren mislukt: ${actErr.message}`)
+        }
         await admin.auth.admin.updateUserById(pid, { ban_duration: 'none' })
       }
       if (memberRowId) await admin.from('company_members').update({ status: 'actief' }).eq('id', memberRowId)

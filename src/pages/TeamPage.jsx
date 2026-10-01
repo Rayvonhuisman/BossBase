@@ -34,7 +34,7 @@ function TeamAvatar({ member, idx, size = 'sm' }) {
   return <Av name={member.fullName || member.email || '?'} size={size} idx={idx % 6} />;
 }
 
-function InviteModal({ onClose, onSaved }) {
+function InviteModal({ onClose, onSaved, onLimiet }) {
   const toast = useToast();
   const [form, setForm] = useState({
     email: '',
@@ -63,6 +63,7 @@ function InviteModal({ onClose, onSaved }) {
       onClose();
     } catch (err) {
       toast.error(err.message || 'Opslaan mislukt');
+      if (err.code === 'gebruikerslimiet') { onClose(); onLimiet?.(); }
     } finally {
       setSaving(false);
     }
@@ -451,7 +452,10 @@ export function TeamPage() {
   // Gebruikerslimiet + rollen&rechten uit de centrale matrix. Server-side dwingt
   // een restrictive policy op company_members (limiet) en user_permissions
   // (feature) hetzelfde af.
-  const { plan, guardLimiet, guardFeature, planModal } = usePlanGuard();
+  const { plan, guardLimiet, guardFeature, planModal, toonBlokkade } = usePlanGuard();
+  // De database weigerde omdat het pakket vol zit: melding staat al als toast,
+  // nu door naar de abonnementspagina om te upgraden.
+  const naarUpgrade = () => toonBlokkade({ limiet: 'gebruikers' });
 
   useEffect(() => {
     setLoading(true);
@@ -468,6 +472,7 @@ export function TeamPage() {
       toast.success('Teamlid geactiveerd');
     } catch (err) {
       toast.error(err.message || 'Activeren mislukt');
+      if (err.code === 'gebruikerslimiet') naarUpgrade();
     }
   };
 
@@ -661,7 +666,7 @@ export function TeamPage() {
                             ) : (
                               <button
                                 className="btn btn-s btn-sm"
-                                onClick={() => handleActivate(member)}
+                                onClick={guardLimiet('gebruikers', () => handleActivate(member))}
                               >
                                 Activeren
                               </button>
@@ -690,6 +695,7 @@ export function TeamPage() {
         <InviteModal
           onClose={() => setShowInvite(false)}
           onSaved={created => setMembers(ms => [...ms, created])}
+          onLimiet={naarUpgrade}
         />
       )}
 

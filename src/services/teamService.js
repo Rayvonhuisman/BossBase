@@ -166,7 +166,12 @@ export async function inviteTeamMember(input) {
     .insert(payload)
     .select()
     .single()
-  if (error) throw error
+  if (error) {
+    // De database telt de gebruikerslimiet (trigger bb_gebruikerslimiet) en
+    // geeft dan een leesbare melding met deze hint.
+    if (error.hint === 'gebruikerslimiet') throw Object.assign(new Error(error.message), { code: 'gebruikerslimiet' })
+    throw error
+  }
 
   // Uitnodigingsmail — altijd productie URL
   const inviteUrl = `https://www.bossbase.nl/uitnodiging/${inviteToken}`
@@ -306,10 +311,13 @@ async function callTeamMemberAction(memberId, action) {
   })
   if (error) {
     let message = error.message
-    try { const b = await error.context?.json(); if (b?.error) message = b.error } catch {}
-    throw new Error(message)
+    let code = null
+    try { const b = await error.context?.json(); if (b?.error) message = b.error; code = b?.code || null } catch {}
+    // code 'gebruikerslimiet': het pakket zit vol; het scherm stuurt dan door
+    // naar upgraden.
+    throw Object.assign(new Error(message), { code })
   }
-  if (!data?.success) throw new Error(data?.error || `${action} mislukt`)
+  if (!data?.success) throw Object.assign(new Error(data?.error || `${action} mislukt`), { code: data?.code || null })
   return data
 }
 
