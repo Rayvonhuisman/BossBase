@@ -178,6 +178,24 @@ export const RONDLEIDINGEN = {
       tekst: 'Klik om hem te openen. Daar boek je uren, vink je taken af, voeg je foto\'s toe en laat je de klant tekenen.',
     },
   ],
+
+  uren: [
+    {
+      doel: 'uren-nieuw',
+      titel: 'Uren registreren',
+      tekst: 'Vul hier je werkdag in: begin, eind en pauze. Uren op een klus boek je op de werkbon.',
+    },
+    {
+      doel: 'uren-soort',
+      titel: 'Werkdag of klus',
+      tekst: 'Wissel tussen je werkdaguren, de uren op werkbonnen, en die twee naast elkaar.',
+    },
+    {
+      doel: 'uren-periode',
+      titel: 'Periode',
+      tekst: 'Bekijk alles, of een dag, week of maand.',
+    },
+  ],
 };
 
 /** Alle pagina's met een rondleiding (voor "geen rondleidingen meer"). */

@@ -147,7 +147,7 @@ function PeriodTabs({ value, onChange }) {
     { id: 'maand', label: 'Maand' },
   ];
   return (
-    <div className="tabs" role="tablist">
+    <div data-rl="uren-periode" className="tabs" role="tablist">
       {tabs.map(t => (
         <button
           key={t.id}
@@ -172,7 +172,7 @@ const SOORTEN = [
 
 function SoortTabs({ value, onChange }) {
   return (
-    <div className="tabs" role="tablist">
+    <div className="tabs" role="tablist" data-rl="uren-soort">
       {SOORTEN.map(t => (
         <button
           key={t.id}
@@ -889,6 +889,7 @@ export function UrenPageV2({ navigatePage } = {}) {
         <button
           type="button"
           className="uren2-btn uren2-btn-primary uren2-hd-cta"
+          data-rl="uren-nieuw"
           onClick={guardSchrijven('Uren boeken', () => setModal({ mode: 'register', initial: null }))}
         >
           <span className="uren2-btn-ic">{Ic.Plus}</span>
