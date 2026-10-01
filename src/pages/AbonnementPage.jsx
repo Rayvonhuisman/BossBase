@@ -259,12 +259,12 @@ export default function AbonnementPage({ setPage }) {
       await requestUpgrade({
         tier: voorstel?.tier || null,
         modules: voorstel?.modules || [],
-        aanleiding: aanleiding?.soort
-          ? `${aanleiding.soort}${aanleiding.key ? `:${aanleiding.key}` : ''}`
-          : 'medewerker',
+        // Leesbare tekst: dit is wat de beheerder in zijn melding en onder
+        // Instellingen → Abonnement te zien krijgt.
+        aanleiding: voorstel?.kop || null,
       });
       setGemeld(true);
-      toast.success('Doorgegeven aan je beheerder.');
+      toast.success('Doorgegeven aan de eigenaar van je bedrijf.');
     } catch (e) {
       toast.error(e.message || 'Doorgeven mislukt');
     } finally {
@@ -361,7 +361,7 @@ export default function AbonnementPage({ setPage }) {
                   {bezig ? 'Bezig…' : 'Laat mijn beheerder weten'}
                 </button>
               : <span style={{ fontSize: '.85rem', color: 'var(--dmu)' }}>
-                  Doorgegeven. Je beheerder ziet dit bij Instellingen → Abonnement.
+                  Doorgegeven. De eigenaar van je bedrijf krijgt hier een melding van.
                 </span>}
           </div>
         </div>

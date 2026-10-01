@@ -50,6 +50,35 @@ export function fallbackPlanStatus(tier = DEFAULT_TIER) {
   }
 }
 
+// Open verzoeken van teamleden, voor de abonnementsbeheerder (Instellingen →
+// Abonnement). De beheerder krijgt bij elk nieuw verzoek ook een melding bij de
+// bel; die komt uit een trigger (bb_upgrade_verzoek_melden).
+export async function getOpenUpgradeVerzoeken() {
+  const { data, error } = await supabase
+    .from('upgrade_requests')
+    .select('id, gewenst_plan, gewenste_modules, aanleiding, created_at, aanvrager:profiles(full_name)')
+    .eq('status', 'open')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data || []).map(r => ({
+    id: r.id,
+    gewenstPlan: r.gewenst_plan,
+    gewensteModules: r.gewenste_modules || [],
+    aanleiding: r.aanleiding,
+    createdAt: r.created_at,
+    naam: r.aanvrager?.full_name || 'Een teamlid',
+  }))
+}
+
+// Alleen de abonnementsbeheerder mag dit (policy upgrade_requests_update).
+export async function rondUpgradeVerzoekAf(id) {
+  const { error } = await supabase
+    .from('upgrade_requests')
+    .update({ status: 'afgehandeld' })
+    .eq('id', id)
+  if (error) throw error
+}
+
 // ── UPGRADE-AANHAAKPUNT (fase 2: Stripe Billing) ─────────────────────────────
 // Legt de wens vast en meer niet. Zodra Stripe Billing er is, wordt dit het
 // startpunt van de checkout — de aanroepende UI hoeft dan niet te veranderen.

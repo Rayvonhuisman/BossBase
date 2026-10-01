@@ -6,6 +6,7 @@ import { moduleLabel, modulePrice, getLimitDef, TIER_LIMITS } from '../lib/featu
 import { getBillingStatus, openPortal, zegOp } from '../services/billingService.js';
 import { readonlyTekst, READONLY_BEWAARD } from '../lib/readonly.js';
 import { gaNaarAbonnement } from '../lib/abonnementNav.js';
+import { getOpenUpgradeVerzoeken, rondUpgradeVerzoekAf } from '../services/planService.js';
 
 // Abonnementssectie in Instellingen: huidig pakket, status, verlengdatum,
 // verbruik tegen de limieten, modules en de knoppen om te wijzigen.
@@ -70,6 +71,9 @@ export function AbonnementSectie() {
   const [laden, setLaden] = useState(true);
   const [bezig, setBezig] = useState(false);
   const [wijzigen, setWijzigen] = useState(false);
+  // Verzoeken van teamleden ("Laat mijn beheerder weten"). Alleen de
+  // abonnementsbeheerder krijgt ze te zien; die kan ze ook afhandelen.
+  const [verzoeken, setVerzoeken] = useState([]);
 
   const isAdmin = profile?.role === 'admin';
 
@@ -81,6 +85,19 @@ export function AbonnementSectie() {
       .finally(() => setLaden(false));
   };
   useEffect(laad, []);
+  useEffect(() => {
+    if (!stand?.magBeheren) return;
+    getOpenUpgradeVerzoeken().then(setVerzoeken).catch(() => {});
+  }, [stand?.magBeheren]);
+
+  const verzoekAfhandelen = async (id) => {
+    try {
+      await rondUpgradeVerzoekAf(id);
+      setVerzoeken(v => v.filter(x => x.id !== id));
+    } catch (e) {
+      toast.error(e.message || 'Afhandelen mislukt');
+    }
+  };
 
   if (!isAdmin) return null;
   if (laden) return <div className="card card-p">Abonnement laden…</div>;
@@ -233,6 +250,32 @@ export function AbonnementSectie() {
                 ? `Je hebt opgezegd. Het abonnement stopt op ${fmtDatum(stand.verplichtingTot)}; tot dan loopt de incasso van € ${tierPrice(stand.tier)} per maand door.`
                 : `Opzegbaar per ${fmtDatum(stand.verplichtingTot)}`}
             </div>
+          </div>
+        )}
+
+        {stand.magBeheren && verzoeken.length > 0 && (
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginBottom: 12 }}>
+            <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--dmu)', marginBottom: 6 }}>VERZOEKEN VAN JE TEAM</div>
+            {verzoeken.map(v => (
+              <div key={v.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, fontSize: 13, padding: '3px 0' }}>
+                <span>
+                  <strong>{v.naam}</strong>
+                  {v.aanleiding ? `: ${v.aanleiding}` : ' wil het abonnement uitbreiden'}
+                  {(() => {
+                    // Wat er gevraagd wordt: de module(s), of een ander pakket.
+                    // Het huidige pakket noemen we niet; dat is geen wens.
+                    const wens = v.gewensteModules.length > 0
+                      ? v.gewensteModules.map(moduleLabel).join(', ')
+                      : (v.gewenstPlan && v.gewenstPlan !== stand.tier ? tierLabel(v.gewenstPlan) : null);
+                    return wens ? ` (voorstel: ${wens})` : '';
+                  })()}
+                  <span style={{ color: 'var(--dmu)' }}> · {fmtDatum(v.createdAt)}</span>
+                </span>
+                <button className="btn btn-ghost btn-sm" onClick={() => verzoekAfhandelen(v.id)}>
+                  Afgehandeld
+                </button>
+              </div>
+            ))}
           </div>
         )}
 

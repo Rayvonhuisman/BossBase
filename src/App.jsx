@@ -709,6 +709,13 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
                       // pagina Aanvragen; die gaan naar de pipeline.
                       if (pagina === 'deal' && id) openDeal(id);
                       else if (pagina === 'aanvragen') navigatePage('pipeline');
+                      // 'instellingen/abonnement': een tabblad, geen item. Het
+                      // tabblad staat in ?tab=; daarna pakt de popstate-afhandeling
+                      // (App én useUrlTab) de nieuwe URL op.
+                      else if (pagina === 'instellingen' && id) {
+                        try { window.history.pushState({}, '', `/dashboard/instellingen?tab=${id}`); } catch { /* niet blokkerend */ }
+                        window.dispatchEvent(new PopStateEvent('popstate'));
+                      }
                       else if (pagina) navigatePage(pagina, id ? { id } : undefined);
                     }
                   };
