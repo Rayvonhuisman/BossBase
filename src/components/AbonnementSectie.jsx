@@ -214,7 +214,7 @@ export function AbonnementSectie() {
             <div style={{ fontSize: '.78rem', color: 'var(--dmu)', marginTop: 2 }}>
               {stand.stoptNaLooptijd
                 ? `Je hebt opgezegd. Het abonnement stopt op ${fmtDatum(stand.verplichtingTot)}; tot dan loopt de incasso van € ${tierPrice(stand.tier)} per maand door.`
-                : `Tussentijds opzeggen kan niet. Je kunt opzeggen tegen ${fmtDatum(stand.verplichtingTot)}; daarna loopt het maandelijks door en is het per maand opzegbaar. Stap je over naar een groter pakket, dan begint de looptijd opnieuw — je ziet de nieuwe einddatum voordat je bevestigt.`}
+                : `Opzegbaar per ${fmtDatum(stand.verplichtingTot)}`}
             </div>
           </div>
         )}
@@ -257,16 +257,6 @@ export function AbonnementSectie() {
             </button>
           )}
         </div>}
-
-        {/* Zeggen wat achter welke knop zit, zodat niemand het portal in gaat
-            om iets te doen wat daar niet kan. */}
-        {stand.heeftStripe && stand.magBeheren && (
-          <p style={{ fontSize: '.8rem', color: 'var(--dmu)', marginTop: 10, marginBottom: 0 }}>
-            Van pakket wisselen, modules bij- of afkopen en teamleden toevoegen doe je onder
-            <strong> Abonnement wijzigen</strong>. Onder <strong>Facturen en betaalmethode</strong>
-            {' '}vind je je facturen, wijzig je je betaalmethode en pas je je factuurgegevens aan.
-          </p>
-        )}
 
         {!stand.heeftStripe && (
           <p style={{ fontSize: '.8rem', color: 'var(--dmu)', marginTop: 10, marginBottom: 0 }}>
