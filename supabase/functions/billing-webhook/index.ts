@@ -330,6 +330,15 @@ serve(async (req) => {
     })
     if (syncErr) throw new Error(syncErr.message)
 
+    // Definitief beëindigd: een geplande opzegging bestaat dan niet meer. Zonder
+    // dit bleef stopt_na_looptijd op true staan en bood de app "Opzegging
+    // intrekken" aan op een abonnement dat Stripe al had geannuleerd.
+    if (stripeStatus === 'canceled') {
+      await admin.from('subscriptions')
+        .update({ stopt_na_looptijd: false, cancel_at_period_end: false, stopt_op: null })
+        .eq('stripe_subscription_id', subscriptionId)
+    }
+
     // Heeft de databaseregel het event afgewezen (bv. DB-proefperiode), dan
     // raken we ook de modules niet aan.
     if (typeof resultaat === 'string' && resultaat.startsWith('genegeerd')) {
@@ -383,7 +392,7 @@ serve(async (req) => {
       const eindeLooptijd = rij?.verplichting_tot ? new Date(rij.verplichting_tot) : null
       const opzegdatum = sub?.cancel_at ? new Date(Number(sub.cancel_at) * 1000) : null
 
-      if (eindeLooptijd && eindeLooptijd > new Date() && opzegdatum && opzegdatum < eindeLooptijd) {
+      if (stripeStatus !== 'canceled' && eindeLooptijd && eindeLooptijd > new Date() && opzegdatum && opzegdatum < eindeLooptijd) {
         // Opzegdatum naar het einde van de looptijd schuiven. Hangt het
         // abonnement nog aan een actief schema, dan via het schema (Stripe
         // weigert cancel_at rechtstreeks); een portal-opzegging heeft het schema

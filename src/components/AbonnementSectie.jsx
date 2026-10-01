@@ -164,7 +164,7 @@ export function AbonnementSectie() {
               <div style={{ fontWeight: 600 }}>{fmtDatum(stand.trialEindigtOp)}</div>
             </div>
           )}
-          {stand.verlengtOp && (
+          {stand.verlengtOp && !stand.definitiefOpgezegd && (
             <div>
               <div style={{ fontSize: '.72rem', color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.04em' }}>
                 {stand.opzeggenPerEindePeriode ? 'Stopt op' : 'Verlengt op'}
@@ -275,7 +275,14 @@ export function AbonnementSectie() {
           )}
         </div>}
 
-        {!stand.heeftStripe && (
+        {/* Definitief opgezegd in Stripe: niets meer in te trekken. De knop
+            hierboven is dan "Abonnement afsluiten", voor een nieuw abonnement. */}
+        {stand.definitiefOpgezegd && (
+          <p style={{ fontSize: '.8rem', color: 'var(--dmu)', marginTop: 10, marginBottom: 0 }}>
+            Je abonnement is opgezegd. Je kunt een nieuw abonnement afsluiten; je gegevens staan er nog.
+          </p>
+        )}
+        {!stand.heeftStripe && !stand.definitiefOpgezegd && (
           <p style={{ fontSize: '.8rem', color: 'var(--dmu)', marginTop: 10, marginBottom: 0 }}>
             Je bent BossBase nu gratis aan het uitproberen. Er is nog geen betaalmethode gekoppeld.
           </p>

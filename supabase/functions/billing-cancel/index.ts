@@ -49,12 +49,24 @@ serve(async (req) => {
 
     const { data: sub } = await admin
       .from('subscriptions')
-      .select('stripe_subscription_id, stripe_schedule_id, verplichting_tot, current_period_end, billing_interval')
+      .select('stripe_subscription_id, stripe_schedule_id, stripe_status, verplichting_tot, current_period_end, billing_interval')
       .eq('company_id', companyId)
       .maybeSingle()
 
     if (!sub?.stripe_subscription_id) {
       return json({ error: 'Er is geen lopend abonnement om op te zeggen.', code: 'geen_abonnement' }, 409)
+    }
+
+    // Definitief geannuleerd: niets meer op te zeggen of in te trekken. Stripe
+    // zou weigeren met "A canceled subscription can only update its
+    // cancellation_details and metadata".
+    if (sub.stripe_status === 'canceled') {
+      return json({
+        error: herstel
+          ? 'Dit abonnement is al definitief beëindigd en kan niet meer worden voortgezet. Je kunt een nieuw abonnement afsluiten.'
+          : 'Dit abonnement is al beëindigd.',
+        code: 'al_beeindigd',
+      }, 409)
     }
 
     // Hoe er opgezegd wordt hangt af van het schema: zie _shared/opzeggen.ts.
@@ -100,6 +112,14 @@ serve(async (req) => {
           : 'Je abonnement stopt aan het einde van de lopende periode.',
     })
   } catch (e) {
-    return json({ error: (e as Error).message || 'Onbekende fout' }, 500)
+    // De Engelse Stripe-melding hoort in de logs, niet op het scherm.
+    const fout = (e as Error).message || ''
+    console.error('billing-cancel', fout)
+    const melding = /canceled subscription/i.test(fout)
+      ? 'Dit abonnement is al beëindigd. Je kunt een nieuw abonnement afsluiten.'
+      : /schedule/i.test(fout)
+        ? 'Het opzeggen kon niet worden verwerkt door de looptijd van je abonnement. Neem contact met ons op, dan regelen we het.'
+        : 'Opzeggen is niet gelukt. Probeer het later opnieuw, of neem contact met ons op.'
+    return json({ error: melding }, 500)
   }
 })

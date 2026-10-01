@@ -131,7 +131,7 @@ serve(async (req) => {
     // ── 4. Stripe-customer hergebruiken of aanmaken ────────────────────────────
     const { data: sub } = await admin
       .from('subscriptions')
-      .select('stripe_customer_id, stripe_subscription_id, welkomstactie')
+      .select('stripe_customer_id, stripe_subscription_id, stripe_status, welkomstactie')
       .eq('company_id', companyId)
       .maybeSingle()
 
@@ -171,7 +171,9 @@ serve(async (req) => {
     //
     // De code heet nog `gebruik_portal` omdat oudere cliëntversies daarop
     // reageren; de melding wijst naar de juiste plek.
-    if (sub?.stripe_subscription_id) {
+    // Een definitief geannuleerd abonnement telt niet: dan sluit de klant een
+    // nieuw abonnement af, op dezelfde Stripe-klant.
+    if (sub?.stripe_subscription_id && sub?.stripe_status !== 'canceled') {
       return json({
         error: 'Je hebt al een lopend abonnement. Gebruik "Abonnement wijzigen" in plaats van opnieuw afsluiten.',
         code: 'gebruik_portal',
