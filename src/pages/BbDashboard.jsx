@@ -649,11 +649,11 @@ export function Pipeline({ openDeal, setPage }) {
           <p>{totalShown} {totalShown === 1 ? 'traject' : 'trajecten'} · {fmt(totalValue)} totaal</p>
         </div>
         <div className="page-hd-actions">
-          <button className={`btn btn-s btn-sm${showFilter ? ' active' : ''}`} onClick={() => setShowFilter(s => !s)}>
+          <button className={`btn btn-s btn-sm${showFilter ? ' active' : ''}`} data-rl="pipeline-filter" onClick={() => setShowFilter(s => !s)}>
             {I.flag} Filter{filterActive ? ' (actief)' : ''}
           </button>
           {magDealsBeheren && (
-            <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een aanvraag toevoegen', () => { setNewStage(null); setShowNew(true); })}>{I.plus} Nieuwe aanvraag</button>
+            <button className="btn btn-p btn-sm" data-rl="pipeline-nieuw" onClick={guardSchrijven('Een aanvraag toevoegen', () => { setNewStage(null); setShowNew(true); })}>{I.plus} Nieuwe aanvraag</button>
           )}
         </div>
       </div>

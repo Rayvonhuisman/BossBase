@@ -42,6 +42,29 @@ export const RONDLEIDINGEN = {
       tekst: 'Hier zie je het als een collega je tagt, je iets toewijst of je planning verandert.',
     },
   ],
+
+  pipeline: [
+    {
+      selector: '.pipe-board .pipe-col',
+      titel: 'Het bord',
+      tekst: 'Elke kolom is een fase. Sleep een kaart naar de volgende fase als de klus verder is.',
+    },
+    {
+      selector: '.pipe-board .pc',
+      titel: 'Een aanvraag',
+      tekst: 'Klik op een kaart om de projectkaart te openen, met de hele klus. Een oranje stipje betekent: nog geen vervolgafspraak gepland.',
+    },
+    {
+      doel: 'pipeline-filter',
+      titel: 'Filteren',
+      tekst: 'Toon alleen een fase, een behandelaar of een prioriteit. Ook voltooide en verloren projecten vind je hier terug.',
+    },
+    {
+      doel: 'pipeline-nieuw',
+      titel: 'Nieuwe aanvraag',
+      tekst: 'Zet hier een nieuwe klus op het bord. Aanvragen van je websiteformulier komen er vanzelf bij.',
+    },
+  ],
 };
 
 /** Alle pagina's met een rondleiding (voor "geen rondleidingen meer"). */
