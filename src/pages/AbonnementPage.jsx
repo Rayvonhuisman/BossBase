@@ -226,6 +226,13 @@ export default function AbonnementPage({ setPage }) {
   // jaarabonnement; een lopend abonnement krijgt geen actie meer.
   const gratisMaanden = !heeftStripe && interval === 'jaar' ? kortingMaandenVoorActie(actie) : 0;
 
+  // De prijzen zijn exclusief btw; Stripe Tax rekent bij een Nederlands adres
+  // 21% erbovenop (gezien in Checkout: € 39,00 + € 8,19 = € 47,19). Bij een
+  // adres buiten Nederland kan het tarief anders zijn, daarom staat het tarief
+  // er expliciet bij.
+  const BTW_PCT = 21;
+  const inclBtw = n => `€ ${(Math.round(n * (100 + BTW_PCT)) / 100).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
   const toggleModule = key => setModules(prev => {
     if (prev.includes(key)) {
       return prev.filter(k => k !== key && MODULES.find(m => m.key === k)?.vereist !== key);
@@ -600,13 +607,16 @@ export default function AbonnementPage({ setPage }) {
                 <>
                   <div className="ab-balk-totaal">Nu afrekenen: {euro(0)}</div>
                   <div className="ab-balk-verschil">
-                    Na {gratisMaanden} {gratisMaanden === 1 ? 'maand' : 'maanden'}: {euro(totaal)} per maand
+                    Na {gratisMaanden} {gratisMaanden === 1 ? 'maand' : 'maanden'}: {euro(totaal)} per maand excl. btw ({inclBtw(totaal)} incl. {BTW_PCT}% btw)
                   </div>
                 </>
               ) : (
-                <div className="ab-balk-totaal">
-                  {euro(totaal)} <span>p/mnd excl. btw</span>
-                </div>
+                <>
+                  <div className="ab-balk-totaal">
+                    {euro(totaal)} <span>p/mnd excl. btw</span>
+                  </div>
+                  <div className="ab-balk-verschil">{inclBtw(totaal)} p/mnd incl. {BTW_PCT}% btw</div>
+                </>
               )}
               {heeftStripe && verschil !== 0 && (
                 <div className="ab-balk-verschil">
@@ -626,7 +636,7 @@ export default function AbonnementPage({ setPage }) {
               <button className="btn btn-p" onClick={bevestig}
                 disabled={bezig || geenActieGekozen || nietsGewijzigd || looptijdNietBevestigd}>
                 {bezig ? 'Bezig…' : heeftStripe ? 'Wijziging doorvoeren'
-                  : gratisMaanden > 0 ? `Afrekenen · ${euro(0)}` : `Afrekenen · ${euro(totaal)} p/mnd`}
+                  : gratisMaanden > 0 ? `Afrekenen · ${euro(0)}` : `Afrekenen · ${euro(totaal)} p/mnd excl. btw`}
               </button>
             </div>
           </div>
