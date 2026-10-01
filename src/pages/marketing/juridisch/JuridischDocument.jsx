@@ -3,12 +3,12 @@
 // de build weigert een document met open plekken of een afwijkende versie.
 import { PaginaSchil, PaginaKop, Sectie, Tekst } from '../../../marketing/templates/Onderdelen.jsx';
 
-export default function JuridischDocument({ navigate, doc, pad, naam }) {
+export default function JuridischDocument({ navigate, doc, pad, naam, kicker = 'Privacy' }) {
   return (
     <PaginaSchil navigate={navigate}>
       <PaginaKop
         kruimels={[{ naam: 'Home', pad: '/' }, { naam, pad }]}
-        kicker="Privacy"
+        kicker={kicker}
         h1={naam}
         lead={`Versie ${doc.versie}, geldig vanaf ${doc.geldigVanaf}.`}
       />

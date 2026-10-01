@@ -1849,12 +1849,13 @@ export function InstellingenPage() {
 
           {/* Overig */}
           <div style={{ marginTop: 'var(--sp-6)', paddingTop: 'var(--sp-5)', borderTop: '1px solid var(--border)' }}>
-            {/* De juridische documenten die op de site staan. Er is geen
-                cookiekeuze (geen cookies die toestemming vragen). Algemene
-                voorwaarden, verwerkersovereenkomst en privacyverklaring komen
-                erbij zodra ze online staan. */}
+            {/* De juridische documenten op de site. Er is geen cookiekeuze
+                (geen cookies die toestemming vragen). */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-4)' }}>
               {[
+                { href: '/voorwaarden', label: 'Algemene voorwaarden' },
+                { href: '/privacy', label: 'Privacyverklaring' },
+                { href: '/verwerkersovereenkomst', label: 'Verwerkersovereenkomst' },
                 { href: '/subverwerkers', label: 'Subverwerkers' },
                 { href: '/cookieverklaring', label: 'Cookiebeleid' },
               ].map(l => (

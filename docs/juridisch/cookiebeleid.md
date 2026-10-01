@@ -132,4 +132,5 @@ vergeet je weergavekeuzes.
 
 ## Vragen
 
-Mail info@bossbase.nl.
+Mail info@bossbase.nl. Meer over hoe we met gegevens omgaan staat in de
+[privacyverklaring](/privacy).

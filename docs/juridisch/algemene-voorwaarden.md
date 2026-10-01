@@ -1,9 +1,6 @@
 # Algemene voorwaarden BossBase
 
-> **CONCEPT — door een jurist laten nakijken vóór publicatie.**
-> Plekken tussen [vierkante haken] zijn keuzes die nog gemaakt moeten worden.
-
-**Versie 2026-10 · geldig vanaf [datum van publicatie]**
+**Versie 2026-10 · geldig vanaf 1 oktober 2026**
 
 Dit zijn de afspraken tussen BossBase en jou als ondernemer die BossBase gebruikt.
 We hebben ze zo kort en duidelijk mogelijk gehouden. Bij elk artikel staat eerst in
@@ -46,7 +43,7 @@ pdf, zodat je ze kunt bewaren.
 geven.
 
 3.2 Na de proefperiode kies je een abonnement. Doe je dat niet, dan kun je niet
-meer werken in je account. We bewaren je gegevens dan nog [2 jaar — termijn nog te besluiten], zodat je
+meer werken in je account. We bewaren je gegevens dan nog 2 jaar, zodat je
 alsnog kunt beginnen of kunt exporteren. Daarna verwijderen we ze.
 
 ## 4. Abonnement en looptijd
@@ -82,11 +79,11 @@ info@bossbase.nl. Je krijgt een bevestiging.
 Je krijgt van ons een factuur.
 
 5.3 Mislukt een betaling, dan proberen we het opnieuw en laten we het je weten.
-Staat een bedrag na [14 dagen] na een herinnering nog open, dan mogen we je
+Staat een bedrag na 14 dagen na een herinnering nog open, dan mogen we je
 het vastleggen van nieuw werk en het versturen van documenten blokkeren tot het
 betaald is. Je gegevens blijven dan staan.
 
-5.4 We mogen onze prijzen wijzigen. We laten het je minstens **[30 dagen — nog te besluiten] van
+5.4 We mogen onze prijzen wijzigen. We laten het je minstens **30 dagen van
 tevoren** weten. Tijdens een jaarperiode verandert je prijs niet. Ben je het niet
 eens met een nieuwe prijs, dan mag je opzeggen tegen de datum waarop hij ingaat.
 
@@ -108,7 +105,7 @@ Vercel, en daar kan iets misgaan wat wij niet in de hand hebben. Gepland onderho
 doen we zoveel mogelijk buiten werktijd en kondigen we vooraf aan.
 
 6.3 Je kunt ons bereiken voor vragen via de app, de assistent "Boss" en per mail
-(info@bossbase.nl). We reageren op werkdagen, meestal binnen [1 werkdag].
+(info@bossbase.nl). We reageren op werkdagen, meestal binnen 1 werkdag.
 
 6.4 We mogen andere bedrijven inschakelen om de dienst te leveren, zoals hosting
 en e-mail. Welke dat zijn, staat op [bossbase.nl/subverwerkers](/subverwerkers).
@@ -155,15 +152,15 @@ verbeteren. Daaruit is niet af te leiden wie jij of je klanten zijn.
 
 ## 9. Einde van de overeenkomst
 
-*Kort: na het opzeggen bewaren we je gegevens nog [2 jaar — termijn nog te besluiten]; daarna zijn ze weg.*
+*Kort: na het opzeggen bewaren we je gegevens nog 2 jaar; daarna zijn ze weg.*
 
-9.1 Na het einde van je abonnement bewaren we jouw gegevens nog **[2 jaar — termijn nog te besluiten]**. In die
+9.1 Na het einde van je abonnement bewaren we jouw gegevens nog **2 jaar**. In die
 tijd kun je terugkomen en verder werken waar je gebleven was, of je gegevens
 exporteren.
 
 9.2 Lukt exporteren niet zelf, dan leveren we je gegevens één keer aan in een
-gangbaar bestandsformaat (zoals CSV of Excel en de bestanden zelf). [Gratis / tegen
-een vergoeding van €…] 
+gangbaar bestandsformaat (zoals CSV of Excel en de bestanden zelf). Dat doen we tegen
+een vergoeding die we vooraf met je afspreken.
 
 9.3 Na die termijn verwijderen we je account en jouw gegevens definitief, ook
 foto's, handtekeningen en andere bestanden. Onze eigen facturen aan jou bewaren we 7 jaar, omdat
@@ -190,7 +187,7 @@ gederfde winst, een gemiste klus of een boete die jij krijgt.
 BossBase of haar leidinggevenden.
 
 10.5 Wil je ons aansprakelijk stellen, laat het ons dan zo snel mogelijk
-schriftelijk weten, maar uiterlijk binnen [12 maanden] nadat je de schade
+schriftelijk weten, maar uiterlijk binnen 12 maanden nadat je de schade
 ontdekte.
 
 10.6 We zijn niet aansprakelijk als we onze afspraken niet kunnen nakomen door iets
@@ -217,7 +214,7 @@ Dat geldt ook na het einde van de overeenkomst.
 
 ## 13. Wijzigen van deze voorwaarden
 
-13.1 We mogen deze voorwaarden wijzigen. We melden het je minstens **[30 dagen — nog te besluiten] van
+13.1 We mogen deze voorwaarden wijzigen. We melden het je minstens **30 dagen van
 tevoren** per mail en in de app.
 
 13.2 Is een wijziging in je nadeel, dan mag je opzeggen tegen de datum waarop de
