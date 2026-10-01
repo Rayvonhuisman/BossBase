@@ -26,6 +26,7 @@ import {
 } from '../_shared/billing.ts'
 import { klantMail, internMail } from '../_shared/websiteMail.ts'
 import { welkomMail } from '../_shared/welkomMail.ts'
+import { opzeggenBijStripe } from '../_shared/opzeggen.ts'
 
 // Maandprijs van de hostingmodule — noemen we in de klantmail zodat die kosten
 // niet als verrassing komen. Uit de matrix (plan_modules), niet hardcoded.
@@ -383,20 +384,15 @@ serve(async (req) => {
       const opzegdatum = sub?.cancel_at ? new Date(Number(sub.cancel_at) * 1000) : null
 
       if (eindeLooptijd && eindeLooptijd > new Date() && opzegdatum && opzegdatum < eindeLooptijd) {
-        // Opzegdatum naar het einde van de looptijd schuiven. Via cancel_at op
-        // het abonnement, want een portal-opzegging zet de schedule op
-        // `released` en die is dan niet meer bij te werken.
-        const eindeUnix = Math.floor(eindeLooptijd.getTime() / 1000)
-        await stripeFetch(`/subscriptions/${subscriptionId}`, 'POST', {
-          'cancel_at': String(eindeUnix),
+        // Opzegdatum naar het einde van de looptijd schuiven. Hangt het
+        // abonnement nog aan een actief schema, dan via het schema (Stripe
+        // weigert cancel_at rechtstreeks); een portal-opzegging heeft het schema
+        // meestal al vrijgegeven, en dan via cancel_at. Zie _shared/opzeggen.ts.
+        await opzeggenBijStripe({
+          subscriptionId,
+          scheduleId: rij?.stripe_schedule_id ?? null,
+          verplichtingTot: rij?.verplichting_tot ?? null,
         })
-        if (rij?.stripe_schedule_id) {
-          try {
-            await stripeFetch(`/subscription_schedules/${rij.stripe_schedule_id}`, 'POST', { end_behavior: 'cancel' })
-          } catch (e) {
-            if (!/released|completed|canceled/i.test((e as Error).message)) throw e
-          }
-        }
         await admin.rpc('bb_stripe_sync_schedule', {
           p_subscription_id: subscriptionId,
           p_schedule_id: rij?.stripe_schedule_id ?? null,
