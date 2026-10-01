@@ -255,6 +255,24 @@ export const RONDLEIDINGEN = {
       tekst: 'Kies week, maand, kwartaal of jaar en blader met de pijltjes.',
     },
   ],
+
+  revenue: [
+    {
+      doel: 'financien-periode',
+      titel: 'Periode',
+      tekst: 'Kies de periode voor de cijfers hieronder.',
+    },
+    {
+      doel: 'financien-tegels',
+      titel: 'De cijfers',
+      tekst: 'Gefactureerd, ontvangen, openstaand, te verwachten, kosten en wat er netto overblijft.',
+    },
+    {
+      doel: 'financien-export',
+      titel: 'Exporteren',
+      tekst: 'Download het overzicht per klant als Excel-bestand.',
+    },
+  ],
 };
 
 /** Alle pagina's met een rondleiding (voor "geen rondleidingen meer"). */

@@ -1823,7 +1823,7 @@ export function RevenuePage() {
       <div className="page-hd afu">
         <div><h1>Financiën</h1><p>Financieel overzicht</p></div>
         <div className="page-hd-actions" style={{ flexWrap: 'wrap', gap: 8 }}>
-          <select value={kpiPeriode} onChange={e => setKpiPeriode(e.target.value)} style={{ fontSize: '.82rem' }}>
+          <select value={kpiPeriode} data-rl="financien-periode" onChange={e => setKpiPeriode(e.target.value)} style={{ fontSize: '.82rem' }}>
             <option value="deze-maand">Deze maand</option>
             <option value="vorige-maand">Vorige maand</option>
             <option value="dit-jaar">Dit jaar</option>
@@ -1834,7 +1834,7 @@ export function RevenuePage() {
             <input type="date" value={kpiVan} onChange={e => setKpiVan(e.target.value)} style={{ fontSize: '.82rem' }} />
             <input type="date" value={kpiTot} onChange={e => setKpiTot(e.target.value)} style={{ fontSize: '.82rem' }} />
           </>)}
-          <button className="btn btn-s btn-sm" onClick={handleExport}>Exporteren</button>
+          <button className="btn btn-s btn-sm" data-rl="financien-export" onClick={handleExport}>Exporteren</button>
         </div>
       </div>
 
@@ -1843,7 +1843,7 @@ export function RevenuePage() {
           btw-kaart en de tabel per klant, die op de gedeelde dataset wachten. */}
       {!kpi && (loading || gedeeldLaden) && <div className="card card-p">Financiën laden...</div>}
 
-      <div className="stats-row afu2" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+      <div className="stats-row afu2" data-rl="financien-tegels" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
         {KPI.map((k, i) => (
           <div key={i} className="sc">
             <div className="sc-top"><div className="sc-icon">{k.icon}</div></div>
