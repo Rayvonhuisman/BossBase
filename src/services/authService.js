@@ -89,8 +89,18 @@ export async function registerWithEmail({ email, password, fullName, companyName
   // Confirm email UIT → er is een sessie. We provisionen het bedrijf NIET meer
   // hier; dat gebeurt pas ná e-mailverificatie in verify-code. Stuur de
   // 6-cijferige code (best-effort; het verificatiescherm heeft een resend).
+  // Eerst het akkoord met de voorwaarden vastleggen (versie, tijdstip, IP; de
+  // edge function bepaalt die zelf). Mislukt dat twee keer, dan legt
+  // verify-code het alsnog vast, zodat een account nooit zonder akkoord bestaat.
+  await legAkkoordVast().catch(() => legAkkoordVast()).catch(() => {})
   await requestVerificationCode().catch(() => {})
   return { ...signup.data, requiresVerification: true }
+}
+
+async function legAkkoordVast() {
+  const { data, error } = await supabase.functions.invoke('akkoord-vastleggen')
+  if (error || !data?.success) throw error || new Error('Akkoord vastleggen mislukt')
+  return data
 }
 
 // Vraag een (nieuwe) 6-cijferige verificatiecode aan voor de ingelogde user.

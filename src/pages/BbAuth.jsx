@@ -444,16 +444,6 @@ export function RegisterFlow({ onDone, onBack }) {
               <input type="password" value={form.password2} onChange={e => set('password2', e.target.value)} placeholder="Nogmaals je wachtwoord" />
               <PasswordMatch password={form.password} password2={form.password2} />
             </div>
-            {/* Informatie over het gebruik van gegevens, bewust zonder vinkje: de
-                grondslag voor een account is het leveren van de dienst, geen
-                toestemming. Komt er een gepubliceerde privacyverklaring (en
-                algemene voorwaarden), link die dan hier. Zie docs/juridisch. */}
-            <p className="auth-privacy" style={{ fontSize: '.78rem', lineHeight: 1.5, color: 'var(--dmu)', margin: '4px 0 10px' }}>
-              BossBase (een handelsnaam van NG E-Commerce B.V.) gebruikt je naam, e-mailadres en bedrijfsgegevens om je account aan te maken en BossBase aan je te leveren.
-              Je krijgt een verificatiecode per e-mail. Tijdens en kort na je proefperiode sturen we je enkele e-mails
-              over de proefperiode en over het kiezen van een abonnement.
-              Vragen over je gegevens of verwijderen: <a href="mailto:info@bossbase.nl">info@bossbase.nl</a>.
-            </p>
           </>
         )}
         {step === 1 && (
@@ -529,6 +519,15 @@ export function RegisterFlow({ onDone, onBack }) {
             : <button className="auth-submit" style={{ flex: 1 }} onClick={submit} disabled={loading}>{loading ? 'Bezig...' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>BossBase starten <Rocket size={16} strokeWidth={1.8} /></span>}</button>
           }
         </div>
+        {step === 3 && (
+          // Het akkoord wordt bij het klikken vastgelegd (versie, tijdstip, IP):
+          // registerWithEmail → edge function akkoord-vastleggen.
+          <p className="auth-privacy" style={{ fontSize: '.78rem', lineHeight: 1.5, color: 'var(--dmu)', margin: '10px 0 0' }}>
+            Door een account aan te maken ga je akkoord met de <a href="/voorwaarden" target="_blank" rel="noopener" style={{ textDecoration: 'underline' }}>algemene voorwaarden</a> en
+            de <a href="/verwerkersovereenkomst" target="_blank" rel="noopener" style={{ textDecoration: 'underline' }}>verwerkersovereenkomst</a>.
+            In de <a href="/privacy" target="_blank" rel="noopener" style={{ textDecoration: 'underline' }}>privacyverklaring</a> lees je hoe we met je gegevens omgaan.
+          </p>
+        )}
         {step === 3 && (
           <div className="auth-link">
             <a href="#" onClick={e => { e.preventDefault(); submit(); }}>Overslaan, later doen</a>

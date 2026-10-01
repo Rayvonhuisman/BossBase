@@ -5,6 +5,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { hashVerificationCode } from '../_shared/hashCode.ts'
+import { legAkkoordVast } from '../_shared/akkoord.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -74,6 +75,17 @@ serve(async (req) => {
         return json({ success: false, code: 'TOO_MANY', error: 'Te veel pogingen. Vraag een nieuwe code aan.' }, 400)
       }
       return json({ success: false, code: 'MISMATCH', remaining, error: `Code is onjuist. Nog ${remaining} ${remaining === 1 ? 'poging' : 'pogingen'}.` }, 400)
+    }
+
+    // Vangnet: kwam het akkoord bij registratie niet aan (akkoord-vastleggen
+    // faalde), leg het dan nu vast. Een account bestaat niet zonder akkoord.
+    try {
+      if (await legAkkoordVast(admin, user, req, 'registratie_vangnet')) {
+        console.log('[verify-code] Akkoord via vangnet vastgelegd', { user: userId })
+      }
+    } catch (e) {
+      console.error('[verify-code] Akkoord vastleggen mislukt', { user: userId, error: String(e) })
+      return json({ success: false, error: 'Account aanmaken mislukt. Probeer het opnieuw.' }, 500)
     }
 
     // ── Match → markeer geverifieerd ──────────────────────────────────────────
