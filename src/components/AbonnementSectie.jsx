@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { tierLabel, tierPrice, EXTRA_USER_PRICE, welkomstactieLabel, getWelkomstactie } from '../lib/tiers.js';
-import { moduleLabel, modulePrice, getLimitDef } from '../lib/features.js';
+import { moduleLabel, modulePrice, getLimitDef, TIER_LIMITS } from '../lib/features.js';
 import { getBillingStatus, openPortal, zegOp } from '../services/billingService.js';
 import { readonlyTekst, READONLY_BEWAARD } from '../lib/readonly.js';
 import { gaNaarAbonnement } from '../lib/abonnementNav.js';
@@ -42,17 +42,22 @@ function StatusPil({ status, opzeggen, stoptOp }) {
   );
 }
 
-// "3 van de 2 gebruikers" — met de nadruk op wat er te veel is.
-function LimietRegel({ sleutel, stand }) {
+// Het maximum van het PAKKET. Tijdens het gratis uitproberen geeft de server
+// geen maximum (er wordt dan niets begrensd), maar hier hoort te staan waar het
+// pakket op uitkomt: Groei is "1 van 2", ook in de proefperiode.
+const maxVan = (tier, sleutel, stand) => stand?.max ?? TIER_LIMITS[tier]?.[sleutel] ?? null;
+
+// "Offertes 8 van 10", en zonder maximum alleen het aantal ("Gebruikers 6").
+// Met de nadruk op wat vol is.
+function LimietRegel({ sleutel, stand, max }) {
   const def = getLimitDef(sleutel);
-  const max = stand?.max ?? null;
   const gebruikt = Number(stand?.gebruikt || 0);
   const vol = max != null && gebruikt >= max;
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '5px 0' }}>
       <span style={{ color: 'var(--dmu)' }}>{def?.label || sleutel}</span>
       <span style={{ fontWeight: 600, color: vol ? '#b45309' : 'var(--dk)' }}>
-        {gebruikt}{max == null ? ' · onbeperkt' : ` / ${max}`}
+        {gebruikt}{max == null ? '' : ` van ${max}`}
       </span>
     </div>
   );
@@ -169,10 +174,22 @@ export function AbonnementSectie() {
           )}
         </div>
 
-        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginBottom: 12 }}>
-          <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--dmu)', marginBottom: 4 }}>IN GEBRUIK</div>
-          {Object.entries(stand.limieten).map(([k, v]) => <LimietRegel key={k} sleutel={k} stand={v} />)}
-        </div>
+        {/* Gebruikers staan er altijd. De andere limieten (offertes, klanten,
+            …) alleen als het pakket ze heeft, en alleen dan het kopje. */}
+        {(() => {
+          const begrensd = Object.entries(stand.limieten)
+            .filter(([k, v]) => k !== 'gebruikers' && maxVan(stand.tier, k, v) != null);
+          return (
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginBottom: 12 }}>
+              {begrensd.length > 0 && (
+                <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--dmu)', marginBottom: 4 }}>IN GEBRUIK</div>
+              )}
+              <LimietRegel sleutel="gebruikers" stand={stand.limieten.gebruikers}
+                max={maxVan(stand.tier, 'gebruikers', stand.limieten.gebruikers)} />
+              {begrensd.map(([k, v]) => <LimietRegel key={k} sleutel={k} stand={v} max={maxVan(stand.tier, k, v)} />)}
+            </div>
+          );
+        })()}
 
         {/* Welkomstactie hoort bij een jaarabonnement; bij maandelijks tonen we
             hem niet, want dan is er geen. */}
