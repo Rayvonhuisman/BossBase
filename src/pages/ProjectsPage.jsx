@@ -64,7 +64,6 @@ export function NewProjectModal({ onClose, onSaved, customers, deals, offertes, 
     customer_id: prefillCustomerId || '',
     deal_id: '',
     offerte_id: '',
-    status: 'concept',
     project_value: '',
     quoted_hours: '',
     start_date: '',
@@ -103,7 +102,9 @@ export function NewProjectModal({ onClose, onSaved, customers, deals, offertes, 
       const saved = await createProject({
         name,
         description: form.description || null,
-        status: form.status,
+        // Geen status: de database begint op 'gepland' en daarna volgt hij de
+        // werkbonnen. Hier stond 'concept', en dat weigert de statuscontrole
+        // sinds de drie statussen (20260917150000).
         customer_id: form.customer_id || null,
         deal_id: form.deal_id || null,
         offerte_id: form.offerte_id || null,
