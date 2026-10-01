@@ -75,13 +75,13 @@ export function bedenkVoorstel({ aanleiding, plan, stand }) {
       const prijs = meegenomen.reduce((s, k) => s + modulePrice(k), 0);
       return {
         kop: `${featureLabel(key)} zit niet in je abonnement`,
-        uitleg: `Je kunt het bijkopen als module — je hoeft er niet voor over te stappen naar een groter pakket.`,
+        uitleg: `Je kunt het bijkopen als module. Je hoeft er niet voor over te stappen naar een groter pakket.`,
         tier: huidig,
         modules: meegenomen,
         extra: stand?.extraGebruikers ?? 0,
         wat: meegenomen.length > 1
-          ? `${meegenomen.map(moduleLabel).join(' + ')} — samen ${euro(prijs)} per maand erbij. ${moduleLabel(module.key)} werkt alleen samen met ${moduleLabel(module.vereist)}.`
-          : `${moduleLabel(module.key)} — ${euro(prijs)} per maand erbij.`,
+          ? `${meegenomen.map(moduleLabel).join(' + ')}: samen ${euro(prijs)} per maand erbij. ${moduleLabel(module.key)} werkt alleen samen met ${moduleLabel(module.vereist)}.`
+          : `${moduleLabel(module.key)}: ${euro(prijs)} per maand erbij.`,
       };
     }
     const doel = tierForFeature(key) || 'team';
@@ -119,7 +119,7 @@ export function bedenkVoorstel({ aanleiding, plan, stand }) {
       modules: stand?.modules ?? [],
       extra: stand?.extraGebruikers ?? 0,
       wat: TIER_LIMITS[doel]?.gebruikers == null
-        ? `${tierLabel(doel)} heeft geen maximum aantal gebruikers — je betaalt ${euro(EXTRA_USER_PRICE)} per extra gebruiker.`
+        ? `${tierLabel(doel)} heeft geen maximum aantal gebruikers. Je betaalt ${euro(EXTRA_USER_PRICE)} per extra gebruiker.`
         : `${tierLabel(doel)} gaat tot ${TIER_LIMITS[doel].gebruikers} gebruikers.`,
     };
   }

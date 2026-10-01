@@ -104,11 +104,11 @@ export const TIER_FEATURES = {
 // vakman die wil weten wat hij eraan heeft — niet hoe het werkt.
 export const MODULES = [
   { key: 'stripe_betaallink', label: 'Stripe betaallink', price: 10, feature: 'stripe_betaallink', vereist: null,       beschikbaarBij: ['groei'],
-    uitleg: 'Zet een betaalknop op je factuur. Je klant betaalt met iDEAL vanaf zijn telefoon en jij ziet meteen dat het binnen is — geen overschrijvingen meer nabellen.' },
+    uitleg: 'Zet een betaalknop op je factuur. Je klant betaalt met iDEAL vanaf zijn telefoon en jij ziet meteen dat het binnen is. Geen overschrijvingen meer nabellen.' },
   { key: 'planning',          label: 'Planningsmodule',   price: 10, feature: 'planning',          vereist: null,       beschikbaarBij: ['groei'],
     uitleg: 'Een weekplanning waarin je klussen op medewerkers zet. Je sleept een werkbon naar een dag en je ziet in één oogopslag wie waar is en wie er nog ruimte heeft.' },
   { key: 'voertuigen',        label: 'Voertuigen',        price: 5,  feature: 'voertuigen',        vereist: 'planning', beschikbaarBij: ['groei'],
-    uitleg: 'Leg je bussen en aanhangers vast en plan ze in bij een klus. Zo zie je meteen of het busje die dag al ergens anders staat. Werkt samen met de planningsmodule — die heb je er dus bij nodig.' },
+    uitleg: 'Leg je bussen en aanhangers vast en plan ze in bij een klus. Zo zie je meteen of het busje die dag al ergens anders staat. Werkt samen met de planningsmodule, dus die heb je er ook bij nodig.' },
   { key: 'hosting',           label: 'Website-hosting',   price: 5,  feature: 'hosting',           vereist: null,       beschikbaarBij: ['groei', 'team'],
     uitleg: 'Wij zetten je bedrijfswebsite online en houden hem draaiend: domein, beveiligd slotje en updates. Jij hoeft er niets voor te regelen.' },
 ]

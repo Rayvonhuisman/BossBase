@@ -5,7 +5,7 @@ import { useProfile } from '../lib/profileContext.jsx';
 import { usePlan } from '../hooks/usePlan.js';
 import {
   TIERS, tierLabel, tierPrice, EXTRA_USER_PRICE,
-  welkomstactiesVoor, welkomstactieLabel, YEARLY_FREE_MONTHS,
+  welkomstactiesVoor, welkomstactieLabel, kortingMaandenVoorActie,
   inbegrepenGebruikers, betaaldeGebruikers, gebruikersPrijs, extraUserLabel,
 } from '../lib/tiers.js';
 import {
@@ -220,6 +220,12 @@ export default function AbonnementPage({ setPage }) {
     : 0;
   const verschil = totaal - huidigTotaal;
 
+  // Gratis maanden van de gekozen welkomstactie. Een coupon van 100% over de
+  // eerste termijnen (billing-checkout): bij het afsluiten wordt € 0
+  // afgeschreven en daarna het volle maandbedrag. Alleen bij een nieuw
+  // jaarabonnement; een lopend abonnement krijgt geen actie meer.
+  const gratisMaanden = !heeftStripe && interval === 'jaar' ? kortingMaandenVoorActie(actie) : 0;
+
   const toggleModule = key => setModules(prev => {
     if (prev.includes(key)) {
       return prev.filter(k => k !== key && MODULES.find(m => m.key === k)?.vereist !== key);
@@ -319,7 +325,7 @@ export default function AbonnementPage({ setPage }) {
           <h1>{heeftStripe ? 'Je abonnement' : 'Kies je abonnement'}</h1>
           <p>{heeftStripe
             ? 'Wijzigingen gaan direct in; het verschil wordt verrekend.'
-            : 'Je gegevens blijven staan — je gaat verder waar je gebleven was.'}</p>
+            : 'Je gegevens blijven staan. Je gaat verder waar je gebleven was.'}</p>
         </div>
       </div>
 
@@ -365,7 +371,7 @@ export default function AbonnementPage({ setPage }) {
               </div>
               {interval === 'jaar' && (
                 <div className="ab-termijn-uitleg">
-                  Je betaalt maandelijks, <strong>12 maanden vast</strong> — tussentijds opzeggen
+                  Je betaalt maandelijks, <strong>12 maanden vast</strong>. Tussentijds opzeggen
                   kan niet. Daarna maandelijks opzegbaar. Je kiest er één welkomstactie bij.
                 </div>
               )}
@@ -403,7 +409,6 @@ export default function AbonnementPage({ setPage }) {
             {TIERS.map(t => {
               const gekozen = tier === t.id;
               const huidig = heeftStripe && t.id === stand?.tier;
-              const isVoorstel = voorstel?.tier === t.id && !huidig;
               const vorige = VORIGE_TIER[t.id];
               const usps = USPS[t.id] || [];
               return (
@@ -414,7 +419,6 @@ export default function AbonnementPage({ setPage }) {
                   <div className="ab-kaart-kop">
                     <div className="ab-tier">{tierLabel(t.id)}</div>
                     {huidig && <span className="ab-merk huidig">Je hebt dit nu</span>}
-                    {isVoorstel && <span className="ab-merk advies">Aanbevolen</span>}
                   </div>
                   <div className="ab-wie">{VOOR_WIE[t.id]}</div>
                   <div className="ab-prijs">
@@ -483,7 +487,7 @@ export default function AbonnementPage({ setPage }) {
                   </div>
                 ))}
                 {modules.includes('voertuigen') && (
-                  <p className="ab-hint">Voertuigen werkt alleen samen met de planningsmodule — die is meegenomen.</p>
+                  <p className="ab-hint">Voertuigen werkt alleen samen met de planningsmodule, dus die is meegenomen.</p>
                 )}
               </div>
             )}
@@ -554,7 +558,7 @@ export default function AbonnementPage({ setPage }) {
                 <ul>
                   {fout.blokkades.map(b => (
                     <li key={b.limiet}>
-                      {b.gebruikt} {b.label} — dit pakket gaat tot {b.maximum}.
+                      {b.gebruikt} {b.label}, dit pakket gaat tot {b.maximum}.
                       Er {b.teveel === 1 ? 'moet er 1' : `moeten er ${b.teveel}`} weg.
                     </li>
                   ))}
@@ -592,9 +596,18 @@ export default function AbonnementPage({ setPage }) {
           <div className="ab-balk">
             <div className="ab-balk-som">
               <div className="ab-balk-tier">{tierLabel(tier)}{modules.length > 0 && ` + ${modules.length} module${modules.length === 1 ? '' : 's'}`}</div>
-              <div className="ab-balk-totaal">
-                {euro(totaal)} <span>p/mnd excl. btw</span>
-              </div>
+              {gratisMaanden > 0 ? (
+                <>
+                  <div className="ab-balk-totaal">Nu afrekenen: {euro(0)}</div>
+                  <div className="ab-balk-verschil">
+                    Na {gratisMaanden} {gratisMaanden === 1 ? 'maand' : 'maanden'}: {euro(totaal)} per maand
+                  </div>
+                </>
+              ) : (
+                <div className="ab-balk-totaal">
+                  {euro(totaal)} <span>p/mnd excl. btw</span>
+                </div>
+              )}
               {heeftStripe && verschil !== 0 && (
                 <div className="ab-balk-verschil">
                   {verschil > 0
@@ -612,7 +625,8 @@ export default function AbonnementPage({ setPage }) {
               </button>
               <button className="btn btn-p" onClick={bevestig}
                 disabled={bezig || geenActieGekozen || nietsGewijzigd || looptijdNietBevestigd}>
-                {bezig ? 'Bezig…' : heeftStripe ? 'Wijziging doorvoeren' : `Afrekenen · ${euro(totaal)} p/mnd`}
+                {bezig ? 'Bezig…' : heeftStripe ? 'Wijziging doorvoeren'
+                  : gratisMaanden > 0 ? `Afrekenen · ${euro(0)}` : `Afrekenen · ${euro(totaal)} p/mnd`}
               </button>
             </div>
           </div>
