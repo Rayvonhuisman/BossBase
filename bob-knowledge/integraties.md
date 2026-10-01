@@ -1,112 +1,68 @@
-# Integraties en koppelingen
+# Koppelingen
 
-> Kennisbron voor **Boss**. Beschrijft welke koppelingen er zijn, wat ze doen, en —
-> belangrijk — wat er wél in het systeem zit maar **niet zichtbaar is voor klanten**.
->
-> Te vinden onder **Instellingen → Integraties**.
+> Kennisbron voor **Boss**.
 
----
-
-## Zichtbaar en bruikbaar voor klanten
-
-### Moneybird (boekhouding)
-
-Beschikbaar vanaf **Groei**.
-
-| Wat | Richting | Automatisch? |
-|---|---|---|
-| Betaalde facturen doorzetten | BossBase → Moneybird | automatisch, zodra je een factuur op betaald zet |
-| Kosten ophalen | Moneybird → BossBase | automatisch, elk uur |
-| Contacten (klanten) synchroniseren | beide kanten | automatisch, elk half uur |
-| Btw-gegevens ophalen | Moneybird → BossBase | automatisch, elke ochtend |
-| Contact bijwerken | BossBase → Moneybird | bij het wijzigen van een klant |
-
-Instellen: je vult je Moneybird-token en administratie-id in en drukt op testen. Pas
-als de test slaagt, staat de koppeling aan.
-
-De opgehaalde kosten verschijnen op de Kosten-pagina; de btw-gegevens voeden het
-**Btw-overzicht**.
-
-### SnelStart (boekhouding)
-
-Beschikbaar vanaf **Groei**. Zelfde soort koppeling als Moneybird:
-
-| Wat | Richting | Automatisch? |
-|---|---|---|
-| Betaalde facturen doorzetten | BossBase → SnelStart | automatisch bij betaald markeren |
-| Kosten ophalen | SnelStart → BossBase | handmatig via een knop |
-| Contacten synchroniseren | beide kanten | handmatig via een knop |
-| Btw-gegevens ophalen | SnelStart → BossBase | handmatig via een knop |
-
-**Verschil met Moneybird:** bij Moneybird lopen kosten, contacten en btw
-automatisch mee op een vast ritme. Bij SnelStart moet je die drie zelf aanzetten met
-een knop. Alleen het doorzetten van een betaalde factuur gaat bij beide vanzelf.
-
-### Stripe betaallink
-
-Zit in **Team**, of bij Groei als losse module van € 10 per maand.
-
-Hiermee zet je een **iDEAL-betaalknop op je facturen**. De klant klikt in de
-factuurmail, betaalt online, en de factuur wordt automatisch op betaald gezet. Er
-komt een bevestigingsmail met de factuur als bijlage.
-
-Je koppelt hiervoor je eigen Stripe-account. Het geld gaat rechtstreeks naar jou.
-
-> Dit staat volledig los van de betaling van je BossBase-abonnement. Dat loopt ook
-> via Stripe, maar dat is een andere koppeling en een ander account.
+Te vinden onder **Instellingen**, tabblad **Integraties**. Er zijn drie koppelingen:
+**Stripe**, **Moneybird** en **SnelStart**. Klik op een kaart om hem te openen.
 
 ---
 
-## Wel in het systeem, NIET zichtbaar voor klanten
+## Moneybird (Groei en Team)
 
-**Boss mag deze niet aanbieden of uitleggen als beschikbare functie.** Ze zijn in de
-schermen verborgen. Vraagt een klant ernaar, dan is het antwoord dat het er nog niet
-is en dat hij het aan Niels kan vragen.
+**Koppelen:** vul je **API token** en **Administratie-ID** in, klik
+**Verbinding testen** en daarna **Opslaan**.
 
-### Google Agenda
+**Wat er gebeurt:**
+- Een factuur die je op betaald zet, gaat direct naar Moneybird.
+- Een nieuwe of gewijzigde klant gaat naar Moneybird.
+- Elk uur haalt BossBase je inkoopfacturen, bonnetjes en uitgaven op; die komen op de
+  pagina **Kosten** met het label MB. Een factuur die in Moneybird als betaald staat,
+  gaat ook in BossBase op betaald.
+- Elk uur worden klanten in beide richtingen bijgewerkt.
+- Elke ochtend komen de btw-cijfers binnen voor de btw-kaart op Financiën.
 
-Volledig gebouwd — koppelen, afspraken synchroniseren — maar **op drie plekken in de
-schermen verborgen** omdat de autorisatie bij Google nog niet is geconfigureerd. Een
-klant kan dit dus niet aanzetten en ziet er niets van.
+Zelf synchroniseren kan met **Kosten importeren** en **Contacten synchroniseren**.
 
-### AFAS (boekhouding)
+## SnelStart (Groei en Team)
 
-De koppeling bestaat, met kosten-import en contactsynchronisatie die elke vijf
-minuten draaien. Het blok in Instellingen is echter **verborgen** met de aantekening
-dat het nog niet actief is.
+**Koppelen:** maak in SnelStart Web een koppelsleutel aan, vul die in bij
+**Koppelsleutel**, klik **Verbinding testen** en **Opslaan**.
 
-Let op de tegenstrijdigheid: de functiebeschrijving van de boekhoudkoppeling noemt
-"Moneybird, SnelStart of AFAS", en er is één bedrijf in de database waarvoor AFAS als
-verbonden staat. Maar in de schermen is het niet te bereiken. **Boss moet AFAS niet
-noemen** tot Niels dit bevestigt.
+**Wat er gebeurt:**
+- Een factuur die je op betaald zet, gaat direct naar SnelStart.
+- Elke nacht worden klanten, leveranciers, facturen en kosten bijgewerkt. Inkoopfacturen
+  uit SnelStart komen als kosten binnen (label SS). Facturen die je in SnelStart maakt,
+  komen in BossBase met het label **Uit SnelStart**.
+- Bij verschillen tussen klantgegevens wint wat in SnelStart staat.
+
+**Tabbladen in de SnelStart-kaart:**
+- **Instellingen**: de **Grootboekindeling** (per kostencategorie en per btw-soort
+  een grootboekrekening) en je **Kostencategorieën**: eigen categorieën toevoegen,
+  op inactief zetten of verwijderen.
+- **Synchroniseren**: wanneer er voor het laatst is gesynchroniseerd, en knoppen om
+  het nu te doen.
+- **Meldingen**: als er iets niet goed ging.
+
+**Iets verwijderd wat uit SnelStart kwam?** Dan komt het bij de volgende
+synchronisatie niet terug. Wil je alles toch weer ophalen, klik dan in de
+SnelStart-kaart, tabblad **Instellingen**, op **Alles opnieuw ophalen**. Dan komt ook
+alles terug wat je eerder hebt verwijderd.
+
+Ontkoppelen doe je met **Loskoppelen**.
+
+## Stripe betaallink (Team, of als module bij Groei)
+
+Hiermee kunnen je klanten hun factuur online betalen met iDEAL.
+1. Klik op **Stripe koppelen** en maak je account aan of log in bij Stripe.
+2. Na de controle door Stripe staat de koppeling op **Actief**.
+
+Daarna staat in elke factuurmail de knop **Factuur betalen**. Betaalt de klant, dan
+gaat de factuur vanzelf op betaald en krijgen jij en de klant een bevestiging. Het
+geld komt op je eigen rekening. Ontkoppelen doe je met **Ontkoppelen**.
 
 ---
 
-## Overzicht van wat er automatisch draait
-
-| Wanneer | Wat |
-|---|---|
-| Elk uur | Kosten ophalen uit Moneybird |
-| Elk half uur | Contacten synchroniseren met Moneybird |
-| Elke ochtend | Btw-gegevens ophalen uit Moneybird |
-| Elke ochtend | Betaalherinneringen en afspraakherinneringen versturen |
-| Elke ochtend | BossBase-mails rond de proefperiode |
-| Elke vijf minuten | AFAS-kosten en -contacten *(verborgen koppeling)* |
-
----
-
-## Onzeker — controleren door Niels
-
-- **Of AFAS bedoeld is om live te gaan.** Er draait een synchronisatie elke vijf
-  minuten en er staat een bedrijf als verbonden, terwijl het blok in de schermen
-  verborgen is. Dat is tegenstrijdig en moet uitgezocht worden.
-- **Of Moneybird en SnelStart tegelijk gekoppeld kunnen zijn**, en wat er dan
-  gebeurt bij het betaald markeren van een factuur — gaat hij dan naar allebei?
-- **Wat er gebeurt bij een mislukte synchronisatie.** Krijgt de gebruiker een
-  melding, of gaat het stil mis? Uit de code lijkt het laatste.
-- **Of de klantsynchronisatie bestaande klanten overschrijft** wanneer de gegevens in
-  BossBase en de boekhouding verschillen, en welke kant dan wint.
-- **Of de Stripe-betaallink ook zonder de module werkt** als iemand hem al eerder had
-  ingesteld.
-- **Of Google Agenda binnenkort live gaat.** Zolang dat niet zo is, moet Boss het
-  helemaal niet noemen.
+## Wat er niet is
+- Klanten importeren uit Excel kan niet (exporteren wel, via Database).
+- Er is geen koppeling met een mailprogramma.
+- Andere koppelingen dan deze drie zijn er op dit moment niet.
