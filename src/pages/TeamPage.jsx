@@ -548,7 +548,7 @@ export function TeamPage() {
         </div>
         <div className="page-hd-actions">
           {isAdmin && (
-            <button className="btn btn-p" onClick={guardLimiet('gebruikers', () => setShowInvite(true))}>
+            <button className="btn btn-p" data-rl="team-uitnodigen" onClick={guardLimiet('gebruikers', () => setShowInvite(true))}>
               {I.plus} Teamlid uitnodigen
             </button>
           )}
@@ -640,6 +640,7 @@ export function TeamPage() {
                           <button
                             className="btn btn-ghost btn-sm"
                             title={plan.has('rollen_rechten') ? 'Rechten instellen' : 'Rollen & rechten zit niet in je abonnement'}
+                            data-rl="team-rechten"
                             onClick={guardFeature('rollen_rechten', () => setPermsMember(member))}
                             style={{ fontSize: '.78rem', opacity: plan.has('rollen_rechten') ? 1 : .6 }}
                           >
@@ -660,6 +661,7 @@ export function TeamPage() {
                                 disabled={isLaatsteAdmin(member)}
                                 title={isLaatsteAdmin(member) ? LAATSTE_ADMIN_REDEN : undefined}
                                 onClick={() => handleDeactivate(member)}
+                                data-rl="team-deactiveren"
                               >
                                 Deactiveren
                               </button>

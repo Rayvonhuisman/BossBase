@@ -273,6 +273,24 @@ export const RONDLEIDINGEN = {
       tekst: 'Download het overzicht per klant als Excel-bestand.',
     },
   ],
+
+  team: [
+    {
+      doel: 'team-uitnodigen',
+      titel: 'Teamlid uitnodigen',
+      tekst: 'Vul het e-mailadres in. Je collega krijgt een link om een account aan te maken.',
+    },
+    {
+      doel: 'team-rechten',
+      titel: 'Rechten',
+      tekst: 'Stel per medewerker in wat hij mag zien en doen. Dit zit in het pakket Team.',
+    },
+    {
+      doel: 'team-deactiveren',
+      titel: 'Deactiveren',
+      tekst: 'Werkt iemand niet meer bij je? Deactiveren stopt de toegang meteen, en is terug te draaien.',
+    },
+  ],
 };
 
 /** Alle pagina's met een rondleiding (voor "geen rondleidingen meer"). */
