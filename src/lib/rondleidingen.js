@@ -214,6 +214,29 @@ export const RONDLEIDINGEN = {
       tekst: 'Versturen, herzien, kopiëren of een factuur maken van een geaccepteerde offerte.',
     },
   ],
+
+  facturen: [
+    {
+      doel: 'facturen-nieuw',
+      titel: 'Nieuwe factuur',
+      tekst: 'Kies een klant en voeg regels toe. Van een geaccepteerde offerte maak je met één klik een factuur.',
+    },
+    {
+      doel: 'facturen-tellers',
+      titel: 'In één oogopslag',
+      tekst: 'Wat er openstaat, wat er deze maand is betaald en hoeveel facturen te laat zijn.',
+    },
+    {
+      doel: 'facturen-filters',
+      titel: 'Per status',
+      tekst: 'Verzonden, betaald, verlopen of gecrediteerd. Zoeken kan op nummer of klant.',
+    },
+    {
+      selector: 'table.dt tbody button[title="Meer acties"]',
+      titel: 'Acties',
+      tekst: 'Versturen, een herinnering sturen, kopiëren of crediteren.',
+    },
+  ],
 };
 
 /** Alle pagina's met een rondleiding (voor "geen rondleidingen meer"). */

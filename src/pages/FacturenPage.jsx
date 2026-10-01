@@ -1267,7 +1267,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
         </div>
         <div className="page-hd-actions">
           {canManage && (
-            <button className="btn btn-p" onClick={guardLimiet('facturen', () => setShowNew(true))}>
+            <button className="btn btn-p" data-rl="facturen-nieuw" onClick={guardLimiet('facturen', () => setShowNew(true))}>
               {I.plus} Nieuwe factuur
             </button>
           )}
@@ -1275,7 +1275,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
       </div>
 
       <div className="afu2">
-        <div className="stats-row" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 20 }}>
+        <div className="stats-row" data-rl="facturen-tellers" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 20 }}>
           <div className="sc">
             <div className="sc-top"><div className="sc-icon">{I.brief}</div></div>
             <div className="sc-val">{facturen.length}</div>
@@ -1299,7 +1299,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
         </div>
 
         <div className="card">
-          <div className="tw-filter">
+          <div className="tw-filter" data-rl="facturen-filters">
             <div className="bb-filter-tabs">
               {filters.map(f => (
                 <button key={f.value} className={`bb-filter-tab${activeFilter === f.value ? ' on' : ''}`} onClick={() => setActiveFilter(f.value)}>
