@@ -1711,9 +1711,9 @@ export function InstellingenPage() {
         </div>
       </div>
 
-      <div className="tabs afu2" style={{ marginBottom: 20 }}>
+      <div className="tabs afu2" data-rl="instellingen-tabs" style={{ marginBottom: 20 }}>
         {TABS.map(t => (
-          <button key={t.id} className={`tab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
+          <button key={t.id} className={`tab${tab === t.id ? ' active' : ''}`} data-rl={`instellingen-tab-${t.id}`} onClick={() => setTab(t.id)}>
             {t.label}
           </button>
         ))}

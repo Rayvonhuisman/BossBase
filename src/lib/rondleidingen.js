@@ -291,6 +291,24 @@ export const RONDLEIDINGEN = {
       tekst: 'Werkt iemand niet meer bij je? Deactiveren stopt de toegang meteen, en is terug te draaien.',
     },
   ],
+
+  instellingen: [
+    {
+      doel: 'instellingen-tabs',
+      titel: 'Instellingen',
+      tekst: 'Je eigen profiel en, als je beheerder bent, de instellingen van je bedrijf.',
+    },
+    {
+      doel: 'instellingen-tab-standaard',
+      titel: 'Algemeen',
+      tekst: 'Uurtarief, btw, hoe lang een offerte geldig is, en de urenherinnering voor je team.',
+    },
+    {
+      doel: 'instellingen-tab-abonnement',
+      titel: 'Abonnement',
+      tekst: 'Je pakket, modules en gebruikers, en verzoeken van je team.',
+    },
+  ],
 };
 
 /** Alle pagina's met een rondleiding (voor "geen rondleidingen meer"). */
