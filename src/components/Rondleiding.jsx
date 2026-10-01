@@ -19,10 +19,13 @@ const zichtbaar = el => {
   const r = el.getBoundingClientRect();
   return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
 };
-const zoek = doel => document.querySelector(`[data-rl="${doel}"]`);
+// Een stap wijst aan met data-rl="<doel>", of met een selector als het om het
+// eerste item van een lijst gaat (de eerste kaart, de eerste rij).
+const zoek = stap => document.querySelector(stap.selector || `[data-rl="${stap.doel}"]`);
 
 // Er staat iets anders open (venster, la, urenherinnering): dan wachten we.
-const ietsOpen = () => Boolean(document.querySelector('.overlay, .drawer, .drawer-overlay'));
+// Een rondleiding binnen een la (de projectkaart) wacht alleen op vensters.
+const ietsOpen = inLa => Boolean(document.querySelector(inLa ? '.overlay' : '.overlay, .drawer, .drawer-overlay'));
 
 // Gezien-lijst één keer per sessie ophalen; daarna bijgehouden in het geheugen.
 let gezienCache = null;
@@ -31,10 +34,15 @@ const laadGezien = () => {
   return gezienCache;
 };
 
+// Hoeveel rondleidingen er binnen een open la gemonteerd zijn. Staat er een,
+// dan start "Rondleiding" in het profielmenu die, en niet ook die van de pagina
+// eronder.
+let inLaActief = 0;
+
 const MARGE = 8;      // ruimte rond het aangewezen element
 const KAART_B = 320;  // breedte van de uitlegkaart
 
-export default function Rondleiding({ pagina }) {
+export default function Rondleiding({ pagina, inLa = false }) {
   // Via een ref: useToast geeft niet gegarandeerd elke render hetzelfde object,
   // en start() zit in de afhankelijkheden van het start-effect hieronder.
   const toast = useToast();
@@ -47,7 +55,7 @@ export default function Rondleiding({ pagina }) {
   const [kaartPos, setKaartPos] = useState({ top: -9999, left: -9999 });
 
   const start = useCallback((handmatig = false) => {
-    const lijst = (RONDLEIDINGEN[pagina] || []).filter(s => zichtbaar(zoek(s.doel)));
+    const lijst = (RONDLEIDINGEN[pagina] || []).filter(s => zichtbaar(zoek(s)));
     if (lijst.length === 0) {
       if (handmatig) toastRef.current.info('Voor deze pagina is er geen rondleiding.');
       return false;
@@ -73,8 +81,8 @@ export default function Rondleiding({ pagina }) {
       // geven we het op; dan komt hij de volgende keer.
       const probeer = () => {
         if (klaar) return;
-        const eersteStap = (RONDLEIDINGEN[pagina] || []).some(s => zichtbaar(zoek(s.doel)));
-        if (eersteStap && !ietsOpen()) {
+        const eersteStap = (RONDLEIDINGEN[pagina] || []).some(s => zichtbaar(zoek(s)));
+        if (eersteStap && !ietsOpen(inLa)) {
           if (start(false)) {
             gezien.add(pagina);
             markeerGezien(pagina).catch(() => {});
@@ -87,28 +95,33 @@ export default function Rondleiding({ pagina }) {
     });
 
     return () => { klaar = true; clearTimeout(timer); };
-  }, [pagina, start, stop]);
+  }, [pagina, inLa, start, stop]);
 
   // ── Seintjes van het profielmenu en Instellingen ──────────────────────────
   useEffect(() => {
-    const opStart = () => start(true);
+    if (inLa) inLaActief += 1;
+    const opStart = () => { if (inLa || inLaActief === 0) start(true); };
     const opReset = () => { gezienCache = null; };
     window.addEventListener(RL_START, opStart);
     window.addEventListener(RL_RESET, opReset);
     return () => {
       window.removeEventListener(RL_START, opStart);
       window.removeEventListener(RL_RESET, opReset);
+      if (inLa) inLaActief -= 1;
     };
-  }, [start]);
+  }, [start, inLa]);
 
   const stap = stappen?.[index];
 
   // ── Het aangewezen element volgen ─────────────────────────────────────────
   useLayoutEffect(() => {
     if (!stap) return undefined;
-    const el = zoek(stap.doel);
+    const el = zoek(stap);
     if (!el) { setRect(null); return undefined; }
-    el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    // Alleen scrollen als het begin van het element buiten beeld staat. Een
+    // hoog element (een pipelinekolom) schoof anders de paginakop weg.
+    const r0 = el.getBoundingClientRect();
+    if (r0.top < 0 || r0.top > window.innerHeight - 80) el.scrollIntoView({ block: 'center', inline: 'nearest' });
     const meet = () => setRect(el.getBoundingClientRect());
     meet();
     window.addEventListener('resize', meet);
@@ -127,7 +140,11 @@ export default function Rondleiding({ pagina }) {
     const vh = window.innerHeight;
     let top;
     let left;
-    if (rect.height > vh * 0.5) {
+    if (rect.height > vh * 0.5 && rect.width > vw * 0.5) {
+      // Groot vlak (een rooster, de tijdlijn): de kaart rechtsonder in beeld.
+      left = vw - KAART_B - 24;
+      top = vh - kh - 24;
+    } else if (rect.height > vh * 0.5) {
       // Hoog element (het menu): ernaast.
       left = rect.right + MARGE + 12;
       top = Math.min(Math.max(rect.top + 80, 16), vh - kh - 16);

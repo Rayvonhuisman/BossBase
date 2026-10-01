@@ -1,6 +1,7 @@
 // De stappen van de rondleiding per pagina.
 //
-// Elke stap wijst een element aan via data-rl="<naam>". Staat dat element niet
+// Elke stap wijst een element aan via data-rl="<naam>" (doel), of via een
+// selector voor het eerste item van een lijst. Staat dat element niet
 // in beeld (geen recht, niet in het pakket, of de pagina toont het nu niet), dan
 // valt de stap vanzelf weg. Zo wijst de rondleiding nooit iets aan wat iemand
 // niet ziet, zonder dat hier rechten of pakketten herhaald hoeven te worden.
