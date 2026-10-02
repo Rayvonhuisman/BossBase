@@ -19,6 +19,7 @@ import { useEscapeSluit } from './hooks/useEscapeSluit.js';
 import AbonnementPage from './pages/AbonnementPage.jsx';
 import { CalendarEventDetailDrawer } from './pages/dashboard/CalendarEventDetailDrawer.jsx';
 import { PageErrorBoundary } from './components/PageErrorBoundary.jsx';
+import { LaadScherm } from './components/LaadFout.jsx';
 import { CustomerPage, CustomersPage, ActivitiesPage } from './pages/BbPages1.jsx';
 import { ActivitiesPageV2 } from './pages/ActivitiesPageV2.jsx';
 // Zware pagina's (recharts, exceljs, jszip, jspdf) lazy laden → uit de eerste bundle.
@@ -82,6 +83,29 @@ import { DEMO_SESSION, DEMO_USER, DEMO_PROFILE, DEMO_COMPANY, DEMO_PLAN_STATUS, 
 // kader. Eén constante in plaats van overal een aparte tak: elke plek die het
 // pad leest of schrijft gebruikt deze waarde.
 const BASISPAD = isDemo ? '/demo' : '/dashboard';
+
+// ── Terug naar de link na inloggen ─────────────────────────────────────────
+// Wie uitgelogd een link uit een mail opent (/dashboard/werkbonnen/<id>,
+// …?tab=abonnement), komt op /login. Zonder dit belandde hij daarna op het
+// dashboard en was het item kwijt (audit 2026-10-01, M25). Alleen paden binnen
+// het dashboard; nooit een volledige URL, zodat dit geen open redirect wordt.
+const DOEL_SLEUTEL = 'bb.naInloggen';
+function bewaarDoelVoorInloggen() {
+  try {
+    const { pathname, search } = window.location;
+    if (pathname.startsWith(BASISPAD + '/') || (pathname === BASISPAD && search)) {
+      sessionStorage.setItem(DOEL_SLEUTEL, pathname + search);
+    }
+  } catch { /* geen sessionStorage: dan gewoon naar het dashboard */ }
+}
+function haalDoelNaInloggen() {
+  try {
+    const doel = sessionStorage.getItem(DOEL_SLEUTEL);
+    sessionStorage.removeItem(DOEL_SLEUTEL);
+    if (doel && /^\/[a-z]/i.test(doel) && !doel.startsWith('//') && (doel.startsWith(BASISPAD + '/') || doel.startsWith(BASISPAD + '?'))) return doel;
+  } catch { /* idem */ }
+  return null;
+}
 
 // De URL is de bron van waarheid voor wat er open staat. Zie lib/route.js.
 
@@ -1132,6 +1156,7 @@ function AppInner() {
     const { data } = onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       if (!nextSession && window.location.pathname.startsWith(BASISPAD)) {
+        bewaarDoelVoorInloggen();
         navigate('/login', true);
       }
     });
@@ -1145,6 +1170,15 @@ function AppInner() {
     try {
       const ctx = await getCurrentUserContext();
       authLog('profile geladen', { role: ctx.profile?.role, id: ctx.profile?.id });
+      // Profiel kon niet worden gelezen (netwerk, server): niet doorgaan met een
+      // halve shell zonder rol en rechten, maar het laadscherm met de fout en
+      // "Opnieuw proberen" laten staan. Een ontbrékend profiel (geen fout) gaat
+      // hieronder door het herstelpad.
+      if (ctx.user && !ctx.profile && ctx.profileError) {
+        setPermissionsLoaded(false);
+        setProfileError(ctx.profileError);
+        return ctx;
+      }
       setUser(ctx.user);
       setProfile(ctx.profile);
       setCompany(ctx.company);
@@ -1480,6 +1514,7 @@ function AppInner() {
       toast.error(err.message || 'Uitloggen mislukt');
     }
     closeCustomer();
+    try { sessionStorage.removeItem(DOEL_SLEUTEL); } catch { /* geen opslag */ }
     navigate('/login', true);
   };
 
@@ -1494,26 +1529,26 @@ function AppInner() {
     setGlobalDataLoading(true);
     // Eén gedeelde fetch voor de hele dashboard-shell (dashboard, sidebar-badges,
     // notificaties en zoeken delen deze data via DataContext).
+    // Mislukt een lijst, dan blijft de vorige stand staan (niet leegmaken: een
+    // lege klantenlijst leest als "al mijn klanten zijn weg") en krijgt de
+    // gebruiker één melding. Vroeger werd elke fout stil een lege lijst.
+    let mislukt = 0;
+    const of = (belofte, zet) => belofte.then(
+      rijen => { if (alive) zet(rijen); },
+      fout => { mislukt += 1; console.warn('[bb] gedeelde lijst laden mislukt', fout); },
+    );
     Promise.all([
-      listCustomers().catch(() => []),
-      listDeals().catch(() => []),
-      listPipelineStages().catch(() => []),
-      listActivities().catch(() => []),
-      getOffertes().catch(() => []),
-      getWerkbonnen().catch(() => []),
-      listLeveranciers().catch(() => []),
+      of(listCustomers(), setGlobalCustomers),
+      of(listDeals(), setGlobalDeals),
+      of(listPipelineStages(), setGlobalStages),
+      of(listActivities(), setGlobalActivities),
+      of(getOffertes(), setGlobalOffertes),
+      of(getWerkbonnen(), setGlobalWerkbonnen),
+      of(listLeveranciers(), setGlobalLeveranciers),
     ])
-      .then(([cs, ds, st, acts, offs, wbs, levs]) => {
-        if (!alive) return;
-        setGlobalCustomers(cs);
-        setGlobalDeals(ds);
-        setGlobalStages(st);
-        setGlobalActivities(acts);
-        setGlobalOffertes(offs);
-        setGlobalWerkbonnen(wbs);
-        setGlobalLeveranciers(levs);
+      .then(() => {
+        if (alive && mislukt) toast.error('Niet alle gegevens konden worden geladen. Controleer je verbinding; ververs de pagina als iets ontbreekt.');
       })
-      .catch(() => {})
       .finally(() => { if (alive) setGlobalDataLoading(false); });
     return () => { alive = false; };
   }, [sessionUserId, refreshKey]);
@@ -1689,7 +1724,9 @@ function AppInner() {
 
   if (route === '/login') {
     if (session) {
-      navigate('/dashboard', true);
+      const doel = haalDoelNaInloggen();
+      if (doel) window.location.replace(doel);
+      else navigate('/dashboard', true);
       return null;
     }
     return (
@@ -1698,6 +1735,10 @@ function AppInner() {
         // Force a fresh profile fetch immediately after login so the
         // dashboard renders with real data instead of a flash of skeletons.
         await refreshProfile();
+        // Kwam je via een link uit een mail? Dan daarheen, met een verse lading
+        // zodat pagina, item en tabblad uit de URL worden opgepakt.
+        const doel = haalDoelNaInloggen();
+        if (doel) { window.location.replace(doel); return; }
         navigate('/dashboard', true);
       }}
       onRegister={() => navigate('/register')}
@@ -1774,6 +1815,7 @@ function AppInner() {
   }
 
   if (!session) {
+    bewaarDoelVoorInloggen();
     navigate('/login', true);
     return null;
   }
@@ -1791,7 +1833,9 @@ function AppInner() {
 
   if (!permissionsLoaded) {
     authLog('shell GEBLOKKEERD — wacht op permissionsLoaded');
-    return <div style={{ background: 'var(--bg)', minHeight: '100dvh' }} />;
+    // Spinner, en na tien seconden (of bij een fout) een melding met opnieuw
+    // proberen. Was een volledig wit scherm, ook als het laden mislukt was.
+    return <LaadScherm fout={profileLoading ? null : profileError} onOpnieuw={() => { refreshProfile(); }} />;
   }
 
   // E-mailverificatie-gate: een ingelogde gebruiker met een profiel zonder

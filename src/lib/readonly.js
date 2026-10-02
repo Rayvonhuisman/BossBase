@@ -91,5 +91,9 @@ export function nettePlanFout(bericht) {
   const laag = tekst.toLowerCase()
   if (laag.includes('readonly')) return READONLY_FOUT
   if (laag.includes('row-level security') || laag.includes('row level security')) return PLAN_FOUT
+  // Netwerkfouten van fetch kwamen als "TypeError: Failed to fetch" in beeld.
+  if (laag.includes('failed to fetch') || laag.includes('networkerror') || laag.includes('load failed')) {
+    return 'Geen verbinding met BossBase. Controleer je internetverbinding en probeer het opnieuw.'
+  }
   return tekst
 }
