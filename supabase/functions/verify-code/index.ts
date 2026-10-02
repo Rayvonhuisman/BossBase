@@ -110,15 +110,24 @@ serve(async (req) => {
       })
       if (rpcErr) {
         console.error('[verify-code] provision_account fout:', rpcErr)
-        return json({ success: false, error: `Account aanmaken mislukt: ${rpcErr.message}` }, 500)
+        return json({ success: false, error: 'Account aanmaken mislukt. Probeer het opnieuw.' }, 500)
       }
       companyId = rpcData?.company_id || null
+
+      // De proef start op het pakket dat de klant bij aanmelden koos (groei of
+      // team). De trigger op companies zet altijd groei; alleen bij een vers
+      // aangemaakt bedrijf in de proefperiode zetten we hem om. Audit A2.
+      if (companyId && rpcData?.status === 'created' && meta.gekozen_pakket === 'team') {
+        const { error: pakketErr } = await admin.from('subscriptions')
+          .update({ plan: 'team' }).eq('company_id', companyId).eq('status', 'trial')
+        if (pakketErr) console.error('[verify-code] proefpakket zetten mislukt:', pakketErr.message)
+      }
     }
 
     console.log('[verify-code] Geverifieerd ✓', { user: userId })
     return json({ success: true, companyId })
   } catch (err) {
     console.error('[verify-code] Fout:', err)
-    return json({ success: false, error: String(err) }, 500)
+    return json({ success: false, error: 'Verifiëren mislukt door een interne fout. Probeer het opnieuw.' }, 500)
   }
 })

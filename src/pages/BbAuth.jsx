@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Logo } from '../bb-shared.jsx';
 import {
   Paintbrush, Trees, Hammer, AppWindow, Plug, Home, ShowerHead, Zap, Sparkles, HardHat,
-  MailCheck, Rocket, User, Users, Check, Plus,
+  MailCheck, Rocket, User, Users, Check,
 } from 'lucide-react';
 import { loginWithEmail, registerWithEmail, requestPasswordReset, resendVerificationEmail, requestVerificationCode, verifyCode, vertaalAuthFout } from '../services/authService.js';
 import { PasswordRequirements, PasswordMatch, passwordValid } from '../components/PasswordStrength.jsx';
@@ -348,7 +348,7 @@ export function RegisterFlow({ onDone, onBack }) {
     setLoading(true);
     setError('');
     try {
-      const result = await registerWithEmail({ ...form, trade });
+      const result = await registerWithEmail({ ...form, trade, pakket: setup });
       if (result?.requiresVerification) {
         setNeedsVerification(true);
       } else if (result?.requiresConfirmation) {
@@ -496,20 +496,17 @@ export function RegisterFlow({ onDone, onBack }) {
           </>
         )}
         {step === 3 && (
-          <>
-            <div style={{ marginBottom: 14, padding: 12, background: 'var(--bgs)', borderRadius: 'var(--r8)', border: '1px solid var(--border)', fontSize: '.8rem', color: 'var(--dmu)' }}>
-              Medewerkers ontvangen een uitnodiging per e-mail en kunnen na acceptatie inloggen.
-            </div>
-            <div className="auth-field"><label>Naam medewerker</label><input placeholder="Remco Smit" /></div>
-            <div className="auth-field"><label>E-mailadres</label><input type="email" placeholder="remco@veldhuis.nl" /></div>
-            <div className="auth-field">
-              <label>Rol</label>
-              <select><option>Medewerker</option><option>Admin</option></select>
-            </div>
-            <button className="btn btn-s btn-sm" style={{ width: '100%', justifyContent: 'center', marginBottom: 8 }}>
-              <Plus size={15} strokeWidth={2} /> Nog een medewerker toevoegen
-            </button>
-          </>
+          // Collega's uitnodigen kan pas als het bedrijf bestaat, dus ná de
+          // e-mailverificatie. Hier stonden invoervelden die nergens heen gingen
+          // (audit 2026-10-01, A1); nu zeggen we eerlijk hoe het wél werkt.
+          <div style={{ marginBottom: 14, padding: 12, background: 'var(--bgs)', borderRadius: 'var(--r8)', border: '1px solid var(--border)', fontSize: '.85rem', color: 'var(--dm)', lineHeight: 1.55 }}>
+            <strong>Je team uitnodigen doe je straks in BossBase.</strong><br />
+            Zodra je account klaar is, ga je naar <strong>Team</strong> en klik je op <strong>Teamlid uitnodigen</strong>.
+            Je collega krijgt dan een uitnodiging per e-mail.
+            {setup === 'team'
+              ? ' In je proefperiode op Team kun je zoveel collega\'s uitnodigen als je wilt.'
+              : ' Op Groei werk je met maximaal 2 gebruikers, inclusief jezelf.'}
+          </div>
         )}
         {error && <div style={{ color: '#dc2626', fontSize: '.78rem', fontWeight: 600, marginTop: 10 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
