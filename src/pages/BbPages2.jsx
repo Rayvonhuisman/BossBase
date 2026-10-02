@@ -230,6 +230,16 @@ function AgendaTimeline({ dates, events, todayKey, onEventClick, startUur, eindU
 }
 
 // ── CALENDAR ─────────────────────────────────────────────────
+// "September 2026" of, voor een week over twee maanden, "September – Oktober 2026".
+// Eerst stond hier alleen de maand van de maandag, waardoor op 1 oktober nog
+// "September 2026 · Week 40" stond.
+function weekMaandLabel(van, tot, cap) {
+  const m1 = cap(NL_MONTHS[van.getMonth()]), m2 = cap(NL_MONTHS[tot.getMonth()]);
+  if (van.getMonth() === tot.getMonth()) return `${m1} ${van.getFullYear()}`;
+  if (van.getFullYear() === tot.getFullYear()) return `${m1} – ${m2} ${tot.getFullYear()}`;
+  return `${m1} ${van.getFullYear()} – ${m2} ${tot.getFullYear()}`;
+}
+
 export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpenActivityId, onNavConsumed }) {
   const toast = useToast();
   const { refreshKey, bumpRefresh, profile } = useProfile();
@@ -421,7 +431,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
 
   const headerLabel = view === 'month'
     ? `${cap(NL_MONTHS[mMonth])} ${mYear}`
-    : `${cap(NL_MONTHS[weekStart.getMonth()])} ${weekStart.getFullYear()} · Week ${isoWeek}`;
+    : weekMaandLabel(weekStart, addDays(weekStart, 6), cap) + ` · Week ${isoWeek}`;
 
   // Nav buttons are shared across views → act on the active view.
   const goPrev = () => view === 'month'

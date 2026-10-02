@@ -1324,7 +1324,12 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       // leeggemaakte selectie er hetzelfde uit laten zien als geen selectie.
       const bewaard = widget.settings?.funnelStages;
       const gekozen = Array.isArray(bewaard) ? bewaard : standaardFunnelFasen(stages);
-      const d = alle.filter(s => !s.id || gekozen.includes(s.id));
+      // Percentages ten opzichte van de eerste getoonde stap, zodat de kop en de
+      // stappen dezelfde basis hebben. Eerst kwam de basis uit alle leads incl.
+      // verloren (113), waardoor "102 leads" als eerste stap 90% heette.
+      const gekozenStappen = alle.filter(s => !s.id || gekozen.includes(s.id));
+      const basis = gekozenStappen[0]?.value || 0;
+      const d = gekozenStappen.map(s => ({ ...s, pct: basis ? Math.round((s.value / basis) * 100) : 0 }));
       return (
         <div className="bb-widget">
           {/* Niet "binnengehaald" noemen: de laatste stap is voltooid werk,
