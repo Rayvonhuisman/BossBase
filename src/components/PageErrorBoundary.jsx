@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import { isLaadfout, herlaadEenmaal } from '../lib/laadfout.js';
 
 // Vangt render-fouten van één pagina op zodat een crash in bijv. de Database-
 // pagina niet de HELE app-shell (en dus alle andere pagina's) meesleept in een
@@ -17,6 +18,9 @@ export class PageErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error('[bb:pagina] render-fout opgevangen', error, info?.componentStack);
+    // Een onderdeel van een oudere versie bestaat niet meer (er is net een
+    // nieuwe versie gepubliceerd): één keer herladen haalt de nieuwe op.
+    if (isLaadfout(error)) herlaadEenmaal();
   }
 
   componentDidUpdate(prevProps) {
@@ -28,6 +32,17 @@ export class PageErrorBoundary extends Component {
 
   render() {
     const { error } = this.state;
+    if (error && isLaadfout(error)) {
+      return (
+        <div className="card card-p" style={{ margin: 24, maxWidth: 560 }} role="alert">
+          <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: 8 }}>Er is een nieuwe versie van BossBase</div>
+          <div style={{ fontSize: '.88rem', color: 'var(--dm)', marginBottom: 12 }}>
+            Deze pagina hoort bij de vorige versie. Herlaad de pagina om verder te gaan; je gegevens blijven gewoon staan.
+          </div>
+          <button className="btn btn-p btn-sm" onClick={() => window.location.reload()}>Pagina herladen</button>
+        </div>
+      );
+    }
     if (error) {
       return (
         <div className="card card-p" style={{ margin: 24, maxWidth: 720 }}>

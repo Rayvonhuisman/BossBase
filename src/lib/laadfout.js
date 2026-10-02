@@ -60,9 +60,14 @@ export function toonLaadfout(fout) {
 }
 
 /** Vite meldt een mislukte dynamische import met dit event. */
+//
+// Geen preventDefault: dan laat Vite de import stil "slagen" met een lege
+// module, en crasht de lazy-wrapper (`m.PlanningPage` op undefined) met een
+// technische fout op de pagina. Zonder preventDefault faalt de import met de
+// echte laadfout; de PageErrorBoundary herkent die en toont een nette melding,
+// terwijl we hier één keer herladen.
 export function installeerLaadfoutHerstel() {
   window.addEventListener('vite:preloadError', event => {
-    event.preventDefault();
-    if (!herlaadEenmaal()) toonLaadfout(event.payload);
+    if (!herlaadEenmaal()) console.error('[bb] laden mislukt', event.payload);
   });
 }
