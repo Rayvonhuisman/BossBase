@@ -158,7 +158,7 @@ de beheerder van je bedrijf.
 |---|---|---|
 | Bon of factuur bij kosten | 10 MB per bestand | JPG, PNG, PDF |
 | Bedrijfslogo | 10 MB | JPG, PNG |
-| Profielfoto | | JPG, PNG, WebP |
+| Profielfoto | 5 MB | JPG, PNG, WebP |
 | Schermafbeelding bij Bug of idee | 5 MB | PNG, JPG, WebP |
 | Foto's op een werkbon of project | | alle afbeeldingen |
 

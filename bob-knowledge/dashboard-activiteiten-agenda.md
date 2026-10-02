@@ -21,7 +21,7 @@ dashboard; wat jij aanpast, verandert niet bij je collega's.
 3. Via de drie puntjes op een tegel kies je de grootte (**Klein**, **Middel**,
    **Groot**, **Breed**) of **Verwijderen**.
 4. **+ Blok toevoegen** opent alle beschikbare tegels, in groepen (Populair,
-   Planning, Financieel, CRM, Analyse & Grafieken), met een zoekveld.
+   Planning, Financieel, CRM, Uitvoering, Analyse & Grafieken), met een zoekveld.
 5. **Layout kiezen** zet in één keer een kant-en-klare indeling neer: Medewerker,
    Standaard, Verkoopgericht, Planninggericht of Financieel.
 6. Klik op **Opslaan**. **Annuleren** laat alles zoals het was; **Reset** zet het
@@ -39,7 +39,7 @@ Groei en Team.
 - **Urenregistratie**: je uren van deze week tegenover 40 uur.
 - **Uren per week**: je uren over zes weken.
 
-**Snel aan de slag**
+**Snelle acties** (in de groep Populair)
 - **Snelle acties**: knoppen naar Pipeline, Activiteiten, Offertes, Werkbonnen,
   Klanten en Uren.
 
@@ -50,7 +50,8 @@ Groei en Team.
 
 **Offertes en facturen**
 - **Open offertes** (recht *Offertes*).
-- **Te factureren**, **Openstaande facturen**, **Factuurstatus** (recht *Facturen*).
+- **Te factureren** (afgeronde klussen, min wat er al gefactureerd is), **Openstaande facturen**,
+  **Factuurstatus** (recht *Facturen*).
 
 **Kosten** (recht *Kosten*, alleen Groei en Team):
 - **Kosten per klus**, **Kosten deze maand**, **Kosten per klant**.

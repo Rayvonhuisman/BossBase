@@ -8,7 +8,7 @@
 
 - **Geboekte kosten**: bonnen en inkoopfacturen die je op de pagina **Kosten**
   invoert, of die uit je boekhouding komen. Die tellen mee in je kosten en je btw.
-- **Kosten op klussen**: materiaal op werkbonnen en **inkopen** op een project
+- **Kosten op werkbonnen**: materiaal op werkbonnen en **inkopen** op een project
   (zoals steigerhuur). Die tellen mee in de brutowinst van het project, niet in je
   geboekte kosten.
 
