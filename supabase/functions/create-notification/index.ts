@@ -5,7 +5,12 @@
 // uitgesloten. verify_jwt=true zorgt dat alleen ingelogde gebruikers aanroepen.
 //
 // Optioneel stuurt deze function ook een e-mail per notificatie (payload
-// `email: { subject, html }`). Het e-mailADRES wordt UITSLUITEND hier
+// `email: true`; een oud `{ subject, html }`-object telt ook als "ja"). De
+// inhoud van de mail bouwt deze functie ZELF uit titel, tekst en link van de
+// melding — HTML of onderwerp van de client wordt genegeerd. Anders was dit een
+// kanaal om collega's willekeurige HTML-mail met afzender "BossBase" te sturen,
+// buiten de mail-limiet om (audit 2026-10-01, B-8/M13). Elke mail telt mee in
+// dezelfde limiet per gebruiker als send-email (60 per uur). Het e-mailADRES wordt UITSLUITEND hier
 // server-side opgelost — primair uit auth.users (de canonieke login-email, met
 // dezelfde identiteit als profiles.id waaruit medewerkers geselecteerd worden),
 // met company_members.email als terugval. Adressen worden nooit naar de client
@@ -15,6 +20,45 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { logMailFout } from '../_shared/mailFout.ts'
 import { inactiefReden } from '../_shared/actieveGebruiker.ts'
+import { mailTemplate } from '../_shared/mailTemplate.ts'
+
+const esc = (v: unknown) => String(v ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+
+// Zelfde vertaling als notificatieService.toAbsoluteUrl: 'werkbonnen/<id>' →
+// https://www.bossbase.nl/dashboard/werkbonnen?open=<id>. Alleen paginanamen
+// uit de app; alles wat geen eenvoudig pad is, krijgt geen knop.
+function appLink(link: unknown): string | undefined {
+  const schoon = String(link ?? '').replace(/^\//, '')
+  if (!/^[a-z_-]+(\/[0-9a-f-]{36})?$/i.test(schoon)) return undefined
+  const [pagina, id] = schoon.split('/')
+  const basis = `https://www.bossbase.nl/dashboard/${pagina}`
+  return id ? `${basis}?open=${encodeURIComponent(id)}` : basis
+}
+
+// Dezelfde teller als send-email (email_send_attempts): mails die een gebruiker
+// via meldingen laat versturen, tellen mee in zijn limiet.
+const MAX_PER_UUR = 60
+async function mailLimietBereikt(admin: any, userId: string): Promise<boolean> {
+  const nu = Date.now()
+  const { data: a } = await admin.from('email_send_attempts')
+    .select('attempt_count, window_start').eq('user_id', userId).maybeSingle()
+  if (a) {
+    const binnenUur = nu - new Date(a.window_start).getTime() < 3600_000
+    if (binnenUur && a.attempt_count >= MAX_PER_UUR) return true
+    await admin.from('email_send_attempts').update({
+      last_attempt: new Date(nu).toISOString(),
+      attempt_count: binnenUur ? a.attempt_count + 1 : 1,
+      window_start: binnenUur ? a.window_start : new Date(nu).toISOString(),
+    }).eq('user_id', userId)
+  } else {
+    await admin.from('email_send_attempts').insert({
+      user_id: userId, last_attempt: new Date(nu).toISOString(), attempt_count: 1, window_start: new Date(nu).toISOString(),
+    })
+  }
+  return false
+}
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -103,7 +147,7 @@ serve(async (req) => {
     // Valideer per notificatie dat de doelgebruiker in hetzelfde bedrijf zit.
     // Verzamel tegelijk de e-mailopdrachten (alleen voor gevalideerde targets).
     const rows: Record<string, unknown>[] = []
-    const mailJobs: { userId: string; subject: string; html: string }[] = []
+    const mailJobs: { userId: string; title: string; body: string | null; link: unknown; soort: string }[] = []
     for (const n of list.slice(0, 50)) {
       if (!n?.user_id || !n?.type || !n?.title) continue
       // Bewust GEEN self-skip: een self-tag levert óók een melding + mail op.
@@ -125,17 +169,22 @@ serve(async (req) => {
         related_id:   n.related_id ?? null,
         created_by:   user.id,
       })
-      const email = n.email
-      if (email && typeof email.subject === 'string' && typeof email.html === 'string' && email.subject && email.html) {
+      if (n.email) {
         // `soort` reist mee zodat een mislukte mail herkenbaar in mail_fouten
         // komt: 'mention', 'toewijzing_werkbon', 'planning_verzet', …
-        mailJobs.push({ userId: n.user_id, subject: email.subject, html: email.html, soort: String(n.type || 'collega_melding') })
+        mailJobs.push({
+          userId: n.user_id,
+          title: String(n.title).slice(0, 200),
+          body: n.body ? String(n.body).slice(0, 1000) : null,
+          link: n.link,
+          soort: String(n.type || 'collega_melding'),
+        })
       }
     }
 
     if (rows.length) {
       const { error: insErr } = await admin.from('notifications').insert(rows)
-      if (insErr) return json({ success: false, error: insErr.message }, 500)
+      if (insErr) { console.error('[create-notification]', insErr.message); return json({ success: false, error: 'Melding opslaan mislukt' }, 500) }
     }
 
     // E-mails versturen (best-effort, blokkeert de notificatie-insert niet).
@@ -165,8 +214,19 @@ serve(async (req) => {
       // Reageren gaat daarom in de app: de mail heeft daar een knop voor.
       const replyTo  = co?.reply_to_email || co?.email || null
 
+      const { data: afzender } = await admin.from('profiles').select('full_name').eq('id', user.id).maybeSingle()
+      const afzenderNaam = afzender?.full_name || 'Een collega'
+
       for (const job of mailJobs) {
         try {
+          if (await mailLimietBereikt(admin, user.id)) {
+            await logMailFout({
+              soort: job.soort, ontvanger: null, companyId, bedrijfNaam: bedrijfsnaam,
+              fout: 'Mail-limiet per gebruiker bereikt (60 per uur); melding wel in de app gezet',
+              bron: 'create-notification',
+            })
+            continue
+          }
           const to = await resolveRecipientEmail(admin, job.userId, companyId)
           if (!to) {
             // Gebeurde eerder stil: de in-app melding stond er wel, de mail niet,
@@ -179,7 +239,18 @@ serve(async (req) => {
             })
             continue
           }
-          const body: Record<string, unknown> = { to, subject: job.subject, html: job.html, from_name: fromName }
+          const { data: ontvanger } = await admin.from('profiles').select('full_name').eq('id', job.userId).maybeSingle()
+          const knop = appLink(job.link)
+          const html = mailTemplate({
+            title: job.title,
+            preheader: job.title,
+            body: `<p>Hoi ${esc(ontvanger?.full_name || 'collega')},</p>
+                   <p><strong>${esc(afzenderNaam)}</strong>: ${esc(job.title)}</p>
+                   ${job.body ? `<blockquote style="margin:12px 0;padding:12px 16px;background:#f9fafb;border-left:3px solid #1DDB62;border-radius:4px;color:#374151;">${esc(job.body)}</blockquote>` : ''}`,
+            buttonText: knop ? 'Bekijk in BossBase' : undefined,
+            buttonUrl: knop,
+          })
+          const body: Record<string, unknown> = { to, subject: job.title, html, from_name: fromName }
           if (replyTo) body.reply_to = replyTo
           body.soort = job.soort || 'collega_melding'
           body.company_id = companyId
@@ -199,6 +270,7 @@ serve(async (req) => {
 
     return json({ success: true, inserted: rows.length, emailed })
   } catch (err) {
-    return json({ success: false, error: String(err) }, 500)
+    console.error('[create-notification]', err)
+    return json({ success: false, error: 'Melding aanmaken mislukt' }, 500)
   }
 })
