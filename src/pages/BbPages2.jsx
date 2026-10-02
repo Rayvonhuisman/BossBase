@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+const FinancienGrafiek = lazy(() => import('./FinancienGrafiek.jsx'));
 import { Smartphone, Phone, Navigation, Camera, Clock, Package, CheckCircle2, ExternalLink, AlertTriangle } from 'lucide-react';
 import {
   I, CAL_EVENTS, HOURS_DATA, COSTS_DATA, TEAM_DATA, CUSTOMERS_DATA, QUOTES_DATA,
@@ -13,13 +14,12 @@ import { listLeveranciers } from '../services/leverancierService.js'
 import LeverancierSelect from '../components/LeverancierSelect.jsx'
 import { categorieOptiesUit } from '../lib/kostenCategorieen.js';
 import { useKostenCategorieen } from '../hooks/useKostenCategorieen.js';
-import { getFacturen, getAllFactuurRegels } from '../services/factuurService.js';
+import { getFacturen } from '../services/factuurService.js';
 import { getFinancienKpi } from '../services/financienService.js';
 import { getConnection } from '../services/accountingService.js';
 import { getBtwPeriodes, syncBtwData } from '../services/btwService.js';
 import { berekenBtwIndicatie } from '../services/btwIndicatieService.js';
 import { InfoTip, InfoUitklap } from '../components/Uitleg.jsx';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { listCustomers } from '../services/customerService.js';
 import { sumGefactureerd, sumBetaald, sumOpenstaand, withCustomerTotals, sumOmzetExclBtw } from '../services/customerTotalsService.js';
 import { getKostenOverzichtPerKlant, LEEG_OVERZICHT } from '../services/kostenOverzichtService.js';
@@ -1515,7 +1515,6 @@ export function RevenuePage() {
   // daarna invullen.
   const [facturen, setFacturen] = useState([]);
   const [costsData, setCostsData] = useState([]);
-  const [allRegels, setAllRegels] = useState([]);
   const [chartMode, setChartMode] = useState('gefactureerd');
   const [chartPeriod, setChartPeriod] = useState('maand');
   const [loading, setLoading] = useState(true);
@@ -1543,20 +1542,19 @@ export function RevenuePage() {
     let leeft = true;
     setLoading(true);
     // Alles wat niet in de gedeelde dataset zit: facturen en kosten voor de
-    // grafiek en de tabel, de factuurregels voor de btw-rubrieken, en de
-    // boekhoudkoppeling.
+    // grafiek en de tabel, en de boekhoudkoppeling. (Hier werden ook álle
+    // factuurregels van het bedrijf opgehaald, maar niets gebruikte ze; de
+    // btw-indicatie haalt zelf wat ze nodig heeft — audit 2026-10-01, P5.)
     Promise.all([
       getFacturen(),
       listJobCosts().then(alleenGeboekt),
-      getAllFactuurRegels(),
       getConnection(),
     ])
-      .then(([facturenData, costData, regelsData, mbConn]) => {
+      .then(([facturenData, costData, mbConn]) => {
         if (!leeft) return;
         setLaadFoutFin(null);
         setFacturen(facturenData);
         setCostsData(costData);
-        setAllRegels(regelsData);
         // Alleen Moneybird: dat is de enige koppeling die btw_periodes nog vult.
         // SnelStart stond hier als terugval, maar snelstart-sync-btw is eruit —
         // de scope btwaangiftes:read komt er niet. Een SnelStart-klant zag
@@ -1582,22 +1580,28 @@ export function RevenuePage() {
   }, [mbConnection, btwPeriodeType]);
 
   // Stelsel ophalen: bepaalt of omzet op factuur- of betaaldatum telt.
+  const [stelselBekend, setStelselBekend] = useState(false);
   React.useEffect(() => {
     getBedrijfsinstellingen()
       .then(s => { if (s?.btwStelsel) setBtwStelsel(s.btwStelsel); })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setStelselBekend(true));
   }, [refreshKey]);
 
   // Eigen BTW-indicatie voor de gekozen periode. Hangt niet aan een koppeling.
   React.useEffect(() => {
     const p = generatePeriodeRange(btwSelectedLabel, btwPeriodeType);
     if (!p) { setBtwIndicatie(null); return; }
+    // Pas rekenen als de pagina en het stelsel geladen zijn. Daarvoor draaide
+    // deze berekening (drie queries) eerst op lege data en daarna nog eens —
+    // de dubbele verzoeken op Financiën (audit 2026-10-01, P5).
+    if (loading || !stelselBekend) return;
     let leeft = true;
     berekenBtwIndicatie({ start: p.start, eind: p.eind, stelsel: btwStelsel })
       .then(r => { if (leeft) setBtwIndicatie(r); })
       .catch(() => { if (leeft) setBtwIndicatie(null); });
     return () => { leeft = false; };
-  }, [btwSelectedLabel, btwPeriodeType, btwStelsel, refreshKey, facturen, costsData]);
+  }, [btwSelectedLabel, btwPeriodeType, btwStelsel, loading, stelselBekend]); // na een refreshKey gaat loading eerst aan en dan uit: dat ververst
 
   // ── KPI ──────────────────────────────────────────────────────
   const kpiRange = React.useMemo(() => {
@@ -1911,23 +1915,14 @@ export function RevenuePage() {
         </div>
         <div style={{ overflowX: 'auto' }}>
           <div style={{ minWidth: 480 }}>
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--dl)' }} axisLine={false} tickLine={false} interval={chartPeriod === 'maand' ? 4 : 0} />
-                <YAxis
-                  tickFormatter={v => v === 0 ? '€0' : `€${(v / 1000).toFixed(0)}k`}
-                  tick={{ fontSize: 11, fill: 'var(--dl)' }}
-                  axisLine={false} tickLine={false} width={44}
-                />
-                <Tooltip
-                  formatter={(v, name) => [fmt(v), CHART_MODES.find(m => m.id === chartMode)?.label || name]}
-                  contentStyle={{ border: '1px solid var(--border)', borderRadius: 8, fontSize: '.8rem', boxShadow: 'none' }}
-                  cursor={{ fill: 'rgba(0,0,0,.03)' }}
-                />
-                <Bar dataKey={chartMode} fill={chartMode === 'kosten' ? '#dc2626' : '#1DDB62'} radius={[4, 4, 0, 0]} maxBarSize={32} />
-              </BarChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<div style={{ height: 240 }} />}>
+              <FinancienGrafiek
+                chartData={chartData}
+                chartMode={chartMode}
+                chartPeriod={chartPeriod}
+                modeLabel={CHART_MODES.find(m => m.id === chartMode)?.label}
+              />
+            </Suspense>
           </div>
         </div>
       </div>
