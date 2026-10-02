@@ -78,6 +78,14 @@ privileges die EXECUTE op een *nieuwe* functie automatisch aan `anon` en
 `authenticated` geven. `revoke all ... from public` haalt die er **niet** af —
 dat zijn expliciete rolgrants, en PUBLIC is iets anders dan een rol.
 
+Sinds migratie 20261002182047 krijgt `anon` in public niets meer vanzelf: geen
+schrijfrechten op tabellen en geen EXECUTE op functies (ook de default privileges
+van `postgres` zijn aangepast). Alleen de token-RPC's van de publieke pagina's
+(`get_*_by_sign_token`, `get_*_by_werkbon_token`, `get_offerte_items_by_token`,
+`get_payment_branding`) en `bb_voor_verzoek` (pre-request hook) staan open. Een
+nieuwe publieke RPC moet `anon` dus expliciet krijgen. Supabase's eigen default
+voor `authenticated` staat er nog: de revoke hierboven blijft nodig.
+
 Dat is geen theorie. Bij het opruimen van de SnelStart-koppeling (migratie
 20260902120000) werd `get_snelstart_sync_targets()` opnieuw aangemaakt met
 drop-and-create. Die functie geeft de koppelsleutel van *álle* bedrijven terug en
