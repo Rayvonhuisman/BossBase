@@ -19,6 +19,7 @@ import { regimeVanPct, regimeVanRegel, regimeVoorOpslag } from '../lib/btwRegime
 import { documentTotalen, regelBedrag } from '../utils/documentTotalen.js';
 import { NewFactuurModal, SendFactuurMailModal } from './FacturenPage.jsx';
 import { generateOffertePdf, previewOffertePdf, getOffertePdfBase64 } from '../utils/generatePdf.js';
+import { getCustomer } from '../services/customerService.js';
 import { mistGetekendePdf, stuurGetekendePdfNa } from '../services/getekendePdfService.js';
 import { buildCompanySnapshot, companyForDocument, isOfferteFullyLocked, isOfferteRevisable } from '../utils/documentSnapshot.js';
 import { getMailTemplate, sendEmail, substituteVars, substituteVarsHtml, logSentEmail } from '../services/emailService.js';
@@ -30,6 +31,15 @@ import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
 import { LaadFout } from '../components/LaadFout.jsx';
 import { vandaagIso, voegDagenToe } from '../lib/datumTijd.js';
+
+// De klant voor een PDF. De gedeelde klantenlijst is kort na het openen van de
+// pagina (of via een gedeelde link) soms nog niet geladen; dan bleef het
+// AAN-blok leeg. In dat geval de klant zelf ophalen.
+async function klantVoorPdf(customers, customerId) {
+  const uitLijst = customers.find(c => String(c.id) === String(customerId));
+  if (uitLijst || !customerId) return uitLijst || null;
+  try { return await getCustomer(customerId); } catch { return null; }
+}
 
 const offerteBadge = status => {
   const s = statusInfo(status, 'offerte');
@@ -361,6 +371,9 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
         geldig_tot: form.geldig_tot || null, notes: form.notes, status: 'concept',
         marge_pct: 0, btw_pct: offerte.btwPct || 21,
         totaal_excl: totaalExcl, totaal_incl: totaalIncl, nummer,
+        // De nieuwe versie hoort bij dezelfde aanvraag; zonder deal_id schoof de
+        // deal niet naar Akkoord als de klant de nieuwe versie tekende.
+        deal_id: offerte.dealId || null,
       });
       await buildItems(created.id);
       await markOfferteVervangen(offerte.id, nummer);
@@ -682,7 +695,7 @@ function ViewOfferteModal({ offerte, customers, onClose, onSluitVoorActie, onMaa
     (async () => {
       setHerstel('bezig');
       try {
-        const customer = customers.find(c => String(c.id) === String(offerte.customerId));
+        const customer = await klantVoorPdf(customers, offerte.customerId);
         const regels = await getOfferteItems(offerte.id);
         const pdfBase64 = await getOffertePdfBase64(offerte, regels, customer, companyForDocument(offerte, company));
         await stuurGetekendePdfNa({ soort: 'offerte', id: offerte.id, pdfBase64 });
@@ -711,7 +724,7 @@ function ViewOfferteModal({ offerte, customers, onClose, onSluitVoorActie, onMaa
   const handleDownloadPdf = async () => {
     setPdfLoading(true);
     try {
-      const customer = customers.find(c => String(c.id) === String(offerte.customerId));
+      const customer = await klantVoorPdf(customers, offerte.customerId);
       const items = await getOfferteItems(offerte.id);
       await generateOffertePdf(offerte, items, customer, companyForDocument(offerte, company));
     } catch (err) {
@@ -725,7 +738,7 @@ function ViewOfferteModal({ offerte, customers, onClose, onSluitVoorActie, onMaa
   const handlePreviewPdf = async () => {
     setPreviewLoading(true);
     try {
-      const customer = customers.find(c => String(c.id) === String(offerte.customerId));
+      const customer = await klantVoorPdf(customers, offerte.customerId);
       const items = await getOfferteItems(offerte.id);
       await previewOffertePdf(offerte, items, customer, companyForDocument(offerte, company));
     } catch (err) {
@@ -950,6 +963,14 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
   const appUrl = window.location.origin;
   const signLink = `${appUrl}/offerte/${offerte.sign_token || ''}`;
   const customer = customers.find(c => c.id == offerte.customerId);
+  // Is de klantenlijst nog niet geladen, haal dan het adres van de klant zelf op
+  // (anders bleef "Aan" leeg). Een al ingevuld adres blijft staan.
+  useEffect(() => {
+    if (customer || !offerte.customerId) return;
+    klantVoorPdf([], offerte.customerId).then(k => {
+      if (k?.email) setForm(f => (f.to ? f : { ...f, to: k.email }));
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const fmt2 = n => new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0);
   const fmtDate = d => d ? new Date(d).toLocaleDateString('nl-NL') : '';
 
@@ -993,7 +1014,8 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
       let attachments = [];
       try {
         const items = await getOfferteItems(offerte.id);
-        const pdfBase64 = await getOffertePdfBase64(offerte, items, customer, companyForDocument(offerte, company));
+        const pdfKlant = await klantVoorPdf(customers, offerte.customerId);
+        const pdfBase64 = await getOffertePdfBase64(offerte, items, pdfKlant, companyForDocument(offerte, company));
         attachments = [{ filename: `Offerte-${offerte.nummer}.pdf`, content: pdfBase64 }];
       } catch (pdfErr) {
         console.warn('PDF bijlage genereren mislukt:', pdfErr.message);
@@ -1168,7 +1190,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
   const handleRowPdf = async o => {
     try {
       const items = await getOfferteItems(o.id);
-      const customer = customers.find(c => String(c.id) === String(o.customerId));
+      const customer = await klantVoorPdf(customers, o.customerId);
       await previewOffertePdf(o, items, customer, companyForDocument(o, company));
     } catch (err) {
       toast.error(err.message || 'Voorbeeld maken mislukt');
@@ -1260,7 +1282,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
       // De klantenlijst staat al in de gedeelde dataset; die hoefde hier niet
       // opnieuw opgehaald te worden voor één naam op de PDF.
       const items = await getOfferteItems(o.id);
-      const customer = customers.find(c => c.id === o.customerId) || null;
+      const customer = await klantVoorPdf(customers, o.customerId);
       await generateOffertePdf(o, items, customer, companyForDocument(o, company));
     } catch (e) {
       toast.error('PDF genereren mislukt: ' + e.message);
