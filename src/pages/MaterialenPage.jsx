@@ -197,7 +197,7 @@ export default function MaterialenPage() {
           <p>{lijst.length} {lijst.length === 1 ? 'materiaal' : 'materialen'} in je bibliotheek</p>
         </div>
         <div className="page-hd-actions">
-          <button className="btn btn-p btn-sm" onClick={() => setModal('nieuw')}>{I.plus} Nieuw materiaal</button>
+          {magInkoop && <button className="btn btn-p btn-sm" onClick={() => setModal('nieuw')}>{I.plus} Nieuw materiaal</button>}
         </div>
       </div>
 
@@ -237,7 +237,7 @@ export default function MaterialenPage() {
               {gefilterd.map(m => {
                 const mg = marge(m);
                 return (
-                  <tr key={m.id} style={{ cursor: 'pointer', opacity: m.actief ? 1 : 0.55 }} onClick={() => setModal(m)}>
+                  <tr key={m.id} style={{ cursor: magInkoop ? 'pointer' : 'default', opacity: m.actief ? 1 : 0.55 }} onClick={() => { if (magInkoop) setModal(m); }}>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Av name={m.naam} size="sm" />
@@ -259,8 +259,11 @@ export default function MaterialenPage() {
                     )}
                     <td>{m.btwPct}%</td>
                     <td>
-                      <button className="btn-icon" onClick={e => { e.stopPropagation(); setModal(m); }}>{I.arrow_r}</button>
-                      <button className="btn-icon" onClick={e => { e.stopPropagation(); verwijder(m); }}>{I.trash}</button>
+                      {/* Beheren vraagt het recht Inkoopprijzen — de database dwingt hetzelfde af. */}
+                      {magInkoop && <>
+                        <button className="btn-icon" title="Bewerken" aria-label="Bewerken" onClick={e => { e.stopPropagation(); setModal(m); }}>{I.arrow_r}</button>
+                        <button className="btn-icon" title="Verwijderen" aria-label="Verwijderen" onClick={e => { e.stopPropagation(); verwijder(m); }}>{I.trash}</button>
+                      </>}
                     </td>
                   </tr>
                 );
