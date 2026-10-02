@@ -485,8 +485,11 @@ export function DatabasePage({ openCustomer }) {
   // Snelfilter op dezelfde lijst: bewust zonder geschiedenisstap (zie useUrlTab).
   const [quickTab, setQuickTab]           = useUrlTab('alle', { validIds: ['alle', 'lopend_project'] });
   const [searchQuery, setSearchQuery]     = useState('');
+  // Segmenten per gebruiker: op een gedeelde computer zag de volgende gebruiker
+  // (ook van een ander bedrijf) anders de opgeslagen filters van de vorige.
+  const segmentSleutel = `bb_db_segments:${profile?.id || 'anoniem'}`;
   const [segments, setSegments]           = useState(() => {
-    try { return JSON.parse(localStorage.getItem('bb_db_segments') || '[]'); } catch { return []; }
+    try { return JSON.parse(localStorage.getItem(segmentSleutel) || '[]'); } catch { return []; }
   });
   const [segmentName, setSegmentName]         = useState('');
   const [showSaveSegment, setShowSaveSegment] = useState(false);
@@ -738,7 +741,7 @@ export function DatabasePage({ openCustomer }) {
     if (!segmentName.trim()) return;
     const newSegs = [...segments, { name: segmentName.trim(), filters }];
     setSegments(newSegs);
-    localStorage.setItem('bb_db_segments', JSON.stringify(newSegs));
+    try { localStorage.setItem(segmentSleutel, JSON.stringify(newSegs)); } catch { /* opslag geblokkeerd */ }
     setSegmentName('');
     setShowSaveSegment(false);
     toast.success('Segment opgeslagen');
@@ -746,7 +749,7 @@ export function DatabasePage({ openCustomer }) {
   const deleteSegment = name => {
     const newSegs = segments.filter(s => s.name !== name);
     setSegments(newSegs);
-    localStorage.setItem('bb_db_segments', JSON.stringify(newSegs));
+    try { localStorage.setItem(segmentSleutel, JSON.stringify(newSegs)); } catch { /* opslag geblokkeerd */ }
   };
 
   // ── Row-level acties ─────────────────────────────────────────
@@ -913,8 +916,16 @@ export function DatabasePage({ openCustomer }) {
   const exportCsv = () => {
     const rows = buildExportRows();
     const headers = EXPORT_COLS.map(c => c.key);
-    const escape = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const csv = [headers.map(escape), ...rows.map(r => headers.map(h => escape(r[h])))].map(r => r.join(',')).join('\n');
+    // Puntkomma: Nederlandse Excel opent een CSV met komma's in één kolom.
+    // Tekst die met = + - @ (of tab/CR) begint krijgt een ' ervoor, zodat Excel
+    // hem niet als formule uitvoert — klantnamen kunnen van buiten komen
+    // (websiteformulier, boekhoudimport). Getallen blijven getallen.
+    const escape = v => {
+      let t = String(v ?? '');
+      if (typeof v === 'string' && /^[=+\-@\t\r]/.test(t)) t = "'" + t;
+      return `"${t.replace(/"/g, '""')}"`;
+    };
+    const csv = [headers.map(escape), ...rows.map(r => headers.map(h => escape(r[h])))].map(r => r.join(';')).join('\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `BossBase-export-${vandaagIso()}.csv`; a.click();
