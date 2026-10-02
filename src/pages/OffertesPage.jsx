@@ -656,6 +656,11 @@ function CopyOfferteModal({ offerte, customers, onClose, onCopied }) {
 
 // ── VIEW OFFERTE MODAL ───────────────────────────────────────────────────────
 
+// Verwijderen kan niet meer zodra de klant akkoord heeft gegeven.
+function magOfferteVerwijderen(o) {
+  return !o.signedAt && o.status !== 'geaccepteerd';
+}
+
 function ViewOfferteModal({ offerte, customers, onClose, onSluitVoorActie, onMaakFactuur, onSendMail, onCopy, onEdit, onDelete, openCustomer }) {
   // Vóór een actie (mailen, wijzigen, kopiëren, verwijderen) sluit de weergave
   // zonder terug te gaan in de geschiedenis. Terug zou, als je hier vanaf een
@@ -774,7 +779,9 @@ function ViewOfferteModal({ offerte, customers, onClose, onSluitVoorActie, onMaa
     isGeaccepteerd && onMaakFactuur && primair?.label !== 'Maak factuur' && {
       label: 'Maak factuur', icon: I.brief, onClick: () => onMaakFactuur(offerte),
     },
-    onDelete && {
+    // Een ondertekende of geaccepteerde offerte is het akkoord van de klant:
+    // die blijft bewaard. Herzien of een nieuwe offerte maken kan altijd.
+    onDelete && magOfferteVerwijderen(offerte) && {
       label: 'Offerte verwijderen', icon: I.trash, gevaarlijk: true, scheiding: true,
       onClick: () => { sluitVoorActie(); onDelete(offerte); },
     },
@@ -1198,6 +1205,10 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
   };
 
   const handleDelete = async (o) => {
+    if (!magOfferteVerwijderen(o)) {
+      toast.error('Een ondertekende of geaccepteerde offerte kun je niet verwijderen.');
+      return;
+    }
     if (!window.confirm(`Offerte ${o.nummer} verwijderen?`)) return;
     try {
       await deleteOfferte(o.id);
@@ -1382,7 +1393,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
                             onClick={() => handleRowPdf(o)}
                           >{I.paperclip}</button>
                           <ActieMenu items={rijActies(o)} />
-                          {canManageOffertes && <button className="btn btn-xs btn-danger btn-icon" title="Verwijderen" onClick={() => handleDelete(o)}>{I.trash}</button>}
+                          {canManageOffertes && magOfferteVerwijderen(o) && <button className="btn btn-xs btn-danger btn-icon" title="Verwijderen" onClick={() => handleDelete(o)}>{I.trash}</button>}
                         </div>
                       </td>
                     </tr>

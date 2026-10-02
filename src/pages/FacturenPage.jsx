@@ -392,8 +392,14 @@ function EditFactuurModal({ factuur, customers, company, onClose, onSaved, onSav
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const locked = isFactuurLocked(factuur);
+  const [aantalRegels, setAantalRegels] = useState(null);
+  useEffect(() => {
+    getFactuurRegels(factuur.id).then(r => setAantalRegels(r.length)).catch(() => setAantalRegels(null));
+  }, [factuur.id]);
 
   const doSave = async () => {
+    const weigering = statusWeigering(factuur, form.status, aantalRegels);
+    if (weigering) throw new Error(weigering);
     // Een verstuurde factuur is alleen-lezen: enkel de status (bijv. betaald
     // markeren) mag nog wijzigen, de inhoud niet.
     const payload = locked ? { status: form.status } : form;
@@ -646,6 +652,22 @@ function paperclipCfg(factuur, heeftDocument) {
 
 // ── VIEW FACTUUR MODAL ────────────────────────────────────────────────────────
 
+// Verwijderen mag alleen bij een concept, of bij een factuur die uit de
+// boekhouding is geïmporteerd (die is geen boekstuk van BossBase zelf).
+function magFactuurVerwijderen(f) {
+  return ['concept', 'aangemaakt'].includes(f.status) || isGeimporteerdeFactuur(f);
+}
+
+// Geeft een melding terug als deze statuswijziging niet mag, anders null.
+// Een concept zonder regels op betaald zetten zou een "betaalde" factuur van
+// € 0 opleveren die nooit verstuurd is.
+function statusWeigering(f, nieuweStatus, aantalRegels) {
+  if (nieuweStatus === 'betaald' && ['concept', 'aangemaakt'].includes(f.status) && aantalRegels === 0) {
+    return 'Deze factuur heeft nog geen regels. Voeg eerst regels toe en verstuur hem, daarna kun je hem op betaald zetten.';
+  }
+  return null;
+}
+
 function ViewFactuurModal({ factuur, customers, onClose, onSluitVoorActie, onRefresh, onSendMail, onEdit, onDelete, onCopy }) {
   // Vóór een actie (mailen, wijzigen, kopiëren, verwijderen) sluit de weergave
   // zonder terug te gaan in de geschiedenis. Terug zou, als je hier vanaf een
@@ -747,6 +769,8 @@ function ViewFactuurModal({ factuur, customers, onClose, onSluitVoorActie, onRef
     : canManage && !uitBoekhouding && factuur.status === 'verzonden'
       ? { label: 'Markeer als betaald', icon: <CheckCircle2 size={15} />,
           onClick: async () => {
+            const weigering = statusWeigering(factuur, 'betaald', regels.length);
+            if (weigering) { toast.error(weigering); return; }
             try { await updateFactuur(factuur.id, { status: 'betaald' }); onRefresh?.(); toast.success('Factuur op betaald gezet'); }
             catch (err) { toast.error(err.message || 'Mislukt'); }
           } }
@@ -784,7 +808,10 @@ function ViewFactuurModal({ factuur, customers, onClose, onSluitVoorActie, onRef
       label: 'Crediteer factuur', icon: I.euro, gevaarlijk: true, scheiding: true,
       onClick: () => setShowCrediteer(true),
     },
-    canManage && {
+    // Verwijderen alleen zolang het een concept is (of een import uit de
+    // boekhouding): een verstuurde factuur of creditnota is een boekstuk met
+    // een nummer in de reeks en valt onder de bewaarplicht. Daarna: crediteren.
+    canManage && magFactuurVerwijderen(factuur) && {
       label: 'Factuur verwijderen', icon: I.trash, gevaarlijk: true, scheiding: !canCrediteer,
       onClick: () => { sluitVoorActie(); onDelete?.(factuur); },
     },
@@ -874,8 +901,11 @@ function ViewFactuurModal({ factuur, customers, onClose, onSluitVoorActie, onRef
             <select
               value={factuur.status}
               onChange={async e => {
+                const nieuw = e.target.value;
+                const weigering = statusWeigering(factuur, nieuw, regels.length);
+                if (weigering) { toast.error(weigering); return; }
                 try {
-                  await updateFactuur(factuur.id, { status: e.target.value });
+                  await updateFactuur(factuur.id, { status: nieuw });
                   onRefresh?.();
                 } catch (err) { toast.error(err.message || 'Status wijzigen mislukt'); }
               }}
@@ -1251,6 +1281,10 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
   };
 
   const handleDelete = async f => {
+    if (!magFactuurVerwijderen(f)) {
+      toast.error('Een verstuurde factuur of creditnota kun je niet verwijderen. Crediteer hem in plaats daarvan.');
+      return;
+    }
     if (!window.confirm(`Factuur ${f.nummer} verwijderen?`)) return;
     try {
       // De factuur is weg zodra deleteFactuur klaar is; een waarschuwing gaat
@@ -1412,7 +1446,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
                             );
                           })()}
                           <ActieMenu items={rijActies(f)} />
-                          {canManage && <button className="btn btn-xs btn-danger btn-icon" title="Verwijderen" onClick={() => handleDelete(f)}>{I.trash}</button>}
+                          {canManage && magFactuurVerwijderen(f) && <button className="btn btn-xs btn-danger btn-icon" title="Verwijderen" onClick={() => handleDelete(f)}>{I.trash}</button>}
                         </div>
                       </td>
                     </tr>
