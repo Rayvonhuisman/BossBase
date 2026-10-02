@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Download, MoreVertical, Send, CheckCircle2, Copy } from 'lucide-react';
 import { NoteEditor } from '../components/NoteEditor.jsx';
-import { plainToEditorHtml } from '../lib/noteFormat.js';
+import { plainToEditorHtml, tekstNaarEditorHtml } from '../lib/noteFormat.js';
 import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
 import { InfoTip, InfoUitklap } from '../components/Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
@@ -983,7 +983,8 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
           : kanOndertekenen
             ? `Beste ${vars.klant_naam},\n\nHierbij sturen wij u offerte ${offerte.nummer} toe.\n\nVia onderstaande knop kunt u de offerte bekijken en digitaal ondertekenen:\n{{link}}\n\nHeeft u vragen? Neem gerust contact met ons op.\n\nMet vriendelijke groet,\n${company?.name || ''}`
             : `Beste ${vars.klant_naam},\n\nHierbij sturen wij u offerte ${offerte.nummer} toe als bijlage.\n\nHeeft u vragen? Neem gerust contact met ons op.\n\nMet vriendelijke groet,\n${company?.name || ''}`;
-        const body = tpl ? rawBody : plainToEditorHtml(rawBody);
+        // Terugvaltekst zonder sjabloon: altijd escapen — de klantnaam is data.
+        const body = tpl ? rawBody : tekstNaarEditorHtml(rawBody);
         // Wat je in de composer ziet is wat de klant krijgt: zonder ondertekenlink
         // halen we de belofte er meteen uit, niet pas bij verzenden.
         setForm({ to: customer?.email || '', subject: sub, body: kanOndertekenen ? body : zonderOndertekenTekst(body) });

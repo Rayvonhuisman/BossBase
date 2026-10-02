@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Download, Send, CheckCircle2 } from 'lucide-react';
 import { NoteEditor } from '../components/NoteEditor.jsx';
-import { plainToEditorHtml } from '../lib/noteFormat.js';
+import { plainToEditorHtml, tekstNaarEditorHtml } from '../lib/noteFormat.js';
 import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -1004,7 +1004,8 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
         const rawBody = tpl
           ? substituteVarsHtml(plainToEditorHtml(tpl.body || ''), vars)
           : `Beste ${vars.klant_naam},\n\nHierbij uw factuur ${factuur.nummer}.\n\n${vars.betaalinstructie}\n\nMet vriendelijke groet,\n${company?.name || ''}`;
-        let body = tpl ? rawBody : plainToEditorHtml(rawBody);
+        // Terugvaltekst zonder sjabloon: altijd escapen — de klantnaam is data.
+        let body = tpl ? rawBody : tekstNaarEditorHtml(rawBody);
         // Staat het rekeningnummer nog nergens in de tekst (de meeste sjablonen
         // hebben geen {{betaalinstructie}}), dan een regel met de betaalgegevens
         // vóór de afsluiting. Creditnota's niet: daar valt niets te betalen.

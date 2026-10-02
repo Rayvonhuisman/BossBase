@@ -62,8 +62,8 @@ export const NoteEditor = forwardRef(function NoteEditor({
 
   // Laad-conversie verschilt per modus:
   //  - mentions=true  (interne notitie): legacy markup → spans + strikte sanitize
-  //  - mentions=false (mail): behoud HTML/links, geen strikte allowlist
-  //    (XSS bij mail wordt op het lees-pad afgevangen met DOMPurify).
+  //  - mentions=false (mail): HTML/links blijven, maar door de mail-allowlist
+  //    (sanitizeMailHtml) — nooit ruwe HTML in de editor.
   const loadHtml = (v) => (mentions ? normalizeToHtml(v) : plainToEditorHtml(v || ''));
 
   const [focused, setFocused] = useState(false);
@@ -147,7 +147,7 @@ export const NoteEditor = forwardRef(function NoteEditor({
         sel.removeAllRanges();
         sel.addRange(range);
       } else {
-        editor.innerHTML = (editor.innerHTML || '') + text;
+        editor.appendChild(document.createTextNode(text));
       }
       emit();
     },

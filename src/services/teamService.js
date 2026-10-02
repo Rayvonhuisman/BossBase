@@ -1,6 +1,6 @@
 import { supabase } from "../lib/supabase"
 import { withCompanyId, getCompanyId } from "../lib/currentCompany"
-import { sendEmail } from "./emailService"
+import { sendEmail, escapeHtml } from "./emailService"
 import { mailTemplate } from "../utils/mailTemplate"
 
 // DB columns company_members: id, company_id, profile_id, email, full_name, phone,
@@ -179,10 +179,11 @@ export async function inviteTeamMember(input) {
   const html = mailTemplate({
     title: 'Je bent uitgenodigd!',
     preheader: `${inviterName} heeft je uitgenodigd voor ${companyName} op BossBase`,
-    body: `<p>Hallo ${inviteeName},</p>
-           <p><strong>${inviterName}</strong> heeft je uitgenodigd om deel uit te maken van
-           <strong>${companyName}</strong> op BossBase.</p>
-           <p>Je krijgt de rol: <strong>${roleLabel}</strong></p>`,
+    // Namen zijn invoer van gebruikers: escapen vóór ze in de mail-HTML gaan.
+    body: `<p>Hallo ${escapeHtml(inviteeName)},</p>
+           <p><strong>${escapeHtml(inviterName)}</strong> heeft je uitgenodigd om deel uit te maken van
+           <strong>${escapeHtml(companyName)}</strong> op BossBase.</p>
+           <p>Je krijgt de rol: <strong>${escapeHtml(roleLabel)}</strong></p>`,
     buttonText: 'Accepteer uitnodiging',
     buttonUrl: inviteUrl,
     footerText: 'Deze uitnodiging is 48 uur geldig. Als je deze uitnodiging niet verwacht hebt, kun je deze mail negeren.',
