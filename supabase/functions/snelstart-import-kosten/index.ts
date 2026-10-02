@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { alleRijen } from '../_shared/alleRijen.ts'
 import { makeAdminClient, isScheduledCall, startSyncRun, eindSyncRun } from "../_shared/scheduledSync.ts"
 import { ssFetch, ssFetchAll, forEachSnelStartCompany, pushVerkoopboeking, pushFactuurPdf, getActieveGrootboeken, ensureRelatie, pushInkoopboeking, pushKostenBijlagen, getGrootboekVoorkeuren, importeerLeverancier, getGenegeerd,
   relatieNaarKlantVelden, alleenGevuld, regimeUitGrootboekfunctie, btwPctVoorRegime,
@@ -154,13 +155,13 @@ async function importKosten(
   // Bestaande referenties voor deduplicatie. Regels van één factuur krijgen
   // refs `snelstart_{id}_{n}` (fallback: `snelstart_{id}`); een factuur geldt
   // als geïmporteerd zodra er één ref van bestaat.
-  const { data: existingCosts } = await supabase
+  const existingCosts = await alleRijen(() => supabase
     .from('job_costs')
-    .select('externe_referentie')
+    .select('id, externe_referentie')
     .eq('company_id', companyId)
-    .not('externe_referentie', 'is', null)
+    .not('externe_referentie', 'is', null))
   const importedFactuurIds = new Set(
-    (existingCosts || [])
+    existingCosts
       .map((r: any) => /^snelstart_(.+?)(?:_\d+)?$/.exec(r.externe_referentie)?.[1])
       .filter(Boolean),
   )
@@ -185,12 +186,12 @@ async function importKosten(
   // regel, herkenbaar aan zijn externe referentie, en te verwijderen waarna de
   // prullenbak hem tegenhoudt. Dat is een zichtbaar en oplosbaar gevolg; een
   // kostenpost die nooit meer terug te halen is, is dat niet.
-  const { data: eigenBoekingen } = await supabase
+  const eigenBoekingen = await alleRijen(() => supabase
     .from('job_costs')
-    .select('snelstart_id')
+    .select('id, snelstart_id')
     .eq('company_id', companyId)
-    .not('snelstart_id', 'is', null)
-  const eigenIds = new Set((eigenBoekingen || []).map((r: any) => String(r.snelstart_id)))
+    .not('snelstart_id', 'is', null))
+  const eigenIds = new Set(eigenBoekingen.map((r: any) => String(r.snelstart_id)))
 
   const isVanOnszelf = (f: any) =>
     Boolean(f?.inkoopBoeking?.id && eigenIds.has(String(f.inkoopBoeking.id)))
@@ -276,7 +277,10 @@ async function importKosten(
 
   let imported = 0
   if (rows.length > 0) {
-    const { error: insertErr } = await supabase.from('job_costs').insert(rows)
+    // ignoreDuplicates: de unieke index (company_id, externe_referentie) houdt
+    // een dubbele import tegen, ook als de dedupe-lijst ooit onvolledig is.
+    const { error: insertErr } = await supabase.from('job_costs')
+      .upsert(rows, { onConflict: 'company_id,externe_referentie', ignoreDuplicates: true })
     if (insertErr) throw insertErr
     imported = toImport.length
   }
@@ -316,14 +320,14 @@ async function importFacturen(
   // Wat we al kennen: op externe referentie (geïmporteerd) én op snelstart_id
   // (door onszelf geëxporteerd). Dat tweede is de terugkoppellus: onze eigen
   // facturen mogen niet als "nieuwe" factuur terugkomen.
-  const { data: bekend } = await supabase
+  const bekend = await alleRijen(() => supabase
     .from('facturen')
-    .select('externe_referentie, snelstart_id, nummer')
-    .eq('company_id', companyId)
+    .select('id, externe_referentie, snelstart_id, nummer')
+    .eq('company_id', companyId))
   const bekendeRefs = new Set<string>()
   const eigenBoekingen = new Set<string>()
   const bekendeNummers = new Set<string>()
-  for (const f of (bekend || [])) {
+  for (const f of bekend) {
     if (f.externe_referentie) bekendeRefs.add(String(f.externe_referentie))
     if (f.snelstart_id) eigenBoekingen.add(String(f.snelstart_id))
     if (f.nummer) bekendeNummers.add(String(f.nummer).toLowerCase())
@@ -411,6 +415,9 @@ async function importFacturen(
         totaal_excl: 0,
         totaal_incl: 0,
       }).select('id').single()
+      // 23505: deze factuur bestaat al (unieke index op externe_referentie).
+      // Overslaan in plaats van de hele import te laten falen.
+      if (fErr?.code === '23505') continue
       if (fErr) throw fErr
 
       // Het originele document erbij, op dezelfde plek waar de PDF van een

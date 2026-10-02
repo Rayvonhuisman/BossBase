@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { alleRijen } from '../_shared/alleRijen.ts'
 import { makeAdminClient, isScheduledCall, startSyncRun, eindSyncRun } from "../_shared/scheduledSync.ts"
 import {
   ssFetchAll, ensureRelatie, forEachSnelStartCompany, ontbrekendeAdresvelden,
@@ -54,10 +55,10 @@ async function syncCompanyInner(
   const relaties = await ssFetchAll(clientKey, `/relaties?$filter=${encodeURIComponent("Relatiesoort/any(r:r eq 'Klant')")}`)
   console.log('SnelStart relaties opgehaald:', relaties.length)
 
-  const { data: existingCustomers } = await supabase
+  const existingCustomers = await alleRijen(() => supabase
     .from('customers')
     .select('id, name, email, snelstart_id')
-    .eq('company_id', companyId)
+    .eq('company_id', companyId))
 
   const bySnelstartId = new Map<string, any>()
   const byEmail = new Map<string, any>()
@@ -128,8 +129,8 @@ async function syncCompanyInner(
     clientKey, `/relaties?$filter=${encodeURIComponent("Relatiesoort/any(r:r eq 'Leverancier')")}`)
   const levGenegeerd = await getGenegeerd(supabase, companyId, 'leverancier')
 
-  const { data: bestaandeLev } = await supabase
-    .from('leveranciers').select('id, naam, snelstart_id').eq('company_id', companyId)
+  const bestaandeLev = await alleRijen(() => supabase
+    .from('leveranciers').select('id, naam, snelstart_id').eq('company_id', companyId))
   const levOpId = new Map<string, any>()
   const levOpNaam = new Map<string, any>()
   for (const l of (bestaandeLev || [])) {
@@ -170,13 +171,13 @@ async function syncCompanyInner(
     `(${levSysteemrelaties} systeemrelaties, ${levOvergeslagen} uit de prullenbak overgeslagen)`)
 
   // ── B: BOSSBASE → SNELSTART ──────────────────────────────────────────────
-  const { data: unsynced } = await supabase
+  const unsynced = await alleRijen(() => supabase
     .from('customers')
     .select('*')
     .eq('company_id', companyId)
-    .is('snelstart_id', null)
+    .is('snelstart_id', null))
 
-  console.log('BossBase klanten zonder snelstart_id:', unsynced?.length ?? 0)
+  console.log('BossBase klanten zonder snelstart_id:', unsynced.length)
 
   for (const customer of (unsynced || [])) {
     try {

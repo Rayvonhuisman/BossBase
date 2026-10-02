@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { alleRijen } from '../_shared/alleRijen.ts'
 import { makeAdminClient, isScheduledCall, forEachMoneybirdCompany } from "../_shared/scheduledSync.ts"
 
 const corsHeaders = {
@@ -42,13 +43,11 @@ async function syncCompany(
   const contactsList: any[] = Array.isArray(mbContacts) ? mbContacts : []
 
   if (contactsList.length > 0) {
-    const { data: existingCustomers, error: custErr } = await supabase
+    const existingCustomers = await alleRijen(() => supabase
       .from('customers')
       .select('id, name, email, moneybird_id')
-      .eq('company_id', companyId)
-
-    if (custErr) console.error('Supabase customers query error:', custErr.message)
-    console.log('BossBase klanten:', existingCustomers?.length ?? 0)
+      .eq('company_id', companyId))
+    console.log('BossBase klanten:', existingCustomers.length)
 
     const byEmail = new Map<string, any>()
     const byName = new Map<string, any>()
@@ -92,13 +91,13 @@ async function syncCompany(
   console.log('Geïmporteerd van Moneybird:', imported)
 
   // ── B: BOSSBASE → MONEYBIRD ──────────────────────────────────────────────
-  const { data: unsynced } = await supabase
+  const unsynced = await alleRijen(() => supabase
     .from('customers')
     .select('*')
     .eq('company_id', companyId)
-    .is('moneybird_id', null)
+    .is('moneybird_id', null))
 
-  console.log('BossBase klanten zonder moneybird_id:', unsynced?.length ?? 0)
+  console.log('BossBase klanten zonder moneybird_id:', unsynced.length)
 
   for (const customer of (unsynced || [])) {
     try {

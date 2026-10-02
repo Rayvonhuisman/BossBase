@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { alleRijen } from '../_shared/alleRijen.ts'
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { inactiefReden } from '../_shared/actieveGebruiker.ts'
 
@@ -217,10 +218,10 @@ serve(async (req) => {
     const allAfasContacts: any[] = [...afasOrgs, ...extraFromRel]
     console.log(`Totaal AFAS contacten na merge: ${allAfasContacts.length}`)
 
-    const { data: existingCustomers } = await supabase
+    const existingCustomers = await alleRijen(() => supabase
       .from('customers')
       .select('id, name, email')
-      .eq('company_id', companyId)
+      .eq('company_id', companyId))
 
     const byName = new Map<string, any>()
     for (const c of (existingCustomers || [])) {
