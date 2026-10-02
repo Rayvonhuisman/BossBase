@@ -363,9 +363,9 @@ export function Pipeline({ openDeal, setPage }) {
     setLoading(true);
     Promise.all([
       listDeals(), listPipelineStages(), listCustomers(),
-      getLostReasons().catch(() => []),
-      getTeamMembers().catch(() => []),
-      listActivities().catch(() => []),
+      getLostReasons().catch(e => { console.warn('[bb] verliesredenen laden mislukt', e); return []; }),
+      getTeamMembers().catch(e => { console.warn('[bb] teamleden laden mislukt', e); return []; }),
+      listActivities().catch(e => { console.warn('[bb] activiteiten laden mislukt', e); return []; }),
     ])
       .then(([dealData, stageData, customerData, reasonData, teamData, activityData]) => {
         setDeals(dealData);

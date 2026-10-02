@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { listLeveranciers } from '../../services/leverancierService.js';
 import { Maximize2, Minimize2, AlertTriangle, AlertOctagon, Check, X, Edit2, Trash2 } from 'lucide-react';
 import { updateCustomer } from '../../services/customerService.js';
@@ -7,6 +7,7 @@ import { InfoTip, InfoUitklap } from '../../components/Uitleg.jsx';
 import { useToast } from '../../lib/toast.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
 import { vandaagIso } from '../../lib/datumTijd.js';
+import { logFout, meldFout } from '../../lib/stilleFouten.js';
 import { usePermissions } from '../../hooks/usePermissions.js';
 import { usePlanGuard } from '../../components/PlanUpgradeModal.jsx';
 import {
@@ -218,6 +219,26 @@ function OverviewTab({
   const [toewijzenBezig, setToewijzenBezig] = useState(false);
   const [toonVerloren, setToonVerloren] = useState(false);
   const [toonToewijzen, setToonToewijzen] = useState(false);
+  // Ernaast klikken sluit de lijst. Elke klik op een naam is al opgeslagen
+  // (wijzigToewijzing schrijft meteen weg), dus dit hoeft niets te bewaren -
+  // het haalt alleen de lijst weg als je klaar bent. Zonder dit bleef hij
+  // openstaan zonder uitweg.
+  const toewijzenRef = useRef(null);
+  useEffect(() => {
+    if (!toonToewijzen) return undefined;
+    const buiten = e => {
+      if (!toewijzenRef.current?.contains(e.target)) setToonToewijzen(false);
+    };
+    const opEscape = e => { if (e.key === 'Escape') setToonToewijzen(false); };
+    // mousedown en niet click: een klik die buiten begint maar binnen eindigt
+    // (slepen) zou anders ongemerkt doorgaan voor "ernaast geklikt".
+    document.addEventListener('mousedown', buiten);
+    document.addEventListener('keydown', opEscape);
+    return () => {
+      document.removeEventListener('mousedown', buiten);
+      document.removeEventListener('keydown', opEscape);
+    };
+  }, [toonToewijzen]);
   const [dealLokaal, setDealLokaal] = useState(null);
   const huidigeDeal = dealLokaal?.id === deal?.id ? dealLokaal : deal;
   // Bedragen op projecten horen achter 'projectbedragen'. Dat recht bestond al
@@ -235,7 +256,7 @@ function OverviewTab({
   const [projDraft, setProjDraft] = useState('');
   const [projBezig, setProjBezig] = useState(false);
 
-  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(logFout('teamleden laden')); }, []);
 
   const startProjEdit = (key, waarde) => {
     setProjVeld(key);
@@ -441,7 +462,7 @@ function OverviewTab({
   useEffect(() => {
     let leeft = true;
     if (!project.dealId) { setBron(null); return undefined; }
-    getAanvraagBron(project.dealId).then(b => { if (leeft) setBron(b); }).catch(() => {});
+    getAanvraagBron(project.dealId).then(b => { if (leeft) setBron(b); }).catch(logFout('aanvraagbron laden'));
     return () => { leeft = false; };
   }, [project.dealId]);
 
@@ -450,7 +471,7 @@ function OverviewTab({
   const [fotoBezig, setFotoBezig] = useState(false);
   useEffect(() => {
     let leeft = true;
-    getProjectFotos(project.id).then(f => { if (leeft) setFotos(f); }).catch(() => {});
+    getProjectFotos(project.id).then(f => { if (leeft) setFotos(f); }).catch(meldFout(toast, "De foto's van dit project konden niet worden geladen."));
     return () => { leeft = false; };
   }, [project.id]);
 
@@ -1265,16 +1286,16 @@ function KostenTab({ project, canManage }) {
   const [loading, setLoading] = useState(true);
   const [toonWinstUitleg, setToonWinstUitleg] = useState(false);
   const [leveranciers, setLeveranciers] = useState([]);
-  useEffect(() => { listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(() => {}); }, []);
+  useEffect(() => { listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(logFout('leveranciers laden')); }, []);
 
   const load = () => {
     setLoading(true);
     Promise.all([
-      getProjectCosts(project.id).catch(() => []),
+      getProjectCosts(project.id).catch(e => { setLaadFout(e.message || 'Laden mislukt'); return []; }),
       listProjectKosten(project.id)
         .then(r => { setLaadFout(''); return r; })
         .catch(e => { setLaadFout(e.message || 'Laden mislukt'); return []; }),
-      getTimeEntries(project.id).catch(() => []),
+      getTimeEntries(project.id).catch(e => { setLaadFout(e.message || 'Laden mislukt'); return []; }),
     ])
       .then(([jc, pk, u]) => { setKosten(jc); setProjectKosten(pk); setUrenRegels(u); })
       .finally(() => setLoading(false));
@@ -1583,7 +1604,7 @@ function WerkbonnenTab({ project, werkbonnen, customers = [], onCreated, canMana
   // door drie lagen doorgegeven: dit is de enige plek in de drawer die ze nodig
   // heeft.
   const [teamLeden, setTeamLeden] = useState([]);
-  useEffect(() => { getTeamMembers().then(setTeamLeden).catch(() => {}); }, []);
+  useEffect(() => { getTeamMembers().then(setTeamLeden).catch(logFout('teamleden laden')); }, []);
   const naamVan = id => teamLeden.find(m => m.id === id || m.profileId === id)?.fullName || '';
   const openWerkbon = w => setPage?.('werkbonnen', { id: w.id, from: 'project', projectId: project.id, projectNaam: project.name });
   const [showForm, setShowForm] = useState(false);
@@ -1700,7 +1721,7 @@ export function ProjectDetailDrawer({
   // De pipelinefasen, voor de fasekeuze op het overzicht. Eén keer per drawer;
   // het zijn er een stuk of twaalf en ze veranderen zelden.
   const [stages, setStages] = useState([]);
-  useEffect(() => { listPipelineStages().then(setStages).catch(() => {}); }, []);
+  useEffect(() => { listPipelineStages().then(setStages).catch(logFout('pipelinefasen laden')); }, []);
 
   // Full-screen toggle — exact dezelfde aanpak als de klantkaart: voeg de
   // klasse klant-fullscreen toe aan de .drawer zodat hij het hele scherm vult.
@@ -1723,14 +1744,20 @@ export function ProjectDetailDrawer({
 
   const loadAll = async () => {
     setLoading(true);
+    const deels = [];
+    const of = (belofte, terug) => belofte.catch(e => { deels.push(e); return terug; });
     try {
       const [p, te, inv, nts, wbs] = await Promise.all([
         getProjectById(projectId),
-        getTimeEntries(projectId).catch(() => []),
-        getProjectInvoices(projectId).catch(() => []),
-        getProjectNotes(projectId).catch(() => []),
-        getWerkbonnenByProject(projectId).catch(() => []),
+        of(getTimeEntries(projectId), []),
+        of(getProjectInvoices(projectId), []),
+        of(getProjectNotes(projectId), []),
+        of(getWerkbonnenByProject(projectId), []),
       ]);
+      if (deels.length) {
+        console.warn('[bb] project deels geladen', deels);
+        toast.error('Niet alles van dit project kon worden geladen (uren, facturen, notities of werkbonnen kunnen ontbreken). Ververs de pagina.');
+      }
       setEntries(te);
       setInvoices(inv);
       setNotes(nts);
