@@ -138,6 +138,9 @@ serve(async (req) => {
         await admin.from('profiles').update({ actief: false, deactivated_at: new Date().toISOString() }).eq('id', pid)
         // Ban → refresh tokens ongeldig, kan niet opnieuw inloggen (omkeerbaar).
         await admin.auth.admin.updateUserById(pid, { ban_duration: FOREVER_BAN })
+        // Ook de lopende sessies weg (refresh-tokens cascaderen mee). De database
+        // weigert een inactief account daarnaast in elke policy en functie.
+        await admin.rpc('bb_sessies_intrekken', { p_user: pid })
       }
       if (memberRowId) await admin.from('company_members').update({ status: 'inactief' }).eq('id', memberRowId)
       console.log('[delete-team-member] gedeactiveerd:', { memberId, profileId: pid })
