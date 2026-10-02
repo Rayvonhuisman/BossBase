@@ -177,7 +177,7 @@ serve(async (req) => {
       .from(cfg.tabel)
       .update({
         [cfg.urlKolom]: url,
-        ondertekening_bewijs: { ...bewijs, nagezonden_op: new Date().toISOString(), inhoud_sha256_nazending: exemplaar.documentHash, pdf_sha256: exemplaar.pdfHash, pdf_pad: pad },
+        ondertekening_bewijs: { ...bewijs, nagezonden_op: new Date().toISOString(), inhoud_sha256_nazending: exemplaar.documentHash, pdf_sha256_nazending: exemplaar.pdfHash, pdf_pad_nazending: pad },
       })
       .eq('id', rij.id)
       .is(cfg.urlKolom, null)
