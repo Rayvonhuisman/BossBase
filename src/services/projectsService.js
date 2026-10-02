@@ -293,7 +293,12 @@ export async function getProjectFotos(projectId) {
     const res = await supabase.storage.from('project-fotos').createSignedUrls(paden, 3600)
     signed = res.data || []
   }
-  return rijen.map((r, i) => toProjectFoto({ ...r, url: signed[i]?.signedUrl || r.url }))
+  // Alleen foto's tonen die echt in de eigen bucket staan. Vroeger viel dit terug
+  // op de ruwe `url` als ondertekenen mislukte; daarmee verscheen een externe link
+  // (of een pad van een ander bedrijf) als foto in het project.
+  return rijen
+    .map((r, i) => (signed[i]?.signedUrl ? toProjectFoto({ ...r, url: signed[i].signedUrl }) : null))
+    .filter(Boolean)
 }
 
 export async function uploadProjectFoto(projectId, file, categorie = null) {
@@ -322,7 +327,9 @@ export async function uploadProjectFoto(projectId, file, categorie = null) {
 
 export async function deleteProjectFoto(id, url) {
   const pad = fotoPadUit(url)
-  if (pad) await supabase.storage.from('project-fotos').remove([pad]).catch(() => {})
+  // Alleen een pad binnen de map van het eigen bedrijf opruimen.
+  const companyId = await getCompanyId()
+  if (pad && pad.startsWith(`${companyId}/`)) await supabase.storage.from('project-fotos').remove([pad]).catch(() => {})
   const { error } = await supabase.from('project_fotos').delete().eq('id', id)
   if (error) throw error
 }
