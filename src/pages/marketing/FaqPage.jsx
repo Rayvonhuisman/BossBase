@@ -20,7 +20,7 @@ const FAQ_DATA = [
       { q: "Voor wie is BossBase geschikt?", a: "BossBase is speciaal gebouwd voor vakmannen en dienstverleners: loodgieters, schilders, elektriciens, aannemers en meer. Ook andere ZZP'ers en bedrijven gebruiken BossBase." },
       { q: "Is BossBase gratis te proberen?", a: "Ja. Je probeert BossBase 14 dagen gratis, met de functies van het Groei-pakket en zonder limieten. Je hoeft geen betaalgegevens in te vullen." },
       { q: "Hoe snel kan ik aan de slag?", a: "Direct na het aanmelden. Je vult je bedrijfsgegevens en logo in, voegt je eerste klant toe en maakt je eerste offerte. Installeren hoeft niet." },
-      { q: "Is er een mobiele app?", a: "Ja, BossBase is ook op je telefoon te gebruiken. Klanten kunnen offertes en werkbonnen op hun telefoon ondertekenen." },
+      { q: "Is er een mobiele app?", a: "Nee. Het dashboard werkt op een tablet, laptop of computer (vanaf 768 pixels breed), niet op een smalle telefoon. Klanten kunnen offertes en werkbonnen wel op hun telefoon ondertekenen." },
     ],
   },
   {

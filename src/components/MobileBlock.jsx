@@ -1,9 +1,10 @@
 import { Logo } from '../bb-shared.jsx';
 
-// Wordt getoond i.p.v. het dashboard op smalle (mobiele) schermen. Het
-// dashboard is verplaatst naar een aparte app; op de telefoon sturen we de
-// gebruiker daarheen. Login/registratie, de ondertekenpagina en de
-// marketingsite blijven mobiel gewoon werken (zie App.jsx).
+// Wordt getoond i.p.v. het dashboard op smalle (mobiele) schermen. Er is geen
+// app: het dashboard werkt vanaf een tablet of computer. Login/registratie, de
+// ondertekenpagina en de marketingsite blijven mobiel gewoon werken (zie App.jsx).
+// De oude tekst beloofde een app met een downloadknop die nergens heen ging
+// (audit 2026-10-01, M36).
 export default function MobileBlock({ onLogout }) {
   return (
     <div className="auth-shell" style={{ minHeight: '100dvh' }}>
@@ -23,17 +24,13 @@ export default function MobileBlock({ onLogout }) {
           </svg>
         </div>
 
-        <div className="auth-title" style={{ marginBottom: 8 }}>Download de BossBase app</div>
+        <div className="auth-title" style={{ marginBottom: 8 }}>Open BossBase op een groter scherm</div>
         <div className="auth-sub" style={{ marginBottom: 22 }}>
-          BossBase werkt het beste in onze app. Download de app om verder te gaan op je telefoon.
+          Het dashboard is gemaakt voor een tablet, laptop of computer. Op een telefoon is het scherm te smal; log daar in om verder te werken.
         </div>
 
-        <a href="#" className="auth-submit" style={{ display: 'block', width: '100%', textAlign: 'center', textDecoration: 'none', boxSizing: 'border-box' }}>
-          Download de app
-        </a>
-
-        <div style={{ marginTop: 18, fontSize: '.82rem', color: 'var(--dmu)', lineHeight: 1.5 }}>
-          Of gebruik BossBase op je computer.
+        <div style={{ marginTop: 6, fontSize: '.82rem', color: 'var(--dmu)', lineHeight: 1.5 }}>
+          Offertes en werkbonnen ondertekenen kan je klant wel gewoon op zijn telefoon.
         </div>
 
         {onLogout && (

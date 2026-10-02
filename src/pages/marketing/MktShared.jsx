@@ -369,7 +369,7 @@ export const FUNCTIE_LINKS = [
   { label: "Planning",        sub: "Per medewerker en voertuig",           href: "/planning",        icon: "calendar" },
   { label: "Urenregistratie", sub: "Per werkdag en per klus",              href: "/urenregistratie", icon: "clock" },
   { label: "Facturen",        sub: "Met herinneringen en iDEAL",           href: "/facturen",        icon: "euro" },
-  { label: "Koppelingen",     sub: "Moneybird, SnelStart, AFAS en Stripe", href: "/integraties",     icon: "zap" },
+  { label: "Koppelingen",     sub: "Moneybird, SnelStart en Stripe", href: "/integraties",     icon: "zap" },
 ]
 
 // Welk menu-item bij een pad hoort, ook voor onderliggende pagina's:

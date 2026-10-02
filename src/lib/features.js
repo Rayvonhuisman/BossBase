@@ -35,7 +35,7 @@ export const FEATURES = [
   // Groei
   { key: 'digitale_handtekening',   label: 'Digitale handtekening',       uitleg: 'Offertes online laten ondertekenen door de klant.' },
   { key: 'betaalherinneringen',     label: 'Automatische betaalherinneringen', uitleg: 'Herinneringen bij openstaande facturen.' },
-  { key: 'boekhoudkoppeling',       label: 'Boekhoudkoppeling',           uitleg: 'Koppeling met Moneybird, SnelStart of AFAS.' },
+  { key: 'boekhoudkoppeling',       label: 'Boekhoudkoppeling',           uitleg: 'Koppeling met Moneybird of SnelStart.' },
   { key: 'btw_overzicht',           label: 'BTW-overzicht',               uitleg: 'BTW per periode uit de boekhoudkoppeling.' },
   { key: 'kosten_nacalculatie',     label: 'Kosten & nacalculatie',       uitleg: 'Kosten registreren en marge per project bewaken.' },
   { key: 'eigen_email_templates',   label: 'Eigen e-mailtemplates',       uitleg: 'Zelf nieuwe e-mailtemplates aanmaken.' },

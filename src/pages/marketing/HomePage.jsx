@@ -12,7 +12,7 @@ import { HI, useGa, naarAnker, Faq, Afsluiting } from "./HvBlokken"
 const HERO_PUNTEN = [
   "Gratis 14 dagen op proef. Geen betaalgegevens nodig.",
   "Gebouwd in Nederland voor schilders, installateurs, hoveniers en aannemers.",
-  "Koppelt met Moneybird, SnelStart, AFAS en Stripe.",
+  "Koppelt met Moneybird, SnelStart en Stripe.",
   "Werkbon met handtekening van de klant, direct op de telefoon.",
 ]
 
@@ -106,7 +106,7 @@ function Hero({ navigate }) {
         <div className="hv-podium">
           <span className="hv-podium-vloer" aria-hidden="true" />
           <div className="hv-frame hv-frame-dash">
-            <div className="hv-frame-bar"><i /><i /><i /><span>{HI.lock} app.bossbase.nl/planning</span></div>
+            <div className="hv-frame-bar"><i /><i /><i /><span>{HI.lock} bossbase.nl/dashboard/planning</span></div>
             <img src="/screens/planning.webp" alt="Weekplanning per medewerker in BossBase" width="1600" height="1000" />
           </div>
           <div className="hv-widget hv-widget-lead" aria-hidden="true">
@@ -137,14 +137,13 @@ function Hero({ navigate }) {
 const KOPPELINGEN = [
   { src: "/brand/moneybird.svg", alt: "Moneybird",  w: 159, h: 26 },
   { src: "/brand/snelstart.svg", alt: "SnelStart",  w: 158, h: 26 },
-  { src: "/brand/afas.png",      alt: "AFAS",       w: 36,  h: 36 },  // vierkant beeldmerk
   { src: "/brand/stripe.svg",    alt: "Stripe",     w: 67,  h: 28 },
 ]
 
 function Koppelingen() {
   const reeks = [...KOPPELINGEN, ...KOPPELINGEN]
   return (
-    <div className="hv-koppel" aria-label="Koppelt met Moneybird, SnelStart, AFAS en Stripe">
+    <div className="hv-koppel" aria-label="Koppelt met Moneybird, SnelStart en Stripe">
       <div className="container hv-koppel-in">
         <span className="hv-koppel-label">Koppelt met</span>
         <div className="hv-marquee">
@@ -383,7 +382,7 @@ function Kennisbank({ navigate }) {
 const FAQ_HOME = [
   ["Heb ik technische kennis nodig?",       "Nee. BossBase is gemaakt voor vakmensen, niet voor IT'ers. Na het aanmelden voer je je eerste klant in en maak je je eerste offerte; installeren hoeft niet."],
   ["Kan ik mijn eigen logo op offertes zetten?", "Ja. Je uploadt één keer je logo en bedrijfsgegevens, en je offertes en facturen krijgen je eigen logo en huisstijlkleur."],
-  ["Werkt het op mijn telefoon?",           "Ja, BossBase is ook op je telefoon te gebruiken. Je klant kan offertes en werkbonnen op elke telefoon ondertekenen."],
+  ["Werkt het op mijn telefoon?",           "Het dashboard werkt op een tablet, laptop of computer, niet op een smalle telefoon, en er is geen app. Je klant kan offertes en werkbonnen wel op elke telefoon ondertekenen."],
   ["Hoe zit het met opzeggen?",             "Een maandabonnement is per maand opzegbaar. Een jaarabonnement loopt 12 maanden en daarna per maand. Je klanten exporteer je als Excel of CSV, en je offertes en facturen als PDF."],
   ["Wat als ik overstap naar een groter pakket?", "Bij een jaarabonnement begint de looptijd van 12 maanden opnieuw vanaf de overstap; je ziet de nieuwe einddatum voordat je bevestigt. Modules of teamleden bijkopen raakt je looptijd niet, en een maandabonnement blijft gewoon per maand opzegbaar."],
   ["Wat krijg ik bij een jaarabonnement?",  "Je kiest één welkomstactie: 2 maanden gratis, of (vanaf Groei) een gratis website met een formulier waarvan de aanvragen in je BossBase-pipeline binnenkomen. Voor de hosting van die website betaal je € 5 per maand."],

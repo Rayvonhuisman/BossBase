@@ -52,7 +52,7 @@ function BeeldKlantbeheer() {
   return (
     <Beeld>
       <div className="hv-frame hf-frame hf-kk">
-        <FrameBar url="app.bossbase.nl/klanten/bakker-loodgieters" />
+        <FrameBar url="bossbase.nl/dashboard/klanten/bakker-loodgieters" />
         <div className="hf-kk-head">
           <span className="hf-kk-wie"><i className="hf-av">BL</i><span><b>Bakker Loodgieters</b><small>Vijzelstraat 21, Utrecht · 030 123 45 67</small></span></span>
           <span className="hv-badge hv-badge-ok"><i className="hf-dot" />Actief</span>
@@ -133,7 +133,7 @@ function BeeldWerkbonnen() {
   return (
     <Beeld>
       <div className="hv-frame hf-frame hf-wb">
-        <FrameBar url="app.bossbase.nl/werkbonnen" />
+        <FrameBar url="bossbase.nl/dashboard/werkbonnen" />
         <img src="/screens/werkbon.webp" alt="Een werkbon in BossBase met klant, adres, planning en de knoppen Bel klant, Route en Afronden" width="1600" height="1000" loading="lazy" decoding="async" />
       </div>
       <div className="hf-phone">
@@ -166,7 +166,7 @@ function BeeldPlanning() {
   return (
     <Beeld>
       <div className="hv-frame hf-frame hf-pl">
-        <FrameBar url="app.bossbase.nl/planning" />
+        <FrameBar url="bossbase.nl/dashboard/planning" />
         <img src="/screens/planning.webp" alt="De weekplanning in BossBase met de werkbonnen van één medewerker per dag" width="1600" height="1000" loading="lazy" decoding="async" />
       </div>
       <div className="hf-kaartje hf-sleep">
@@ -193,7 +193,7 @@ function BeeldUren() {
   return (
     <Beeld>
       <div className="hv-frame hf-frame hf-ur">
-        <FrameBar url="app.bossbase.nl/uren" />
+        <FrameBar url="bossbase.nl/dashboard/uren" />
         <div className="hf-ur-head">
           <span className="hf-ur-wie"><i className="hf-av hf-av-blauw">TV</i><span><b>Thomas Visser</b><small>Week 40 · 28 sep t/m 2 okt</small></span></span>
           <span className="hf-toggle"><span className="actief">Werkdagen</span><span>Werkbonuren</span></span>
@@ -448,8 +448,6 @@ const KOPPELINGEN = [
     tekst: "Betaalde facturen gaan naar Moneybird. Inkoopfacturen, bonnetjes en uitgaven komen terug als kosten.", pakket: "Groei en Team" },
   { naam: "SnelStart", src: "/brand/snelstart.svg", w: 158, h: 26, href: "/integraties/snelstart",
     tekst: "Facturen als verkoopboeking in SnelStart, met de PDF erbij. Inkoopfacturen komen terug als kosten.", pakket: "Groei en Team" },
-  { naam: "AFAS", src: "/brand/afas.png", w: 34, h: 34, href: "/integraties",
-    tekst: "Relaties en kosten uitwisselen met je AFAS-omgeving, zodat je boekhouding bij blijft.", pakket: "Groei en Team" },
   { naam: "Betaallink met iDEAL", src: "/brand/stripe.svg", w: 67, h: 28, href: "/integraties/stripe-betaallink",
     tekst: "Via je eigen Stripe-account staat er een betaallink in elke factuurmail. Na betaling gaat de factuur vanzelf op betaald.", pakket: "Team, of module bij Groei" },
 ]
@@ -490,7 +488,7 @@ const FAQ_FUNCTIES = [
   ["Ziet de klant mijn prijzen of notities op de werkbon?", "Nee. De ondertekenpagina en de PDF voor de klant tonen geen bedragen, geen inkoopprijzen en geen interne notities. Notities die je als 'voor klant' markeert, zijn wel zichtbaar."],
   ["Kan ik mijn klanten uit Excel importeren?", "Nee, een importfunctie is er niet. Je voert klanten in, of ze ontstaan uit een aanvraag. Exporteren naar Excel of CSV kan wel."],
   ["Kan de klant een offerte online afwijzen?", "Nee. Online kan de klant alleen akkoord geven en tekenen. Wijst hij af, dan zet je de status zelf op afgewezen."],
-  ["Werkt het op mijn telefoon?", "Ja, BossBase is ook op je telefoon te gebruiken. Je klant kan offertes en werkbonnen op elke telefoon ondertekenen."],
+  ["Werkt het op mijn telefoon?", "Het dashboard werkt op een tablet, laptop of computer, niet op een smalle telefoon, en er is geen app. Je klant kan offertes en werkbonnen wel op elke telefoon ondertekenen."],
 ]
 
 /* ── Pagina ── */
