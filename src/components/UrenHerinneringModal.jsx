@@ -299,7 +299,7 @@ export function UrenHerinneringModal({ navigatePage }) {
             <div className="modal-title">Vul je werkdag in</div>
             <div className="modal-sub">
               Je stond {meer ? 'op deze dagen' : 'op deze dag'} gepland, maar er
-              {meer ? ' zijn' : ' is'} nog geen werkdag ingevuld. Doe het hier direct.
+              {meer ? ' zijn nog geen werkdagen' : ' is nog geen werkdag'} ingevuld. Doe het hier direct.
             </div>
           </div>
           <ModalX onClose={snooze} />
