@@ -109,15 +109,22 @@ function toAbsoluteUrl(link) {
   // detailvenster opent (preOpenWerkbonId en verwanten).
   const schoon = link.replace(/^\//, '')
   const [pagina, id] = schoon.split('/')
+  // Klant en leverancier zijn geen eigen pagina maar een kaart over de lijst
+  // heen, die opent met ?klant=<id> of ?lev=<id> (zie lib/route.js).
+  if (pagina === 'klant' && id) return `https://www.bossbase.nl/dashboard/customers?klant=${encodeURIComponent(id)}`
+  if (pagina === 'leverancier' && id) return `https://www.bossbase.nl/dashboard/leveranciers?lev=${encodeURIComponent(id)}`
   const basis = `https://www.bossbase.nl/dashboard/${pagina}`
   return id ? `${basis}?open=${encodeURIComponent(id)}` : basis
 }
 
-// Welke pagina's kunnen één item openen? Alleen deze hebben in App.jsx een
-// preOpen…Id dat op de navigatie-intentie luistert. Voor de rest — customers,
-// leveranciers, materialen, planning — heeft een id in de link geen zin: de
-// pagina doet er niets mee, en dan beloven we iets wat niet gebeurt.
+// Welke soorten items kunnen één item openen? De pagina's hebben in App.jsx een
+// preOpen…Id dat op de navigatie-intentie luistert; klant en leverancier openen
+// hun kaart. Voor de rest (materialen, planning) heeft een id geen zin.
 const DETAILPAGINA = {
+  // Klant en leverancier openen als kaart (?klant= / ?lev=); App.jsx en
+  // toAbsoluteUrl vertalen 'klant/<id>' en 'leverancier/<id>' daarnaar.
+  klant:      'klant',
+  leverancier:'leverancier',
   werkbon:    'werkbonnen',
   activiteit: 'activities',
   project:    'projecten',

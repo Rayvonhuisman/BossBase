@@ -737,6 +737,11 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
                       // ('deal/<id>'). Oude meldingen wezen naar de vervallen
                       // pagina Aanvragen; die gaan naar de pipeline.
                       if (pagina === 'deal' && id) openDeal(id);
+                      // Klantkaart/leverancierskaart. Oude meldingen hebben link
+                      // 'customers' zonder id; dan het id uit related_id.
+                      else if (pagina === 'klant' && id) openCustomer(id);
+                      else if (pagina === 'customers' && n.relatedType === 'klant' && n.relatedId) openCustomer(n.relatedId);
+                      else if (pagina === 'leverancier' && id && openLeverancier) openLeverancier(id);
                       else if (pagina === 'aanvragen') navigatePage('pipeline');
                       // 'instellingen/abonnement': een tabblad, geen item. Het
                       // tabblad staat in ?tab=; daarna pakt de popstate-afhandeling

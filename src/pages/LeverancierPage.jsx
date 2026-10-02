@@ -162,6 +162,11 @@ export default function LeverancierPage({ leverancierId, onClose }) {
       setNotities(list => [created, ...list]);
       setTijdlijn(list => [created, ...list]);
       setText('');
+      // Ook in het Overzicht-notitieveld werd taggen aangeboden zonder melding.
+      createMentionNotifications({
+        text, relatedType: 'leverancier', relatedId: l.id, link: 'leveranciers',
+        creatorId: profile?.id, creatorName: profile?.fullName, contextName: l.naam,
+      }).catch(e => console.warn('[leverancier] mention-melding mislukt:', e?.message));
     } catch (err) {
       toast.error(err.message || 'Notitie opslaan mislukt');
     } finally {

@@ -694,7 +694,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
             </div>
             {c.phone && <a href={`tel:${c.phone}`} className="btn btn-s btn-sm" style={{ flexShrink: 0, marginLeft: 12 }}>{I.call} {c.phone}</a>}
           </div>
-          <div style={{ fontSize: '.82rem', color: 'var(--dmu)', marginBottom: 10 }}>{c.company} · {c.city}</div>
+          <div style={{ fontSize: '.82rem', color: 'var(--dmu)', marginBottom: 10 }}>{[c.company, c.city].filter(Boolean).join(' · ')}</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-start', marginLeft: 0, paddingLeft: 0 }}>
             {/* Toont zichzelf alleen als de betreffende koppeling ook echt
                 actief is — een oud id van een losgekoppelde boekhouding gaf

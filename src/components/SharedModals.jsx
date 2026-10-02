@@ -76,6 +76,7 @@ async function compressImage(file) {
 // ── NEW CUSTOMER MODAL ───────────────────────────────────────
 export function NewCustomerModal({ onClose, onSaved }) {
   const toast = useToast();
+  const { profile } = useProfile();
   const [form, setForm] = useState({
     name: '', company: '', email: '', phone: '', address: '', postcode: '', city: '',
     kvkNumber: '', btwNumber: '', iban: '',
@@ -102,6 +103,13 @@ export function NewCustomerModal({ onClose, onSaved }) {
     try {
       const created = await createCustomer(form);
       toast.success(`${created.name} is toegevoegd`);
+      // Taggen werd in het notitieveld aangeboden maar gaf niemand een melding.
+      if (profile?.id && form.notes) {
+        createMentionNotifications({
+          text: form.notes, relatedType: 'klant', relatedId: created.id, link: 'customers',
+          creatorId: profile.id, creatorName: profile.fullName, contextName: created.name,
+        }).catch(logFout('melding versturen'));
+      }
       onSaved?.(created);
       onClose();
     } catch (err) {
@@ -125,12 +133,10 @@ export function NewCustomerModal({ onClose, onSaved }) {
         <div className="fg">
           <div className="f">
             <label>Naam *</label>
-            <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="Voor- en achternaam" />
+            {/* Eén naamveld: de klanttabel kent geen aparte bedrijfsnaam. Een
+                los veld "Bedrijfsnaam" werd stil weggegooid (audit M31). */}
+            <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="Naam van de persoon of het bedrijf" />
             {errors.name && <span className="bb-err">{errors.name}</span>}
-          </div>
-          <div className="f">
-            <label>Bedrijfsnaam</label>
-            <input value={form.company} onChange={e => set('company', e.target.value)} placeholder="Optioneel" />
           </div>
           <div className="f">
             <label>E-mail</label>

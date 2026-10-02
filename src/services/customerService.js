@@ -22,7 +22,9 @@ const toCustomer = (row, index = 0) => ({
   // The DB only stores `name`. We surface it as both customer name and company label
   // so the existing UI keeps working without a separate company column.
   name: sanitizeName(row.name),
-  company: sanitizeName(row.name),
+  // Geen aparte bedrijfsnaam in de tabel; vroeger stond hier de naam nog eens,
+  // waardoor overal "Priya Meijer · Priya Meijer" verscheen.
+  company: '',
   email: row.email || "",
   phone: row.phone || "",
   city: row.city || "",

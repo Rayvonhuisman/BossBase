@@ -44,7 +44,7 @@ import { NewFactuurModal, SendFactuurMailModal } from '../FacturenPage.jsx';
 import { NewOfferteModal, SendOfferteMailModal } from '../OffertesPage.jsx';
 import { WerkbonModal } from '../WerkbonPageV2.jsx';
 import NotitieLog, { toLogItem } from '../../components/NotitieLog.jsx';
-import { getTeamMembers, createMentionNotifications } from '../../services/notificatieService.js';
+import { getTeamMembers, createMentionNotifications, notifyNewAssignees } from '../../services/notificatieService.js';
 import { statusInfo } from '../../utils/statusColors.js';
 import Rondleiding from '../../components/Rondleiding.jsx';
 
@@ -211,6 +211,7 @@ function OverviewTab({
   // wat de gebruiker ziet; de deal blijft de bron. Hoort er geen deal bij (een
   // project dat met de hand is aangemaakt), dan valt de hele kopstrook weg.
   const deal = deals.find(d => d.id === project.dealId) || null;
+  const { profile: mijnProfiel } = useProfile();
   const magVerkoop = magBewerken('verkoop');
   const dealAfgerond = isAfgerond(deal);
   const dealVerloren = deal?.status === 'lost';
@@ -319,9 +320,17 @@ function OverviewTab({
     if (!huidigeDeal) return;
     setToewijzenBezig(true);
     try {
+      const vorige = huidigeDeal.assignedToIds || (huidigeDeal.assignedTo ? [huidigeDeal.assignedTo] : []);
       const bij = await updateDeal(huidigeDeal.id, { assigned_to_ids: ids, assigned_to: ids[0] || null });
       setDealLokaal(bij);
       onChanged?.();
+      // Wie erbij komt, hoort dat — net als bij activiteiten en werkbonnen.
+      notifyNewAssignees({
+        userIds: ids, prevUserIds: vorige, members: teamMembers,
+        type: 'toewijzing_project', title: `Je behandelt nu ${project.name || huidigeDeal.title || 'een project'}`,
+        link: 'projecten', relatedType: 'project', relatedId: project.id,
+        creatorId: mijnProfiel?.id, creatorName: mijnProfiel?.fullName,
+      }).catch(logFout('melding versturen'));
     } catch (e) {
       toast.error(e.message || 'Toewijzen is mislukt');
     } finally {
