@@ -4,7 +4,7 @@ import { I } from '../../bb-shared.jsx';
 import { getSupportedSizes } from '../../data/widgetRegistry.js';
 import { activiteitTypeLabel } from '../../services/activityService.js';
 import { statusInfo } from '../../utils/statusColors.js';
-import { buildStageIndex, dealStatus, firstStageId, standaardFunnelFasen } from '../../utils/pipeline.js';
+import { buildStageIndex, dealStatus, firstStageId, isAfgerond, standaardFunnelFasen } from '../../utils/pipeline.js';
 import { isRealFactuur, sumOmzetExclBtw } from '../../services/customerTotalsService.js';
 import { staatOpDagVoor } from '../../utils/werkbonDagen.js';
 import { kortBedrag, voluitBedrag } from '../../utils/bedrag.js';
@@ -531,7 +531,9 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
 
     // ───────── KPI cards ─────────
     case 'open_pipeline_value': {
-      const open = deals.filter(d => dStatus(d) === 'open');
+      // Een voltooid project (afgerond_op) staat niet meer op het pipelinebord en
+      // telt hier dus ook niet meer mee, ook al is de status nog 'open'.
+      const open = deals.filter(d => dStatus(d) === 'open' && !isAfgerond(d));
       const val = open.reduce((s, d) => s + (d.value || 0), 0);
       return <KpiCard tone="green" icon={I.brief} label="Open pipeline" value={<Bedrag n={val} />} sub={<><span>{open.length} deals</span><span>·</span><Delta dir="up">Live</Delta></>} onClick={() => setPage('pipeline')} />;
     }
@@ -578,8 +580,19 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
       // alleen in de fase (de status kent enkel open/won/lost), dus die bepaalt
       // hier de selectie — maar een verloren deal valt er nu uit. Daar zat
       // eerder €85.900 aan verloren werk in.
-      const b = deals.filter(d => stageCat(d) === 'won' && dStatus(d) !== 'lost');
-      const val = b.reduce((s, d) => s + (d.value || 0), 0);
+      //
+      // En "nog niet afgerekend": wat al gefactureerd is (verstuurd of betaald,
+      // via het project van de deal) gaat eraf. Eerder telde de tegel ook klussen
+      // die al volledig gefactureerd en betaald waren (13 van de 14 bij Stamvol).
+      const gefactureerd = new Map();
+      facturen.forEach(f => {
+        if (!f.dealId || f.isCredit || f.gecrediteerd) return;
+        if (['concept', 'aangemaakt'].includes(String(f.status || '').toLowerCase())) return;
+        gefactureerd.set(f.dealId, (gefactureerd.get(f.dealId) || 0) + (Number(f.totaalExcl) || 0));
+      });
+      const rest = d => Math.max(0, (d.value || 0) - (gefactureerd.get(d.id) || 0));
+      const b = deals.filter(d => (stageCat(d) === 'won' || isAfgerond(d)) && dStatus(d) !== 'lost' && rest(d) > 0.005);
+      const val = b.reduce((s, d) => s + rest(d), 0);
       return <KpiCard tone="warn" icon={I.euro} label="Te factureren" value={val > 0 ? <Bedrag n={val} /> : ''} sub={b.length ? `${b.length} afgeronde klussen` : 'niets in de wacht'} onClick={() => setPage('facturen')} />;
     }
 

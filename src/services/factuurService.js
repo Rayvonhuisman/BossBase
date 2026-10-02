@@ -85,6 +85,9 @@ const toFactuur = row => ({
   companyId: row.company_id,
   customerId: row.customer_id,
   projectId: row.project_id || null,
+  // De deal achter het project (voor "Te factureren"); alleen gevuld waar de
+  // lijst het project meeneemt.
+  dealId: row.projects?.deal_id || null,
   nummer: row.nummer || '',
   factuurdatum: row.factuurdatum || null,
   vervaldatum: row.vervaldatum || null,
@@ -209,7 +212,7 @@ export async function generateCreditFactuurNummer() {
 export async function getFacturen() {
   const rijen = await alleRijen(() => supabase
     .from('facturen')
-    .select('*, customers(name)', { count: 'exact' })
+    .select('*, customers(name), projects(deal_id)', { count: 'exact' })
     .order('created_at', { ascending: false })
     .order('id', { ascending: true }))
   return rijen.map(toFactuur)
