@@ -68,9 +68,12 @@ serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
 
   const admin = makeAdminClient()
-  const antwoord = async (l: Log) => {
+  // opslaan=false voor weigeringen vóór de sleutelcontrole: die kan iedereen op
+  // internet veroorzaken, en een databaserij per verzoek liet een aanvaller de
+  // tabel onbeperkt vullen (audit B-15). Die gaan alleen naar de functielog.
+  const antwoord = async (l: Log, opslaan = true) => {
     console.log(`[snelstart-webhook] ${l.status} ${l.actie ?? '-'} ${l.companyId ?? '-'}: ${l.melding}`)
-    await log(admin, l)
+    if (opslaan) await log(admin, l)
     return l.uitkomst === 'verwerkt'
       ? json({ success: true }, l.status)
       : json({ error: l.melding }, l.status)
@@ -78,11 +81,11 @@ serve(async (req) => {
 
   const expected = Deno.env.get('SNELSTART_WEBHOOK_SECRET') ?? ''
   if (!expected) {
-    return antwoord({ uitkomst: 'fout', status: 503, melding: 'SNELSTART_WEBHOOK_SECRET ontbreekt' })
+    return antwoord({ uitkomst: 'fout', status: 503, melding: 'SNELSTART_WEBHOOK_SECRET ontbreekt' }, false)
   }
   const provided = new URL(req.url).searchParams.get('key') ?? ''
   if (!timingSafeEqual(provided, expected)) {
-    return antwoord({ uitkomst: 'geweigerd', status: 401, melding: 'Ongeldige key in URL' })
+    return antwoord({ uitkomst: 'geweigerd', status: 401, melding: 'Ongeldige key in URL' }, false)
   }
 
   const body = await req.json().catch(() => null)
