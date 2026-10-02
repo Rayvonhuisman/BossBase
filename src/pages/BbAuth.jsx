@@ -148,7 +148,7 @@ export function LoginPage({ onLogin, onRegister }) {
         <div className="auth-logo"><Logo /></div>
         <div className="auth-title">Welkom terug</div>
         <div className="auth-sub">
-          Beheer klanten, offertes, jobs en omzet<br />
+          Beheer klanten, offertes, klussen en omzet<br />
           vanuit één eenvoudig dashboard.
         </div>
         <div className="auth-field">

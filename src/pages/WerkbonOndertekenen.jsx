@@ -260,7 +260,10 @@ export default function WerkbonOndertekenen({ token }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16, marginBottom: 24 }}>
         <Info label="Klant" value={klant?.name || ''} />
-        <Info label="Uitgevoerd op" value={fmtDatum(werkbon.afgerond_op || werkbon.gestart_op || werkbon.gepland_op)} />
+        {/* De werkdag, niet de dag van afronden of tekenen: een klus van 30-09
+            die op 01-10 werd afgerond stond hier als "1 oktober". De PDF
+            gebruikte al de planningsdatum. */}
+        <Info label="Uitgevoerd op" value={fmtDatum(werkbon.gepland_op || werkbon.gestart_op || werkbon.afgerond_op)} />
         {werkbon.locatie && <Info label="Locatie" value={werkbon.locatie} />}
         {totaalUren > 0 && <Info label="Gewerkte uren" value={uurFmt(totaalUren)} />}
         {uitvoerders.length > 0 && <Info label="Uitgevoerd door" value={uitvoerders.join(', ')} />}

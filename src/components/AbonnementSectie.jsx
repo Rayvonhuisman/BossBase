@@ -7,6 +7,7 @@ import { getBillingStatus, openPortal, zegOp } from '../services/billingService.
 import { readonlyTekst, READONLY_BEWAARD } from '../lib/readonly.js';
 import { gaNaarAbonnement } from '../lib/abonnementNav.js';
 import { getOpenUpgradeVerzoeken, rondUpgradeVerzoekAf } from '../services/planService.js';
+import { vandaagIso } from '../lib/datumTijd.js';
 
 // Abonnementssectie in Instellingen: huidig pakket, status, verlengdatum,
 // verbruik tegen de limieten, modules en de knoppen om te wijzigen.
@@ -181,7 +182,9 @@ export function AbonnementSectie() {
               <div style={{ fontWeight: 600 }}>{fmtDatum(stand.trialEindigtOp)}</div>
             </div>
           )}
-          {stand.verlengtOp && !stand.definitiefOpgezegd && (
+          {/* Een verlengdatum in het verleden (bedrijf zonder Stripe) is geen
+              informatie maar verwarring; dan niet tonen. */}
+          {stand.verlengtOp && !stand.definitiefOpgezegd && String(stand.verlengtOp).slice(0, 10) >= vandaagIso() && (
             <div>
               <div style={{ fontSize: '.72rem', color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.04em' }}>
                 {stand.opzeggenPerEindePeriode ? 'Stopt op' : 'Verlengt op'}
@@ -204,6 +207,15 @@ export function AbonnementSectie() {
               <LimietRegel sleutel="gebruikers" stand={stand.limieten.gebruikers}
                 max={maxVan(stand.tier, 'gebruikers', stand.limieten.gebruikers)} />
               {begrensd.map(([k, v]) => <LimietRegel key={k} sleutel={k} stand={v} max={maxVan(stand.tier, k, v)} />)}
+              {(() => {
+                const max = maxVan(stand.tier, 'gebruikers', stand.limieten.gebruikers);
+                const gebruikt = Number(stand.limieten.gebruikers?.gebruikt || 0);
+                return max != null && gebruikt > max ? (
+                  <p style={{ fontSize: '.8rem', color: '#b45309', margin: '6px 0 0' }}>
+                    Je hebt meer gebruikers ({gebruikt}) dan je pakket toestaat ({max}). Kies een groter pakket of deactiveer gebruikers onder Team.
+                  </p>
+                ) : null;
+              })()}
             </div>
           );
         })()}
@@ -327,7 +339,9 @@ export function AbonnementSectie() {
         )}
         {!stand.heeftStripe && !stand.definitiefOpgezegd && (
           <p style={{ fontSize: '.8rem', color: 'var(--dmu)', marginTop: 10, marginBottom: 0 }}>
-            Je bent BossBase nu gratis aan het uitproberen. Er is nog geen betaalmethode gekoppeld.
+            {stand.trial
+              ? 'Je bent BossBase nu gratis aan het uitproberen. Er is nog geen betaalmethode gekoppeld.'
+              : 'Er is geen betaalmethode gekoppeld.'}
           </p>
         )}
       </div>

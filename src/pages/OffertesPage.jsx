@@ -31,6 +31,7 @@ import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
 import { LaadFout } from '../components/LaadFout.jsx';
 import { vandaagIso, voegDagenToe } from '../lib/datumTijd.js';
+import { opNaam } from '../lib/sorteren.js';
 
 // De klant voor een PDF. De gedeelde klantenlijst is kort na het openen van de
 // pagina (of via een gedeelde link) soms nog niet geladen; dan bleef het
@@ -157,7 +158,7 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
             <label>Klant *</label>
             <select value={form.customer_id} onChange={e => { set('customer_id', e.target.value); set('deal_id', ''); }}>
               <option value="">— Selecteer klant —</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {opNaam(customers).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           {form.customer_id && (
@@ -441,7 +442,7 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
               <label>Klant</label>
               <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)} disabled={locked}>
                 <option value="">— Selecteer klant —</option>
-                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {opNaam(customers).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div className="f s2">
@@ -637,7 +638,7 @@ function CopyOfferteModal({ offerte, customers, onClose, onCopied }) {
               <label>Klant</label>
               <select value={customerId} onChange={e => setCustomerId(e.target.value)}>
                 <option value="">— Selecteer klant —</option>
-                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {opNaam(customers).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
           )}
@@ -850,7 +851,7 @@ function ViewOfferteModal({ offerte, customers, onClose, onSluitVoorActie, onMaa
                           {it.omschrijving || ''}
                           {it.eenheid ? <span style={{ color: 'var(--dl)', fontSize: '.76rem' }}> · {it.eenheid}</span> : null}
                         </td>
-                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{it.aantal}</td>
+                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{Number(it.aantal || 0).toLocaleString('nl-NL', { maximumFractionDigits: 3 })}</td>
                         <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(it.prijsPer)}</td>
                         <td style={{ textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(it.subtotaal)}</td>
                       </tr>

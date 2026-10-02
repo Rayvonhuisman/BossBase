@@ -77,7 +77,8 @@ function MateriaalModal({ materiaal, leveranciers, magInkoop, onClose, onSaved, 
           <div className="f">
             <label>Eenheid</label>
             <select value={form.eenheid} onChange={e => set('eenheid', e.target.value)}>
-              {EENHEDEN.map(e => <option key={e} value={e}>{e}</option>)}
+              {(form.eenheid && !EENHEDEN.includes(form.eenheid) ? [form.eenheid, ...EENHEDEN] : EENHEDEN)
+                .map(e => <option key={e} value={e}>{e}</option>)}
             </select>
           </div>
           <div className="f">

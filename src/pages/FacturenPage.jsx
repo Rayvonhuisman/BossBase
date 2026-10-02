@@ -33,6 +33,7 @@ import { mailTemplate, mailButton } from '../utils/mailTemplate.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { statusInfo } from '../utils/statusColors.js';
 import ActieMenu from '../components/ActieMenu.jsx';
+import { opNaam } from '../lib/sorteren.js';
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -331,7 +332,7 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
             <label>Klant *</label>
             <select value={form.customer_id} onChange={e => { set('customer_id', e.target.value); set('project_id', ''); }}>
               <option value="">— Selecteer klant —</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {opNaam(customers).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           {form.customer_id && projects.filter(p => p.customerId === form.customer_id).length > 0 && (
@@ -1233,7 +1234,9 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
   const filtered = facturen.filter(f => {
     if (activeFilter === 'gecrediteerd') return f.gecrediteerd || f.isCredit;
     const ds = displayStatus(f);
-    if (activeFilter && ds !== activeFilter) return false;
+    // De tab heet "Aangemaakt", maar de database noemt dat 'concept'.
+    if (activeFilter === 'aangemaakt') { if (!['concept', 'aangemaakt'].includes(ds)) return false; }
+    else if (activeFilter && ds !== activeFilter) return false;
     if (search) {
       const q = search.toLowerCase();
       const cn = f.customerName || customers.find(c => c.id == f.customerId)?.name || '';

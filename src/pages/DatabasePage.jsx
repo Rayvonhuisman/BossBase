@@ -29,6 +29,7 @@ import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { getCompanyId } from '../lib/currentCompany.js';
+import { alleRijen } from '../lib/alleRijen.js';
 
 const PAD = n => String(n).padStart(2, '0');
 const isoDate = d => `${d.getFullYear()}-${PAD(d.getMonth()+1)}-${PAD(d.getDate())}`;
@@ -542,8 +543,10 @@ export function DatabasePage({ openCustomer }) {
       (async () => {
         const companyId = await getCompanyId();
         if (!companyId) return [];
-        const { data } = await supabase.from('sent_emails').select('id,customer_id,to_email,subject,sent_at,related_type').eq('company_id', companyId);
-        return data || [];
+        // Gepagineerd: boven 1000 mails was de mailhistorie in de export onvolledig.
+        return alleRijen(() => supabase.from('sent_emails')
+          .select('id,customer_id,to_email,subject,sent_at,related_type', { count: 'exact' })
+          .eq('company_id', companyId).order('id', { ascending: true }));
       })(),
       (async () => {
         const companyId = await getCompanyId();
@@ -551,10 +554,12 @@ export function DatabasePage({ openCustomer }) {
         // Factureerbare uren zijn werkbonuren; de werkbon levert de klant en
         // het project. Werkdaguren (urenregistratie) horen hier niet: die gaan
         // over loon, niet over wat er bij een klant te factureren valt.
-        const { data } = await supabase
+        // Gepagineerd: boven 1000 werkbonuren vielen de uren per klant te laag uit.
+        const data = await alleRijen(() => supabase
           .from('werkbon_uren')
-          .select('id,profile_id,uren,datum,werkbonnen(customer_id,project_id)')
-          .eq('company_id', companyId);
+          .select('id,profile_id,uren,datum,werkbonnen(customer_id,project_id)', { count: 'exact' })
+          .eq('company_id', companyId)
+          .order('id', { ascending: true }));
         return (data || []).map(u => ({
           ...u,
           customer_id: u.werkbonnen?.customer_id || null,

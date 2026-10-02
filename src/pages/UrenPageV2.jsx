@@ -42,7 +42,8 @@ const fmtTimeRange = (s, e) => {
 };
 
 
-const fmtUren = n => (n == null || Number.isNaN(n)) ? '' : Number(n).toFixed(2);
+// Nederlandse notatie: "8,25", niet "8.25".
+const fmtUren = n => (n == null || Number.isNaN(n)) ? '' : Number(n).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // ── Period navigation (zelfde patroon/stijl als de Agenda) ──────────────────
 // Datumhelpers gelijk aan CalendarPage: maandag-start, ISO-weeknummer.
@@ -414,7 +415,7 @@ function MobileList({ rows, onEdit, onDelete }) {
             <span className="uren2-mgroup-day">
               {dayLabel(g.datum)} <span className="uren2-mgroup-date">{fmtNL(g.datum)}</span>
             </span>
-            <span className="uren2-mgroup-total">{g.totalUren.toFixed(2)} uur</span>
+            <span className="uren2-mgroup-total">{fmtUren(g.totalUren)} uur</span>
           </div>
           {g.items.map(r => (
             <div key={r.id} className="uren2-mcard">
@@ -611,7 +612,7 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
             />
             {hint !== null && (
               <div className="uren2-hint">
-                ≈ {hint.toFixed(2)} uur{Number(form.pauze_minuten) > 0 ? ` (${form.pauze_minuten} min pauze eraf)` : ''}
+                ≈ {fmtUren(hint)} uur{Number(form.pauze_minuten) > 0 ? ` (${form.pauze_minuten} min pauze eraf)` : ''}
               </div>
             )}
             {timeInvalid && (
@@ -923,21 +924,21 @@ export function UrenPageV2({ navigatePage } = {}) {
             <KpiCard
               icon={Ic.Clock}
               label="Werkdaguren"
-              value={vergelijkKpis.dag.toFixed(2)}
+              value={fmtUren(vergelijkKpis.dag)}
               unit="uur"
               hint={`Som over ${periodNoun(periodType)}`}
             />
             <KpiCard
               icon={Ic.Clock}
               label="Op klussen"
-              value={vergelijkKpis.klus.toFixed(2)}
+              value={fmtUren(vergelijkKpis.klus)}
               unit="uur"
               hint="Geboekt op werkbonnen"
             />
             <KpiCard
               icon={Ic.Trend}
               label="Verschil"
-              value={vergelijkKpis.verschil.toFixed(2)}
+              value={fmtUren(vergelijkKpis.verschil)}
               unit="uur"
               hint="Werkdag min klus"
             />
@@ -947,7 +948,7 @@ export function UrenPageV2({ navigatePage } = {}) {
             <KpiCard
               icon={Ic.Clock}
               label={soort === 'werkbon' ? 'Totaal werkbonuren' : 'Totaal uren'}
-              value={kpis.totaal.toFixed(2)}
+              value={fmtUren(kpis.totaal)}
               unit="uur"
               hint={`Som over ${periodNoun(periodType)}`}
             />
@@ -960,7 +961,7 @@ export function UrenPageV2({ navigatePage } = {}) {
             <KpiCard
               icon={Ic.Trend}
               label="Gem. per dag"
-              value={kpis.gemPerDag.toFixed(2)}
+              value={fmtUren(kpis.gemPerDag)}
               unit="uur"
               hint={`Over ${kpis.dagen} ${kpis.dagen === 1 ? 'dag' : 'dagen'}`}
             />
