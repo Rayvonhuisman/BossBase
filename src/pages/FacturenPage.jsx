@@ -8,6 +8,7 @@ import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { useData } from '../lib/dataContext.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
+import { LaadFout } from '../components/LaadFout.jsx';
 import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
 import { createFactuurPaymentLink, getStripeConnection } from '../services/stripeService.js';
 import {
@@ -1182,7 +1183,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
         // Eén listing van de bucket, niet één check per rij.
         getFacturenMetDocument(f[0]?.companyId).then(setMetDocument).catch(() => {});
       })
-      .catch(err => setError(err.message || 'Laden mislukt'))
+      .catch(err => setError(err))
       .finally(() => setLoading(false));
   };
 
@@ -1347,7 +1348,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
           <p style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <PlanStand limiet="facturen" />
           </p>
-          {error && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 4 }}>{error}</div>}
+          {error && <LaadFout fout={error} titel="Facturen laden is niet gelukt" onOpnieuw={load} />}
         </div>
         <div className="page-hd-actions">
           {canManage && (

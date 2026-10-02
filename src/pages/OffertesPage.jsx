@@ -28,6 +28,7 @@ import { statusInfo } from '../utils/statusColors.js';
 import ActieMenu from '../components/ActieMenu.jsx';
 import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
+import { LaadFout } from '../components/LaadFout.jsx';
 import { vandaagIso, voegDagenToe } from '../lib/datumTijd.js';
 
 const offerteBadge = status => {
@@ -1111,7 +1112,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
     setLoading(true);
     getOffertes()
       .then(o => { setOffertes(o); setError(''); })
-      .catch(err => setError(err.message || 'Laden mislukt'))
+      .catch(err => setError(err))
       .finally(() => setLoading(false));
   };
 
@@ -1277,7 +1278,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
           <p style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <PlanStand limiet="offertes" />
           </p>
-          {error && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 4 }}>{error}</div>}
+          {error && <LaadFout fout={error} titel="Offertes laden is niet gelukt" onOpnieuw={load} />}
         </div>
         <div className="page-hd-actions">
           {canManageOffertes && (
