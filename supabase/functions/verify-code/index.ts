@@ -4,7 +4,7 @@
 // verify_jwt=true: alleen de eigenaar van de sessie kan zijn eigen code checken.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { hashVerificationCode } from '../_shared/hashCode.ts'
+import { hashVerificationCode, legacyHashVerificationCode, LEGACY_TOT, gelijk } from '../_shared/hashCode.ts'
 import { legAkkoordVast } from '../_shared/akkoord.ts'
 
 const CORS = {
@@ -49,7 +49,7 @@ serve(async (req) => {
 
     // Meest recente, nog niet gebruikte code voor deze user.
     const { data: row } = await admin.from('email_verification_codes')
-      .select('id, code_hash, expires_at, verified_at, attempts')
+      .select('id, code_hash, expires_at, verified_at, attempts, created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -61,16 +61,23 @@ serve(async (req) => {
     if (new Date(row.expires_at) < new Date()) {
       return json({ success: false, code: 'EXPIRED', error: 'Code is verlopen. Vraag een nieuwe code aan.' }, 400)
     }
-    if (row.attempts >= MAX_ATTEMPTS) {
+    // Eerst de poging tellen, atomair: twee gelijktijdige verzoeken kunnen zo
+    // nooit samen meer dan MAX_ATTEMPTS pogingen opleveren. Geen rij terug =
+    // het maximum is bereikt.
+    const { data: poging } = await admin.rpc('bb_verificatie_poging', { p_id: row.id, p_max: MAX_ATTEMPTS })
+    if (poging === null || poging === undefined) {
       return json({ success: false, code: 'TOO_MANY', error: 'Te veel pogingen. Vraag een nieuwe code aan.' }, 400)
     }
 
-    // Hash de ingevoerde code en vergelijk.
-    const inputHash = await hashVerificationCode(String(code), userId)
-    if (inputHash !== row.code_hash) {
-      const newAttempts = row.attempts + 1
-      await admin.from('email_verification_codes').update({ attempts: newAttempts }).eq('id', row.id)
-      const remaining = MAX_ATTEMPTS - newAttempts
+    // Hash de ingevoerde code en vergelijk (constante tijd). Codes van vóór de
+    // overstap op HMAC gebruiken nog de oude hash.
+    const invoer = String(code)
+    let klopt = gelijk(await hashVerificationCode(invoer, userId), row.code_hash)
+    if (!klopt && row.created_at && row.created_at < LEGACY_TOT) {
+      klopt = gelijk(await legacyHashVerificationCode(invoer, userId), row.code_hash)
+    }
+    if (!klopt) {
+      const remaining = MAX_ATTEMPTS - Number(poging)
       if (remaining <= 0) {
         return json({ success: false, code: 'TOO_MANY', error: 'Te veel pogingen. Vraag een nieuwe code aan.' }, 400)
       }
