@@ -9,8 +9,8 @@ import { useData } from '../lib/dataContext.jsx';
 import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
 import { createFactuurPaymentLink, getStripeConnection } from '../services/stripeService.js';
 import {
-  getFacturen, createFactuur, updateFactuur, deleteFactuur,
-  generateFactuurNummer, getFactuurRegels, createFactuurRegel,
+  getFacturen, updateFactuur, deleteFactuur, maakFactuurMetRegels,
+  generateFactuurNummer, getFactuurRegels,
   generateCreditFactuurNummer, createCreditFactuur, uploadFactuurPdf, getFactuurDocumentUrl,
   getFacturenMetDocument, FACTUUR_STATUS_OPTIONS, kopieerFactuur,
 } from '../services/factuurService.js';
@@ -260,13 +260,18 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
   const doCreate = async () => {
     if (!form.customer_id) { toast.error('Selecteer een klant'); return null; }
     if (hasIncompleteCustomer) { toast.error('Vul eerst de klantgegevens aan voordat je een factuur aanmaakt'); return null; }
-    const created = await createFactuur({ ...form, project_id: form.project_id || null, status: 'aangemaakt', nummer, betalingskenmerk: nummer, totaal_excl: totaalExcl, totaal_incl: totaalIncl });
-    for (let i = 0; i < regels.length; i++) {
-      const r = regels[i];
-      const omschrijving = r.omschrijving.trim() || omschrijvingFallback(r.type, eenheden);
-      const btwPct = r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw);
-      await createFactuurRegel({ factuur_id: created.id, type: r.type, omschrijving, aantal: Number(r.aantal || 1), eenheidsprijs: Number(r.eenheidsprijs || 0), btw_pct: btwPct, btw_regime: regimeVoorOpslag(regimeVanRegel(r)), volgorde: i });
-    }
+    // Kop en regels in één transactie; het btw-percentage volgt uit het regime.
+    const created = await maakFactuurMetRegels({
+      ...form, project_id: form.project_id || null, status: 'concept', nummer, betalingskenmerk: nummer,
+    }, regels.map((r, i) => ({
+      type: r.type,
+      omschrijving: r.omschrijving.trim() || omschrijvingFallback(r.type, eenheden),
+      aantal: Number(r.aantal || 1),
+      eenheidsprijs: Number(r.eenheidsprijs || 0),
+      btw_pct: r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw),
+      btw_regime: regimeVoorOpslag(regimeVanRegel(r)),
+      volgorde: i,
+    })));
     return created;
   };
 

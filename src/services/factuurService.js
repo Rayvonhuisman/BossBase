@@ -123,13 +123,65 @@ const toRegel = row => ({
   omschrijving: row.omschrijving || '',
   aantal: Number(row.aantal || 1),
   eenheidsprijs: Number(row.eenheidsprijs || 0),
-  btwPct: Number(row.btw_pct || 21),
+  btwPct: Number(row.btw_pct ?? 21),
   // Regels van vóór de btw_regime-migratie hebben nog geen regime: afleiden uit
   // het percentage, zodat de rest van de app altijd een regime ziet.
   btwRegime: row.btw_regime || regimeVanPct(row.btw_pct),
   regelprijs: Number(row.regelprijs || 0),
   volgorde: Number(row.volgorde || 0),
 })
+
+// Btw-percentage voor opslag. Bij verlegd en vrijgesteld is het altijd 0 —
+// `Number(pct || 21)` maakte van 0% vroeger 21%, waarna de database de regel
+// weigerde (factuur_regels_verlegd_nul_check). Audit 2026-10-01, H10.
+export function btwPctVoorOpslag(pct, regime) {
+  if (regime === 'verlegd' || regime === 'vrijgesteld') return 0
+  const n = Number(pct)
+  return Number.isFinite(n) && pct !== '' && pct !== null && pct !== undefined ? n : 21
+}
+
+// Databasefouten bij facturen naar een melding die een ondernemer begrijpt.
+export function factuurFout(err) {
+  const m = String(err?.message || err || '')
+  if (/verlegd_nul_check/.test(m)) return new Error('Bij btw verlegd of vrijgesteld hoort 0% btw. Kies het regime opnieuw en probeer het nog eens.')
+  if (/row-level security|permission denied/i.test(m)) return new Error('Je kunt deze factuur niet opslaan: je hebt geen recht op facturen, of je account staat op alleen-lezen.')
+  if (/duplicate key|unique/i.test(m)) return new Error('Dit factuurnummer bestaat al. Sluit het venster en probeer het opnieuw.')
+  if (/check constraint/i.test(m)) return new Error('De factuur bevat een ongeldige waarde en is niet opgeslagen.')
+  return err instanceof Error ? err : new Error(m || 'Opslaan mislukt')
+}
+
+// Kop en regels in één transactie (RPC bb_factuur_aanmaken): faalt één regel,
+// dan bestaat de factuur niet — geen halve factuur met een verbruikt nummer.
+// `regels` in de vorm { type, omschrijving, aantal, eenheidsprijs, btw_pct, btw_regime, volgorde }.
+export async function maakFactuurMetRegels(kop, regels) {
+  const p_regels = regels.map((r, i) => {
+    const regime = regimeVoorOpslag(r.btw_regime || r.btwRegime || regimeVanPct(r.btw_pct ?? r.btwPct))
+    return {
+      type: r.type || 'stuks',
+      omschrijving: r.omschrijving,
+      aantal: Number(r.aantal ?? 1),
+      eenheidsprijs: Number(r.eenheidsprijs || 0),
+      btw_regime: regime,
+      btw_pct: btwPctVoorOpslag(r.btw_pct ?? r.btwPct, regime),
+      volgorde: r.volgorde ?? i,
+    }
+  })
+  const { data: id, error } = await supabase.rpc('bb_factuur_aanmaken', { p_kop: kop, p_regels })
+  if (error) throw factuurFout(error)
+  const { data, error: leesFout } = await supabase.from('facturen').select('*, customers(name)').eq('id', id).single()
+  if (leesFout) throw leesFout
+  const factuur = toFactuur(data)
+  if (factuur.customerId) {
+    const bedrag = factuur.totaalIncl.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    if (factuur.isCredit) {
+      logTijdlijnSafe(factuur.customerId, 'creditfactuur_aangemaakt', `Creditfactuur ${factuur.nummer} aangemaakt`, { nummer: factuur.nummer })
+    } else {
+      logTijdlijnSafe(factuur.customerId, 'factuur_aangemaakt',
+        `Factuur ${factuur.nummer} aangemaakt (€${bedrag})`, { nummer: factuur.nummer, totaalIncl: factuur.totaalIncl })
+    }
+  }
+  return factuur
+}
 
 export async function generateFactuurNummer() {
   const { count, error } = await supabase
@@ -344,7 +396,9 @@ export async function createCreditFactuur(origineleFactuurId, regels, origineleF
   }
   const totaalBtw = Object.values(btwPerTarief).reduce((s, v) => s + v, 0)
   const totaalIncl = -Math.round((Math.abs(totaalExcl) + totaalBtw) * 100) / 100
-  const base = {
+  // Kop, regels en het op gecrediteerd zetten van de originele factuur in één
+  // transactie. De totalen rekent de database-trigger uit de regels.
+  return maakFactuurMetRegels({
     customer_id: origineleFactuur.customerId,
     nummer,
     factuurdatum: new Date().toISOString().slice(0, 10),
@@ -352,8 +406,6 @@ export async function createCreditFactuur(origineleFactuurId, regels, origineleF
     notities: `Creditering van factuur ${origineleFactuur.nummer}`,
     is_credit: true,
     credit_van_factuur_id: origineleFactuurId,
-    totaal_excl: Math.round(totaalExcl * 100) / 100,
-    totaal_incl: Math.round(totaalIncl * 100) / 100,
     // Een creditfactuur is meteen "verzonden"; bevries dezelfde branding als de
     // originele (al bevroren) factuur, zodat ook hij niet meer wijzigt.
     snapshot_logo_url: origineleFactuur.snapshotLogoUrl || null,
@@ -365,40 +417,16 @@ export async function createCreditFactuur(origineleFactuurId, regels, origineleF
     snapshot_email: origineleFactuur.snapshotEmail || null,
     snapshot_kvk: origineleFactuur.snapshotKvk || null,
     snapshot_btw: origineleFactuur.snapshotBtw || null,
-  }
-  const payload = await withCompanyId(base)
-  const { data, error } = await supabase
-    .from('facturen')
-    .insert(payload)
-    .select('*, customers(name)')
-    .single()
-  if (error) throw error
-  const creditFactuur = toFactuur(data)
-  if (creditFactuur.customerId) {
-    logTijdlijnSafe(creditFactuur.customerId, 'creditfactuur_aangemaakt',
-      `Creditfactuur ${creditFactuur.nummer} aangemaakt`, { nummer: creditFactuur.nummer })
-  }
-  for (let i = 0; i < regels.length; i++) {
-    const r = regels[i]
-    await createFactuurRegel({
-      factuur_id: creditFactuur.id,
-      type: r.type,
-      omschrijving: r.omschrijving,
-      // Aantal ongewijzigd overnemen; alleen de prijs wordt negatief. Ook hier
-      // gold de 'vast'-uitzondering, waardoor een creditregel van 2 × €120 maar
-      // €120 crediteerde.
-      aantal: Number(r.aantal || 1),
-      eenheidsprijs: -Math.abs(Number(r.eenheidsprijs || 0)),
-      btw_pct: Number(r.btwPct || 21),
-      btw_regime: r.btwRegime || regimeVanPct(r.btwPct),
-      volgorde: i,
-    })
-  }
-  await supabase
-    .from('facturen')
-    .update({ gecrediteerd: true, updated_at: new Date().toISOString() })
-    .eq('id', origineleFactuurId)
-  return creditFactuur
+  }, regels.map((r, i) => ({
+    type: r.type,
+    omschrijving: r.omschrijving,
+    // Aantal ongewijzigd overnemen; alleen de prijs wordt negatief.
+    aantal: Number(r.aantal || 1),
+    eenheidsprijs: -Math.abs(Number(r.eenheidsprijs || 0)),
+    btw_pct: r.btwPct,
+    btw_regime: r.btwRegime || regimeVanPct(r.btwPct),
+    volgorde: i,
+  })))
 }
 
 export async function createFactuurRegel(input) {
@@ -420,11 +448,11 @@ export async function createFactuurRegel(input) {
     omschrijving: input.omschrijving,
     aantal,
     eenheidsprijs,
-    btw_pct: Number(input.btw_pct || 21),
     btw_regime: regimeVoorOpslag(input.btw_regime || input.btwRegime || regimeVanPct(input.btw_pct)),
     regelprijs,
     volgorde: Number(input.volgorde || 0),
   }
+  base.btw_pct = btwPctVoorOpslag(input.btw_pct, base.btw_regime)
   if (!base.factuur_id) throw new Error('factuur_id is verplicht')
   if (!base.omschrijving) throw new Error('omschrijving is verplicht')
   const payload = await withCompanyId(base)
@@ -433,7 +461,7 @@ export async function createFactuurRegel(input) {
     .insert(payload)
     .select()
     .single()
-  if (error) throw error
+  if (error) throw factuurFout(error)
   return toRegel(data)
 }
 
@@ -457,29 +485,23 @@ export async function kopieerFactuur(bronId) {
   const regels = await getFactuurRegels(bronId)
   const nummer = await generateFactuurNummer()
 
-  const nieuw = await createFactuur({
+  // Bewust NIET meegenomen: status, betaald_op, snelstart_id,
+  // externe_referentie, credit_van_factuur_id, de branding-snapshot en de
+  // herinneringsdatums. Dit is een nieuwe factuur, geen doorslag van een oude.
+  return maakFactuurMetRegels({
     customer_id: bron.customer_id,
     project_id: bron.project_id,
     nummer,
     factuurdatum: new Date().toISOString().slice(0, 10),
     betaaltermijn_dagen: bron.betaaltermijn_dagen,
     notities: bron.notities,
-    // Bewust NIET meegenomen: status, betaald_op, snelstart_id,
-    // externe_referentie, credit_van_factuur_id, de branding-snapshot en de
-    // herinneringsdatums. Dit is een nieuwe factuur, geen doorslag van een oude.
-  })
-
-  for (const r of regels) {
-    await createFactuurRegel({
-      factuur_id: nieuw.id,
-      type: r.type,
-      omschrijving: r.omschrijving,
-      aantal: r.aantal,
-      eenheidsprijs: r.eenheidsprijs,
-      btw_pct: r.btwPct,
-      btw_regime: r.btwRegime,
-      volgorde: r.volgorde,
-    })
-  }
-  return nieuw
+  }, regels.map(r => ({
+    type: r.type,
+    omschrijving: r.omschrijving,
+    aantal: r.aantal,
+    eenheidsprijs: r.eenheidsprijs,
+    btw_pct: r.btwPct,
+    btw_regime: r.btwRegime,
+    volgorde: r.volgorde,
+  })))
 }
