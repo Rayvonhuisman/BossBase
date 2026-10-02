@@ -1562,7 +1562,7 @@ export function PlanningPage({ openCustomer } = {}) {
               <button key={v} className={`tab${zicht === v ? ' active' : ''}`} onClick={() => setZicht(v)}>{l}</button>
             ))}
           </div>
-          <div className="tabs" style={{ marginLeft: 8 }}>
+          <div className="tabs" data-rl="planning-weergave" style={{ marginLeft: 8 }}>
             {[['totaal','Totaal'],['medewerker','Medewerker'], ...(metVoertuigen ? [['voertuig','Voertuig']] : [])].map(([v, l]) => (
               <button key={v} className={`tab${viewMode === v ? ' active' : ''}`} onClick={() => setViewMode(v)}>{l}</button>
             ))}
@@ -1580,7 +1580,7 @@ export function PlanningPage({ openCustomer } = {}) {
               {actieveVoertuigen.map(v => <option key={v.id} value={v.id}>{v.naam}{v.kenteken ? ` (${v.kenteken})` : ''}</option>)}
             </select>
           )}
-          <button className="btn btn-s btn-sm" onClick={() => setShowPlanModal(true)}>
+          <button className="btn btn-s btn-sm" data-rl="planning-werkbon" onClick={() => setShowPlanModal(true)}>
             {I.plus} Werkbon inplannen
           </button>
           <button className="btn btn-p btn-sm" onClick={() => setShowPlanActivityModal(true)}>
@@ -1595,7 +1595,7 @@ export function PlanningPage({ openCustomer } = {}) {
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
 
           {/* ── NIET-INGEPLAND PANEEL ── */}
-          <div style={{ marginBottom: 12 }}>
+          <div style={{ marginBottom: 12 }} data-rl="planning-niet-ingepland">
             <button onClick={() => setShowUnplanned(v => !v)}
               style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: '3px 0', marginBottom: 6 }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--dk)', textTransform: 'uppercase', letterSpacing: '.04em' }}>
@@ -1621,7 +1621,7 @@ export function PlanningPage({ openCustomer } = {}) {
           {/* ── TIJDLIJN GRID ── */}
           <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start' }}>
             {/* Tijdlijn + kolommen */}
-            <div className="card" style={{ flex: 1, padding: 0, overflow: 'hidden', minWidth: 0 }}>
+            <div className="card" data-rl="planning-tijdlijn" style={{ flex: 1, padding: 0, overflow: 'hidden', minWidth: 0 }}>
               {/* Dagkoppen en tijdlijn schuiven samen horizontaal: op een
                   telefoon past een hele week niet, en dan moet elke dagkop
                   boven zijn eigen kolom blijven staan. In de dagweergave is er

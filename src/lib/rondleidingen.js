@@ -143,6 +143,29 @@ export const RONDLEIDINGEN = {
     },
   ],
 
+  planning: [
+    {
+      doel: 'planning-niet-ingepland',
+      titel: 'Niet ingepland',
+      tekst: 'Werkbonnen zonder dag of tijd. Sleep er een naar de tijdlijn om hem in te plannen.',
+    },
+    {
+      doel: 'planning-tijdlijn',
+      titel: 'Slepen en rekken',
+      tekst: 'Sleep een blok om de tijd te verschuiven, of trek aan de rand om begin of eind te veranderen. Je collega krijgt er een melding van.',
+    },
+    {
+      doel: 'planning-weergave',
+      titel: 'Wie en wat',
+      tekst: 'Bekijk de planning van iedereen, per medewerker of per voertuig.',
+    },
+    {
+      doel: 'planning-werkbon',
+      titel: 'Werkbon inplannen',
+      tekst: 'Maak een nieuwe werkbon en plan hem meteen in, met dagen, ploeg en voertuig.',
+    },
+  ],
+
   projecten: [
     {
       doel: 'projecten-tellers',
