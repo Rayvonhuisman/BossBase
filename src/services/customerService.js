@@ -44,6 +44,8 @@ const toCustomer = (row, index = 0) => ({
   // voor: niet in deze mapper, niet op de klantkaart. Het projectoverzicht toont
   // en bewerkt hem, dus hij moet hier langs.
   contactpersoon: row.contactpersoon || "",
+  // Betaaltermijn van deze klant in dagen; leeg = de standaard van 14.
+  betaaltermijnDagen: row.betaaltermijn_dagen ?? null,
   // UI helpers — synthesized, not stored:
   av: index,
   stage: "new_lead",
