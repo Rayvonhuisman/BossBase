@@ -434,6 +434,8 @@ function BossKnop({ onClick }) {
 function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, onLogout, openCustomer, openLeverancier, openDeal, navigatePage, refreshKey, onOpenBoss }) {
   const { customers: dCustomers, leveranciers: dLeveranciers = [], deals: dDeals, stages: dStages = [], activities: dActivities, offertes: dOffertes, werkbonnen: dWerkbonnen, refresh: refreshData } = useData();
   const [openMenu, setOpenMenu] = useState(null);
+  // Escape sluit het open menu (meldingen, profiel), net als drawers en vensters.
+  useEscapeSluit(() => setOpenMenu(null), openMenu !== null);
   const [search, setSearch] = useState('');
   // Zoekbalk staat ingeklapt tot je op het icoon klikt. Escape of een klik
   // ernaast klapt hem weer in; een lopende zoekterm blijft dan wel staan.

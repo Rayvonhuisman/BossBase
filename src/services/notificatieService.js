@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase.js';
 import { getCompanyId } from '../lib/currentCompany.js';
 import { mailTemplate } from '../utils/mailTemplate.js';
+import { korteDatumNl } from '../lib/datumTijd.js';
 
 // HTML-escape voor door gebruikers ingevoerde waarden die in de rauwe `body`-HTML
 // van collega-mails terechtkomen (naam, notitietekst, deal-/werkbon-titel). De
@@ -359,7 +360,7 @@ export async function meldPlanningWijziging({
   const companyId = await getCompanyId();
   if (!companyId) return;
 
-  const omschrijf = (d, s) => (d ? `${d}${s ? ` om ${String(s).slice(0, 5)}` : ''}` : 'niet ingepland');
+  const omschrijf = (d, s) => (d ? `${korteDatumNl(d)}${s ? ` om ${String(s).slice(0, 5)}` : ''}` : 'niet ingepland');
   const titelTekst = soort === 'afgehaald'
     ? `Je staat niet meer op ${werkbon.titel || 'een klus'}`
     : soort === 'ingepland'

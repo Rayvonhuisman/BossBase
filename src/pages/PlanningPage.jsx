@@ -38,7 +38,7 @@ import { MemberMultiSelect } from '../components/MemberMultiSelect.jsx';
 import { AssigneeResponsibleSelect } from '../components/AssigneeResponsibleSelect.jsx';
 import { supabase } from '../lib/supabase.js';
 import { NoteEditor } from '../components/NoteEditor.jsx';
-import { lokaleDatum } from '../lib/datumTijd.js';
+import { lokaleDatum, korteDatumNl } from '../lib/datumTijd.js';
 
 // ── TIJDLIJN CONSTANTEN ───────────────────────────────────────────────────────
 
@@ -534,7 +534,7 @@ function QuickPlanModal({ werkbon, date, hour, teamMembers, profile, onClose, on
       notifyNewAssignees({
         userIds: assignedToIds.filter(id => !nieuweVerantw.includes(id)), prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail,
         type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${werkbon.titel}`,
-        body: `Datum: ${date}${starttijd ? ` om ${starttijd}` : ''}`,
+        body: `Datum: ${korteDatumNl(date)}${starttijd ? ` om ${starttijd}` : ''}`,
         link: 'planning', relatedType: 'werkbon', relatedId: werkbon.id,
         creatorId: profile?.id, creatorName: profile?.fullName,
       }).catch(logFout('melding versturen'));
@@ -676,7 +676,7 @@ function PlanActivityModal({ teamMembers, customers, werkbonnen, profile, onClos
         userIds: form.assigned_to_ids, members: teamMembers, sendMail: notifyMail,
         type: 'toewijzing_activiteit',
         title: `Je bent toegewezen aan ${form.titel.trim()}`,
-        body: `Datum: ${form.datum}${form.starttijd ? ` om ${form.starttijd}` : ''}`,
+        body: `Datum: ${korteDatumNl(form.datum)}${form.starttijd ? ` om ${form.starttijd}` : ''}`,
         link: 'planning', relatedType: 'activiteit', relatedId: created.id,
         creatorId: profile?.id, creatorName: profile?.fullName,
       }).catch(logFout('melding versturen'));

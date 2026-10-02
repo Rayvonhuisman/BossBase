@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { logFout, meldFout } from '../lib/stilleFouten.js';
-import { vandaagIso } from '../lib/datumTijd.js';
+import { vandaagIso, korteDatumNl } from '../lib/datumTijd.js';
 import { I, ModalX, NotifyMailToggle, PIPELINE_STAGES, fmt } from '../bb-shared.jsx';
 import { InfoTip } from './Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
@@ -514,7 +514,7 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
         createMentionNotifications({ text: form.notes, relatedType: 'activiteit', relatedId: created.id, link: 'activities', creatorId: profile.id, creatorName: profile.fullName, contextName: custName }).catch(logFout('melding versturen'));
       }
       // Assignment notification naar elke toegewezen medewerker (behalve jezelf)
-      notifyNewAssignees({ userIds: form.assignedToIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${form.date}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: created.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(logFout('melding versturen'));
+      notifyNewAssignees({ userIds: form.assignedToIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${korteDatumNl(form.date)}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: created.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(logFout('melding versturen'));
       if (form.type === 'visit' && form.custId) {
         const cust = customers?.find(c => c.id === form.custId);
         if (cust?.email) {
@@ -1237,7 +1237,7 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
       }
       // Notificatie naar nieuw toegevoegde toegewezen medewerkers (behalve jezelf).
       const prevIds = activity?.assignedToIds || (activity?.assignee ? [activity.assignee] : []);
-      notifyNewAssignees({ userIds: form.assignedToIds, prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${form.date}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: activity.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(logFout('melding versturen'));
+      notifyNewAssignees({ userIds: form.assignedToIds, prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${korteDatumNl(form.date)}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: activity.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(logFout('melding versturen'));
       toast.success('Activiteit bijgewerkt');
       onSaved?.(updated);
       onClose();

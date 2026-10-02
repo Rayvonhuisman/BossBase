@@ -9,6 +9,7 @@ import { isIngepland } from '../utils/werkbonDagen.js';
 import { getActiveTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
 import { useToast } from '../lib/toast.jsx';
 import { usePlan } from '../hooks/usePlan.js';
+import { korteDatumNl } from '../lib/datumTijd.js';
 
 // Werkbon inplannen vanuit de agenda — voor wie geen planningsmodule heeft.
 // Hergebruikt EXACT dezelfde inplanlogica als de planning-modals
@@ -96,7 +97,7 @@ export function AgendaWerkbonPlanModal({ currentUserId, currentUserName, default
         notifyNewAssignees({
           userIds: assignIds, prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail,
           type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${selected?.titel || 'een werkbon'}`,
-          body: `Datum: ${date}${starttijd ? ` om ${starttijd}` : ''}`,
+          body: `Datum: ${korteDatumNl(date)}${starttijd ? ` om ${starttijd}` : ''}`,
           link: 'calendar', relatedType: 'werkbon', relatedId: werkbonId,
           creatorId: currentUserId, creatorName: currentUserName,
         }).catch(logFout('melding versturen'));

@@ -126,3 +126,12 @@ export function weekdagMaandag0(dateStr) {
 export function maandagVan(dateStr = vandaagIso()) {
   return voegDagenToe(dateStr, -weekdagMaandag0(dateStr));
 }
+
+// "2026-09-17" → "do 17 sep". Voor korte teksten als meldingen, waar een
+// ISO-datum onleesbaar is. Geen datum of ongeldig → de invoer ongewijzigd.
+export function korteDatumNl(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''))
+  if (!m) return iso || ''
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  return d.toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' })
+}

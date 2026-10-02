@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useEscapeSluit } from '../../hooks/useEscapeSluit.js';
 import { I } from '../../bb-shared.jsx';
 import { WIDGET_REGISTRY, WIDGET_CATEGORIES, magWidgetZien } from '../../data/widgetRegistry.js';
 
@@ -7,6 +8,7 @@ const widgetIcon = w => I[w.iconKey] ?? I.dash;
 const SIZE_LABELS = { small: 'Klein', medium: 'Middel', large: 'Groot', full: 'Breed' };
 
 export function AddWidgetModal({ existingTypes, onAdd, onClose, can, has }) {
+  useEscapeSluit(onClose);
   const [activeCategory, setActiveCategory] = useState('popular');
   const [search, setSearch] = useState('');
 
