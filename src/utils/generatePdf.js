@@ -1,3 +1,6 @@
+import { documentTotalen } from './documentTotalen.js';
+import { regimeVanPct, regimeVoorOpslag } from '../lib/btwRegime.js';
+
 // jsPDF wordt dynamisch geladen zodat de ~350KB lib niet in de hoofdbundle
 // zit — pas opgehaald wanneer er daadwerkelijk een PDF gemaakt wordt.
 let _jsPDF = null;
@@ -28,18 +31,12 @@ const euro = n => `€ ${Number(n || 0).toFixed(2).replace('.', ',')}`;
 // Het bedrag per regel heet anders: een factuurregel heeft regelprijs, een
 // offerteregel subtotaal. Offerteregels hebben bovendien niet altijd een eigen
 // percentage; die vallen terug op het percentage van de offerte zelf.
-function documentTotalen(regels = [], { bedragVeld, standaardPct = 21 } = {}) {
-  const bedragVan = r => Number(r[bedragVeld]) || 0;
-  const excl = Math.round(regels.reduce((s, r) => s + bedragVan(r), 0) * 100) / 100;
-  const btwPerTarief = {};
-  for (const r of regels) {
-    const pct = Number(r.btwPct ?? standaardPct);
-    const vrij = r.btwRegime === 'vrijgesteld' || r.btwRegime === 'verlegd';
-    const bedrag = vrij ? 0 : bedragVan(r) * pct / 100;
-    btwPerTarief[pct] = Math.round(((btwPerTarief[pct] || 0) + bedrag) * 100) / 100;
-  }
-  const btw = Object.values(btwPerTarief).reduce((s, v) => s + v, 0);
-  return { excl, btwPerTarief, incl: Math.round((excl + btw) * 100) / 100 };
+function pdfTotalen(regels = [], { bedragVeld, standaardPct = 21 } = {}) {
+  return documentTotalen(regels, {
+    bedrag: r => r[bedragVeld],
+    pct: r => r.btwPct ?? standaardPct,
+    regime: r => regimeVoorOpslag(r.btwRegime || regimeVanPct(r.btwPct ?? standaardPct)),
+  });
 }
 
 export function hexToRgb(hex) {
@@ -206,7 +203,7 @@ export async function bereidAfbeeldingVoor(dataUrl, maxWmm, maxHmm) {
 
 async function buildPdf(doc, type, document, regels, customer, company) {
   const W = 210, M = 16, CW = W - 2 * M;
-  const totalen = documentTotalen(regels || [], type === 'factuur'
+  const totalen = pdfTotalen(regels || [], type === 'factuur'
     ? { bedragVeld: 'regelprijs', standaardPct: 21 }
     : { bedragVeld: 'subtotaal', standaardPct: Number(document.btwPct ?? 21) });
   const accent = hexToRgb(company?.brandingColor);

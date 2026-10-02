@@ -16,6 +16,7 @@ import { getEigenEenheden } from '../services/eigenEenheidService.js';
 import { typeCfg, typeOptionsWith, applyTypeChange, omschrijvingFallback, reconstructRegel } from '../lib/regelTypes.js'
 import BtwRegimeSelect, { VerlegdUitleg } from '../components/BtwRegimeSelect.jsx';
 import { regimeVanPct, regimeVanRegel, regimeVoorOpslag } from '../lib/btwRegime.js';
+import { documentTotalen, regelBedrag } from '../utils/documentTotalen.js';
 import { NewFactuurModal, SendFactuurMailModal } from './FacturenPage.jsx';
 import { generateOffertePdf, previewOffertePdf, getOffertePdfBase64 } from '../utils/generatePdf.js';
 import { mistGetekendePdf, stuurGetekendePdfNa } from '../services/getekendePdfService.js';
@@ -26,6 +27,7 @@ import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { statusInfo } from '../utils/statusColors.js';
 import ActieMenu from '../components/ActieMenu.jsx';
 import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
+import { usePermissions } from '../hooks/usePermissions.js';
 
 const offerteBadge = status => {
   const s = statusInfo(status, 'offerte');
@@ -82,18 +84,12 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
   }]);
   const removeRegel = (id) => setRegels(rs => rs.filter(r => r.id !== id));
 
-  const getRegelprijs = r => Math.round(Number(r.aantal || 0) * Number(r.eenheidsprijs || 0) * 100) / 100;
+  // Totalen volgens dezelfde regel als de database (utils/documentTotalen.js).
+  const getRegelprijs = r => regelBedrag(r.aantal, r.eenheidsprijs);
   const getEffBtw = r => r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw);
-
-  const totaalExcl = Math.round(regels.reduce((s, r) => s + getRegelprijs(r), 0) * 100) / 100;
-
-  const btwPerTarief = {};
-  for (const r of regels) {
-    const pct = getEffBtw(r);
-    const key = String(pct);
-    btwPerTarief[key] = Math.round(((btwPerTarief[key] || 0) + getRegelprijs(r) * pct / 100) * 100) / 100;
-  }
-  const totaalIncl = Math.round((totaalExcl + Object.values(btwPerTarief).reduce((s, v) => s + v, 0)) * 100) / 100;
+  const { excl: totaalExcl, btwPerTarief, incl: totaalIncl } = documentTotalen(regels, {
+    bedrag: getRegelprijs, pct: getEffBtw, regime: r => regimeVoorOpslag(regimeVanRegel(r)),
+  });
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
   const modalStyle = isMobile ? { width: '100vw', height: '100vh', maxWidth: '100vw', maxHeight: '100vh', borderRadius: 0, overflow: 'auto' } : { overflowX: 'hidden' };
@@ -332,17 +328,12 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
   const addRegel = () => setRegels(rs => [...rs, emptyRegel()]);
   const removeRegel = (id) => setRegels(rs => rs.filter(r => r.id !== id));
 
-  const getRegelprijs = r => Math.round(Number(r.aantal || 0) * Number(r.eenheidsprijs || 0) * 100) / 100;
+  // Totalen volgens dezelfde regel als de database (utils/documentTotalen.js).
+  const getRegelprijs = r => regelBedrag(r.aantal, r.eenheidsprijs);
   const getEffBtw = r => r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw);
-
-  const totaalExcl = Math.round(regels.reduce((s, r) => s + getRegelprijs(r), 0) * 100) / 100;
-  const btwPerTarief = {};
-  for (const r of regels) {
-    const pct = getEffBtw(r);
-    const key = String(pct);
-    btwPerTarief[key] = Math.round(((btwPerTarief[key] || 0) + getRegelprijs(r) * pct / 100) * 100) / 100;
-  }
-  const totaalIncl = Math.round((totaalExcl + Object.values(btwPerTarief).reduce((s, v) => s + v, 0)) * 100) / 100;
+  const { excl: totaalExcl, btwPerTarief, incl: totaalIncl } = documentTotalen(regels, {
+    bedrag: getRegelprijs, pct: getEffBtw, regime: r => regimeVoorOpslag(regimeVanRegel(r)),
+  });
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
   const modalStyle = isMobile ? { width: '100vw', height: '100vh', maxWidth: '100vw', maxHeight: '100vh', borderRadius: 0, overflow: 'auto' } : { overflowX: 'hidden' };
@@ -1090,7 +1081,10 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
 export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onItemClose, onItemLeave, preFillDealId, onNavConsumed, backKlant, onBackKlant }) {
   const toast = useToast();
   const { profile, company } = useProfile();
-  const canManageOffertes = profile?.role === 'admin' || profile?.role === 'planner';
+  // Beheren = admin of het recht 'offertes' (er bestaat geen rol "planner";
+  // zelfde regel als de database, audit M17).
+  const { magBewerken } = usePermissions();
+  const canManageOffertes = magBewerken('offertes');
   const [offertes, setOffertes] = useState([]);
   // Klanten en deals komen uit de gedeelde dataset; deze pagina haalde ze apart
   // op. De offertes zelf blijven eigen state: die worden hier na kopiëren,

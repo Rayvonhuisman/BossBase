@@ -312,16 +312,10 @@ export async function updateOfferte(id, input) {
 
   const updates = { ...input }
 
-  // Herbereken totalen als financiële velden aanwezig zijn
-  const financialKeys = ["arbeidsuren", "uurtarief", "materiaalkosten", "reiskosten", "marge_pct", "btw_pct"]
-  const hasFinancial = financialKeys.some(k => k in updates || k.replace(/_([a-z])/g, (_, c) => c.toUpperCase()) in updates)
-  if (hasFinancial) {
-    // Haal huidige waarden op zodat we altijd een volledig beeld hebben
-    const { data: current } = await supabase.from("offertes").select("*").eq("id", id).single()
-    const merged = { ...current, ...updates }
-    const totals = calculateOfferteTotals(merged)
-    Object.assign(updates, totals)
-  }
+  // Totalen rekent de database: trg_offertes_totalen_forceren zet bij elke
+  // update totaal_excl/incl uit de regels (bb_offertetotalen), met dezelfde
+  // regel als utils/documentTotalen.js. Hier niets meer herberekenen — de oude
+  // marge-formule gaf bij een mislukte lees-actie verzonnen standaardwaarden.
 
   // Verwijder frontend-aliases zodat alleen DB-kolommen overblijven
   delete updates.customerId

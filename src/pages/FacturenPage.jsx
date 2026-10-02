@@ -6,6 +6,7 @@ import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { useData } from '../lib/dataContext.jsx';
+import { usePermissions } from '../hooks/usePermissions.js';
 import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
 import { createFactuurPaymentLink, getStripeConnection } from '../services/stripeService.js';
 import {
@@ -22,6 +23,7 @@ import BtwRegimeSelect, { VerlegdUitleg } from '../components/BtwRegimeSelect.js
 import { regimeVanPct, regimeVanRegel, regimeVoorOpslag } from '../lib/btwRegime.js';
 import { previewFactuurPdf, getFactuurPdfBase64, formatIban } from '../utils/generatePdf.js';
 import { openstaandPerFactuur } from '../services/customerTotalsService.js';
+import { documentTotalen, regelBedrag } from '../utils/documentTotalen.js';
 import { buildCompanySnapshot, companyForDocument, isFactuurLocked, isGeimporteerdeFactuur } from '../utils/documentSnapshot.js';
 import { bewaarFactuurPdf, PDF_STATUSSEN } from '../utils/bewaarFactuurPdf.js';
 import { getMailTemplate, sendEmail, substituteVars, substituteVarsHtml, logSentEmail, escapeHtml } from '../services/emailService.js';
@@ -81,18 +83,16 @@ const emptyRegel = (defaults) => ({
   btwRegime: regimeVanPct(defaults?.btwPct ?? 21),
 });
 
+// Totalen volgens dezelfde regel als de database (utils/documentTotalen.js).
 function useRegelTotals(regels) {
-  const getRegelprijs = r => Math.round(Number(r.aantal || 0) * Number(r.eenheidsprijs || 0) * 100) / 100;
+  const getRegelprijs = r => regelBedrag(r.aantal, r.eenheidsprijs);
   const getEffBtw = r => r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw);
-  const totaalExcl = Math.round(regels.reduce((s, r) => s + getRegelprijs(r), 0) * 100) / 100;
-  const btwPerTarief = {};
-  for (const r of regels) {
-    const pct = getEffBtw(r);
-    const key = String(pct);
-    btwPerTarief[key] = Math.round(((btwPerTarief[key] || 0) + getRegelprijs(r) * pct / 100) * 100) / 100;
-  }
-  const totaalIncl = Math.round((totaalExcl + Object.values(btwPerTarief).reduce((s, v) => s + v, 0)) * 100) / 100;
-  return { getRegelprijs, totaalExcl, btwPerTarief, totaalIncl };
+  const t = documentTotalen(regels, {
+    bedrag: getRegelprijs,
+    pct: getEffBtw,
+    regime: r => regimeVoorOpslag(regimeVanRegel(r)),
+  });
+  return { getRegelprijs, totaalExcl: t.excl, btwPerTarief: t.btwPerTarief, totaalIncl: t.incl };
 }
 
 function RegelItemsForm({ regels, setRegels, defaults, eenheden = [] }) {
@@ -686,7 +686,10 @@ function ViewFactuurModal({ factuur, customers, onClose, onSluitVoorActie, onRef
   // van herinnering_*_verstuurd_at alsnog.
   const { plan, guardFeature, planModal } = usePlanGuard();
   const kanHerinneren = plan.has('betaalherinneringen');
-  const canManage = profile?.role === 'admin' || profile?.role === 'planner';
+  // Beheren = admin of het recht 'facturen' (er bestaat geen rol "planner";
+  // zelfde regel als de database, audit M17).
+  const { magBewerken } = usePermissions();
+  const canManage = magBewerken('facturen');
   // Uit de boekhouding opgehaald: alleen tonen, niets mee doen. Zie
   // isGeimporteerdeFactuur — versturen of crediteren zou een tweede
   // werkelijkheid maken naast die van SnelStart.
@@ -1133,7 +1136,10 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
 export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onItemClose, onItemLeave, onNavConsumed, backKlant, onBackKlant }) {
   const toast = useToast();
   const { profile, company } = useProfile();
-  const canManage = profile?.role === 'admin' || profile?.role === 'planner';
+  // Beheren = admin of het recht 'facturen' (er bestaat geen rol "planner";
+  // zelfde regel als de database, audit M17).
+  const { magBewerken } = usePermissions();
+  const canManage = magBewerken('facturen');
   const [facturen, setFacturen] = useState([]);
   // Factuur-id's waarvan een brondocument is bewaard: onze eigen PDF bij het
   // versturen, of het document dat uit de boekhouding is meegekomen.
