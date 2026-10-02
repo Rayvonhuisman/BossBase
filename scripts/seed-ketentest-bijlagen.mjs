@@ -12,8 +12,10 @@
 // kan hangen. Wil je de echte opmaak testen, verstuur de factuur dan vanuit
 // BossBase — dan overschrijft de app deze kopie.
 //
-// Draaien:  node scripts/seed-ketentest-bijlagen.mjs
-// Vereist:  .env.local met VITE_SUPABASE_URL en VITE_SUPABASE_ANON_KEY
+// Draaien:  SNELSTART_TEST_WACHTWOORD=… node scripts/seed-ketentest-bijlagen.mjs
+// Vereist:  .env.local met VITE_SUPABASE_URL en VITE_SUPABASE_ANON_KEY, en het
+//           wachtwoord van het testaccount in SNELSTART_TEST_WACHTWOORD (mag ook in
+//           .env.local). Nooit in dit bestand: de repo is publiek.
 
 import { readFileSync } from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
@@ -84,9 +86,12 @@ function maakBon() {
 
 const sb = createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY)
 
+const wachtwoord = process.env.SNELSTART_TEST_WACHTWOORD || env.SNELSTART_TEST_WACHTWOORD
+if (!wachtwoord) { console.error('Zet SNELSTART_TEST_WACHTWOORD (omgeving of .env.local).'); process.exit(1) }
+
 const { error: loginErr } = await sb.auth.signInWithPassword({
   email: 'snelstart.test@bossbase.nl',
-  password: 'SnelStartTest!2608',
+  password: wachtwoord,
 })
 if (loginErr) { console.error('Inloggen mislukt:', loginErr.message); process.exit(1) }
 
