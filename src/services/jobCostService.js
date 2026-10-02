@@ -44,6 +44,16 @@ export async function getKostenBijlageUrl(stored) {
 }
 
 
+// Opslagpaden uit bijlage_url (JSON-array of één pad). Oude publieke http-URL's
+// zijn geen pad in onze bucket en blijven buiten beschouwing.
+function bijlagePaden(stored) {
+  if (!stored) return []
+  let items
+  try { items = JSON.parse(stored) } catch { items = [stored] }
+  return (Array.isArray(items) ? items : [items])
+    .filter(p => typeof p === 'string' && p && !p.startsWith('http'))
+}
+
 // Bonnen uploaden naar de privé-bucket en de opslagpaden teruggeven. Gedeeld
 // door de kostenmodal en het snelle kostenformulier in de projectdrawer, zodat
 // beide dezelfde padopbouw gebruiken — de SnelStart-koppeling leest deze paden
@@ -315,7 +325,7 @@ export async function deleteJobCost(id) {
   // de FK (ON DELETE CASCADE) ruimt de kost dan mee op. Zo blijven materiaal en
   // kost in sync, ongeacht vanaf welke kant je verwijdert.
   const { data: cost } = await supabase
-    .from('job_costs').select('werkbon_materiaal_id, externe_referentie').eq('id', id).maybeSingle()
+    .from('job_costs').select('werkbon_materiaal_id, externe_referentie, bijlage_url').eq('id', id).maybeSingle()
   if (cost?.werkbon_materiaal_id) {
     const { error } = await supabase.from('werkbon_materialen').delete().eq('id', cost.werkbon_materiaal_id)
     if (error) throw error
@@ -325,6 +335,16 @@ export async function deleteJobCost(id) {
   }
   const { error } = await supabase.from('job_costs').delete().eq('id', id)
   if (error) throw error
+
+  // De bon(nen) in de opslag mee weggooien: de privacyverklaring belooft dat
+  // verwijderde gegevens ook echt weg zijn, en een bon zonder kostenpost is
+  // door niemand meer te vinden. Mislukt het, dan is de kostenpost toch weg;
+  // het bestand blijft dan staan tot de opschoning.
+  const paden = bijlagePaden(cost?.bijlage_url)
+  if (paden.length) {
+    const { error: opslagFout } = await supabase.storage.from('kosten-bijlagen').remove(paden)
+    if (opslagFout) console.warn('Bon verwijderen uit de opslag mislukt:', opslagFout.message)
+  }
 
   // Onthouden dat deze kostenpost hier bewust weg is, zodat de import hem niet
   // terughaalt.
