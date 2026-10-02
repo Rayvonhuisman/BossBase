@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { logFout } from '../lib/stilleFouten.js';
 import { ModalX } from '../bb-shared.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { useData } from '../lib/dataContext.jsx';
@@ -172,7 +173,7 @@ export function UrenHerinneringModal({ navigatePage }) {
     let alive = true;
     getTeamMembers()
       .then(ms => { if (alive) setHeeftPersoneel((ms || []).filter(m => m.profileId).length > 1); })
-      .catch(() => {});
+      .catch(logFout('teamleden laden'));
     return () => { alive = false; };
   }, [isPersoneel, refreshKey]);
 

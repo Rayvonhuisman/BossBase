@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { logFout } from '../../lib/stilleFouten.js';
 import { MapPin } from 'lucide-react';
 import { I, fmt } from '../../bb-shared.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
@@ -126,9 +127,9 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
   // ── Laad dropdown-data + teamleden (voor @ tagging) ───────────
   useEffect(() => {
     let alive = true;
-    listCustomers().then(d => { if (alive) setCustomers(d || []); }).catch(() => {});
-    listDeals().then(d => { if (alive) setDeals(d || []); }).catch(() => {});
-    getTeamMembers().then(d => { if (alive) setTeamMembers(d || []); }).catch(() => {});
+    listCustomers().then(d => { if (alive) setCustomers(d || []); }).catch(logFout('klanten laden'));
+    listDeals().then(d => { if (alive) setDeals(d || []); }).catch(logFout('aanvragen laden'));
+    getTeamMembers().then(d => { if (alive) setTeamMembers(d || []); }).catch(logFout('teamleden laden'));
     return () => { alive = false; };
   }, []);
 
@@ -137,12 +138,18 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
     let alive = true;
     if (!ev?.werkbonId) { setWerkbon(null); setTaken([]); setMaterialen([]); return; }
     setWbLoading(true);
+    const deels = [];
+    const of = (belofte, terug) => belofte.catch(e => { deels.push(e); return terug; });
     Promise.all([
-      getWerkbonById(ev.werkbonId).catch(() => null),
-      getWerkbonTaken(ev.werkbonId).catch(() => []),
-      getWerkbonMaterialen(ev.werkbonId).catch(() => []),
+      of(getWerkbonById(ev.werkbonId), null),
+      of(getWerkbonTaken(ev.werkbonId), []),
+      of(getWerkbonMaterialen(ev.werkbonId), []),
     ]).then(([w, t, m]) => {
       if (!alive) return;
+      if (deels.length) {
+        console.warn('[bb] gekoppelde werkbon deels geladen', deels);
+        toast.error('De gekoppelde werkbon kon niet volledig worden geladen. Ververs de pagina.');
+      }
       setWerkbon(w); setTaken(t || []); setMaterialen(m || []);
     }).finally(() => { if (alive) setWbLoading(false); });
     return () => { alive = false; };
@@ -242,7 +249,7 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
       creatorId: profile?.id,
       creatorName: profile?.fullName,
       contextName: ev.title,
-    }).catch(() => {});
+    }).catch(logFout('melding versturen'));
   };
 
   const HeadClose = (

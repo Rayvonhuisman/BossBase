@@ -226,7 +226,7 @@ ${mailButton('Werkbon bekijken en ondertekenen', link, company?.brandingColor)}
     toEmail: adres, subject: onderwerp, bodyHtml: html,
     relatedType: 'werkbon', relatedId: werkbon.id,
     customerId: werkbon.customerId || werkbon.customer_id || null,
-  }).catch(() => {})
+  }).catch(e => console.warn('[bb] mailarchief bijwerken mislukt', e))
 
   // Vastleggen waar de link heen is; de ondertekenpagina vult het adres
   // daarmee voor, en op de werkbon is te zien dat er al iets verstuurd is.
@@ -314,7 +314,7 @@ export async function verstuurWaarschuwing({ werkbon, notitie, constatering, gev
     toEmail: adres, subject: onderwerp, bodyHtml: html,
     relatedType: 'werkbon', relatedId: werkbon?.id,
     customerId: werkbon?.customerId || werkbon?.customer_id || null,
-  }).catch(() => {})
+  }).catch(e => console.warn('[bb] mailarchief bijwerken mislukt', e))
 
   const bijgewerkt = await legWaarschuwingVast(notitie.id, { note: wat, gevolg: gev, email: adres })
   return { email: adres, notitie: bijgewerkt }

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { logFout, meldFout, AGENDA_NIET_BIJGEWERKT } from '../lib/stilleFouten.js';
 import { ModalX, NotifyMailToggle } from '../bb-shared.jsx';
 import { InfoTip } from './Uitleg.jsx';
 import { AssigneeResponsibleSelect } from './AssigneeResponsibleSelect.jsx';
@@ -49,11 +50,17 @@ export function AgendaWerkbonPlanModal({ currentUserId, currentUserName, default
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    const deels = [];
+    const of = (belofte, terug) => belofte.catch(e => { deels.push(e); return terug; });
     Promise.all([
-      getWerkbonnen().catch(() => []),
-      gedeeld ? getActiveTeamMembers({ includeSelf: true }).catch(() => []) : Promise.resolve([]),
+      of(getWerkbonnen(), []),
+      gedeeld ? of(getActiveTeamMembers({ includeSelf: true }), []) : Promise.resolve([]),
     ]).then(([wbs, members]) => {
       if (!alive) return;
+      if (deels.length) {
+        console.warn('[bb] inplannen deels geladen', deels);
+        toast.error('De werkbonnen of teamleden konden niet worden geladen. Sluit het venster en probeer het opnieuw.');
+      }
       // Alleen nog niet ingeplande werkbonnen — zelfde definitie als de Planning:
       // een werkbon telt als ingepland zodra hij een datum én starttijd heeft.
       const unplanned = (wbs || []).filter(w => !isIngepland(w) && w.status !== 'afgerond');
@@ -92,10 +99,10 @@ export function AgendaWerkbonPlanModal({ currentUserId, currentUserName, default
           body: `Datum: ${date}${starttijd ? ` om ${starttijd}` : ''}`,
           link: 'calendar', relatedType: 'werkbon', relatedId: werkbonId,
           creatorId: currentUserId, creatorName: currentUserName,
-        }).catch(() => {});
+        }).catch(logFout('melding versturen'));
       }
       // 3) Agenda bijwerken: één item per geplande dag (herkomst 'planning').
-      syncWerkbonEvents(werkbonId).catch(() => {});
+      syncWerkbonEvents(werkbonId).catch(meldFout(toast, AGENDA_NIET_BIJGEWERKT));
       toast.success('Werkbon ingepland');
       onScheduled?.(updated);
       onClose();

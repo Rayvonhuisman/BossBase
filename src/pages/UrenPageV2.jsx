@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { logFout } from '../lib/stilleFouten.js';
+import { leesbareFout } from '../components/LaadFout.jsx';
 import { vandaagIso } from '../lib/datumTijd.js';
 import { useToast } from '../lib/toast.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
@@ -727,14 +729,19 @@ export function UrenPageV2({ navigatePage } = {}) {
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    const deels = [];
     Promise.all([
       getUrenregistratie(),
-      getProjects().catch(() => []),
-      getAlleWerkbonUren().catch(() => []),
+      getProjects().catch(e => { deels.push(e); return []; }),
+      getAlleWerkbonUren().catch(e => { deels.push(e); return []; }),
     ])
       .then(([r, p, wu]) => {
         if (!alive) return;
         setAllRows(r); setProjecten(p); setWerkbonUren(wu); setError('');
+        if (deels.length) {
+          console.warn('[bb] uren deels geladen', deels);
+          toast.error('De werkbonuren of projecten konden niet worden geladen; totalen kunnen te laag zijn. Ververs de pagina.');
+        }
       })
       .catch(err => { if (!alive) return; setError(err.message || 'Laden mislukt'); })
       .finally(() => { if (alive) setLoading(false); });
@@ -747,7 +754,7 @@ export function UrenPageV2({ navigatePage } = {}) {
     let alive = true;
     getTeamMembers()
       .then(ms => { if (alive) setTeamMembers((ms || []).filter(m => m.profileId)); })
-      .catch(() => {});
+      .catch(logFout('teamleden laden'));
     return () => { alive = false; };
   }, [canBookForOthers]);
 
@@ -905,7 +912,7 @@ export function UrenPageV2({ navigatePage } = {}) {
       {error && (
         <div className="uren2-error-strip">
           <span className="uren2-error-strip-ic">{Ic.Alert}</span>
-          Kon urenregistraties niet laden — {error}
+          Kon urenregistraties niet laden — {leesbareFout(error)}
         </div>
       )}
 

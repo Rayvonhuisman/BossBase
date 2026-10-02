@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { logFout } from './lib/stilleFouten.js';
 import { vandaagIso } from './lib/datumTijd.js';
 import { createPortal } from 'react-dom';
 import { Wrench, AlertTriangle } from 'lucide-react';
@@ -702,7 +703,7 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
                     disabled={markingAll}
                     onClick={async () => {
                       setMarkingAll(true);
-                      await markAllNotificationsRead().catch(() => {});
+                      await markAllNotificationsRead().catch(logFout('meldingen als gelezen markeren'));
                       await loadDbNotifs();
                       setMarkingAll(false);
                     }}
@@ -723,7 +724,7 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
                     : n.type.startsWith('toewijzing') ? '→' : '●';
                   const handleClick = async () => {
                     if (isUnread) {
-                      await markNotificationRead(n.id).catch(() => {});
+                      await markNotificationRead(n.id).catch(logFout('melding als gelezen markeren'));
                       setDbNotifs(prev => prev.map(x => x.id === n.id ? { ...x, readAt: new Date().toISOString() } : x));
                     }
                     close();
@@ -1564,7 +1565,7 @@ function AppInner() {
     let alive = true;
     getPlanStatus()
       .then(st => { if (alive && st) setPlanStatus(st); })
-      .catch(() => {});
+      .catch(logFout('abonnementsstand verversen'));
     return () => { alive = false; };
   }, [sessionUserId, refreshKey, profile?.companyId]);
 

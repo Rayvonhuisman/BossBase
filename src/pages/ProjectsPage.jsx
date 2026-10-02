@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { leesbareFout } from '../components/LaadFout.jsx';
 import { vandaagIso } from '../lib/datumTijd.js';
 import { I, ModalX, NotifyMailToggle, fmt, fmt0, BackToKlant } from '../bb-shared.jsx';
 import { InfoTip } from '../components/Uitleg.jsx';
@@ -413,7 +414,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
         <div>
           <h1>Projecten</h1>
           <p>Beheer projecten, uren, offertes en facturatie</p>
-          {err && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 4 }}>{err}</div>}
+          {err && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 4 }}>{leesbareFout(err)}</div>}
         </div>
         <div className="page-hd-actions">
           {canManage && (

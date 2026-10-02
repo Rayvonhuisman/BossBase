@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { logFout, meldFout } from '../lib/stilleFouten.js';
 import { vandaagIso } from '../lib/datumTijd.js';
 import { I, ModalX, NotifyMailToggle, PIPELINE_STAGES, fmt } from '../bb-shared.jsx';
 import { InfoTip } from './Uitleg.jsx';
@@ -85,7 +86,7 @@ export function NewCustomerModal({ onClose, onSaved }) {
   const [teamMembersNC, setTeamMembersNC] = useState([]);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  useEffect(() => { getTeamMembers().then(setTeamMembersNC).catch(() => {}); }, []);
+  useEffect(() => { getTeamMembers().then(setTeamMembersNC).catch(logFout('teamleden laden')); }, []);
 
   const validate = () => {
     const next = {};
@@ -208,7 +209,7 @@ export function VerlorenModal({ deal, lostStage, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [reasons, setReasons] = useState([]);
 
-  useEffect(() => { getLostReasons().then(setReasons).catch(() => {}); }, []);
+  useEffect(() => { getLostReasons().then(setReasons).catch(logFout('verliesredenen laden')); }, []);
   const opties = reasons.length ? reasons.map(r => r.label) : LOST_REASONS_FALLBACK;
 
   const bevestig = async () => {
@@ -297,7 +298,7 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
   const [teamMembersNL, setTeamMembersNL] = useState([]);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  useEffect(() => { getTeamMembers().then(setTeamMembersNL).catch(() => {}); }, []);
+  useEffect(() => { getTeamMembers().then(setTeamMembersNL).catch(logFout('teamleden laden')); }, []);
 
   // A real DB stage has a UUID id. The hardcoded fallbacks (PIPELINE_STAGES)
   // use slug ids — those would fail the deals.stage_id UUID check, so we
@@ -470,7 +471,7 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
   const [notifyMail, setNotifyMail] = useState(true);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(logFout('teamleden laden')); }, []);
 
   const dealsForCust = useMemo(() => {
     if (!deals) return [];
@@ -504,10 +505,10 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
       // Mention notifications in notes
       if (form.notes && profile?.id) {
         const custName = customers?.find(c => c.id === form.custId)?.name || '';
-        createMentionNotifications({ text: form.notes, relatedType: 'activiteit', relatedId: created.id, link: 'activities', creatorId: profile.id, creatorName: profile.fullName, contextName: custName }).catch(() => {});
+        createMentionNotifications({ text: form.notes, relatedType: 'activiteit', relatedId: created.id, link: 'activities', creatorId: profile.id, creatorName: profile.fullName, contextName: custName }).catch(logFout('melding versturen'));
       }
       // Assignment notification naar elke toegewezen medewerker (behalve jezelf)
-      notifyNewAssignees({ userIds: form.assignedToIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${form.date}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: created.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
+      notifyNewAssignees({ userIds: form.assignedToIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${form.date}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: created.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(logFout('melding versturen'));
       if (form.type === 'visit' && form.custId) {
         const cust = customers?.find(c => c.id === form.custId);
         if (cust?.email) {
@@ -641,7 +642,7 @@ export function NewCalendarEventModal({ onClose, onSaved, customers, defaultDate
   const [saving, setSaving] = useState(false);
   const [teamMembersCE, setTeamMembersCE] = useState([]);
 
-  useEffect(() => { getTeamMembers().then(setTeamMembersCE).catch(() => {}); }, []);
+  useEffect(() => { getTeamMembers().then(setTeamMembersCE).catch(logFout('teamleden laden')); }, []);
   const set = (k, v) => {
     setForm(f => {
       const next = { ...f, [k]: v };
@@ -783,7 +784,7 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
   const { leveranciers: leverancierOpties = [], werkbonnen = [], refresh: verversGedeeld } = useData();
   const [projecten, setProjecten] = useState([]);
   useEffect(() => {
-    getProjects().then(setProjecten).catch(() => {});
+    getProjects().then(setProjecten).catch(logFout('projecten laden'));
   }, []);
   const [regels, setRegels] = useState(() => [newKostenRegel()]);
   const [bijlageFiles, setBijlageFiles] = useState([]);
@@ -1133,7 +1134,7 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
   // planning. Er bestaat geen rol 'planner'; dat is een recht.
   const canEdit = magBewerken('planning');
   const [teamMembers, setTeamMembers] = useState([]);
-  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(logFout('teamleden laden')); }, []);
 
   // Notitielogboek van deze activiteit (losse rijen in activiteit_notities).
   const [activiteitNotities, setActiviteitNotities] = useState([]);
@@ -1142,7 +1143,7 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
     let alive = true;
     getActiviteitNotities(activity.id)
       .then(rows => { if (alive) setActiviteitNotities(rows); })
-      .catch(() => {});
+      .catch(meldFout(toast, 'De notities van deze activiteit konden niet worden geladen.'));
     return () => { alive = false; };
   }, [activity?.id]);
 
@@ -1226,11 +1227,11 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
       });
       if (form.notes && profile?.id) {
         const custName = customers?.find(c => c.id === form.custId)?.name || '';
-        createMentionNotifications({ text: form.notes, relatedType: 'activiteit', relatedId: activity.id, link: 'activities', creatorId: profile.id, creatorName: profile.fullName, contextName: custName }).catch(() => {});
+        createMentionNotifications({ text: form.notes, relatedType: 'activiteit', relatedId: activity.id, link: 'activities', creatorId: profile.id, creatorName: profile.fullName, contextName: custName }).catch(logFout('melding versturen'));
       }
       // Notificatie naar nieuw toegevoegde toegewezen medewerkers (behalve jezelf).
       const prevIds = activity?.assignedToIds || (activity?.assignee ? [activity.assignee] : []);
-      notifyNewAssignees({ userIds: form.assignedToIds, prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${form.date}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: activity.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
+      notifyNewAssignees({ userIds: form.assignedToIds, prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${form.date}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: activity.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(logFout('melding versturen'));
       toast.success('Activiteit bijgewerkt');
       onSaved?.(updated);
       onClose();

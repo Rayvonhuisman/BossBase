@@ -8,6 +8,7 @@
 // zou lopen — precies de overlap die het bij leveranciers eerder gaf.
 
 import { useEffect, useState } from 'react';
+import { leesbareFout } from '../components/LaadFout.jsx';
 import { I, ModalX, fmt, Av } from '../bb-shared.jsx';
 import { InfoTip } from '../components/Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
@@ -206,7 +207,7 @@ export default function LeveranciersPage({ openLeverancier }) {
         </div>
       </div>
 
-      {error && <div className="card card-p" style={{ color: '#dc2626', marginBottom: 14 }}>{error}</div>}
+      {error && <div className="card card-p" style={{ color: '#dc2626', marginBottom: 14 }}>{leesbareFout(error)}</div>}
 
       <div className="search afu2" style={{ maxWidth: 360, marginBottom: 14 }}>
         {I.search}

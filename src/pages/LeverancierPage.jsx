@@ -66,15 +66,21 @@ export default function LeverancierPage({ leverancierId, onClose }) {
     let alive = true;
     setLoading(true);
     setTab('overview');
+    const deels = [];
+    const of = (belofte, terug) => belofte.catch(e => { deels.push(e); return terug; });
     Promise.all([
       getLeverancier(leverancierId),
-      getLeverancierNotities(leverancierId).catch(() => []),
-      getTijdlijnByLeverancier(leverancierId).catch(() => []),
-      listMaterialen().catch(() => []),
-      getTeamMembers().catch(() => []),
+      of(getLeverancierNotities(leverancierId), []),
+      of(getTijdlijnByLeverancier(leverancierId), []),
+      of(listMaterialen(), []),
+      of(getTeamMembers(), []),
     ])
       .then(([lev, n, t, m, tm]) => {
         if (!alive) return;
+        if (deels.length) {
+          console.warn('[bb] leverancier deels geladen', deels);
+          toast.error('Niet alles van deze leverancier kon worden geladen (notities, tijdlijn of materialen kunnen ontbreken). Ververs de pagina.');
+        }
         setLeverancier(lev);
         setNotities(n);
         setTijdlijn(t);

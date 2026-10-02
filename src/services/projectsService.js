@@ -590,7 +590,7 @@ export async function getEnrichedProjects() {
       .from('facturen')
       .select('*', { count: 'exact' })
       .order('created_at', { ascending: false })
-      .order('id', { ascending: true })).catch(() => []),
+      .order('id', { ascending: true })),
   ])
 
   const invoicesByProject = {}

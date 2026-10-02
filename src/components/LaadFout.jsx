@@ -21,6 +21,14 @@ export function laadFoutTekst(fout) {
   return 'Er ging iets mis bij het laden. Probeer het opnieuw.';
 }
 
+/** Netwerk- en time-outfouten in het Nederlands; andere meldingen (validatie,
+ *  rechten) blijven zoals ze zijn, want die zijn al bedoeld voor de gebruiker. */
+export function leesbareFout(fout) {
+  const t = String(fout?.message || fout || '');
+  return /failed to fetch|networkerror|network request failed|load failed|timeout|canceling statement/i.test(t)
+    ? laadFoutTekst(t) : t;
+}
+
 /** Kaart met foutmelding en "Opnieuw proberen", voor binnen een pagina. */
 export function LaadFout({ fout, onOpnieuw, titel = 'Laden is niet gelukt' }) {
   return (

@@ -1687,9 +1687,9 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
     try {
       const [list, cs, tc, prs] = await Promise.all([
         getWerkbonnen(),
-        listCustomers().catch(() => []),
+        listCustomers().catch(e => { logFout('klanten laden')(e); return []; }),
         getAllWerkbonTakenCounts().catch(() => ({})),
-        getProjects().catch(() => []),
+        getProjects().catch(e => { logFout('projecten laden')(e); return []; }),
       ]);
       setWerkbonnen(list);
       setCustomers(cs);
@@ -1736,16 +1736,24 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
     let alive = true;
     setDetailLoading(true);
     setShowHoursAdd(false);
+    // Een onderdeel dat niet laadt mag de werkbon niet tegenhouden, maar ook
+    // niet stil als "geen uren" of "geen materiaal" in beeld komen.
+    const deels = [];
+    const of = (belofte, terug) => belofte.catch(e => { deels.push(e); return terug; });
     Promise.all([
-      getWerkbonById(selectedId).catch(() => null),
-      getWerkbonTaken(selectedId).catch(() => []),
-      getWerkbonMaterialen(selectedId).catch(() => []),
-      getWerkbonUren(selectedId).catch(() => []),
-      getWerkbonFotos(selectedId).catch(() => []),
-      getWerkbonTaken(selectedId, { soort: 'meerwerk' }).catch(() => []),
-      getWerkbonNotities(selectedId).catch(() => []),
+      of(getWerkbonById(selectedId), null),
+      of(getWerkbonTaken(selectedId), []),
+      of(getWerkbonMaterialen(selectedId), []),
+      of(getWerkbonUren(selectedId), []),
+      of(getWerkbonFotos(selectedId), []),
+      of(getWerkbonTaken(selectedId, { soort: 'meerwerk' }), []),
+      of(getWerkbonNotities(selectedId), []),
     ]).then(([w, t, m, u, f, mw, nt]) => {
       if (!alive) return;
+      if (deels.length) {
+        console.warn('[bb] werkbon deels geladen', deels);
+        toast.error(w ? 'Niet alles van deze werkbon kon worden geladen (taken, materiaal, uren, foto\'s of notities kunnen ontbreken). Ververs de pagina.' : 'Deze werkbon kon niet worden geladen. Ververs de pagina.');
+      }
       setDetail(w);
       setWerkbonNotities(nt);
       setTaken(t);
@@ -1989,7 +1997,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
     if (ondertekend) {
       // De edge function heeft de bon al bijgewerkt en op slot gezet; opnieuw
       // ophalen is de enige manier om de UI daarmee gelijk te krijgen.
-      const vers = await getWerkbonById(detail.id).catch(() => null);
+      const vers = await getWerkbonById(detail.id).catch(logFout('werkbon verversen'));
       if (vers) {
         setDetail(vers);
         setWerkbonnen(prev => prev.map(w => (w.id === vers.id ? vers : w)));
@@ -2010,7 +2018,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
     if (gemaild) {
       setAfrondModal(false);
       toast.success(`Werkbon verstuurd naar ${email}. De bon blijft open tot de klant tekent.`);
-      const vers = await getWerkbonById(detail.id).catch(() => null);
+      const vers = await getWerkbonById(detail.id).catch(logFout('werkbon verversen'));
       if (vers) setDetail(vers);
       return;
     }

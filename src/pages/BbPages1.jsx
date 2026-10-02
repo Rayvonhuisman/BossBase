@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { leesbareFout } from '../components/LaadFout.jsx';
+import { logFout, meldFout } from '../lib/stilleFouten.js';
 import { vandaagIso } from '../lib/datumTijd.js';
 import SyncIndicator from '../components/SyncIndicator.jsx';
 import DOMPurify from 'dompurify';
@@ -235,7 +237,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   const [showActivityModal, setShowActivityModal] = useState(false);
   // Inkopen toevoegen: dezelfde invoerregel als op het project (KostenInvoerRegel).
   const [leveranciers, setLeveranciers] = useState([]);
-  useEffect(() => { listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(() => {}); }, []);
+  useEffect(() => { listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(logFout('leveranciers laden')); }, []);
   const [selectedAct, setSelectedAct] = useState(null);
   const [cOffertes, setOffertes] = useState([]);
   const [cFacturen, setFacturen] = useState([]);
@@ -307,8 +309,8 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   useEffect(() => {
     if (tab !== 'emails' || !custId) return;
     setSentEmailsLoading(true);
-    getSentEmailsByCustomer(custId).then(setSentEmails).catch(() => {}).finally(() => setSentEmailsLoading(false));
-    getEmailTemplates().then(tpls => setEmailTemplates(tpls.filter(t => t.actief))).catch(() => {});
+    getSentEmailsByCustomer(custId).then(setSentEmails).catch(meldFout(toast, 'De verstuurde e-mails konden niet worden geladen.')).finally(() => setSentEmailsLoading(false));
+    getEmailTemplates().then(tpls => setEmailTemplates(tpls.filter(t => t.actief))).catch(logFout('mailtemplates laden'));
     setExpandedEmailId(null);
   }, [tab, custId]);
 
@@ -321,18 +323,26 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    // Een deel dat niet laadt, mag de klantkaart niet tegenhouden, maar ook niet
+    // stil als "geen facturen" of "€ 0 kosten" in beeld komen.
+    const deels = [];
+    const of = (belofte, terug) => belofte.catch(e => { deels.push(e); return terug; });
     Promise.all([
       getCustomer(custId), listActivities(),
-      getOffertesByCustomer(custId).catch(() => []),
-      getFacturenByCustomer(custId).catch(() => []),
-      getProjectsByCustomer(custId).catch(() => []),
-      getKlantNotities(custId).catch(() => []),
-      getTijdlijnByCustomer(custId).catch(() => []),
-      getWerkbonnen().catch(() => []),
-      getKlantKostenOverzicht(custId).catch(() => LEEG_OVERZICHT),
+      of(getOffertesByCustomer(custId), []),
+      of(getFacturenByCustomer(custId), []),
+      of(getProjectsByCustomer(custId), []),
+      of(getKlantNotities(custId), []),
+      of(getTijdlijnByCustomer(custId), []),
+      of(getWerkbonnen(), []),
+      of(getKlantKostenOverzicht(custId), LEEG_OVERZICHT),
     ])
     .then(([customer, activities, offertes, facturen, projecten, notities, tl, werkbonnen, overzicht]) => {
       if (!alive) return;
+      if (deels.length) {
+        console.warn('[bb] klantkaart deels geladen', deels);
+        toast.error('Niet alles van deze klant kon worden geladen. Bedragen en lijsten kunnen onvolledig zijn; ververs de pagina.');
+      }
       setKostenOverzicht(overzicht);
       setCustomer(customer);
       setKlantNotities(notities);
@@ -349,7 +359,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
     return () => { alive = false; };
   }, [custId, refreshKey]);
 
-  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(logFout('teamleden laden')); }, []);
 
   // Moet vóór early returns staan (Rules of Hooks)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -472,7 +482,10 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   const reloadCosts = async () => {
     try {
       setKostenOverzicht(await getKlantKostenOverzicht(custId));
-    } catch { /* ignore */ }
+    } catch (e) {
+      console.warn('[bb] kostenoverzicht verversen mislukt', e);
+      toast.error('Het kostenoverzicht kon niet worden ververst. Ververs de pagina.');
+    }
   };
 
   // De klantgegevens-tab toont het label alleen als de tabbalk de ruimte heeft;
@@ -517,7 +530,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
           creatorId: profile.id,
           creatorName: profile.fullName,
           contextName: c.name,
-        }).catch(() => {});
+        }).catch(logFout('melding versturen'));
       }
       clearText('');
       onDone?.();
@@ -546,7 +559,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
         creatorId: profile.id,
         creatorName: profile.fullName,
         contextName: c.name,
-      }).catch(() => {});
+      }).catch(logFout('melding versturen'));
     }
     toast.success('Notitie opgeslagen');
   };
@@ -602,7 +615,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
       });
       toast.success('E-mail verstuurd');
       logTijdlijnSafe(c?.id, 'email_verstuurd', `E-mail verstuurd: ${emailForm.subject}`, { to: emailForm.to, subject: emailForm.subject });
-      getSentEmailsByCustomer(custId).then(setSentEmails).catch(() => {});
+      getSentEmailsByCustomer(custId).then(setSentEmails).catch(logFout('verstuurde e-mails verversen'));
       setEmailForm(f => ({ ...f, templateId: '', subject: '', body: '' }));
     } catch (err) {
       toast.error(err.message || 'Versturen mislukt');
@@ -1529,7 +1542,7 @@ export function CustomersPage({ openCustomer }) {
           <button className="btn btn-p btn-sm" data-rl="klanten-nieuw" onClick={guardLimiet('klanten', () => setShowNew(true))}>{I.plus} Nieuwe klant</button>
         </div>
       </div>
-      {error && <div className="card card-p" style={{ color: '#dc2626', marginBottom: 14 }}>{error}</div>}
+      {error && <div className="card card-p" style={{ color: '#dc2626', marginBottom: 14 }}>{leesbareFout(error)}</div>}
       <div className="search afu2" data-rl="klanten-zoeken" style={{ maxWidth: 360, marginBottom: 14 }}>
         {I.search}
         <input placeholder="Zoek op naam of bedrijf…" value={search} onChange={e => setSearch(e.target.value)} />
