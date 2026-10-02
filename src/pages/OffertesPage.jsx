@@ -270,8 +270,10 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
           </div>
 
           <div className="f s2">
-            <label>Notities</label>
-            <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Interne notities..." />
+            {/* Dit veld komt op de offerte-PDF en de ondertekenpagina: het is een
+                opmerking voor de klant, geen interne notitie (audit M21). */}
+            <label>Opmerking voor de klant</label>
+            <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Staat op de offerte die de klant ontvangt" />
           </div>
         </div>
         <div className="fa">
@@ -537,8 +539,8 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
             </div>
 
             <div className="f s2">
-              <label>Notities</label>
-              <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} disabled={locked} />
+              <label>Opmerking voor de klant</label>
+              <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} disabled={locked} placeholder="Staat op de offerte die de klant ontvangt" />
             </div>
           </div>
         )}
@@ -856,7 +858,7 @@ function ViewOfferteModal({ offerte, customers, onClose, onSluitVoorActie, onMaa
           </div>
           {offerte.notes && (
             <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>Notities</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>Opmerking voor de klant</div>
               <div style={{ fontSize: 13, color: 'var(--tx)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{offerte.notes}</div>
             </div>
           )}
