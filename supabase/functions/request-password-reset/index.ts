@@ -17,13 +17,38 @@ const json = (body: unknown, status = 200) =>
 // Alleen de hash van het token gaat de database in; het token zelf staat
 // uitsluitend in de link in de mail. Zelfde hash als apply-password-reset gebruikt.
 
+// Hoe lang een antwoord minimaal duurt. Al het werk (opzoeken, token, mail)
+// gebeurt ná het antwoord, op de achtergrond; dit vangt de laatste paar
+// milliseconden verschil op. Zonder dit verraadde de responstijd of een adres
+// een account had: 3,2 s tegen 0,23 s (audit 2026-10-01, B-7).
+const MIN_ANTWOORD_MS = 600
+
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
+  const start = Date.now()
+  let email = ''
   try {
-    const { email } = await req.json()
-    if (!email) return json({ success: false, error: 'email is verplicht' }, 400)
+    const body = await req.json()
+    email = typeof body?.email === 'string' ? body.email.trim() : ''
+  } catch { /* ongeldige body: zelfde antwoord als hieronder */ }
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return json({ success: false, error: 'Vul een geldig e-mailadres in.' }, 400)
+  }
 
+  const werk = verwerk(email).catch(err => console.error('[request-password-reset] Fout:', err))
+  if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(werk)
+  else await werk
+
+  const rest = MIN_ANTWOORD_MS - (Date.now() - start)
+  if (rest > 0) await new Promise(r => setTimeout(r, rest))
+  // Altijd hetzelfde antwoord, of het adres nu bestaat of niet.
+  return json({ success: true })
+})
+
+async function verwerk(email: string): Promise<void> {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const resendKey   = Deno.env.get('RESEND_API_KEY')!
@@ -34,9 +59,7 @@ serve(async (req) => {
 
     // Zoek user_id op via SECURITY DEFINER helper (bypast RLS op auth.users)
     const { data: userId } = await supabase.rpc('get_auth_user_id_by_email', { p_email: email.toLowerCase() })
-
-    // Altijd success — geen user-existence leak
-    if (!userId) return json({ success: true })
+    if (!userId) return
 
     // ── Rate limiting (mail-spam tegengaan) ──────────────────────────────────
     // Throttle per e-mailadres: min. 60s tussen mails én max. 3 per uur.
@@ -59,7 +82,7 @@ serve(async (req) => {
       if ((nowMs - lastMs < 60 * 1000) || (withinHour && attempt.attempt_count >= 3)) {
         // Geen e-mailadres in de logs: logs zijn geen plek voor persoonsgegevens.
         console.log('[request-password-reset] Throttled (geen mail):', { user: userId })
-        return json({ success: true })
+        return
       }
       // Reset het uurvenster als het verlopen is.
       const newCount = withinHour ? attempt.attempt_count + 1 : 1
@@ -133,9 +156,4 @@ serve(async (req) => {
     // Bewust GEEN resetUrl/token loggen: wie logtoegang heeft kon anders binnen
     // het geldigheidsvenster een reset-token buitmaken en accounts overnemen.
     console.log('[request-password-reset] Mail verstuurd ✓', { user: userId, message_id: resendData.id })
-    return json({ success: true })
-  } catch (err) {
-    console.error('[request-password-reset] Fout:', err)
-    return json({ success: false, error: String(err) }, 500)
-  }
-})
+}
