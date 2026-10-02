@@ -32,7 +32,11 @@ export function refreshUrl(): string {
 export function appOrigin(reqOrigin: string): string {
   let prod = 'https://bossbase.nl'
   try { const u = Deno.env.get('STRIPE_PAYMENT_SUCCESS_URL'); if (u) prod = new URL(u).origin } catch { /* fallback */ }
-  const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(reqOrigin)
+  // Een localhost-origin alleen in testmodus. Met een live sleutel stuurde een
+  // aanroeper met Origin: http://localhost de klant na het betalen naar zijn
+  // eigen machine (audit 2026-10-01, F7).
+  const testmodus = (Deno.env.get('STRIPE_SECRET_KEY') || '').startsWith('sk_test_')
+  const isLocal = testmodus && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(reqOrigin)
   return (reqOrigin && (reqOrigin === prod || isLocal)) ? reqOrigin : prod
 }
 
@@ -71,6 +75,7 @@ export async function createFactuurCheckoutSession(
     stripe_checkout_session_id: session.id,
     stripe_payment_url: session.url,
     stripe_payment_status: 'open',
+    stripe_checkout_aangemaakt_op: new Date().toISOString(),
   }).eq('id', factuur.id)
 
   return { url: session.url as string, sessionId: session.id as string }
@@ -183,8 +188,11 @@ export async function verifyStripeSignature(
   }
   if (!t || v1s.length === 0) return false
 
+  // Een tijdstempel die geen getal is, telt als ongeldig: anders sloeg zo'n
+  // event de replay-controle over.
   const ts = Number(t)
-  if (Number.isFinite(ts) && toleranceSec > 0 && Math.abs(Math.floor(Date.now() / 1000) - ts) > toleranceSec) {
+  if (!Number.isFinite(ts)) return false
+  if (toleranceSec > 0 && Math.abs(Math.floor(Date.now() / 1000) - ts) > toleranceSec) {
     return false
   }
 

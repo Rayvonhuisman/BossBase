@@ -133,6 +133,6 @@ serve(async (req) => {
     return json({ url: link.url })
   } catch (err: any) {
     console.error('[stripe-connect-start]', err?.message)
-    return json({ error: err?.message || 'Onboarding starten mislukt' }, 500)
+    return json({ error: 'Onboarding starten is niet gelukt. Probeer het later opnieuw.' }, 500)
   }
 })

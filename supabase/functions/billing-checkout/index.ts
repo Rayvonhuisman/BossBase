@@ -90,7 +90,7 @@ serve(async (req) => {
     // eerst opruimen; we vertellen precies wát.
     const { data: blokkades, error: blokErr } = await admin
       .rpc('bb_downgrade_blokkades', { p_company_id: companyId, p_doel_tier: tier })
-    if (blokErr) return json({ error: `Limietcontrole mislukt: ${blokErr.message}` }, 500)
+    if (blokErr) { console.error('[billing-checkout] limietcontrole', blokErr.message); return json({ error: 'Limietcontrole mislukt. Probeer het later opnieuw.' }, 500) }
 
     if (Array.isArray(blokkades) && blokkades.length > 0) {
       return json({
@@ -268,6 +268,8 @@ serve(async (req) => {
 
     return json({ url: session.url, sessionId: session.id })
   } catch (e) {
-    return json({ error: (e as Error).message || 'Onbekende fout' }, 500)
+    // Geen Stripe- of databasetekst naar de browser; details staan in de log.
+    console.error('[billing-checkout]', (e as Error)?.message)
+    return json({ error: 'Afrekenen starten is niet gelukt. Probeer het later opnieuw.' }, 500)
   }
 })

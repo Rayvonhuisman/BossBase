@@ -109,6 +109,6 @@ serve(async (req) => {
     return json({ url: `${appOrigin(reqOrigin)}/betaal/${token}` })
   } catch (err: any) {
     console.error('[stripe-create-payment-link]', err?.message)
-    return json({ error: err?.message || 'Betaallink aanmaken mislukt' }, 500)
+    return json({ error: 'Betaallink aanmaken is niet gelukt.' }, 500)
   }
 })

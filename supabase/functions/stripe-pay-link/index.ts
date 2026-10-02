@@ -33,11 +33,12 @@ serve(async (req) => {
 
     const body = await req.json().catch(() => ({}))
     const token = typeof body?.token === 'string' ? body.token.trim() : ''
-    if (!token) return json({ state: 'invalid' })
+    // Tokens zijn 48 hex-tekens; alles anders hoeft de database niet te zien.
+    if (!/^[0-9a-f]{32,64}$/i.test(token)) return json({ state: 'invalid' })
 
     const { data: factuur } = await admin
       .from('facturen')
-      .select('id, nummer, totaal_incl, status, company_id, gecrediteerd, is_credit')
+      .select('id, nummer, totaal_incl, status, company_id, gecrediteerd, is_credit, stripe_payment_url, stripe_payment_status, stripe_checkout_aangemaakt_op')
       .eq('stripe_payment_token', token)
       .maybeSingle()
     if (!factuur) return json({ state: 'invalid' })
@@ -66,6 +67,17 @@ serve(async (req) => {
 
     const cents = Math.round(Number(factuur.totaal_incl || 0) * 100)
     if (!cents || cents <= 0) return json({ state: 'no_stripe', branding })
+
+    // Een open sessie van minder dan een half uur oud hergebruiken. Zonder dit
+    // maakte elke aanroep met het token een nieuwe Checkout-sessie op het
+    // Stripe-account van het bedrijf, zonder enige limiet (Stripe-review F6).
+    const HERGEBRUIK_MS = 30 * 60 * 1000
+    const aangemaakt = factuur.stripe_checkout_aangemaakt_op ? Date.parse(factuur.stripe_checkout_aangemaakt_op) : NaN
+    if (factuur.stripe_payment_status === 'open' && factuur.stripe_payment_url
+        && Number.isFinite(aangemaakt) && Date.now() - aangemaakt < HERGEBRUIK_MS
+        && String(factuur.stripe_payment_url).startsWith('https://checkout.stripe.com/')) {
+      return json({ state: 'redirect', url: factuur.stripe_payment_url, branding })
+    }
 
     // Verse Checkout Session (gedeelde logica) → klant wordt hierheen doorgestuurd.
     const reqOrigin = req.headers.get('origin') || ''
