@@ -5,6 +5,7 @@ import { withCompanyId } from '../lib/currentCompany'
 import { syncFactuurNaarBoekhouding } from './accountingService'
 import { logTijdlijnSafe } from './klantTijdlijnService'
 import { regimeVanPct, regimeVoorOpslag } from '../lib/btwRegime'
+import { vandaagIso } from '../lib/datumTijd.js'
 
 // Canonieke factuurstatussen. 'aangemaakt' bestond alleen als oude alias en komt
 // in de database niet voor — de beginstatus is 'concept'.
@@ -231,7 +232,7 @@ export async function createFactuur(input) {
     customer_id: input.customer_id || null,
     project_id: input.project_id || input.projectId || null,
     nummer,
-    factuurdatum: input.factuurdatum || new Date().toISOString().slice(0, 10),
+    factuurdatum: input.factuurdatum || vandaagIso(),
     vervaldatum: input.vervaldatum || null,
     betalingskenmerk: input.betalingskenmerk || nummer,
     status: 'concept',
@@ -384,7 +385,7 @@ export async function createCreditFactuur(origineleFactuurId, regels, origineleF
   return maakFactuurMetRegels({
     customer_id: origineleFactuur.customerId,
     nummer,
-    factuurdatum: new Date().toISOString().slice(0, 10),
+    factuurdatum: vandaagIso(),
     status: 'verzonden',
     notities: `Creditering van factuur ${origineleFactuur.nummer}`,
     is_credit: true,
@@ -477,7 +478,7 @@ export async function kopieerFactuur(bronId) {
     customer_id: bron.customer_id,
     project_id: bron.project_id,
     nummer,
-    factuurdatum: new Date().toISOString().slice(0, 10),
+    factuurdatum: vandaagIso(),
     betaaltermijn_dagen: bron.betaaltermijn_dagen,
     notities: bron.notities,
   }, regels.map(r => ({

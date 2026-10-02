@@ -28,6 +28,7 @@ import { statusInfo } from '../utils/statusColors.js';
 import ActieMenu from '../components/ActieMenu.jsx';
 import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
+import { vandaagIso, voegDagenToe } from '../lib/datumTijd.js';
 
 const offerteBadge = status => {
   const s = statusInfo(status, 'offerte');
@@ -63,9 +64,7 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
     getBedrijfsinstellingen().then(s => {
       if (!s) return;
       setInstDefaults(s);
-      const d = new Date();
-      d.setDate(d.getDate() + (s.offerteGeldigDagen || 14));
-      const geldig = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const geldig = voegDagenToe(vandaagIso(), s.offerteGeldigDagen || 14);
       setForm(f => ({ ...f, geldig_tot: geldig }));
       setRegels(rs => rs.map((r, i) => i === 0 ? {
         ...r, btw: String(s.btwPct), btwRegime: regimeVanPct(s.btwPct),

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { vandaagIso, voegDagenToe } from '../lib/datumTijd.js';
 import { Download, Send, CheckCircle2 } from 'lucide-react';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml, tekstNaarEditorHtml } from '../lib/noteFormat.js';
@@ -34,8 +35,13 @@ import ActieMenu from '../components/ActieMenu.jsx';
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 
-const TODAY = () => new Date().toISOString().slice(0, 10);
-const THIS_MONTH = () => new Date().toISOString().slice(0, 7);
+// Nederlandse kalenderdag, niet de UTC-dag: tussen 00:00 en 02:00 gaf
+// toISOString() nog de datum van gisteren (audit M20).
+const TODAY = () => vandaagIso();
+const THIS_MONTH = () => vandaagIso().slice(0, 7);
+// Standaard betaaltermijn als de klant er geen heeft (= default van
+// facturen.betaaltermijn_dagen in de database).
+const STANDAARD_BETAALTERMIJN = 14;
 
 // Te laat = verstuurd, niet betaald, niet gecrediteerd en geen creditnota, en
 // de vervaldatum is voorbij. Concepten zijn nooit naar de klant gegaan; een
@@ -228,10 +234,6 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
     getBedrijfsinstellingen().then(s => {
       if (!s) return;
       setInstDefaults(s);
-      const d = new Date();
-      d.setDate(d.getDate() + (s.offerteGeldigDagen || 14));
-      const verval = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      set('vervaldatum', verval);
       if (!prefill?.regels?.length) {
         setRegels(rs => rs.map((r, i) => i === 0 ? {
           ...r, btw: String(s.btwPct), btwRegime: regimeVanPct(s.btwPct),
@@ -242,6 +244,16 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
   }, []);
 
   const selectedCustomer = form.customer_id ? customers.find(c => String(c.id) === String(form.customer_id)) : null;
+
+  // Vervaldatum = factuurdatum + betaaltermijn van de klant (anders 14 dagen).
+  // Vroeger: + het aantal dagen dat een ófferte geldig is (audit M22). Past de
+  // gebruiker de datum zelf aan, dan blijft die staan.
+  const betaaltermijn = Number(selectedCustomer?.betaaltermijnDagen) || STANDAARD_BETAALTERMIJN;
+  const vervalHandmatig = useRef(false);
+  useEffect(() => {
+    if (vervalHandmatig.current || !form.factuurdatum) return;
+    set('vervaldatum', voegDagenToe(form.factuurdatum, betaaltermijn));
+  }, [form.factuurdatum, betaaltermijn]); // eslint-disable-line react-hooks/exhaustive-deps
   const missingFields = selectedCustomer ? [
     !selectedCustomer.address && 'adres',
     !selectedCustomer.city && 'plaats',
@@ -267,6 +279,7 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
     // Kop en regels in één transactie; het btw-percentage volgt uit het regime.
     const created = await maakFactuurMetRegels({
       ...form, project_id: form.project_id || null, status: 'concept', nummer, betalingskenmerk: nummer,
+      betaaltermijn_dagen: betaaltermijn,
     }, regels.map((r, i) => ({
       type: r.type,
       omschrijving: r.omschrijving.trim() || omschrijvingFallback(r.type, eenheden),
@@ -354,7 +367,7 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
           </div>
           <div className="f">
             <label>Vervaldatum</label>
-            <input type="date" value={form.vervaldatum} onChange={e => set('vervaldatum', e.target.value)} />
+            <input type="date" value={form.vervaldatum} onChange={e => { vervalHandmatig.current = true; set('vervaldatum', e.target.value); }} />
           </div>
 
           <RegelItemsForm regels={regels} setRegels={setRegels} defaults={instDefaults} eenheden={eenheden} />
@@ -455,7 +468,7 @@ function EditFactuurModal({ factuur, customers, company, onClose, onSaved, onSav
             </select>
           </div>
           <div className="f">
-            <label>Betaaltermijn</label>
+            <label>Vervaldatum</label>
             <input type="date" value={form.vervaldatum} onChange={e => set('vervaldatum', e.target.value)} disabled={locked} />
           </div>
           <div className="f s2">
@@ -837,7 +850,7 @@ function ViewFactuurModal({ factuur, customers, onClose, onSluitVoorActie, onRef
             <div><div style={DL_STYLE}>Status</div><div>{factuurBadge(factuur)}</div></div>
             <div><div style={DL_STYLE}>Factuurdatum</div><div>{fmtDate(factuur.factuurdatum)}</div></div>
             <div>
-              <div style={DL_STYLE}>Betaaltermijn</div>
+              <div style={DL_STYLE}>Vervaldatum</div>
               <div style={{ color: isOverdue ? '#dc2626' : 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>
                 {fmtDate(factuur.vervaldatum)}
                 {isOverdue && <span className="badge b-declined" style={{ fontSize: 10 }}>Te laat</span>}
@@ -1393,7 +1406,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
                   <th className="th">Excl. BTW</th>
                   <th className="th">Incl. BTW</th>
                   <th className="th">Status</th>
-                  <th className="th">Betaaltermijn</th>
+                  <th className="th">Vervaldatum</th>
                   <th className="th">Acties</th>
                 </tr>
               </thead>
