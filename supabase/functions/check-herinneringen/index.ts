@@ -101,7 +101,13 @@ serve(async (req) => {
     const { data: facturen } = await db
       .from('facturen')
       .select('*, customers(name, email), companies(name, email, logo_url, branding_color)')
-      .neq('status', 'betaald')
+      // Alleen verstuurde (of uit de boekhouding geïmporteerde, 'geboekt'), onbetaalde facturen. Concepten zijn nooit naar de
+      // klant gegaan; een gecrediteerde factuur is niet meer verschuldigd; een
+      // creditnota is een tegoed. Vroeger was het `status <> 'betaald'`, en
+      // kreeg conceptfactuur BB-F155 op 26-09 een herinnering (audit 2026-10-01, H9).
+      .in('status', ['verzonden', 'geboekt'])
+      .not('gecrediteerd', 'is', true)
+      .not('is_credit', 'is', true)
       .not('vervaldatum', 'is', null)
       .lt('vervaldatum', todayStr)
 

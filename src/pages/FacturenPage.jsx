@@ -34,8 +34,11 @@ import ActieMenu from '../components/ActieMenu.jsx';
 const TODAY = () => new Date().toISOString().slice(0, 10);
 const THIS_MONTH = () => new Date().toISOString().slice(0, 7);
 
+// Te laat = verstuurd, niet betaald, niet gecrediteerd en geen creditnota, en
+// de vervaldatum is voorbij. Concepten zijn nooit naar de klant gegaan; een
+// gecrediteerde factuur is niet meer verschuldigd (audit 2026-10-01, H9).
 const isVerlopen = f =>
-  f.status !== 'betaald' && f.vervaldatum && f.vervaldatum < TODAY();
+  ['verzonden', 'geboekt'].includes(f.status) && !f.gecrediteerd && !f.isCredit && f.vervaldatum && f.vervaldatum < TODAY();
 
 const displayStatus = f => (isVerlopen(f) ? 'verlopen' : f.status);
 
@@ -673,7 +676,7 @@ function ViewFactuurModal({ factuur, customers, onClose, onSluitVoorActie, onRef
   const [pdfLoading, setPdfLoading] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [showCrediteer, setShowCrediteer] = useState(false);
-  const isOverdue = factuur.status !== 'betaald' && factuur.vervaldatum && factuur.vervaldatum < new Date().toISOString().slice(0, 10);
+  const isOverdue = isVerlopen(factuur);
 
   useEffect(() => {
     getFactuurRegels(factuur.id).then(setRegels).catch(() => {});
@@ -1141,7 +1144,10 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
 
   // 'geboekt' = uit SnelStart opgehaald en daar nog niet afgeletterd; dat is
   // net zo goed openstaand als een eigen verzonden factuur.
-  const kpiOpenstaand = facturen.filter(f => ['verzonden', 'geboekt'].includes(f.status) && !isVerlopen(f));
+  // Openstaand = verstuurd en nog verschuldigd, nog niet over de vervaldatum.
+  // Gecrediteerde facturen en creditnota's tellen niet mee (die maakten de tegel
+  // negatief: € −9.799,10 in de audit).
+  const kpiOpenstaand = facturen.filter(f => ['verzonden', 'geboekt'].includes(f.status) && !f.gecrediteerd && !f.isCredit && !isVerlopen(f));
   const kpiBetaaldMaand = facturen.filter(f => f.status === 'betaald' && f.betaaldOp?.startsWith(thisMonth));
   const kpiVerlopen = facturen.filter(f => isVerlopen(f));
 

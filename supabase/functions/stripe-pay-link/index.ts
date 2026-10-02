@@ -2,6 +2,7 @@
 // De permanente betaallink /betaal/<token> roept dit aan. Op basis van het
 // onraadbare token bepaalt de functie server-side de juiste actie:
 //   • factuur al betaald            → { state: 'paid' }
+//   • concept, gecrediteerd of creditnota → { state: 'niet_betaalbaar' } (geen Checkout)
 //   • openstaand + actieve koppeling → VERSE Checkout Session → { state: 'redirect', url }
 //   • geen/geen actieve koppeling    → { state: 'no_stripe' }
 //   • bedrag 0 / geen bedrag         → { state: 'no_stripe' }
@@ -36,7 +37,7 @@ serve(async (req) => {
 
     const { data: factuur } = await admin
       .from('facturen')
-      .select('id, nummer, totaal_incl, status, company_id')
+      .select('id, nummer, totaal_incl, status, company_id, gecrediteerd, is_credit')
       .eq('stripe_payment_token', token)
       .maybeSingle()
     if (!factuur) return json({ state: 'invalid' })
@@ -49,6 +50,12 @@ serve(async (req) => {
       : null
 
     if (factuur.status === 'betaald') return json({ state: 'paid', branding })
+    // Alleen een verstuurde, niet-gecrediteerde factuur is te betalen. Een
+    // gecrediteerde factuur kreeg hier vroeger gewoon een nieuwe Checkout-sessie
+    // (audit 2026-10-01, P4/H9).
+    if (!['verzonden', 'geboekt'].includes(factuur.status) || factuur.gecrediteerd || factuur.is_credit) {
+      return json({ state: 'niet_betaalbaar', branding })
+    }
 
     const { data: conn } = await admin
       .from('stripe_connections')

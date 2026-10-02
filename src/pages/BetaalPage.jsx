@@ -77,6 +77,9 @@ export function BetaalPage({ token }) {
   } else if (result.state === 'no_stripe') {
     icon = InfoIcon; iconColor = 'var(--dmu)'; title = 'Online betalen niet beschikbaar';
     text = `Online betalen is momenteel niet mogelijk. Neem contact op met ${bedrijf} om de factuur te voldoen.`;
+  } else if (result.state === 'niet_betaalbaar') {
+    icon = InfoIcon; iconColor = 'var(--dmu)'; title = 'Deze factuur staat niet open';
+    text = `Deze factuur hoeft niet (meer) betaald te worden. Heb je vragen, neem dan contact op met ${bedrijf}.`;
   } else if (result.state === 'invalid') {
     icon = InfoIcon; iconColor = 'var(--dmu)'; title = 'Betaallink ongeldig';
     text = 'Deze betaallink is ongeldig of niet meer beschikbaar. Controleer de link in je e-mail.';
