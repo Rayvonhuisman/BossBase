@@ -57,7 +57,11 @@ serve(async (req) => {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { authorization: authHeader } } },
+      // Met hoofdletter: supabase-js zet zelf ook `Authorization`. Een tweede
+      // sleutel `authorization` werd in de Headers samengevoegd tot
+      // "Bearer …, Bearer …", en dan weigert Auth élk token (audit B-18: 401
+      // bij een geldige sessie). Zelfde vorm als google-calendar-auth-url.
+      { global: { headers: { Authorization: authHeader } } },
     )
     // getUser() zonder argument leest in een Edge Function geen sessie en gaf dus
     // altijd "Niet ingelogd" (zie google-calendar-auth-url). Token meegeven.
