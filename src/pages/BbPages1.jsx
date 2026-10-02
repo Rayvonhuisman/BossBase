@@ -1062,7 +1062,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
             {/* Zelfde invoerregel als op het project. Een inkoop hoort bij een
                 project; heeft de klant er meer, dan kies je dat vooraan. Zelfde
                 recht als de kostentab van het project. */}
-            {(['admin', 'planner'].includes(profile?.role) || can('projecten_bewerken')) && (
+            {(profile?.role === 'admin' || can('projecten_bewerken')) && (
               <div ref={kostenKolommen.ref} style={{ marginTop: 10 }}>
                 <KostenInvoerRegel
                   kolommen={kostenKolommen}

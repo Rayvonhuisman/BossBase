@@ -305,9 +305,9 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
   const { can } = usePermissions();
   const { guardSchrijven, planModal } = usePlanGuard();
   const magBedragen = can('projectbedragen');
-  // Projecten bewerken/aanmaken: admin/planner-rol óf het 'projecten_bewerken'-recht.
+  // Projecten bewerken/aanmaken: admin óf het 'projecten_bewerken'-recht.
   // Zien mag iedereen; RLS bepaalt welke projecten zichtbaar zijn.
-  const canManage = ['admin', 'planner'].includes(profile?.role) || can('projecten_bewerken');
+  const canManage = profile?.role === 'admin' || can('projecten_bewerken');
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');

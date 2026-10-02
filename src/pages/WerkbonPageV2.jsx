@@ -143,7 +143,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
   // als LeverancierSelect. Wat hier net is aangemaakt staat nog niet in de
   // lijsten die de pagina meegaf, dus komt het er lokaal bij.
   const { can } = usePermissions();
-  const beheerder = ['admin', 'planner'].includes(profile?.role);
+  const beheerder = profile?.role === 'admin';
   const magKlantMaken = beheerder || can('klanten_bewerken');
   const magProjectMaken = beheerder || can('projecten_bewerken');
   const [snelNieuw, setSnelNieuw] = useState(null); // 'klant' | 'project'
@@ -504,10 +504,14 @@ function WerkbonListCard({ w, takenCount, onClick }) {
 function HoursQuickAdd({ werkbon, onSaved }) {
   const toast = useToast();
   const { profile } = useProfile();
-  const canBookForOthers = ['admin', 'planner'].includes(profile?.role);
+  const { magBewerken } = usePermissions();
+  // Voor een collega boeken: beheerder, recht planning, of verantwoordelijke van
+  // deze werkbon — dezelfde regel als de database (bb_mag_uren_voor_ander).
+  const canBookForOthers = magBewerken('planning')
+    || (werkbon?.verantwoordelijkeIds || []).includes(profile?.id);
   // Wie op deze klus zit mag hier boeken; de RLS dwingt hetzelfde af. We vragen
   // het hier na zodat er geen knop staat die je toch niet mag indrukken.
-  const magBoeken = magWerkbonUrenBeheren(werkbon, profile);
+  const magBoeken = magWerkbonUrenBeheren(werkbon, profile, magBewerken('planning'));
 
   const [datum, setDatum] = useState(TODAY());
   const [start, setStart] = useState('');
@@ -516,7 +520,7 @@ function HoursQuickAdd({ werkbon, onSaved }) {
   const [km, setKm] = useState('');
   const [notitie, setNotitie] = useState('');
   const [saving, setSaving] = useState(false);
-  // Admin-vangnet: uren namens een collega boeken. Alleen voor admin/planner —
+  // Uren namens een collega boeken: beheerder, planning of verantwoordelijke —
   // een monteur boekt op de werkbon altijd voor zichzelf.
   const [teamMembers, setTeamMembers] = useState([]);
   const [bookForId, setBookForId] = useState(profile?.id || '');
@@ -1104,7 +1108,7 @@ function WerkbonKostenSection({ werkbon, uren, materialen }) {
   const plan = usePlan();
   const magZien = can('kosten') && plan.has('kosten_nacalculatie');
   const magInkoop = can('inkoopprijzen');
-  const magBewerken = ['admin', 'planner'].includes(profile?.role) || can('projecten_bewerken');
+  const magBewerken = profile?.role === 'admin' || can('projecten_bewerken');
 
   const [jobCosts, setJobCosts] = useState([]);
   const [inkopen, setInkopen] = useState([]);
@@ -1623,7 +1627,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
   const { guardSchrijven, planModal } = usePlanGuard();
   // Beheer/alle werkbonnen bewerken: admin/planner-rol óf het 'werkbonnen_bewerken'-
   // recht. (Een verantwoordelijke mag z'n eigen bon sowieso al — zie canEditDetail.)
-  const canManage = !profile || ['admin', 'planner'].includes(profile.role) || can('werkbonnen_bewerken');
+  const canManage = !profile || profile.role === 'admin' || can('werkbonnen_bewerken');
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');

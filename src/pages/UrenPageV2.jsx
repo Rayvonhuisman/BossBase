@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { vandaagIso } from '../lib/datumTijd.js';
 import { useToast } from '../lib/toast.jsx';
+import { usePermissions } from '../hooks/usePermissions.js';
 import { useProfile } from '../lib/profileContext.jsx';
 import { useData } from '../lib/dataContext.jsx';
 import { useUrlTab } from '../hooks/useUrlTab.js';
@@ -687,7 +688,10 @@ export function UrenPageV2({ navigatePage } = {}) {
   const toast = useToast();
   const { profile, bumpRefresh } = useProfile();
   const { guardSchrijven, planModal } = usePlanGuard();
-  const canBookForOthers = ['admin', 'planner'].includes(profile?.role);
+  // Werkdagen van een collega boeken: beheerder of recht planning (zelfde regel
+  // als de database, urenregistratie-policies).
+  const { magBewerken } = usePermissions();
+  const canBookForOthers = magBewerken('planning');
   const [allRows, setAllRows] = useState([]);
   // Werkbonuren komen uit een eigen tabel en zijn hier alleen ter inzage.
   const [werkbonUren, setWerkbonUren] = useState([]);

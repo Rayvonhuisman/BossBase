@@ -122,10 +122,14 @@ Twee soorten, twee tabellen, bewust gescheiden:
 - **`werkbon_uren`** — uren op een klus: nacalculatie, facturatie en de
   werkbon-PDF. Hangt aan de werkbon en heeft daarom géén eigen project- of
   klantkolom; die volgen uit de werkbon. Wie mag boeken bepaalt de werkbon
-  (uitvoerder of verantwoordelijke, admin en planner als vangnet) via
-  `bb_mag_werkbon_uren_beheren`.
+  (uitvoerder of verantwoordelijke, met admin en het recht `planning` als
+  vangnet) via `bb_mag_werkbon_uren_beheren`. Op naam van een collega boeken
+  mag alleen een admin, een verantwoordelijke van die werkbon of iemand met
+  `planning` (`bb_mag_uren_voor_ander`). Er bestaat geen rol "planner": rollen
+  zijn alleen `admin` en `medewerker`, de rest zijn rechten.
 
-Het totaal is altijd `eind − begin − pauze`, berekend in `berekenUren()`. De
+Het totaal is altijd `eind − begin − pauze`, berekend in `berekenUren()` en
+opnieuw in de database (trigger `bb_uren_berekenen`); het getal van de client telt niet. De
 nacalculatie draait uitsluitend op werkbonuren.
 
 ## Losse dingen die tijd kosten als je ze niet weet

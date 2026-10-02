@@ -10,6 +10,7 @@ import { getLostReasons } from '../services/lostReasonService.js';
 import { createActivity, updateActivity, deleteActivity, buildDueAt, getActiviteitNotities, addActiviteitNotitie } from '../services/activityService.js';
 import { syncActivity } from '../services/googleCalendarService.js';
 import { useProfile } from '../lib/profileContext.jsx';
+import { usePermissions } from '../hooks/usePermissions.js';
 import { useData } from '../lib/dataContext.jsx';
 import { triggerAutoEmail } from '../services/emailService.js';
 import { getCompanyId } from '../lib/currentCompany.js';
@@ -1127,8 +1128,10 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
 export function ActivityEditModal({ activity, customers, deals, onClose, onSaved, onDeleted }) {
   const toast = useToast();
   const { profile } = useProfile();
-  const role = profile?.role || 'medewerker';
-  const canEdit = role === 'admin' || role === 'planner';
+  const { magBewerken } = usePermissions();
+  // Volledig bewerken (titel, type, datum, toewijzing): beheerder of recht
+  // planning. Er bestaat geen rol 'planner'; dat is een recht.
+  const canEdit = magBewerken('planning');
   const [teamMembers, setTeamMembers] = useState([]);
   useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
 
