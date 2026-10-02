@@ -37,6 +37,8 @@ import { usePlan } from '../hooks/usePlan.js';
 import { usePlanGuard } from '../components/PlanUpgradeModal.jsx';
 import { getBedrijfsinstellingen } from '../services/instellingenService.js';
 import { usePermissions } from '../hooks/usePermissions.js';
+import { LaadFout } from '../components/LaadFout.jsx';
+import { vandaagIso } from '../lib/datumTijd.js';
 import { useUrlTab } from '../hooks/useUrlTab.js';
 import { ActivityEditModal, NewCalendarEventModal, NewJobCostModal } from '../components/SharedModals.jsx';
 import { AgendaWerkbonPlanModal } from '../components/AgendaWerkbonPlanModal.jsx';
@@ -1170,7 +1172,12 @@ export function CostsPage() {
   // start en eind als dependency, niet het periode-object zelf: dat is bij elke
   // render een nieuw object en zou eindeloos opnieuw laden.
   const { start: periodeStart, eind: periodeEind } = periode;
+  // `leeft`: wissel je snel van periode, dan kan een ouder antwoord later
+  // binnenkomen dan het nieuwe. Zonder deze vlag won het laatst binnengekomen
+  // antwoord en stond het jaartotaal onder de kop "Oktober" (audit M24).
+  const [opnieuw, setOpnieuw] = useState(0);
   React.useEffect(() => {
+    let leeft = true;
     setLoading(true);
     Promise.all([
       listJobCosts({ vanDatum: periodeStart, totDatum: periodeEind }),
@@ -1180,14 +1187,16 @@ export function CostsPage() {
       listWerkbonInkopen({ vanDatum: periodeStart, totDatum: periodeEind }),
     ])
       .then(([costData, conn, inkoopData]) => {
+        if (!leeft) return;
         setCosts(costData);
         setWerkbonInkopen(inkoopData.map(werkbonInkoopAlsRij));
         if (conn?.administrationId) setMbAdminId(conn.administrationId);
-        setError('');
+        setError(null);
       })
-      .catch(err => setError(err.message || 'Kosten laden is mislukt.'))
-      .finally(() => setLoading(false));
-  }, [refreshKey, periodeStart, periodeEind]);
+      .catch(err => { if (leeft) setError(err); })
+      .finally(() => { if (leeft) setLoading(false); });
+    return () => { leeft = false; };
+  }, [refreshKey, periodeStart, periodeEind, opnieuw]);
   // De periode zit nu in de query zelf, dus hier blijven alleen de twee
   // dropdowns over.
   const filtered = costs.filter(r => {
@@ -1251,7 +1260,7 @@ export function CostsPage() {
         </div>
       </div>
       {loading && <div className="card card-p">Kosten laden...</div>}
-      {error && <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>}
+      {error && <LaadFout fout={error} titel="Kosten laden is niet gelukt" onOpnieuw={() => setOpnieuw(n => n + 1)} />}
       {/* Groepering via kostenPerGroep — hoofdletterongevoelig en met een
           vangnet-groep, zodat de tegels altijd optellen tot het totaal. */}
       <div className="stats-row afu2" style={{ gridTemplateColumns: `repeat(${tegels.length},1fr)` }}>
@@ -1513,20 +1522,28 @@ export function RevenuePage() {
   const [kpiVan, setKpiVan] = useState('');
   const [kpiTot, setKpiTot] = useState('');
 
-  const TODAY = new Date().toISOString().slice(0, 10);
+  const TODAY = vandaagIso();
 
+  // Laadfouten zichtbaar maken. Vroeger viel een mislukte lading terug op een
+  // lege lijst (.catch(() => [])) en toonde Financiën overal € 0,00 zonder
+  // melding — "ik heb niets openstaan" (audit M23).
+  const [laadFoutFin, setLaadFoutFin] = useState(null);
+  const [opnieuwFin, setOpnieuwFin] = useState(0);
   React.useEffect(() => {
+    let leeft = true;
     setLoading(true);
     // Alles wat niet in de gedeelde dataset zit: facturen en kosten voor de
     // grafiek en de tabel, de factuurregels voor de btw-rubrieken, en de
     // boekhoudkoppeling.
     Promise.all([
-      getFacturen().catch(() => []),
-      listJobCosts().then(alleenGeboekt).catch(() => []),
+      getFacturen(),
+      listJobCosts().then(alleenGeboekt),
       getAllFactuurRegels(),
       getConnection(),
     ])
       .then(([facturenData, costData, regelsData, mbConn]) => {
+        if (!leeft) return;
+        setLaadFoutFin(null);
         setFacturen(facturenData);
         setCostsData(costData);
         setAllRegels(regelsData);
@@ -1535,8 +1552,11 @@ export function RevenuePage() {
         // de scope btwaangiftes:read komt er niet. Een SnelStart-klant zag
         // daardoor een knop "Ophalen uit boekhouding" die niets kon ophalen.
         setMbConnection(mbConn);
-      }).catch(() => {}).finally(() => setLoading(false));
-  }, [refreshKey]);
+      })
+      .catch(err => { if (leeft) setLaadFoutFin(err); })
+      .finally(() => { if (leeft) setLoading(false); });
+    return () => { leeft = false; };
+  }, [refreshKey, opnieuwFin]);
 
   React.useEffect(() => {
     setBtwSelectedLabel(generatePeriodeOpties(btwPeriodeType)[0] || '');
@@ -1616,6 +1636,7 @@ export function RevenuePage() {
   }, [kpiRange]);
 
   const [kpi, setKpi] = useState(null);
+  const [kpiFout, setKpiFout] = useState(null);
   React.useEffect(() => {
     if (!kpiDatums.van || !kpiDatums.tot) return undefined;
     let leeft = true;
@@ -1623,10 +1644,10 @@ export function RevenuePage() {
     // vorige bedragen staan tot de nieuwe binnen zijn. Dat leest rustiger dan
     // een tegel die even op nul springt.
     getFinancienKpi(kpiDatums)
-      .then(r => { if (leeft) setKpi(r); })
-      .catch(() => { if (leeft) setKpi(null); });
+      .then(r => { if (leeft) { setKpi(r); setKpiFout(null); } })
+      .catch(err => { if (leeft) { setKpi(null); setKpiFout(err); } });
     return () => { leeft = false; };
-  }, [kpiDatums.van, kpiDatums.tot, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [kpiDatums.van, kpiDatums.tot, refreshKey, opnieuwFin]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const omzetPeriode     = kpi?.gefactureerd ?? 0;
   const ontvangenPeriode = kpi?.ontvangen ?? 0;
@@ -1841,13 +1862,16 @@ export function RevenuePage() {
       {/* De tegels hangen niet meer aan dit laden: die komen uit één RPC en
           staan er als eerste. Deze melding gaat alleen nog over de grafiek, de
           btw-kaart en de tabel per klant, die op de gedeelde dataset wachten. */}
-      {!kpi && (loading || gedeeldLaden) && <div className="card card-p">Financiën laden...</div>}
+      {(kpiFout || laadFoutFin) && (
+        <LaadFout fout={kpiFout || laadFoutFin} titel="Financiën laden is niet gelukt" onOpnieuw={() => setOpnieuwFin(n => n + 1)} />
+      )}
+      {!kpi && !kpiFout && !laadFoutFin && (loading || gedeeldLaden) && <div className="card card-p">Financiën laden...</div>}
 
       <div className="stats-row afu2" data-rl="financien-tegels" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
         {KPI.map((k, i) => (
           <div key={i} className="sc">
             <div className="sc-top"><div className="sc-icon">{k.icon}</div></div>
-            <div className="sc-val" style={k.color ? { color: k.color } : {}}>{k.val}</div>
+            <div className="sc-val" style={k.color && !kpiFout ? { color: k.color } : {}}>{kpiFout ? '—' : k.val}</div>
             <div className="sc-label">{k.label}</div>
             <div className="sc-sub">{k.sub}</div>
           </div>
