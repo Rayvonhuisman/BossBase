@@ -17,6 +17,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { isScheduledCall } from '../_shared/scheduledSync.ts'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
+import { clientFout } from '../_shared/clientFout.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -64,7 +65,7 @@ serve(async (req) => {
       .is('verwerkt_op', null)
       .order('aangemaakt_op', { ascending: true })
       .limit(2000)
-    if (error) return json({ success: false, error: error.message }, 500)
+    if (error) return json({ success: false, error: clientFout(error) }, 500)
     if (!open || open.length === 0) return json({ success: true, medewerkers: 0, wijzigingen: 0 })
 
     // Per medewerker bundelen.
@@ -163,6 +164,6 @@ serve(async (req) => {
     return json({ success: true, medewerkers: perUser.size, verstuurd, mislukt: mislukt.length, wijzigingen: open.length })
   } catch (e) {
     console.error('planning-samenvatting', (e as Error).message)
-    return json({ success: false, error: String(e) }, 500)
+    return json({ success: false, error: clientFout(e) }, 500)
   }
 })

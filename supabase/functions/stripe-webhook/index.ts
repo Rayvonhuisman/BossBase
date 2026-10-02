@@ -9,6 +9,7 @@ import { encode as base64Encode } from 'https://deno.land/std@0.168.0/encoding/b
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { verifyStripeSignature } from '../_shared/stripe.ts'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
+import { clientFout } from '../_shared/clientFout.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -202,7 +203,7 @@ serve(async (req) => {
     return json({ received: true })
   } catch (err: any) {
     console.error('[stripe-webhook]', type_safe(event), err?.message)
-    return json({ error: err?.message || 'Webhook-verwerking mislukt' }, 500)
+    return json({ error: clientFout(err, 'Webhook-verwerking mislukt') }, 500)
   }
 })
 

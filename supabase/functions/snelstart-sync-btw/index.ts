@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient, isScheduledCall } from "../_shared/scheduledSync.ts"
 import { ssFetchAll, forEachSnelStartCompany } from "../_shared/snelstart.ts"
+import { clientFout } from '../_shared/clientFout.ts'
 
 // ⚠️  NIET IN GEBRUIK — deze functie wordt nergens meer aangeroepen (28-08-2026).
 //
@@ -159,6 +160,6 @@ serve(async (req) => {
     return json({ success: true, ...r })
   } catch (err: any) {
     console.error('Error:', err.message, err.stack)
-    return json({ success: false, error: err.message }, 500)
+    return json({ success: false, error: clientFout(err) }, 500)
   }
 })

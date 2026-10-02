@@ -27,6 +27,7 @@ import {
 import { klantMail, internMail } from '../_shared/websiteMail.ts'
 import { welkomMail } from '../_shared/welkomMail.ts'
 import { opzeggenBijStripe } from '../_shared/opzeggen.ts'
+import { clientFout } from '../_shared/clientFout.ts'
 
 // Maandprijs van de hostingmodule — noemen we in de klantmail zodat die kosten
 // niet als verrassing komen. Uit de matrix (plan_modules), niet hardcoded.
@@ -206,7 +207,7 @@ serve(async (req) => {
     .insert({ event_id: eventId, type })
   if (claimErr) {
     if (claimErr.code === '23505') return ok('al verwerkt')
-    return new Response(JSON.stringify({ error: claimErr.message }), {
+    return new Response(JSON.stringify({ error: clientFout(claimErr) }), {
       status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
     })
   }

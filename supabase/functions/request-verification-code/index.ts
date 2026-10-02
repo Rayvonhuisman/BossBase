@@ -7,6 +7,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
 import { hashVerificationCode } from '../_shared/hashCode.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
+import { clientFout } from '../_shared/clientFout.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -122,6 +123,6 @@ serve(async (req) => {
     return json({ success: true })
   } catch (err) {
     console.error('[request-verification-code] Fout:', err)
-    return json({ success: false, error: String(err) }, 500)
+    return json({ success: false, error: clientFout(err) }, 500)
   }
 })

@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { clientFout } from '../_shared/clientFout.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -50,7 +51,7 @@ serve(async (req) => {
       .in('form_id', (formulieren || []).map((f: any) => f.id))
       .select('id, status')
       .maybeSingle()
-    if (error) return json({ error: error.message }, 500)
+    if (error) return json({ error: clientFout(error) }, 500)
     if (!data) return json({ error: 'Aanvraag niet gevonden' }, 404)
     return json({ aanvraag: data })
   }

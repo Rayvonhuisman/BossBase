@@ -8,6 +8,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { legAkkoordVast } from '../_shared/akkoord.ts'
+import { clientFout } from '../_shared/clientFout.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -47,6 +48,6 @@ serve(async (req) => {
     return json({ success: true })
   } catch (err) {
     console.error('[akkoord-vastleggen] Fout:', err)
-    return json({ success: false, error: String(err) }, 500)
+    return json({ success: false, error: clientFout(err) }, 500)
   }
 })

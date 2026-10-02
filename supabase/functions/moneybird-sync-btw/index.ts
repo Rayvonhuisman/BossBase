@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient, isScheduledCall, forEachMoneybirdCompany } from "../_shared/scheduledSync.ts"
+import { clientFout } from '../_shared/clientFout.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -170,6 +171,6 @@ serve(async (req) => {
     return json({ success: true, ...r })
   } catch (err: any) {
     console.error('Error:', err.message, err.stack)
-    return json({ success: false, error: err.message }, 500)
+    return json({ success: false, error: clientFout(err) }, 500)
   }
 })

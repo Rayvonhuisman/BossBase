@@ -24,6 +24,7 @@ import { isScheduledCall } from '../_shared/scheduledSync.ts'
 import { mailTemplate, mailButton } from '../_shared/mailTemplate.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
 import { appOrigin } from '../_shared/stripe.ts'
+import { clientFout } from '../_shared/clientFout.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -64,7 +65,7 @@ serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 
     const { data: kandidaten, error } = await admin.rpc('bb_uren_herinnering_kandidaten')
-    if (error) return json({ success: false, error: error.message }, 500)
+    if (error) return json({ success: false, error: clientFout(error) }, 500)
     if (!kandidaten || kandidaten.length === 0) return json({ success: true, medewerkers: 0, verstuurd: 0 })
 
     // Per medewerker bundelen: één mail met al zijn open dagen.

@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { clientFout } from '../_shared/clientFout.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -68,7 +69,7 @@ serve(async (req) => {
     } catch (err) {
       console.error('Token exchange mislukt:', err.message)
       return new Response(
-        JSON.stringify({ success: false, error: `Token exchange mislukt: ${err.message}` }),
+        JSON.stringify({ success: false, error: `Token exchange mislukt: ${clientFout(err)}` }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       )
     }
@@ -91,7 +92,7 @@ serve(async (req) => {
   } catch (err) {
     console.error('Unexpected error:', err.message, err.stack)
     return new Response(
-      JSON.stringify({ success: false, error: err.message }),
+      JSON.stringify({ success: false, error: clientFout(err) }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     )
   }

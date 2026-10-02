@@ -13,6 +13,7 @@
 // Beveiliging: caller moet admin (of super-admin) van HETZELFDE bedrijf zijn.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { clientFout } from '../_shared/clientFout.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -155,7 +156,7 @@ serve(async (req) => {
         const { error: actErr } = await admin.from('profiles').update({ actief: true, deactivated_at: null }).eq('id', pid)
         if (actErr) {
           if (actErr.hint === 'gebruikerslimiet') {
-            return json({ success: false, error: actErr.message, code: 'gebruikerslimiet' }, 409)
+            return json({ success: false, error: clientFout(actErr), code: 'gebruikerslimiet' }, 409)
           }
           throw new Error(`Heractiveren mislukt: ${actErr.message}`)
         }
@@ -174,7 +175,7 @@ serve(async (req) => {
       if (delAuthErr) {
         const alreadyGone = /not.*found|404|user.*does not exist|user_not_found/i.test(delAuthErr.message)
         console.log('[delete-team-member] deleteUser resultaat:', {
-          profileId: pid, ok: false, alreadyGone, error: delAuthErr.message,
+          profileId: pid, ok: false, alreadyGone, error: clientFout(delAuthErr),
         })
         // Account bestaat al niet meer = ook goed; andere fouten zijn echt fout.
         if (!alreadyGone) throw new Error(`auth.admin.deleteUser mislukt: ${delAuthErr.message}`)

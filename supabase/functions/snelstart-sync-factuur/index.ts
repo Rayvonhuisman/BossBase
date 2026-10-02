@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient, isScheduledCall } from "../_shared/scheduledSync.ts"
 import { pushVerkoopboeking, pushFactuurPdf, getGrootboekVoorkeuren } from "../_shared/snelstart.ts"
+import { clientFout } from '../_shared/clientFout.ts'
 
 // Pusht ÉÉN BossBase-factuur als verkoopboeking naar SnelStart (zie
 // pushVerkoopboeking in _shared/snelstart.ts voor het boekingsmodel).
@@ -86,6 +87,6 @@ serve(async (req) => {
     return json({ success: true, ...result, bijlage, meldingen })
   } catch (err: any) {
     console.error('Error:', err?.message, err?.stack)
-    return json({ success: false, error: err?.message }, 500)
+    return json({ success: false, error: clientFout(err) }, 500)
   }
 })
