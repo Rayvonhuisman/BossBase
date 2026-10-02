@@ -5,7 +5,10 @@ import { readableTextColor } from '../utils/mailTemplate.js';
 
 // Publieke bedankpagina ná een Stripe-betaling (geen login). Toont de branding van
 // HET BEDRIJF waaraan betaald wordt (logo + kleur van de ondernemer), bepaald via
-// de factuur-id in de URL (?factuur=<uuid>) → publieke RPC get_payment_branding.
+// het betaaltoken in de URL (?token=…) → publieke RPC get_payment_branding.
+// "Betaling ontvangen" alleen als de factuur echt als betaald is verwerkt; anders
+// een neutrale tekst. Deze pagina is zonder betaling te openen (gedeelde of
+// zelfgemaakte link), dus hij mag niet op eigen houtje "gelukt" zeggen.
 // Lukt dat niet, dan valt de pagina terug op de neutrale BossBase-huisstijl.
 //   status = 'success'   → /betaald
 //   status = 'cancelled' → /betaling-geannuleerd
@@ -24,6 +27,7 @@ const XIcon = (
 export function BetaalStatusPage({ status = 'success' }) {
   const success = status === 'success';
   const [branding, setBranding] = useState(null);
+  const [betaald, setBetaald] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -31,7 +35,11 @@ export function BetaalStatusPage({ status = 'success' }) {
     try { token = new URLSearchParams(window.location.search).get('token') || ''; } catch { /* geen params */ }
     if (!token) return;
     supabase.rpc('get_payment_branding', { p_token: token })
-      .then(({ data }) => { if (alive && data && (data.logo_url || data.company_name || data.branding_color)) setBranding(data); })
+      .then(({ data }) => {
+        if (!alive || !data) return;
+        if (data.logo_url || data.company_name || data.branding_color) setBranding(data);
+        if (data.betaald === true) setBetaald(true);
+      })
       .catch(() => { /* fallback: BossBase-huisstijl */ });
     return () => { alive = false; };
   }, []);
@@ -59,10 +67,12 @@ export function BetaalStatusPage({ status = 'success' }) {
           {success ? CheckIcon : XIcon}
         </div>
 
-        <div className="auth-title">{success ? 'Betaling gelukt' : 'Betaling geannuleerd'}</div>
+        <div className="auth-title">{success ? (betaald ? 'Betaling ontvangen' : 'Bedankt voor je betaling') : 'Betaling geannuleerd'}</div>
         <p style={{ color: 'var(--dm)', fontSize: '.95rem', lineHeight: 1.6, margin: '4px 0 0' }}>
           {success
-            ? 'Bedankt! Je betaling is ontvangen. Je kunt dit venster sluiten.'
+            ? (betaald
+                ? 'Bedankt! Je betaling is ontvangen. Je kunt dit venster sluiten.'
+                : 'Zodra je betaling is verwerkt, ontvang je een bevestiging per e-mail. Je kunt dit venster sluiten.')
             : 'Je betaling is geannuleerd — er is niets afgeschreven. Je kunt het opnieuw proberen.'}
         </p>
 

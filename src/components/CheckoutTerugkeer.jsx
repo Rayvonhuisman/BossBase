@@ -118,7 +118,9 @@ export function CheckoutTerugkeer() {
     const pad = herkomst?.pad;
     wisHerkomst();
     setToestand(null);
-    if (pad && pad !== window.location.pathname + window.location.search) {
+    // Alleen een pad binnen de app (geen // of volledige URL).
+    const intern = typeof pad === 'string' && pad.startsWith('/') && !pad.startsWith('//');
+    if (intern && pad !== window.location.pathname + window.location.search) {
       window.location.assign(pad);
     }
   };

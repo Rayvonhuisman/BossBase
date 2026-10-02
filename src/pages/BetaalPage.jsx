@@ -48,7 +48,11 @@ export function BetaalPage({ token }) {
       .then(({ data, error }) => {
         if (!alive) return;
         if (error || !data) { setResult({ state: 'error' }); return; }
-        if (data.state === 'redirect' && data.url) { window.location.href = data.url; return; }
+        // Alleen doorsturen naar Stripe Checkout zelf, nooit naar een ander adres.
+        if (data.state === 'redirect' && typeof data.url === 'string' && data.url.startsWith('https://checkout.stripe.com/')) {
+          window.location.href = data.url; return;
+        }
+        if (data.state === 'redirect') { setResult({ state: 'error' }); return; }
         setResult(data);
       })
       .catch(() => { if (alive) setResult({ state: 'error' }); });
