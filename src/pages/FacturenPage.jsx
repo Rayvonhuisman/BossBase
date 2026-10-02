@@ -21,6 +21,7 @@ import { typeCfg, typeOptionsWith, applyTypeChange, omschrijvingFallback } from 
 import BtwRegimeSelect, { VerlegdUitleg } from '../components/BtwRegimeSelect.jsx';
 import { regimeVanPct, regimeVanRegel, regimeVoorOpslag } from '../lib/btwRegime.js';
 import { previewFactuurPdf, getFactuurPdfBase64, formatIban } from '../utils/generatePdf.js';
+import { openstaandPerFactuur } from '../services/customerTotalsService.js';
 import { buildCompanySnapshot, companyForDocument, isFactuurLocked, isGeimporteerdeFactuur } from '../utils/documentSnapshot.js';
 import { bewaarFactuurPdf, PDF_STATUSSEN } from '../utils/bewaarFactuurPdf.js';
 import { getMailTemplate, sendEmail, substituteVars, substituteVarsHtml, logSentEmail, escapeHtml } from '../services/emailService.js';
@@ -1192,7 +1193,11 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
   // Openstaand = verstuurd en nog verschuldigd, nog niet over de vervaldatum.
   // Gecrediteerde facturen en creditnota's tellen niet mee (die maakten de tegel
   // negatief: € −9.799,10 in de audit).
-  const kpiOpenstaand = facturen.filter(f => ['verzonden', 'geboekt'].includes(f.status) && !f.gecrediteerd && !f.isCredit && !isVerlopen(f));
+  // Bedrag per factuur volgens de ene definitie (customerTotalsService,
+  // gelijk aan bb_openstaand_per_factuur): restant na eigen creditnota's.
+  const kpiOpenstaand = openstaandPerFactuur(facturen)
+    .filter(o => o.bedrag > 0 && !(o.factuur.vervaldatum && o.factuur.vervaldatum < TODAY()))
+    .map(o => ({ ...o.factuur, totaalIncl: o.bedrag }));
   const kpiBetaaldMaand = facturen.filter(f => f.status === 'betaald' && f.betaaldOp?.startsWith(thisMonth));
   const kpiVerlopen = facturen.filter(f => isVerlopen(f));
 

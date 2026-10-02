@@ -37,11 +37,27 @@ export const sumBetaald      = (facturen = []) => sumIncl(facturen, isBetaaldeFa
 export const sumOmzetExclBtw = (facturen = []) =>
   facturen.filter(isGefactureerdeFactuur).reduce((s, f) => s + (Number(f.totaalExcl) || 0), 0)
 
-// Openstaand is per definitie het verschil, nooit een eigen optelling. Een
-// betaalde factuur zit altijd óók in `gefactureerd`, en zodra ze gecrediteerd
-// wordt valt ze uit `betaald` weg terwijl de creditnota `gefactureerd` verlaagt.
-// Daardoor kan dit niet negatief worden.
-export const sumOpenstaand = (facturen = []) => sumGefactureerd(facturen) - sumBetaald(facturen)
+// Openstaand — één definitie, gelijk aan de database (bb_openstaand_per_factuur,
+// migratie 20261002135544): een verstuurde, nog niet betaalde factuur (status
+// verzonden of geboekt), geen creditnota zelf, met als bedrag zijn totaal plus
+// de creditnota's die naar hem verwijzen, nooit onder 0. Een creditnota op een
+// al betaalde factuur is geld dat terug moet, geen openstaande vordering.
+// Vroeger was dit "gefactureerd − betaald", waardoor een betaalde en daarna
+// gecrediteerde factuur als openstaand telde (audit 2026-10-01, M18).
+export function openstaandPerFactuur(facturen = []) {
+  const credits = new Map()
+  facturen.forEach(f => {
+    if (f.isCredit && f.creditVanFactuurId && f.status !== "concept") {
+      credits.set(f.creditVanFactuurId, (credits.get(f.creditVanFactuurId) || 0) + (f.totaalIncl || 0))
+    }
+  })
+  return facturen
+    .filter(f => !f.isCredit && ["verzonden", "geboekt"].includes(f.status))
+    .map(f => ({ factuur: f, bedrag: Math.max(0, Math.round(((f.totaalIncl || 0) + (credits.get(f.id) || 0)) * 100) / 100) }))
+}
+
+export const sumOpenstaand = (facturen = []) =>
+  Math.round(openstaandPerFactuur(facturen).reduce((s, o) => s + o.bedrag, 0) * 100) / 100
 
 // Map<customerId, { total, paid, openstaand }> voor lijstweergaven die alle
 // facturen in één keer inlezen.
@@ -57,7 +73,9 @@ export function buildCustomerTotals({ facturen = [] } = {}) {
     t.total += f.totaalIncl || 0
     if (isBetaaldeFactuur(f)) t.paid += f.totaalIncl || 0
   })
-  totals.forEach(t => { t.openstaand = t.total - t.paid })
+  openstaandPerFactuur(facturen).forEach(({ factuur, bedrag }) => {
+    if (factuur.customerId) entry(factuur.customerId).openstaand += bedrag
+  })
   return totals
 }
 
@@ -74,7 +92,7 @@ export function withCustomerTotals(customers = [], { facturen = [] } = {}) {
 export function customerTotals({ facturen = [] } = {}) {
   const total = sumGefactureerd(facturen)
   const paid = sumBetaald(facturen)
-  return { total, paid, openstaand: total - paid }
+  return { total, paid, openstaand: sumOpenstaand(facturen) }
 }
 
 // Klantenlijst inclusief bedragen, voor pagina's die verder niets met facturen doen.
