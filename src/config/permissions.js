@@ -113,6 +113,3 @@ export const AVAILABLE_PERMISSIONS = PERMISSION_GROUPS.flatMap(g => g.subs)
 // 20261001140105) zodra iemand medewerker wordt. Pas je deze lijst aan, pas dan
 // die functie mee aan.
 export const DEFAULT_MEDEWERKER_PERMISSIONS = ['projecten']
-
-// Alle recht-keys (voor admin of "alles aan").
-export const ALL_PERMISSION_KEYS = AVAILABLE_PERMISSIONS.map(p => p.key)

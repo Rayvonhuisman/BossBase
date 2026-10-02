@@ -22,14 +22,6 @@ export const KOSTEN_CATEGORIEEN = [
 
 export const STANDAARD_CATEGORIE = 'Materiaal';
 
-// Categorieën die niet (meer) gekozen kunnen worden maar wel in de data staan.
-// Puur voor weergave, zodat een bestaande rij zijn eigen waarde houdt in plaats
-// van stil om te klappen naar de eerste optie in de lijst.
-const VERVALLEN = ['Arbeid', 'Brandstof'];
-
-export const isGeldigeCategorie = cat =>
-  KOSTEN_CATEGORIEEN.some(c => c.value === cat) || VERVALLEN.includes(cat);
-
 // Categorieën waarbij géén inkoopfactuur bestaat om te bewaren. Reiskosten is
 // meestal een kilometervergoeding: daar is geen bon van, en er een verzinnen is
 // erger dan hem missen. Bij alle andere categorieën koop je iets van een

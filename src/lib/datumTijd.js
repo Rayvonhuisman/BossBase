@@ -95,17 +95,6 @@ export function lokaalNaarUtc(dateStr, timeStr = '00:00') {
   return new Date(ts);
 }
 
-/** Middernacht (00:00 NL) van een YYYY-MM-DD, als UTC-instant. */
-export const beginVanDag = dateStr => lokaalNaarUtc(dateStr, '00:00');
-
-/** 23:59:59.999 NL van een YYYY-MM-DD, als UTC-instant. */
-export function eindVanDag(dateStr) {
-  const start = lokaalNaarUtc(dateStr, '00:00');
-  if (!start) return null;
-  const volgende = voegDagenToe(dateStr, 1);
-  return new Date(lokaalNaarUtc(volgende, '00:00').getTime() - 1);
-}
-
 // ── DAGREKENEN op YYYY-MM-DD, zonder tijdzone-valkuilen ──────────────────────
 
 /** Telt dagen op bij een YYYY-MM-DD en geeft weer YYYY-MM-DD terug. */
@@ -120,11 +109,6 @@ export function voegDagenToe(dateStr, aantal) {
 export function weekdagMaandag0(dateStr) {
   const [y, m, d] = String(dateStr).slice(0, 10).split('-').map(Number);
   return (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
-}
-
-/** De maandag van de week waarin deze datum valt, als YYYY-MM-DD. */
-export function maandagVan(dateStr = vandaagIso()) {
-  return voegDagenToe(dateStr, -weekdagMaandag0(dateStr));
 }
 
 // "2026-09-17" → "do 17 sep". Voor korte teksten als meldingen, waar een

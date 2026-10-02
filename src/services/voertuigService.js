@@ -66,7 +66,3 @@ export async function deleteVoertuig(id) {
   const { error } = await supabase.from('voertuigen').delete().eq('id', id);
   if (error) throw error;
 }
-
-export async function deactiveerVoertuig(id) {
-  return updateVoertuig(id, { actief: false });
-}

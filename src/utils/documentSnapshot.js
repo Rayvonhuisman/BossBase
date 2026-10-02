@@ -61,11 +61,6 @@ export function isFactuurLocked(factuur) {
   return !!factuur && !['concept', 'aangemaakt'].includes(factuur.status)
 }
 
-// Offerte: verstuurd/geaccepteerd/afgewezen of ondertekend → inhoud vergrendeld.
-export function isOfferteLocked(offerte) {
-  return !!offerte && (offerte.status !== 'concept' || !!offerte.signedAt)
-}
-
 // Een ondertekende offerte staat juridisch vast: ook de status mag niet meer wijzigen.
 export function isOfferteFullyLocked(offerte) {
   return !!offerte && (!!offerte.signedAt || offerte.status === 'geaccepteerd')

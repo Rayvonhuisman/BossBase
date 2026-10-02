@@ -1,5 +1,4 @@
 import { createContext, useContext } from 'react';
-import { DEFAULT_TIER } from './tiers.js';
 
 export const ProfileContext = createContext({
   user: null,
@@ -16,17 +15,6 @@ export const ProfileContext = createContext({
 });
 
 export const useProfile = () => useContext(ProfileContext);
-
-// Abonnementstier van het huidige bedrijf ('starter' | 'groei' | 'team').
-//
-// Let op: gebruik dit NIET om functionaliteit aan of uit te zetten. Daarvoor is
-// usePlan() er — die leest de centrale feature-/limietmatrix (src/lib/features.js)
-// en spiegelt exact wat de server afdwingt. Losse tier-vergelijkingen zoals
-// `tier === 'team'` horen nergens meer in de code te staan.
-export const useTier = () => {
-  const { company, planStatus } = useProfile();
-  return planStatus?.tier || company?.tier || DEFAULT_TIER;
-};
 
 // Derives the display name in priority order: profile.full_name → user.email
 // local-part → null. Returns null (not '??') when nothing is available so the

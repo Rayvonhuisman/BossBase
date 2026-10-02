@@ -27,9 +27,6 @@ export const PAGINAS = [
 // Pagina's die een detail-id in het pad mogen dragen.
 export const ITEM_IN_PAD = ['werkbonnen', 'projecten', 'offertes', 'facturen', 'activities'];
 
-// De drawers, met hun queryparameter.
-export const DRAWERS = { klant: 'klant', deal: 'deal', lev: 'lev', agenda: 'agenda' };
-
 /** Leest de huidige URL. Geeft altijd een volledig beeld terug. */
 export function leesRoute(basispad, href = typeof window !== 'undefined' ? window.location.href : '/') {
   let u;
@@ -89,9 +86,4 @@ export function bouwRoute(basispad, opties = {}) {
 
   const s = q.toString();
   return pad + (s ? `?${s}` : '');
-}
-
-/** Staat er een drawer open in deze route? */
-export function heeftDrawer(r) {
-  return Boolean(r.klant || r.deal || r.lev || r.agenda);
 }

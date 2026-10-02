@@ -22,9 +22,6 @@ export function costCategoryMeta(cat) {
   return { label, bg: "#f3f4f6", color: "#6b7280" }
 }
 
-// Lijst voor dropdowns (vaste categorieën, consistente casing).
-export const COST_CATEGORY_OPTIONS = Object.values(COST_CATEGORIES).map(c => c.label)
-
 // kosten-bijlagen is een PRIVÉ bucket. De `bijlage_url`-kolom bevat een JSON-
 // array met opslagpaden ({company_id}/bestand). Deze helper geeft een tijdelijke
 // signed URL terug voor de eerste bijlage (legacy: een opgeslagen http-URL wordt
@@ -52,28 +49,6 @@ function bijlagePaden(stored) {
   try { items = JSON.parse(stored) } catch { items = [stored] }
   return (Array.isArray(items) ? items : [items])
     .filter(p => typeof p === 'string' && p && !p.startsWith('http'))
-}
-
-// Bonnen uploaden naar de privé-bucket en de opslagpaden teruggeven. Gedeeld
-// door de kostenmodal en het snelle kostenformulier in de projectdrawer, zodat
-// beide dezelfde padopbouw gebruiken — de SnelStart-koppeling leest deze paden
-// weer uit om het document aan de inkoopboeking te hangen.
-//
-// Geeft een array met paden terug; de aanroeper zet die als JSON in bijlage_url.
-export async function uploadKostenBonnen(files, companyId) {
-  if (!files?.length) return []
-  const cid = companyId || (await supabase.auth.getUser()
-    .then(({ data }) => supabase.from('profiles').select('company_id').eq('id', data?.user?.id).maybeSingle())
-    .then(({ data }) => data?.company_id))
-  if (!cid) throw new Error('Geen bedrijf gevonden voor de bijlage')
-
-  return await Promise.all(files.map(async (file) => {
-    const ext = (file.name || 'bestand').split('.').pop()
-    const path = `${cid}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-    const { error } = await supabase.storage.from('kosten-bijlagen').upload(path, file)
-    if (error) throw error
-    return path
-  }))
 }
 
 // Real DB columns: id, company_id, deal_id, description, amount, category,
@@ -174,25 +149,6 @@ export const isWerkbonMateriaal = k => Boolean(k?.werkbonMateriaalId ?? k?.werkb
  * ander bedrag tonen.
  */
 export const alleenGeboekt = (kosten = []) => kosten.filter(k => !isWerkbonMateriaal(k))
-
-/**
- * Splitst kosten in kostprijs (alles) en boekhoudkosten (wat naar de
- * boekhouding gaat). Geeft { kostprijs, boekhouding, werkbonMateriaal }.
- */
-export function kostenSplitsing(kosten = []) {
-  let kostprijs = 0
-  let werkbonMateriaal = 0
-  for (const k of kosten) {
-    const bedrag = Number(k.amt ?? k.amount) || 0
-    kostprijs += bedrag
-    if (isWerkbonMateriaal(k)) werkbonMateriaal += bedrag
-  }
-  return {
-    kostprijs: Math.round(kostprijs * 100) / 100,
-    boekhouding: Math.round((kostprijs - werkbonMateriaal) * 100) / 100,
-    werkbonMateriaal: Math.round(werkbonMateriaal * 100) / 100,
-  }
-}
 
 /**
  * Inkoopwaarde van de kosten — de basis voor een brutowinst.

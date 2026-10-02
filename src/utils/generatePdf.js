@@ -736,13 +736,6 @@ async function buildPdf(doc, type, document, regels, customer, company) {
 
 // ── EXPORTS ──────────────────────────────────────────────────────────────────
 
-export async function generateFactuurPdf(factuur, regels, customer, company) {
-  const JsPDF = await loadJsPDF();
-  const doc = new JsPDF({ unit: 'mm', format: 'a4' });
-  await buildPdf(doc, 'factuur', factuur, regels, customer, company);
-  doc.save(`${factuur.nummer || 'factuur'}.pdf`);
-}
-
 export async function generateOffertePdf(offerte, items, customer, company) {
   const JsPDF = await loadJsPDF();
   const doc = new JsPDF({ unit: 'mm', format: 'a4' });
@@ -770,13 +763,6 @@ export async function getOffertePdfUrl(offerte, items, customer, company) {
   const JsPDF = await loadJsPDF();
   const doc = new JsPDF({ unit: 'mm', format: 'a4' });
   await buildPdf(doc, 'offerte', offerte, items, customer, company);
-  return doc.output('bloburl');
-}
-
-export async function getFactuurPdfUrl(factuur, regels, customer, company) {
-  const JsPDF = await loadJsPDF();
-  const doc = new JsPDF({ unit: 'mm', format: 'a4' });
-  await buildPdf(doc, 'factuur', factuur, regels, customer, company);
   return doc.output('bloburl');
 }
 

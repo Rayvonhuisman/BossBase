@@ -126,17 +126,6 @@ export async function updateCustomer(id, input) {
   return customer
 }
 
-export async function updateCustomerNotities(id, notities) {
-  const { data, error } = await supabase
-    .from("customers")
-    .update({ notities: notities || null })
-    .eq("id", id)
-    .select()
-    .single()
-  if (error) throw error
-  return toCustomer(data)
-}
-
 export async function deleteCustomer(id) {
   // Eerst opzoeken, daarna pas verwijderen: na de delete is de rij weg en is
   // niet meer te achterhalen of hij uit SnelStart kwam.

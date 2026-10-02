@@ -288,9 +288,3 @@ export async function addActiviteitNotitie(activityId, note) {
   if (error) throw error
   return toActiviteitNotitie(data)
 }
-
-export async function deleteActiviteitNotitie(notitieId) {
-  if (!notitieId) throw new Error('notitieId is verplicht')
-  const { error } = await supabase.from('activiteit_notities').delete().eq('id', notitieId)
-  if (error) throw error
-}

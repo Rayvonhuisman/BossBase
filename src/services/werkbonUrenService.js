@@ -123,33 +123,5 @@ export async function createWerkbonUur(input) {
   return toWerkbonUur(data)
 }
 
-export async function updateWerkbonUur(id, velden) {
-  const updates = { ...velden, updated_at: new Date().toISOString() }
-  if ('pauzeMinuten' in updates) {
-    updates.pauze_minuten = Math.max(0, Number(updates.pauzeMinuten) || 0)
-    delete updates.pauzeMinuten
-  }
-  if ('startTijd' in updates) { updates.start_tijd = updates.startTijd; delete updates.startTijd }
-  if ('eindTijd' in updates) { updates.eind_tijd = updates.eindTijd; delete updates.eindTijd }
-  if ('reisKm' in updates) {
-    updates.reis_km = updates.reisKm === '' || updates.reisKm == null ? null : Number(updates.reisKm)
-    delete updates.reisKm
-  }
-  if ('start_tijd' in updates || 'eind_tijd' in updates || 'pauze_minuten' in updates) {
-    const berekend = berekenUren(updates.start_tijd, updates.eind_tijd, updates.pauze_minuten ?? 0)
-    if (berekend !== null) updates.uren = berekend
-  }
-
-  const { data, error } = await supabase
-    .from('werkbon_uren').update(updates).eq('id', id).select(SELECT_VOL).single()
-  if (error) throw error
-  return toWerkbonUur(data)
-}
-
-export async function deleteWerkbonUur(id) {
-  const { error } = await supabase.from('werkbon_uren').delete().eq('id', id)
-  if (error) throw error
-}
-
 // Uren per project voor de nacalculatie: zie getProjectHoursMap in
 // projectsService (opgeteld in de database, zonder rijengrens).

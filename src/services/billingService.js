@@ -47,18 +47,6 @@ export async function getBillingStatus() {
   }
 }
 
-// Wat verhindert een overstap naar `doelTier`? Lege lijst = het mag.
-// Dezelfde controle die de edge function server-side afdwingt, zodat de UI
-// vooraf kan tonen wat er weg moet in plaats van achteraf te weigeren.
-export async function getDowngradeBlokkades(doelTier) {
-  const { data, error } = await supabase.rpc('bb_downgrade_blokkades', { p_doel_tier: doelTier })
-  if (error) throw error
-  return (data || []).map(b => ({
-    limiet: b.limiet, label: b.label,
-    gebruikt: Number(b.gebruikt), maximum: Number(b.maximum), teveel: Number(b.teveel),
-  }))
-}
-
 // Foutmelding uit een edge function halen. Die geeft bij een 4xx een JSON-body
 // met `error` en soms `code`/`blokkades`; zonder dit blijft er alleen
 // "non-2xx status code" over.

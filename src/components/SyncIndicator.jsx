@@ -13,7 +13,6 @@ import { Check } from 'lucide-react';
 import { getActieveKoppelingen } from '../services/accountingService.js';
 
 let gedeeld = null;
-export function vergeetKoppelingen() { gedeeld = null; }
 
 function useKoppelingen() {
   const [koppelingen, setKoppelingen] = useState(null);

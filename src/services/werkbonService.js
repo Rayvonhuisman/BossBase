@@ -622,10 +622,6 @@ export async function deleteWerkbonMateriaal(id) {
 
 // ── WERKBON NOTITIES ─────────────────────────────────────────────────────────
 
-export async function updateWerkbonNotities(id, notities) {
-  return updateWerkbon(id, { werkbon_notities: notities || null })
-}
-
 // ── WERKBON FOTOS ────────────────────────────────────────────────────────────
 
 const toWerkbonFoto = row => ({
@@ -846,10 +842,4 @@ export async function legWaarschuwingVast(notitieId, { note, gevolg, email }) {
     .single()
   if (error) throw error
   return toWerkbonNotitie(data)
-}
-
-export async function deleteWerkbonNotitie(notitieId) {
-  if (!notitieId) throw new Error('notitieId is verplicht')
-  const { error } = await supabase.from('werkbon_notities').delete().eq('id', notitieId)
-  if (error) throw error
 }

@@ -12,10 +12,6 @@
 // (één rij per company). Voor de frontend leest `get_company_tier()` alleen de
 // tier uit — zie profileService.getCompany en de bijbehorende migratie.
 
-// Alle bedragen zijn EXCLUSIEF BTW (zo staan ze ook op de prijspagina). In Stripe
-// betekent dat tax_behavior 'exclusive' op elke price.
-export const PRIJZEN_EXCL_BTW = true
-
 export const TIERS = [
   { id: 'starter', label: 'Starter', price: 29 },
   { id: 'groei',   label: 'Groei',   price: 39 },
@@ -50,10 +46,6 @@ export const betaaldeGebruikers = (tier, totaalGebruikers) =>
 export const gebruikersPrijs = (tier, totaalGebruikers) =>
   betaaldeGebruikers(tier, totaalGebruikers) * EXTRA_USER_PRICE
 
-/** Pakket + gebruikers, zonder modules. */
-export const abonnementPrijs = (tier, totaalGebruikers) =>
-  tierPrice(tier) + gebruikersPrijs(tier, totaalGebruikers)
-
 // Jaarabonnement: GEEN aparte jaarprijs en geen kortingspercentage. De klant
 // betaalt gewoon maandelijks, 12 maanden lang, tegen dezelfde maandprijs.
 // Het voordeel zit in de WELKOMSTACTIE die hij daarbij kiest (zie hieronder).
@@ -62,7 +54,6 @@ export const abonnementPrijs = (tier, totaalGebruikers) =>
 // YEARLY_DISCOUNT / tierPriceYearly — die bestaan niet meer, zodat er geen prijs
 // kan blijven rondslingeren die Stripe niet incasseert.
 export const YEARLY_FREE_MONTHS = 2
-export const yearlySavingPct = () => Math.round((YEARLY_FREE_MONTHS / 12) * 100)
 
 // ── WELKOMSTACTIES ────────────────────────────────────────────────────────────
 // Wie een JAARabonnement afsluit kiest één welkomstactie. Precies één — nooit
@@ -100,7 +91,6 @@ export const WELKOMSTACTIES = [
   },
 ]
 
-export const WELKOMSTACTIE_KEYS = WELKOMSTACTIES.map(a => a.key)
 export const getWelkomstactie = key => WELKOMSTACTIES.find(a => a.key === key) || null
 export const welkomstactieLabel = key => getWelkomstactie(key)?.label || key
 
@@ -120,10 +110,6 @@ export const TIER_IDS = TIERS.map(t => t.id)
 export const getTier    = id => TIERS.find(t => t.id === id) || null
 export const tierLabel  = id => getTier(id)?.label || id
 export const tierPrice  = id => getTier(id)?.price ?? 0
-export const isValidTier = id => TIER_IDS.includes(id)
-
-// Wat de klant het eerste jaar betaalt bij jaarbetaling: 10 van de 12 maanden.
-export const tierPriceFirstYear = id => tierPrice(id) * (12 - YEARLY_FREE_MONTHS)
 
 // Tekst voor de gebruikersregel op de prijskaarten. Bij Team zit er geen
 // gebruiker in de prijs, dus daar telt de eerste ook mee.

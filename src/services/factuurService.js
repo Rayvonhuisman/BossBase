@@ -370,17 +370,6 @@ export async function getFactuurRegels(factuurId) {
   return (data || []).map(toRegel)
 }
 
-// Factuurregels groeien het snelst van alles (meerdere per factuur), dus hier
-// wordt de grens als eerste geraakt. Er stond ook geen sortering: dan bepaalt
-// Postgres zelf welke duizend je kreeg, en dus ook welke btw je zag.
-export async function getAllFactuurRegels() {
-  const rijen = await alleRijen(() => supabase
-    .from('factuur_regels')
-    .select('*', { count: 'exact' })
-    .order('id', { ascending: true }))
-  return rijen.map(toRegel)
-}
-
 export async function createCreditFactuur(origineleFactuurId, regels, origineleFactuur) {
   const nummer = await generateCreditFactuurNummer()
   // Kop, regels en het op gecrediteerd zetten van de originele factuur in één

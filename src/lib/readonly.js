@@ -58,20 +58,6 @@ export const READONLY_BLIJFT_WERKEN = [
 export const READONLY_BEWAARD =
   'Je gegevens blijven bewaard en zijn meteen weer volledig beschikbaar zodra je abonnement loopt.'
 
-// Herkent de foutmelding die de database teruggeeft als een schrijfactie op een
-// read-only account strandt. Zowel de trigger (RAISE ... HINT 'readonly') als een
-// geweigerde restrictive policy komen hier langs; die laatste geeft geen eigen
-// tekst, dus daar herkennen we de standaard RLS-fout.
-//
-// Let op: een geweigerde policy geeft 42501 zonder te zeggen wélke gate hem
-// tegenhield — een bereikte limiet ziet er identiek uit. Roep dit dus alleen aan
-// als je al weet dat het bedrijf read-only is (plan.readonly).
-export function isReadonlyFout(error) {
-  const tekst = `${error?.message || ''} ${error?.hint || ''} ${error?.details || ''}`.toLowerCase()
-  if (tekst.includes('readonly')) return true
-  return error?.code === '42501' || tekst.includes('row-level security')
-}
-
 // Vertaalt de rauwe databasemelding van een geweigerde plan-gate naar iets wat
 // een dakdekker begrijpt. De knoppen die we kennen zijn vooraf afgevangen
 // (usePlanGuard); dit is het vangnet voor alles wat we níét als knop hebben

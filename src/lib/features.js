@@ -59,8 +59,6 @@ export const FEATURES = [
 // Features die aan de gebruiker getoond mogen worden (prijskaarten, upgrade).
 export const ZICHTBARE_FEATURES = FEATURES.filter(f => !f.intern)
 
-export const FEATURE_KEYS = FEATURES.map(f => f.key)
-
 export const getFeature   = key => FEATURES.find(f => f.key === key) || null
 export const featureLabel = key => getFeature(key)?.label || key
 
@@ -113,8 +111,6 @@ export const MODULES = [
     uitleg: 'Wij zetten je bedrijfswebsite online en houden hem draaiend: domein, beveiligd slotje en updates. Jij hoeft er niets voor te regelen.' },
 ]
 
-export const MODULE_KEYS = MODULES.map(m => m.key)
-
 // Tiers die überhaupt modules kunnen bijkopen — afgeleid, niet apart onderhouden.
 export const MODULE_TIERS = [...new Set(MODULES.flatMap(m => m.beschikbaarBij))]
 
@@ -138,8 +134,6 @@ export const LIMIT_DEFS = [
   { key: 'offertes',   label: 'Offertes',   enkelvoud: 'offerte',   telwijze: 'periode' },
   { key: 'facturen',   label: 'Facturen',   enkelvoud: 'factuur',   telwijze: 'periode' },
 ]
-
-export const LIMIT_KEYS = LIMIT_DEFS.map(l => l.key)
 
 export const getLimitDef = key => LIMIT_DEFS.find(l => l.key === key) || null
 
@@ -181,13 +175,6 @@ export function limitFor(tier, key, { trial = false } = {}) {
   if (trial) return null
   const t = effectiveTier(tier)
   return TIER_LIMITS[t]?.[key] ?? null
-}
-
-/** Is er nog ruimte? `used` is de huidige stand. */
-export function withinLimit(tier, key, used, { trial = false } = {}) {
-  const max = limitFor(tier, key, { trial })
-  if (max == null) return true
-  return Number(used || 0) < max
 }
 
 /** Het laagste tier dat deze feature heeft — voor de upgrade-melding. */
