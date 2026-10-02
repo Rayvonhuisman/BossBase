@@ -1,3 +1,4 @@
+import { heeftRecht, geenRecht } from '../_shared/eisRecht.ts'
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { inactiefReden } from '../_shared/actieveGebruiker.ts'
@@ -31,6 +32,7 @@ serve(async (req) => {
     if (authErr || !user) {
       return new Response(JSON.stringify({ error: 'Niet ingelogd' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
+    if (!(await heeftRecht(user.id, 'klanten_bewerken'))) return geenRecht(corsHeaders)
     // service_role omzeilt RLS: zelf controleren dat account en bedrijf actief zijn.
     const inactief = await inactiefReden(user.id)
     if (inactief) return new Response(JSON.stringify({ error: inactief }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })

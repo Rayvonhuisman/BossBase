@@ -1,3 +1,4 @@
+import { heeftRecht, geenRecht } from '../_shared/eisRecht.ts'
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { alleRijen } from '../_shared/alleRijen.ts'
 import { makeAdminClient, isScheduledCall, forEachMoneybirdCompany } from "../_shared/scheduledSync.ts"
@@ -147,6 +148,7 @@ serve(async (req) => {
     // ── User-modus (ongewijzigd): één bedrijf van de ingelogde gebruiker ────────
     const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt)
     if (authErr || !user) return json({ error: 'Niet ingelogd' }, 401)
+    if (!(await heeftRecht(user.id, 'klanten_bewerken'))) return geenRecht(corsHeaders)
 
     const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single()
     if (!profile?.company_id) return json({ error: 'Geen bedrijf gevonden' }, 400)

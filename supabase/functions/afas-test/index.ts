@@ -1,3 +1,4 @@
+import { heeftRecht, geenRecht, ingelogdeGebruiker } from '../_shared/eisRecht.ts'
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { clientFout } from '../_shared/clientFout.ts'
 
@@ -53,6 +54,15 @@ serve(async (req) => {
   console.log('Function started: afas-test')
 
   try {
+    // Alleen een ingelogde beheerder mag koppelgegevens testen. Zonder deze
+    // controle was de functie voor iedereen met de publieke sleutel een proxy
+    // naar de boekhoud-API (audit 2026-10-01, B-16).
+    const gebruiker = await ingelogdeGebruiker(req)
+    if (!gebruiker) {
+      return new Response(JSON.stringify({ success: false, error: 'Niet ingelogd' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+    if (!(await heeftRecht(gebruiker, null))) return geenRecht(corsHeaders)
+
     const { environment_id, token } = await req.json()
 
     if (!environment_id || !token) {
