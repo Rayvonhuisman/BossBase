@@ -36,7 +36,7 @@ const FAQ_DATA = [
       { q: "Hoe betaal ik mijn abonnement?", a: "Via Stripe, ook bij een jaarabonnement (in 12 maandtermijnen). Welke betaalmethoden je kunt kiezen, zie je bij het afrekenen." },
       { q: "Is btw inbegrepen in de prijs?", a: "Nee, alle prijzen zijn exclusief btw. De btw komt er op je factuur bij." },
       { q: "Kan ik van pakket wisselen?", a: "Upgraden kan altijd. Naar een kleiner pakket kan bij een maandabonnement, maar niet binnen de looptijd van een jaarabonnement, en niet als je boven de limiet van het kleinere pakket zit." },
-      { q: "Wat gebeurt er na de proefperiode?", a: "Na 14 dagen kies je een abonnement. Doe je dat niet, dan wordt je account alleen-lezen: je kunt je gegevens bekijken en exporteren, maar niets nieuws aanmaken." },
+      { q: "Wat gebeurt er na de proefperiode?", a: "Na 14 dagen kies je een abonnement. Doe je dat niet, dan blijven je gegevens gewoon staan: je kunt ze bekijken, aanpassen en exporteren, maar niets nieuws aanmaken of versturen." },
     ],
   },
   {
