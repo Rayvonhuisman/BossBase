@@ -75,7 +75,11 @@ const T = {
   shadow:  '0 1px 3px rgba(0,0,0,.05)',
 };
 
-const COLS = '20px 1fr 180px 160px 48px 120px 88px';
+// Klantkolom heeft een minimum en de rij een minimale breedte: op een half
+// scherm schoven de kolommen anders over de klantnaam heen (audit M38). De
+// kaart scrolt dan horizontaal.
+const COLS = '20px minmax(170px, 1fr) 180px 160px 48px 120px 88px';
+const RIJ_MIN = 860;
 
 // ── ICONS ────────────────────────────────────────────────────
 const IconMail = () => (
@@ -1190,7 +1194,7 @@ export function DatabasePage({ openCustomer }) {
       </div>
 
       {/* ── Body ── */}
-      <div className="afu2" style={{ display: 'grid', gridTemplateColumns: '216px 1fr', gap: 14, alignItems: 'start', position: 'relative', zIndex: 1 }}>
+      <div className="afu2" style={{ display: 'grid', gridTemplateColumns: '216px minmax(0, 1fr)', gap: 14, alignItems: 'start', position: 'relative', zIndex: 1 }}>
 
         {/* ── Sidebar ── */}
         <div style={{
@@ -1409,13 +1413,13 @@ export function DatabasePage({ openCustomer }) {
         <div style={{
           background: 'white', borderRadius: 'var(--r14)',
           border: '1px solid var(--border)', boxShadow: T.shadow,
-          overflow: 'hidden', display: 'flex', flexDirection: 'column',
+          overflowX: 'auto', display: 'flex', flexDirection: 'column', minWidth: 0,
         }}>
 
           {/* Column headers */}
           <div style={{
             display: 'grid', gridTemplateColumns: COLS, gap: 12, alignItems: 'center',
-            padding: '8px 16px', borderBottom: `1px solid ${T.borderXL}`,
+            padding: '8px 16px', borderBottom: `1px solid ${T.borderXL}`, minWidth: RIJ_MIN,
           }}>
             <Checkbox checked={allPageSelected} indeterminate={somePageSelected} onChange={toggleAll} />
             <div style={TH}>Klant</div>
@@ -1442,7 +1446,7 @@ export function DatabasePage({ openCustomer }) {
                 onMouseLeave={() => setHoveredRow(null)}
                 style={{
                   display: 'grid', gridTemplateColumns: COLS, gap: 12, alignItems: 'center',
-                  padding: '10px 16px',
+                  padding: '10px 16px', minWidth: RIJ_MIN,
                   borderLeft: `3px solid ${isSelected ? 'var(--p)' : 'transparent'}`,
                   borderBottom: i < pageSlice.length - 1 ? `1px solid ${T.borderXL}` : 'none',
                   background: isSelected ? T.rowSel : isHovered ? T.pageBg : 'white',

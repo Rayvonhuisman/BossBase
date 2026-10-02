@@ -600,7 +600,10 @@ export function TeamPage() {
 
       {!loading && !laadFout && members.length > 0 && (
         <div className="tw afu3">
-          <table className="dt">
+          {/* Minimale breedte: op tablet/half scherm scrolt de tabel in zijn
+              kader, in plaats van dat namen over drie regels breken en de knoppen
+              (Deactiveren) buiten beeld vallen (audit M38). */}
+          <table className="dt" style={{ minWidth: 980 }}>
             <thead>
               <tr>
                 <th>Naam</th>

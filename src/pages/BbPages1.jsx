@@ -1550,10 +1550,10 @@ export function CustomersPage({ openCustomer }) {
       {loading && <div className="card card-p">Klanten laden...</div>}
       {!loading && filtered.length === 0 && <div className="empty"><div className="empty-title">Geen klanten gevonden</div><div className="empty-sub">Maak je eerste klant aan of pas je zoekopdracht aan.</div></div>}
       {!loading && filtered.length > 0 && (view === 'grid' ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, alignItems: 'stretch' }} className="afu2 cust-card-grid">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(260px, 100%), 1fr))', gap: 12, alignItems: 'stretch' }} className="afu2 cust-card-grid">
           {filtered.map(c => {
             return (
-              <div key={c.id} className="card card-p" style={{ cursor: 'pointer', transition: 'all .18s ease', display: 'flex', flexDirection: 'column' }}
+              <div key={c.id} className="card card-p" style={{ cursor: 'pointer', transition: 'all .18s ease', display: 'flex', flexDirection: 'column', minWidth: 0, overflowWrap: 'anywhere' }}
                 onClick={() => openCustomer(c.id)}
                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.borderColor = 'rgba(29,219,98,.3)'; }}
                 onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.borderColor = ''; }}>
