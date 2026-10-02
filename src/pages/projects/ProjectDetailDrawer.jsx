@@ -1272,6 +1272,7 @@ function KostenTab({ project, canManage }) {
   const [projectKosten, setProjectKosten] = useState([]);
   const [urenRegels, setUrenRegels] = useState([]);   // werkbon_uren van dit project
   const [laadFout, setLaadFout] = useState('');
+  const [nietLaadbaar, setNietLaadbaar] = useState('');
   const [loading, setLoading] = useState(true);
   const [toonWinstUitleg, setToonWinstUitleg] = useState(false);
   const [leveranciers, setLeveranciers] = useState([]);
@@ -1733,6 +1734,7 @@ export function ProjectDetailDrawer({
 
   const loadAll = async () => {
     setLoading(true);
+    setNietLaadbaar('');
     const deels = [];
     const of = (belofte, terug) => belofte.catch(e => { deels.push(e); return terug; });
     try {
@@ -1753,7 +1755,12 @@ export function ProjectDetailDrawer({
       setWerkbonnen(wbs);
       setProject(enrichProject(p, { timeEntries: te, invoices: inv }));
     } catch (e) {
-      toast.error(e.message || 'Project laden mislukt');
+      // Geen rij (PGRST116): het project bestaat niet meer of je hebt er geen
+      // toegang toe (bijv. op Team een project van een collega). Zonder deze tak
+      // bleef de drawer eindeloos op "Project laden…" staan.
+      setNietLaadbaar(e?.code === 'PGRST116'
+        ? 'Dit project bestaat niet (meer), of je hebt er geen toegang toe.'
+        : 'Het project kon niet worden geladen. Probeer het opnieuw.');
     } finally {
       setLoading(false);
     }
@@ -1831,7 +1838,13 @@ export function ProjectDetailDrawer({
       <div className="drawer-overlay" onClick={onClose} />
       <div className="drawer">
         <div className="drawer-body" style={{ padding: 0 }}>
-          {loading || !project ? (
+          {!loading && !project && nietLaadbaar ? (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--dm)' }}>
+              <p style={{ margin: '0 0 16px' }}>{nietLaadbaar}</p>
+              <button type="button" className="btn btn-s btn-sm" onClick={loadAll} style={{ marginRight: 8 }}>Opnieuw proberen</button>
+              <button type="button" className="btn btn-s btn-sm" onClick={onClose}>Sluiten</button>
+            </div>
+          ) : loading || !project ? (
             <div style={{ padding: 32, textAlign: 'center', color: 'var(--dl)' }}>Project laden…</div>
           ) : (
             <>
