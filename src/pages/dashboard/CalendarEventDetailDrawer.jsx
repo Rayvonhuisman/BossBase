@@ -3,6 +3,7 @@ import { logFout } from '../../lib/stilleFouten.js';
 import { MapPin } from 'lucide-react';
 import { I, fmt } from '../../bb-shared.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
+import { korteDatumNl } from '../../lib/datumTijd.js';
 import { useEscapeSluit } from '../../hooks/useEscapeSluit.js';
 import { usePermissions } from '../../hooks/usePermissions.js';
 import { useToast } from '../../lib/toast.jsx';
@@ -173,6 +174,9 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
       });
       setEv(updated);
       toast.success('Agenda-item opgeslagen');
+      // De agenda achter de drawer laadt zijn items op refreshKey; zonder deze
+      // tik bleef daar de oude titel/tijd staan tot je de pagina herlaadde.
+      bumpRefresh?.([]);
     } catch (e) {
       toast.error(e.message || 'Opslaan mislukt');
     } finally {
@@ -291,7 +295,7 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
           <span className={`badge ${tone}`}>{typeLabel}</span>
           <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.3, color: '#0a0a0a', marginTop: 6 }}>{ev.title || 'Afspraak'}</div>
           <div style={{ marginTop: 6, fontSize: 13, color: '#6b7280' }}>
-            {ev.date || ''}{(ev.time || ev.end) ? ` · ${ev.time || ''}${ev.end ? `–${ev.end}` : ''}` : ''}
+            {ev.date ? korteDatumNl(ev.date) : ''}{(ev.time || ev.end) ? ` · ${ev.time || ''}${ev.end ? `–${ev.end}` : ''}` : ''}
           </div>
         </div>
         {HeadClose}
@@ -352,7 +356,7 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
         <Section title="Overzicht">
           <Row k="Titel" v={ev.title || ''} />
           <Row k="Type" v={typeLabel} />
-          <Row k="Datum" v={ev.date || ''} />
+          <Row k="Datum" v={ev.date ? korteDatumNl(ev.date) : ''} />
           <Row k="Starttijd" v={ev.time || ''} />
           <Row k="Eindtijd" v={ev.end || ''} />
           <Row k="Locatie" v={ev.location || ''} />
