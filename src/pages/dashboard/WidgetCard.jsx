@@ -573,7 +573,8 @@ function renderContent(type, data, widget, setPage, openCustomer, onSettingsChan
     case 'costs_month': {
       const md = jobCosts.filter(c => inThisMonth(c.date));
       const val = md.reduce((s, c) => s + (Number(c.amt) || 0), 0);
-      return <KpiCard tone="amber" icon={I.costs} label="Kosten deze maand" value={val > 0 ? <Bedrag n={val} /> : ''} sub={`${md.length} kostenposten`} onClick={() => setPage('costs')} />;
+      // Ook € 0 tonen: een lege regel las als "nog aan het laden".
+      return <KpiCard tone="amber" icon={I.costs} label="Kosten deze maand" value={<Bedrag n={val} />} sub={`${md.length} kostenposten`} onClick={() => setPage('costs')} />;
     }
     case 'billable': {
       // Te factureren = het werk is af, maar nog niet afgerekend. "Af" staat

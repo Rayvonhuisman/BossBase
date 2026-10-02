@@ -88,8 +88,8 @@ export function LoginPage({ onLogin, onRegister }) {
             <div style={{ marginBottom: 12 }}><MailCheck size={42} strokeWidth={1.6} color="var(--p)" /></div>
             <div className="auth-title" style={{ marginBottom: 6 }}>Check je e-mail</div>
             <div className="auth-sub">
-              We hebben een resetlink gestuurd naar <strong>{forgotEmail}</strong>.
-              Klik op de link in de mail om je wachtwoord opnieuw in te stellen.
+              Als <strong>{forgotEmail}</strong> bij ons bekend is, hebben we daar een resetlink
+              naartoe gestuurd. Klik op de link in de mail om je wachtwoord opnieuw in te stellen.
             </div>
           </div>
           <div className="auth-link" style={{ textAlign: 'center' }}>

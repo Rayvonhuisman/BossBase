@@ -1487,7 +1487,15 @@ export function CustomersPage({ openCustomer }) {
   const toast = useToast();
   const { refreshKey, bumpRefresh } = useProfile();
   const { can } = usePermissions();
-  const [search, setSearch] = useState('');
+  // De zoekterm overleeft het openen van een klant: de lijst wordt dan opnieuw
+  // opgebouwd (naast de klantkaart) en begon eerst weer leeg, met alle klanten.
+  const [search, setSearchState] = useState(() => {
+    try { return sessionStorage.getItem('bb.klanten.zoek') || ''; } catch { return ''; }
+  });
+  const setSearch = v => {
+    setSearchState(v);
+    try { sessionStorage.setItem('bb.klanten.zoek', v); } catch { /* geen opslag: alleen niet onthouden */ }
+  };
   const [view, setView] = useState(() => localStorage.getItem('customers_view') || 'grid');
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);

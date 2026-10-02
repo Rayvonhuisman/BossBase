@@ -357,7 +357,7 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
           triggerAutoEmail('aanvraag_ontvangen',
             { klant_naam: cust.name, bedrijfsnaam: company?.name || 'BossBase' },
             cust.email, companyId, 'deal', deal.id, customerId)
-        );
+          ).then(ok => { if (ok === false) toast.error(`De bevestigingsmail aan ${cust.email} is niet verstuurd.`); });
       }
       toast.success('Nieuwe aanvraag toegevoegd');
       onSaved?.(deal);
@@ -521,7 +521,7 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
             triggerAutoEmail('afspraak_bevestiging',
               { klant_naam: cust.name, bedrijfsnaam: company?.name || 'BossBase', afspraak_datum: dateStr, afspraak_tijd: form.time || '' },
               cust.email, companyId, 'activity', created.id, form.custId)
-          );
+          ).then(ok => { if (ok === false) toast.error(`De afspraakbevestiging aan ${cust.email} is niet verstuurd.`); });
         }
       }
       toast.success('Activiteit toegevoegd');
