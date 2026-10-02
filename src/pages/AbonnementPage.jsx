@@ -80,6 +80,9 @@ const limietTekst = (tier, key) => {
   if (max == null) return `Onbeperkt ${meervoud}`;
   const naam = max === 1 ? (ENKELVOUD[key] || meervoud) : meervoud;
   const per = def?.telwijze === 'periode' ? ' per maand' : '';
+  // "2 gebruikers" naast "+ € 10 per extra gebruiker" las alsof er twee in de
+  // prijs zitten. Het is een maximum, en er zit er één in.
+  if (key === 'gebruikers') return `Tot ${max} ${naam} (${inbegrepenGebruikers(tier)} inbegrepen)`;
   return `${max} ${naam}${per}`;
 };
 
@@ -134,6 +137,8 @@ export default function AbonnementPage({ setPage }) {
   // Totaal aantal gebruikers, niet "extra bovenop de eerste". Hoeveel er apart
   // gefactureerd worden hangt van het pakket af (Team rekent ook de eerste).
   const [gebruikers, setGebruikers] = useState(1);
+  // Ondergrens van de teller: wie er nu in het team zit.
+  const minGebruikers = Math.max(1, Number(plan.used('gebruikers')) || 0);
   const [oordeel, setOordeel] = useState(null);
   const [akkoordLooptijd, setAkkoordLooptijd] = useState(false);
 
@@ -157,7 +162,9 @@ export default function AbonnementPage({ setPage }) {
         setModules(v.modules);
         // Minstens 1: bij Team zit er geen gebruiker in de pakketprijs, dus
         // zonder ondergrens zou de teller op 0 beginnen.
-        setGebruikers(Math.max(1, inbegrepenGebruikers(start) + (v.extra || 0)));
+        // En nooit minder dan het team nu groot is (actief + openstaande
+        // uitnodigingen): de server weigert dat ook (billing-checkout).
+        setGebruikers(Math.max(1, minGebruikers, inbegrepenGebruikers(start) + (v.extra || 0)));
         // Alleen een LOPEND abonnement houdt zijn eigen termijn. Zonder Stripe
         // staat er weliswaar een billing_interval in de proefrij, maar die zegt
         // niets over wat de klant straks kiest — daar is jaarlijks de standaard.
@@ -245,13 +252,15 @@ export default function AbonnementPage({ setPage }) {
     setModules(prev => prev.filter(k => canBuyModule(t, k)));
     const plafond = TIER_LIMITS[t]?.gebruikers ?? null;
     setGebruikers(g => {
-      const ondergrens = Math.max(1, g);
+      const ondergrens = Math.max(minGebruikers, g);
       return plafond != null ? Math.min(ondergrens, plafond) : ondergrens;
     });
   };
 
   const gebruikersPlafond = TIER_LIMITS[tier]?.gebruikers ?? null;
   const gebruikersVol = gebruikersPlafond != null && gebruikers >= gebruikersPlafond;
+  // Past het huidige team niet in dit pakket, dan valt er niets af te rekenen.
+  const pakketTeKlein = gebruikersPlafond != null && minGebruikers > gebruikersPlafond;
 
   const meldBijBeheerder = async () => {
     setBezig(true);
@@ -502,8 +511,8 @@ export default function AbonnementPage({ setPage }) {
             <div className="card card-p">
               <div className="ab-kop">Teamleden</div>
               <div className="ab-teller">
-                <button className="btn btn-s btn-sm" disabled={bezig || gebruikers <= 1}
-                  onClick={() => setGebruikers(g => Math.max(1, g - 1))} aria-label="Minder gebruikers">−</button>
+                <button className="btn btn-s btn-sm" disabled={bezig || gebruikers <= minGebruikers}
+                  onClick={() => setGebruikers(g => Math.max(minGebruikers, g - 1))} aria-label="Minder gebruikers">−</button>
                 <span className="ab-teller-waarde">{gebruikers} {gebruikers === 1 ? 'gebruiker' : 'gebruikers'}</span>
                 <button className="btn btn-s btn-sm" disabled={bezig || gebruikersVol}
                   onClick={() => setGebruikers(g => g + 1)} aria-label="Meer gebruikers">+</button>
@@ -513,6 +522,9 @@ export default function AbonnementPage({ setPage }) {
                   ? `${betaald} × ${euro(EXTRA_USER_PRICE)} = ${euro(betaald * EXTRA_USER_PRICE)} p/mnd bovenop ${tierLabel(tier)}`
                   : `${inbegrepenGebruikers(tier)} inbegrepen · ${euro(EXTRA_USER_PRICE)} per extra gebruiker`}
               </p>
+              {gebruikers <= minGebruikers && minGebruikers > 1 && (
+                <p className="ab-hint">Je team heeft nu {minGebruikers} gebruikers. Minder kan pas na het deactiveren van teamleden.</p>
+              )}
               {gebruikersVol && (
                 <p className="ab-hint">
                   {tierLabel(tier)} gaat tot {gebruikersPlafond} gebruiker{gebruikersPlafond === 1 ? '' : 's'}.
@@ -634,7 +646,7 @@ export default function AbonnementPage({ setPage }) {
                 Later
               </button>
               <button className="btn btn-p" onClick={bevestig}
-                disabled={bezig || geenActieGekozen || nietsGewijzigd || looptijdNietBevestigd}>
+                disabled={bezig || geenActieGekozen || nietsGewijzigd || looptijdNietBevestigd || pakketTeKlein}>
                 {bezig ? 'Bezig…' : heeftStripe ? 'Wijziging doorvoeren'
                   : gratisMaanden > 0 ? `Afrekenen · ${euro(0)}` : `Afrekenen · ${euro(totaal)} p/mnd excl. btw`}
               </button>

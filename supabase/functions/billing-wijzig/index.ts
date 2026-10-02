@@ -33,7 +33,7 @@ import {
   stripeFetch, json, CORS, eisAbonnementsbeheerder,
   tierPriceId, modulePriceId, extraUserPriceId, duidItems, naarISO, bouwItemMutaties,
   zetJaarverplichting, isJaar,
-  MODULE_BESCHIKBAAR, MODULE_VEREIST, inbegrepenGebruikers,
+  MODULE_BESCHIKBAAR, MODULE_VEREIST, inbegrepenGebruikers, benodigdeGebruikers, teWeinigGebruikers,
 } from '../_shared/billing.ts'
 
 const TIERS = ['starter', 'groei', 'team']
@@ -71,6 +71,10 @@ serve(async (req) => {
       : []
 
     if (!TIERS.includes(doelTier)) return json({ error: 'Onbekend pakket' }, 400)
+
+    // ── Minstens zoveel plekken als er gebruikers zijn ─────────────────────────
+    const weigering = teWeinigGebruikers(doelTier, extra, await benodigdeGebruikers(admin, companyId))
+    if (weigering) return weigering
 
     // ── Loopt er wel een abonnement? ─────────────────────────────────────────
     const { data: rij } = await admin

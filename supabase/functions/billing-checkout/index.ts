@@ -21,7 +21,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
   stripeFetch, appOrigin, json, CORS, eisAbonnementsbeheerder,
   tierPriceId, modulePriceId, extraUserPriceId,
-  MODULE_BESCHIKBAAR, MODULE_VEREIST, inbegrepenGebruikers,
+  MODULE_BESCHIKBAAR, MODULE_VEREIST, inbegrepenGebruikers, benodigdeGebruikers, teWeinigGebruikers,
   WELKOMSTACTIES, heeftWelkomstkorting, welkomCouponId, isJaar,
 } from '../_shared/billing.ts'
 
@@ -62,6 +62,10 @@ serve(async (req) => {
 
     if (!TIERS.includes(tier)) return json({ error: 'Onbekend pakket' }, 400)
     if (!['maand', 'jaar'].includes(interval)) return json({ error: 'Onbekende betaaltermijn' }, 400)
+
+    // ── Minstens zoveel plekken als er gebruikers zijn ─────────────────────────
+    const weigering = teWeinigGebruikers(tier, extra, await benodigdeGebruikers(admin, companyId))
+    if (weigering) return weigering
 
     // ── Welkomstactie valideren ────────────────────────────────────────────────
     if (welkomstactie) {
