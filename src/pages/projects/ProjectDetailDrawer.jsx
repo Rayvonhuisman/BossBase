@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { listLeveranciers } from '../../services/leverancierService.js';
 import { Maximize2, Minimize2, AlertTriangle, AlertOctagon, Check, X, Edit2, Trash2 } from 'lucide-react';
 import { updateCustomer } from '../../services/customerService.js';
@@ -219,26 +219,6 @@ function OverviewTab({
   const [toewijzenBezig, setToewijzenBezig] = useState(false);
   const [toonVerloren, setToonVerloren] = useState(false);
   const [toonToewijzen, setToonToewijzen] = useState(false);
-  // Ernaast klikken sluit de lijst. Elke klik op een naam is al opgeslagen
-  // (wijzigToewijzing schrijft meteen weg), dus dit hoeft niets te bewaren -
-  // het haalt alleen de lijst weg als je klaar bent. Zonder dit bleef hij
-  // openstaan zonder uitweg.
-  const toewijzenRef = useRef(null);
-  useEffect(() => {
-    if (!toonToewijzen) return undefined;
-    const buiten = e => {
-      if (!toewijzenRef.current?.contains(e.target)) setToonToewijzen(false);
-    };
-    const opEscape = e => { if (e.key === 'Escape') setToonToewijzen(false); };
-    // mousedown en niet click: een klik die buiten begint maar binnen eindigt
-    // (slepen) zou anders ongemerkt doorgaan voor "ernaast geklikt".
-    document.addEventListener('mousedown', buiten);
-    document.addEventListener('keydown', opEscape);
-    return () => {
-      document.removeEventListener('mousedown', buiten);
-      document.removeEventListener('keydown', opEscape);
-    };
-  }, [toonToewijzen]);
   const [dealLokaal, setDealLokaal] = useState(null);
   const huidigeDeal = dealLokaal?.id === deal?.id ? dealLokaal : deal;
   // Bedragen op projecten horen achter 'projectbedragen'. Dat recht bestond al
