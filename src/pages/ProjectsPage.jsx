@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { vandaagIso } from '../lib/datumTijd.js';
 import { I, ModalX, NotifyMailToggle, fmt, fmt0, BackToKlant } from '../bb-shared.jsx';
 import { InfoTip } from '../components/Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
@@ -510,7 +511,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
                 </thead>
                 <tbody>
                   {filtered.map(p => {
-                    const isOverdue = p.deadline && p.deadline < new Date().toISOString().slice(0, 10) && p.status !== 'afgerond';
+                    const isOverdue = p.deadline && p.deadline < vandaagIso() && p.status !== 'afgerond';
                     return (
                       <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => setOpenProjectId(p.id)}>
                         <td className="td">

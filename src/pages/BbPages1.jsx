@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { vandaagIso } from '../lib/datumTijd.js';
 import SyncIndicator from '../components/SyncIndicator.jsx';
 import DOMPurify from 'dompurify';
 import { mailVoorbeeldDocument } from '../utils/mailFrame.js';
@@ -394,9 +395,9 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   // datum: voor de klant is het één agenda, ongeacht waar het vandaan komt.
   const losRegels = losseRegels(cActs);
   const planningRegels = samenOpDatum(planRegels(planWerkbonnen, naamVan), losRegels);
-  const komendeRegels = planningRegels.filter(r => r.datum >= new Date().toISOString().slice(0, 10));
+  const komendeRegels = planningRegels.filter(r => r.datum >= vandaagIso());
   const alleRegels = samenOpDatum(planRegels(cWerkbonnen, naamVan), losRegels);
-  const vandaagIso = new Date().toISOString().slice(0, 10);
+  const vandaagStr = vandaagIso();
 
   const cQuotes = [];
   // Zelfde definitie als de klantenlijst, Financiën en de database-export.
@@ -449,7 +450,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
     if (!activityTitle.trim()) return;
     setSavingActivity(true);
     try {
-      const created = await createActivity({ title: activityTitle, customer_id: c.id, type: 'task', completed: false, due_at: buildDueAt(new Date().toISOString().slice(0, 10)) });
+      const created = await createActivity({ title: activityTitle, customer_id: c.id, type: 'task', completed: false, due_at: buildDueAt(vandaagIso()) });
       setActs(a => [created, ...a]);
       setActivityTitle('');
       toast.success('Activiteit toegevoegd');
@@ -1128,7 +1129,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
                 <PlanningRegels
                   regels={alleRegels}
                   onOpen={openRegel}
-                  vandaag={vandaagIso}
+                  vandaag={vandaagStr}
                   toonTitel
                   variant="lrow"
                 />

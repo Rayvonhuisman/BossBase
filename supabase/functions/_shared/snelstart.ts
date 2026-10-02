@@ -1,4 +1,5 @@
 import { kiesOmzetGrootboek, kiesInkoopGrootboek } from "./grootboekKeuze.ts"
+import { vandaagIso } from "./datumTijd.ts"
 
 // Gedeelde SnelStart B2B-Api v2 client voor edge functions.
 //
@@ -423,7 +424,7 @@ export async function pushVerkoopboeking(
 
   const body = {
     factuurnummer: factuur.nummer,
-    factuurdatum: factuur.factuurdatum || new Date().toISOString().slice(0, 10),
+    factuurdatum: factuur.factuurdatum || vandaagIso(),
     klant: { id: relatieId },
     omschrijving: `BossBase factuur ${factuur.nummer}`,
     factuurbedrag: round2(sumExcl + sumBtw),
@@ -730,7 +731,7 @@ export async function pushInkoopboeking(
 
   const body: Record<string, unknown> = {
     factuurnummer: `BB-KST-${String(cost.id).slice(0, 8)}`,
-    factuurdatum: cost.cost_date || new Date().toISOString().slice(0, 10),
+    factuurdatum: cost.cost_date || vandaagIso(),
     leverancier: { id: relatieId },
     omschrijving,
     factuurbedrag: round2(excl + btwBedrag),

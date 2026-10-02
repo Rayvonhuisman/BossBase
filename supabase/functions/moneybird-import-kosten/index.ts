@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { alleRijen } from '../_shared/alleRijen.ts'
+import { vandaagIso } from '../_shared/datumTijd.ts'
 import { makeAdminClient, isScheduledCall, forEachMoneybirdCompany } from "../_shared/scheduledSync.ts"
 
 const corsHeaders = {
@@ -199,7 +200,7 @@ async function syncCompany(
       return {
         company_id: companyId,
         nummer: inv.invoice_id || ('MB-' + inv.id),
-        factuurdatum: inv.date || new Date().toISOString().split('T')[0],
+        factuurdatum: inv.date || vandaagIso(),
         vervaldatum: inv.due_date || null,
         betalingskenmerk: inv.reference || null,
         status,

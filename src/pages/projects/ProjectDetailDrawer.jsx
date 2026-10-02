@@ -6,6 +6,7 @@ import { I, ModalX, fmt, fmt0 } from '../../bb-shared.jsx';
 import { InfoTip, InfoUitklap } from '../../components/Uitleg.jsx';
 import { useToast } from '../../lib/toast.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
+import { vandaagIso } from '../../lib/datumTijd.js';
 import { usePermissions } from '../../hooks/usePermissions.js';
 import { usePlanGuard } from '../../components/PlanUpgradeModal.jsx';
 import {
@@ -260,7 +261,7 @@ function OverviewTab({
     }
   };
 
-  const isOverdue = project.deadline && project.deadline < new Date().toISOString().slice(0, 10) && project.status !== 'afgerond';
+  const isOverdue = project.deadline && project.deadline < vandaagIso() && project.status !== 'afgerond';
 
   // ── Acties op de aanvraag ─────────────────────────────────────────────────
   const wijzigFase = async stageId => {
@@ -345,7 +346,7 @@ function OverviewTab({
   const projectOffertes = offertes.filter(o =>
     (project.dealId && o.dealId === project.dealId) || (project.offerteId && o.id === project.offerteId));
   const planning = planRegels(werkbonnen, naamVan);
-  const komende = planning.filter(r => r.datum >= new Date().toISOString().slice(0, 10));
+  const komende = planning.filter(r => r.datum >= vandaagIso());
   // "Wanneer" uit de echte planning van de werkbonnen, dezelfde dagen als het
   // blok Planning. Eerder las dit alleen projects.start_date, en die vult
   // niemand bij het inplannen: dan stond er "Nog niet ingepland" boven een

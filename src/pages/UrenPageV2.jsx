@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { vandaagIso } from '../lib/datumTijd.js';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { useData } from '../lib/dataContext.jsx';
@@ -15,7 +16,7 @@ import { I } from '../bb-shared.jsx';
 import { usePlanGuard } from '../components/PlanUpgradeModal.jsx';
 
 // ── Date / time helpers ─────────────────────────────────────────────────────
-const todayIso = () => new Date().toISOString().slice(0, 10);
+const todayIso = () => vandaagIso();
 const fmtNL = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${d}-${m}-${y}`; };
 const MONTHS_NL = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
 const DAYS_NL = ['Zondag','Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag'];

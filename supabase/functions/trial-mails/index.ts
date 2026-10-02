@@ -16,6 +16,7 @@
 //                                   zonder iets vast te leggen
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { vandaagIso } from '../_shared/datumTijd.ts'
 import { isScheduledCall } from '../_shared/scheduledSync.ts'
 import { appOrigin } from '../_shared/stripe.ts'
 import {
@@ -114,7 +115,7 @@ serve(async (req) => {
   const appUrl = appOrigin('')
 
   const uitslag = {
-    datum: vandaag ?? new Date().toISOString().slice(0, 10),
+    datum: vandaag ?? vandaagIso(),
     verstuurd: 0,
     overgeslagen: 0,
     mislukt: 0,

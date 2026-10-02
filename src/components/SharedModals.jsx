@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { vandaagIso } from '../lib/datumTijd.js';
 import { I, ModalX, NotifyMailToggle, PIPELINE_STAGES, fmt } from '../bb-shared.jsx';
 import { InfoTip } from './Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
@@ -448,7 +449,7 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
 export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCustId = '', defaultDealId = '' }) {
   const toast = useToast();
   const { company, profile } = useProfile();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = vandaagIso();
   const [form, setForm] = useState({
     title: '',
     type: 'task',
@@ -624,7 +625,7 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
 // ── NEW CALENDAR EVENT MODAL ─────────────────────────────────
 export function NewCalendarEventModal({ onClose, onSaved, customers, defaultDate = '', defaultCustId = '' }) {
   const toast = useToast();
-  const today = defaultDate || new Date().toISOString().slice(0, 10);
+  const today = defaultDate || vandaagIso();
   const [form, setForm] = useState({
     title: '',
     type: 'event',
@@ -761,7 +762,7 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
   const [form, setForm] = useState({
     customer_id: defaultCustId,
     category: '',
-    cost_date: new Date().toISOString().slice(0, 10),
+    cost_date: vandaagIso(),
     project_id: '',
     werkbon_id: '',
     leverancier_id: '',

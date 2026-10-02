@@ -19,6 +19,7 @@
 // het volgende kwartier alsnog.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { vandaagIso, voegDagenToe } from '../_shared/datumTijd.ts'
 import { isScheduledCall } from '../_shared/scheduledSync.ts'
 import { mailTemplate, mailButton } from '../_shared/mailTemplate.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
@@ -157,12 +158,12 @@ serve(async (req) => {
 
     // De pop-up kijkt veertien dagen terug; wat ouder is dan twee maanden heeft
     // geen functie meer.
-    const grens = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10)
+    const grens = voegDagenToe(vandaagIso(), -60)
     await admin.from('uren_herinnering_mails').delete().lt('datum', grens)
 
     return json({ success: true, medewerkers: perUser.size, verstuurd, mislukt })
   } catch (e) {
     console.error('uren-herinnering', (e as Error).message)
-    return json({ success: false, error: String(e) }, 500)
+    return json({ success: false, error: 'Urenherinnering mislukt' }, 500)
   }
 })

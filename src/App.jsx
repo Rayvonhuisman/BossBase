@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { vandaagIso } from './lib/datumTijd.js';
 import { createPortal } from 'react-dom';
 import { Wrench, AlertTriangle } from 'lucide-react';
 import { I, Logo, initials } from './bb-shared.jsx';
@@ -466,7 +467,7 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
 
   // Ephemere notificaties afgeleid uit gedeelde data — geen extra queries.
   const notifData = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = vandaagIso();
     const eersteFase = firstStageId(dStages);
     return {
       overdue: dActivities.filter(a => a.status !== 'completed' && a.status !== 'done' && a.dueAt && a.dueAt.slice(0, 10) < today).slice(0, 5),

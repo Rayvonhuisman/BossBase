@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { vandaagIso } from '../lib/datumTijd.js';
 import { listMaterialen } from '../services/materiaalService.js';
 import { listLeveranciers } from '../services/leverancierService.js';
 import LeverancierSelect from '../components/LeverancierSelect.jsx';
@@ -62,7 +63,7 @@ import { documentUrl } from '../services/documentService.js';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 
-const TODAY = () => new Date().toISOString().slice(0, 10);
+const TODAY = () => vandaagIso();
 // Waarde van de "+ Nieuwe klant…"/"+ Nieuw project…"-optie in een keuzelijst.
 const NIEUW_OPTIE = '__nieuw__';
 

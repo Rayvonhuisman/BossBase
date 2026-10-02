@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { vandaagIso } from '../lib/datumTijd.js';
 import { AlertTriangle } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import JSZip from 'jszip';
@@ -27,7 +28,6 @@ import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { getCompanyId } from '../lib/currentCompany.js';
 
-const TODAY = new Date().toISOString().slice(0, 10);
 const PAD = n => String(n).padStart(2, '0');
 const isoDate = d => `${d.getFullYear()}-${PAD(d.getMonth()+1)}-${PAD(d.getDate())}`;
 const daysAgo = n => { const d = new Date(); d.setDate(d.getDate() - n); return isoDate(d); };
@@ -631,7 +631,7 @@ export function DatabasePage({ openCustomer }) {
       if (filters.projectMedewerker && !rel.projects.some(p => p.ownerId === filters.projectMedewerker)) return false;
 
       if (filters.offerteStatussen.length > 0 && !rel.offertes.some(o => filters.offerteStatussen.includes(o.status))) return false;
-      if (filters.offerteVerlopen && !rel.offertes.some(o => o.status === 'verzonden' && o.geldigTot && o.geldigTot < TODAY)) return false;
+      if (filters.offerteVerlopen && !rel.offertes.some(o => o.status === 'verzonden' && o.geldigTot && o.geldigTot < vandaagIso())) return false;
       if (filters.offerteOndertekend !== 'alles') {
         const isSigned = rel.offertes.some(o => Boolean(o.signedAt));
         if (filters.offerteOndertekend === 'ja' && !isSigned) return false;
@@ -641,7 +641,7 @@ export function DatabasePage({ openCustomer }) {
       if (filters.offerteBedragMax && !rel.offertes.some(o => o.totaalIncl <= Number(filters.offerteBedragMax))) return false;
 
       if (filters.factuurStatussen.length > 0 && !rel.facturen.some(f => filters.factuurStatussen.includes(f.status))) return false;
-      if (filters.factuurVervallen && !rel.facturen.some(f => f.status === 'verzonden' && f.vervaldatum && f.vervaldatum < TODAY)) return false;
+      if (filters.factuurVervallen && !rel.facturen.some(f => f.status === 'verzonden' && f.vervaldatum && f.vervaldatum < vandaagIso())) return false;
       if (filters.herinnering1 !== 'alles') {
         const h1 = rel.facturen.some(f => Boolean(f.herinnering1VerstuurdAt));
         if (filters.herinnering1 === 'ja' && !h1) return false;
@@ -689,7 +689,7 @@ export function DatabasePage({ openCustomer }) {
       if (filters.heeftFacturen && rel.facturen.length === 0) return false;
       if (filters.heeftGetekendOfferte && !rel.offertes.some(o => Boolean(o.signedAt))) return false;
       if (filters.heeftOnbetaaldeFacturen && !rel.facturen.some(f => f.status !== 'betaald' && !f.isCredit)) return false;
-      if (filters.heeftVerlopenOffertes && !rel.offertes.some(o => o.status === 'verzonden' && o.geldigTot && o.geldigTot < TODAY)) return false;
+      if (filters.heeftVerlopenOffertes && !rel.offertes.some(o => o.status === 'verzonden' && o.geldigTot && o.geldigTot < vandaagIso())) return false;
       if (filters.documentenPeriodeVan) {
         const hasDoc = rel.offertes.some(o => (o.createdAt||'').slice(0,10) >= filters.documentenPeriodeVan) ||
                        rel.facturen.some(f => (f.factuurdatum||'') >= filters.documentenPeriodeVan);
@@ -890,7 +890,7 @@ export function DatabasePage({ openCustomer }) {
       const buffer = await wb.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = `BossBase-export-${TODAY}.xlsx`; a.click();
+      const a = document.createElement('a'); a.href = url; a.download = `BossBase-export-${vandaagIso()}.xlsx`; a.click();
       URL.revokeObjectURL(url);
       rows.forEach((_, i) => { const c = selectedCustomers[i]; if (c?.id) logTijdlijnSafe(c.id, 'export_uitgevoerd', 'Klantgegevens geëxporteerd als Excel'); });
       setShowBulkMenu(false);
@@ -905,7 +905,7 @@ export function DatabasePage({ openCustomer }) {
     const csv = [headers.map(escape), ...rows.map(r => headers.map(h => escape(r[h])))].map(r => r.join(',')).join('\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `BossBase-export-${TODAY}.csv`; a.click();
+    const a = document.createElement('a'); a.href = url; a.download = `BossBase-export-${vandaagIso()}.csv`; a.click();
     URL.revokeObjectURL(url);
     rows.forEach((_, i) => { const c = selectedCustomers[i]; if (c?.id) logTijdlijnSafe(c.id, 'export_uitgevoerd', 'Klantgegevens geëxporteerd als CSV'); });
     setShowBulkMenu(false);
@@ -939,7 +939,7 @@ export function DatabasePage({ openCustomer }) {
         const filename = `Offerte-${slugify(offerte.nummer)}-${slugify(customer.name)}.pdf`;
         zip.file(filename, b64, { base64: true });
       }
-      await triggerZipDownload(zip, `BossBase-offertes-${TODAY}.zip`);
+      await triggerZipDownload(zip, `BossBase-offertes-${vandaagIso()}.zip`);
       toast.success(`${pairs.length} offerte${pairs.length !== 1 ? 's' : ''} gedownload`);
     } catch (err) { toast.error('Download mislukt: ' + (err.message || '')); }
     finally { setBulkDownloadProgress(null); }
@@ -962,7 +962,7 @@ export function DatabasePage({ openCustomer }) {
         const filename = `Factuur-${slugify(factuur.nummer)}-${slugify(customer.name)}.pdf`;
         zip.file(filename, b64, { base64: true });
       }
-      await triggerZipDownload(zip, `BossBase-facturen-${TODAY}.zip`);
+      await triggerZipDownload(zip, `BossBase-facturen-${vandaagIso()}.zip`);
       toast.success(`${pairs.length} factuur${pairs.length !== 1 ? 'en' : ''} gedownload`);
     } catch (err) { toast.error('Download mislukt: ' + (err.message || '')); }
     finally { setBulkDownloadProgress(null); }
@@ -1003,7 +1003,7 @@ export function DatabasePage({ openCustomer }) {
         toast.error(`Geen enkele getekende offerte kon worden opgehaald. ${mislukt[0] || ''}`);
         return;
       }
-      await triggerZipDownload(zip, `BossBase-getekende-offertes-${TODAY}.zip`);
+      await triggerZipDownload(zip, `BossBase-getekende-offertes-${vandaagIso()}.zip`);
       if (mislukt.length) {
         toast.error(`${gelukt} van ${pairs.length} gedownload. Niet gelukt: ${mislukt.slice(0, 3).join(' · ')}${mislukt.length > 3 ? ` en nog ${mislukt.length - 3}` : ''}`);
       } else {
@@ -1032,7 +1032,7 @@ export function DatabasePage({ openCustomer }) {
         const filename = `Creditfactuur-${slugify(factuur.nummer)}-${slugify(customer.name)}.pdf`;
         zip.file(filename, b64, { base64: true });
       }
-      await triggerZipDownload(zip, `BossBase-creditfacturen-${TODAY}.zip`);
+      await triggerZipDownload(zip, `BossBase-creditfacturen-${vandaagIso()}.zip`);
       toast.success(`${pairs.length} creditfactuur${pairs.length !== 1 ? 'en' : ''} gedownload`);
     } catch (err) { toast.error('Download mislukt: ' + (err.message || '')); }
     finally { setBulkDownloadProgress(null); }
@@ -1066,7 +1066,7 @@ export function DatabasePage({ openCustomer }) {
         const b64 = await getFactuurPdfBase64(factuur, regels, customer, company);
         factuurFolder.file(`Factuur-${slugify(factuur.nummer)}-${slugify(customer.name)}.pdf`, b64, { base64: true });
       }
-      await triggerZipDownload(zip, `BossBase-export-${TODAY}.zip`);
+      await triggerZipDownload(zip, `BossBase-export-${vandaagIso()}.zip`);
       toast.success(`${total} document${total !== 1 ? 'en' : ''} gedownload`);
     } catch (err) { toast.error('Download mislukt: ' + (err.message || '')); }
     finally { setBulkDownloadProgress(null); }
