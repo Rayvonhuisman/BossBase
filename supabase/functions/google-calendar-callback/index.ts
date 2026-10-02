@@ -35,16 +35,15 @@ async function verifyState(state: string): Promise<{ uid: string; cid: string } 
   }
 }
 
-function redirect(status: "connected" | "error", detail = "") {
+// Alleen vaste codes in de URL; de app vertaalt ze naar een tekst. Geen vrije
+// tekst uit Google of een foutmelding (audit F6).
+const FOUTCODES = new Set(["geen_code", "ongeldige_state", "token_exchange_mislukt", "opslaan_mislukt", "geweigerd", "onbekend"])
+function redirect(params: Record<string, string>) {
   const base = (Deno.env.get("APP_URL") || "").replace(/\/$/, "")
-  const q = new URLSearchParams({ google: status })
-  if (detail) q.set("google_msg", detail.slice(0, 160))
-  // /dashboard/calendar en niet /calendar: de app leest zijn route pas vanaf
-  // BASISPAD (/dashboard, zie App.jsx). Een pad daarbuiten wordt niet herkend en
-  // valt terug op de marketingpagina, waarna de gebruiker nooit te zien krijgt
-  // of de koppeling is gelukt.
+  const q = new URLSearchParams(params)
   return new Response(null, { status: 302, headers: { Location: `${base}/dashboard/calendar?${q.toString()}` } })
 }
+const fout = (code: string) => redirect({ google: "error", google_msg: FOUTCODES.has(code) ? code : "onbekend" })
 
 serve(async (req) => {
   try {
@@ -52,11 +51,11 @@ serve(async (req) => {
     const code = u.searchParams.get("code")
     const state = u.searchParams.get("state") ?? ""
     const oauthErr = u.searchParams.get("error")
-    if (oauthErr) return redirect("error", oauthErr)
-    if (!code) return redirect("error", "geen_code")
+    if (oauthErr) return fout(oauthErr === "access_denied" ? "geweigerd" : "onbekend")
+    if (!code) return fout("geen_code")
 
     const verified = await verifyState(state)
-    if (!verified) return redirect("error", "ongeldige_state")
+    if (!verified) return fout("ongeldige_state")
 
     // Exchange the authorization code for tokens.
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
@@ -72,7 +71,7 @@ serve(async (req) => {
     })
     const tok = await tokenRes.json()
     if (!tokenRes.ok || !tok.access_token) {
-      return redirect("error", tok.error_description || "token_exchange_mislukt")
+      return fout("token_exchange_mislukt")
     }
 
     // Best-effort: read the connected Google account email.
@@ -90,32 +89,26 @@ serve(async (req) => {
     )
 
     // Preserve the existing refresh_token if Google didn't return a new one.
-    const { data: existing } = await admin
-      .from("google_calendar_connections")
-      .select("refresh_token")
-      .eq("user_id", verified.uid)
-      .maybeSingle()
+    // Niet direct koppelen: eerst bevestigen met de sessie van de ingelogde
+    // gebruiker (google-calendar-bevestig). Zo zit de koppeling vast aan wie hem
+    // in deze browser aanvroeg, niet alleen aan de state (audit B-12).
+    const { data: wachtend, error: upErr } = await admin
+      .from("google_koppel_wachtend")
+      .insert({
+        user_id: verified.uid,
+        company_id: verified.cid,
+        google_email: email,
+        access_token: tok.access_token,
+        refresh_token: tok.refresh_token || null,
+        token_expiry: new Date(Date.now() + (Number(tok.expires_in || 3600) * 1000)).toISOString(),
+      })
+      .select("id")
+      .single()
+    if (upErr || !wachtend) return fout("opslaan_mislukt")
 
-    const expiry = new Date(Date.now() + (Number(tok.expires_in || 3600) * 1000)).toISOString()
-    const row = {
-      company_id: verified.cid,
-      user_id: verified.uid,
-      google_email: email,
-      google_calendar_id: "primary",
-      access_token: tok.access_token,
-      refresh_token: tok.refresh_token || existing?.refresh_token || null,
-      token_expiry: expiry,
-      is_connected: true,
-      updated_at: new Date().toISOString(),
-    }
-
-    const { error: upErr } = await admin
-      .from("google_calendar_connections")
-      .upsert(row, { onConflict: "user_id" })
-    if (upErr) return redirect("error", "opslaan_mislukt")
-
-    return redirect("connected", email || "")
+    return redirect({ google: "bevestigen", koppel: wachtend.id })
   } catch (err) {
-    return redirect("error", (err as Error).message)
+    console.error("[gcal-callback]", (err as Error).message)
+    return fout("onbekend")
   }
 })

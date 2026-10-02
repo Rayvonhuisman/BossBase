@@ -110,3 +110,16 @@ export function autoSyncDeleteSafe(activityId, googleEventId) {
     })
   } catch { /* swallow — non-blocking */ }
 }
+
+// Tweede stap na de terugkeer van Google: de koppeling bevestigen met de sessie
+// van wie hier is ingelogd. De server koppelt alleen als dat dezelfde gebruiker
+// is die de koppeling startte (audit B-12).
+export async function bevestigGoogleKoppeling(koppel) {
+  const { data, error } = await supabase.functions.invoke("google-calendar-bevestig", { body: { koppel } })
+  if (error) {
+    let melding = "Koppelen mislukt"
+    try { const b = await error.context?.json(); if (b?.error) melding = b.error } catch { /* standaardtekst */ }
+    throw new Error(melding)
+  }
+  return data
+}

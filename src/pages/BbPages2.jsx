@@ -24,7 +24,7 @@ import { listCustomers } from '../services/customerService.js';
 import { sumGefactureerd, sumBetaald, sumOpenstaand, withCustomerTotals, sumOmzetExclBtw } from '../services/customerTotalsService.js';
 import { getKostenOverzichtPerKlant, LEEG_OVERZICHT } from '../services/kostenOverzichtService.js';
 import { listActivities } from '../services/activityService.js';
-import { getConnectionStatus, startGoogleCalendarConnect, disconnectGoogleCalendar } from '../services/googleCalendarService.js';
+import { getConnectionStatus, startGoogleCalendarConnect, bevestigGoogleKoppeling, disconnectGoogleCalendar } from '../services/googleCalendarService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
 import { werkbonDagen, tijdenOpDag, tijdenVoorPersoon, ploegOpDag } from '../utils/werkbonDagen.js';
 import { voertuigVanPersoon } from '../utils/voertuigDagen.js';
@@ -384,12 +384,29 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
   React.useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const g = q.get('google');
-    if (g === 'connected') toast.success('Google Agenda gekoppeld');
-    else if (g === 'error') toast.error('Google-koppeling mislukt: ' + (q.get('google_msg') || 'onbekende fout'));
+    const koppel = q.get('koppel');
+    // Alleen vaste teksten: google_msg komt uit de URL en mag nooit letterlijk
+    // in beeld (een link kon zo een eigen melding in het dashboard zetten).
+    const GOOGLE_FOUTEN = {
+      geen_code: 'Google gaf geen toestemming terug.',
+      ongeldige_state: 'De koppelaanvraag is verlopen of ongeldig. Probeer het opnieuw.',
+      token_exchange_mislukt: 'Google weigerde de koppeling. Probeer het opnieuw.',
+      opslaan_mislukt: 'De koppeling kon niet worden opgeslagen.',
+      geweigerd: 'Je hebt geen toestemming gegeven in Google.',
+    };
     if (g) {
       // Clean the query so a refresh doesn't re-toast.
       window.history.replaceState({}, '', window.location.pathname);
     }
+    if (g === 'bevestigen' && koppel) {
+      bevestigGoogleKoppeling(koppel)
+        .then(() => toast.success('Google Agenda gekoppeld'))
+        .catch(e => toast.error('Google-koppeling mislukt: ' + e.message))
+        .finally(loadGcalStatus);
+      return;
+    }
+    if (g === 'connected') toast.success('Google Agenda gekoppeld');
+    else if (g === 'error') toast.error('Google-koppeling mislukt. ' + (GOOGLE_FOUTEN[q.get('google_msg')] || 'Probeer het opnieuw.'));
     loadGcalStatus();
   }, [loadGcalStatus]);
 
