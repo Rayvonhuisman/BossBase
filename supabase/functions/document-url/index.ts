@@ -52,10 +52,15 @@ serve(async (req) => {
       if (!user) return json({ error: 'Niet ingelogd' }, 401)
       const inactief = await inactiefReden(user.id)
       if (inactief) return json({ error: inactief }, 403)
-      const { data: prof } = await admin.from('profiles').select('company_id').eq('id', user.id).maybeSingle()
-      const { data } = await admin.from(cfg.tabel).select(`id, company_id, ${cfg.kolom}`).eq('id', id).maybeSingle()
-      // Eén antwoord voor "bestaat niet" en "niet van jouw bedrijf".
-      rij = data && prof?.company_id && data.company_id === prof.company_id ? data : null
+      // Mag deze gebruiker het stuk zelf zien? Dat beslist de RLS van de tabel
+      // (bedrijf én recht: offertes resp. werkbonnen/planning). Dan volgt het
+      // document precies dezelfde rechten als de offerte of werkbon.
+      const { data: zichtbaar } = await userClient.from(cfg.tabel).select('id').eq('id', id).maybeSingle()
+      const { data } = zichtbaar
+        ? await admin.from(cfg.tabel).select(`id, ${cfg.kolom}`).eq('id', id).maybeSingle()
+        : { data: null }
+      // Eén antwoord voor "bestaat niet", "niet van jouw bedrijf" en "geen recht".
+      rij = data
     }
     if (!rij) return json({ error: 'Document niet gevonden' }, 404)
 

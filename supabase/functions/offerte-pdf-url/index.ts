@@ -68,16 +68,19 @@ serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 
-    const { data: prof } = await admin
-      .from('profiles').select('company_id').eq('id', user.id).maybeSingle()
-    const { data: offerte } = await admin
-      .from('offertes')
-      .select('id, nummer, company_id, signed_at, signed_pdf_url')
-      .eq('id', offerteId).maybeSingle()
+    // Mag deze gebruiker de offerte zelf zien (RLS: bedrijf én recht)? Dan mag
+    // hij ook het ondertekende exemplaar.
+    const { data: zichtbaar } = await userClient.from('offertes').select('id').eq('id', offerteId).maybeSingle()
+    const { data: offerte } = zichtbaar
+      ? await admin
+          .from('offertes')
+          .select('id, nummer, company_id, signed_at, signed_pdf_url')
+          .eq('id', offerteId).maybeSingle()
+      : { data: null }
 
-    // Eén boodschap voor "bestaat niet" en "niet van jouw bedrijf": anders is dit
-    // een manier om te ontdekken welke offertes er bij andere bedrijven bestaan.
-    if (!offerte || !prof?.company_id || offerte.company_id !== prof.company_id) {
+    // Eén boodschap voor "bestaat niet", "niet van jouw bedrijf" en "geen recht":
+    // anders is dit een manier om te ontdekken welke offertes er elders bestaan.
+    if (!offerte) {
       return json({ error: 'Offerte niet gevonden' }, 404)
     }
     if (!offerte.signed_at) {
