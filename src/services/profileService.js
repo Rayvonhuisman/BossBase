@@ -36,6 +36,8 @@ const toCompany = row => ({
   logoUrl: row.logo_url || "",
   brandingColor: row.branding_color || '#1DDB62',
   replyToEmail: row.reply_to_email || "",
+  iban: row.iban || "",
+  ibanTnv: row.iban_tnv || "",
   status: row.status || 'actief',
   // Abonnementstier — apart ingeladen via get_company_tier() (zie getCompany).
   tier: DEFAULT_TIER,
@@ -175,7 +177,7 @@ export async function updateCompany(id, input) {
   for (const k of [
     "name", "email", "kvk", "btw_number", "phone",
     "address", "city", "postal_code", "website", "logo_url", "branding_color",
-    "reply_to_email",
+    "reply_to_email", "iban", "iban_tnv",
   ]) {
     if (input[k] !== undefined) allowed[k] = input[k]
   }

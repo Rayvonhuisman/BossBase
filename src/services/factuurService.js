@@ -114,6 +114,8 @@ const toFactuur = row => ({
   snapshotEmail: row.snapshot_email || null,
   snapshotKvk: row.snapshot_kvk || null,
   snapshotBtw: row.snapshot_btw || null,
+  snapshotIban: row.snapshot_iban || null,
+  snapshotIbanTnv: row.snapshot_iban_tnv || null,
 })
 
 const toRegel = row => ({
@@ -301,7 +303,7 @@ export async function updateFactuur(id, input) {
   if ('herinnering_1_verstuurd_at' in input)   updates.herinnering_1_verstuurd_at = input.herinnering_1_verstuurd_at
   if ('herinnering_2_verstuurd_at' in input)   updates.herinnering_2_verstuurd_at = input.herinnering_2_verstuurd_at
   // Branding-snapshot (bevriezen bij versturen)
-  for (const k of ['snapshot_logo_url', 'snapshot_branding_color', 'snapshot_bedrijfsnaam', 'snapshot_adres', 'snapshot_postcode', 'snapshot_plaats', 'snapshot_email', 'snapshot_kvk', 'snapshot_btw']) {
+  for (const k of ['snapshot_logo_url', 'snapshot_branding_color', 'snapshot_bedrijfsnaam', 'snapshot_adres', 'snapshot_postcode', 'snapshot_plaats', 'snapshot_email', 'snapshot_kvk', 'snapshot_btw', 'snapshot_iban', 'snapshot_iban_tnv']) {
     if (k in input) updates[k] = input[k]
   }
   // (betaald wordt hierboven al via mark_factuur_betaald afgehandeld)
@@ -417,6 +419,8 @@ export async function createCreditFactuur(origineleFactuurId, regels, origineleF
     snapshot_email: origineleFactuur.snapshotEmail || null,
     snapshot_kvk: origineleFactuur.snapshotKvk || null,
     snapshot_btw: origineleFactuur.snapshotBtw || null,
+    snapshot_iban: origineleFactuur.snapshotIban || null,
+    snapshot_iban_tnv: origineleFactuur.snapshotIbanTnv || null,
   }, regels.map((r, i) => ({
     type: r.type,
     omschrijving: r.omschrijving,

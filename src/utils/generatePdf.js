@@ -96,6 +96,11 @@ export const C = {
   warnInk:  [146,  94,  6],   // #925e06
 };
 
+// NL91ABNA0417164300 → NL91 ABNA 0417 1643 00
+export function formatIban(iban) {
+  return String(iban || '').replace(/\s+/g, '').toUpperCase().replace(/(.{4})/g, '$1 ').trim();
+}
+
 export async function imgToBase64(url) {
   try {
     const res = await fetch(url, { mode: 'cors' });
@@ -548,6 +553,36 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     doc.text(noteLines.slice(0, 5), M + 11.5, noteTextY);
 
     y += noteH + 8;
+  }
+
+  // ── BETAALGEGEVENS EN BTW-VERMELDING (facturen) ───────────────
+  // Een factuur zonder rekeningnummer kan de klant niet betalen (audit
+  // 2026-10-01, H11). Bij verlegde btw hoort de vermelding "btw verlegd" plus
+  // het btw-nummer van de opdrachtgever op de factuur (art. 35a Wet OB).
+  if (type === 'factuur') {
+    const regimes = (regels || []).map(r => r.btwRegime);
+    const klantBtw = customer?.btwNumber || customer?.btw_number;
+    const regelsTekst = [];
+    if (regimes.includes('verlegd')) {
+      regelsTekst.push(`Btw verlegd: de btw wordt afgedragen door de opdrachtgever${klantBtw ? ` (btw-nummer ${klantBtw})` : ''}.`);
+    }
+    if (regimes.includes('vrijgesteld')) regelsTekst.push('Een deel van deze factuur is vrijgesteld van btw.');
+    if (!document.isCredit && company?.iban) {
+      const iban = formatIban(company.iban);
+      const tnv = company.ibanTnv || company.name || '';
+      const vervalTekst = document.vervaldatum ? ` vóór ${fmtDate(document.vervaldatum)}` : '';
+      const kenmerk = document.betalingskenmerk || document.nummer;
+      regelsTekst.push(`Graag het totaalbedrag${vervalTekst} overmaken op ${iban}${tnv ? ` t.n.v. ${tnv}` : ''}${kenmerk ? `, onder vermelding van ${kenmerk}` : ''}.`);
+    }
+    if (regelsTekst.length) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      const lijnen = regelsTekst.flatMap(t => doc.splitTextToSize(t, CW));
+      if (y + lijnen.length * 4.2 + 6 > 280) { doc.addPage(); y = 17; }
+      tc(C.dark);
+      doc.text(lijnen, M, y);
+      y += lijnen.length * 4.2 + 6;
+    }
   }
 
   // ── HANDTEKENING (alleen bij ondertekende offertes) ───────────

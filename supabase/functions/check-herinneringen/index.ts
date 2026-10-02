@@ -100,7 +100,7 @@ serve(async (req) => {
     // ── Betaalherinneringen ───────────────────────────────────────────────────
     const { data: facturen } = await db
       .from('facturen')
-      .select('*, customers(name, email), companies(name, email, logo_url, branding_color)')
+      .select('*, customers(name, email), companies(name, email, logo_url, branding_color, iban, iban_tnv)')
       // Alleen verstuurde (of uit de boekhouding geïmporteerde, 'geboekt'), onbetaalde facturen. Concepten zijn nooit naar de
       // klant gegaan; een gecrediteerde factuur is niet meer verschuldigd; een
       // creditnota is een tegoed. Vroeger was het `status <> 'betaald'`, en
@@ -148,13 +148,25 @@ serve(async (req) => {
       const tpl1 = kiesTemplate('herinnering_1', tpls?.find(t => t.type === 'herinnering_1'))
       const tpl2 = kiesTemplate('herinnering_2', tpls?.find(t => t.type === 'herinnering_2'))
 
+      // Rekeningnummer: bevroren op de factuur, anders het huidige van het bedrijf.
+      const ibanRuw = (f.snapshot_iban || company.iban || '').replace(/\s+/g, '').toUpperCase()
+      const ibanTnv = f.snapshot_iban_tnv || company.iban_tnv || company.name || ''
+      const ibanTekst = ibanRuw ? `${ibanRuw.replace(/(.{4})/g, '$1 ').trim()}${ibanTnv ? ` t.n.v. ${ibanTnv}` : ''}` : ''
       const vars = {
         klant_naam: f.customers.name || 'klant',
         bedrijfsnaam: company.name || 'ons bedrijf',
         factuur_nummer: f.nummer,
         totaal_bedrag: fmtCurrency(f.totaal_incl || 0),
         vervaldatum: fmtDate(f.vervaldatum),
+        iban: ibanTekst,
       }
+      // Een herinnering is een betaalverzoek: zonder rekeningnummer kan de klant
+      // niet overmaken (audit 2026-10-01, H11). Staat het nummer niet al in de
+      // tekst, dan een regel met de betaalgegevens eronder.
+      const metBetaalgegevens = (html: string) =>
+        ibanRuw && !html.replace(/\s/g, '').toUpperCase().includes(ibanRuw)
+          ? `${html}<p>Betaalgegevens: ${escapeHtml(ibanTekst)}, onder vermelding van ${escapeHtml(f.betalingskenmerk || f.nummer)}.</p>`
+          : html
 
       // Herinnering 1
       if (tpl1 && !f.herinnering_1_verstuurd_at && daysPast >= (tpl1.auto_dagen || 7)) {
@@ -162,7 +174,7 @@ serve(async (req) => {
         const innerBody = tpl1.body_html
           ? substituteVarsHtml(tpl1.body_html, vars)
           : plainTextToHtml(substituteVars(tpl1.body, vars))
-        const html = mailTemplate({ title: subject, body: innerBody, companyName: company.name, logoUrl: company.logo_url || undefined, brandColor: company.branding_color || undefined })
+        const html = mailTemplate({ title: subject, body: metBetaalgegevens(innerBody), companyName: company.name, logoUrl: company.logo_url || undefined, brandColor: company.branding_color || undefined })
         const msgId = await sendMail(f.customers.email, subject, html, company.name)
         if (msgId !== null) {
           await db.from('facturen').update({ herinnering_1_verstuurd_at: new Date().toISOString() }).eq('id', f.id)
@@ -177,7 +189,7 @@ serve(async (req) => {
         const innerBody = tpl2.body_html
           ? substituteVarsHtml(tpl2.body_html, vars)
           : plainTextToHtml(substituteVars(tpl2.body, vars))
-        const html = mailTemplate({ title: subject, body: innerBody, companyName: company.name, logoUrl: company.logo_url || undefined, brandColor: company.branding_color || undefined })
+        const html = mailTemplate({ title: subject, body: metBetaalgegevens(innerBody), companyName: company.name, logoUrl: company.logo_url || undefined, brandColor: company.branding_color || undefined })
         const msgId = await sendMail(f.customers.email, subject, html, company.name)
         if (msgId !== null) {
           await db.from('facturen').update({ herinnering_2_verstuurd_at: new Date().toISOString() }).eq('id', f.id)

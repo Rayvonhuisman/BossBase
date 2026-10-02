@@ -20,10 +20,10 @@ import { getEigenEenheden } from '../services/eigenEenheidService.js';
 import { typeCfg, typeOptionsWith, applyTypeChange, omschrijvingFallback } from '../lib/regelTypes.js';
 import BtwRegimeSelect, { VerlegdUitleg } from '../components/BtwRegimeSelect.jsx';
 import { regimeVanPct, regimeVanRegel, regimeVoorOpslag } from '../lib/btwRegime.js';
-import { previewFactuurPdf, getFactuurPdfBase64 } from '../utils/generatePdf.js';
+import { previewFactuurPdf, getFactuurPdfBase64, formatIban } from '../utils/generatePdf.js';
 import { buildCompanySnapshot, companyForDocument, isFactuurLocked, isGeimporteerdeFactuur } from '../utils/documentSnapshot.js';
 import { bewaarFactuurPdf, PDF_STATUSSEN } from '../utils/bewaarFactuurPdf.js';
-import { getMailTemplate, sendEmail, substituteVars, substituteVarsHtml, logSentEmail } from '../services/emailService.js';
+import { getMailTemplate, sendEmail, substituteVars, substituteVarsHtml, logSentEmail, escapeHtml } from '../services/emailService.js';
 import { mailTemplate, mailButton } from '../utils/mailTemplate.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { statusInfo } from '../utils/statusColors.js';
@@ -947,15 +947,22 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
       if (stripeAllowed) {
         try { const conn = await getStripeConnection(); stripeActive = !!conn?.chargesEnabled; } catch { /* geen koppeling */ }
       }
+      // Rekeningnummer: van de verstuurde factuur (bevroren) of het bedrijf nu.
+      // Zonder IBAN kon de klant niet overmaken (audit 2026-10-01, H11).
+      const docBedrijf = companyForDocument(factuur, company);
+      const ibanTekst = docBedrijf?.iban
+        ? `${formatIban(docBedrijf.iban)}${(docBedrijf.ibanTnv || docBedrijf.name) ? ` t.n.v. ${docBedrijf.ibanTnv || docBedrijf.name}` : ''}`
+        : '';
       const vars = {
         klant_naam: customer?.name || factuur.customerName || 'klant',
         bedrijfsnaam: company?.name || 'ons bedrijf',
         factuur_nummer: factuur.nummer,
         totaal_bedrag: fmt2(factuur.totaalIncl),
         vervaldatum: fmtD(factuur.vervaldatum),
+        iban: ibanTekst,
         betaalinstructie: stripeActive
-          ? `U kunt de factuur eenvoudig online betalen via de knop hieronder, of het bedrag overmaken onder vermelding van ${factuur.nummer}.`
-          : `Gelieve het totaalbedrag voor de betaaltermijn over te maken onder vermelding van ${factuur.nummer}.`,
+          ? `U kunt de factuur eenvoudig online betalen via de knop hieronder, of het bedrag overmaken${ibanTekst ? ` op ${ibanTekst}` : ''} onder vermelding van ${factuur.nummer}.`
+          : `Gelieve het totaalbedrag voor de betaaltermijn over te maken${ibanTekst ? ` op ${ibanTekst}` : ''} onder vermelding van ${factuur.nummer}.`,
       };
       try {
         const tpl = await getMailTemplate(templateType);
@@ -967,7 +974,14 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
         const rawBody = tpl
           ? substituteVarsHtml(plainToEditorHtml(tpl.body || ''), vars)
           : `Beste ${vars.klant_naam},\n\nHierbij uw factuur ${factuur.nummer}.\n\n${vars.betaalinstructie}\n\nMet vriendelijke groet,\n${company?.name || ''}`;
-        if (alive) setForm({ to: customer?.email || '', subject: sub, body: tpl ? rawBody : plainToEditorHtml(rawBody) });
+        let body = tpl ? rawBody : plainToEditorHtml(rawBody);
+        // Staat het rekeningnummer nog nergens in de tekst (de meeste sjablonen
+        // hebben geen {{betaalinstructie}}), dan een regel met de betaalgegevens
+        // vóór de afsluiting. Creditnota's niet: daar valt niets te betalen.
+        if (ibanTekst && !factuur.isCredit && !body.replace(/\s/g, '').includes(docBedrijf.iban.replace(/\s/g, '').toUpperCase())) {
+          body = insertPayButtonBeforeClosing(body, `<p>Betaalgegevens: ${escapeHtml(ibanTekst)}, onder vermelding van ${escapeHtml(factuur.betalingskenmerk || factuur.nummer)}.</p>`);
+        }
+        if (alive) setForm({ to: customer?.email || '', subject: sub, body });
       } catch {
         if (alive) setForm({ to: customer?.email || '', subject: `Factuur ${factuur.nummer}`, body: '' });
       } finally {
@@ -1022,7 +1036,7 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
       if ((templateType === 'factuur') && (factuur.status === 'aangemaakt' || factuur.status === 'concept')) {
         // Bij versturen: bedrijfs-branding bevriezen op de factuur, zodat latere
         // logo-/kleurwijzigingen deze verstuurde factuur niet meer veranderen.
-        await updateFactuur(factuur.id, { status: 'verzonden', ...buildCompanySnapshot(company) });
+        await updateFactuur(factuur.id, { status: 'verzonden', ...buildCompanySnapshot(company, { metIban: true }) });
       }
       if (templateType === 'herinnering_1') {
         await updateFactuur(factuur.id, { herinnering_1_verstuurd_at: new Date().toISOString() });

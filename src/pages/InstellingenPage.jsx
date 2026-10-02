@@ -40,6 +40,7 @@ import { getTeamMembers } from '../services/teamService.js';
 import { getVoertuigen, createVoertuig, updateVoertuig, deleteVoertuig } from '../services/voertuigService.js';
 import { getEigenEenheden, createEigenEenheid, updateEigenEenheid, deleteEigenEenheid } from '../services/eigenEenheidService.js';
 import { updateCompany, updateProfile, deleteOwnAccount, cancelCompanyAccount } from '../services/profileService.js';
+import { ibanGeldig, ibanOpslaan } from '../lib/iban.js';
 import { zegOp } from '../services/billingService.js';
 import { changePassword } from '../services/authService.js';
 import { uploadProfileAvatar, removeProfileAvatar } from '../services/avatarService.js';
@@ -74,7 +75,7 @@ const ALL_TEMPLATE_CONFIGS = [
   // Geen auto-schakelaar: deze mail hoort bij het ondertekenen en gaat altijd mee.
   // "Uit" zetten suggereerde dat je hem kon tegenhouden, en dat deed hij niet.
   { type: 'offerte_geaccepteerd', label: 'Offerte geaccepteerd', vars: ['klant_naam','bedrijfsnaam','offerte_nummer'], showAutoToggle: false, showAutoDagen: false },
-  { type: 'factuur', label: 'Factuur', vars: ['klant_naam','bedrijfsnaam','factuur_nummer','totaal_bedrag','vervaldatum','betaalinstructie'], showAutoToggle: false, showAutoDagen: false },
+  { type: 'factuur', label: 'Factuur', vars: ['klant_naam','bedrijfsnaam','factuur_nummer','totaal_bedrag','vervaldatum','betaalinstructie','iban'], showAutoToggle: false, showAutoDagen: false },
   // feature: automatisch verzenden hangt aan een pakket. De cron (check-herinneringen)
   // slaat bedrijven zonder die feature over, dus zonder deze gate zou Instellingen
   // "Automatisch verzenden aan" tonen terwijl er nooit een herinnering uitgaat.
@@ -196,6 +197,7 @@ export function InstellingenPage() {
   const [bedrijfForm, setBedrijfForm] = useState({
     name: '', email: '', phone: '', kvk: '', btw_number: '',
     address: '', city: '', postal_code: '', website: '', branding_color: '#1DDB62',
+    iban: '', iban_tnv: '',
   });
   const [savingBedrijf, setSavingBedrijf] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
@@ -524,6 +526,8 @@ export function InstellingenPage() {
         postal_code: company.postalCode || '',
         website: company.website || '',
         branding_color: company.brandingColor || '#1DDB62',
+        iban: company.iban || '',
+        iban_tnv: company.ibanTnv || '',
       });
     }
   }, [company]);
@@ -603,9 +607,13 @@ export function InstellingenPage() {
       toast.error('KvK-nummer moet 8 cijfers bevatten');
       return;
     }
+    if (bedrijfForm.iban && !ibanGeldig(bedrijfForm.iban)) {
+      toast.error('Dit IBAN klopt niet. Controleer het rekeningnummer.');
+      return;
+    }
     setSavingBedrijf(true);
     try {
-      await updateCompany(company.id, bedrijfForm);
+      await updateCompany(company.id, { ...bedrijfForm, iban: ibanOpslaan(bedrijfForm.iban), iban_tnv: bedrijfForm.iban_tnv.trim() || null });
       await refresh();
       toast.success('Bedrijfsprofiel opgeslagen');
     } catch (err) {
@@ -2072,6 +2080,14 @@ export function InstellingenPage() {
             <div className="f">
               <label>Website</label>
               <input value={bedrijfForm.website} onChange={e => setBedrijf('website', e.target.value)} placeholder="Nog niet ingevuld" />
+            </div>
+            <div className="f">
+              <label>IBAN <span style={{ fontSize: '.75rem', color: 'var(--dmu)', fontWeight: 400 }}>(komt op je facturen)</span></label>
+              <input value={bedrijfForm.iban} onChange={e => setBedrijf('iban', e.target.value)} placeholder="NL00 BANK 0123 4567 89" autoComplete="off" />
+            </div>
+            <div className="f">
+              <label>Ten name van</label>
+              <input value={bedrijfForm.iban_tnv} onChange={e => setBedrijf('iban_tnv', e.target.value)} placeholder={bedrijfForm.name || 'Naam rekeninghouder'} />
             </div>
             <div className="f">
               <label>Adres</label>
