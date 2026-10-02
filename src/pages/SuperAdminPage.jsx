@@ -171,7 +171,9 @@ export function SuperAdminPage({ navigate, profile }) {
       const { error: compErr } = await supabase.from('companies').update({ status }).eq('id', company.id)
       if (compErr) throw compErr
       if (company.subscription?.id) {
-        await supabase.from('subscriptions').update({ status }).eq('id', company.subscription.id)
+        // Ook deze fout tonen: anders lopen bedrijf en abonnement stil uiteen.
+        const { error: subErr } = await supabase.from('subscriptions').update({ status }).eq('id', company.subscription.id)
+        if (subErr) throw new Error(`bedrijf bijgewerkt, abonnement niet (${subErr.message})`)
       }
       await load(drawer?.id === company.id ? company.id : null)
     } catch (err) {

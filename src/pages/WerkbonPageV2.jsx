@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { LaadFout } from '../components/LaadFout.jsx';
+import { logFout, meldFout, AGENDA_NIET_BIJGEWERKT } from '../lib/stilleFouten.js';
 import { vandaagIso } from '../lib/datumTijd.js';
 import { listMaterialen } from '../services/materiaalService.js';
 import { listLeveranciers } from '../services/leverancierService.js';
@@ -115,7 +117,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
   const { profile } = useProfile();
   const isEdit = mode === 'edit';
   const [teamMembers, setTeamMembers] = useState([]);
-  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(logFout('teamleden laden')); }, []);
   const [form, setForm] = useState(() => ({
     titel: werkbon?.titel || '',
     customer_id: werkbon?.customerId || '',
@@ -244,10 +246,10 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
         const nieuweVerantw = form.verantwoordelijkeIds.filter(id => !prevVerantw.includes(id));
         // Wie tegelijk gekoppeld én verantwoordelijk wordt, krijgt alleen de
         // zwaardere melding: twee berichten voor één handeling leest als spam.
-        notifyNewAssignees({ userIds: form.assignedToIds.filter(id => !nieuweVerantw.includes(id)), prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
+        notifyNewAssignees({ userIds: form.assignedToIds.filter(id => !nieuweVerantw.includes(id)), prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(logFout('melding versturen'));
         // Verantwoordelijk worden telt apart: dat viel eerder door de diff als je
         // al gekoppeld was.
-        notifyNieuweVerantwoordelijken({ userIds: form.verantwoordelijkeIds, prevUserIds: prevVerantw, members: teamMembers, sendMail: notifyMail, titel: form.titel.trim(), relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
+        notifyNieuweVerantwoordelijken({ userIds: form.verantwoordelijkeIds, prevUserIds: prevVerantw, members: teamMembers, sendMail: notifyMail, titel: form.titel.trim(), relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(logFout('melding versturen'));
         // Een dag of tijd verzetten telt hier net zo zwaar als slepen in de
         // planning: wie blijft staan hoort de oude én de nieuwe tijd. Dit venster
         // deed dat niet, dus een tijdwijziging vanaf de werkbon bleef stil.
@@ -260,12 +262,12 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
         // ook nog te horen dat er iets verschoof. Alleen de blijvers dus.
         const blijvers = form.assignedToIds.filter(id => prevIds.includes(id));
         if (planVerschoven && blijvers.length && (oudPlan.datum || nieuwPlan.datum)) {
-          meldPlanningWijziging({ userIds: blijvers, soort: oudPlan.datum ? 'verzet' : 'ingepland', werkbon: werkbonKern, oud: oudPlan, nieuw: nieuwPlan, creatorId: profile?.id }).catch(() => {});
+          meldPlanningWijziging({ userIds: blijvers, soort: oudPlan.datum ? 'verzet' : 'ingepland', werkbon: werkbonKern, oud: oudPlan, nieuw: nieuwPlan, creatorId: profile?.id }).catch(logFout('melding versturen'));
         }
         // Van de werkbon afgehaald worden hoorde je tot nu toe van niemand.
         const eraf = prevIds.filter(id => !form.assignedToIds.includes(id));
         if (eraf.length) {
-          meldPlanningWijziging({ userIds: eraf, soort: 'afgehaald', werkbon: werkbonKern, oud: oudPlan, creatorId: profile?.id }).catch(() => {});
+          meldPlanningWijziging({ userIds: eraf, soort: 'afgehaald', werkbon: werkbonKern, oud: oudPlan, creatorId: profile?.id }).catch(logFout('melding versturen'));
         }
         toast.success('Werkbon bijgewerkt');
       } else {
@@ -284,8 +286,8 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
         toast.success('Werkbon aangemaakt');
         // Zelfde verdeling als bij bewerken: verantwoordelijk zijn is de zwaardere
         // melding, dus wie dat wordt krijgt niet óók nog "je bent toegewezen".
-        notifyNewAssignees({ userIds: form.assignedToIds.filter(id => !form.verantwoordelijkeIds.includes(id)), members: teamMembers, sendMail: notifyMail, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
-        notifyNieuweVerantwoordelijken({ userIds: form.verantwoordelijkeIds, members: teamMembers, sendMail: notifyMail, titel: form.titel.trim(), relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
+        notifyNewAssignees({ userIds: form.assignedToIds.filter(id => !form.verantwoordelijkeIds.includes(id)), members: teamMembers, sendMail: notifyMail, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(logFout('melding versturen'));
+        notifyNieuweVerantwoordelijken({ userIds: form.verantwoordelijkeIds, members: teamMembers, sendMail: notifyMail, titel: form.titel.trim(), relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(logFout('melding versturen'));
       }
       // De dagen pas ná het opslaan: een nieuwe werkbon heeft dan pas een id.
       // Lukt dit niet, dan staat de werkbon er al wél (op de startdatum) —
@@ -297,7 +299,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
           toast.error(`Werkbon opgeslagen, maar de dagen niet: ${e.message || 'onbekende fout'}`);
         }
       }
-      syncWerkbonEvents(saved.id).catch(() => {});
+      syncWerkbonEvents(saved.id).catch(meldFout(toast, AGENDA_NIET_BIJGEWERKT));
       onSaved?.(saved);
       onClose();
     } catch (e) {
@@ -527,7 +529,7 @@ function HoursQuickAdd({ werkbon, onSaved }) {
 
   useEffect(() => {
     if (!canBookForOthers) return;
-    getTeamMembers().then(ms => setTeamMembers(ms.filter(m => m.profileId))).catch(() => {});
+    getTeamMembers().then(ms => setTeamMembers(ms.filter(m => m.profileId))).catch(logFout('teamleden laden'));
   }, [canBookForOthers]);
 
   useEffect(() => {
@@ -807,8 +809,8 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
   const [biblio, setBiblio] = useState([]);
   const [leveranciers, setLeveranciers] = useState([]);
   useEffect(() => {
-    listMaterialen({ inclusiefInactief: false }).then(setBiblio).catch(() => {});
-    listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(() => {});
+    listMaterialen({ inclusiefInactief: false }).then(setBiblio).catch(logFout('materialenbibliotheek laden'));
+    listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(logFout('leveranciers laden'));
   }, []);
 
   const VRIJ = '__vrij__';
@@ -1115,7 +1117,7 @@ function WerkbonKostenSection({ werkbon, uren, materialen }) {
   const [laadFout, setLaadFout] = useState('');
   const [loading, setLoading] = useState(true);
   const [leveranciers, setLeveranciers] = useState([]);
-  useEffect(() => { if (magZien) listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(() => {}); }, [magZien]);
+  useEffect(() => { if (magZien) listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(logFout('leveranciers laden')); }, [magZien]);
 
   // Opnieuw laden als het materiaal op deze werkbon verandert: de materiaal-
   // kosten zijn spiegelregels die de database bij elke wijziging bijwerkt.
@@ -1703,7 +1705,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
   useEffect(() => { loadList(); }, [refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Teamleden voor @ tagging in de notities-sectie van het werkbon-detail.
-  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(logFout('teamleden laden')); }, []);
 
   // Geplande dagen van deze werkbon, voor het Planning-blok in het detail.
   // Zelfde regels als in de klantkaart, alleen dan van één werkbon.
@@ -1712,7 +1714,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
   ), [detail, teamMembers]);
 
   // Bedrijfsgegevens voor de werkbon-PDF (logo, huisstijlkleur, adres).
-  useEffect(() => { getCurrentCompany().then(setCompany).catch(() => {}); }, []);
+  useEffect(() => { getCurrentCompany().then(setCompany).catch(logFout('bedrijfsgegevens laden')); }, []);
 
   // De URL bepaalt of het detail open staat. Geen id meer in de URL (terug in de
   // browser) betekent: terug naar de lijst.
@@ -2630,7 +2632,6 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
       <div className="wb2-head">
         <div>
           <h1>Werkbonnen</h1>
-          {err && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 4 }}>{err}</div>}
         </div>
         <div className="wb2-head-spacer" />
         {canManage && (
@@ -2669,7 +2670,9 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
         ))}
       </div>
 
-      {filtered.length === 0 ? (
+      {err ? (
+        <LaadFout titel="Werkbonnen laden is niet gelukt" fout={err} onOpnieuw={loadList} />
+      ) : filtered.length === 0 ? (
         <div className="wb2-empty">
           <div className="wb2-empty-ic">{I.brief}</div>
           <div className="wb2-empty-title">Geen werkbonnen gevonden</div>

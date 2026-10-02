@@ -288,7 +288,8 @@ async function syncEnkelWerkbonEvent(werkbonId) {
     .eq("id", werkbonId)
     .maybeSingle()
   if (!wb?.gepland_op || !wb?.starttijd) {
-    await supabase.from("calendar_events").delete().eq("werkbon_id", werkbonId)
+    const { error } = await supabase.from("calendar_events").delete().eq("werkbon_id", werkbonId)
+    if (error) throw error
     return null
   }
   return upsertWerkbonEvent({
@@ -394,7 +395,8 @@ export async function upsertActivityEvent({ activiteitId, title, date, time, end
 // Verwijder het gekoppelde calendar_event van een activiteit.
 export async function deleteActivityEvent(activiteitId) {
   if (!activiteitId) return
-  await supabase.from("calendar_events").delete().eq("activiteit_id", activiteitId)
+  const { error } = await supabase.from("calendar_events").delete().eq("activiteit_id", activiteitId)
+  if (error) throw error
 }
 
 // Koppel (of ontkoppel met null) een werkbon aan een agenda-item.

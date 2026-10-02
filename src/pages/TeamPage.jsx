@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { LaadFout } from '../components/LaadFout.jsx';
 import { I, ModalX, initials, Av } from '../bb-shared.jsx';
 import { InfoTip } from '../components/Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
@@ -457,13 +458,17 @@ export function TeamPage() {
   // nu door naar de abonnementspagina om te upgraden.
   const naarUpgrade = () => toonBlokkade({ limiet: 'gebruikers' });
 
-  useEffect(() => {
+  const [laadFout, setLaadFout] = useState(null);
+  const laad = () => {
     setLoading(true);
+    setLaadFout(null);
     Promise.all([getTeamMembers(), getEigenaarId()])
       .then(([data, eigenaar]) => { setMembers(data); setEigenaarId(eigenaar); })
-      .catch(err => toast.error(err.message || 'Laden mislukt'))
+      // Niet "Nog geen teamleden" tonen als het laden mislukte.
+      .catch(err => setLaadFout(err))
       .finally(() => setLoading(false));
-  }, []);
+  };
+  useEffect(laad, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleActivate = async (member) => {
     try {
@@ -583,7 +588,9 @@ export function TeamPage() {
         <div className="card card-p" style={{ textAlign: 'center', color: 'var(--dl)' }}>Laden…</div>
       )}
 
-      {!loading && members.length === 0 && (
+      {!loading && laadFout && <LaadFout titel="Team laden is niet gelukt" fout={laadFout} onOpnieuw={laad} />}
+
+      {!loading && !laadFout && members.length === 0 && (
         <div className="card card-p afu3" style={{ textAlign: 'center', color: 'var(--dl)', padding: '40px 20px' }}>
           <div style={{ marginBottom: 10, opacity: .5 }}>{I.team}</div>
           <div style={{ fontWeight: 600, marginBottom: 6 }}>Nog geen teamleden</div>
@@ -591,7 +598,7 @@ export function TeamPage() {
         </div>
       )}
 
-      {!loading && members.length > 0 && (
+      {!loading && !laadFout && members.length > 0 && (
         <div className="tw afu3">
           <table className="dt">
             <thead>

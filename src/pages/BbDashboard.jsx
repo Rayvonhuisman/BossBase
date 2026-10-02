@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { LaadFout } from '../components/LaadFout.jsx';
 import { I, PIPELINE_STAGES, fmt, Av, ModalX, stageBadgeStyle } from '../bb-shared.jsx';
 import { listDeals, listPipelineStages, updateDealStage, markDealLost, updateDeal, zetDealAfgerond } from '../services/dealService.js';
 import { getLostReasons } from '../services/lostReasonService.js';
@@ -704,7 +705,7 @@ export function Pipeline({ openDeal, setPage }) {
       )}
 
       {loading && <div className="card card-p">Pipeline laden...</div>}
-      {error && <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>}
+      {error && <LaadFout titel="Pipeline laden is niet gelukt" fout={error} onOpnieuw={reload} />}
 
       {!loading && !error && totalShown === 0 && (
         <div className="pipe-empty afu3">
