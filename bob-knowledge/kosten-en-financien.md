@@ -92,7 +92,7 @@ Kies **Deze maand**, **Vorige maand**, **Dit jaar**, **Vorig jaar** of
 | **Openstaand** | Wat gefactureerd is en nog niet betaald, over alle periodes |
 | **Te verwachten** | Geaccepteerde offertes. Inclusief btw |
 | **Kosten** | Geboekte kosten in de periode. Exclusief btw |
-| **Nettoresultaat** | Ontvangen min kosten, met de marge in procenten |
+| **Ontvangen min kosten** | Wat binnenkwam (incl. btw) min de kosten (excl. btw); geen winst, want de btw zit er nog in |
 
 Gefactureerd en ontvangen zijn niet hetzelfde: een factuur van december die in
 januari wordt betaald, telt in december bij gefactureerd en in januari bij ontvangen.
@@ -115,4 +115,8 @@ brutowinst vóór arbeid en marge.
 
 ### Exporteren
 Met de knop **Exporteren** bovenaan Financiën download je de tabel Per klant /
-opdracht als Excel-bestand, met een totaalregel.
+opdracht als Excel-bestand, met een totaalregel. Die tabel telt alle periodes bij
+elkaar, niet alleen de periode die je bovenaan kiest. Een losse lijst met kostenregels
+exporteren kan niet. Wie zijn kosten per klant in Excel wil, gebruikt deze export:
+die bevat per klant materiaal, inkopen en brutowinst. De export onder **Database**
+is een klantoverzicht met gefactureerd, betaald en openstaand, zonder kosten.

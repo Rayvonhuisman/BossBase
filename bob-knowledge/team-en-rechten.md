@@ -97,7 +97,8 @@ profiel.
 In Groei werk je met maximaal twee personen in een gedeelde werkruimte. Er zijn geen
 rechten in te stellen:
 - Iedereen ziet alles: Pipeline, Projecten, Offertes, Facturen, Kosten, Financiën,
-  Database en Team, met dezelfde cijfers.
+  Database en Team, met dezelfde cijfers. Eén uitzondering: inkoopprijzen en marge
+  op materialen ziet alleen de beheerder.
 - Aanmaken en wijzigen van klanten, aanvragen, projecten, werkbonnen, offertes en
   facturen doet de beheerder. De tweede persoon kan wel activiteiten aanmaken,
   notities plaatsen en uren boeken op werkbonnen waar hij op staat.

@@ -1655,7 +1655,6 @@ export function RevenuePage() {
   const teVerwachten     = kpi?.teVerwachten ?? 0;
   const kostenPeriode    = kpi?.kosten ?? 0;
   const netto            = ontvangenPeriode - kostenPeriode;
-  const marge            = ontvangenPeriode > 0 ? Math.round((netto / ontvangenPeriode) * 100) : 0;
 
   // ── CHART DATA ────────────────────────────────────────────────
   const chartData = React.useMemo(() => {
@@ -1739,7 +1738,7 @@ export function RevenuePage() {
     const omzetExcl = sumOmzetExclBtw(facturen.filter(f => f.customerId === c.id));
     const profit = omzetExcl - kosten.totaal;
     const margin = omzetExcl > 0 ? Math.round((profit / omzetExcl) * 100) : 0;
-    return { ...c, materiaal: kosten.materiaal.bedrag, inkopen: kosten.inkopen.bedrag, uren: kosten.uren.uren, profit, margin };
+    return { ...c, materiaal: kosten.materiaal.bedrag, inkopen: kosten.inkopen.bedrag, uren: kosten.uren.uren, omzetExcl, profit, margin };
   });
   const som = veld => Math.round(rows.reduce((s, r) => s + (Number(r[veld]) || 0), 0) * 100) / 100;
   const totaalRij = {
@@ -1775,7 +1774,9 @@ export function RevenuePage() {
     try {
       const { default: ExcelJS } = await import('exceljs');
       const wb = new ExcelJS.Workbook();
-      const ws = wb.addWorksheet('Per klant');
+      // De tabel Per klant is cumulatief (alle periodes), niet de periode van de
+      // tegels erboven. Dat staat in de bladnaam en de bestandsnaam.
+      const ws = wb.addWorksheet('Per klant (alle periodes)');
       const euro = '"€" #,##0.00;[Red]-"€" #,##0.00';
       ws.columns = [
         { header: 'Klant', key: 'klant', width: 32 },
@@ -1791,6 +1792,7 @@ export function RevenuePage() {
       ];
       ws.getRow(1).font = { bold: true };
       const getal = v => Math.round((Number(v) || 0) * 100) / 100;
+      const totaalOmzetExcl = rows.reduce((t, r) => t + (Number(r.omzetExcl) || 0), 0);
       rows.forEach(r => ws.addRow({
         klant: r.name, plaats: r.city || '',
         gefactureerd: getal(r.total), materiaal: getal(r.materiaal), inkopen: getal(r.inkopen),
@@ -1802,12 +1804,13 @@ export function RevenuePage() {
         gefactureerd: totaalRij.total, materiaal: totaalRij.materiaal, inkopen: totaalRij.inkopen,
         uren: totaalRij.uren, betaald: totaalRij.paid, openstaand: totaalRij.openstaand,
         brutowinst: totaalRij.profit,
+        marge: totaalOmzetExcl > 0 ? Math.round((totaalRij.profit / totaalOmzetExcl) * 100) : 0,
       });
       totaal.font = { bold: true };
       const buffer = await wb.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = `BossBase-financien-${TODAY}.xlsx`; a.click();
+      const a = document.createElement('a'); a.href = url; a.download = `BossBase-financien-per-klant-alle-periodes-${vandaagIso()}.xlsx`; a.click();
       URL.revokeObjectURL(url);
       toast.success('Export gedownload');
     } catch (err) {
@@ -1836,7 +1839,9 @@ export function RevenuePage() {
     { label: 'Openstaand',             val: fmt(openstaand),       sub: 'Nog niet betaald, alle periodes',    icon: I.clock,  color: '#e8784a' },
     { label: 'Te verwachten',          val: fmt(teVerwachten),     sub: 'Geaccepteerde offertes',             icon: I.quotes  },
     { label: `Kosten ${periodeLabel}`, val: fmt(kostenPeriode),    sub: `Alle kostenregels ${periodeLabel}`,  icon: I.costs   },
-    { label: 'Nettoresultaat',         val: fmt(netto),            sub: `${marge}% marge ${periodeLabel}`,    icon: I.revenue, color: netto >= 0 ? '#15A34A' : '#dc2626' },
+    // Ontvangen is incl. btw, kosten excl. btw: geen nettoresultaat of marge,
+    // dus ook niet zo noemen. De te betalen btw zit er nog in.
+    { label: 'Ontvangen min kosten',   val: fmt(netto),            sub: `Ontvangen incl. btw, kosten excl. btw, ${periodeLabel}`, icon: I.revenue, color: netto >= 0 ? '#15A34A' : '#dc2626' },
   ];
 
   return (
@@ -2010,7 +2015,7 @@ export function RevenuePage() {
       )}
 
       <div className="tw afu3">
-        <div className="tw-hd"><div className="card-title">Per klant / opdracht</div></div>
+        <div className="tw-hd"><div className="card-title">Per klant / opdracht <span style={{ fontWeight: 400, color: 'var(--dm)', fontSize: '.8rem' }}>· alle periodes</span></div></div>
         <div style={{ overflowX: 'auto' }}>
           <table className="dt" style={{ minWidth: 860 }}>
             <thead>

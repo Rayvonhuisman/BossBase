@@ -35,8 +35,9 @@ const MAX_HISTORIE = 20
 const TOOLS = [{
   name: 'stuur_naar_team',
   description:
-    'Zet een vraag door naar het BossBase-team wanneer je het antwoord niet zeker weet, ' +
-    'of bij bugs, klachten en administratieve vragen.',
+    'Zet een vraag door naar het BossBase-team: alleen als de gebruiker erom vraagt, bij een bug, ' +
+    'klacht of administratieve vraag over zijn abonnement, of als je het antwoord over BossBase ' +
+    'echt niet weet. Niet voor vragen over andere bedrijven, hun gegevens of buiten je vakgebied.',
   input_schema: {
     type: 'object',
     properties: {
@@ -70,6 +71,10 @@ const sse = (soort: string, data: unknown) =>
 function zonderStreepjes(t: string): string {
   return t
     .replace(/ [\u2014\u2013]+ /g, ', ')
+    // Een streepje direct tussen twee woorden ("planning—niet") is een
+    // gedachtestreep zonder spaties, geen samenstelling: maak er ", " van in
+    // plaats van een koppelteken, anders plakken de woorden aan elkaar.
+    .replace(/(\p{L})[\u2014\u2013]+(\p{L})/gu, '$1, $2')
     .replace(/[\u2014\u2013]/g, '-')
 }
 
