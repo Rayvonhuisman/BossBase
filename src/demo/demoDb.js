@@ -116,7 +116,7 @@ export const demoDb = {
     klant(K.dekker,    'Dekker Vastgoedbeheer',     'Deventer',  'onderhoud@dekkervastgoed.nl',  '0570 - 61 22 88', 'Snipperlingsdijk 4',  '7417 BJ'),
     klant(K.molenaar,  'Molenaar Bouw & Onderhoud', 'Raalte',    'info@molenaarbouw.nl',         '0572 - 35 11 20', 'Industrieweg 45',     '8102 HK'),
     klant(K.zorggroep, 'Zorggroep IJssel-Vecht',    'Zwolle',    'facilitair@zorgijsselvecht.nl','038 - 456 30 00', 'Zorgpad 5',           '8025 AB'),
-    klant(K.visser,    'Familie Visser',            'Wezep',     'vissernl@gmail.com',           '06 - 1180 3344',  'Heerderweg 7',        '8091 BD'),
+    klant(K.visser,    'Familie Visser',            'Wezep',     'visser@voorbeeld.nl',           '06 - 1180 3344',  'Heerderweg 7',        '8091 BD'),
   ],
 
   pipeline_stages: [

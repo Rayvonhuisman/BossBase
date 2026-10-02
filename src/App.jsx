@@ -1852,8 +1852,10 @@ function AppInner() {
     if (!permissionsLoaded || !profile) {
       return <div style={{ background: '#0D0D0D', minHeight: '100dvh' }} />;
     }
-    const ALLOWED = ['info@bossbase.nl', 'nielsgrevink@gmail.com'];
-    if (profile.isSuperAdmin !== true || !ALLOWED.includes(profile.email)) {
+    // Alleen profiles.is_super_admin telt: die kan een gebruiker niet zelf zetten
+    // (trigger a0_protect_privileges) en super-admin-data controleert hem op de
+    // server. Geen e-mailadressen meer in de publieke bundel (audit F9).
+    if (profile.isSuperAdmin !== true) {
       navigate('/dashboard', true);
       return null;
     }

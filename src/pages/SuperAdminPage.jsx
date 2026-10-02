@@ -84,14 +84,12 @@ function PlanBadge({ plan }) {
 const isBetalend = c => c.subscription?.status === 'actief' && c.status !== 'geblokkeerd'
 
 // ── Hoofdcomponent ───────────────────────────────────────────────────────────
-const ALLOWED_EMAILS = ['info@bossbase.nl', 'nielsgrevink@gmail.com']
-
 export function SuperAdminPage({ navigate, profile }) {
   // Laag 2 — beveiliging binnen de pagina zelf. Naast de route-guard in
   // App.jsx checkt de pagina nogmaals onafhankelijk of de gebruiker een
   // super admin is. `authorized` wordt vóór de hooks berekend zodat het
   // aantal hook-calls constant blijft (rules-of-hooks veilig).
-  const authorized = profile?.isSuperAdmin === true && ALLOWED_EMAILS.includes(profile?.email)
+  const authorized = profile?.isSuperAdmin === true
 
   const [companies,   setCompanies]   = useState([])
   const [aanvragen,   setAanvragen]   = useState([])
