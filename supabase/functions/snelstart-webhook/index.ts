@@ -93,14 +93,18 @@ serve(async (req) => {
   const actie = typeof body?.ActionType === 'string' ? body.ActionType : ''
   const referenceKey = typeof body?.ReferenceKey === 'string' ? body.ReferenceKey.trim() : ''
 
+  // Weigeringen zonder bekend bedrijf gaan alleen naar de functielog. Het
+  // publieke doorgeefluik /api/snelstart/webhook voegt de juiste URL-key toe,
+  // dus iedereen op internet komt tot hier; een databaserij per verzoek liet
+  // de tabel onbeperkt vullen (audit fix-ronde, zelfde patroon als B-15).
   if (!ACTIES.includes(actie)) {
-    return antwoord({ actie: actie || null, uitkomst: 'geweigerd', status: 400, melding: 'Onbekend ActionType' })
+    return antwoord({ actie: actie || null, uitkomst: 'geweigerd', status: 400, melding: 'Onbekend ActionType' }, false)
   }
   if (!referenceKey) {
-    return antwoord({ actie, uitkomst: 'geweigerd', status: 400, melding: 'ReferenceKey ontbreekt' })
+    return antwoord({ actie, uitkomst: 'geweigerd', status: 400, melding: 'ReferenceKey ontbreekt' }, false)
   }
   if (actie !== 'Delete' && !koppelSleutel) {
-    return antwoord({ actie, uitkomst: 'geweigerd', status: 400, melding: 'KoppelSleutel ontbreekt' })
+    return antwoord({ actie, uitkomst: 'geweigerd', status: 400, melding: 'KoppelSleutel ontbreekt' }, false)
   }
 
   try {
@@ -116,7 +120,7 @@ serve(async (req) => {
       return antwoord({
         actie, uitkomst: 'geweigerd', status: 404,
         melding: `Onbekende ReferenceKey (${referenceKey.slice(0, 8)}…)`,
-      })
+      }, false)
     }
     const companyId: string = ref.company_id
     const bedrijfNaam: string | null = (ref as any).companies?.name ?? null
