@@ -1272,7 +1272,6 @@ function KostenTab({ project, canManage }) {
   const [projectKosten, setProjectKosten] = useState([]);
   const [urenRegels, setUrenRegels] = useState([]);   // werkbon_uren van dit project
   const [laadFout, setLaadFout] = useState('');
-  const [nietLaadbaar, setNietLaadbaar] = useState('');
   const [loading, setLoading] = useState(true);
   const [toonWinstUitleg, setToonWinstUitleg] = useState(false);
   const [leveranciers, setLeveranciers] = useState([]);
@@ -1703,6 +1702,7 @@ export function ProjectDetailDrawer({
   }, [tabs, tab]);
   const [loading, setLoading] = useState(true);
   const [project, setProject] = useState(null);
+  const [nietLaadbaar, setNietLaadbaar] = useState('');
   const [entries, setEntries] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [notes, setNotes] = useState([]);
