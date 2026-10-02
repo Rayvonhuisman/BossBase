@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { vandaagIso } from '../lib/datumTijd.js';
 import { AlertTriangle } from 'lucide-react';
-import ExcelJS from 'exceljs';
-import JSZip from 'jszip';
+// exceljs (±900 kB) en jszip pas laden bij exporteren, niet bij het openen van
+// de pagina (audit 2026-10-01, P6).
+const laadExcelJS = () => import('exceljs').then(m => m.default);
+const laadJSZip = () => import('jszip').then(m => m.default);
 import { supabase } from '../lib/supabase.js';
 import { I, fmt, Av } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
@@ -886,6 +888,7 @@ export function DatabasePage({ openCustomer }) {
   const exportExcel = async () => {
     try {
       const rows = buildExportRows();
+      const ExcelJS = await laadExcelJS();
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet('Klanten');
       ws.columns = EXPORT_COLS.map(c => ({ header: c.key, key: c.key, width: c.width }));
@@ -932,6 +935,7 @@ export function DatabasePage({ openCustomer }) {
       (byCustomer[c.id]?.offertes || []).map(o => ({ offerte: o, customer: c }))
     );
     if (pairs.length === 0) { toast.error('Geen offertes gevonden voor de selectie'); return; }
+    const JSZip = await laadJSZip();
     const zip = new JSZip();
     setBulkDownloadProgress({ current: 0, total: pairs.length, label: 'offertes' });
     try {
@@ -955,6 +959,7 @@ export function DatabasePage({ openCustomer }) {
       (byCustomer[c.id]?.facturen || []).map(f => ({ factuur: f, customer: c }))
     );
     if (pairs.length === 0) { toast.error('Geen facturen gevonden voor de selectie'); return; }
+    const JSZip = await laadJSZip();
     const zip = new JSZip();
     setBulkDownloadProgress({ current: 0, total: pairs.length, label: 'facturen' });
     try {
@@ -980,6 +985,7 @@ export function DatabasePage({ openCustomer }) {
         .map(o => ({ offerte: o, customer: c }))
     );
     if (pairs.length === 0) { toast.error('Geen getekende offertes gevonden voor de selectie'); return; }
+    const JSZip = await laadJSZip();
     const zip = new JSZip();
     const mislukt = [];
     let gelukt = 0;
@@ -1025,6 +1031,7 @@ export function DatabasePage({ openCustomer }) {
         .map(f => ({ factuur: f, customer: c }))
     );
     if (pairs.length === 0) { toast.error('Geen creditfacturen gevonden voor de selectie'); return; }
+    const JSZip = await laadJSZip();
     const zip = new JSZip();
     setBulkDownloadProgress({ current: 0, total: pairs.length, label: 'creditfacturen' });
     try {
@@ -1052,6 +1059,7 @@ export function DatabasePage({ openCustomer }) {
     );
     const total = offertePairs.length + factuurPairs.length;
     if (total === 0) { toast.error('Geen documenten gevonden voor de selectie'); return; }
+    const JSZip = await laadJSZip();
     const zip = new JSZip();
     const offerteFolder = zip.folder('Offertes');
     const factuurFolder = zip.folder('Facturen');
