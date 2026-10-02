@@ -59,7 +59,7 @@ export const PERMISSION_GROUPS = [
     subs: [
       { key: 'projectbedragen', label: 'Projectbedragen zien',
         kort: 'Bedragen en marges op projecten/werkbonnen',
-        uitleg: 'Toont bedragen op projecten, werkbonnen en de klantkaart: projectwaarde, gefactureerd, betaald, kosten en winst per project/klant. Staat los van de gevoeliger bedrijfsomzet. Standaard uit.' },
+        uitleg: 'Toont bedragen op projecten, werkbonnen en de klantkaart: projectwaarde, gefactureerd, betaald, kosten en winst per project/klant. Staat los van de gevoeliger bedrijfsomzet. Standaard uit. Let op: dit verbergt de bedragen in het scherm. De projectwaarde en materiaalprijzen staan in dezelfde gegevens als het project zelf; wie projecten mag zien, kan die met technische kennis nog opvragen. Facturen, offertes en verkoop zijn wél volledig afgeschermd.' },
       { key: 'bedrijfsfinancien', label: 'Bedrijfsfinanciën zien',
         kort: 'Omzet, winst en marges van het bedrijf',
         uitleg: 'Toegang tot de Financiën-pagina en de omzet-/winst-widgets op het dashboard (omzet en winst per maand, pipeline-waarde, geaccepteerde waarde, grafieken). Gevoelige bedrijfscijfers; standaard uit.' },
