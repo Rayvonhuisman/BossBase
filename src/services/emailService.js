@@ -168,21 +168,21 @@ export async function triggerAutoEmail(type, vars, toEmail, companyId, relatedTy
 // standaardtemplates die nooit werd aangeroepen. De database doet dit al met
 // seed_default_email_templates, en die kent alle types.)
 
-export async function signOfferte({ signToken, name, email, signatureDataUrl, signedPdfBase64, pdfFout }) {
+export async function signOfferte({ signToken, name, email, signatureDataUrl }) {
+  // Het ondertekende exemplaar maakt de server; een PDF uit deze browser wordt
+  // niet meer meegestuurd (die kon de ondertekenaar zelf samenstellen).
   const body = { sign_token: signToken, name, email, signature_data_url: signatureDataUrl }
-  if (signedPdfBase64) body.signed_pdf_base64 = signedPdfBase64
-  // Lukte het maken van de ondertekende PDF niet, dan gaat de reden mee zodat de
-  // server dat kan vastleggen — anders verdwijnt het in de console van de klant.
-  if (pdfFout) body.pdf_fout = String(pdfFout).slice(0, 500)
   const { data, error } = await supabase.functions.invoke('sign-offerte', { body })
   if (error) {
-    // Haal de werkelijke foutmelding op uit de response body
+    // Haal de werkelijke foutmelding (en de code) op uit de response body
     let message = error.message
+    let code = null
     try {
       const body = await error.context?.json()
       if (body?.error) message = body.error
+      code = body?.code || null
     } catch {}
-    throw new Error(message)
+    throw Object.assign(new Error(message), { code })
   }
   if (!data?.success) throw new Error(data?.error || 'Ondertekenen mislukt')
   return data

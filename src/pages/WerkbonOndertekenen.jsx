@@ -11,7 +11,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import HandtekeningCanvas from '../components/HandtekeningCanvas.jsx'
-import { getWerkbonPdfUrl, getWerkbonPdfBase64 } from '../utils/generateWerkbonPdf.js'
+import { getWerkbonPdfUrl } from '../utils/generateWerkbonPdf.js'
 import { signWerkbon, getFotosViaToken, splitsKlantnotities } from '../services/werkbonOndertekenenService.js'
 // De omschrijving komt uit de notitie-editor en is HTML; zonder omzetting leest
 // de klant hier de tags. Zelfde behandeling als in de PDF.
@@ -178,35 +178,15 @@ export default function WerkbonOndertekenen({ token }) {
 
     setSigning(true)
     try {
-      // De ondertekende PDF wordt hier gemaakt, mét handtekening, en gaat mee
-      // naar de edge function. Mislukt dat, dan gaat het tekenen gewoon door —
-      // de handtekening in de database is het bewijs, de PDF is de weergave.
-      let pdfBase64 = null
-      let pdfFout = null
-      try {
-        pdfBase64 = await getWerkbonPdfBase64(...pdfArgs({
-          ondertekendOp: new Date().toISOString(),
-          ondertekendDoorNaam: form.name.trim(),
-          ondertekendDoorEmail: form.email.trim(),
-          handtekeningDataUrl: dataUrl,
-        }))
-      } catch (e) {
-        console.warn('Ondertekende PDF maken mislukt:', e.message)
-        // De reden gaat mee naar de server: daar wordt hij vastgelegd en maakt
-        // het bedrijf de bon alsnog zodra het de werkbon opent. Anders verdween
-        // dit in de console van de klant en merkte niemand het.
-        pdfFout = e.message || String(e)
-      }
-
+      // Het ondertekende exemplaar maakt de server uit de werkbongegevens; hier
+      // gaat alleen de handtekening mee.
       const resultaat = await signWerkbon({
         signToken: token,
         name: form.name.trim(),
         email: form.email.trim(),
         signatureDataUrl: dataUrl,
-        signedPdfBase64: pdfBase64,
-        pdfFout,
       })
-      setPdfOntbrak(!pdfBase64)
+      setPdfOntbrak(!resultaat?.ondertekende_pdf_url)
       setOndertekening({
         op: resultaat?.ondertekend_op || new Date().toISOString(),
         naam: form.name.trim(),

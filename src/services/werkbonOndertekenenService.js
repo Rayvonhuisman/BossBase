@@ -135,12 +135,10 @@ export function bouwPdfWerkbon(werkbon, extra = {}) {
  * Roept de sign-werkbon edge function aan. Werkt zowel vanaf de publieke pagina
  * (geen sessie) als vanuit de app.
  */
-export async function signWerkbon({ signToken, name, email, signatureDataUrl, signedPdfBase64, pdfFout }) {
+export async function signWerkbon({ signToken, name, email, signatureDataUrl }) {
+  // Het ondertekende exemplaar maakt de server uit de database. Een PDF uit de
+  // browser gaat niet meer mee: die kon de ondertekenaar zelf samenstellen.
   const body = { sign_token: signToken, name, email, signature_data_url: signatureDataUrl }
-  if (signedPdfBase64) body.signed_pdf_base64 = signedPdfBase64
-  // Mislukte de PDF in de browser, dan gaat de reden mee zodat de server het kan
-  // vastleggen: anders gaan de mails zonder bijlage en merkt niemand het.
-  if (pdfFout) body.pdf_fout = String(pdfFout).slice(0, 500)
 
   const { data, error } = await supabase.functions.invoke('sign-werkbon', { body })
   if (error) {
