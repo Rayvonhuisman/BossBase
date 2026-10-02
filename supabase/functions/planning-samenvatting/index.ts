@@ -14,6 +14,7 @@
 // liever een dag te laat dan helemaal niet.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { isScheduledCall } from '../_shared/scheduledSync.ts'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
 
@@ -41,6 +42,16 @@ function leesbaar(datum: string | null, tijd: string | null): string {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
+
+  // Alleen de cron mag dit starten: die stuurt het geheim uit de vault mee
+  // (edge_cron_secret = CRON_SECRET). De anon-sleutel alleen is publiek en
+  // dus geen bewijs. Audit 2026-10-01, H7.
+  const aanroep = await req.clone().json().catch(() => ({}))
+  if (!isScheduledCall(aanroep)) {
+    return new Response(JSON.stringify({ error: 'Niet toegestaan' }), {
+      status: 403, headers: { ...CORS, 'Content-Type': 'application/json' },
+    })
+  }
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
