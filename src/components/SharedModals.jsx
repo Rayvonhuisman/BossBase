@@ -17,12 +17,10 @@ import { triggerAutoEmail } from '../services/emailService.js';
 import { getCompanyId } from '../lib/currentCompany.js';
 import { createCalendarEvent } from '../services/calendarService.js';
 import { createJobCost, updateJobCost } from '../services/jobCostService.js'
-import { listLeveranciers } from '../services/leverancierService.js'
 import LeverancierSelect from './LeverancierSelect.jsx'
 import BijlageDropzone from './BijlageDropzone.jsx'
 import { categorieOptiesUit, standaardCategorieUit, bonVerplichtUit, BON_VERPLICHT_MELDING } from '../lib/kostenCategorieen.js';
 import { useKostenCategorieen } from '../hooks/useKostenCategorieen.js';
-import { getWerkbonnen } from '../services/werkbonService.js';
 import { getProjects } from '../services/projectsService.js';
 import { calcBtw } from '../utils/btw.js';
 import { updateProfile } from '../services/profileService.js';

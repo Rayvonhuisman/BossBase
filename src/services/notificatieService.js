@@ -191,7 +191,7 @@ export function stripMentions(text) {
 }
 
 // Create in-app notifications + optional email for all @mentions in a text
-export async function createMentionNotifications({ text, relatedType, relatedId, link, creatorId, creatorName, contextName }) {
+export async function createMentionNotifications({ text, relatedType, relatedId, link, creatorId: _creatorId, creatorName, contextName }) {
   const mentions = extractMentions(text);
   if (!mentions.length) return;
 

@@ -614,14 +614,6 @@ function QuickPlanModal({ werkbon, date, hour, teamMembers, profile, onClose, on
 
 // ── ACTIVITEIT INPLANNEN MODAL ────────────────────────────────────────────────
 
-const ACT_TYPES = [
-  { value: 'call',  label: 'Bellen'      },
-  { value: 'visit', label: 'Bezoek'      },
-  { value: 'task',  label: 'Vergadering' },
-  { value: 'task',  label: 'Klus'        },
-  { value: 'follow',label: 'Overig'      },
-];
-
 function PlanActivityModal({ teamMembers, customers, werkbonnen, profile, onClose, onSaved }) {
   const toast = useToast();
   const [form, setForm] = useState({

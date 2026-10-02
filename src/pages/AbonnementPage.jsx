@@ -9,7 +9,7 @@ import {
   inbegrepenGebruikers, betaaldeGebruikers, gebruikersPrijs, extraUserLabel,
 } from '../lib/tiers.js';
 import {
-  MODULES, moduleLabel, modulePrice, canBuyModule, getLimitDef, featureLabel,
+  MODULES, modulePrice, canBuyModule, getLimitDef, featureLabel,
   tierForLimit, moduleMetVereisten, TIER_FEATURES, ZICHTBARE_FEATURES, TIER_LIMITS,
 } from '../lib/features.js';
 import {
@@ -332,7 +332,6 @@ export default function AbonnementPage({ setPage }) {
     && modules.length === (stand.modules || []).length
     && modules.every(k => (stand.modules || []).includes(k));
 
-  const zichtbaar = new Set(ZICHTBARE_FEATURES.map(f => f.key));
 
   return (
     <div className="ab-page">

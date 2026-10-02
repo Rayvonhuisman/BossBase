@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { usePlan } from '../hooks/usePlan.js';
 import { gaNaarAbonnement } from '../lib/abonnementNav.js';
 import {
@@ -19,7 +18,6 @@ import {
 
 export function ReadOnlyBanner() {
   const plan = usePlan();
-  const [open, setOpen] = useState(false);
 
   if (!plan.readonly) return null;
 

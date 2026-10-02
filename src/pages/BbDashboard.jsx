@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LaadFout } from '../components/LaadFout.jsx';
-import { I, PIPELINE_STAGES, fmt, Av, ModalX, stageBadgeStyle } from '../bb-shared.jsx';
+import { I, PIPELINE_STAGES, fmt, ModalX, stageBadgeStyle } from '../bb-shared.jsx';
 import { listDeals, listPipelineStages, updateDealStage, markDealLost, updateDeal, zetDealAfgerond } from '../services/dealService.js';
 import { getLostReasons } from '../services/lostReasonService.js';
 import { listActivities } from '../services/activityService.js';
@@ -29,7 +29,7 @@ function PriorityBadge({ priority, style }) {
 // gerenderd en is verwijderd.
 
 // ── MOBILE PIPELINE (swipeable carousel) ─────────────────────
-function MobilePipeline({ stages, dealsInStage, openDeal, moveDeal, markLost, lostStageId, setNewStage, setShowNew, customers, geenVervolg }) {
+function MobilePipeline({ stages, dealsInStage, openDeal, moveDeal: _moveDeal, markLost, lostStageId, setNewStage, setShowNew, customers, geenVervolg }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
@@ -906,7 +906,7 @@ export function Pipeline({ openDeal, setPage }) {
               return (
                 <>
                   <div className="card-menu-label">Prioriteit</div>
-                  {[['high', 'Hoog'], ['med', 'Normaal'], ['low', 'Laag']].map(([val, label]) => (
+                  {[['high', 'Hoog'], ['med', 'Normaal'], ['low', 'Laag']].map(([val]) => (
                     <button
                       key={val}
                       className="card-menu-item"

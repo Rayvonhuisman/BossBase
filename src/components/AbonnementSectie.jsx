@@ -71,7 +71,6 @@ export function AbonnementSectie() {
   const [stand, setStand] = useState(null);
   const [laden, setLaden] = useState(true);
   const [bezig, setBezig] = useState(false);
-  const [wijzigen, setWijzigen] = useState(false);
   // Verzoeken van teamleden ("Laat mijn beheerder weten"). Alleen de
   // abonnementsbeheerder krijgt ze te zien; die kan ze ook afhandelen.
   const [verzoeken, setVerzoeken] = useState([]);

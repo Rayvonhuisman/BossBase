@@ -14,7 +14,7 @@ import { createFactuurPaymentLink, getStripeConnection } from '../services/strip
 import {
   getFacturen, updateFactuur, deleteFactuur, maakFactuurMetRegels,
   generateFactuurNummer, getFactuurRegels,
-  generateCreditFactuurNummer, createCreditFactuur, uploadFactuurPdf, getFactuurDocumentUrl,
+  createCreditFactuur, uploadFactuurPdf, getFactuurDocumentUrl,
   getFacturenMetDocument, FACTUUR_STATUS_OPTIONS, kopieerFactuur,
 } from '../services/factuurService.js';
 import { getProjects } from '../services/projectsService.js';
@@ -255,7 +255,7 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
   useEffect(() => {
     if (vervalHandmatig.current || !form.factuurdatum) return;
     set('vervaldatum', voegDagenToe(form.factuurdatum, betaaltermijn));
-  }, [form.factuurdatum, betaaltermijn]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [form.factuurdatum, betaaltermijn]);
   const missingFields = selectedCustomer ? [
     !selectedCustomer.address && 'adres',
     !selectedCustomer.city && 'plaats',
@@ -267,7 +267,6 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
     generateFactuurNummer().then(setNummer);
   }, []);
 
-  const { totaalExcl, totaalIncl } = useRegelTotals(regels);
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
   const modalStyle = isMobile
@@ -695,7 +694,7 @@ function ViewFactuurModal({ factuur, customers, onClose, onSluitVoorActie, onRef
   // melding zelf — onder meer achter "Origineel document uit de boekhouding
   // openen", precies op het moment dat er iets uit te leggen viel.
   const toast = useToast();
-  const { company, profile } = useProfile();
+  const { company } = useProfile();
   // Betaalherinneringen zijn een feature (Groei+). Zonder die feature tonen we
   // de knoppen niet; server-side blokkeert een trigger op facturen het zetten
   // van herinnering_*_verstuurd_at alsnog.
@@ -1150,7 +1149,7 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
 // zetten de geschiedenisstap; zonder die props werkt de pagina op eigen state.
 export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onItemClose, onItemLeave, onNavConsumed, backKlant, onBackKlant }) {
   const toast = useToast();
-  const { profile, company } = useProfile();
+  const { company } = useProfile();
   // Beheren = admin of het recht 'facturen' (er bestaat geen rol "planner";
   // zelfde regel als de database, audit M17).
   const { magBewerken } = usePermissions();
@@ -1206,7 +1205,6 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
     }
   }, [preOpenFactuurId, loading, facturen, onItemOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const today = TODAY();
   const thisMonth = THIS_MONTH();
 
   // 'geboekt' = uit SnelStart opgehaald en daar nog niet afgeletterd; dat is

@@ -473,7 +473,7 @@ function ModalShell({ open, onClose, busy, mobile, children, maxWidth = 640 }) {
 }
 
 // ── Register / Edit modal ───────────────────────────────────────────────────
-function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = [], profiles = [], canBookForOthers = false, currentProfileId, onClose, onSave, mobile }) {
+function UrenModal({ open, mode, initial, klanten: _klanten, werkbonnen: _werkbonnen = [], projecten: _projecten = [], profiles = [], canBookForOthers = false, currentProfileId, onClose, onSave, mobile }) {
   const empty = useMemo(() => ({
     datum: todayIso(),
     start_tijd: '',

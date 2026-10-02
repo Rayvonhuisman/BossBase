@@ -112,7 +112,7 @@ export function omschrijvingFallback(type, eenheden = []) {
 // Nieuwe regels hebben type + btwPct → die worden verbatim teruggelezen, óók voor
 // eigen eenheden. Oude data (NULL) valt veilig terug: type geraden uit aantal en
 // het BTW-tarief afgeleid uit de document-totalen, zodat het BEDRAG niet verandert.
-export function reconstructRegel(item, doc, eenheden = []) {
+export function reconstructRegel(item, doc, _eenheden = []) {
   const totExcl = Number(doc?.totaalExcl || 0);
   const totIncl = Number(doc?.totaalIncl || 0);
   const fallbackBtw = totExcl > 0 ? Math.round((totIncl / totExcl - 1) * 1000) / 10 : 21;

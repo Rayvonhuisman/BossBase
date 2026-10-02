@@ -468,7 +468,7 @@ export function TeamPage() {
       .catch(err => setLaadFout(err))
       .finally(() => setLoading(false));
   };
-  useEffect(laad, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(laad, []);
 
   const handleActivate = async (member) => {
     try {
