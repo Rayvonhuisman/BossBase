@@ -58,6 +58,10 @@ serve(async (req) => {
     const companyId = profile?.company_id
     if (!companyId) return json({ error: 'Geen bedrijf gekoppeld' }, 400)
 
+    // Een betaallink hoort bij een factuur: alleen wie facturen mag beheren.
+    const { data: magFacturen } = await userClient.rpc('bb_is_admin_or_permission', { p_permission: 'facturen' })
+    if (magFacturen !== true) return json({ error: 'Je hebt geen recht op facturen.' }, 403)
+
     // ── HARDE feature-check (server-side, centrale matrix) ──────────────────────
     const { data: heeftFeature } = await userClient.rpc('bb_has_feature', { p_feature: VEREISTE_FEATURE })
     if (heeftFeature !== true) {
