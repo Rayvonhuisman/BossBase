@@ -79,6 +79,7 @@ serve(async (req) => {
     // verify_jwt aan de gateway passeert — levert géén user op en wordt hier
     // dus geweigerd.
     const internal = isInternalCall(req)
+    let gebruikerBedrijf: string | null = null
 
     if (!internal) {
       const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
@@ -124,6 +125,19 @@ serve(async (req) => {
           error: 'Je account is beperkt tot lezen. Sluit een abonnement af om weer te kunnen versturen.',
         }, 403)
       }
+
+      // ── Geen open relay ───────────────────────────────────────────────────
+      // Een gebruiker mag alleen mailen vanuit zijn eigen bedrijf, naar adressen
+      // die bij dat bedrijf horen (klanten, leveranciers, teamleden, aanvragen,
+      // het bedrijfsadres), met een geverifieerd e-mailadres. Afzendernaam en
+      // reply-to bepaalt de server, niet de aanroeper. Zie audit 2026-10-01, K2.
+      const { data: prof } = await admin.from('profiles')
+        .select('company_id, email_verified_at').eq('id', user.id).maybeSingle()
+      if (!prof?.company_id) return json({ success: false, error: 'Geen bedrijf gekoppeld aan dit account' }, 403)
+      if (!prof.email_verified_at) {
+        return json({ success: false, code: 'niet_geverifieerd', error: 'Bevestig eerst je e-mailadres voordat je mail verstuurt.' }, 403)
+      }
+      gebruikerBedrijf = prof.company_id
     }
 
     // ── Verzenden ─────────────────────────────────────────────────────────────
@@ -137,20 +151,69 @@ serve(async (req) => {
 
     const apiKey = Deno.env.get('RESEND_API_KEY')
     const fromEmail = Deno.env.get('RESEND_FROM_EMAIL') || 'noreply@bossbase.nl'
-    // From-naam: puur de bedrijfsnaam (geen "via BossBase"). Systeemmails geven
-    // 'BossBase' mee. Het e-mailadres blijft technisch noreply@bossbase.nl.
-    const label = from_name && from_name.trim() ? from_name.trim() : 'BossBase'
-    const fromLabel = `${label} <${fromEmail}>`
-
     if (!apiKey) {
-      return json({ success: false, error: 'RESEND_API_KEY niet geconfigureerd' }, 500)
+      return json({ success: false, error: 'Mail is niet geconfigureerd' }, 500)
     }
 
-    const payload: Record<string, unknown> = { from: fromLabel, to, subject, html }
-    // Reply-to: antwoorden van de klant gaan naar het door het bedrijf
-    // ingestelde adres i.p.v. naar noreply@bossbase.nl.
-    if (typeof reply_to === 'string' && reply_to.includes('@')) payload.reply_to = reply_to
-    if (Array.isArray(attachments) && attachments.length > 0) payload.attachments = attachments
+    const ontvangers = (Array.isArray(to) ? to : [to]).map((x: unknown) => String(x ?? '').trim()).filter(Boolean)
+    if (!ontvangers.length) return json({ success: false, error: 'Geen ontvanger opgegeven' }, 400)
+
+    let label: string
+    let replyTo: string | null = null
+    let bijlagen: unknown[] = []
+
+    if (gebruikerBedrijf) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+      const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      const admin = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
+
+      if (ontvangers.length > 5) return json({ success: false, error: 'Maximaal 5 ontvangers per mail' }, 400)
+      const { data: buiten, error: buitenErr } = await admin.rpc('bb_mail_ontvangers_buiten_bedrijf', {
+        p_company: gebruikerBedrijf, p_emails: ontvangers,
+      })
+      if (buitenErr) return json({ success: false, error: 'Ontvanger kon niet worden gecontroleerd' }, 500)
+      if (Array.isArray(buiten) && buiten.length) {
+        return json({
+          success: false,
+          code: 'ontvanger_onbekend',
+          error: `Je kunt alleen mailen naar klanten, leveranciers en teamleden van je bedrijf. Voeg ${buiten.join(', ')} eerst toe aan een klant of leverancier.`,
+        }, 403)
+      }
+
+      const { data: bedrijf } = await admin.from('companies')
+        .select('name, email, reply_to_email').eq('id', gebruikerBedrijf).maybeSingle()
+      // Afzendernaam: de bedrijfsnaam, of "BossBase" voor de platformmail
+      // (teamuitnodiging). Nooit een vrije tekst van de aanroeper.
+      label = from_name === 'BossBase' ? 'BossBase' : (bedrijf?.name?.trim() || 'BossBase')
+      replyTo = bedrijf?.reply_to_email || bedrijf?.email || null
+
+      // Bijlagen: alleen PDF's, hooguit 3, samen hooguit ~10 MB.
+      if (Array.isArray(attachments) && attachments.length) {
+        if (attachments.length > 3) return json({ success: false, error: 'Maximaal 3 bijlagen' }, 400)
+        let totaal = 0
+        for (const a of attachments) {
+          const naam = String(a?.filename ?? '')
+          const inhoud = String(a?.content ?? '')
+          if (!/\.pdf$/i.test(naam) || !inhoud) return json({ success: false, error: 'Alleen PDF-bijlagen zijn toegestaan' }, 400)
+          totaal += inhoud.length
+        }
+        if (totaal > 14_000_000) return json({ success: false, error: 'Bijlagen zijn te groot' }, 400)
+        bijlagen = attachments.map((a: { filename: string; content: string }) => ({ filename: a.filename, content: a.content }))
+      }
+    } else {
+      // Interne aanroepen (andere edge functions met het geheim) bepalen zelf.
+      label = from_name && String(from_name).trim() ? String(from_name).trim() : 'BossBase'
+      if (typeof reply_to === 'string' && reply_to.includes('@')) replyTo = reply_to
+      if (Array.isArray(attachments)) bijlagen = attachments
+    }
+
+    // Het e-mailadres blijft technisch noreply@bossbase.nl. Tekens die een
+    // From-kop kunnen breken eruit.
+    const fromLabel = `${label.replace(/[<>"\r\n]/g, '')} <${fromEmail}>`
+
+    const payload: Record<string, unknown> = { from: fromLabel, to: ontvangers, subject, html }
+    if (replyTo) payload.reply_to = replyTo
+    if (bijlagen.length > 0) payload.attachments = bijlagen
 
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -175,13 +238,14 @@ serve(async (req) => {
         gerelateerdType: gerelateerd_type || null,
         gerelateerdId: gerelateerd_id || null,
       })
-      return json({ success: false, error: data.message || 'Resend fout' }, res.status)
+      return json({ success: false, error: 'De mail kon niet worden verstuurd. Controleer het adres en probeer het opnieuw.' }, 502)
     }
 
     return json({ success: true, message_id: data.id })
   } catch (err) {
     // Netwerkfout of onverwachte uitzondering: ook dát is post die niet aankwam.
     await logMailFout({ soort: 'onbekend', ontvanger: null, fout: String(err), bron: 'send-email' })
-    return json({ success: false, error: String(err) }, 500)
+    console.error('send-email', err)
+    return json({ success: false, error: 'Versturen mislukt door een interne fout' }, 500)
   }
 })
