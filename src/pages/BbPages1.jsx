@@ -1547,7 +1547,7 @@ export function CustomersPage({ openCustomer }) {
             <button className={`tab${view === 'grid' ? ' active' : ''}`} onClick={() => { setView('grid'); localStorage.setItem('customers_view', 'grid'); }}>Kaarten</button>
             <button className={`tab${view === 'table' ? ' active' : ''}`} onClick={() => { setView('table'); localStorage.setItem('customers_view', 'table'); }}>Tabel</button>
           </div>
-          <button className="btn btn-p btn-sm" data-rl="klanten-nieuw" onClick={guardLimiet('klanten', () => setShowNew(true))}>{I.plus} Nieuwe klant</button>
+          {can('klanten_bewerken') && <button className="btn btn-p btn-sm" data-rl="klanten-nieuw" onClick={guardLimiet('klanten', () => setShowNew(true))}>{I.plus} Nieuwe klant</button>}
         </div>
       </div>
       {error && <div className="card card-p" style={{ color: '#dc2626', marginBottom: 14 }}>{leesbareFout(error)}</div>}
