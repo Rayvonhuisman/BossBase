@@ -528,7 +528,9 @@ export function DatabasePage({ openCustomer }) {
 
   useEffect(() => {
     if (!rowMenuOpen) return;
-    const h = () => setRowMenuOpen(null);
+    // Klikken ín het menu niet als "ernaast" tellen: anders sloot mousedown het
+    // menu al vóór de klik op "Klant verwijderen" aankwam, en gebeurde er niets.
+    const h = e => { if (!e.target.closest?.('[data-rijmenu]')) setRowMenuOpen(null); };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, [rowMenuOpen]);
@@ -1567,6 +1569,7 @@ export function DatabasePage({ openCustomer }) {
                           boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 160,
                         }}
                         onClick={e => e.stopPropagation()}
+                        data-rijmenu
                       >
                         <button
                           onClick={() => { setRowMenuOpen(null); setDeleteTarget({ id: c.id, name: c.name }); }}
