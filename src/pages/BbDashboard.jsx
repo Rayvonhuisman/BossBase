@@ -5,7 +5,6 @@ import { listDeals, listPipelineStages, updateDealStage, markDealLost, updateDea
 import { getLostReasons } from '../services/lostReasonService.js';
 import { listActivities } from '../services/activityService.js';
 import { listCustomers } from '../services/customerService.js';
-import { createProject } from '../services/projectsService.js';
 import { useProfile, displayName } from '../lib/profileContext.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { ActivityEditModal, NewLeadModal } from '../components/SharedModals.jsx';
@@ -179,77 +178,8 @@ function MobilePipeline({ stages, dealsInStage, openDeal, moveDeal: _moveDeal, m
   );
 }
 
-// ── MAAK PROJECT MODAL ───────────────────────────────────────
-function MaakProjectModal({ deal, customers, onClose, setPage }) {
-  const toast = useToast();
-  const [form, setForm] = useState({
-    name: deal.title || '',
-    customer_id: deal.custId || '',
-    project_value: deal.value || 0,
-  });
-  const [saving, setSaving] = useState(false);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-
-  const submit = async () => {
-    if (!form.name.trim()) { toast.error('Projectnaam is verplicht'); return; }
-    setSaving(true);
-    try {
-      const created = await createProject({
-        name: form.name.trim(),
-        customer_id: form.customer_id || null,
-        deal_id: deal.id,
-        project_value: Number(form.project_value || 0),
-      });
-      toast.success('Project aangemaakt');
-      onClose();
-      setPage?.('projecten', { id: created.id });
-    } catch (e) {
-      toast.error(e.message || 'Aanmaken mislukt');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="overlay" onClick={e => e.target === e.currentTarget && !saving && onClose()}>
-      <div className="modal" style={{ maxWidth: 420 }}>
-        <div className="modal-hd">
-          <div>
-            <div className="modal-title">Project aanmaken</div>
-            <div className="modal-sub">{deal.customerName} — {deal.title}</div>
-          </div>
-          <ModalX onClose={onClose} />
-        </div>
-        <div className="fg">
-          <div className="f s2">
-            <label>Projectnaam *</label>
-            <input type="text" value={form.name} onChange={e => set('name', e.target.value)} autoFocus />
-          </div>
-          <div className="f s2">
-            <label>Klant</label>
-            <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)}>
-              <option value="">— Geen —</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-          <div className="f s2">
-            <label>Projectwaarde (€)</label>
-            <input type="number" min="0" step="0.01" value={form.project_value} onChange={e => set('project_value', e.target.value)} />
-          </div>
-        </div>
-        <div className="fa">
-          <button className="btn btn-ghost" onClick={onClose}>Annuleren</button>
-          <button className="btn btn-p" onClick={submit} disabled={saving || !form.name.trim()}>
-            {saving ? 'Aanmaken...' : 'Project aanmaken'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── PIPELINE ─────────────────────────────────────────────────
-export function Pipeline({ openDeal, setPage }) {
+export function Pipeline({ openDeal }) {
   const toast = useToast();
   const { refreshKey, bumpRefresh } = useProfile();
   const { guardSchrijven, planModal } = usePlanGuard();
@@ -284,7 +214,6 @@ export function Pipeline({ openDeal, setPage }) {
 
   const [showNew, setShowNew] = useState(false);
   const [newStage, setNewStage] = useState(null);
-  const [maakProjectDeal, setMaakProjectDeal] = useState(null);
   const [hideLost, setHideLost] = useState(() => localStorage.getItem('pipeline_hide_lost') === 'true');
 
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 767);
@@ -978,14 +907,6 @@ export function Pipeline({ openDeal, setPage }) {
           stages={stages}
           defaultStage={newStage || ''}
           onSaved={onSaved}
-        />
-      )}
-      {maakProjectDeal && (
-        <MaakProjectModal
-          deal={maakProjectDeal}
-          customers={customers}
-          onClose={() => setMaakProjectDeal(null)}
-          setPage={setPage}
         />
       )}
 
