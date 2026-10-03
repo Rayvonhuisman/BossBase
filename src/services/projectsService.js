@@ -112,34 +112,60 @@ export const PROJECT_STATUS_OPTIONS = Object.entries(PROJECT_STATUS).map(([id, v
 // PROJECTS
 // =============================================================================
 
+// Projectbedragen (project_value, geschatte_waarde) zijn niet direct leesbaar:
+// de database geeft ze alleen via bb_projectbedragen() aan wie het recht
+// "projectbedragen" heeft (of admin is, of op Groei werkt). Daarom hier
+// expliciete kolommen in plaats van '*', en de bedragen er apart bij.
+const PROJECT_KOLOMMEN = 'id, company_id, customer_id, deal_id, offerte_id, name, description, status, '
+  + 'quoted_hours, start_date, deadline, owner_id, created_by, created_at, updated_at, assigned_to, waarde_bron'
+const PROJECT_SELECT = `${PROJECT_KOLOMMEN}, customers(name), deals(title), offertes(nummer, totaal_incl, arbeidsuren)`
+
+// Vult project_value/geschatte_waarde in voor wie ze mag zien; anders blijven
+// ze leeg (de UI toont bedragen dan ook niet).
+async function metBedragen(rijen) {
+  const lijst = (rijen || []).filter(Boolean)
+  if (!lijst.length) return lijst
+  const ids = lijst.map(r => r.id)
+  const bedragen = new Map()
+  for (let i = 0; i < ids.length; i += 500) {
+    const { data, error } = await supabase.rpc('bb_projectbedragen', { p_ids: ids.slice(i, i + 500) })
+    if (error) throw error
+    ;(data || []).forEach(b => bedragen.set(b.id, b))
+  }
+  return lijst.map(r => {
+    const b = bedragen.get(r.id)
+    return b ? { ...r, project_value: b.project_value, geschatte_waarde: b.geschatte_waarde } : r
+  })
+}
+
 export async function getProjects() {
   const rijen = await alleRijen(() => supabase
     .from('projects')
-    .select('*, customers(name), deals(title), offertes(nummer, totaal_incl, arbeidsuren)', { count: 'exact' })
+    .select(PROJECT_SELECT, { count: 'exact' })
     .order('created_at', { ascending: false })
     .order('id', { ascending: true }))
-  return rijen.map(toProject)
+  return (await metBedragen(rijen)).map(toProject)
 }
 
 export async function getProjectsByCustomer(customerId) {
   if (!customerId) return []
   const { data, error } = await supabase
     .from('projects')
-    .select('*, customers(name), deals(title), offertes(nummer, totaal_incl, arbeidsuren)')
+    .select(PROJECT_SELECT)
     .eq('customer_id', customerId)
     .order('created_at', { ascending: false })
   if (error) throw error
-  return (data || []).map(toProject)
+  return (await metBedragen(data)).map(toProject)
 }
 
 export async function getProjectById(id) {
   const { data, error } = await supabase
     .from('projects')
-    .select('*, customers(name), deals(title), offertes(nummer, totaal_incl, arbeidsuren)')
+    .select(PROJECT_SELECT)
     .eq('id', id)
     .single()
   if (error) throw error
-  return toProject(data)
+  return toProject((await metBedragen([data]))[0])
 }
 
 export async function createProject(input) {
@@ -197,10 +223,10 @@ export async function createProject(input) {
   const { data, error } = await supabase
     .from('projects')
     .insert(payload)
-    .select('*, customers(name), deals(title), offertes(nummer, totaal_incl, arbeidsuren)')
+    .select(PROJECT_SELECT)
     .single()
   if (error) throw error
-  const project = toProject(data)
+  const project = toProject((await metBedragen([data]))[0])
   if (project.customerId) {
     logTijdlijnSafe(project.customerId, 'project_aangemaakt',
       `Project aangemaakt: ${project.name}`, { name: project.name })
@@ -221,7 +247,7 @@ export async function getProjectByDeal(dealId) {
   if (!dealId) return null
   const { data, error } = await supabase
     .from('projects')
-    .select('*, customers(name), deals(title), offertes(nummer, totaal_incl, arbeidsuren)')
+    .select(PROJECT_SELECT)
     .eq('deal_id', dealId)
     .order('created_at', { ascending: true })
     .limit(1)
@@ -229,7 +255,7 @@ export async function getProjectByDeal(dealId) {
     console.error('[bb:projects] getProjectByDeal mislukt', { message: error.message, code: error.code })
     throw error
   }
-  return data?.length ? toProject(data[0]) : null
+  return data?.length ? toProject((await metBedragen([data[0]]))[0]) : null
 }
 
 /**
@@ -370,10 +396,10 @@ export async function updateProject(projectId, patch) {
     .from('projects')
     .update(updates)
     .eq('id', projectId)
-    .select('*, customers(name), deals(title), offertes(nummer, totaal_incl, arbeidsuren)')
+    .select(PROJECT_SELECT)
     .single()
   if (error) throw error
-  const project = toProject(data)
+  const project = toProject((await metBedragen([data]))[0])
   if (project.customerId && updates.status) {
     const statusLabel = PROJECT_STATUS[updates.status]?.label || updates.status
     logTijdlijnSafe(project.customerId, 'project_status_gewijzigd',
