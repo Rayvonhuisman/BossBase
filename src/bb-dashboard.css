@@ -3501,18 +3501,30 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 @media(max-width:900px){.bb-mailframe{height:320px}}
 @media(max-width:640px){.bb-mailframe{height:260px}}
 
-/* ── Rondleiding (onboarding) ─────────────────────────────────────────────── */
-/* Boven alles behalve de cookiebanner: de spot dimt de pagina met een grote
-   schaduw en laat het aangewezen element vrij. */
+/* ── Rondleiding (onboarding): Boss als gids ──────────────────────────────── */
+/* De markering dimt de pagina met een grote schaduw en laat het aangewezen
+   onderdeel vrij. Boss staat ernaast in een tegeltje, met zijn tekstballon. */
 .rl-laag{position:fixed;inset:0;z-index:1500}
 .rl-vanger{position:absolute;inset:0}
-.rl-spot{position:fixed;border-radius:var(--r12);box-shadow:0 0 0 9999px rgba(13,13,13,.45),0 0 0 2px var(--p);pointer-events:none;transition:top .2s ease,left .2s ease,width .2s ease,height .2s ease}
-.rl-kaart{position:fixed;background:var(--bg);border-radius:var(--r16);padding:18px 18px 12px;box-shadow:0 24px 64px rgba(0,0,0,.18);animation:fadeUp .2s cubic-bezier(.22,1,.36,1) both}
-.rl-teller{font-size:.72rem;font-weight:700;color:var(--dmu);letter-spacing:.02em;margin-bottom:4px}
-.rl-titel{font-size:1rem;font-weight:800;letter-spacing:-.01em;color:var(--dk);margin-bottom:6px}
+.rl-dim{background:rgba(13,13,13,.45);animation:fadeIn .2s ease both}
+.rl-spot{position:fixed;box-shadow:0 0 0 9999px rgba(13,13,13,.45),0 0 0 2px var(--p),0 0 0 6px rgba(29,219,98,.25);pointer-events:none}
+.rl-gids{position:fixed;display:flex;align-items:flex-end;gap:10px;width:min(400px,calc(100vw - 24px));animation:fadeUp .22s cubic-bezier(.22,1,.36,1) both}
+.rl-boss{flex:0 0 64px;height:64px;border-radius:50%;background:var(--pl);border:2px solid var(--p);box-shadow:0 8px 24px rgba(0,0,0,.22);overflow:hidden}
+/* Het plaatje heeft een doorzichtige achtergrond en vult het rondje helemaal. */
+.rl-boss img{width:100%;height:100%;object-fit:cover;object-position:center top;display:block}
+.rl-ballon{position:relative;flex:1;min-width:0;background:var(--bg);border-radius:var(--r16);padding:14px 16px 10px;box-shadow:0 18px 48px rgba(0,0,0,.2)}
+/* Het staartje van de ballon wijst naar Boss. */
+.rl-ballon::before{content:"";position:absolute;left:-7px;bottom:22px;width:14px;height:14px;background:var(--bg);transform:rotate(45deg);border-radius:2px}
+.rl-teller{font-size:.7rem;font-weight:700;color:var(--dmu);letter-spacing:.02em;margin-bottom:3px}
+.rl-titel{font-size:.98rem;font-weight:800;letter-spacing:-.01em;color:var(--dk);margin-bottom:5px}
 .rl-tekst{font-size:.84rem;line-height:1.45;color:var(--dm);margin:0 0 10px}
 .rl-noot{color:var(--dmu);font-size:.78rem}
-.rl-knoppen{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}
+.rl-knoppen{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .rl-knoppen .btn-ghost{padding-left:0}
-.rl-geen-meer{display:block;margin-top:8px;font-size:.72rem;color:var(--dl);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline}
+.rl-knoppen-rechts{display:flex;gap:6px}
+.rl-geen-meer{display:block;margin-top:6px;font-size:.72rem;color:var(--dl);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline}
 .rl-geen-meer:hover{color:var(--dmu)}
+.rl-gids-welkom .rl-boss{flex-basis:84px;height:84px}
+/* Na de rondleiding licht de Boss-knop rechtsboven even op. */
+@keyframes rlPuls{0%,100%{box-shadow:0 0 0 0 rgba(29,219,98,0)}50%{box-shadow:0 0 0 7px rgba(29,219,98,.35)}}
+.rl-boss-puls{border-radius:50%;animation:rlPuls 1s ease 3}

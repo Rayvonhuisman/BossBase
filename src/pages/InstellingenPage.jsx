@@ -1989,7 +1989,7 @@ export function InstellingenPage() {
             <div className="card-title">Bedrijfsprofiel</div>
             <div className="card-sub">Basisinformatie van je bedrijf</div>
           </div>
-          <div style={{ marginBottom: 20 }}>
+          <div style={{ marginBottom: 20 }} data-rl="set-logo">
             <div style={{ fontSize: '.78rem', fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 10 }}>Bedrijfslogo</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               {company?.logoUrl ? (
@@ -2046,7 +2046,7 @@ export function InstellingenPage() {
               />
             </div>
           </div>
-          <div className="fg">
+          <div className="fg" data-rl="set-gegevens">
             <div className="f">
               <label>Bedrijfsnaam</label>
               <input value={bedrijfForm.name} onChange={e => setBedrijf('name', e.target.value)} placeholder="Nog niet ingevuld" />
@@ -2103,7 +2103,7 @@ export function InstellingenPage() {
             </div>
           </div>
           <div className="fa">
-            <button className="btn btn-p" onClick={saveBedrijf} disabled={savingBedrijf}>
+            <button className="btn btn-p" data-rl="set-bedrijf-opslaan" onClick={saveBedrijf} disabled={savingBedrijf}>
               {savingBedrijf ? 'Opslaan...' : 'Opslaan'}
             </button>
           </div>
@@ -2118,7 +2118,7 @@ export function InstellingenPage() {
               Algemeen <InfoTip tekst="Wordt vooringevuld bij nieuwe offertes en werkbonnen." />
             </div>
           </div>
-          <div className="fg">
+          <div className="fg" data-rl="set-algemeen">
             <div className="f">
               <label>Uurtarief (€/uur)</label>
               <input
@@ -2181,7 +2181,7 @@ export function InstellingenPage() {
         </div>
 
         {/* ── Herinneringen ── */}
-        <div className="card card-p afu3" style={{ marginTop: 16 }}>
+        <div className="card card-p afu3" data-rl="set-herinneringen" style={{ marginTop: 16 }}>
           <div className="card-hd" style={{ marginBottom: 18 }}>
             <div className="card-title">
               Herinneringen <InfoTip tekst="Herinner medewerkers eraan hun uren in te vullen voor verstreken geplande dagen." />
@@ -2425,7 +2425,7 @@ export function InstellingenPage() {
           {(() => {
             const customTemplates = templates.filter(t => !STANDARD_TYPES.has(t.type));
             return (
-              <div style={{ marginBottom: 16 }}>
+              <div style={{ marginBottom: 16 }} data-rl="set-templates">
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: customTemplates.length > 0 ? 8 : 0 }}>
                   {ALL_TEMPLATE_CONFIGS.map(cfg => {
                     const exists = templates.some(t => t.type === cfg.type);
@@ -3134,7 +3134,9 @@ export function InstellingenPage() {
       {!loading && tab === 'abonnement' && isAdmin && <AbonnementSectie />}
 
       {!loading && tab === 'integraties' && (
-        <IntegratiesOverzicht integraties={INTEGRATIES} initieelOpen={ssActivatie ? 'snelstart' : null} />
+        <div data-rl="set-integraties">
+          <IntegratiesOverzicht integraties={INTEGRATIES} initieelOpen={ssActivatie ? 'snelstart' : null} />
+        </div>
       )}
 
     </div>

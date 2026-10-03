@@ -27,6 +27,7 @@ import { mailTemplate, mailButton } from '../utils/mailTemplate.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { statusInfo } from '../utils/statusColors.js';
 import ActieMenu from '../components/ActieMenu.jsx';
+import Rondleiding from '../components/Rondleiding.jsx';
 import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
 import { usePermissions } from '../hooks/usePermissions.js';
 import { LaadFout } from '../components/LaadFout.jsx';
@@ -153,8 +154,9 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
           </div>
           <ModalX onClose={onClose} />
         </div>
+        <Rondleiding pagina="venster-offerte" inVenster />
         <div className="fg">
-          <div className="f s2">
+          <div className="f s2" data-rl="vo-klant">
             <label>Klant *</label>
             <select value={form.customer_id} onChange={e => { set('customer_id', e.target.value); set('deal_id', ''); }}>
               <option value="">— Selecteer klant —</option>
@@ -178,7 +180,7 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
           </div>
 
           {/* ── Regelitems ── */}
-          <div className="f s2" style={{ flexDirection: 'column', gap: 6 }}>
+          <div className="f s2" data-rl="vo-regels" style={{ flexDirection: 'column', gap: 6 }}>
             <label style={{ marginBottom: 0 }}>Regelitems</label>
 
             {isMobile ? (
@@ -262,7 +264,7 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
           </div>
 
           {/* ── Totalen ── */}
-          <div className="f s2" style={{ padding: '10px 14px', background: 'var(--pll)', borderRadius: 8, fontSize: 13 }}>
+          <div className="f s2" data-rl="vo-totaal" style={{ padding: '10px 14px', background: 'var(--pll)', borderRadius: 8, fontSize: 13 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--dl)' }}>Subtotaal excl. BTW</span>
@@ -288,7 +290,7 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
             <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Staat op de offerte die de klant ontvangt" />
           </div>
         </div>
-        <div className="fa">
+        <div className="fa" data-rl="vo-opslaan">
           <button className="btn btn-ghost" onClick={onClose}>Annuleren</button>
           {onSaveAndSend && <button className="btn btn-s" onClick={submitAndSend} disabled={saving} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={14} />{saving ? 'Bezig...' : 'Opslaan en versturen'}</button>}
           <button className="btn btn-p" onClick={submit} disabled={saving}>{saving ? 'Opslaan...' : 'Opslaan'}</button>

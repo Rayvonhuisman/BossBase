@@ -76,7 +76,7 @@ const ProfileModal = lazy(() => import('./components/SharedModals.jsx').then(m =
 import { supabase } from './lib/supabase.js';
 import { listNotifications, markNotificationRead, markAllNotificationsRead } from './services/notificatieService.js';
 import { isDemo } from './lib/supabase.js';
-import Rondleiding from './components/Rondleiding.jsx';
+import Rondleiding, { StartRondleiding } from './components/Rondleiding.jsx';
 import { RL_START } from './lib/rondleidingen.js';
 import { isAppPath } from './lib/appRoutes.js';
 import { meet } from './lib/meting.js';
@@ -2027,6 +2027,7 @@ function AppInner() {
                   {renderPage()}
                 </Suspense>
                 <Rondleiding pagina={page} />
+                <StartRondleiding rol={profile?.role || ''} company={company} />
               </PageErrorBoundary>
             )}
           </div>

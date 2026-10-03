@@ -198,13 +198,13 @@ export default function MaterialenPage() {
           <p>{lijst.length} {lijst.length === 1 ? 'materiaal' : 'materialen'} in je bibliotheek</p>
         </div>
         <div className="page-hd-actions">
-          {magInkoop && <button className="btn btn-p btn-sm" onClick={() => setModal('nieuw')}>{I.plus} Nieuw materiaal</button>}
+          {magInkoop && <button className="btn btn-p btn-sm" data-rl="mat-nieuw" onClick={() => setModal('nieuw')}>{I.plus} Nieuw materiaal</button>}
         </div>
       </div>
 
       {fout && <div className="card card-p" style={{ color: '#dc2626', marginBottom: 14 }}>{fout}</div>}
 
-      <div className="search afu2" style={{ maxWidth: 360, marginBottom: 14 }}>
+      <div className="search afu2" data-rl="mat-zoeken" style={{ maxWidth: 360, marginBottom: 14 }}>
         {I.search}
         <input placeholder="Zoek op naam of artikelnummer…" value={zoek} onChange={e => setZoek(e.target.value)} />
       </div>
@@ -223,7 +223,7 @@ export default function MaterialenPage() {
       )}
 
       {!laden && gefilterd.length > 0 && (
-        <div className="tw afu2">
+        <div className="tw afu2" data-rl="mat-lijst">
           <table className="dt">
             <thead>
               <tr>

@@ -29,6 +29,7 @@ import { korteDatum } from '../utils/werkbonDagen.js';
 import { PlanningRegels, losseRegels, planRegels, samenOpDatum } from '../components/PlanningBlok.jsx';
 import { WerkbonModal } from './WerkbonPageV2.jsx';
 import { NewOfferteModal, OfferteBadge } from './OffertesPage.jsx';
+import Rondleiding from '../components/Rondleiding.jsx';
 import { NewFactuurModal, FactuurBadge } from './FacturenPage.jsx';
 import { NewProjectModal, KlusBadge } from './ProjectsPage.jsx';
 import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
@@ -123,7 +124,7 @@ function KlantTabbalk({ tabs, labels, actief, onKies }) {
   }
 
   return (
-    <div className="kk-tabs-wrap" ref={wrapRef} style={{ position: 'relative' }}>
+    <div className="kk-tabs-wrap" ref={wrapRef} data-rl="kk-tabs" style={{ position: 'relative' }}>
       {/* Onzichtbare meetstrook met alle tabs op ware grootte. */}
       <div className="tabs kk-tabs kk-tabs-meter" aria-hidden style={{ position: 'absolute', visibility: 'hidden', pointerEvents: 'none', top: 0, left: 0 }}>
         {tabs.map(t => <button key={t} className="tab" tabIndex={-1}>{labels[t]}</button>)}
@@ -706,7 +707,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
 
       {/* Quick stats (projectbedragen) — gefactureerd/betaald/kosten/winst per klant */}
       {can('projectbedragen') && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
+        <div data-rl="kk-cijfers" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
           {[
             { label: 'Gefactureerd',      val: fmt(totalGefactureerd) },
             { label: 'Betaald',           val: fmt(totalBetaald),    green: totalBetaald > 0 },
@@ -721,6 +722,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
         </div>
       )}
 
+      <Rondleiding pagina="klantkaart" inLa />
       {/* Tabs */}
       <KlantTabbalk tabs={TABS} labels={TAB_LABELS} actief={tab} onKies={setTab} />
 
@@ -728,7 +730,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
       {tab === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Planning van alle werkbonnen van deze klant. */}
-          <div className="card card-p">
+          <div className="card card-p" data-rl="kk-planning">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <button type="button" className="kk-blok-titel" onClick={() => setTab('planning')}>
                 Planning <span className="kk-pijl">→</span>
@@ -755,7 +757,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
           </div>
 
           {/* Notities blok */}
-          <div className="card card-p">
+          <div className="card card-p" data-rl="kk-notities">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <button type="button" className="kk-blok-titel" onClick={() => setTab('notities')}>Notities <span className="kk-pijl">→</span></button>
             </div>

@@ -282,7 +282,7 @@ function FilterBar({ quickTab, setQuickTab, searchQuery, setSearchQuery, filters
   ];
 
   return (
-    <div style={{
+    <div data-rl="db-filters" style={{
       display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', rowGap: 8,
       background: 'white', borderRadius: 'var(--r14)',
       border: '1px solid var(--border)', boxShadow: T.shadow,
@@ -1160,7 +1160,7 @@ export function DatabasePage({ openCustomer }) {
           </p>
         </div>
         <div className="page-hd-actions">
-          <button className="btn btn-s btn-sm" onClick={() => setShowSaveSegment(s => !s)}>
+          <button className="btn btn-s btn-sm" data-rl="db-segment" onClick={() => setShowSaveSegment(s => !s)}>
             Segment opslaan
           </button>
         </div>
@@ -1223,7 +1223,7 @@ export function DatabasePage({ openCustomer }) {
       <div className="afu2" style={{ display: 'grid', gridTemplateColumns: '216px minmax(0, 1fr)', gap: 14, alignItems: 'start', position: 'relative', zIndex: 1 }}>
 
         {/* ── Sidebar ── */}
-        <div style={{
+        <div data-rl="db-geavanceerd" style={{
           background: 'white', borderRadius: 'var(--r14)',
           border: '1px solid var(--border)', boxShadow: T.shadow,
           padding: '4px 14px 14px',
@@ -1443,7 +1443,7 @@ export function DatabasePage({ openCustomer }) {
         }}>
 
           {/* Column headers */}
-          <div style={{
+          <div data-rl="db-selectie" style={{
             display: 'grid', gridTemplateColumns: COLS, gap: 12, alignItems: 'center',
             padding: '8px 16px', borderBottom: `1px solid ${T.borderXL}`, minWidth: RIJ_MIN,
           }}>

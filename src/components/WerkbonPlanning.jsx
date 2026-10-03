@@ -223,7 +223,7 @@ export function WerkbonDagenVelden({
   // wel was) houdt die; een andere startdag verplaatst de hele klus.
   if (!meerdaags) {
     return (
-      <div className={`wbd ${className}`} style={style}>
+      <div className={`wbd wbd-enkel ${className}`} style={style}>
         <span className="wbd-kop">{aantalBijOpenen > 1 ? 'Startdag' : 'Dag'}</span>
         <div className="wbd-kal-wrap">
           <div className="wbd-kal-kolom">
@@ -539,9 +539,9 @@ export function useKlantAdres({ customers, locatie, setLocatie, vragenBijWijzige
 }
 
 /** Locatieveld met de PDOK-adreszoeker, plus de vraag uit useKlantAdres. */
-export function WerkbonLocatieVeld({ value, onChange, voorstel, onNeemOver, onHoudHuidige, disabled = false, className = '', style }) {
+export function WerkbonLocatieVeld({ value, onChange, voorstel, onNeemOver, onHoudHuidige, disabled = false, className = '', style, rl }) {
   return (
-    <div className={className} style={style}>
+    <div className={className} style={style} data-rl={rl}>
       <AdresZoeker
         label="Locatie"
         value={value || ''}

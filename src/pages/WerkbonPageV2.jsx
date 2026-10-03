@@ -62,6 +62,7 @@ import { bouwKostenOverzicht, getWerkbonKostenBron } from '../services/kostenOve
 import { createProjectKost } from '../services/projectKostenService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { documentUrl } from '../services/documentService.js';
+import Rondleiding from '../components/Rondleiding.jsx';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 
@@ -327,6 +328,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
           </div>
           <ModalX onClose={onClose} />
         </div>
+        {!isEdit && <Rondleiding pagina="venster-werkbon" inVenster />}
         <div className="wb2-modal-fg">
           {isEdit && (
             <div className="f full">
@@ -338,7 +340,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
               </select>
             </div>
           )}
-          <div className="f full">
+          <div className="f full" data-rl="vw-titel">
             <label>Titel</label>
             <input
               type="text" autoFocus
@@ -347,7 +349,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
               onChange={e => set('titel', e.target.value)}
             />
           </div>
-          <div className="f">
+          <div className="f" data-rl="vw-klant">
             <label>Klant</label>
             <select value={form.customer_id} onChange={e => kiesKlant(e.target.value)}>
               <option value="">— Geen klant —</option>
@@ -367,6 +369,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
             </select>
           </div>
           <WerkbonLocatieVeld
+            rl="vw-locatie"
             className="full"
             value={form.locatie}
             onChange={v => set('locatie', v)}
@@ -394,6 +397,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
           />
           {teamMembers.length > 0 && (
             <AssigneeResponsibleSelect
+              rl="vw-ploeg"
               members={teamMembers}
               assignedIds={form.assignedToIds}
               verantwoordelijkeIds={form.verantwoordelijkeIds}
@@ -416,7 +420,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
             disabled: saving,
             className: 'full',
           })}
-          <div className="f full">
+          <div className="f full" data-rl="vw-omschrijving">
             <label>Omschrijving</label>
             <NoteEditor mentions={true} value={form.omschrijving} onChange={v => set('omschrijving', v)} placeholder="Wat moet er gebeuren op locatie? Typ @ om iemand te taggen" rows={3} disabled={saving} teamMembers={teamMembers} />
           </div>
@@ -438,7 +442,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
             </div>
           )}
         </div>
-        <div className="fa">
+        <div className="fa" data-rl="vw-aanmaken">
           <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Annuleren</button>
           <button className="btn btn-p" onClick={submit} disabled={saving}>
             {saving ? 'Opslaan…' : (isEdit ? 'Wijzigingen opslaan' : 'Werkbon aanmaken')}
