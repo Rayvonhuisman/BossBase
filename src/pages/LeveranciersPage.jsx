@@ -203,7 +203,7 @@ export default function LeveranciersPage({ openLeverancier }) {
             <button className={`tab${view === 'grid' ? ' active' : ''}`} onClick={() => { setView('grid'); localStorage.setItem('leveranciers_view', 'grid'); }}>Kaarten</button>
             <button className={`tab${view === 'table' ? ' active' : ''}`} onClick={() => { setView('table'); localStorage.setItem('leveranciers_view', 'table'); }}>Tabel</button>
           </div>
-          <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>{I.plus} Nieuwe leverancier</button>
+          {(can('klanten_bewerken') || can('kosten')) && <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>{I.plus} Nieuwe leverancier</button>}
         </div>
       </div>
 
