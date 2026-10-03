@@ -122,7 +122,7 @@ serve(async (req) => {
         return json({
           success: false,
           code: 'readonly',
-          error: 'Er loopt geen abonnement. Versturen kan weer zodra je een abonnement afsluit.',
+          error: 'Je account staat op alleen-lezen. Versturen kan weer zodra je een abonnement afsluit.',
         }, 403)
       }
 
