@@ -180,7 +180,9 @@ BEGIN
   ASSERT     public.bb_has_feature(c, 'gedeelde_werkruimte'),   'Groei is een gedeelde werkruimte';
   ASSERT NOT public.bb_has_feature(c, 'planning'),              'Groei heeft GEEN planning zonder module';
   ASSERT NOT public.bb_has_feature(c, 'stripe_betaallink'),     'Groei heeft GEEN Stripe zonder module';
-  ASSERT NOT public.bb_has_feature(c, 'rollen_rechten'),        'Groei heeft GEEN rollen & rechten';
+  -- Sinds 20261004190000 heeft ook Groei rollen & rechten: financiele inzage loopt
+  -- via een recht, en dat moet de beheerder kunnen toekennen.
+  ASSERT public.bb_has_feature(c, 'rollen_rechten'),            'Groei heeft rollen & rechten';
 
   -- Groei + bijgekochte module
   INSERT INTO public.company_modules (company_id, module_key) VALUES (c, 'planning');
