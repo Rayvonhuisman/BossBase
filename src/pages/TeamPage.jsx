@@ -238,7 +238,6 @@ function EditModal({ member, rolVergrendeld, rolReden, onClose, onSaved }) {
             >
               <option value="medewerker">Medewerker</option>
               <option value="admin">Admin</option>
-              {form.role === 'planner' && <option value="planner">Planner</option>}
             </select>
             {rolVergrendeld && rolReden && (
               <div style={{ fontSize: '.75rem', color: 'var(--dl)', marginTop: 4, lineHeight: 1.4 }}>
@@ -523,7 +522,6 @@ export function TeamPage() {
 
   const roleBadge = role => {
     if (role === 'admin') return <span className="badge b-blue">Admin</span>;
-    if (role === 'planner') return <span className="badge b-green">Planner</span>;
     return <span className="badge b-gray">Medewerker</span>;
   };
 

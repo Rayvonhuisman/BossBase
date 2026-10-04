@@ -1,0 +1,186 @@
+# Eindmeting rechtentests v3 — 2026-10-04, lokaal 127.0.0.1, origin/main 3cee394 MET 20261004190000, 20261004200000 en 20261004201000. nr | uitslag | naam | detail
+1 | PASS | admin A: sessie hoort bij bedrijf A | 
+2 | PASS | admin A ziet 0 klanten van B | 
+3 | PASS | admin A ziet 0 deals van B | 
+4 | PASS | admin A ziet 0 offertes van B | 
+5 | PASS | admin A ziet 0 facturen van B | 
+6 | PASS | admin A ziet 0 werkbonnen van B | 
+7 | PASS | admin A ziet 0 werkbonuren van B | 
+8 | PASS | admin A ziet 0 urenregistraties van B | 
+9 | PASS | admin A ziet 0 profielen van B | 
+10 | PASS | admin A ziet 0 rechten van B | 
+11 | PASS | planner A ziet 0 klanten van B | 
+12 | PASS | planner A ziet 0 deals van B | 
+13 | PASS | planner A ziet 0 offertes van B | 
+14 | PASS | planner A ziet 0 facturen van B | 
+15 | PASS | planner A ziet 0 werkbonnen van B | 
+16 | PASS | planner A ziet 0 werkbonuren van B | 
+17 | PASS | medewerker A ziet 0 klanten van B | 
+18 | PASS | medewerker A ziet 0 werkbonnen van B | 
+19 | PASS | medewerker A ziet 0 werkbonuren van B | 
+20 | PASS | medewerker A ziet 0 urenregistraties van B | 
+21 | PASS | planner ziet klanten van het eigen bedrijf | 
+22 | PASS | bb_is_admin_or_permission weigert deze planner facturen | 
+23 | PASS | bb_is_admin_or_permission weigert deze planner bedrijfsfinancien | 
+24 | PASS | bb_is_admin_or_permission weigert deze planner planning | 
+25 | PASS | bb_has_permission geeft deze planner GEEN facturen | 
+26 | PASS | bb_has_permission geeft deze planner GEEN offertes | 
+27 | PASS | bb_has_permission geeft deze planner GEEN kosten | 
+28 | PASS | bb_has_permission geeft deze planner GEEN verkoop | 
+29 | PASS | bb_has_permission geeft deze planner GEEN alles_inzien | 
+30 | PASS | bb_has_permission geeft deze planner GEEN planning | 
+31 | PASS | planner zonder recht ziet GEEN facturen | 
+32 | PASS | planner zonder recht ziet GEEN factuurregels | 
+33 | PASS | planner zonder recht ziet GEEN offertes | 
+34 | PASS | planner zonder recht ziet GEEN offerteregels | 
+35 | PASS | planner zonder recht ziet GEEN deals | 
+36 | PASS | planner zonder recht kan GEEN omzet optellen | 
+37 | PASS | planner zonder recht ziet GEEN werkbonnen | 
+38 | PASS | planner met recht: bb_is_admin_or_permission(planning) is waar | 
+39 | PASS | planner met recht ziet de werkbonnen van het bedrijf | 
+40 | PASS | planner met recht ziet klanten | 
+41 | PASS | planning-recht geeft GEEN bb_is_admin_or_permission(facturen) | 
+42 | PASS | planning-recht geeft GEEN bb_is_admin_or_permission(offertes) | 
+43 | PASS | planning-recht geeft GEEN toegang tot facturen | 
+44 | PASS | planning-recht geeft GEEN toegang tot offertes | 
+45 | PASS | medewerker ziet zijn eigen werkdaguren | 
+46 | PASS | medewerker ziet de werkdaguren van de collega NIET | 
+47 | PASS | medewerker ziet alleen de werkbon waar hij op staat | 
+48 | PASS | medewerker ziet GEEN werkbonuren van de collega | 
+49 | PASS | medewerker ziet alleen werkbonuren van zijn eigen bonnen | 
+50 | PASS | medewerker kan GEEN totaal van andermans uren optellen | 
+51 | PASS | medewerker ziet op zijn EIGEN bon alleen zijn eigen uren | 
+52 | PASS | planner zonder recht ziet GEEN werkbonuren | 
+53 | PASS | planner MET planning-recht ziet de werkbonuren van het bedrijf | 
+54 | PASS | planner MET planning-recht ziet 0 werkbonuren van bedrijf B | 
+55 | PASS | admin ziet alle werkdaguren van het eigen bedrijf | 
+56 | PASS | admin ziet alle werkbonuren van het eigen bedrijf | 
+57 | PASS | medewerker kan uren boeken op zijn eigen werkbon | 
+58 | PASS | medewerker kan zijn eigen uren bijwerken | 
+59 | PASS | medewerker raakt 0 urenregels van de collega (op naam) | 
+60 | PASS | medewerker raakt 0 urenregels van de collega (op id) | 
+61 | PASS | medewerker verwijdert 0 urenregels van de collega | 
+62 | PASS | expliciet recht: bb_has_permission(facturen) is waar | 
+63 | PASS | expliciet recht: bb_is_admin_or_permission(facturen) is waar | 
+64 | PASS | expliciet recht geeft toegang tot facturen | 
+65 | PASS | recht op facturen geeft GEEN toegang tot offertes | 
+66 | PASS | recht op facturen geeft GEEN toegang tot deals | 
+67 | PASS | zonder recht: bb_has_permission(facturen) is onwaar | 
+68 | PASS | zonder recht geen toegang tot facturen | 
+69 | PASS | zonder recht geen toegang tot offertes | 
+70 | PASS | zonder recht geen toegang tot deals | 
+71 | PASS | planner zonder recht kan GEEN offerteregel toevoegen | 
+72 | PASS | planner zonder recht wijzigt 0 offerteregels | 
+73 | PASS | planner zonder recht verwijdert 0 offerteregels | 
+74 | PASS | planner zonder recht kan GEEN factuurregel toevoegen | 
+75 | PASS | planner zonder recht wijzigt 0 factuurregels | 
+76 | PASS | planner zonder recht ziet GEEN kosten (job_costs) | 
+77 | PASS | planner zonder recht ziet GEEN projectkosten | 
+78 | PASS | planner zonder recht ziet GEEN websiteaanvragen | 
+79 | PASS | planner zonder recht ziet GEEN werkdaguren van anderen | 
+80 | PASS | planner zonder recht kan GEEN werkdaguren voor een ander boeken | 
+81 | PASS | planner zonder recht kan GEEN werkbonuren voor een ander boeken | 
+82 | PASS | planner zonder recht kan GEEN werkbontaak toevoegen | 
+83 | PASS | planner zonder recht verwijdert 0 werkbontaken | 
+84 | PASS | planning-recht alleen geeft GEEN werkbontaak (dat is werkbonnen_bewerken) | 
+85 | PASS | planner met planning-recht ziet de werkdaguren van het bedrijf | 
+86 | PASS | planner met planning-recht kan werkbonuren voor een ander boeken | 
+87 | PASS | planner met planning-recht kan GEEN offerteregel toevoegen | 
+88 | PASS | planner met planning-recht ziet GEEN kosten | 
+89 | PASS | planner met planning-recht ziet GEEN deals | 
+90 | PASS | geen enkele policy noemt de rol planner | 
+91 | PASS | geen enkele functie geeft toegang op de rol planner | 
+92 | PASS | gedeelde werkruimte: medewerker ziet de werkbon van de ander | 
+93 | PASS | gedeelde werkruimte: medewerker ziet klanten | 
+94 | PASS | gedeelde werkruimte geeft GEEN facturen | 
+95 | PASS | gedeelde werkruimte geeft GEEN factuurregels | 
+96 | PASS | gedeelde werkruimte geeft GEEN offertes | 
+97 | PASS | gedeelde werkruimte geeft GEEN offerteregels | 
+98 | PASS | gedeelde werkruimte geeft GEEN deals | 
+99 | PASS | gedeelde werkruimte geeft GEEN kosten (job_costs) | 
+100 | PASS | gedeelde werkruimte geeft GEEN projectkosten | 
+101 | PASS | gedeelde werkruimte: GEEN omzet op te tellen | 
+102 | PASS | gedeelde werkruimte: medewerker kan GEEN kosten op een bon boeken | 
+103 | PASS | gedeelde werkruimte: medewerker ziet alleen eigen werkbonuren | 
+104 | PASS | gedeelde werkruimte: medewerker ziet alleen eigen werkdaguren | 
+105 | PASS | gedeelde werkruimte: 0 werkbonnen van bedrijf A | 
+106 | PASS | gedeelde werkruimte: 0 klanten van bedrijf A | 
+107 | PASS | admin C ziet de facturen van C | 
+108 | PASS | admin C ziet de kosten van C | 
+109 | PASS | admin C ziet alle werkbonuren van C | 
+110 | PASS | geen financiele policy leunt op gedeelde_werkruimte | 
+111 | PASS | fixture: op het project staan ook uren van de collega | 
+112 | PASS | bb_uren_per_project: medewerker telt alleen zijn eigen uren | 
+113 | PASS | bb_factuurtotalen: medewerker zonder recht krijgt niets | 
+114 | PASS | bb_offertetotalen: medewerker zonder recht krijgt niets | 
+115 | PASS | bb_financien_kpi: medewerker zonder recht ziet geen omzet | 
+116 | PASS | bb_financien_kpi: gedeelde werkruimte geeft geen omzet | 
+117 | PASS | bb_factuurtotalen: gedeelde werkruimte geeft niets | 
+118 | PASS | bb_financien_kpi: met recht facturen komt de omzet terug | 
+119 | PASS | bb_uren_per_project: admin telt alle uren van het project | 
+120 | PASS | bb_factuurtotalen: admin A krijgt niets voor een factuur van B | 
+121 | PASS | bb_financien_kpi: admin A telt alleen de omzet van A | 
+122 | PASS | admin A wijzigt 0 facturen van B | 
+123 | PASS | mark_factuur_betaald: admin A kan een factuur van B niet op betaald zetten | 
+124 | PASS | mark_factuur_betaald: medewerker zonder recht wordt geweigerd | 
+125 | PASS | standaardrecht: nieuwe medewerker krijgt projecten | 
+126 | PASS | standaardrecht: nieuwe medewerker krijgt verder niets | 
+127 | PASS | geen planner heeft ongevraagd een financieel recht of alles_inzien | 
+128 | PASS | gedeactiveerd teamlid: bb_has_permission geeft niets, ook niet met een recht | 
+129 | PASS | gedeactiveerd teamlid: bb_is_admin_or_permission geeft niets | 
+130 | PASS | gedeactiveerd teamlid: geen inkoopprijzen | 
+131 | PASS | gedeactiveerd teamlid ziet GEEN eigen werkdaguren | 
+132 | PASS | gedeactiveerd teamlid ziet GEEN klanten | 
+133 | PASS | gedeactiveerd teamlid ziet GEEN werkbonuren | 
+134 | PASS | werkbon_uren heeft beide restrictive policies (actief + beperking na afloop) | 
+135 | PASS | admin A ziet 0 kosten van B | 
+136 | PASS | admin A ziet 0 projectkosten van B | 
+137 | PASS | admin A ziet 0 websiteaanvragen van B | 
+138 | PASS | admin A ziet 0 projecten van B | 
+139 | PASS | admin A ziet 0 factuurregels van B | 
+140 | PASS | admin A ziet 0 offerteregels van B | 
+141 | PASS | admin A ziet de kosten van A | 
+142 | PASS | admin A ziet de websiteaanvraag van A | 
+143 | PASS | admin A ziet facturen, offertes en deals van A | 
+144 | PASS | Groei heeft de gedeelde werkruimte | 
+145 | PASS | Groei heeft rollen_rechten | 
+146 | PASS | Groei-admin: rollen_rechten staat aan in zijn sessie | 
+147 | PASS | Groei-admin ziet de rechten van zijn team | 
+148 | PASS | Groei-medewerker begint met alleen het standaardrecht projecten | 
+149 | PASS | Groei-medewerker zonder grant: deals/offertes/facturen/kosten | 
+150 | PASS | Groei-medewerker zonder grant mag geen inkoopprijzen zien | 
+151 | PASS | Groei, operationeel: medewerker ziet de projecten van de ander | 
+152 | PASS | Groei, operationeel: medewerker ziet de werkbon van de ander | 
+153 | PASS | Groei, operationeel: medewerker ziet de taken op die bon | 
+154 | PASS | Groei-medewerker kan zichzelf GEEN recht geven | 
+155 | PASS | Groei-admin kent verkoop toe | 
+156 | PASS | met alleen verkoop: deals/offertes/facturen/kosten | 
+157 | PASS | Groei-admin trekt verkoop in | 
+158 | PASS | na intrekken van verkoop: weer niets | 
+159 | PASS | Groei-admin kent offertes toe | 
+160 | PASS | met alleen offertes: deals/offertes/facturen/kosten | 
+161 | PASS | Groei-admin trekt offertes in | 
+162 | PASS | na intrekken van offertes: weer niets | 
+163 | PASS | Groei-admin kent facturen toe | 
+164 | PASS | met alleen facturen: deals/offertes/facturen/kosten | 
+165 | PASS | Groei-admin trekt facturen in | 
+166 | PASS | na intrekken van facturen: weer niets | 
+167 | PASS | Groei-admin kent kosten toe | 
+168 | PASS | met alleen kosten: deals/offertes/facturen/kosten | 
+169 | PASS | Groei-admin trekt kosten in | 
+170 | PASS | na intrekken van kosten: weer niets | 
+171 | PASS | Groei-admin kent facturen opnieuw toe | 
+172 | PASS | Groei-admin zet facturen uit (granted = false) | 
+173 | PASS | uitgezet recht geeft geen toegang | 
+174 | PASS | niemand heeft automatisch alles_inzien | 
+175 | PASS | standaardrechtentrigger gaf geen financieel recht | 
+176 | PASS | admin A kan GEEN recht zetten in bedrijf B | 
+177 | PASS | admin A kan GEEN recht zetten op naam van iemand uit B | 
+178 | PASS | admin A wijzigt 0 rechten van B | 
+179 | PASS | admin A verwijdert 0 rechten van B | 
+180 | PASS | een recht uit een ander bedrijf telt niet (bb_has_permission) | 
+181 | PASS | een recht uit een ander bedrijf telt niet (bb_is_admin_or_permission) | 
+182 | PASS | medewerker B ziet geen kosten van B door een recht uit A | 
+183 | PASS | medewerker B ziet geen facturen van B | 
+totaal | geslaagd | gefaald
+183 | 183 | 0

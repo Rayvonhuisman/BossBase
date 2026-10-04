@@ -1,20 +1,21 @@
 import { useProfile } from '../lib/profileContext.jsx'
 import { usePlan } from './usePlan.js'
 
-// Rechten die alleen over ZIEN gaan. In een gedeelde werkruimte vervallen deze.
+// OPERATIONELE rechten die alleen over ZIEN gaan. In een gedeelde werkruimte
+// (pakket Groei, 1-2 personen) vervallen deze: iedereen ziet elkaars agenda,
+// projecten en werkbonnen zonder rechtenbeheer.
 //
-// Een Groei-bedrijf (1-2 personen) heeft geen `rollen_rechten` — die feature zit
-// pas in Team. De rechten-UI staat daar dus achter een slot en user_permissions
-// blijft leeg, terwijl wie je uitnodigt medewerker wordt (accept-invite). Een
-// recht dat niemand kán toekennen is geen bescherming maar een blokkade.
-//
-// Dezelfde lijn loopt door de database (migratie 20260919220742: deals_select,
-// facturen_select, offertes_select en job_costs kennen bb_gedeelde_werkruimte())
-// en door het dashboard (magWidgetZien in widgetRegistry.js). Zonder deze hook
-// zag zo'n medewerker de tegels wél, maar ontbraken Pipeline, Offertes,
-// Facturen en Kosten in zijn menu — tegels die doodliepen op de routebewaking.
+// Een abonnementsfeature is geen gebruikersrecht. Financiele inzage — pipeline,
+// offertes, facturen, kosten, bedrijfsfinancien, projectbedragen — vraagt
+// daarom óók in een gedeelde werkruimte een expliciet recht (besluit 4-10-2026,
+// migratie 20261004200000). Groei heeft daarvoor sinds 20261004190000 het
+// rechtenbeheer. Deze lijst en de SELECT-policies horen hetzelfde te zeggen:
+// staat een recht hier, dan moet de bijbehorende policy bb_gedeelde_werkruimte()
+// kennen, anders opent het menu een pagina waar de database niets op teruggeeft.
 //
 // Bewust NIET in deze lijst:
+// - verkoop, offertes, facturen, kosten, bedrijfsfinancien, projectbedragen:
+//   financieel, zie hierboven.
 // - klanten_bewerken, klanten_verwijderen, projecten_bewerken,
 //   werkbonnen_bewerken: aanmaken en wijzigen blijft een recht vragen, precies
 //   zoals de database het doet. deals_insert en deals_update eisen nog altijd
@@ -26,12 +27,6 @@ import { usePlan } from './usePlan.js'
 //   bb_mag_inkoopprijs_zien() in de database.
 // - instellingen: beheer, geen inzage.
 export const INZAGE_RECHTEN = new Set([
-  'verkoop',            // Pipeline openen. Fase wijzigen loopt via magBewerken.
-  'offertes',
-  'facturen',
-  'kosten',
-  'bedrijfsfinancien',
-  'projectbedragen',
   'alles_inzien',
   'agenda_inzien',
   'projecten',
