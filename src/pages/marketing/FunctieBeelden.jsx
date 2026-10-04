@@ -255,6 +255,40 @@ export function BeeldFacturen() {
   )
 }
 
+/* ── 07 Koppelingen: facturen in BossBase, synchronisatie, de drie pakketten ── */
+export function BeeldKoppelingen() {
+  return (
+    <Beeld>
+      <div className="hf-kaartje kp-fact">
+        <div className="hf-kaartje-h"><span><i className="hf-rond groen">{HI.euro}</i>Facturen</span><span className="hv-wm kp-wm"><b>Boss</b><i>Base</i></span></div>
+        <ul>
+          <li><span><b>BB-F-13</b><small>Fam. de Vries</small></span><span><b>€ 3.511,40</b><em className="hv-badge hv-badge-ok">Betaald</em></span></li>
+          <li><span><b>BB-F-12</b><small>Bakker Loodgieters</small></span><span><b>€ 1.210,00</b><em className="hv-badge hv-badge-ok">Betaald</em></span></li>
+          <li><span><b>BB-F-11</b><small>VvE Lindenlaan</small></span><span><b>€ 2.480,00</b><em className="hv-badge hv-badge-blauw">Verstuurd</em></span></li>
+        </ul>
+        <div className="kp-kosten"><i className="hf-rond oranje">{HI.download}</i><span><b>Kosten</b><small>3 inkoopfacturen uit je boekhouding</small></span></div>
+      </div>
+      <span className="kp-lijn" />
+      <div className="kp-sync"><span className="kp-sync-knop">{HI.sync}</span><small>Automatisch</small></div>
+      <div className="kp-pakketten">
+        <div className="hf-kaartje kp-pakket">
+          <div className="kp-pakket-h"><img src="/brand/moneybird.svg" alt="Moneybird" width="159" height="26" loading="lazy" decoding="async" /><span className="kp-status los"><i />Gekoppeld</span></div>
+          <ul><li>{HI.check}Betaalde facturen en contacten</li><li>{HI.check}Inkoop en bonnetjes als kosten</li></ul>
+        </div>
+        <div className="hf-kaartje kp-pakket">
+          <div className="kp-pakket-h"><img src="/brand/snelstart.svg" alt="SnelStart" width="158" height="26" loading="lazy" decoding="async" /><span className="kp-status los stil"><i />Beschikbaar</span></div>
+          <ul><li>{HI.check}Verkoopboeking met de PDF erbij</li><li>{HI.check}Inkoopfacturen als kosten</li></ul>
+        </div>
+        <div className="hf-kaartje kp-pakket">
+          <div className="kp-pakket-h"><img src="/brand/stripe.svg" alt="Stripe" width="67" height="28" className="hoog" loading="lazy" decoding="async" /><span className="hv-badge hv-badge-blauw">iDEAL</span></div>
+          <ul><li>{HI.check}Betaallink in elke factuurmail</li></ul>
+        </div>
+      </div>
+      <div className="hv-chip hf-chip-zwart kp-chip"><i>{HI.check}</i>Betaald via iDEAL · BB-F-13 staat op betaald</div>
+    </Beeld>
+  )
+}
+
 // Per pad, voor de kop van de functiepagina's.
 export const BEELDEN = {
   "/klantbeheer": BeeldKlantbeheer,
