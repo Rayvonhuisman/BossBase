@@ -22,6 +22,12 @@
     { "titel": "Het team op de hoogte", "tekst": "Wie ingepland wordt, krijgt een melding in de app, en als je wilt ook een mail. Om 18:00 volgt een samenvatting van de wijzigingen van die dag." },
     { "titel": "Voertuigen", "tekst": "Plan ook je bussen in, met naam en kenteken. Voertuigen zitten in Team, of als module van € 5 bij Groei (naast de planning)." }
   ],
+  "faq": [
+    { "v": "In welk pakket zit de planning?", "a": "De planningsmodule zit in Team. Bij Groei neem je hem erbij voor € 10 per maand. De agenda zit in elk pakket. De proefperiode heeft de functies van Groei, dus zonder planningsmodule." },
+    { "v": "Heb ik de planning nodig als ik alleen werk?", "a": "Werk je alleen, dan heb je vaak genoeg aan de agenda. Die zit in elk pakket en toont je afspraken en ingeplande werkbonnen. De planningsmodule is bedoeld voor bedrijven met meerdere mensen of bussen." },
+    { "v": "Kan ik ook mijn bussen inplannen?", "a": "Ja. Plan je bussen in met naam en kenteken, en krijg een waarschuwing als een bus al ergens ingepland staat. Voertuigen zitten in Team, of als module van € 5 bij Groei, naast de planning." },
+    { "v": "Krijgt mijn team een melding bij een wijziging?", "a": "Wie ingepland wordt, krijgt een melding in de app, en als je wilt ook een mail. Om 18:00 volgt een samenvatting van de wijzigingen van die dag." }
+  ],
   "gerelateerd": [
     { "href": "/kennisbank/medewerkers-en-klussen-plannen", "titel": "Meerdere medewerkers en klussen plannen", "tekst": "Een weekplanning opzetten die overeind blijft." },
     { "href": "/werkbonnen", "titel": "Werkbonnen", "tekst": "Wat er per klus gebeurt, van taak tot handtekening." },
