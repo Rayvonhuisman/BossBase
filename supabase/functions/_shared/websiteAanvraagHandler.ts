@@ -123,7 +123,7 @@ export function kiesOntvangers(
   metVerkoopRecht: Set<string>,
 ): string[] {
   return profielen
-    .filter(p => p.role === 'admin' || p.role === 'planner' || metVerkoopRecht.has(p.id))
+    .filter(p => p.role === 'admin' || metVerkoopRecht.has(p.id))
     .map(p => p.id)
 }
 

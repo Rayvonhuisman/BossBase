@@ -40,8 +40,12 @@ export const FEATURES = [
   { key: 'kosten_nacalculatie',     label: 'Kosten & nacalculatie',       uitleg: 'Kosten registreren en marge per project bewaken.' },
   { key: 'eigen_email_templates',   label: 'Eigen e-mailtemplates',       uitleg: 'Zelf nieuwe e-mailtemplates aanmaken.' },
 
-  // Team (of als module bij Groei)
+  // Groei en Team. Financiele inzage (pipeline, offertes, facturen, kosten)
+  // loopt in elk pakket via een recht dat de beheerder toekent; daarom heeft
+  // ook Groei het rechtenbeheer (migratie 20261004190000).
   { key: 'rollen_rechten',          label: 'Rollen & rechten',            uitleg: 'Per teamlid instellen wat hij mag zien en doen.' },
+
+  // Team (of als module bij Groei)
   { key: 'planning',                label: 'Planningsmodule',             uitleg: 'Weekplanning met drag & drop op medewerker en voertuig.' },
   { key: 'stripe_betaallink',       label: 'Stripe betaallink',           uitleg: 'iDEAL-betaalknop op je facturen via Stripe.' },
   { key: 'voertuigen',              label: 'Voertuigen',                  uitleg: 'Voertuigen beheren en inplannen in de planning.' },
@@ -53,7 +57,7 @@ export const FEATURES = [
   // zodat er nergens meer een losse `tier === '…'`-vergelijking nodig is.
   // `intern: true` houdt het uit prijskaarten en upgrade-meldingen.
   { key: 'gedeelde_werkruimte',     label: 'Gedeelde werkruimte',         intern: true,
-    uitleg: 'Iedereen ziet alles van het bedrijf zonder rechtenbeheer: agenda, projecten, werkbonnen, deals, offertes, facturen en kosten. Past bij een bedrijf van één of twee personen.' },
+    uitleg: 'Iedereen ziet elkaars agenda, projecten en werkbonnen zonder rechtenbeheer. Offertes, facturen, pipeline en kosten vragen een recht. Past bij een bedrijf van één of twee personen.' },
 ]
 
 // Features die aan de gebruiker getoond mogen worden (prijskaarten, upgrade).
@@ -74,10 +78,11 @@ const STARTER_FEATURES = [
 const GROEI_EXTRA = [
   'digitale_handtekening', 'betaalherinneringen', 'boekhoudkoppeling',
   'btw_overzicht', 'kosten_nacalculatie', 'eigen_email_templates',
+  'rollen_rechten',
 ]
 
 const TEAM_EXTRA = [
-  'rollen_rechten', 'planning', 'stripe_betaallink', 'voertuigen',
+  'planning', 'stripe_betaallink', 'voertuigen',
 ]
 
 export const TIER_FEATURES = {

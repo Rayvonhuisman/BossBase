@@ -1770,10 +1770,11 @@ export function ProjectDetailDrawer({
   // project de nieuwe dag te tonen zonder dat je de drawer opnieuw opent.
   useEffect(() => { if (projectId) loadAll(); }, [projectId, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Bewerken: admin/planner-rol óf het 'projecten_bewerken'-recht. Zien mag
+  // Bewerken: admin of het 'projecten_bewerken'-recht (can() geeft een admin
+  // alles; de rol planner bestaat niet meer). Zien mag
   // iedereen; de form-velden worden uitgeschakeld zonder bewerkrecht en RLS
   // dwingt hetzelfde server-side af.
-  const canManage = ['admin', 'planner'].includes(profile?.role) || can('projecten_bewerken');
+  const canManage = can('projecten_bewerken');
 
   const recompute = (nextEntries = entries, nextInvoices = invoices, nextProject = project) => {
     if (!nextProject) return;

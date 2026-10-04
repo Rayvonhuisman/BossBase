@@ -12,7 +12,13 @@
     "preview": "vite preview",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
-    "migratie:check": "node scripts/migratie-check.mjs"
+    "migratie:check": "node scripts/migratie-check.mjs",
+    "db:drift": "node scripts/db-drift-check.mjs",
+    "db:drift:local": "node scripts/db-drift-check.mjs --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres",
+    "db:seed:local": "node scripts/db-seed-config.mjs --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres",
+    "db:bootstrap:local": "bash scripts/db-bootstrap-local.sh",
+    "db:test:security": "bash scripts/db-test-security-local.sh",
+    "security:static": "node scripts/check-planner-bypass.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

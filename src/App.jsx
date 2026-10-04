@@ -1679,17 +1679,17 @@ function AppInner() {
     if (!profile || !permissionsLoaded || !planStatus) return;
     const isAdmin = profile.role === 'admin';
     const requiredPerm = PROTECTED_PAGES[page];
-    // In een gedeelde werkruimte vervallen de inzagerechten — dezelfde regel als
-    // in usePermissions().can(), in magWidgetZien en in de policies.
+    // In een gedeelde werkruimte vervallen de OPERATIONELE inzagerechten —
+    // dezelfde regel als in usePermissions().can() en in de policies. Pipeline,
+    // Offertes, Facturen en Kosten vragen ook daar een recht (20261004200000).
     //
     // Die hook kan hier niet gebruikt worden: AppInner levert de profielcontext
     // zélf, en een component kan de context die hij aanbiedt niet consumeren.
     // Vandaar dat de regel hier is uitgeschreven, met INZAGE_RECHTEN uit
     // dezelfde bron zodat de twee niet uit elkaar kunnen lopen.
     //
-    // Zonder dit blokkeerde de route wat het menu wél toonde: Pipeline,
-    // Offertes, Facturen en Kosten kaatsten terug naar het dashboard met
-    // "Je hebt geen toegang tot deze pagina".
+    // Menu en route gebruiken dezelfde lijst, zodat de route nooit blokkeert
+    // wat het menu wél toont.
     const gedeeldeWerkruimte = Boolean(planStatus?.features?.includes('gedeelde_werkruimte'));
     const magPagina = !requiredPerm
       || isAdmin
