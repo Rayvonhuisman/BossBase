@@ -34,7 +34,7 @@
   "faq": [
     { "v": "Kan ik vanuit een werkbon direct een factuur maken?", "a": "Nee. Een factuur maak je in BossBase vanuit een geaccepteerde offerte (dan worden de regels overgenomen) of vanuit een project. Meerwerk, extra uren en extra materiaal van de werkbon zet je er zelf bij." },
     { "v": "Ziet de klant mijn prijzen of notities?", "a": "Nee. De ondertekenpagina en de PDF voor de klant tonen geen bedragen, geen inkoopprijzen en geen interne notities. Notities die je als 'voor klant' markeert, zijn wel zichtbaar." },
-    { "v": "Werkt het op mijn telefoon?", "a": "Ja, BossBase is ook op je telefoon te gebruiken. Het tekenen door de klant werkt op elke telefoon, want dat gaat via een webpagina." },
+    { "v": "Werkt het op mijn telefoon?", "a": "Het tekenen door de klant werkt op elke telefoon, want dat gaat via een webpagina. Het dashboard zelf is gemaakt voor een scherm vanaf 768 pixels breed, zoals een tablet of laptop; op een smalle telefoon kun je het dashboard niet gebruiken. Een app in de appstore is er niet." },
     { "v": "Kan de klant de werkbon later nog tekenen?", "a": "Ja. Je stuurt een link per mail; de klant tekent dan zelf, op zijn eigen telefoon of computer." }
   ],
   "gerelateerd": [

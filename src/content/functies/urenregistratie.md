@@ -23,7 +23,7 @@
     { "v": "Kan ik verlof of ziekte registreren?", "a": "Nee. De urenregistratie legt gewerkte uren vast. Uursoorten, verlof en ziekte houd je (nog) buiten BossBase bij." },
     { "v": "Komen de uren van een werkbon automatisch op de factuur?", "a": "Nee. Uren op de werkbon tellen op in het project en in je nacalculatie. Op de factuur zet je ze zelf, bijvoorbeeld als regel met het aantal uren." },
     { "v": "Rekent BossBase de loonkosten van een klus uit?", "a": "Nee. De nacalculatie vergelijkt wat je hebt gefactureerd met de kostprijs van materiaal en projectkosten. Uren zie je als aantal (begroot, geregistreerd, resterend), niet in euro's." },
-    { "v": "Kunnen medewerkers hun uren op hun telefoon invullen?", "a": "Ja, BossBase is ook op je telefoon te gebruiken." }
+    { "v": "Kunnen medewerkers hun uren op hun telefoon invullen?", "a": "Het dashboard werkt vanaf een schermbreedte van 768 pixels, zoals een tablet. Op een smalle telefoon kan het niet, en een app is er niet." }
   ],
   "gerelateerd": [
     { "href": "/kennisbank/uren-en-materialen-per-klus", "titel": "Uren en materialen per klus bijhouden", "tekst": "Met een voorbeeld-urenstaat en materiaallijst." },
