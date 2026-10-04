@@ -112,7 +112,7 @@ const metas = import.meta.glob('../content/**/*.md', { query: '?meta', eager: tr
 const modules = import.meta.glob('../content/**/*.md');
 
 const SJABLONEN = {
-  functie: { src: 'src/marketing/templates/LandingTemplate.jsx', load: () => import('./templates/LandingTemplate.jsx') },
+  functie: { src: 'src/marketing/templates/FunctieTemplate.jsx', load: () => import('./templates/FunctieTemplate.jsx') },
   branche: { src: 'src/marketing/templates/LandingTemplate.jsx', load: () => import('./templates/LandingTemplate.jsx') },
   integratie: { src: 'src/marketing/templates/LandingTemplate.jsx', load: () => import('./templates/LandingTemplate.jsx') },
   artikel: { src: 'src/marketing/templates/ArticleTemplate.jsx', load: () => import('./templates/ArticleTemplate.jsx') },
