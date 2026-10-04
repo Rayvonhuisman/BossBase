@@ -13,6 +13,8 @@ const ico = (paden, extra = {}) => (
 export const HI = {
   check:     ico(<path d="M20 6 9 17l-5-5" />, { strokeWidth: 2.6 }),
   arrow:     ico(<><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></>, { strokeWidth: 2.4 }),
+  arrowL:    ico(<><path d="M19 12H5" /><path d="m12 19-7-7 7-7" /></>, { strokeWidth: 2.4 }),
+  sync:      ico(<><path d="M4 9h15" /><path d="m15 5 4 4-4 4" /><path d="M20 15H5" /><path d="m9 11-4 4 4 4" /></>, { strokeWidth: 2.4 }),
   arrowDown: ico(<><path d="M12 5v14" /><path d="m5 12 7 7 7-7" /></>, { strokeWidth: 2.6 }),
   chevron:   ico(<path d="m6 9 6 6 6-6" />, { strokeWidth: 2.4 }),
   lock:      ico(<><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>),
@@ -75,11 +77,11 @@ export function naarAnker(e, id) {
 
 /* ── Veelgestelde vragen ── */
 // items: [[vraag, antwoord], …]. De eerste staat open.
-export function Faq({ navigate, items, titel = "Veelgestelde vragen" }) {
+export function Faq({ navigate, items, titel = "Veelgestelde vragen", creme = false }) {
   const go = useGa(navigate)
   const [open, setOpen] = useState(0)
   return (
-    <section className="hv-sectie hv-sectie-wit" id="faq">
+    <section className={`hv-sectie ${creme ? "hv-sectie-creme" : "hv-sectie-wit"}`} id="faq">
       <div className="container">
         <div className="hv-kop hv-kop-rij">
           <div>
