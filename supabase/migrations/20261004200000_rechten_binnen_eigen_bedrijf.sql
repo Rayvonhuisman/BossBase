@@ -191,11 +191,11 @@ select
       and prosrc ~ 'up.company_id = ik.company_id'
       and prosrc ~ 'actief is not false')                                              as functies_met_bedrijfs_en_actiefcontrole,
   (select count(*) from pg_policies
-    where (schemaname = 'public'
-             and tablename in ('deals', 'deal_notities', 'offertes', 'offerte_items', 'facturen',
-                               'factuur_regels', 'job_costs', 'project_kosten', 'klant_tijdlijn',
-                               'sent_emails', 'inquiries', 'website_forms'))
-       or (schemaname = 'storage' and policyname in ('factuur_pdfs_select', 'kosten_bijlagen_select'))
+    where ((schemaname = 'public'
+              and tablename in ('deals', 'deal_notities', 'offertes', 'offerte_items', 'facturen',
+                                'factuur_regels', 'job_costs', 'project_kosten', 'klant_tijdlijn',
+                                'sent_emails', 'inquiries', 'website_forms'))
+        or (schemaname = 'storage' and policyname in ('factuur_pdfs_select', 'kosten_bijlagen_select')))
       and (coalesce(qual, '') || ' ' || coalesce(with_check, '')) ~ 'bb_gedeelde_werkruimte') as financiele_policies_met_werkruimte,
   (select count(*) from pg_policies
     where schemaname in ('public', 'storage')
