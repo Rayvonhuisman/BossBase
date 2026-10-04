@@ -1,3 +1,6 @@
+import { documentTotalen } from './documentTotalen.js';
+import { regimeVanPct, regimeVoorOpslag } from '../lib/btwRegime.js';
+
 // jsPDF wordt dynamisch geladen zodat de ~350KB lib niet in de hoofdbundle
 // zit — pas opgehaald wanneer er daadwerkelijk een PDF gemaakt wordt.
 let _jsPDF = null;
@@ -28,18 +31,12 @@ const euro = n => `€ ${Number(n || 0).toFixed(2).replace('.', ',')}`;
 // Het bedrag per regel heet anders: een factuurregel heeft regelprijs, een
 // offerteregel subtotaal. Offerteregels hebben bovendien niet altijd een eigen
 // percentage; die vallen terug op het percentage van de offerte zelf.
-function documentTotalen(regels = [], { bedragVeld, standaardPct = 21 } = {}) {
-  const bedragVan = r => Number(r[bedragVeld]) || 0;
-  const excl = Math.round(regels.reduce((s, r) => s + bedragVan(r), 0) * 100) / 100;
-  const btwPerTarief = {};
-  for (const r of regels) {
-    const pct = Number(r.btwPct ?? standaardPct);
-    const vrij = r.btwRegime === 'vrijgesteld' || r.btwRegime === 'verlegd';
-    const bedrag = vrij ? 0 : bedragVan(r) * pct / 100;
-    btwPerTarief[pct] = Math.round(((btwPerTarief[pct] || 0) + bedrag) * 100) / 100;
-  }
-  const btw = Object.values(btwPerTarief).reduce((s, v) => s + v, 0);
-  return { excl, btwPerTarief, incl: Math.round((excl + btw) * 100) / 100 };
+function pdfTotalen(regels = [], { bedragVeld, standaardPct = 21 } = {}) {
+  return documentTotalen(regels, {
+    bedrag: r => r[bedragVeld],
+    pct: r => r.btwPct ?? standaardPct,
+    regime: r => regimeVoorOpslag(r.btwRegime || regimeVanPct(r.btwPct ?? standaardPct)),
+  });
 }
 
 export function hexToRgb(hex) {
@@ -95,6 +92,11 @@ export const C = {
   warnLine: [245, 158, 11],   // #f59e0b
   warnInk:  [146,  94,  6],   // #925e06
 };
+
+// NL91ABNA0417164300 → NL91 ABNA 0417 1643 00
+export function formatIban(iban) {
+  return String(iban || '').replace(/\s+/g, '').toUpperCase().replace(/(.{4})/g, '$1 ').trim();
+}
 
 export async function imgToBase64(url) {
   try {
@@ -201,7 +203,7 @@ export async function bereidAfbeeldingVoor(dataUrl, maxWmm, maxHmm) {
 
 async function buildPdf(doc, type, document, regels, customer, company) {
   const W = 210, M = 16, CW = W - 2 * M;
-  const totalen = documentTotalen(regels || [], type === 'factuur'
+  const totalen = pdfTotalen(regels || [], type === 'factuur'
     ? { bedragVeld: 'regelprijs', standaardPct: 21 }
     : { bedragVeld: 'subtotaal', standaardPct: Number(document.btwPct ?? 21) });
   const accent = hexToRgb(company?.brandingColor);
@@ -550,6 +552,36 @@ async function buildPdf(doc, type, document, regels, customer, company) {
     y += noteH + 8;
   }
 
+  // ── BETAALGEGEVENS EN BTW-VERMELDING (facturen) ───────────────
+  // Een factuur zonder rekeningnummer kan de klant niet betalen (audit
+  // 2026-10-01, H11). Bij verlegde btw hoort de vermelding "btw verlegd" plus
+  // het btw-nummer van de opdrachtgever op de factuur (art. 35a Wet OB).
+  if (type === 'factuur') {
+    const regimes = (regels || []).map(r => r.btwRegime);
+    const klantBtw = customer?.btwNumber || customer?.btw_number;
+    const regelsTekst = [];
+    if (regimes.includes('verlegd')) {
+      regelsTekst.push(`Btw verlegd: de btw wordt afgedragen door de opdrachtgever${klantBtw ? ` (btw-nummer ${klantBtw})` : ''}.`);
+    }
+    if (regimes.includes('vrijgesteld')) regelsTekst.push('Een deel van deze factuur is vrijgesteld van btw.');
+    if (!document.isCredit && company?.iban) {
+      const iban = formatIban(company.iban);
+      const tnv = company.ibanTnv || company.name || '';
+      const vervalTekst = document.vervaldatum ? ` vóór ${fmtDate(document.vervaldatum)}` : '';
+      const kenmerk = document.betalingskenmerk || document.nummer;
+      regelsTekst.push(`Graag het totaalbedrag${vervalTekst} overmaken op ${iban}${tnv ? ` t.n.v. ${tnv}` : ''}${kenmerk ? `, onder vermelding van ${kenmerk}` : ''}.`);
+    }
+    if (regelsTekst.length) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      const lijnen = regelsTekst.flatMap(t => doc.splitTextToSize(t, CW));
+      if (y + lijnen.length * 4.2 + 6 > 280) { doc.addPage(); y = 17; }
+      tc(C.dark);
+      doc.text(lijnen, M, y);
+      y += lijnen.length * 4.2 + 6;
+    }
+  }
+
   // ── HANDTEKENING (alleen bij ondertekende offertes) ───────────
 
   const signedAt = type === 'offerte' ? (document.signedAt || document.signed_at) : null;
@@ -704,13 +736,6 @@ async function buildPdf(doc, type, document, regels, customer, company) {
 
 // ── EXPORTS ──────────────────────────────────────────────────────────────────
 
-export async function generateFactuurPdf(factuur, regels, customer, company) {
-  const JsPDF = await loadJsPDF();
-  const doc = new JsPDF({ unit: 'mm', format: 'a4' });
-  await buildPdf(doc, 'factuur', factuur, regels, customer, company);
-  doc.save(`${factuur.nummer || 'factuur'}.pdf`);
-}
-
 export async function generateOffertePdf(offerte, items, customer, company) {
   const JsPDF = await loadJsPDF();
   const doc = new JsPDF({ unit: 'mm', format: 'a4' });
@@ -738,13 +763,6 @@ export async function getOffertePdfUrl(offerte, items, customer, company) {
   const JsPDF = await loadJsPDF();
   const doc = new JsPDF({ unit: 'mm', format: 'a4' });
   await buildPdf(doc, 'offerte', offerte, items, customer, company);
-  return doc.output('bloburl');
-}
-
-export async function getFactuurPdfUrl(factuur, regels, customer, company) {
-  const JsPDF = await loadJsPDF();
-  const doc = new JsPDF({ unit: 'mm', format: 'a4' });
-  await buildPdf(doc, 'factuur', factuur, regels, customer, company);
   return doc.output('bloburl');
 }
 

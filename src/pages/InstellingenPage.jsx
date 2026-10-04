@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import { resetGezien } from '../services/rondleidingService.js';
+import { RL_RESET } from '../lib/rondleidingen.js';
 import { I, ModalX, STAGE_COLOR_OPTIONS, stageColToHex, stageColorLabel, stageBadgeStyle } from '../bb-shared.jsx';
 import { supabase } from '../lib/supabase.js';
 import GrootboekIndeling from '../components/GrootboekIndeling.jsx';
@@ -38,6 +40,7 @@ import { getTeamMembers } from '../services/teamService.js';
 import { getVoertuigen, createVoertuig, updateVoertuig, deleteVoertuig } from '../services/voertuigService.js';
 import { getEigenEenheden, createEigenEenheid, updateEigenEenheid, deleteEigenEenheid } from '../services/eigenEenheidService.js';
 import { updateCompany, updateProfile, deleteOwnAccount, cancelCompanyAccount } from '../services/profileService.js';
+import { ibanGeldig, ibanOpslaan } from '../lib/iban.js';
 import { zegOp } from '../services/billingService.js';
 import { changePassword } from '../services/authService.js';
 import { uploadProfileAvatar, removeProfileAvatar } from '../services/avatarService.js';
@@ -72,7 +75,7 @@ const ALL_TEMPLATE_CONFIGS = [
   // Geen auto-schakelaar: deze mail hoort bij het ondertekenen en gaat altijd mee.
   // "Uit" zetten suggereerde dat je hem kon tegenhouden, en dat deed hij niet.
   { type: 'offerte_geaccepteerd', label: 'Offerte geaccepteerd', vars: ['klant_naam','bedrijfsnaam','offerte_nummer'], showAutoToggle: false, showAutoDagen: false },
-  { type: 'factuur', label: 'Factuur', vars: ['klant_naam','bedrijfsnaam','factuur_nummer','totaal_bedrag','vervaldatum','betaalinstructie'], showAutoToggle: false, showAutoDagen: false },
+  { type: 'factuur', label: 'Factuur', vars: ['klant_naam','bedrijfsnaam','factuur_nummer','totaal_bedrag','vervaldatum','betaalinstructie','iban'], showAutoToggle: false, showAutoDagen: false },
   // feature: automatisch verzenden hangt aan een pakket. De cron (check-herinneringen)
   // slaat bedrijven zonder die feature over, dus zonder deze gate zou Instellingen
   // "Automatisch verzenden aan" tonen terwijl er nooit een herinnering uitgaat.
@@ -194,6 +197,7 @@ export function InstellingenPage() {
   const [bedrijfForm, setBedrijfForm] = useState({
     name: '', email: '', phone: '', kvk: '', btw_number: '',
     address: '', city: '', postal_code: '', website: '', branding_color: '#1DDB62',
+    iban: '', iban_tnv: '',
   });
   const [savingBedrijf, setSavingBedrijf] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
@@ -522,6 +526,8 @@ export function InstellingenPage() {
         postal_code: company.postalCode || '',
         website: company.website || '',
         branding_color: company.brandingColor || '#1DDB62',
+        iban: company.iban || '',
+        iban_tnv: company.ibanTnv || '',
       });
     }
   }, [company]);
@@ -601,9 +607,13 @@ export function InstellingenPage() {
       toast.error('KvK-nummer moet 8 cijfers bevatten');
       return;
     }
+    if (bedrijfForm.iban && !ibanGeldig(bedrijfForm.iban)) {
+      toast.error('Dit IBAN klopt niet. Controleer het rekeningnummer.');
+      return;
+    }
     setSavingBedrijf(true);
     try {
-      await updateCompany(company.id, bedrijfForm);
+      await updateCompany(company.id, { ...bedrijfForm, iban: ibanOpslaan(bedrijfForm.iban), iban_tnv: bedrijfForm.iban_tnv.trim() || null });
       await refresh();
       toast.success('Bedrijfsprofiel opgeslagen');
     } catch (err) {
@@ -1214,7 +1224,7 @@ export function InstellingenPage() {
     { id: 'profiel', label: 'Mijn profiel' },
     ...(canCompanySettings ? [
       { id: 'bedrijf', label: 'Bedrijfsprofiel' },
-      { id: 'standaard', label: 'Standaardwaarden' },
+      { id: 'standaard', label: 'Algemeen' },
       { id: 'templates', label: 'E-mailtemplates' },
       { id: 'pipeline', label: 'Pipeline' },
       // Voertuigen is een feature uit de matrix (Team, of module bij Groei).
@@ -1709,9 +1719,9 @@ export function InstellingenPage() {
         </div>
       </div>
 
-      <div className="tabs afu2" style={{ marginBottom: 20 }}>
+      <div className="tabs afu2" data-rl="instellingen-tabs" style={{ marginBottom: 20 }}>
         {TABS.map(t => (
-          <button key={t.id} className={`tab${tab === t.id ? ' active' : ''}`} onClick={() => setTab(t.id)}>
+          <button key={t.id} className={`tab${tab === t.id ? ' active' : ''}`} data-rl={`instellingen-tab-${t.id}`} onClick={() => setTab(t.id)}>
             {t.label}
           </button>
         ))}
@@ -1847,18 +1857,48 @@ export function InstellingenPage() {
             )}
           </div>
 
+          {/* Rondleiding: alles weer als niet gezien, zodat elke pagina hem de
+              volgende keer opnieuw toont. Per gebruiker, dus ook op een andere
+              computer. */}
+          <div style={{ marginTop: 'var(--sp-6)', paddingTop: 'var(--sp-5)', borderTop: '1px solid var(--border)' }}>
+            <div className="label" style={{ marginBottom: 'var(--sp-2)' }}>Rondleiding</div>
+            <p style={{ fontSize: '.82rem', color: 'var(--dl)', lineHeight: 1.5, marginBottom: 'var(--sp-3)', maxWidth: 560 }}>
+              Elke pagina laat de eerste keer zien waar je wat vindt. Wil je dat nog eens zien, start de rondleidingen dan opnieuw.
+            </p>
+            <button className="btn btn-s" onClick={async () => {
+              try {
+                await resetGezien();
+                window.dispatchEvent(new Event(RL_RESET));
+                toast.success('De rondleidingen starten weer op elke pagina.');
+              } catch (e) {
+                toast.error(e.message || 'Opnieuw starten mislukt');
+              }
+            }}>Rondleidingen opnieuw starten</button>
+          </div>
+
           {/* Overig */}
           <div style={{ marginTop: 'var(--sp-6)', paddingTop: 'var(--sp-5)', borderTop: '1px solid var(--border)' }}>
-            {/* Er is geen cookiekeuze meer (geen cookies die toestemming vragen);
-                wel de uitleg over wat er in de browser staat. */}
-            <a
-              href="/cookieverklaring"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'var(--pd)', fontWeight: 600, fontSize: '.84rem', textDecoration: 'underline' }}
-            >
-              Cookiebeleid
-            </a>
+            {/* De juridische documenten op de site. Er is geen cookiekeuze
+                (geen cookies die toestemming vragen). */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-4)' }}>
+              {[
+                { href: '/voorwaarden', label: 'Algemene voorwaarden' },
+                { href: '/privacy', label: 'Privacyverklaring' },
+                { href: '/verwerkersovereenkomst', label: 'Verwerkersovereenkomst' },
+                { href: '/subverwerkers', label: 'Subverwerkers' },
+                { href: '/cookieverklaring', label: 'Cookiebeleid' },
+              ].map(l => (
+                <a
+                  key={l.href}
+                  href={l.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: 'var(--pd)', fontWeight: 600, fontSize: '.84rem', textDecoration: 'underline' }}
+                >
+                  {l.label}
+                </a>
+              ))}
+            </div>
           </div>
 
           {/* ── Gevarenzone: account verwijderen ── */}
@@ -1949,7 +1989,7 @@ export function InstellingenPage() {
             <div className="card-title">Bedrijfsprofiel</div>
             <div className="card-sub">Basisinformatie van je bedrijf</div>
           </div>
-          <div style={{ marginBottom: 20 }}>
+          <div style={{ marginBottom: 20 }} data-rl="set-logo">
             <div style={{ fontSize: '.78rem', fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 10 }}>Bedrijfslogo</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               {company?.logoUrl ? (
@@ -2006,7 +2046,7 @@ export function InstellingenPage() {
               />
             </div>
           </div>
-          <div className="fg">
+          <div className="fg" data-rl="set-gegevens">
             <div className="f">
               <label>Bedrijfsnaam</label>
               <input value={bedrijfForm.name} onChange={e => setBedrijf('name', e.target.value)} placeholder="Nog niet ingevuld" />
@@ -2042,6 +2082,14 @@ export function InstellingenPage() {
               <input value={bedrijfForm.website} onChange={e => setBedrijf('website', e.target.value)} placeholder="Nog niet ingevuld" />
             </div>
             <div className="f">
+              <label>IBAN <span style={{ fontSize: '.75rem', color: 'var(--dmu)', fontWeight: 400 }}>(komt op je facturen)</span></label>
+              <input value={bedrijfForm.iban} onChange={e => setBedrijf('iban', e.target.value)} placeholder="NL00 BANK 0123 4567 89" autoComplete="off" />
+            </div>
+            <div className="f">
+              <label>Ten name van</label>
+              <input value={bedrijfForm.iban_tnv} onChange={e => setBedrijf('iban_tnv', e.target.value)} placeholder={bedrijfForm.name || 'Naam rekeninghouder'} />
+            </div>
+            <div className="f">
               <label>Adres</label>
               <input value={bedrijfForm.address} onChange={e => setBedrijf('address', e.target.value)} placeholder="Nog niet ingevuld" />
             </div>
@@ -2055,7 +2103,7 @@ export function InstellingenPage() {
             </div>
           </div>
           <div className="fa">
-            <button className="btn btn-p" onClick={saveBedrijf} disabled={savingBedrijf}>
+            <button className="btn btn-p" data-rl="set-bedrijf-opslaan" onClick={saveBedrijf} disabled={savingBedrijf}>
               {savingBedrijf ? 'Opslaan...' : 'Opslaan'}
             </button>
           </div>
@@ -2067,10 +2115,10 @@ export function InstellingenPage() {
         <div className="card card-p afu3">
           <div className="card-hd" style={{ marginBottom: 18 }}>
             <div className="card-title">
-              Standaardwaarden <InfoTip tekst="Wordt vooringevuld bij nieuwe offertes en werkbonnen." />
+              Algemeen <InfoTip tekst="Wordt vooringevuld bij nieuwe offertes en werkbonnen." />
             </div>
           </div>
-          <div className="fg">
+          <div className="fg" data-rl="set-algemeen">
             <div className="f">
               <label>Uurtarief (€/uur)</label>
               <input
@@ -2133,7 +2181,7 @@ export function InstellingenPage() {
         </div>
 
         {/* ── Herinneringen ── */}
-        <div className="card card-p afu3" style={{ marginTop: 16 }}>
+        <div className="card card-p afu3" data-rl="set-herinneringen" style={{ marginTop: 16 }}>
           <div className="card-hd" style={{ marginBottom: 18 }}>
             <div className="card-title">
               Herinneringen <InfoTip tekst="Herinner medewerkers eraan hun uren in te vullen voor verstreken geplande dagen." />
@@ -2377,7 +2425,7 @@ export function InstellingenPage() {
           {(() => {
             const customTemplates = templates.filter(t => !STANDARD_TYPES.has(t.type));
             return (
-              <div style={{ marginBottom: 16 }}>
+              <div style={{ marginBottom: 16 }} data-rl="set-templates">
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: customTemplates.length > 0 ? 8 : 0 }}>
                   {ALL_TEMPLATE_CONFIGS.map(cfg => {
                     const exists = templates.some(t => t.type === cfg.type);
@@ -3086,7 +3134,9 @@ export function InstellingenPage() {
       {!loading && tab === 'abonnement' && isAdmin && <AbonnementSectie />}
 
       {!loading && tab === 'integraties' && (
-        <IntegratiesOverzicht integraties={INTEGRATIES} initieelOpen={ssActivatie ? 'snelstart' : null} />
+        <div data-rl="set-integraties">
+          <IntegratiesOverzicht integraties={INTEGRATIES} initieelOpen={ssActivatie ? 'snelstart' : null} />
+        </div>
       )}
 
     </div>

@@ -125,14 +125,18 @@ export async function deleteLeverancier(id) {
 // Hoeveel kosten hangen er aan deze leveranciers? Voedt de kolom "kosten" in het
 // overzicht en de waarschuwing bij verwijderen. Eén query voor de hele lijst.
 export async function getLeverancierKostenTotalen() {
-  let data
-  try {
-    data = await alleRijen(() => supabase
-      .from('job_costs')
-      .select('leverancier_id, amount', { count: 'exact' })
-      .not('leverancier_id', 'is', null)
-      .order('id', { ascending: true }))
-  } catch { return {} }
+  // Alleen wat geboekt is (zoals overal: alleenGeboekt). Werkbonmateriaal is de
+  // kostprijs van een klus; de inkoopfactuur ervan staat er al als boeking in,
+  // dus meetellen telde dezelfde inkoop dubbel — en een medewerker zonder het
+  // recht inkoopprijzen zag die regels niet en kreeg een ander totaal.
+  // Een fout gaat door naar de pagina (die toont een melding), in plaats van
+  // stil € 0 bij elke leverancier.
+  const data = await alleRijen(() => supabase
+    .from('job_costs')
+    .select('leverancier_id, amount', { count: 'exact' })
+    .not('leverancier_id', 'is', null)
+    .is('werkbon_materiaal_id', null)
+    .order('id', { ascending: true }))
   const totalen = {}
   for (const r of data) {
     const id = r.leverancier_id

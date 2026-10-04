@@ -5,11 +5,11 @@ import { useProfile } from '../lib/profileContext.jsx';
 import { usePlan } from '../hooks/usePlan.js';
 import {
   TIERS, tierLabel, tierPrice, EXTRA_USER_PRICE,
-  welkomstactiesVoor, welkomstactieLabel, YEARLY_FREE_MONTHS,
+  welkomstactiesVoor, welkomstactieLabel, kortingMaandenVoorActie,
   inbegrepenGebruikers, betaaldeGebruikers, gebruikersPrijs, extraUserLabel,
 } from '../lib/tiers.js';
 import {
-  MODULES, moduleLabel, modulePrice, canBuyModule, getLimitDef, featureLabel,
+  MODULES, modulePrice, canBuyModule, getLimitDef, featureLabel,
   tierForLimit, moduleMetVereisten, TIER_FEATURES, ZICHTBARE_FEATURES, TIER_LIMITS,
 } from '../lib/features.js';
 import {
@@ -80,6 +80,9 @@ const limietTekst = (tier, key) => {
   if (max == null) return `Onbeperkt ${meervoud}`;
   const naam = max === 1 ? (ENKELVOUD[key] || meervoud) : meervoud;
   const per = def?.telwijze === 'periode' ? ' per maand' : '';
+  // "2 gebruikers" naast "+ € 10 per extra gebruiker" las alsof er twee in de
+  // prijs zitten. Het is een maximum, en er zit er één in.
+  if (key === 'gebruikers') return `Tot ${max} ${naam} (${inbegrepenGebruikers(tier)} inbegrepen)`;
   return `${max} ${naam}${per}`;
 };
 
@@ -134,6 +137,8 @@ export default function AbonnementPage({ setPage }) {
   // Totaal aantal gebruikers, niet "extra bovenop de eerste". Hoeveel er apart
   // gefactureerd worden hangt van het pakket af (Team rekent ook de eerste).
   const [gebruikers, setGebruikers] = useState(1);
+  // Ondergrens van de teller: wie er nu in het team zit.
+  const minGebruikers = Math.max(1, Number(plan.used('gebruikers')) || 0);
   const [oordeel, setOordeel] = useState(null);
   const [akkoordLooptijd, setAkkoordLooptijd] = useState(false);
 
@@ -157,7 +162,9 @@ export default function AbonnementPage({ setPage }) {
         setModules(v.modules);
         // Minstens 1: bij Team zit er geen gebruiker in de pakketprijs, dus
         // zonder ondergrens zou de teller op 0 beginnen.
-        setGebruikers(Math.max(1, inbegrepenGebruikers(start) + (v.extra || 0)));
+        // En nooit minder dan het team nu groot is (actief + openstaande
+        // uitnodigingen): de server weigert dat ook (billing-checkout).
+        setGebruikers(Math.max(1, minGebruikers, inbegrepenGebruikers(start) + (v.extra || 0)));
         // Alleen een LOPEND abonnement houdt zijn eigen termijn. Zonder Stripe
         // staat er weliswaar een billing_interval in de proefrij, maar die zegt
         // niets over wat de klant straks kiest — daar is jaarlijks de standaard.
@@ -220,6 +227,19 @@ export default function AbonnementPage({ setPage }) {
     : 0;
   const verschil = totaal - huidigTotaal;
 
+  // Gratis maanden van de gekozen welkomstactie. Een coupon van 100% over de
+  // eerste termijnen (billing-checkout): bij het afsluiten wordt € 0
+  // afgeschreven en daarna het volle maandbedrag. Alleen bij een nieuw
+  // jaarabonnement; een lopend abonnement krijgt geen actie meer.
+  const gratisMaanden = !heeftStripe && interval === 'jaar' ? kortingMaandenVoorActie(actie) : 0;
+
+  // De prijzen zijn exclusief btw; Stripe Tax rekent bij een Nederlands adres
+  // 21% erbovenop (gezien in Checkout: € 39,00 + € 8,19 = € 47,19). Bij een
+  // adres buiten Nederland kan het tarief anders zijn, daarom staat het tarief
+  // er expliciet bij.
+  const BTW_PCT = 21;
+  const inclBtw = n => `€ ${(Math.round(n * (100 + BTW_PCT)) / 100).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
   const toggleModule = key => setModules(prev => {
     if (prev.includes(key)) {
       return prev.filter(k => k !== key && MODULES.find(m => m.key === k)?.vereist !== key);
@@ -232,13 +252,15 @@ export default function AbonnementPage({ setPage }) {
     setModules(prev => prev.filter(k => canBuyModule(t, k)));
     const plafond = TIER_LIMITS[t]?.gebruikers ?? null;
     setGebruikers(g => {
-      const ondergrens = Math.max(1, g);
+      const ondergrens = Math.max(minGebruikers, g);
       return plafond != null ? Math.min(ondergrens, plafond) : ondergrens;
     });
   };
 
   const gebruikersPlafond = TIER_LIMITS[tier]?.gebruikers ?? null;
   const gebruikersVol = gebruikersPlafond != null && gebruikers >= gebruikersPlafond;
+  // Past het huidige team niet in dit pakket, dan valt er niets af te rekenen.
+  const pakketTeKlein = gebruikersPlafond != null && minGebruikers > gebruikersPlafond;
 
   const meldBijBeheerder = async () => {
     setBezig(true);
@@ -246,12 +268,12 @@ export default function AbonnementPage({ setPage }) {
       await requestUpgrade({
         tier: voorstel?.tier || null,
         modules: voorstel?.modules || [],
-        aanleiding: aanleiding?.soort
-          ? `${aanleiding.soort}${aanleiding.key ? `:${aanleiding.key}` : ''}`
-          : 'medewerker',
+        // Leesbare tekst: dit is wat de beheerder in zijn melding en onder
+        // Instellingen → Abonnement te zien krijgt.
+        aanleiding: voorstel?.kop || null,
       });
       setGemeld(true);
-      toast.success('Doorgegeven aan je beheerder.');
+      toast.success('Doorgegeven aan de eigenaar van je bedrijf.');
     } catch (e) {
       toast.error(e.message || 'Doorgeven mislukt');
     } finally {
@@ -310,7 +332,6 @@ export default function AbonnementPage({ setPage }) {
     && modules.length === (stand.modules || []).length
     && modules.every(k => (stand.modules || []).includes(k));
 
-  const zichtbaar = new Set(ZICHTBARE_FEATURES.map(f => f.key));
 
   return (
     <div className="ab-page">
@@ -319,7 +340,7 @@ export default function AbonnementPage({ setPage }) {
           <h1>{heeftStripe ? 'Je abonnement' : 'Kies je abonnement'}</h1>
           <p>{heeftStripe
             ? 'Wijzigingen gaan direct in; het verschil wordt verrekend.'
-            : 'Je gegevens blijven staan — je gaat verder waar je gebleven was.'}</p>
+            : 'Je gegevens blijven staan. Je gaat verder waar je gebleven was.'}</p>
         </div>
       </div>
 
@@ -348,7 +369,7 @@ export default function AbonnementPage({ setPage }) {
                   {bezig ? 'Bezig…' : 'Laat mijn beheerder weten'}
                 </button>
               : <span style={{ fontSize: '.85rem', color: 'var(--dmu)' }}>
-                  Doorgegeven. Je beheerder ziet dit bij Instellingen → Abonnement.
+                  Doorgegeven. De eigenaar van je bedrijf krijgt hier een melding van.
                 </span>}
           </div>
         </div>
@@ -365,7 +386,7 @@ export default function AbonnementPage({ setPage }) {
               </div>
               {interval === 'jaar' && (
                 <div className="ab-termijn-uitleg">
-                  Je betaalt maandelijks, <strong>12 maanden vast</strong> — tussentijds opzeggen
+                  Je betaalt maandelijks, <strong>12 maanden vast</strong>. Tussentijds opzeggen
                   kan niet. Daarna maandelijks opzegbaar. Je kiest er één welkomstactie bij.
                 </div>
               )}
@@ -403,7 +424,6 @@ export default function AbonnementPage({ setPage }) {
             {TIERS.map(t => {
               const gekozen = tier === t.id;
               const huidig = heeftStripe && t.id === stand?.tier;
-              const isVoorstel = voorstel?.tier === t.id && !huidig;
               const vorige = VORIGE_TIER[t.id];
               const usps = USPS[t.id] || [];
               return (
@@ -414,7 +434,6 @@ export default function AbonnementPage({ setPage }) {
                   <div className="ab-kaart-kop">
                     <div className="ab-tier">{tierLabel(t.id)}</div>
                     {huidig && <span className="ab-merk huidig">Je hebt dit nu</span>}
-                    {isVoorstel && <span className="ab-merk advies">Aanbevolen</span>}
                   </div>
                   <div className="ab-wie">{VOOR_WIE[t.id]}</div>
                   <div className="ab-prijs">
@@ -483,7 +502,7 @@ export default function AbonnementPage({ setPage }) {
                   </div>
                 ))}
                 {modules.includes('voertuigen') && (
-                  <p className="ab-hint">Voertuigen werkt alleen samen met de planningsmodule — die is meegenomen.</p>
+                  <p className="ab-hint">Voertuigen werkt alleen samen met de planningsmodule, dus die is meegenomen.</p>
                 )}
               </div>
             )}
@@ -491,8 +510,8 @@ export default function AbonnementPage({ setPage }) {
             <div className="card card-p">
               <div className="ab-kop">Teamleden</div>
               <div className="ab-teller">
-                <button className="btn btn-s btn-sm" disabled={bezig || gebruikers <= 1}
-                  onClick={() => setGebruikers(g => Math.max(1, g - 1))} aria-label="Minder gebruikers">−</button>
+                <button className="btn btn-s btn-sm" disabled={bezig || gebruikers <= minGebruikers}
+                  onClick={() => setGebruikers(g => Math.max(minGebruikers, g - 1))} aria-label="Minder gebruikers">−</button>
                 <span className="ab-teller-waarde">{gebruikers} {gebruikers === 1 ? 'gebruiker' : 'gebruikers'}</span>
                 <button className="btn btn-s btn-sm" disabled={bezig || gebruikersVol}
                   onClick={() => setGebruikers(g => g + 1)} aria-label="Meer gebruikers">+</button>
@@ -502,6 +521,9 @@ export default function AbonnementPage({ setPage }) {
                   ? `${betaald} × ${euro(EXTRA_USER_PRICE)} = ${euro(betaald * EXTRA_USER_PRICE)} p/mnd bovenop ${tierLabel(tier)}`
                   : `${inbegrepenGebruikers(tier)} inbegrepen · ${euro(EXTRA_USER_PRICE)} per extra gebruiker`}
               </p>
+              {gebruikers <= minGebruikers && minGebruikers > 1 && (
+                <p className="ab-hint">Je team heeft nu {minGebruikers} gebruikers. Minder kan pas na het deactiveren van teamleden.</p>
+              )}
               {gebruikersVol && (
                 <p className="ab-hint">
                   {tierLabel(tier)} gaat tot {gebruikersPlafond} gebruiker{gebruikersPlafond === 1 ? '' : 's'}.
@@ -554,7 +576,7 @@ export default function AbonnementPage({ setPage }) {
                 <ul>
                   {fout.blokkades.map(b => (
                     <li key={b.limiet}>
-                      {b.gebruikt} {b.label} — dit pakket gaat tot {b.maximum}.
+                      {b.gebruikt} {b.label}, dit pakket gaat tot {b.maximum}.
                       Er {b.teveel === 1 ? 'moet er 1' : `moeten er ${b.teveel}`} weg.
                     </li>
                   ))}
@@ -592,9 +614,21 @@ export default function AbonnementPage({ setPage }) {
           <div className="ab-balk">
             <div className="ab-balk-som">
               <div className="ab-balk-tier">{tierLabel(tier)}{modules.length > 0 && ` + ${modules.length} module${modules.length === 1 ? '' : 's'}`}</div>
-              <div className="ab-balk-totaal">
-                {euro(totaal)} <span>p/mnd excl. btw</span>
-              </div>
+              {gratisMaanden > 0 ? (
+                <>
+                  <div className="ab-balk-totaal">Nu afrekenen: {euro(0)}</div>
+                  <div className="ab-balk-verschil">
+                    Na {gratisMaanden} {gratisMaanden === 1 ? 'maand' : 'maanden'}: {euro(totaal)} per maand excl. btw ({inclBtw(totaal)} incl. {BTW_PCT}% btw)
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="ab-balk-totaal">
+                    {euro(totaal)} <span>p/mnd excl. btw</span>
+                  </div>
+                  <div className="ab-balk-verschil">{inclBtw(totaal)} p/mnd incl. {BTW_PCT}% btw</div>
+                </>
+              )}
               {heeftStripe && verschil !== 0 && (
                 <div className="ab-balk-verschil">
                   {verschil > 0
@@ -611,8 +645,9 @@ export default function AbonnementPage({ setPage }) {
                 Later
               </button>
               <button className="btn btn-p" onClick={bevestig}
-                disabled={bezig || geenActieGekozen || nietsGewijzigd || looptijdNietBevestigd}>
-                {bezig ? 'Bezig…' : heeftStripe ? 'Wijziging doorvoeren' : `Afrekenen · ${euro(totaal)} p/mnd`}
+                disabled={bezig || geenActieGekozen || nietsGewijzigd || looptijdNietBevestigd || pakketTeKlein}>
+                {bezig ? 'Bezig…' : heeftStripe ? 'Wijziging doorvoeren'
+                  : gratisMaanden > 0 ? `Afrekenen · ${euro(0)}` : `Afrekenen · ${euro(totaal)} p/mnd excl. btw`}
               </button>
             </div>
           </div>

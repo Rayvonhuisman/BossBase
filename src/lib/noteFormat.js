@@ -50,23 +50,41 @@ export function looksLikeHtml(value) {
   return /<[a-zA-Z]/.test(value);
 }
 
-// Platte tekst (met \n) → editor-HTML (<div> per regel, zoals Chrome's
-// contentEditable). Bestaande HTML wordt ongewijzigd teruggegeven.
-// Gebruikt voor de mail-modus (mentions={false}), waar opmaak/links behouden
-// blijven en NIET de strikte notitie-allowlist geldt.
+// Mail-modus: ruimer dan de notitie-allowlist (links, lijsten, koppen, de
+// knop uit mailButton), maar nooit scripts, event-handlers of javascript:-links.
+// Audit 2026-10-01, M8: een klantnaam met opmaakcode werd hier vroeger
+// ongezien als HTML in de editor gezet en voerde dan code uit.
+export const MAIL_ALLOWED_TAGS = ['b', 'i', 'u', 'strong', 'em', 'br', 'div', 'p', 'span', 'a',
+  'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'blockquote', 'table', 'tbody', 'tr', 'td', 'img', 'hr'];
+export const MAIL_ALLOWED_ATTR = ['href', 'target', 'rel', 'style', 'class', 'src', 'alt', 'width',
+  'height', 'align', 'border', 'cellpadding', 'cellspacing', 'role'];
+
+export function sanitizeMailHtml(html) {
+  return DOMPurify.sanitize(html || '', {
+    ALLOWED_TAGS: MAIL_ALLOWED_TAGS,
+    ALLOWED_ATTR: MAIL_ALLOWED_ATTR,
+    ALLOW_DATA_ATTR: false,
+  });
+}
+
+// Platte tekst (met \n) → editor-HTML, ALTIJD ge-escaped: een regel per <div>,
+// zoals Chrome's contentEditable. Gebruik dit voor tekst die je zelf opbouwt
+// met gegevens erin (klantnaam, bedrijfsnaam).
+export function tekstNaarEditorHtml(text) {
+  if (!text) return '';
+  return String(text)
+    .split('\n')
+    .map(line => `<div>${esc(line) || '<br>'}</div>`)
+    .join('');
+}
+
+// Platte tekst of bestaande HTML → editor-HTML voor de mail-modus
+// (mentions={false}). HTML gaat door de mail-allowlist; platte tekst wordt
+// ge-escaped.
 export function plainToEditorHtml(text) {
   if (!text) return '';
-  if (looksLikeHtml(text)) return text;
-  return text
-    .split('\n')
-    .map(line => {
-      const escaped = line
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-      return `<div>${escaped || '<br>'}</div>`;
-    })
-    .join('');
+  if (looksLikeHtml(text)) return sanitizeMailHtml(text);
+  return tekstNaarEditorHtml(text);
 }
 
 // Legacy markup of HTML → veilige, genormaliseerde HTML voor opslag/weergave.

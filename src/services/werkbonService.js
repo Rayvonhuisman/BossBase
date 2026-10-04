@@ -509,26 +509,45 @@ export async function deleteWerkbonTaak(id) {
 
 // ── WERKBON MATERIALEN ───────────────────────────────────────────────────────
 
+// Verkoopprijs en subtotaal van werkbonmateriaal zijn niet direct leesbaar: de
+// database geeft ze alleen via bb_werkbonmateriaal_bedragen() aan wie
+// projectbedragen mag zien. Daarom expliciete kolommen en de bedragen apart.
+const WM_KOLOMMEN = "id, werkbon_id, company_id, naam, eenheid, aantal, created_at, updated_at, materiaal_id, leverancier_id, btw_percentage"
+
+async function materiaalMetBedragen(rijen) {
+  const lijst = (rijen || []).filter(Boolean)
+  if (!lijst.length) return lijst
+  const { data, error } = await supabase.rpc("bb_werkbonmateriaal_bedragen", { p_ids: lijst.map(r => r.id) })
+  if (error) throw error
+  const bedragen = new Map((data || []).map(b => [b.id, b]))
+  return lijst.map(r => {
+    const b = bedragen.get(r.id)
+    return b ? { ...r, prijs_per: b.prijs_per, subtotaal: b.subtotaal } : r
+  })
+}
+
 export async function getWerkbonMaterialen(werkbonId) {
   // De kostprijs staat in werkbon_materiaal_inkoop met eigen RLS: zonder het
   // recht inkoopprijzen komt die inbedding gewoon leeg terug.
   let { data, error } = await supabase
     .from("werkbon_materialen")
-    .select("*, werkbon_materiaal_inkoop(inkoopprijs_per)")
+    .select(`${WM_KOLOMMEN}, werkbon_materiaal_inkoop(inkoopprijs_per)`)
     .eq("werkbon_id", werkbonId)
     .order("created_at", { ascending: true })
   if (error && /could not find.*relationship|foreign key/i.test(error.message)) {
     const fb = await supabase
-      .from("werkbon_materialen").select("*").eq("werkbon_id", werkbonId).order("created_at", { ascending: true })
+      .from("werkbon_materialen").select(WM_KOLOMMEN).eq("werkbon_id", werkbonId).order("created_at", { ascending: true })
     data = fb.data; error = fb.error
   }
   if (error) throw error
-  return (data || []).map(toWerkbonMateriaal)
+  return (await materiaalMetBedragen(data)).map(toWerkbonMateriaal)
 }
 
 export async function createWerkbonMateriaal(input) {
   const aantal = Number(input.aantal || 1)
   const prijsPer = Number(input.prijs_per || input.prijsPer || 0)
+  // Het subtotaal rekent de database zelf uit (trigger a1_wm_subtotaal); deze
+  // waarde is alleen voor de weergave direct na het opslaan.
   const subtotaal = Math.round(aantal * prijsPer * 100) / 100
 
   const base = {
@@ -537,7 +556,6 @@ export async function createWerkbonMateriaal(input) {
     eenheid: input.eenheid || null,
     aantal,
     prijs_per: prijsPer,
-    subtotaal,
     // Uit de bibliotheek gekopieerd (of null bij vrij materiaal). De kostprijs
     // gaat niet mee in deze insert — die staat in werkbon_materiaal_inkoop.
     materiaal_id: input.materiaal_id ?? input.materiaalId ?? null,
@@ -552,7 +570,7 @@ export async function createWerkbonMateriaal(input) {
   const { data, error } = await supabase
     .from("werkbon_materialen")
     .insert(payload)
-    .select()
+    .select(WM_KOLOMMEN)
     .single()
   if (error) throw error
 
@@ -564,7 +582,9 @@ export async function createWerkbonMateriaal(input) {
       .update({ inkoopprijs_per: Number(inkoop), updated_at: new Date().toISOString() })
       .eq("werkbon_materiaal_id", data.id)
   }
-  return toWerkbonMateriaal({ ...data, werkbon_materiaal_inkoop: { inkoopprijs_per: inkoop } })
+  // Wat we net zelf hebben opgeslagen mogen we tonen; vanaf de volgende keer
+  // laden komt de prijs alleen terug voor wie hem mag zien.
+  return toWerkbonMateriaal({ ...data, prijs_per: prijsPer, subtotaal, werkbon_materiaal_inkoop: { inkoopprijs_per: inkoop } })
 }
 
 export async function updateWerkbonMateriaal(id, input) {
@@ -576,29 +596,20 @@ export async function updateWerkbonMateriaal(id, input) {
   delete updates.inkoopprijs_per
   delete updates.inkoopprijsPer
 
-  // Subtotaal herberekenen als aantal of prijs wijzigt. Bij een DEELpatch
-  // (alleen aantal, of alleen prijs) moet de ontbrekende helft uit de database
-  // komen — anders werd er met 0 gerekend en viel het subtotaal weg.
-  if ("aantal" in updates || "prijs_per" in updates || "prijsPer" in updates) {
-    const { data: huidig } = await supabase
-      .from("werkbon_materialen").select("aantal, prijs_per").eq("id", id).maybeSingle()
-    const aantal = "aantal" in updates ? Number(updates.aantal) || 0 : Number(huidig?.aantal ?? 1)
-    const prijsPer = ("prijs_per" in updates || "prijsPer" in updates)
-      ? Number(updates.prijs_per ?? updates.prijsPer) || 0
-      : Number(huidig?.prijs_per ?? 0)
-    updates.subtotaal = Math.round(aantal * prijsPer * 100) / 100
-    delete updates.prijsPer
-  }
+  // Het subtotaal rekent de database uit (trigger a1_wm_subtotaal), ook bij een
+  // deelpatch; de app hoeft de huidige prijs daarvoor niet meer te lezen.
+  if ("prijsPer" in updates) { updates.prijs_per = updates.prijsPer; delete updates.prijsPer }
+  delete updates.subtotaal
   delete updates.werkbonId
 
   let rij = null
   if (Object.keys(updates).length) {
     const { data, error } = await supabase
-      .from("werkbon_materialen").update(updates).eq("id", id).select().single()
+      .from("werkbon_materialen").update(updates).eq("id", id).select(WM_KOLOMMEN).single()
     if (error) throw error
     rij = data
   } else {
-    const { data } = await supabase.from("werkbon_materialen").select("*").eq("id", id).maybeSingle()
+    const { data } = await supabase.from("werkbon_materialen").select(WM_KOLOMMEN).eq("id", id).maybeSingle()
     rij = data
   }
 
@@ -612,7 +623,8 @@ export async function updateWerkbonMateriaal(id, input) {
       .eq("werkbon_materiaal_id", id)
   }
 
-  return toWerkbonMateriaal({ ...rij, werkbon_materiaal_inkoop: heeftInkoop ? { inkoopprijs_per: inkoop } : undefined })
+  const [metPrijs] = await materiaalMetBedragen([rij])
+  return toWerkbonMateriaal({ ...metPrijs, werkbon_materiaal_inkoop: heeftInkoop ? { inkoopprijs_per: inkoop } : undefined })
 }
 
 export async function deleteWerkbonMateriaal(id) {
@@ -621,10 +633,6 @@ export async function deleteWerkbonMateriaal(id) {
 }
 
 // ── WERKBON NOTITIES ─────────────────────────────────────────────────────────
-
-export async function updateWerkbonNotities(id, notities) {
-  return updateWerkbon(id, { werkbon_notities: notities || null })
-}
 
 // ── WERKBON FOTOS ────────────────────────────────────────────────────────────
 
@@ -846,10 +854,4 @@ export async function legWaarschuwingVast(notitieId, { note, gevolg, email }) {
     .single()
   if (error) throw error
   return toWerkbonNotitie(data)
-}
-
-export async function deleteWerkbonNotitie(notitieId) {
-  if (!notitieId) throw new Error('notitieId is verplicht')
-  const { error } = await supabase.from('werkbon_notities').delete().eq('id', notitieId)
-  if (error) throw error
 }

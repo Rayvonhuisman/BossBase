@@ -84,14 +84,12 @@ function PlanBadge({ plan }) {
 const isBetalend = c => c.subscription?.status === 'actief' && c.status !== 'geblokkeerd'
 
 // ── Hoofdcomponent ───────────────────────────────────────────────────────────
-const ALLOWED_EMAILS = ['info@bossbase.nl', 'nielsgrevink@gmail.com']
-
 export function SuperAdminPage({ navigate, profile }) {
   // Laag 2 — beveiliging binnen de pagina zelf. Naast de route-guard in
   // App.jsx checkt de pagina nogmaals onafhankelijk of de gebruiker een
   // super admin is. `authorized` wordt vóór de hooks berekend zodat het
   // aantal hook-calls constant blijft (rules-of-hooks veilig).
-  const authorized = profile?.isSuperAdmin === true && ALLOWED_EMAILS.includes(profile?.email)
+  const authorized = profile?.isSuperAdmin === true
 
   const [companies,   setCompanies]   = useState([])
   const [aanvragen,   setAanvragen]   = useState([])
@@ -171,7 +169,9 @@ export function SuperAdminPage({ navigate, profile }) {
       const { error: compErr } = await supabase.from('companies').update({ status }).eq('id', company.id)
       if (compErr) throw compErr
       if (company.subscription?.id) {
-        await supabase.from('subscriptions').update({ status }).eq('id', company.subscription.id)
+        // Ook deze fout tonen: anders lopen bedrijf en abonnement stil uiteen.
+        const { error: subErr } = await supabase.from('subscriptions').update({ status }).eq('id', company.subscription.id)
+        if (subErr) throw new Error(`bedrijf bijgewerkt, abonnement niet (${subErr.message})`)
       }
       await load(drawer?.id === company.id ? company.id : null)
     } catch (err) {

@@ -17,3 +17,6 @@ supabase/tests/_dryrun_readonly.sql
 # Seedscript met testaccount-wachtwoord — repo is publiek
 scripts/seed-snelstart-test.sql
 dist-ssr/
+
+# Auditrapporten beschrijven hoe je gaten misbruikt — repo is publiek, nooit committen
+docs/audit/

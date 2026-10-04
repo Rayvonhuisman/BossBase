@@ -9,9 +9,10 @@
 //   (concept).
 
 // Live company (camelCase, zie profileService.toCompany) → snapshot-kolommen.
-export function buildCompanySnapshot(company) {
+// `metIban`: alleen facturen hebben snapshot_iban-kolommen; offertes niet.
+export function buildCompanySnapshot(company, { metIban = false } = {}) {
   if (!company) return {}
-  return {
+  const snap = {
     snapshot_logo_url:       company.logoUrl || null,
     snapshot_branding_color: company.brandingColor || null,
     snapshot_bedrijfsnaam:   company.name || null,
@@ -22,6 +23,11 @@ export function buildCompanySnapshot(company) {
     snapshot_kvk:            company.kvk || null,
     snapshot_btw:            company.btwNumber || null,
   }
+  if (metIban) {
+    snap.snapshot_iban = company.iban || null
+    snap.snapshot_iban_tnv = company.ibanTnv || null
+  }
+  return snap
 }
 
 // Een document heeft een snapshot zodra het is verstuurd/ondertekend.
@@ -43,6 +49,9 @@ export function companyForDocument(doc, liveCompany) {
     email:         doc.snapshotEmail          ?? liveCompany?.email,
     kvk:           doc.snapshotKvk            ?? liveCompany?.kvk,
     btwNumber:     doc.snapshotBtw            ?? liveCompany?.btwNumber,
+    // Facturen van vóór de IBAN-kolom hebben geen snapshot: dan het huidige.
+    iban:          doc.snapshotIban           ?? liveCompany?.iban,
+    ibanTnv:       doc.snapshotIbanTnv        ?? liveCompany?.ibanTnv,
   }
 }
 
@@ -50,11 +59,6 @@ export function companyForDocument(doc, liveCompany) {
 // Factuur: alles behalve concept/aangemaakt is vergrendeld.
 export function isFactuurLocked(factuur) {
   return !!factuur && !['concept', 'aangemaakt'].includes(factuur.status)
-}
-
-// Offerte: verstuurd/geaccepteerd/afgewezen of ondertekend → inhoud vergrendeld.
-export function isOfferteLocked(offerte) {
-  return !!offerte && (offerte.status !== 'concept' || !!offerte.signedAt)
 }
 
 // Een ondertekende offerte staat juridisch vast: ook de status mag niet meer wijzigen.

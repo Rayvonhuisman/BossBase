@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Logo } from '../bb-shared.jsx';
 import {
   Paintbrush, Trees, Hammer, AppWindow, Plug, Home, ShowerHead, Zap, Sparkles, HardHat,
-  MailCheck, Rocket, User, Users, Check, Plus,
+  MailCheck, Rocket, User, Users, Check,
 } from 'lucide-react';
 import { loginWithEmail, registerWithEmail, requestPasswordReset, resendVerificationEmail, requestVerificationCode, verifyCode, vertaalAuthFout } from '../services/authService.js';
 import { PasswordRequirements, PasswordMatch, passwordValid } from '../components/PasswordStrength.jsx';
@@ -88,8 +88,8 @@ export function LoginPage({ onLogin, onRegister }) {
             <div style={{ marginBottom: 12 }}><MailCheck size={42} strokeWidth={1.6} color="var(--p)" /></div>
             <div className="auth-title" style={{ marginBottom: 6 }}>Check je e-mail</div>
             <div className="auth-sub">
-              We hebben een resetlink gestuurd naar <strong>{forgotEmail}</strong>.
-              Klik op de link in de mail om je wachtwoord opnieuw in te stellen.
+              Als <strong>{forgotEmail}</strong> bij ons bekend is, hebben we daar een resetlink
+              naartoe gestuurd. Klik op de link in de mail om je wachtwoord opnieuw in te stellen.
             </div>
           </div>
           <div className="auth-link" style={{ textAlign: 'center' }}>
@@ -148,7 +148,7 @@ export function LoginPage({ onLogin, onRegister }) {
         <div className="auth-logo"><Logo /></div>
         <div className="auth-title">Welkom terug</div>
         <div className="auth-sub">
-          Beheer klanten, offertes, jobs en omzet<br />
+          Beheer klanten, offertes, klussen en omzet<br />
           vanuit één eenvoudig dashboard.
         </div>
         <div className="auth-field">
@@ -348,7 +348,7 @@ export function RegisterFlow({ onDone, onBack }) {
     setLoading(true);
     setError('');
     try {
-      const result = await registerWithEmail({ ...form, trade });
+      const result = await registerWithEmail({ ...form, trade, pakket: setup });
       if (result?.requiresVerification) {
         setNeedsVerification(true);
       } else if (result?.requiresConfirmation) {
@@ -444,16 +444,6 @@ export function RegisterFlow({ onDone, onBack }) {
               <input type="password" value={form.password2} onChange={e => set('password2', e.target.value)} placeholder="Nogmaals je wachtwoord" />
               <PasswordMatch password={form.password} password2={form.password2} />
             </div>
-            {/* Informatie over het gebruik van gegevens, bewust zonder vinkje: de
-                grondslag voor een account is het leveren van de dienst, geen
-                toestemming. Komt er een gepubliceerde privacyverklaring (en
-                algemene voorwaarden), link die dan hier. Zie docs/juridisch. */}
-            <p className="auth-privacy" style={{ fontSize: '.78rem', lineHeight: 1.5, color: 'var(--dmu)', margin: '4px 0 10px' }}>
-              BossBase (een handelsnaam van NG E-Commerce B.V.) gebruikt je naam, e-mailadres en bedrijfsgegevens om je account aan te maken en BossBase aan je te leveren.
-              Je krijgt een verificatiecode per e-mail. Tijdens en kort na je proefperiode sturen we je enkele e-mails
-              over de proefperiode en over het kiezen van een abonnement.
-              Vragen over je gegevens of verwijderen: <a href="mailto:info@bossbase.nl">info@bossbase.nl</a>.
-            </p>
           </>
         )}
         {step === 1 && (
@@ -506,20 +496,17 @@ export function RegisterFlow({ onDone, onBack }) {
           </>
         )}
         {step === 3 && (
-          <>
-            <div style={{ marginBottom: 14, padding: 12, background: 'var(--bgs)', borderRadius: 'var(--r8)', border: '1px solid var(--border)', fontSize: '.8rem', color: 'var(--dmu)' }}>
-              Medewerkers ontvangen een uitnodiging per e-mail en kunnen na acceptatie inloggen.
-            </div>
-            <div className="auth-field"><label>Naam medewerker</label><input placeholder="Remco Smit" /></div>
-            <div className="auth-field"><label>E-mailadres</label><input type="email" placeholder="remco@veldhuis.nl" /></div>
-            <div className="auth-field">
-              <label>Rol</label>
-              <select><option>Medewerker</option><option>Admin</option></select>
-            </div>
-            <button className="btn btn-s btn-sm" style={{ width: '100%', justifyContent: 'center', marginBottom: 8 }}>
-              <Plus size={15} strokeWidth={2} /> Nog een medewerker toevoegen
-            </button>
-          </>
+          // Collega's uitnodigen kan pas als het bedrijf bestaat, dus ná de
+          // e-mailverificatie. Hier stonden invoervelden die nergens heen gingen
+          // (audit 2026-10-01, A1); nu zeggen we eerlijk hoe het wél werkt.
+          <div style={{ marginBottom: 14, padding: 12, background: 'var(--bgs)', borderRadius: 'var(--r8)', border: '1px solid var(--border)', fontSize: '.85rem', color: 'var(--dm)', lineHeight: 1.55 }}>
+            <strong>Je team uitnodigen doe je straks in BossBase.</strong><br />
+            Zodra je account klaar is, ga je naar <strong>Team</strong> en klik je op <strong>Teamlid uitnodigen</strong>.
+            Je collega krijgt dan een uitnodiging per e-mail.
+            {setup === 'team'
+              ? ' In je proefperiode op Team kun je zoveel collega\'s uitnodigen als je wilt.'
+              : ' Op Groei werk je met maximaal 2 gebruikers, inclusief jezelf.'}
+          </div>
         )}
         {error && <div style={{ color: '#dc2626', fontSize: '.78rem', fontWeight: 600, marginTop: 10 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
@@ -529,6 +516,15 @@ export function RegisterFlow({ onDone, onBack }) {
             : <button className="auth-submit" style={{ flex: 1 }} onClick={submit} disabled={loading}>{loading ? 'Bezig...' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>BossBase starten <Rocket size={16} strokeWidth={1.8} /></span>}</button>
           }
         </div>
+        {step === 3 && (
+          // Het akkoord wordt bij het klikken vastgelegd (versie, tijdstip, IP):
+          // registerWithEmail → edge function akkoord-vastleggen.
+          <p className="auth-privacy" style={{ fontSize: '.78rem', lineHeight: 1.5, color: 'var(--dmu)', margin: '10px 0 0' }}>
+            Door een account aan te maken ga je akkoord met de <a href="/voorwaarden" target="_blank" rel="noopener" style={{ textDecoration: 'underline' }}>algemene voorwaarden</a> en
+            de <a href="/verwerkersovereenkomst" target="_blank" rel="noopener" style={{ textDecoration: 'underline' }}>verwerkersovereenkomst</a>.
+            In de <a href="/privacy" target="_blank" rel="noopener" style={{ textDecoration: 'underline' }}>privacyverklaring</a> lees je hoe we met je gegevens omgaan.
+          </p>
+        )}
         {step === 3 && (
           <div className="auth-link">
             <a href="#" onClick={e => { e.preventDefault(); submit(); }}>Overslaan, later doen</a>

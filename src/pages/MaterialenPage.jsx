@@ -77,7 +77,8 @@ function MateriaalModal({ materiaal, leveranciers, magInkoop, onClose, onSaved, 
           <div className="f">
             <label>Eenheid</label>
             <select value={form.eenheid} onChange={e => set('eenheid', e.target.value)}>
-              {EENHEDEN.map(e => <option key={e} value={e}>{e}</option>)}
+              {(form.eenheid && !EENHEDEN.includes(form.eenheid) ? [form.eenheid, ...EENHEDEN] : EENHEDEN)
+                .map(e => <option key={e} value={e}>{e}</option>)}
             </select>
           </div>
           <div className="f">
@@ -197,13 +198,13 @@ export default function MaterialenPage() {
           <p>{lijst.length} {lijst.length === 1 ? 'materiaal' : 'materialen'} in je bibliotheek</p>
         </div>
         <div className="page-hd-actions">
-          <button className="btn btn-p btn-sm" onClick={() => setModal('nieuw')}>{I.plus} Nieuw materiaal</button>
+          {magInkoop && <button className="btn btn-p btn-sm" data-rl="mat-nieuw" onClick={() => setModal('nieuw')}>{I.plus} Nieuw materiaal</button>}
         </div>
       </div>
 
       {fout && <div className="card card-p" style={{ color: '#dc2626', marginBottom: 14 }}>{fout}</div>}
 
-      <div className="search afu2" style={{ maxWidth: 360, marginBottom: 14 }}>
+      <div className="search afu2" data-rl="mat-zoeken" style={{ maxWidth: 360, marginBottom: 14 }}>
         {I.search}
         <input placeholder="Zoek op naam of artikelnummer…" value={zoek} onChange={e => setZoek(e.target.value)} />
       </div>
@@ -222,7 +223,7 @@ export default function MaterialenPage() {
       )}
 
       {!laden && gefilterd.length > 0 && (
-        <div className="tw afu2">
+        <div className="tw afu2" data-rl="mat-lijst">
           <table className="dt">
             <thead>
               <tr>
@@ -237,7 +238,7 @@ export default function MaterialenPage() {
               {gefilterd.map(m => {
                 const mg = marge(m);
                 return (
-                  <tr key={m.id} style={{ cursor: 'pointer', opacity: m.actief ? 1 : 0.55 }} onClick={() => setModal(m)}>
+                  <tr key={m.id} style={{ cursor: magInkoop ? 'pointer' : 'default', opacity: m.actief ? 1 : 0.55 }} onClick={() => { if (magInkoop) setModal(m); }}>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Av name={m.naam} size="sm" />
@@ -259,8 +260,11 @@ export default function MaterialenPage() {
                     )}
                     <td>{m.btwPct}%</td>
                     <td>
-                      <button className="btn-icon" onClick={e => { e.stopPropagation(); setModal(m); }}>{I.arrow_r}</button>
-                      <button className="btn-icon" onClick={e => { e.stopPropagation(); verwijder(m); }}>{I.trash}</button>
+                      {/* Beheren vraagt het recht Inkoopprijzen — de database dwingt hetzelfde af. */}
+                      {magInkoop && <>
+                        <button className="btn-icon" title="Bewerken" aria-label="Bewerken" onClick={e => { e.stopPropagation(); setModal(m); }}>{I.arrow_r}</button>
+                        <button className="btn-icon" title="Verwijderen" aria-label="Verwijderen" onClick={e => { e.stopPropagation(); verwijder(m); }}>{I.trash}</button>
+                      </>}
                     </td>
                   </tr>
                 );

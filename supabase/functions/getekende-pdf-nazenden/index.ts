@@ -8,8 +8,12 @@
 // scherm zei gewoon "u ontvangt een bevestiging". De handtekening zelf staat wél
 // vast, dus het document kan altijd later alsnog gemaakt worden.
 //
-// Deze functie krijgt die alsnog gemaakte PDF van de app van het BEDRIJF (zodra
-// iemand de offerte of werkbon opent), bewaart hem, en stuurt de bijlage na.
+// Sinds oktober 2026 maakt de SERVER het exemplaar, uit de database en de
+// vastgelegde handtekening (_shared/ondertekendExemplaar.ts). Vroeger stuurde de
+// app van het bedrijf een PDF mee en werd die ongezien bewaard en naar de klant
+// gemaild — elke gebruiker kon zo een willekeurig bestand als "ondertekend
+// exemplaar" laten opslaan (audit 2026-10-01, H4/B-9). Een meegestuurde
+// `pdf_base64` wordt genegeerd.
 //
 // Dubbel versturen voorkomen we zonder extra kolom: de update die de link zet is
 // zélf de claim (`where ... url is null`). Openen twee mensen tegelijk, dan wint
@@ -19,7 +23,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
 import { inactiefReden } from '../_shared/actieveGebruiker.ts'
-import { opslagWaarde } from '../_shared/documentLink.ts'
+import { opslagWaarde, padUit } from '../_shared/documentLink.ts'
+import { maakOfferteExemplaar, maakWerkbonExemplaar, bytesNaarBase64, isUuid, type Ondertekening } from '../_shared/ondertekendExemplaar.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -32,12 +37,6 @@ const esc = (s: unknown) => String(s ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 
-function base64ToBytes(b64: string): Uint8Array {
-  const binary = atob(b64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return bytes
-}
 
 // Eén mail via de send-email relay (intern secret: geen sessie nodig, en geen
 // read-only-blokkade — een ontbrekend bewijsstuk nasturen mag altijd).
@@ -66,6 +65,7 @@ const SOORTEN = {
     naamKolom: 'signed_by_name',
     emailKolom: 'signed_by_email',
     bucket: 'signed-offertes',
+    handtekeningKolom: 'signature_url',
     label: 'offerte',
   },
   werkbon: {
@@ -75,6 +75,7 @@ const SOORTEN = {
     naamKolom: 'ondertekend_door_naam',
     emailKolom: 'ondertekend_door_email',
     bucket: 'signed-werkbonnen',
+    handtekeningKolom: 'handtekening_url',
     label: 'werkbon',
   },
 } as const
@@ -103,9 +104,7 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}))
     const soort = body?.soort === 'offerte' || body?.soort === 'werkbon' ? body.soort : null
     const id = String(body?.id || '')
-    const pdfBase64 = String(body?.pdf_base64 || '')
-    if (!soort || !id) return json({ error: 'soort en id zijn verplicht' }, 400)
-    if (!pdfBase64) return json({ error: 'pdf_base64 ontbreekt' }, 400)
+    if (!soort || !isUuid(id)) return json({ error: 'soort en id zijn verplicht' }, 400)
 
     const cfg = SOORTEN[soort]
     const admin = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
@@ -115,7 +114,7 @@ serve(async (req) => {
 
     const { data: rij } = await admin
       .from(cfg.tabel)
-      .select(`id, nummer, company_id, ${cfg.getekendKolom}, ${cfg.urlKolom}, ${cfg.naamKolom}, ${cfg.emailKolom}`)
+      .select(`id, nummer, company_id, sign_token, ondertekening_bewijs, ${cfg.getekendKolom}, ${cfg.urlKolom}, ${cfg.naamKolom}, ${cfg.emailKolom}, ${cfg.handtekeningKolom}`)
       .eq('id', id).maybeSingle()
 
     // Eén boodschap voor "bestaat niet" en "niet van jouw bedrijf".
@@ -131,12 +130,35 @@ serve(async (req) => {
       return json({ nagezonden: false, reden: 'bestond_al' })
     }
 
-    // ── PDF bewaren ─────────────────────────────────────────────────────────
-    const bestandsnaam = `${cfg.label}-${rij.nummer}-ondertekend.pdf`
-    const pad = `${rij.company_id}/${bestandsnaam}`
+    // ── Exemplaar maken op de server ────────────────────────────────────────
+    const r = rij as Record<string, any>
+    const bewijs = (r.ondertekening_bewijs || {}) as Record<string, any>
+    let handtekeningPng: Uint8Array | null = null
+    const sigPad = padUit('signatures', r[cfg.handtekeningKolom])
+    if (sigPad) {
+      const { data: blob } = await admin.storage.from('signatures').download(sigPad)
+      if (blob) handtekeningPng = new Uint8Array(await blob.arrayBuffer())
+    }
+    const ondertekening: Ondertekening = {
+      naam: r[cfg.naamKolom] || '', email: r[cfg.emailKolom] || '',
+      tijdstip: r[cfg.getekendKolom], ip: bewijs.ip ?? null, userAgent: bewijs.user_agent ?? null,
+      handtekeningPng,
+    }
+    let exemplaar
+    try {
+      exemplaar = soort === 'offerte'
+        ? await maakOfferteExemplaar(admin, r.id, ondertekening)
+        : await maakWerkbonExemplaar(admin, r.sign_token, ondertekening)
+    } catch (e) {
+      console.error('getekende-pdf-nazenden exemplaar', e)
+      return json({ error: 'Het document kon niet worden gemaakt.' }, 500)
+    }
+    const pdfBase64 = bytesNaarBase64(exemplaar.pdf)
+    const bestandsnaam = `${cfg.label}-${rij.nummer || rij.id}-ondertekend.pdf`
+    const pad = `${rij.company_id}/${cfg.label}-${rij.id}-${crypto.randomUUID().slice(0, 8)}-ondertekend.pdf`
     const { error: upErr } = await admin.storage
       .from(cfg.bucket)
-      .upload(pad, base64ToBytes(pdfBase64), { contentType: 'application/pdf', upsert: true })
+      .upload(pad, exemplaar.pdf, { contentType: 'application/pdf', upsert: false })
     if (upErr) {
       await logMailFout({
         soort: `nazending_${soort}`, ontvanger: null, companyId: rij.company_id,
@@ -153,11 +175,15 @@ serve(async (req) => {
     // ── Claim: wie deze update wint, verstuurt de mails ─────────────────────
     const { data: geclaimd } = await admin
       .from(cfg.tabel)
-      .update({ [cfg.urlKolom]: url })
+      .update({
+        [cfg.urlKolom]: url,
+        ondertekening_bewijs: { ...bewijs, nagezonden_op: new Date().toISOString(), inhoud_sha256_nazending: exemplaar.documentHash, pdf_sha256_nazending: exemplaar.pdfHash, pdf_pad_nazending: pad },
+      })
       .eq('id', rij.id)
       .is(cfg.urlKolom, null)
       .select('id')
     if (!geclaimd || geclaimd.length === 0) {
+      await admin.storage.from(cfg.bucket).remove([pad]).catch(() => {})
       return json({ nagezonden: false, reden: 'bestond_al' })
     }
 
@@ -201,7 +227,7 @@ serve(async (req) => {
       const html = mailTemplate({
         title: `Ondertekende ${cfg.label} ${rij.nummer} alsnog opgeslagen`,
         preheader: `De ontbrekende bijlage bij ${cfg.label} ${rij.nummer} is aangevuld`,
-        body: `<p>Bij het ondertekenen van ${cfg.label} <strong>${esc(rij.nummer)}</strong> kon de PDF niet in de browser van de klant gemaakt worden, waardoor de bevestiging zonder bijlage wegging.</p>
+        body: `<p>Bij het ondertekenen van ${cfg.label} <strong>${esc(rij.nummer)}</strong> kon het ondertekende exemplaar niet worden gemaakt, waardoor de bevestiging zonder bijlage wegging.</p>
 <p>Het document is nu alsnog gemaakt en opgeslagen; de klant heeft de bijlage per mail nagestuurd gekregen. Hij staat ook in BossBase bij de ${cfg.label}.</p>`,
         // Interne melding aan het bedrijf zelf: BossBase-stijl, dus bewust geen
         // companyName/logo/kleur. Zonder companyName kiest mailTemplate vanzelf

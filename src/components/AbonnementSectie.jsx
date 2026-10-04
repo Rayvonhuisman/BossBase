@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { tierLabel, tierPrice, EXTRA_USER_PRICE, welkomstactieLabel, getWelkomstactie } from '../lib/tiers.js';
-import { moduleLabel, modulePrice, getLimitDef } from '../lib/features.js';
+import { moduleLabel, modulePrice, getLimitDef, TIER_LIMITS } from '../lib/features.js';
 import { getBillingStatus, openPortal, zegOp } from '../services/billingService.js';
 import { readonlyTekst, READONLY_BEWAARD } from '../lib/readonly.js';
 import { gaNaarAbonnement } from '../lib/abonnementNav.js';
+import { getOpenUpgradeVerzoeken, rondUpgradeVerzoekAf } from '../services/planService.js';
+import { vandaagIso } from '../lib/datumTijd.js';
 
 // Abonnementssectie in Instellingen: huidig pakket, status, verlengdatum,
 // verbruik tegen de limieten, modules en de knoppen om te wijzigen.
@@ -42,17 +44,22 @@ function StatusPil({ status, opzeggen, stoptOp }) {
   );
 }
 
-// "3 van de 2 gebruikers" — met de nadruk op wat er te veel is.
-function LimietRegel({ sleutel, stand }) {
+// Het maximum van het PAKKET. Tijdens het gratis uitproberen geeft de server
+// geen maximum (er wordt dan niets begrensd), maar hier hoort te staan waar het
+// pakket op uitkomt: Groei is "1 van 2", ook in de proefperiode.
+const maxVan = (tier, sleutel, stand) => stand?.max ?? TIER_LIMITS[tier]?.[sleutel] ?? null;
+
+// "Offertes 8 van 10", en zonder maximum alleen het aantal ("Gebruikers 6").
+// Met de nadruk op wat vol is.
+function LimietRegel({ sleutel, stand, max }) {
   const def = getLimitDef(sleutel);
-  const max = stand?.max ?? null;
   const gebruikt = Number(stand?.gebruikt || 0);
   const vol = max != null && gebruikt >= max;
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '5px 0' }}>
       <span style={{ color: 'var(--dmu)' }}>{def?.label || sleutel}</span>
       <span style={{ fontWeight: 600, color: vol ? '#b45309' : 'var(--dk)' }}>
-        {gebruikt}{max == null ? ' · onbeperkt' : ` / ${max}`}
+        {gebruikt}{max == null ? '' : ` van ${max}`}
       </span>
     </div>
   );
@@ -64,7 +71,9 @@ export function AbonnementSectie() {
   const [stand, setStand] = useState(null);
   const [laden, setLaden] = useState(true);
   const [bezig, setBezig] = useState(false);
-  const [wijzigen, setWijzigen] = useState(false);
+  // Verzoeken van teamleden ("Laat mijn beheerder weten"). Alleen de
+  // abonnementsbeheerder krijgt ze te zien; die kan ze ook afhandelen.
+  const [verzoeken, setVerzoeken] = useState([]);
 
   const isAdmin = profile?.role === 'admin';
 
@@ -76,6 +85,19 @@ export function AbonnementSectie() {
       .finally(() => setLaden(false));
   };
   useEffect(laad, []);
+  useEffect(() => {
+    if (!stand?.magBeheren) return;
+    getOpenUpgradeVerzoeken().then(setVerzoeken).catch(() => {});
+  }, [stand?.magBeheren]);
+
+  const verzoekAfhandelen = async (id) => {
+    try {
+      await rondUpgradeVerzoekAf(id);
+      setVerzoeken(v => v.filter(x => x.id !== id));
+    } catch (e) {
+      toast.error(e.message || 'Afhandelen mislukt');
+    }
+  };
 
   if (!isAdmin) return null;
   if (laden) return <div className="card card-p">Abonnement laden…</div>;
@@ -159,7 +181,9 @@ export function AbonnementSectie() {
               <div style={{ fontWeight: 600 }}>{fmtDatum(stand.trialEindigtOp)}</div>
             </div>
           )}
-          {stand.verlengtOp && (
+          {/* Een verlengdatum in het verleden (bedrijf zonder Stripe) is geen
+              informatie maar verwarring; dan niet tonen. */}
+          {stand.verlengtOp && !stand.definitiefOpgezegd && String(stand.verlengtOp).slice(0, 10) >= vandaagIso() && (
             <div>
               <div style={{ fontSize: '.72rem', color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.04em' }}>
                 {stand.opzeggenPerEindePeriode ? 'Stopt op' : 'Verlengt op'}
@@ -169,10 +193,31 @@ export function AbonnementSectie() {
           )}
         </div>
 
-        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginBottom: 12 }}>
-          <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--dmu)', marginBottom: 4 }}>IN GEBRUIK</div>
-          {Object.entries(stand.limieten).map(([k, v]) => <LimietRegel key={k} sleutel={k} stand={v} />)}
-        </div>
+        {/* Gebruikers staan er altijd. De andere limieten (offertes, klanten,
+            …) alleen als het pakket ze heeft, en alleen dan het kopje. */}
+        {(() => {
+          const begrensd = Object.entries(stand.limieten)
+            .filter(([k, v]) => k !== 'gebruikers' && maxVan(stand.tier, k, v) != null);
+          return (
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginBottom: 12 }}>
+              {begrensd.length > 0 && (
+                <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--dmu)', marginBottom: 4 }}>IN GEBRUIK</div>
+              )}
+              <LimietRegel sleutel="gebruikers" stand={stand.limieten.gebruikers}
+                max={maxVan(stand.tier, 'gebruikers', stand.limieten.gebruikers)} />
+              {begrensd.map(([k, v]) => <LimietRegel key={k} sleutel={k} stand={v} max={maxVan(stand.tier, k, v)} />)}
+              {(() => {
+                const max = maxVan(stand.tier, 'gebruikers', stand.limieten.gebruikers);
+                const gebruikt = Number(stand.limieten.gebruikers?.gebruikt || 0);
+                return max != null && gebruikt > max ? (
+                  <p style={{ fontSize: '.8rem', color: '#b45309', margin: '6px 0 0' }}>
+                    Je hebt meer gebruikers ({gebruikt}) dan je pakket toestaat ({max}). Kies een groter pakket of deactiveer gebruikers onder Team.
+                  </p>
+                ) : null;
+              })()}
+            </div>
+          );
+        })()}
 
         {/* Welkomstactie hoort bij een jaarabonnement; bij maandelijks tonen we
             hem niet, want dan is er geen. */}
@@ -214,8 +259,34 @@ export function AbonnementSectie() {
             <div style={{ fontSize: '.78rem', color: 'var(--dmu)', marginTop: 2 }}>
               {stand.stoptNaLooptijd
                 ? `Je hebt opgezegd. Het abonnement stopt op ${fmtDatum(stand.verplichtingTot)}; tot dan loopt de incasso van € ${tierPrice(stand.tier)} per maand door.`
-                : `Tussentijds opzeggen kan niet. Je kunt opzeggen tegen ${fmtDatum(stand.verplichtingTot)}; daarna loopt het maandelijks door en is het per maand opzegbaar. Stap je over naar een groter pakket, dan begint de looptijd opnieuw — je ziet de nieuwe einddatum voordat je bevestigt.`}
+                : `Opzegbaar per ${fmtDatum(stand.verplichtingTot)}`}
             </div>
+          </div>
+        )}
+
+        {stand.magBeheren && verzoeken.length > 0 && (
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginBottom: 12 }}>
+            <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--dmu)', marginBottom: 6 }}>VERZOEKEN VAN JE TEAM</div>
+            {verzoeken.map(v => (
+              <div key={v.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, fontSize: 13, padding: '3px 0' }}>
+                <span>
+                  <strong>{v.naam}</strong>
+                  {v.aanleiding ? `: ${v.aanleiding}` : ' wil het abonnement uitbreiden'}
+                  {(() => {
+                    // Wat er gevraagd wordt: de module(s), of een ander pakket.
+                    // Het huidige pakket noemen we niet; dat is geen wens.
+                    const wens = v.gewensteModules.length > 0
+                      ? v.gewensteModules.map(moduleLabel).join(', ')
+                      : (v.gewenstPlan && v.gewenstPlan !== stand.tier ? tierLabel(v.gewenstPlan) : null);
+                    return wens ? ` (voorstel: ${wens})` : '';
+                  })()}
+                  <span style={{ color: 'var(--dmu)' }}> · {fmtDatum(v.createdAt)}</span>
+                </span>
+                <button className="btn btn-ghost btn-sm" onClick={() => verzoekAfhandelen(v.id)}>
+                  Afgehandeld
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
@@ -258,19 +329,18 @@ export function AbonnementSectie() {
           )}
         </div>}
 
-        {/* Zeggen wat achter welke knop zit, zodat niemand het portal in gaat
-            om iets te doen wat daar niet kan. */}
-        {stand.heeftStripe && stand.magBeheren && (
+        {/* Definitief opgezegd in Stripe: niets meer in te trekken. De knop
+            hierboven is dan "Abonnement afsluiten", voor een nieuw abonnement. */}
+        {stand.definitiefOpgezegd && (
           <p style={{ fontSize: '.8rem', color: 'var(--dmu)', marginTop: 10, marginBottom: 0 }}>
-            Van pakket wisselen, modules bij- of afkopen en teamleden toevoegen doe je onder
-            <strong> Abonnement wijzigen</strong>. Onder <strong>Facturen en betaalmethode</strong>
-            {' '}vind je je facturen, wijzig je je betaalmethode en pas je je factuurgegevens aan.
+            Je abonnement is opgezegd. Je kunt een nieuw abonnement afsluiten; je gegevens staan er nog.
           </p>
         )}
-
-        {!stand.heeftStripe && (
+        {!stand.heeftStripe && !stand.definitiefOpgezegd && (
           <p style={{ fontSize: '.8rem', color: 'var(--dmu)', marginTop: 10, marginBottom: 0 }}>
-            Je bent BossBase nu gratis aan het uitproberen. Er is nog geen betaalmethode gekoppeld.
+            {stand.trial
+              ? 'Je bent BossBase nu gratis aan het uitproberen. Er is nog geen betaalmethode gekoppeld.'
+              : 'Er is geen betaalmethode gekoppeld.'}
           </p>
         )}
       </div>

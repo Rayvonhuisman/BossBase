@@ -6,9 +6,13 @@ import { safeInsert } from "../lib/safeInsert"
 import { logTijdlijnSafe } from "./klantTijdlijnService"
 
 // Real DB columns: id, company_id, name, email, phone, address, postcode, city,
-// kvk_number, btw_number, iban, logo_url, notes, created_at, updated_at.
-// UI may carry richer fields (company, source, type) — those are
-// kept as local UI state and stripped here before talking to Supabase.
+// kvk_number, btw_number, iban, logo_url, notes, type, source, created_at,
+// updated_at. `company` is UI-only and is folded into `name`.
+
+// De vaste keuzes voor het klanttype. De database dwingt dezelfde lijst af
+// (customers_type_check); een andere waarde wordt hier weggelaten in plaats van
+// de hele opslag te laten mislukken.
+export const KLANT_TYPES = ['Particulier', 'Zakelijk', 'VvE', 'Aannemer'];
 
 // Nette weergavenaam met fallback wanneer de naam leeg is.
 export const sanitizeName = name => (name || '').trim() || 'Naamloos';
@@ -18,7 +22,9 @@ const toCustomer = (row, index = 0) => ({
   // The DB only stores `name`. We surface it as both customer name and company label
   // so the existing UI keeps working without a separate company column.
   name: sanitizeName(row.name),
-  company: sanitizeName(row.name),
+  // Geen aparte bedrijfsnaam in de tabel; vroeger stond hier de naam nog eens,
+  // waardoor overal "Priya Meijer · Priya Meijer" verscheen.
+  company: '',
   email: row.email || "",
   phone: row.phone || "",
   city: row.city || "",
@@ -38,13 +44,16 @@ const toCustomer = (row, index = 0) => ({
   // voor: niet in deze mapper, niet op de klantkaart. Het projectoverzicht toont
   // en bewerkt hem, dus hij moet hier langs.
   contactpersoon: row.contactpersoon || "",
+  // Betaaltermijn van deze klant in dagen; leeg = de standaard van 14.
+  betaaltermijnDagen: row.betaaltermijn_dagen ?? null,
   // UI helpers — synthesized, not stored:
   av: index,
   stage: "new_lead",
   // Let op: géén `total`/`paid` hier. Die stonden hier hardgecodeerd op 0,
   // waardoor de klantenlijst overal €0 toonde. De bedragen per klant komen uit
   // customerTotalsService (afgeleid van offertes + facturen).
-  // UI-only display defaults (no DB columns for these):
+  // Zonder gekozen type tonen we "Klant"; dat label wordt niet opgeslagen
+  // (zie KLANT_TYPES in mapCustomerFormToPayload).
   type: row.type || "Klant",
   source: row.source || "",
   raw: row,
@@ -68,6 +77,8 @@ export function mapCustomerFormToPayload(form = {}) {
     notes: form.notes || null,
     logo_url: form.logo_url || form.logoUrl || null,
     contactpersoon: form.contactpersoon || null,
+    type: KLANT_TYPES.includes(form.type) ? form.type : null,
+    source: trim(form.source) || null,
   }
   if (form.company_id || form.companyId) {
     payload.company_id = form.company_id || form.companyId
@@ -113,17 +124,6 @@ export async function updateCustomer(id, input) {
     supabase.functions.invoke('moneybird-update-contact', { body: { customer_id: id } }).catch(() => {})
   }
   return customer
-}
-
-export async function updateCustomerNotities(id, notities) {
-  const { data, error } = await supabase
-    .from("customers")
-    .update({ notities: notities || null })
-    .eq("id", id)
-    .select()
-    .single()
-  if (error) throw error
-  return toCustomer(data)
 }
 
 export async function deleteCustomer(id) {

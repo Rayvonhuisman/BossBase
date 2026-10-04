@@ -12,7 +12,7 @@ import { alleRijen } from '../lib/alleRijen.js'
 // zijn werkbon; dat kan nu niet meer.
 //
 // Wie mag boeken bepaalt de werkbon, niet het profiel: de uitvoerders en
-// verantwoordelijken van díé werkbon, plus admin en planner als vangnet. Dat
+// verantwoordelijken van díé werkbon, plus admin en het recht planning als vangnet. Dat
 // staat in de RLS (bb_mag_werkbon_uren_beheren); de UI vraagt hier hetzelfde na
 // zodat je geen knop krijgt die je toch niet mag indrukken.
 
@@ -38,9 +38,9 @@ const toWerkbonUur = row => ({
  * Mag deze gebruiker uren boeken op deze werkbon? Spiegelt de RLS-regel, zodat
  * het scherm de knop kan verbergen in plaats van te laten falen bij opslaan.
  */
-export function magWerkbonUrenBeheren(werkbon, profile) {
+export function magWerkbonUrenBeheren(werkbon, profile, magPlanning = false) {
   if (!werkbon || !profile?.id) return false
-  if (profile.role === 'admin' || profile.role === 'planner') return true
+  if (profile.role === 'admin' || magPlanning) return true
   const uitvoerders = werkbon.assignedToIds || []
   const verantwoordelijken = werkbon.verantwoordelijkeIds || []
   return uitvoerders.includes(profile.id) || verantwoordelijken.includes(profile.id)
@@ -121,34 +121,6 @@ export async function createWerkbonUur(input) {
     throw error
   }
   return toWerkbonUur(data)
-}
-
-export async function updateWerkbonUur(id, velden) {
-  const updates = { ...velden, updated_at: new Date().toISOString() }
-  if ('pauzeMinuten' in updates) {
-    updates.pauze_minuten = Math.max(0, Number(updates.pauzeMinuten) || 0)
-    delete updates.pauzeMinuten
-  }
-  if ('startTijd' in updates) { updates.start_tijd = updates.startTijd; delete updates.startTijd }
-  if ('eindTijd' in updates) { updates.eind_tijd = updates.eindTijd; delete updates.eindTijd }
-  if ('reisKm' in updates) {
-    updates.reis_km = updates.reisKm === '' || updates.reisKm == null ? null : Number(updates.reisKm)
-    delete updates.reisKm
-  }
-  if ('start_tijd' in updates || 'eind_tijd' in updates || 'pauze_minuten' in updates) {
-    const berekend = berekenUren(updates.start_tijd, updates.eind_tijd, updates.pauze_minuten ?? 0)
-    if (berekend !== null) updates.uren = berekend
-  }
-
-  const { data, error } = await supabase
-    .from('werkbon_uren').update(updates).eq('id', id).select(SELECT_VOL).single()
-  if (error) throw error
-  return toWerkbonUur(data)
-}
-
-export async function deleteWerkbonUur(id) {
-  const { error } = await supabase.from('werkbon_uren').delete().eq('id', id)
-  if (error) throw error
 }
 
 // Uren per project voor de nacalculatie: zie getProjectHoursMap in

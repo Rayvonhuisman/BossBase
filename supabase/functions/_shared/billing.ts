@@ -137,6 +137,28 @@ export const INBEGREPEN_GEBRUIKERS: Record<string, number> = {
 export const inbegrepenGebruikers = (tier: string): number =>
   INBEGREPEN_GEBRUIKERS[tier] ?? 1
 
+// Hoeveel gebruikers moet een abonnement minstens dekken? Actieve gebruikers
+// plus openstaande uitnodigingen — dezelfde telling als bb_usage('gebruikers'),
+// die de app ook toont. Een checkout of wijziging met minder betaalde plekken
+// werd eerder gewoon geaccepteerd: een bedrijf met 9 gebruikers kon Team voor
+// 1 gebruiker afrekenen (audit 2026-10-01, H12).
+export async function benodigdeGebruikers(admin: any, companyId: string): Promise<number> {
+  const { data, error } = await admin.rpc('bb_usage', { p_company_id: companyId, p_key: 'gebruikers' })
+  if (error) throw new Error(`Gebruikers tellen mislukt: ${error.message}`)
+  return Math.max(1, Number(data) || 0)
+}
+
+/** Nette weigering als er te weinig plekken worden afgerekend, anders null. */
+export function teWeinigGebruikers(tier: string, extra: number, nodig: number): Response | null {
+  const plekken = inbegrepenGebruikers(tier) + extra
+  if (plekken >= nodig) return null
+  return json({
+    error: `Je team heeft ${nodig} gebruikers (inclusief openstaande uitnodigingen). Reken er minstens zoveel af, of deactiveer eerst teamleden.`,
+    code: 'te_weinig_gebruikers',
+    minimum: nodig,
+  }, 400)
+}
+
 // Prijs per extra gebruiker. Spiegelt src/lib/tiers.js → EXTRA_USER_PRICE; een
 // edge function kan die module niet laden. Alleen voor wat we in mails en
 // meldingen NOEMEN — wat er daadwerkelijk wordt geïncasseerd bepaalt de Stripe

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { logFout, meldFout, AGENDA_NIET_BIJGEWERKT } from '../lib/stilleFouten.js';
 import { ModalX, NotifyMailToggle } from '../bb-shared.jsx';
 import { InfoTip } from './Uitleg.jsx';
 import { AssigneeResponsibleSelect } from './AssigneeResponsibleSelect.jsx';
@@ -8,6 +9,7 @@ import { isIngepland } from '../utils/werkbonDagen.js';
 import { getActiveTeamMembers, notifyNewAssignees } from '../services/notificatieService.js';
 import { useToast } from '../lib/toast.jsx';
 import { usePlan } from '../hooks/usePlan.js';
+import { korteDatumNl } from '../lib/datumTijd.js';
 
 // Werkbon inplannen vanuit de agenda — voor wie geen planningsmodule heeft.
 // Hergebruikt EXACT dezelfde inplanlogica als de planning-modals
@@ -49,11 +51,17 @@ export function AgendaWerkbonPlanModal({ currentUserId, currentUserName, default
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    const deels = [];
+    const of = (belofte, terug) => belofte.catch(e => { deels.push(e); return terug; });
     Promise.all([
-      getWerkbonnen().catch(() => []),
-      gedeeld ? getActiveTeamMembers({ includeSelf: true }).catch(() => []) : Promise.resolve([]),
+      of(getWerkbonnen(), []),
+      gedeeld ? of(getActiveTeamMembers({ includeSelf: true }), []) : Promise.resolve([]),
     ]).then(([wbs, members]) => {
       if (!alive) return;
+      if (deels.length) {
+        console.warn('[bb] inplannen deels geladen', deels);
+        toast.error('De werkbonnen of teamleden konden niet worden geladen. Sluit het venster en probeer het opnieuw.');
+      }
       // Alleen nog niet ingeplande werkbonnen — zelfde definitie als de Planning:
       // een werkbon telt als ingepland zodra hij een datum én starttijd heeft.
       const unplanned = (wbs || []).filter(w => !isIngepland(w) && w.status !== 'afgerond');
@@ -89,13 +97,13 @@ export function AgendaWerkbonPlanModal({ currentUserId, currentUserName, default
         notifyNewAssignees({
           userIds: assignIds, prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail,
           type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${selected?.titel || 'een werkbon'}`,
-          body: `Datum: ${date}${starttijd ? ` om ${starttijd}` : ''}`,
+          body: `Datum: ${korteDatumNl(date)}${starttijd ? ` om ${starttijd}` : ''}`,
           link: 'calendar', relatedType: 'werkbon', relatedId: werkbonId,
           creatorId: currentUserId, creatorName: currentUserName,
-        }).catch(() => {});
+        }).catch(logFout('melding versturen'));
       }
       // 3) Agenda bijwerken: één item per geplande dag (herkomst 'planning').
-      syncWerkbonEvents(werkbonId).catch(() => {});
+      syncWerkbonEvents(werkbonId).catch(meldFout(toast, AGENDA_NIET_BIJGEWERKT));
       toast.success('Werkbon ingepland');
       onScheduled?.(updated);
       onClose();

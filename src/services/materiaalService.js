@@ -11,7 +11,10 @@ import { withCompanyId } from '../lib/currentCompany'
 // altijd. Het bijwerken van de prijs is daarom een gewone update; er kan nooit
 // een materiaal zonder prijsrij achterblijven.
 
-export const EENHEDEN = ['stuk', 'm', 'm²', 'liter', 'uur']
+// Gangbare eenheden in de bouw. Een materiaal met een eenheid die hier niet in
+// staat (bijv. uit een import: "m1", "m2") blijft bewaard: het formulier toont
+// die als extra keuze, zie MaterialenPage.
+export const EENHEDEN = ['stuk', 'm', 'm²', 'm³', 'kg', 'liter', 'uur', 'zak', 'plaat', 'rol', 'doos', 'koker', 'blik', 'emmer', 'set', 'pak', 'bigbag']
 
 // Inbedding: materiaal_inkoop hangt met zijn primaire sleutel aan materialen,
 // dus PostgREST levert één object. Oudere versies gaven een array — beide

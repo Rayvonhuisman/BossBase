@@ -195,7 +195,7 @@ export function ActivitiesPageV2({ openCustomer, preOpenActivityId, onItemOpen, 
       setSelected(a);
       onNavConsumed && onNavConsumed();
     }
-  }, [preOpenActivityId, loading, acts, onNavConsumed, onItemOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [preOpenActivityId, loading, acts, onNavConsumed, onItemOpen]);
 
   // Unieke toegewezen medewerkers als { id, name } objecten voor de filterdropdown
   const assignees = useMemo(() => {

@@ -80,21 +80,31 @@ const klok = () => NU
 // ── Eenmalig gebruik ──
 {
   const { opslag, gezet } = maakOpslag([await rij('a', T, U, over(30))])
-  const eerste = await pasResetToe({ token: T, newPassword: 'nieuw-1' }, opslag, klok)
-  const tweede = await pasResetToe({ token: T, newPassword: 'nieuw-2' }, opslag, klok)
+  const eerste = await pasResetToe({ token: T, newPassword: 'Nieuw-1!aa' }, opslag, klok)
+  const tweede = await pasResetToe({ token: T, newPassword: 'Nieuw-2!aa' }, opslag, klok)
   const check3 = await pasResetToe({ token: T, checkOnly: true }, opslag, klok)
   check('eerste gebruik slaagt', eerste.body.code === 'OK', eerste)
   check('tweede gebruik geeft USED', tweede.body.code === 'USED', tweede)
   check('controle na gebruik geeft USED', check3.body.code === 'USED', check3)
-  check('wachtwoord precies één keer gezet', gezet.length === 1 && gezet[0].wachtwoord === 'nieuw-1', gezet)
+  check('wachtwoord precies één keer gezet', gezet.length === 1 && gezet[0].wachtwoord === 'Nieuw-1!aa', gezet)
+}
+
+// ── Te zwak wachtwoord: server weigert, link blijft bruikbaar ──
+{
+  const { opslag, gezet, rijen } = maakOpslag([await rij('a', T, U, over(30))])
+  for (const zwak of ['zwak', 'alleenkleine1!', 'GEENCIJFER!a', 'Geenteken12']) {
+    const r = await pasResetToe({ token: T, newPassword: zwak }, opslag, klok)
+    check(`zwak wachtwoord "${zwak}" geeft WEAK`, r.body.code === 'WEAK', r)
+  }
+  check('zwak wachtwoord zet niets en claimt niets', gezet.length === 0 && rijen[0].used_at === null)
 }
 
 // ── Twee verzoeken tegelijk met dezelfde link ──
 {
   const { opslag, gezet } = maakOpslag([await rij('a', T, U, over(30))])
   const [a, b] = await Promise.all([
-    pasResetToe({ token: T, newPassword: 'gelijk-1' }, opslag, klok),
-    pasResetToe({ token: T, newPassword: 'gelijk-2' }, opslag, klok),
+    pasResetToe({ token: T, newPassword: 'Gelijk-1!a' }, opslag, klok),
+    pasResetToe({ token: T, newPassword: 'Gelijk-2!a' }, opslag, klok),
   ])
   const codes = [a.body.code, b.body.code].sort()
   check('gelijktijdig: één OK, één USED', codes[0] === 'OK' && codes[1] === 'USED', codes)
@@ -105,7 +115,7 @@ const klok = () => NU
 {
   const { opslag, gezet } = maakOpslag([await rij('a', T, U, over(-1))])
   const c = await pasResetToe({ token: T, checkOnly: true }, opslag, klok)
-  const t = await pasResetToe({ token: T, newPassword: 'x' }, opslag, klok)
+  const t = await pasResetToe({ token: T, newPassword: 'Sterk-1!xx' }, opslag, klok)
   check('verlopen link: controle geeft EXPIRED', c.body.code === 'EXPIRED', c)
   check('verlopen link: toepassen geeft EXPIRED', t.body.code === 'EXPIRED', t)
   check('verlopen link: geen wachtwoord gezet', gezet.length === 0)
@@ -115,7 +125,7 @@ const klok = () => NU
   const { opslag, gezet } = maakOpslag([await rij('a', T, U, over(1))])
   let tik = 0
   const verspringendeKlok = () => (tik++ === 0 ? NU : new Date(NU.getTime() + 2 * 60_000))
-  const r = await pasResetToe({ token: T, newPassword: 'x' }, opslag, verspringendeKlok)
+  const r = await pasResetToe({ token: T, newPassword: 'Sterk-1!xx' }, opslag, verspringendeKlok)
   check('verloopt tijdens verwerken: niet toegepast', r.body.code === 'USED' && gezet.length === 0, r)
 }
 
@@ -134,8 +144,8 @@ const klok = () => NU
 // ── Mislukt wachtwoord: link blijft bruikbaar ──
 {
   const { opslag, rijen } = maakOpslag([await rij('a', T, U, over(30))], { wachtwoordFout: 'Password should be at least 6 characters' })
-  const r = await pasResetToe({ token: T, newPassword: 'kort' }, opslag, klok)
-  check('te zwak wachtwoord geeft ERROR', r.body.code === 'ERROR' && r.status === 500, r)
+  const r = await pasResetToe({ token: T, newPassword: 'Lang-Genoeg1!' }, opslag, klok)
+  check('fout bij zetten geeft ERROR', r.body.code === 'ERROR' && r.status === 500, r)
   check('na mislukte poging is de link weer vrij', rijen[0].used_at === null, rijen[0])
 }
 
@@ -148,7 +158,7 @@ const klok = () => NU
     await rij('nieuw', T, U, over(50)),
     await rij('ander', T3, 'gebruiker-2', over(50)),
   ])
-  await pasResetToe({ token: T, newPassword: 'nieuw' }, opslag, klok)
+  await pasResetToe({ token: T, newPassword: 'Nieuw-3!aa' }, opslag, klok)
   const oud = await pasResetToe({ token: T2, checkOnly: true }, opslag, klok)
   const ander = await pasResetToe({ token: T3, checkOnly: true }, opslag, klok)
   check('oudere link van dezelfde gebruiker vervalt', oud.body.code === 'INVALID', oud)

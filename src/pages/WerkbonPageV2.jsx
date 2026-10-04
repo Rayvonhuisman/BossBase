@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { LaadFout } from '../components/LaadFout.jsx';
+import { logFout, meldFout, AGENDA_NIET_BIJGEWERKT } from '../lib/stilleFouten.js';
+import { vandaagIso } from '../lib/datumTijd.js';
 import { listMaterialen } from '../services/materiaalService.js';
 import { listLeveranciers } from '../services/leverancierService.js';
 import LeverancierSelect from '../components/LeverancierSelect.jsx';
@@ -59,10 +62,11 @@ import { bouwKostenOverzicht, getWerkbonKostenBron } from '../services/kostenOve
 import { createProjectKost } from '../services/projectKostenService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { documentUrl } from '../services/documentService.js';
+import Rondleiding from '../components/Rondleiding.jsx';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 
-const TODAY = () => new Date().toISOString().slice(0, 10);
+const TODAY = () => vandaagIso();
 // Waarde van de "+ Nieuwe klant…"/"+ Nieuw project…"-optie in een keuzelijst.
 const NIEUW_OPTIE = '__nieuw__';
 
@@ -114,7 +118,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
   const { profile } = useProfile();
   const isEdit = mode === 'edit';
   const [teamMembers, setTeamMembers] = useState([]);
-  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(logFout('teamleden laden')); }, []);
   const [form, setForm] = useState(() => ({
     titel: werkbon?.titel || '',
     customer_id: werkbon?.customerId || '',
@@ -142,7 +146,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
   // als LeverancierSelect. Wat hier net is aangemaakt staat nog niet in de
   // lijsten die de pagina meegaf, dus komt het er lokaal bij.
   const { can } = usePermissions();
-  const beheerder = ['admin', 'planner'].includes(profile?.role);
+  const beheerder = profile?.role === 'admin';
   const magKlantMaken = beheerder || can('klanten_bewerken');
   const magProjectMaken = beheerder || can('projecten_bewerken');
   const [snelNieuw, setSnelNieuw] = useState(null); // 'klant' | 'project'
@@ -243,10 +247,10 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
         const nieuweVerantw = form.verantwoordelijkeIds.filter(id => !prevVerantw.includes(id));
         // Wie tegelijk gekoppeld én verantwoordelijk wordt, krijgt alleen de
         // zwaardere melding: twee berichten voor één handeling leest als spam.
-        notifyNewAssignees({ userIds: form.assignedToIds.filter(id => !nieuweVerantw.includes(id)), prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
+        notifyNewAssignees({ userIds: form.assignedToIds.filter(id => !nieuweVerantw.includes(id)), prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(logFout('melding versturen'));
         // Verantwoordelijk worden telt apart: dat viel eerder door de diff als je
         // al gekoppeld was.
-        notifyNieuweVerantwoordelijken({ userIds: form.verantwoordelijkeIds, prevUserIds: prevVerantw, members: teamMembers, sendMail: notifyMail, titel: form.titel.trim(), relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
+        notifyNieuweVerantwoordelijken({ userIds: form.verantwoordelijkeIds, prevUserIds: prevVerantw, members: teamMembers, sendMail: notifyMail, titel: form.titel.trim(), relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(logFout('melding versturen'));
         // Een dag of tijd verzetten telt hier net zo zwaar als slepen in de
         // planning: wie blijft staan hoort de oude én de nieuwe tijd. Dit venster
         // deed dat niet, dus een tijdwijziging vanaf de werkbon bleef stil.
@@ -259,12 +263,12 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
         // ook nog te horen dat er iets verschoof. Alleen de blijvers dus.
         const blijvers = form.assignedToIds.filter(id => prevIds.includes(id));
         if (planVerschoven && blijvers.length && (oudPlan.datum || nieuwPlan.datum)) {
-          meldPlanningWijziging({ userIds: blijvers, soort: oudPlan.datum ? 'verzet' : 'ingepland', werkbon: werkbonKern, oud: oudPlan, nieuw: nieuwPlan, creatorId: profile?.id }).catch(() => {});
+          meldPlanningWijziging({ userIds: blijvers, soort: oudPlan.datum ? 'verzet' : 'ingepland', werkbon: werkbonKern, oud: oudPlan, nieuw: nieuwPlan, creatorId: profile?.id }).catch(logFout('melding versturen'));
         }
         // Van de werkbon afgehaald worden hoorde je tot nu toe van niemand.
         const eraf = prevIds.filter(id => !form.assignedToIds.includes(id));
         if (eraf.length) {
-          meldPlanningWijziging({ userIds: eraf, soort: 'afgehaald', werkbon: werkbonKern, oud: oudPlan, creatorId: profile?.id }).catch(() => {});
+          meldPlanningWijziging({ userIds: eraf, soort: 'afgehaald', werkbon: werkbonKern, oud: oudPlan, creatorId: profile?.id }).catch(logFout('melding versturen'));
         }
         toast.success('Werkbon bijgewerkt');
       } else {
@@ -283,8 +287,8 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
         toast.success('Werkbon aangemaakt');
         // Zelfde verdeling als bij bewerken: verantwoordelijk zijn is de zwaardere
         // melding, dus wie dat wordt krijgt niet óók nog "je bent toegewezen".
-        notifyNewAssignees({ userIds: form.assignedToIds.filter(id => !form.verantwoordelijkeIds.includes(id)), members: teamMembers, sendMail: notifyMail, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
-        notifyNieuweVerantwoordelijken({ userIds: form.verantwoordelijkeIds, members: teamMembers, sendMail: notifyMail, titel: form.titel.trim(), relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
+        notifyNewAssignees({ userIds: form.assignedToIds.filter(id => !form.verantwoordelijkeIds.includes(id)), members: teamMembers, sendMail: notifyMail, type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${form.titel.trim()}`, link: 'werkbonnen', relatedType: 'werkbon', relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(logFout('melding versturen'));
+        notifyNieuweVerantwoordelijken({ userIds: form.verantwoordelijkeIds, members: teamMembers, sendMail: notifyMail, titel: form.titel.trim(), relatedId: saved?.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(logFout('melding versturen'));
       }
       // De dagen pas ná het opslaan: een nieuwe werkbon heeft dan pas een id.
       // Lukt dit niet, dan staat de werkbon er al wél (op de startdatum) —
@@ -296,7 +300,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
           toast.error(`Werkbon opgeslagen, maar de dagen niet: ${e.message || 'onbekende fout'}`);
         }
       }
-      syncWerkbonEvents(saved.id).catch(() => {});
+      syncWerkbonEvents(saved.id).catch(meldFout(toast, AGENDA_NIET_BIJGEWERKT));
       onSaved?.(saved);
       onClose();
     } catch (e) {
@@ -324,6 +328,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
           </div>
           <ModalX onClose={onClose} />
         </div>
+        {!isEdit && <Rondleiding pagina="venster-werkbon" inVenster />}
         <div className="wb2-modal-fg">
           {isEdit && (
             <div className="f full">
@@ -335,7 +340,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
               </select>
             </div>
           )}
-          <div className="f full">
+          <div className="f full" data-rl="vw-titel">
             <label>Titel</label>
             <input
               type="text" autoFocus
@@ -344,7 +349,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
               onChange={e => set('titel', e.target.value)}
             />
           </div>
-          <div className="f">
+          <div className="f" data-rl="vw-klant">
             <label>Klant</label>
             <select value={form.customer_id} onChange={e => kiesKlant(e.target.value)}>
               <option value="">— Geen klant —</option>
@@ -364,6 +369,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
             </select>
           </div>
           <WerkbonLocatieVeld
+            rl="vw-locatie"
             className="full"
             value={form.locatie}
             onChange={v => set('locatie', v)}
@@ -391,6 +397,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
           />
           {teamMembers.length > 0 && (
             <AssigneeResponsibleSelect
+              rl="vw-ploeg"
               members={teamMembers}
               assignedIds={form.assignedToIds}
               verantwoordelijkeIds={form.verantwoordelijkeIds}
@@ -413,7 +420,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
             disabled: saving,
             className: 'full',
           })}
-          <div className="f full">
+          <div className="f full" data-rl="vw-omschrijving">
             <label>Omschrijving</label>
             <NoteEditor mentions={true} value={form.omschrijving} onChange={v => set('omschrijving', v)} placeholder="Wat moet er gebeuren op locatie? Typ @ om iemand te taggen" rows={3} disabled={saving} teamMembers={teamMembers} />
           </div>
@@ -435,7 +442,7 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
             </div>
           )}
         </div>
-        <div className="fa">
+        <div className="fa" data-rl="vw-aanmaken">
           <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Annuleren</button>
           <button className="btn btn-p" onClick={submit} disabled={saving}>
             {saving ? 'Opslaan…' : (isEdit ? 'Wijzigingen opslaan' : 'Werkbon aanmaken')}
@@ -503,10 +510,14 @@ function WerkbonListCard({ w, takenCount, onClick }) {
 function HoursQuickAdd({ werkbon, onSaved }) {
   const toast = useToast();
   const { profile } = useProfile();
-  const canBookForOthers = ['admin', 'planner'].includes(profile?.role);
+  const { magBewerken } = usePermissions();
+  // Voor een collega boeken: beheerder, recht planning, of verantwoordelijke van
+  // deze werkbon — dezelfde regel als de database (bb_mag_uren_voor_ander).
+  const canBookForOthers = magBewerken('planning')
+    || (werkbon?.verantwoordelijkeIds || []).includes(profile?.id);
   // Wie op deze klus zit mag hier boeken; de RLS dwingt hetzelfde af. We vragen
   // het hier na zodat er geen knop staat die je toch niet mag indrukken.
-  const magBoeken = magWerkbonUrenBeheren(werkbon, profile);
+  const magBoeken = magWerkbonUrenBeheren(werkbon, profile, magBewerken('planning'));
 
   const [datum, setDatum] = useState(TODAY());
   const [start, setStart] = useState('');
@@ -515,14 +526,14 @@ function HoursQuickAdd({ werkbon, onSaved }) {
   const [km, setKm] = useState('');
   const [notitie, setNotitie] = useState('');
   const [saving, setSaving] = useState(false);
-  // Admin-vangnet: uren namens een collega boeken. Alleen voor admin/planner —
+  // Uren namens een collega boeken: beheerder, planning of verantwoordelijke —
   // een monteur boekt op de werkbon altijd voor zichzelf.
   const [teamMembers, setTeamMembers] = useState([]);
   const [bookForId, setBookForId] = useState(profile?.id || '');
 
   useEffect(() => {
     if (!canBookForOthers) return;
-    getTeamMembers().then(ms => setTeamMembers(ms.filter(m => m.profileId))).catch(() => {});
+    getTeamMembers().then(ms => setTeamMembers(ms.filter(m => m.profileId))).catch(logFout('teamleden laden'));
   }, [canBookForOthers]);
 
   useEffect(() => {
@@ -802,8 +813,8 @@ function MaterialenSection({ materialen, onAdd, onUpdate, onDelete, canEdit = tr
   const [biblio, setBiblio] = useState([]);
   const [leveranciers, setLeveranciers] = useState([]);
   useEffect(() => {
-    listMaterialen({ inclusiefInactief: false }).then(setBiblio).catch(() => {});
-    listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(() => {});
+    listMaterialen({ inclusiefInactief: false }).then(setBiblio).catch(logFout('materialenbibliotheek laden'));
+    listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(logFout('leveranciers laden'));
   }, []);
 
   const VRIJ = '__vrij__';
@@ -1103,14 +1114,14 @@ function WerkbonKostenSection({ werkbon, uren, materialen }) {
   const plan = usePlan();
   const magZien = can('kosten') && plan.has('kosten_nacalculatie');
   const magInkoop = can('inkoopprijzen');
-  const magBewerken = ['admin', 'planner'].includes(profile?.role) || can('projecten_bewerken');
+  const magBewerken = profile?.role === 'admin' || can('projecten_bewerken');
 
   const [jobCosts, setJobCosts] = useState([]);
   const [inkopen, setInkopen] = useState([]);
   const [laadFout, setLaadFout] = useState('');
   const [loading, setLoading] = useState(true);
   const [leveranciers, setLeveranciers] = useState([]);
-  useEffect(() => { if (magZien) listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(() => {}); }, [magZien]);
+  useEffect(() => { if (magZien) listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(logFout('leveranciers laden')); }, [magZien]);
 
   // Opnieuw laden als het materiaal op deze werkbon verandert: de materiaal-
   // kosten zijn spiegelregels die de database bij elke wijziging bijwerkt.
@@ -1622,7 +1633,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
   const { guardSchrijven, planModal } = usePlanGuard();
   // Beheer/alle werkbonnen bewerken: admin/planner-rol óf het 'werkbonnen_bewerken'-
   // recht. (Een verantwoordelijke mag z'n eigen bon sowieso al — zie canEditDetail.)
-  const canManage = !profile || ['admin', 'planner'].includes(profile.role) || can('werkbonnen_bewerken');
+  const canManage = !profile || profile.role === 'admin' || can('werkbonnen_bewerken');
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
@@ -1680,9 +1691,9 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
     try {
       const [list, cs, tc, prs] = await Promise.all([
         getWerkbonnen(),
-        listCustomers().catch(() => []),
+        listCustomers().catch(e => { logFout('klanten laden')(e); return []; }),
         getAllWerkbonTakenCounts().catch(() => ({})),
-        getProjects().catch(() => []),
+        getProjects().catch(e => { logFout('projecten laden')(e); return []; }),
       ]);
       setWerkbonnen(list);
       setCustomers(cs);
@@ -1698,7 +1709,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
   useEffect(() => { loadList(); }, [refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Teamleden voor @ tagging in de notities-sectie van het werkbon-detail.
-  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(logFout('teamleden laden')); }, []);
 
   // Geplande dagen van deze werkbon, voor het Planning-blok in het detail.
   // Zelfde regels als in de klantkaart, alleen dan van één werkbon.
@@ -1707,7 +1718,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
   ), [detail, teamMembers]);
 
   // Bedrijfsgegevens voor de werkbon-PDF (logo, huisstijlkleur, adres).
-  useEffect(() => { getCurrentCompany().then(setCompany).catch(() => {}); }, []);
+  useEffect(() => { getCurrentCompany().then(setCompany).catch(logFout('bedrijfsgegevens laden')); }, []);
 
   // De URL bepaalt of het detail open staat. Geen id meer in de URL (terug in de
   // browser) betekent: terug naar de lijst.
@@ -1729,16 +1740,24 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
     let alive = true;
     setDetailLoading(true);
     setShowHoursAdd(false);
+    // Een onderdeel dat niet laadt mag de werkbon niet tegenhouden, maar ook
+    // niet stil als "geen uren" of "geen materiaal" in beeld komen.
+    const deels = [];
+    const of = (belofte, terug) => belofte.catch(e => { deels.push(e); return terug; });
     Promise.all([
-      getWerkbonById(selectedId).catch(() => null),
-      getWerkbonTaken(selectedId).catch(() => []),
-      getWerkbonMaterialen(selectedId).catch(() => []),
-      getWerkbonUren(selectedId).catch(() => []),
-      getWerkbonFotos(selectedId).catch(() => []),
-      getWerkbonTaken(selectedId, { soort: 'meerwerk' }).catch(() => []),
-      getWerkbonNotities(selectedId).catch(() => []),
+      of(getWerkbonById(selectedId), null),
+      of(getWerkbonTaken(selectedId), []),
+      of(getWerkbonMaterialen(selectedId), []),
+      of(getWerkbonUren(selectedId), []),
+      of(getWerkbonFotos(selectedId), []),
+      of(getWerkbonTaken(selectedId, { soort: 'meerwerk' }), []),
+      of(getWerkbonNotities(selectedId), []),
     ]).then(([w, t, m, u, f, mw, nt]) => {
       if (!alive) return;
+      if (deels.length) {
+        console.warn('[bb] werkbon deels geladen', deels);
+        toast.error(w ? 'Niet alles van deze werkbon kon worden geladen (taken, materiaal, uren, foto\'s of notities kunnen ontbreken). Ververs de pagina.' : 'Deze werkbon kon niet worden geladen. Ververs de pagina.');
+      }
       setDetail(w);
       setWerkbonNotities(nt);
       setTaken(t);
@@ -1982,7 +2001,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
     if (ondertekend) {
       // De edge function heeft de bon al bijgewerkt en op slot gezet; opnieuw
       // ophalen is de enige manier om de UI daarmee gelijk te krijgen.
-      const vers = await getWerkbonById(detail.id).catch(() => null);
+      const vers = await getWerkbonById(detail.id).catch(logFout('werkbon verversen'));
       if (vers) {
         setDetail(vers);
         setWerkbonnen(prev => prev.map(w => (w.id === vers.id ? vers : w)));
@@ -2003,7 +2022,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
     if (gemaild) {
       setAfrondModal(false);
       toast.success(`Werkbon verstuurd naar ${email}. De bon blijft open tot de klant tekent.`);
-      const vers = await getWerkbonById(detail.id).catch(() => null);
+      const vers = await getWerkbonById(detail.id).catch(logFout('werkbon verversen'));
       if (vers) setDetail(vers);
       return;
     }
@@ -2625,11 +2644,10 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
       <div className="wb2-head">
         <div>
           <h1>Werkbonnen</h1>
-          {err && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 4 }}>{err}</div>}
         </div>
         <div className="wb2-head-spacer" />
         {canManage && (
-          <button className="btn btn-p" onClick={guardSchrijven('Een werkbon aanmaken', () => setShowNew(true))} type="button">
+          <button className="btn btn-p" data-rl="werkbonnen-nieuw" onClick={guardSchrijven('Een werkbon aanmaken', () => setShowNew(true))} type="button">
             {I.plus} Nieuwe werkbon
           </button>
         )}
@@ -2644,7 +2662,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
         />
       </div>
 
-      <div className="wb2-chips">
+      <div className="wb2-chips" data-rl="werkbonnen-filters">
         {[
           ['all', 'Alle', counts.all, null],
           ['gepland', 'Gepland', counts.gepland, statusInfo('gepland', 'werkbon').dot],
@@ -2664,7 +2682,9 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
         ))}
       </div>
 
-      {filtered.length === 0 ? (
+      {err ? (
+        <LaadFout titel="Werkbonnen laden is niet gelukt" fout={err} onOpnieuw={loadList} />
+      ) : filtered.length === 0 ? (
         <div className="wb2-empty">
           <div className="wb2-empty-ic">{I.brief}</div>
           <div className="wb2-empty-title">Geen werkbonnen gevonden</div>

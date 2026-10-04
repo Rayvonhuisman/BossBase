@@ -7,17 +7,31 @@
 //     De bucket werkbon-fotos is privé en een signed URL is niet in SQL te
 //     maken, dus dat kan alleen hier. De sign-token-functies in de database
 //     geven wel de paden, maar nooit een leesbare link.
-//   { sign_token, name, email, signature_data_url, signed_pdf_base64 } → tekenen.
+//   { sign_token, name, email, signature_data_url } → tekenen.
 //
-// Wat hier NIET gebeurt: de PDF bouwen. Die komt kant-en-klaar uit de browser.
-// Zou deze functie hem zelf maken, dan las hij met de service-role langs de RLS
-// die de inkoopprijzen afschermt — precies wat de werkbon niet mag tonen.
+// Het ondertekende exemplaar maakt de server (_shared/ondertekendExemplaar.ts),
+// uitsluitend uit de sign-token-functies: dat is precies wat de klant op de
+// publieke pagina ziet, dus geen inkoopprijzen of interne notities. Een PDF die
+// de browser meestuurt wordt genegeerd — die kon de ondertekenaar zelf maken
+// (audit 2026-10-01, H4).
+//
+// Wie mag tekenen:
+//   - zonder login (de publieke link): alleen als de werkbon ter ondertekening
+//     is verstuurd (verstuurd_op) of al is afgerond;
+//   - ingelogd, ter plekke in de afrondmodal: een actieve gebruiker van hetzelfde
+//     bedrijf, ook als de werkbon nog in uitvoering is.
+// Het pakket moet werkbonnen bevatten. Bewust niet 'digitale_handtekening': die
+// feature gaat over offertes, en werkbonnen laten tekenen hoort bij elk pakket
+// met werkbonnen (bob-knowledge/abonnementen.md).
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
 import { opslagWaarde, kortLink } from '../_shared/documentLink.ts'
+import {
+  maakWerkbonExemplaar, bytesNaarBase64, isUuid, handtekeningUit, aanroeperGegevens,
+} from '../_shared/ondertekendExemplaar.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -51,21 +65,6 @@ async function sendViaEdge(supabaseUrl: string, serviceKey: string, body: Record
   } catch { return false }
 }
 
-function dataUrlToBytes(dataUrl: string): Uint8Array {
-  const base64 = dataUrl.split(',')[1]
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return bytes
-}
-
-function base64ToBytes(b64: string): Uint8Array {
-  const binary = atob(b64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return bytes
-}
-
 // De fotokolom bevat bij nieuwe uploads een kaal opslagpad en bij oude rijen een
 // volledige URL. Zelfde afhandeling als storagePathFromStored in werkbonService.
 function padUit(waarde: string): string {
@@ -81,21 +80,10 @@ serve(async (req) => {
   const warnings: string[] = []
 
   try {
-    const payload = await req.json()
-    const { action, sign_token, name, email, signature_data_url, signed_pdf_base64, pdf_fout } = payload
+    const payload = await req.json().catch(() => ({}))
+    const { action, sign_token, signature_data_url } = payload
 
-    // De ondertekende PDF wordt in de browser van de klant gemaakt. Lukte dat niet,
-    // dan gaan de mails zonder bijlage en merkte niemand het. Leg dat vast.
-    if (pdf_fout) {
-      await logMailFout({
-        soort: 'ondertekende_pdf_werkbon',
-        ontvanger: email ?? null,
-        fout: String(pdf_fout).slice(0, 500),
-        bron: 'sign-werkbon',
-      })
-    }
-
-    if (!sign_token) return json({ success: false, error: 'sign_token ontbreekt' }, 400)
+    if (!isUuid(sign_token)) return json({ success: false, code: 'ongeldig', error: 'Deze link is ongeldig.' }, 404)
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -103,107 +91,143 @@ serve(async (req) => {
 
     // ── ACTIE: foto's ────────────────────────────────────────────────────────
     if (action === 'fotos') {
-      const { data: rijen, error } = await admin.rpc('get_werkbon_fotos_by_sign_token', { p_token: sign_token })
-      if (error) return json({ success: false, error: error.message }, 500)
-      const paden = (rijen || []).map((r: { pad: string }) => padUit(r.pad))
-      if (!paden.length) return json({ success: true, fotos: [] })
-      const { data: signed } = await admin.storage.from('werkbon-fotos').createSignedUrls(paden, 3600)
+      const [{ data: wbRij }, { data: rijen, error }] = await Promise.all([
+        admin.rpc('get_werkbon_by_sign_token', { p_token: sign_token }),
+        admin.rpc('get_werkbon_fotos_by_sign_token', { p_token: sign_token }),
+      ])
+      const wb = wbRij?.[0]
+      if (error || !wb) return json({ success: true, fotos: [] })
+      // Alleen bestanden in de map van DEZE werkbon. werkbon_fotos.url is vrije
+      // tekst; zonder dit filter tekende de service-role elk pad in de bucket,
+      // ook dat van een ander bedrijf (audit M14).
+      const map = `${wb.company_id}/${wb.id}/`
+      const geldig = (rijen || [])
+        .map((r: { pad: string; categorie: string }) => ({ pad: padUit(r.pad), categorie: r.categorie || '' }))
+        .filter((r: { pad: string }) => r.pad.startsWith(map) && !r.pad.includes('..'))
+      if (!geldig.length) return json({ success: true, fotos: [] })
+      const { data: signed } = await admin.storage.from('werkbon-fotos').createSignedUrls(geldig.map((r: { pad: string }) => r.pad), 3600)
       return json({
         success: true,
-        fotos: (rijen || []).map((r: { pad: string; categorie: string }, i: number) => ({
+        fotos: geldig.map((r: { categorie: string }, i: number) => ({
           url: signed?.[i]?.signedUrl || null,
-          categorie: r.categorie || '',
+          categorie: r.categorie,
         })).filter((f: { url: string | null }) => f.url),
       })
     }
 
     // ── ACTIE: ondertekenen ──────────────────────────────────────────────────
+    const name = String(payload?.name ?? '').trim().slice(0, 200)
+    const email = String(payload?.email ?? '').trim().toLowerCase().slice(0, 254)
     if (!name || !email || !signature_data_url) {
-      return json({ success: false, error: 'Verplichte velden ontbreken' }, 400)
+      return json({ success: false, error: 'Vul de naam en het e-mailadres in en zet een handtekening.' }, 400)
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ success: false, error: 'Vul een geldig e-mailadres in.' }, 400)
+    const sigBytes = handtekeningUit(signature_data_url)
+    if (!sigBytes) return json({ success: false, error: 'De handtekening kon niet worden gelezen. Probeer het opnieuw.' }, 400)
 
     const { data: werkbon, error: wbErr } = await admin
       .from('werkbonnen')
-      .select('id, nummer, titel, company_id, customer_id, ondertekend_op, status, afgerond_op')
+      .select('id, nummer, titel, company_id, customer_id, ondertekend_op, status, afgerond_op, verstuurd_op')
       .eq('sign_token', sign_token)
       .maybeSingle()
 
-    if (wbErr) return json({ success: false, error: `Werkbon ophalen mislukt: ${wbErr.message}` }, 500)
-    if (!werkbon) return json({ success: false, error: 'Werkbon niet gevonden voor deze link' }, 404)
-    if (werkbon.ondertekend_op) return json({ success: false, error: 'Deze werkbon is al ondertekend' }, 409)
+    if (wbErr) {
+      console.error('sign-werkbon ophalen', wbErr.message)
+      return json({ success: false, error: 'De werkbon kon niet worden geladen. Probeer het later opnieuw.' }, 500)
+    }
+    if (!werkbon) return json({ success: false, code: 'ongeldig', error: 'Deze werkbon is niet gevonden. Controleer de link.' }, 404)
+    if (werkbon.ondertekend_op) return json({ success: false, code: 'al_ondertekend', error: 'Deze werkbon is al ondertekend.' }, 409)
 
-    // ── Handtekening opslaan (privé bucket, net als bij de offerte) ──────────
-    let sigBytes: Uint8Array
-    try {
-      sigBytes = dataUrlToBytes(signature_data_url)
-    } catch (err) {
-      return json({ success: false, error: `Handtekening ongeldig: ${err}` }, 400)
+    // Ter plekke (ingelogd, zelfde bedrijf) of via de publieke link?
+    let terPlekke = false
+    const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
+    if (jwt && jwt.split('.').length === 3) {
+      const { data: { user } } = await admin.auth.getUser(jwt).catch(() => ({ data: { user: null } }))
+      if (user) {
+        const { data: prof } = await admin.from('profiles').select('company_id, actief').eq('id', user.id).maybeSingle()
+        terPlekke = !!prof && prof.actief !== false && prof.company_id === werkbon.company_id
+      }
+    }
+    const verstuurdOfAf = !!werkbon.verstuurd_op || werkbon.status === 'afgerond'
+    if (!terPlekke && !verstuurdOfAf) {
+      return json({ success: false, code: 'niet_ondertekenbaar', error: 'Deze werkbon is nog niet ter ondertekening verstuurd.' }, 409)
     }
 
-    const sigNaam = `werkbon-${werkbon.id}.png`
+    const { data: heeftFeature } = await admin.rpc('bb_has_feature', {
+      p_company_id: werkbon.company_id, p_feature: 'werkbonnen',
+    })
+    if (heeftFeature !== true) {
+      return json({ success: false, error: 'Werkbonnen ondertekenen is voor dit bedrijf niet beschikbaar.' }, 403)
+    }
+
+    // ── Handtekening en exemplaar opslaan (uniek pad, nog nergens aan gekoppeld)
+    const nu = new Date().toISOString()
+    const { ip, userAgent } = aanroeperGegevens(req)
+    const uniek = crypto.randomUUID()
+    const sigNaam = `werkbon-${werkbon.id}-${uniek}.png`
     const { error: sigErr } = await admin.storage
       .from('signatures')
-      .upload(sigNaam, sigBytes, { contentType: 'image/png', upsert: true })
-    if (sigErr) return json({ success: false, error: `Handtekening opslaan mislukt: ${sigErr.message}` }, 500)
-
-    // Opgeslagen: een link van 24 uur (overgang, _shared/documentLink.ts); de app
-    // vraagt bij het openen een korte link op via document-url. Vroeger: 10 jaar.
+      .upload(sigNaam, sigBytes, { contentType: 'image/png', upsert: false })
+    if (sigErr) {
+      console.error('sign-werkbon handtekening', sigErr.message)
+      return json({ success: false, error: 'De handtekening kon niet worden opgeslagen. Probeer het opnieuw.' }, 500)
+    }
     const sigVerwijzing = await opslagWaarde(admin, 'signatures', sigNaam)
 
-    // ── Bedrijfsgegevens (branding + notificatieadres) ───────────────────────
-    let company: Record<string, unknown> = {}
+    let exemplaar: Awaited<ReturnType<typeof maakWerkbonExemplaar>> | null = null
+    let pdfPad: string | null = null
     try {
-      const { data, error } = await admin
-        .from('companies')
-        .select('name, email, logo_url, branding_color')
-        .eq('id', werkbon.company_id)
-        .maybeSingle()
-      if (error) warnings.push(`Bedrijfsgegevens: ${error.message}`)
-      else company = data || {}
-    } catch (err) { warnings.push(`Bedrijfsgegevens mislukt: ${err}`) }
+      exemplaar = await maakWerkbonExemplaar(admin, sign_token, { naam: name, email, tijdstip: nu, ip, userAgent, handtekeningPng: sigBytes })
+      pdfPad = `${werkbon.company_id}/werkbon-${werkbon.id}-${uniek.slice(0, 8)}-ondertekend.pdf`
+      const { error: upErr } = await admin.storage.from('signed-werkbonnen')
+        .upload(pdfPad, exemplaar.pdf, { contentType: 'application/pdf', upsert: false })
+      if (upErr) { console.error('sign-werkbon pdf opslaan', upErr.message); pdfPad = null; warnings.push('Ondertekend exemplaar opslaan mislukt') }
+    } catch (e) {
+      console.error('sign-werkbon exemplaar maken', e)
+      warnings.push('Ondertekend exemplaar maken mislukt')
+      await logMailFout({ soort: 'ondertekende_pdf_werkbon', ontvanger: null, companyId: werkbon.company_id,
+        fout: `Exemplaar maken mislukt: ${String(e).slice(0, 300)}`, bron: 'sign-werkbon', gerelateerdType: 'werkbon', gerelateerdId: werkbon.id })
+    }
+    const pdfUrl = pdfPad ? await opslagWaarde(admin, 'signed-werkbonnen', pdfPad) : null
 
-    // ── Werkbon bijwerken ────────────────────────────────────────────────────
+    // ── Bedrijfsgegevens (branding + notificatieadres) ───────────────────────
+    const { data: companyRij } = await admin
+      .from('companies').select('name, email, logo_url, branding_color').eq('id', werkbon.company_id).maybeSingle()
+    const company: Record<string, unknown> = companyRij || {}
+
+    // ── Atomair ondertekenen ─────────────────────────────────────────────────
     // Tekenen rondt de klus ook af als dat nog niet gebeurd was: de klant tekent
-    // voor werk dat klaar is. afgerond_op wordt alleen gezet als het leeg is,
-    // zodat een eerder afrondmoment niet wordt overschreven.
-    const nu = new Date().toISOString()
+    // voor werk dat klaar is. afgerond_op blijft staan als hij er al was.
     const update: Record<string, unknown> = {
       ondertekend_op: nu,
       handtekening_url: sigVerwijzing,
       ondertekend_door_naam: name,
       ondertekend_door_email: email,
       status: 'afgerond',
+      ondertekende_pdf_url: pdfUrl,
+      afgerond_op: werkbon.afgerond_op || nu,
+      ondertekening_bewijs: {
+        versie: 1, tijdstip: nu, naam: name, email, ip, user_agent: userAgent,
+        nummer: werkbon.nummer, ter_plekke: terPlekke,
+        inhoud_sha256: exemplaar?.documentHash ?? null,
+        pdf_sha256: pdfPad ? exemplaar?.pdfHash ?? null : null,
+        pdf_pad: pdfPad, handtekening_pad: sigNaam,
+      },
     }
-    if (!werkbon.afgerond_op) update.afgerond_op = nu
-
-    const { error: updErr } = await admin.from('werkbonnen').update(update).eq('id', werkbon.id)
-    if (updErr) return json({ success: false, error: `Werkbon bijwerken mislukt: ${updErr.message}` }, 500)
-
-    // ── Ondertekende PDF opslaan (uit de browser) ────────────────────────────
-    let pdfUrl: string | null = null
-    if (signed_pdf_base64) {
-      try {
-        // Map per bedrijf: een werkbonnummer is alleen BINNEN een bedrijf uniek.
-        // WB-001 bestaat bij vier bedrijven, en die overschreven in de wortel van
-        // de bucket elkaars ondertekende exemplaar — precies het bewijsstuk dat
-        // je nodig hebt als een klant zegt niets getekend te hebben.
-        const bestand = `${werkbon.company_id}/werkbon-${werkbon.nummer || werkbon.id}-ondertekend.pdf`
-        const { error: upErr } = await admin.storage
-          .from('signed-werkbonnen')
-          .upload(bestand, base64ToBytes(signed_pdf_base64), { contentType: 'application/pdf', upsert: true })
-        if (upErr) {
-          warnings.push(`PDF opslaan mislukt: ${upErr.message}`)
-        } else {
-          // De bucket is privé: een link van 24 uur bewaren, geen lange link.
-          pdfUrl = await opslagWaarde(admin, 'signed-werkbonnen', bestand)
-          if (pdfUrl) {
-            const { error: urlErr } = await admin.from('werkbonnen')
-              .update({ ondertekende_pdf_url: pdfUrl }).eq('id', werkbon.id)
-            if (urlErr) warnings.push(`PDF-link opslaan mislukt: ${urlErr.message}`)
-          }
-        }
-      } catch (err) { warnings.push(`PDF verwerken mislukt: ${err}`) }
+    let q = admin.from('werkbonnen').update(update).eq('id', werkbon.id).is('ondertekend_op', null)
+    if (!terPlekke) q = q.or('verstuurd_op.not.is.null,status.eq.afgerond')
+    const { data: gewonnen, error: updErr } = await q.select('id')
+    if (updErr || !gewonnen || gewonnen.length === 0) {
+      await admin.storage.from('signatures').remove([sigNaam]).catch(() => {})
+      if (pdfPad) await admin.storage.from('signed-werkbonnen').remove([pdfPad]).catch(() => {})
+      if (updErr) {
+        console.error('sign-werkbon update', updErr.message)
+        return json({ success: false, error: 'Ondertekenen is niet gelukt. Probeer het opnieuw.' }, 500)
+      }
+      return json({ success: false, code: 'al_ondertekend', error: 'Deze werkbon is al ondertekend.' }, 409)
     }
+
+    const exemplaarB64 = exemplaar && pdfPad ? bytesNaarBase64(exemplaar.pdf) : null
 
     // ── Bevestigingsmails ────────────────────────────────────────────────────
     try {
@@ -211,9 +235,14 @@ serve(async (req) => {
       const logoUrl = (company?.logo_url as string) || undefined
       const brandColor = (company?.branding_color as string) || undefined
       const bedrijfEmail = (company?.email as string) || null
-      const bijlagen = signed_pdf_base64
-        ? [{ filename: `Werkbon-${werkbon.nummer || ''}.pdf`, content: signed_pdf_base64 }]
+      const bijlagen = exemplaarB64
+        ? [{ filename: `Werkbon-${werkbon.nummer || ''}-ondertekend.pdf`, content: exemplaarB64 }]
         : undefined
+      // Naar de klant van de werkbon én de ondertekenaar (als dat iemand anders is).
+      const { data: klantRij } = werkbon.customer_id
+        ? await admin.from('customers').select('email').eq('id', werkbon.customer_id).maybeSingle()
+        : { data: null }
+      const ontvangers = [...new Set([(klantRij?.email as string | undefined)?.trim().toLowerCase(), email].filter(Boolean))] as string[]
 
       // 1) KLANT — in de huisstijl van het bedrijf, met de bon als bijlage.
       const klantHtml = mailTemplate({
@@ -229,7 +258,7 @@ ${bijlagen ? '<p>In de bijlage vindt u de ondertekende werkbon met het uitgevoer
         brandColor,
       })
       const klantBody: Record<string, unknown> = {
-        to: email,
+        to: ontvangers,
         subject: `Werkbon ${werkbon.nummer || ''} ondertekend`,
         html: klantHtml,
         from_name: bedrijfsnaam,
@@ -259,7 +288,7 @@ Datum en tijd: ${esc(new Date(nu).toLocaleString('nl-NL'))}</p>
         if (!(await sendViaEdge(supabaseUrl, serviceKey, internBody))) warnings.push('Melding naar bedrijf mislukt')
       }
     } catch (mailErr) {
-      warnings.push(`Bevestigingsmails mislukt: ${mailErr}`)
+      console.error('sign-werkbon mails', mailErr); warnings.push('Bevestigingsmails mislukt')
     }
 
     // ── Tijdlijn op de klantkaart ────────────────────────────────────────────
@@ -276,7 +305,7 @@ Datum en tijd: ${esc(new Date(nu).toLocaleString('nl-NL'))}</p>
         aangemaakt_op: nu,
         meta: { nummer: werkbon.nummer, signed_by: name, signed_by_email: email },
       })
-      if (tijdlijnErr) warnings.push(`Tijdlijnregel schrijven mislukt: ${tijdlijnErr.message}`)
+      if (tijdlijnErr) { console.error('sign-werkbon tijdlijn', tijdlijnErr.message); warnings.push('Tijdlijnregel schrijven mislukt') }
     }
 
     const antwoord: Record<string, unknown> = {
@@ -293,6 +322,6 @@ Datum en tijd: ${esc(new Date(nu).toLocaleString('nl-NL'))}</p>
     return json(antwoord)
   } catch (err) {
     console.error('sign-werkbon onverwachte fout:', err)
-    return json({ success: false, error: String(err) }, 500)
+    return json({ success: false, error: 'Er ging iets mis bij het ondertekenen. Probeer het later opnieuw.' }, 500)
   }
 })

@@ -6,6 +6,8 @@ import { I, ModalX, fmt, fmt0 } from '../../bb-shared.jsx';
 import { InfoTip, InfoUitklap } from '../../components/Uitleg.jsx';
 import { useToast } from '../../lib/toast.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
+import { vandaagIso } from '../../lib/datumTijd.js';
+import { logFout, meldFout } from '../../lib/stilleFouten.js';
 import { usePermissions } from '../../hooks/usePermissions.js';
 import { usePlanGuard } from '../../components/PlanUpgradeModal.jsx';
 import {
@@ -42,8 +44,9 @@ import { NewFactuurModal, SendFactuurMailModal } from '../FacturenPage.jsx';
 import { NewOfferteModal, SendOfferteMailModal } from '../OffertesPage.jsx';
 import { WerkbonModal } from '../WerkbonPageV2.jsx';
 import NotitieLog, { toLogItem } from '../../components/NotitieLog.jsx';
-import { getTeamMembers, createMentionNotifications } from '../../services/notificatieService.js';
+import { getTeamMembers, createMentionNotifications, notifyNewAssignees } from '../../services/notificatieService.js';
 import { statusInfo } from '../../utils/statusColors.js';
+import Rondleiding from '../../components/Rondleiding.jsx';
 
 const TABS = [
   { id: 'overview',   label: 'Overzicht' },
@@ -182,7 +185,7 @@ function zichtbareTabs(can, plan) {
 
 function Tabs({ tab, setTab, tabs = TABS }) {
   return (
-    <div className="tabs kk-tabs" style={{ padding: '8px 16px', borderBottom: '1px solid var(--br)' }}>
+    <div className="tabs kk-tabs" data-rl="pk-tabs" style={{ padding: '8px 16px', borderBottom: '1px solid var(--br)' }}>
       {tabs.map(t => (
         <button
           key={t.id}
@@ -208,6 +211,7 @@ function OverviewTab({
   // wat de gebruiker ziet; de deal blijft de bron. Hoort er geen deal bij (een
   // project dat met de hand is aangemaakt), dan valt de hele kopstrook weg.
   const deal = deals.find(d => d.id === project.dealId) || null;
+  const { profile: mijnProfiel } = useProfile();
   const magVerkoop = magBewerken('verkoop');
   const dealAfgerond = isAfgerond(deal);
   const dealVerloren = deal?.status === 'lost';
@@ -233,7 +237,7 @@ function OverviewTab({
   const [projDraft, setProjDraft] = useState('');
   const [projBezig, setProjBezig] = useState(false);
 
-  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(logFout('teamleden laden')); }, []);
 
   const startProjEdit = (key, waarde) => {
     setProjVeld(key);
@@ -259,7 +263,7 @@ function OverviewTab({
     }
   };
 
-  const isOverdue = project.deadline && project.deadline < new Date().toISOString().slice(0, 10) && project.status !== 'afgerond';
+  const isOverdue = project.deadline && project.deadline < vandaagIso() && project.status !== 'afgerond';
 
   // ── Acties op de aanvraag ─────────────────────────────────────────────────
   const wijzigFase = async stageId => {
@@ -316,9 +320,17 @@ function OverviewTab({
     if (!huidigeDeal) return;
     setToewijzenBezig(true);
     try {
+      const vorige = huidigeDeal.assignedToIds || (huidigeDeal.assignedTo ? [huidigeDeal.assignedTo] : []);
       const bij = await updateDeal(huidigeDeal.id, { assigned_to_ids: ids, assigned_to: ids[0] || null });
       setDealLokaal(bij);
       onChanged?.();
+      // Wie erbij komt, hoort dat — net als bij activiteiten en werkbonnen.
+      notifyNewAssignees({
+        userIds: ids, prevUserIds: vorige, members: teamMembers,
+        type: 'toewijzing_project', title: `Je behandelt nu ${project.name || huidigeDeal.title || 'een project'}`,
+        link: 'projecten', relatedType: 'project', relatedId: project.id,
+        creatorId: mijnProfiel?.id, creatorName: mijnProfiel?.fullName,
+      }).catch(logFout('melding versturen'));
     } catch (e) {
       toast.error(e.message || 'Toewijzen is mislukt');
     } finally {
@@ -344,7 +356,7 @@ function OverviewTab({
   const projectOffertes = offertes.filter(o =>
     (project.dealId && o.dealId === project.dealId) || (project.offerteId && o.id === project.offerteId));
   const planning = planRegels(werkbonnen, naamVan);
-  const komende = planning.filter(r => r.datum >= new Date().toISOString().slice(0, 10));
+  const komende = planning.filter(r => r.datum >= vandaagIso());
   // "Wanneer" uit de echte planning van de werkbonnen, dezelfde dagen als het
   // blok Planning. Eerder las dit alleen projects.start_date, en die vult
   // niemand bij het inplannen: dan stond er "Nog niet ingepland" boven een
@@ -439,7 +451,7 @@ function OverviewTab({
   useEffect(() => {
     let leeft = true;
     if (!project.dealId) { setBron(null); return undefined; }
-    getAanvraagBron(project.dealId).then(b => { if (leeft) setBron(b); }).catch(() => {});
+    getAanvraagBron(project.dealId).then(b => { if (leeft) setBron(b); }).catch(logFout('aanvraagbron laden'));
     return () => { leeft = false; };
   }, [project.dealId]);
 
@@ -448,7 +460,7 @@ function OverviewTab({
   const [fotoBezig, setFotoBezig] = useState(false);
   useEffect(() => {
     let leeft = true;
-    getProjectFotos(project.id).then(f => { if (leeft) setFotos(f); }).catch(() => {});
+    getProjectFotos(project.id).then(f => { if (leeft) setFotos(f); }).catch(meldFout(toast, "De foto's van dit project konden niet worden geladen."));
     return () => { leeft = false; };
   }, [project.id]);
 
@@ -481,7 +493,7 @@ function OverviewTab({
     <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14, overflow: 'hidden' }}>
       {/* ── De aanvraag: fase, wie het behandelt, en de twee eindacties ────── */}
       {huidigeDeal && (
-        <div className="card card-p" style={{ padding: 14 }}>
+        <div className="card card-p" data-rl="pk-status" style={{ padding: 14 }}>
           {/* Status en voltooien. Alleen met 'verkoop': deals_update eist dat,
               dus zonder dat recht zou een keuzelijst stil weigeren. */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
@@ -512,6 +524,7 @@ function OverviewTab({
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <button
                   className={dealAfgerond ? 'btn btn-s btn-sm' : 'btn wb2-complete-btn'}
+                  data-rl="pk-voltooien"
                   disabled={afrondBezig}
                   onClick={() => zetAfgerond(!dealAfgerond)}
                 >
@@ -535,7 +548,7 @@ function OverviewTab({
           {/* Wie het behandelt. Dicht als knop met de namen erop: de lijst toont
               alle teamleden en zou het blok anders uit elkaar duwen. */}
           {magVerkoop && (
-            <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 12 }} data-rl="pk-behandeld">
               <div style={labelStyle}>Behandeld door</div>
               {toonToewijzen ? (
                 <MemberMultiSelect
@@ -1262,16 +1275,16 @@ function KostenTab({ project, canManage }) {
   const [loading, setLoading] = useState(true);
   const [toonWinstUitleg, setToonWinstUitleg] = useState(false);
   const [leveranciers, setLeveranciers] = useState([]);
-  useEffect(() => { listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(() => {}); }, []);
+  useEffect(() => { listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(logFout('leveranciers laden')); }, []);
 
   const load = () => {
     setLoading(true);
     Promise.all([
-      getProjectCosts(project.id).catch(() => []),
+      getProjectCosts(project.id).catch(e => { setLaadFout(e.message || 'Laden mislukt'); return []; }),
       listProjectKosten(project.id)
         .then(r => { setLaadFout(''); return r; })
         .catch(e => { setLaadFout(e.message || 'Laden mislukt'); return []; }),
-      getTimeEntries(project.id).catch(() => []),
+      getTimeEntries(project.id).catch(e => { setLaadFout(e.message || 'Laden mislukt'); return []; }),
     ])
       .then(([jc, pk, u]) => { setKosten(jc); setProjectKosten(pk); setUrenRegels(u); })
       .finally(() => setLoading(false));
@@ -1580,7 +1593,7 @@ function WerkbonnenTab({ project, werkbonnen, customers = [], onCreated, canMana
   // door drie lagen doorgegeven: dit is de enige plek in de drawer die ze nodig
   // heeft.
   const [teamLeden, setTeamLeden] = useState([]);
-  useEffect(() => { getTeamMembers().then(setTeamLeden).catch(() => {}); }, []);
+  useEffect(() => { getTeamMembers().then(setTeamLeden).catch(logFout('teamleden laden')); }, []);
   const naamVan = id => teamLeden.find(m => m.id === id || m.profileId === id)?.fullName || '';
   const openWerkbon = w => setPage?.('werkbonnen', { id: w.id, from: 'project', projectId: project.id, projectNaam: project.name });
   const [showForm, setShowForm] = useState(false);
@@ -1689,6 +1702,7 @@ export function ProjectDetailDrawer({
   }, [tabs, tab]);
   const [loading, setLoading] = useState(true);
   const [project, setProject] = useState(null);
+  const [nietLaadbaar, setNietLaadbaar] = useState('');
   const [entries, setEntries] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [notes, setNotes] = useState([]);
@@ -1697,7 +1711,7 @@ export function ProjectDetailDrawer({
   // De pipelinefasen, voor de fasekeuze op het overzicht. Eén keer per drawer;
   // het zijn er een stuk of twaalf en ze veranderen zelden.
   const [stages, setStages] = useState([]);
-  useEffect(() => { listPipelineStages().then(setStages).catch(() => {}); }, []);
+  useEffect(() => { listPipelineStages().then(setStages).catch(logFout('pipelinefasen laden')); }, []);
 
   // Full-screen toggle — exact dezelfde aanpak als de klantkaart: voeg de
   // klasse klant-fullscreen toe aan de .drawer zodat hij het hele scherm vult.
@@ -1720,21 +1734,33 @@ export function ProjectDetailDrawer({
 
   const loadAll = async () => {
     setLoading(true);
+    setNietLaadbaar('');
+    const deels = [];
+    const of = (belofte, terug) => belofte.catch(e => { deels.push(e); return terug; });
     try {
       const [p, te, inv, nts, wbs] = await Promise.all([
         getProjectById(projectId),
-        getTimeEntries(projectId).catch(() => []),
-        getProjectInvoices(projectId).catch(() => []),
-        getProjectNotes(projectId).catch(() => []),
-        getWerkbonnenByProject(projectId).catch(() => []),
+        of(getTimeEntries(projectId), []),
+        of(getProjectInvoices(projectId), []),
+        of(getProjectNotes(projectId), []),
+        of(getWerkbonnenByProject(projectId), []),
       ]);
+      if (deels.length) {
+        console.warn('[bb] project deels geladen', deels);
+        toast.error('Niet alles van dit project kon worden geladen (uren, facturen, notities of werkbonnen kunnen ontbreken). Ververs de pagina.');
+      }
       setEntries(te);
       setInvoices(inv);
       setNotes(nts);
       setWerkbonnen(wbs);
       setProject(enrichProject(p, { timeEntries: te, invoices: inv }));
     } catch (e) {
-      toast.error(e.message || 'Project laden mislukt');
+      // Geen rij (PGRST116): het project bestaat niet meer of je hebt er geen
+      // toegang toe (bijv. op Team een project van een collega). Zonder deze tak
+      // bleef de drawer eindeloos op "Project laden…" staan.
+      setNietLaadbaar(e?.code === 'PGRST116'
+        ? 'Dit project bestaat niet (meer), of je hebt er geen toegang toe.'
+        : 'Het project kon niet worden geladen. Probeer het opnieuw.');
     } finally {
       setLoading(false);
     }
@@ -1812,12 +1838,19 @@ export function ProjectDetailDrawer({
       <div className="drawer-overlay" onClick={onClose} />
       <div className="drawer">
         <div className="drawer-body" style={{ padding: 0 }}>
-          {loading || !project ? (
+          {!loading && !project && nietLaadbaar ? (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--dm)' }}>
+              <p style={{ margin: '0 0 16px' }}>{nietLaadbaar}</p>
+              <button type="button" className="btn btn-s btn-sm" onClick={loadAll} style={{ marginRight: 8 }}>Opnieuw proberen</button>
+              <button type="button" className="btn btn-s btn-sm" onClick={onClose}>Sluiten</button>
+            </div>
+          ) : loading || !project ? (
             <div style={{ padding: 32, textAlign: 'center', color: 'var(--dl)' }}>Project laden…</div>
           ) : (
             <>
               <DrawerHeader project={project} onClose={onClose} fullscreen={fullscreen} onToggleFullscreen={() => setFullscreen(f => !f)} onSave={handleSave} canManage={canManage} openCustomer={openCustomer} />
               <Tabs tab={tab} setTab={setTab} tabs={tabs} />
+              <Rondleiding pagina="projectkaart" inLa />
 
               {tab === 'overview' && (
                 <OverviewTab

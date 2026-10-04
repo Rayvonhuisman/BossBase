@@ -1,5 +1,9 @@
+import { heeftRecht, geenRecht } from '../_shared/eisRecht.ts'
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { alleRijen } from '../_shared/alleRijen.ts'
+import { vandaagIso } from '../_shared/datumTijd.ts'
 import { makeAdminClient, isScheduledCall, forEachMoneybirdCompany } from "../_shared/scheduledSync.ts"
+import { clientFout } from '../_shared/clientFout.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -36,21 +40,21 @@ async function syncCompany(
   supabase: any, companyId: string, token: string, adminId: string,
 ): Promise<{ imported: ImportCounts }> {
   // Bestaande referenties ophalen voor deduplicatie
-  const { data: existingCosts } = await supabase
+  const existingCosts = await alleRijen(() => supabase
     .from('job_costs')
-    .select('externe_referentie')
+    .select('id, externe_referentie')
     .eq('company_id', companyId)
-    .not('externe_referentie', 'is', null)
+    .not('externe_referentie', 'is', null))
 
-  const existingCostRefs = new Set((existingCosts || []).map((r: any) => r.externe_referentie))
+  const existingCostRefs = new Set(existingCosts.map((r: any) => r.externe_referentie))
 
-  const { data: existingFacturen } = await supabase
+  const existingFacturen = await alleRijen(() => supabase
     .from('facturen')
-    .select('externe_referentie')
+    .select('id, externe_referentie')
     .eq('company_id', companyId)
-    .not('externe_referentie', 'is', null)
+    .not('externe_referentie', 'is', null))
 
-  const existingFactuurRefs = new Set((existingFacturen || []).map((r: any) => r.externe_referentie))
+  const existingFactuurRefs = new Set(existingFacturen.map((r: any) => r.externe_referentie))
 
   // ── 1. INKOOPFACTUREN ────────────────────────────────────────────────────
   let inkoopfacturenCount = 0
@@ -80,7 +84,11 @@ async function syncCompany(
     }
 
     if (rows.length > 0) {
-      const { error: insertErr } = await supabase.from('job_costs').insert(rows)
+      // Upsert met ignoreDuplicates: de unieke index (company_id, externe_referentie)
+      // houdt een dubbele import tegen, ook als de dedupe-lijst hierboven ooit
+      // onvolledig is.
+      const { error: insertErr } = await supabase.from('job_costs')
+        .upsert(rows, { onConflict: 'company_id,externe_referentie', ignoreDuplicates: true })
       if (insertErr) throw insertErr
       inkoopfacturenCount = rows.length
     }
@@ -115,7 +123,11 @@ async function syncCompany(
     }
 
     if (rows.length > 0) {
-      const { error: insertErr } = await supabase.from('job_costs').insert(rows)
+      // Upsert met ignoreDuplicates: de unieke index (company_id, externe_referentie)
+      // houdt een dubbele import tegen, ook als de dedupe-lijst hierboven ooit
+      // onvolledig is.
+      const { error: insertErr } = await supabase.from('job_costs')
+        .upsert(rows, { onConflict: 'company_id,externe_referentie', ignoreDuplicates: true })
       if (insertErr) throw insertErr
       bonnetjesCount = rows.length
     }
@@ -160,7 +172,11 @@ async function syncCompany(
     }))
 
     if (rows.length > 0) {
-      const { error: insertErr } = await supabase.from('job_costs').insert(rows)
+      // Upsert met ignoreDuplicates: de unieke index (company_id, externe_referentie)
+      // houdt een dubbele import tegen, ook als de dedupe-lijst hierboven ooit
+      // onvolledig is.
+      const { error: insertErr } = await supabase.from('job_costs')
+        .upsert(rows, { onConflict: 'company_id,externe_referentie', ignoreDuplicates: true })
       if (insertErr) throw insertErr
       mutatiesCount = rows.length
     }
@@ -186,7 +202,7 @@ async function syncCompany(
       return {
         company_id: companyId,
         nummer: inv.invoice_id || ('MB-' + inv.id),
-        factuurdatum: inv.date || new Date().toISOString().split('T')[0],
+        factuurdatum: inv.date || vandaagIso(),
         vervaldatum: inv.due_date || null,
         betalingskenmerk: inv.reference || null,
         status,
@@ -199,7 +215,11 @@ async function syncCompany(
     })
 
     if (rows.length > 0) {
-      const { error: insertErr } = await supabase.from('facturen').insert(rows)
+      // Upsert met ignoreDuplicates: de unieke index (company_id, externe_referentie)
+      // houdt een dubbele import tegen, ook als de dedupe-lijst hierboven ooit
+      // onvolledig is.
+      const { error: insertErr } = await supabase.from('facturen')
+        .upsert(rows, { onConflict: 'company_id,externe_referentie', ignoreDuplicates: true })
       if (insertErr) throw insertErr
       verkoopfacturenCount = rows.length
     }
@@ -270,6 +290,7 @@ serve(async (req) => {
     // ── User-modus (ongewijzigd): één bedrijf van de ingelogde gebruiker ────────
     const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt)
     if (authErr || !user) return json({ error: 'Niet ingelogd' }, 401)
+    if (!(await heeftRecht(user.id, 'kosten'))) return geenRecht(corsHeaders)
 
     const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single()
     if (!profile?.company_id) return json({ error: 'Geen bedrijf gevonden' }, 400)
@@ -286,6 +307,6 @@ serve(async (req) => {
     return json({ success: true, ...r })
   } catch (err: any) {
     console.error('Error:', err.message, err.stack)
-    return json({ success: false, error: err.message }, 500)
+    return json({ success: false, error: clientFout(err) }, 500)
   }
 })

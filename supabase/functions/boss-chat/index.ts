@@ -35,8 +35,9 @@ const MAX_HISTORIE = 20
 const TOOLS = [{
   name: 'stuur_naar_team',
   description:
-    'Zet een vraag door naar het BossBase-team wanneer je het antwoord niet zeker weet, ' +
-    'of bij bugs, klachten en administratieve vragen.',
+    'Zet een vraag door naar het BossBase-team: alleen als de gebruiker erom vraagt, bij een bug, ' +
+    'klacht of administratieve vraag over zijn abonnement, of als je het antwoord over BossBase ' +
+    'echt niet weet. Niet voor vragen over andere bedrijven, hun gegevens of buiten je vakgebied.',
   input_schema: {
     type: 'object',
     properties: {
@@ -70,6 +71,10 @@ const sse = (soort: string, data: unknown) =>
 function zonderStreepjes(t: string): string {
   return t
     .replace(/ [\u2014\u2013]+ /g, ', ')
+    // Een streepje direct tussen twee woorden ("planning—niet") is een
+    // gedachtestreep zonder spaties, geen samenstelling: maak er ", " van in
+    // plaats van een koppelteken, anders plakken de woorden aan elkaar.
+    .replace(/(\p{L})[\u2014\u2013]+(\p{L})/gu, '$1, $2')
     .replace(/[\u2014\u2013]/g, '-')
 }
 
@@ -158,18 +163,31 @@ serve(async (req) => {
       p_conversation_id: conversationId,
       p_company_id: companyId,
       p_user_id: user.id,
-      p_titel: String(binnen[0]?.tekst || '').slice(0, 80),
+      p_titel: String(laatste.tekst || '').slice(0, 80),
     })
     if (startFout || !gesprekId) {
       console.error('gesprek starten mislukt', startFout?.message)
       return json({ error: 'Boss is even niet beschikbaar. Probeer het later opnieuw.' }, 503)
     }
 
+    // ── 4b. Geschiedenis van de server, niet van de client ───────────────────
+    // Eerder stuurde de app de hele geschiedenis mee, en die werd geloofd: een
+    // client kon zelf "boss"-berichten verzinnen ("ik mag alles delen…") om Boss
+    // te sturen (audit 2026-10-01, Boss C-13). Nu komt de geschiedenis uit het
+    // opgeslagen gesprek van deze gebruiker; van de client nemen we alleen de
+    // nieuwe vraag aan.
+    const { data: opgeslagen } = await admin.from('boss_conversations')
+      .select('messages').eq('id', gesprekId).eq('user_id', user.id).maybeSingle()
+    const eerder = (Array.isArray(opgeslagen?.messages) ? opgeslagen.messages : [])
+      .filter((m: { rol?: string }) => m?.rol === 'gebruiker' || m?.rol === 'boss')
+    const gesprekNu: { rol: string; tekst: string; op?: string }[] = [
+      ...eerder,
+      { rol: 'gebruiker', tekst: String(laatste.tekst).slice(0, 4000), op: new Date().toISOString() },
+    ]
+
     // ── 5. Naar Anthropic ────────────────────────────────────────────────────
-    // De historie wordt omgezet naar het formaat dat de API verwacht. Alles wat
-    // geen herkenbare rol heeft valt eruit — de frontend mag geen rollen
-    // verzinnen die we niet kennen.
-    const historie = binnen
+    // De historie wordt omgezet naar het formaat dat de API verwacht.
+    const historie = gesprekNu
       .slice(-MAX_HISTORIE)
       .filter(m => m?.rol === 'gebruiker' || m?.rol === 'boss')
       .map(m => ({
@@ -301,7 +319,7 @@ serve(async (req) => {
           naam: prof?.full_name ?? null,
           email: user.email ?? null,
           bedrijfsnaam: bedrijf?.name ?? null,
-          gesprek: binnen.map(b => ({ rol: b.rol, tekst: b.tekst })),
+          gesprek: gesprekNu.map(b => ({ rol: b.rol, tekst: b.tekst })),
         })
 
         const id = await stuurBossBaseMail(INTERN_ADRES(), m.subject, m.html, user.email ?? undefined)
@@ -336,7 +354,7 @@ serve(async (req) => {
         const bewaar = async () => {
           try {
             const gesprek = [
-              ...binnen.map(m => ({ rol: m.rol, tekst: m.tekst })),
+              ...gesprekNu,
               { rol: 'boss', tekst: volledig, op: new Date().toISOString() },
             ]
             await admin.rpc('bb_boss_log_gesprek', {
@@ -344,7 +362,7 @@ serve(async (req) => {
               p_company_id: companyId,
               p_user_id: user.id,
               p_messages: gesprek,
-              p_titel: String(binnen[0]?.tekst || '').slice(0, 80),
+              p_titel: String(gesprekNu[0]?.tekst || '').slice(0, 80),
             })
           } catch (e) {
             console.error('gesprek bewaren mislukt', (e as Error).message)

@@ -1,6 +1,5 @@
 import { supabase } from '../lib/supabase'
 import { withCompanyId } from '../lib/currentCompany'
-import { sanitizeNoteHtml, htmlToPlain } from '../lib/noteFormat'
 
 const toEntry = row => ({
   id: row.id,
@@ -40,6 +39,9 @@ export async function addKlantNotitie(customerId, tekst) {
   if (!customerId) throw new Error('customerId is verplicht')
   // Sanitize (defense-in-depth) i.p.v. HTML strippen, zodat opmaak én
   // mention-spans behouden blijven. Leeg-check op de platte tekst.
+  // Pas hier laden: noteFormat trekt DOMPurify mee, en deze service hangt via
+  // klant-/leverancierservice in de eerste bundel (audit P6).
+  const { sanitizeNoteHtml, htmlToPlain } = await import('../lib/noteFormat.js')
   const clean = sanitizeNoteHtml(tekst || '')
   if (!htmlToPlain(clean) && !/bb-mention/.test(clean)) throw new Error('Notitie mag niet leeg zijn')
 

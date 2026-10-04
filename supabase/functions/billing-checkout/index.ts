@@ -21,7 +21,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
   stripeFetch, appOrigin, json, CORS, eisAbonnementsbeheerder,
   tierPriceId, modulePriceId, extraUserPriceId,
-  MODULE_BESCHIKBAAR, MODULE_VEREIST, inbegrepenGebruikers,
+  MODULE_BESCHIKBAAR, MODULE_VEREIST, inbegrepenGebruikers, benodigdeGebruikers, teWeinigGebruikers,
   WELKOMSTACTIES, heeftWelkomstkorting, welkomCouponId, isJaar,
 } from '../_shared/billing.ts'
 
@@ -63,6 +63,10 @@ serve(async (req) => {
     if (!TIERS.includes(tier)) return json({ error: 'Onbekend pakket' }, 400)
     if (!['maand', 'jaar'].includes(interval)) return json({ error: 'Onbekende betaaltermijn' }, 400)
 
+    // ── Minstens zoveel plekken als er gebruikers zijn ─────────────────────────
+    const weigering = teWeinigGebruikers(tier, extra, await benodigdeGebruikers(admin, companyId))
+    if (weigering) return weigering
+
     // ── Welkomstactie valideren ────────────────────────────────────────────────
     if (welkomstactie) {
       const actie = WELKOMSTACTIES[welkomstactie]
@@ -86,7 +90,7 @@ serve(async (req) => {
     // eerst opruimen; we vertellen precies wát.
     const { data: blokkades, error: blokErr } = await admin
       .rpc('bb_downgrade_blokkades', { p_company_id: companyId, p_doel_tier: tier })
-    if (blokErr) return json({ error: `Limietcontrole mislukt: ${blokErr.message}` }, 500)
+    if (blokErr) { console.error('[billing-checkout] limietcontrole', blokErr.message); return json({ error: 'Limietcontrole mislukt. Probeer het later opnieuw.' }, 500) }
 
     if (Array.isArray(blokkades) && blokkades.length > 0) {
       return json({
@@ -131,7 +135,7 @@ serve(async (req) => {
     // ── 4. Stripe-customer hergebruiken of aanmaken ────────────────────────────
     const { data: sub } = await admin
       .from('subscriptions')
-      .select('stripe_customer_id, stripe_subscription_id, welkomstactie')
+      .select('stripe_customer_id, stripe_subscription_id, stripe_status, welkomstactie')
       .eq('company_id', companyId)
       .maybeSingle()
 
@@ -171,7 +175,9 @@ serve(async (req) => {
     //
     // De code heet nog `gebruik_portal` omdat oudere cliëntversies daarop
     // reageren; de melding wijst naar de juiste plek.
-    if (sub?.stripe_subscription_id) {
+    // Een definitief geannuleerd abonnement telt niet: dan sluit de klant een
+    // nieuw abonnement af, op dezelfde Stripe-klant.
+    if (sub?.stripe_subscription_id && sub?.stripe_status !== 'canceled') {
       return json({
         error: 'Je hebt al een lopend abonnement. Gebruik "Abonnement wijzigen" in plaats van opnieuw afsluiten.',
         code: 'gebruik_portal',
@@ -194,6 +200,13 @@ serve(async (req) => {
       'automatic_tax[enabled]': 'true',
       'customer_update[address]': 'auto',
       'billing_address_collection': 'required',
+      // Een zakelijke klant kan zijn btw-nummer invullen ("Ik koop als
+      // bedrijf"). Stripe Tax controleert het en verlegt de btw voor een bedrijf
+      // in een ander EU-land; het nummer komt op de klant en op de factuur.
+      // Bij een bestaande klant eist Stripe dan dat de bedrijfsnaam mag worden
+      // bijgewerkt, vandaar customer_update[name].
+      'tax_id_collection[enabled]': 'true',
+      'customer_update[name]': 'auto',
       // Let op het /dashboard-voorvoegsel: de instellingenpagina leeft binnen de
       // app-shell (/dashboard/<pagina>). Zonder dat voorvoegsel landt de klant na
       // het betalen op de marketingsite in plaats van bij zijn abonnement.
@@ -255,6 +268,8 @@ serve(async (req) => {
 
     return json({ url: session.url, sessionId: session.id })
   } catch (e) {
-    return json({ error: (e as Error).message || 'Onbekende fout' }, 500)
+    // Geen Stripe- of databasetekst naar de browser; details staan in de log.
+    console.error('[billing-checkout]', (e as Error)?.message)
+    return json({ error: 'Afrekenen starten is niet gelukt. Probeer het later opnieuw.' }, 500)
   }
 })

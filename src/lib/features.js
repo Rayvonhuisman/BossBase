@@ -35,7 +35,7 @@ export const FEATURES = [
   // Groei
   { key: 'digitale_handtekening',   label: 'Digitale handtekening',       uitleg: 'Offertes online laten ondertekenen door de klant.' },
   { key: 'betaalherinneringen',     label: 'Automatische betaalherinneringen', uitleg: 'Herinneringen bij openstaande facturen.' },
-  { key: 'boekhoudkoppeling',       label: 'Boekhoudkoppeling',           uitleg: 'Koppeling met Moneybird, SnelStart of AFAS.' },
+  { key: 'boekhoudkoppeling',       label: 'Boekhoudkoppeling',           uitleg: 'Koppeling met Moneybird of SnelStart.' },
   { key: 'btw_overzicht',           label: 'BTW-overzicht',               uitleg: 'BTW per periode uit de boekhoudkoppeling.' },
   { key: 'kosten_nacalculatie',     label: 'Kosten & nacalculatie',       uitleg: 'Kosten registreren en marge per project bewaken.' },
   { key: 'eigen_email_templates',   label: 'Eigen e-mailtemplates',       uitleg: 'Zelf nieuwe e-mailtemplates aanmaken.' },
@@ -58,8 +58,6 @@ export const FEATURES = [
 
 // Features die aan de gebruiker getoond mogen worden (prijskaarten, upgrade).
 export const ZICHTBARE_FEATURES = FEATURES.filter(f => !f.intern)
-
-export const FEATURE_KEYS = FEATURES.map(f => f.key)
 
 export const getFeature   = key => FEATURES.find(f => f.key === key) || null
 export const featureLabel = key => getFeature(key)?.label || key
@@ -104,16 +102,14 @@ export const TIER_FEATURES = {
 // vakman die wil weten wat hij eraan heeft — niet hoe het werkt.
 export const MODULES = [
   { key: 'stripe_betaallink', label: 'Stripe betaallink', price: 10, feature: 'stripe_betaallink', vereist: null,       beschikbaarBij: ['groei'],
-    uitleg: 'Zet een betaalknop op je factuur. Je klant betaalt met iDEAL vanaf zijn telefoon en jij ziet meteen dat het binnen is — geen overschrijvingen meer nabellen.' },
+    uitleg: 'Zet een betaalknop op je factuur. Je klant betaalt met iDEAL vanaf zijn telefoon en jij ziet meteen dat het binnen is. Geen overschrijvingen meer nabellen.' },
   { key: 'planning',          label: 'Planningsmodule',   price: 10, feature: 'planning',          vereist: null,       beschikbaarBij: ['groei'],
     uitleg: 'Een weekplanning waarin je klussen op medewerkers zet. Je sleept een werkbon naar een dag en je ziet in één oogopslag wie waar is en wie er nog ruimte heeft.' },
   { key: 'voertuigen',        label: 'Voertuigen',        price: 5,  feature: 'voertuigen',        vereist: 'planning', beschikbaarBij: ['groei'],
-    uitleg: 'Leg je bussen en aanhangers vast en plan ze in bij een klus. Zo zie je meteen of het busje die dag al ergens anders staat. Werkt samen met de planningsmodule — die heb je er dus bij nodig.' },
+    uitleg: 'Leg je bussen en aanhangers vast en plan ze in bij een klus. Zo zie je meteen of het busje die dag al ergens anders staat. Werkt samen met de planningsmodule, dus die heb je er ook bij nodig.' },
   { key: 'hosting',           label: 'Website-hosting',   price: 5,  feature: 'hosting',           vereist: null,       beschikbaarBij: ['groei', 'team'],
     uitleg: 'Wij zetten je bedrijfswebsite online en houden hem draaiend: domein, beveiligd slotje en updates. Jij hoeft er niets voor te regelen.' },
 ]
-
-export const MODULE_KEYS = MODULES.map(m => m.key)
 
 // Tiers die überhaupt modules kunnen bijkopen — afgeleid, niet apart onderhouden.
 export const MODULE_TIERS = [...new Set(MODULES.flatMap(m => m.beschikbaarBij))]
@@ -138,8 +134,6 @@ export const LIMIT_DEFS = [
   { key: 'offertes',   label: 'Offertes',   enkelvoud: 'offerte',   telwijze: 'periode' },
   { key: 'facturen',   label: 'Facturen',   enkelvoud: 'factuur',   telwijze: 'periode' },
 ]
-
-export const LIMIT_KEYS = LIMIT_DEFS.map(l => l.key)
 
 export const getLimitDef = key => LIMIT_DEFS.find(l => l.key === key) || null
 
@@ -181,13 +175,6 @@ export function limitFor(tier, key, { trial = false } = {}) {
   if (trial) return null
   const t = effectiveTier(tier)
   return TIER_LIMITS[t]?.[key] ?? null
-}
-
-/** Is er nog ruimte? `used` is de huidige stand. */
-export function withinLimit(tier, key, used, { trial = false } = {}) {
-  const max = limitFor(tier, key, { trial })
-  if (max == null) return true
-  return Number(used || 0) < max
 }
 
 /** Het laagste tier dat deze feature heeft — voor de upgrade-melding. */

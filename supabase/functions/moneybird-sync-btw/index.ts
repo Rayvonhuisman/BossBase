@@ -1,5 +1,7 @@
+import { heeftRecht, geenRecht } from '../_shared/eisRecht.ts'
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient, isScheduledCall, forEachMoneybirdCompany } from "../_shared/scheduledSync.ts"
+import { clientFout } from '../_shared/clientFout.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -154,6 +156,7 @@ serve(async (req) => {
     // ── User-modus (ongewijzigd): één bedrijf van de ingelogde gebruiker ────────
     const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt)
     if (authErr || !user) return json({ error: 'Niet ingelogd' }, 401)
+    if (!(await heeftRecht(user.id, 'bedrijfsfinancien'))) return geenRecht(corsHeaders)
 
     const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single()
     if (!profile?.company_id) return json({ error: 'Geen bedrijf gevonden' }, 400)
@@ -170,6 +173,6 @@ serve(async (req) => {
     return json({ success: true, ...r })
   } catch (err: any) {
     console.error('Error:', err.message, err.stack)
-    return json({ success: false, error: err.message }, 500)
+    return json({ success: false, error: clientFout(err) }, 500)
   }
 })

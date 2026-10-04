@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient } from "../_shared/scheduledSync.ts"
 import { ssFetch, getActieveGrootboeken } from "../_shared/snelstart.ts"
+import { clientFout } from '../_shared/clientFout.ts'
 
 // Verbindingstest voor de SnelStart-koppeling. Test de opgegeven koppelsleutel
 // (body.client_key, vóór het opslaan) of anders de opgeslagen sleutel van het
@@ -88,6 +89,6 @@ serve(async (req) => {
     })
   } catch (err: any) {
     console.error('Error:', err.message)
-    return json({ success: false, error: err.message }, 500)
+    return json({ success: false, error: clientFout(err) }, 500)
   }
 })

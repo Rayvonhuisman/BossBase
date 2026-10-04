@@ -92,7 +92,7 @@ export default function GrootboekIndeling() {
     }
   };
 
-  useEffect(() => { laad(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { laad(); }, []);
 
   const rijen = useMemo(() => [
     ...categorieen.filter(c => c.actief).map(c => ({

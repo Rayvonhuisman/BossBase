@@ -1,7 +1,10 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { vandaagIso } from '../lib/datumTijd.js';
 import { AlertTriangle } from 'lucide-react';
-import ExcelJS from 'exceljs';
-import JSZip from 'jszip';
+// exceljs (±900 kB) en jszip pas laden bij exporteren, niet bij het openen van
+// de pagina (audit 2026-10-01, P6).
+const laadExcelJS = () => import('exceljs').then(m => m.default);
+const laadJSZip = () => import('jszip').then(m => m.default);
 import { supabase } from '../lib/supabase.js';
 import { I, fmt, Av } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
@@ -26,8 +29,8 @@ import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { getCompanyId } from '../lib/currentCompany.js';
+import { alleRijen } from '../lib/alleRijen.js';
 
-const TODAY = new Date().toISOString().slice(0, 10);
 const PAD = n => String(n).padStart(2, '0');
 const isoDate = d => `${d.getFullYear()}-${PAD(d.getMonth()+1)}-${PAD(d.getDate())}`;
 const daysAgo = n => { const d = new Date(); d.setDate(d.getDate() - n); return isoDate(d); };
@@ -75,7 +78,11 @@ const T = {
   shadow:  '0 1px 3px rgba(0,0,0,.05)',
 };
 
-const COLS = '20px 1fr 180px 160px 48px 120px 88px';
+// Klantkolom heeft een minimum en de rij een minimale breedte: op een half
+// scherm schoven de kolommen anders over de klantnaam heen (audit M38). De
+// kaart scrolt dan horizontaal.
+const COLS = '20px minmax(170px, 1fr) 180px 160px 48px 120px 88px';
+const RIJ_MIN = 860;
 
 // ── ICONS ────────────────────────────────────────────────────
 const IconMail = () => (
@@ -275,7 +282,7 @@ function FilterBar({ quickTab, setQuickTab, searchQuery, setSearchQuery, filters
   ];
 
   return (
-    <div style={{
+    <div data-rl="db-filters" style={{
       display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', rowGap: 8,
       background: 'white', borderRadius: 'var(--r14)',
       border: '1px solid var(--border)', boxShadow: T.shadow,
@@ -478,8 +485,11 @@ export function DatabasePage({ openCustomer }) {
   // Snelfilter op dezelfde lijst: bewust zonder geschiedenisstap (zie useUrlTab).
   const [quickTab, setQuickTab]           = useUrlTab('alle', { validIds: ['alle', 'lopend_project'] });
   const [searchQuery, setSearchQuery]     = useState('');
+  // Segmenten per gebruiker: op een gedeelde computer zag de volgende gebruiker
+  // (ook van een ander bedrijf) anders de opgeslagen filters van de vorige.
+  const segmentSleutel = `bb_db_segments:${profile?.id || 'anoniem'}`;
   const [segments, setSegments]           = useState(() => {
-    try { return JSON.parse(localStorage.getItem('bb_db_segments') || '[]'); } catch { return []; }
+    try { return JSON.parse(localStorage.getItem(segmentSleutel) || '[]'); } catch { return []; }
   });
   const [segmentName, setSegmentName]         = useState('');
   const [showSaveSegment, setShowSaveSegment] = useState(false);
@@ -518,7 +528,9 @@ export function DatabasePage({ openCustomer }) {
 
   useEffect(() => {
     if (!rowMenuOpen) return;
-    const h = () => setRowMenuOpen(null);
+    // Klikken ín het menu niet als "ernaast" tellen: anders sloot mousedown het
+    // menu al vóór de klik op "Klant verwijderen" aankwam, en gebeurde er niets.
+    const h = e => { if (!e.target.closest?.('[data-rijmenu]')) setRowMenuOpen(null); };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, [rowMenuOpen]);
@@ -536,8 +548,10 @@ export function DatabasePage({ openCustomer }) {
       (async () => {
         const companyId = await getCompanyId();
         if (!companyId) return [];
-        const { data } = await supabase.from('sent_emails').select('id,customer_id,to_email,subject,sent_at,related_type').eq('company_id', companyId);
-        return data || [];
+        // Gepagineerd: boven 1000 mails was de mailhistorie in de export onvolledig.
+        return alleRijen(() => supabase.from('sent_emails')
+          .select('id,customer_id,to_email,subject,sent_at,related_type', { count: 'exact' })
+          .eq('company_id', companyId).order('id', { ascending: true }));
       })(),
       (async () => {
         const companyId = await getCompanyId();
@@ -545,10 +559,12 @@ export function DatabasePage({ openCustomer }) {
         // Factureerbare uren zijn werkbonuren; de werkbon levert de klant en
         // het project. Werkdaguren (urenregistratie) horen hier niet: die gaan
         // over loon, niet over wat er bij een klant te factureren valt.
-        const { data } = await supabase
+        // Gepagineerd: boven 1000 werkbonuren vielen de uren per klant te laag uit.
+        const data = await alleRijen(() => supabase
           .from('werkbon_uren')
-          .select('id,profile_id,uren,datum,werkbonnen(customer_id,project_id)')
-          .eq('company_id', companyId);
+          .select('id,profile_id,uren,datum,werkbonnen(customer_id,project_id)', { count: 'exact' })
+          .eq('company_id', companyId)
+          .order('id', { ascending: true }));
         return (data || []).map(u => ({
           ...u,
           customer_id: u.werkbonnen?.customer_id || null,
@@ -631,7 +647,7 @@ export function DatabasePage({ openCustomer }) {
       if (filters.projectMedewerker && !rel.projects.some(p => p.ownerId === filters.projectMedewerker)) return false;
 
       if (filters.offerteStatussen.length > 0 && !rel.offertes.some(o => filters.offerteStatussen.includes(o.status))) return false;
-      if (filters.offerteVerlopen && !rel.offertes.some(o => o.status === 'verzonden' && o.geldigTot && o.geldigTot < TODAY)) return false;
+      if (filters.offerteVerlopen && !rel.offertes.some(o => o.status === 'verzonden' && o.geldigTot && o.geldigTot < vandaagIso())) return false;
       if (filters.offerteOndertekend !== 'alles') {
         const isSigned = rel.offertes.some(o => Boolean(o.signedAt));
         if (filters.offerteOndertekend === 'ja' && !isSigned) return false;
@@ -641,7 +657,7 @@ export function DatabasePage({ openCustomer }) {
       if (filters.offerteBedragMax && !rel.offertes.some(o => o.totaalIncl <= Number(filters.offerteBedragMax))) return false;
 
       if (filters.factuurStatussen.length > 0 && !rel.facturen.some(f => filters.factuurStatussen.includes(f.status))) return false;
-      if (filters.factuurVervallen && !rel.facturen.some(f => f.status === 'verzonden' && f.vervaldatum && f.vervaldatum < TODAY)) return false;
+      if (filters.factuurVervallen && !rel.facturen.some(f => f.status === 'verzonden' && f.vervaldatum && f.vervaldatum < vandaagIso())) return false;
       if (filters.herinnering1 !== 'alles') {
         const h1 = rel.facturen.some(f => Boolean(f.herinnering1VerstuurdAt));
         if (filters.herinnering1 === 'ja' && !h1) return false;
@@ -689,7 +705,7 @@ export function DatabasePage({ openCustomer }) {
       if (filters.heeftFacturen && rel.facturen.length === 0) return false;
       if (filters.heeftGetekendOfferte && !rel.offertes.some(o => Boolean(o.signedAt))) return false;
       if (filters.heeftOnbetaaldeFacturen && !rel.facturen.some(f => f.status !== 'betaald' && !f.isCredit)) return false;
-      if (filters.heeftVerlopenOffertes && !rel.offertes.some(o => o.status === 'verzonden' && o.geldigTot && o.geldigTot < TODAY)) return false;
+      if (filters.heeftVerlopenOffertes && !rel.offertes.some(o => o.status === 'verzonden' && o.geldigTot && o.geldigTot < vandaagIso())) return false;
       if (filters.documentenPeriodeVan) {
         const hasDoc = rel.offertes.some(o => (o.createdAt||'').slice(0,10) >= filters.documentenPeriodeVan) ||
                        rel.facturen.some(f => (f.factuurdatum||'') >= filters.documentenPeriodeVan);
@@ -727,7 +743,7 @@ export function DatabasePage({ openCustomer }) {
     if (!segmentName.trim()) return;
     const newSegs = [...segments, { name: segmentName.trim(), filters }];
     setSegments(newSegs);
-    localStorage.setItem('bb_db_segments', JSON.stringify(newSegs));
+    try { localStorage.setItem(segmentSleutel, JSON.stringify(newSegs)); } catch { /* opslag geblokkeerd */ }
     setSegmentName('');
     setShowSaveSegment(false);
     toast.success('Segment opgeslagen');
@@ -735,7 +751,7 @@ export function DatabasePage({ openCustomer }) {
   const deleteSegment = name => {
     const newSegs = segments.filter(s => s.name !== name);
     setSegments(newSegs);
-    localStorage.setItem('bb_db_segments', JSON.stringify(newSegs));
+    try { localStorage.setItem(segmentSleutel, JSON.stringify(newSegs)); } catch { /* opslag geblokkeerd */ }
   };
 
   // ── Row-level acties ─────────────────────────────────────────
@@ -882,6 +898,7 @@ export function DatabasePage({ openCustomer }) {
   const exportExcel = async () => {
     try {
       const rows = buildExportRows();
+      const ExcelJS = await laadExcelJS();
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet('Klanten');
       ws.columns = EXPORT_COLS.map(c => ({ header: c.key, key: c.key, width: c.width }));
@@ -890,7 +907,7 @@ export function DatabasePage({ openCustomer }) {
       const buffer = await wb.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = `BossBase-export-${TODAY}.xlsx`; a.click();
+      const a = document.createElement('a'); a.href = url; a.download = `BossBase-export-${vandaagIso()}.xlsx`; a.click();
       URL.revokeObjectURL(url);
       rows.forEach((_, i) => { const c = selectedCustomers[i]; if (c?.id) logTijdlijnSafe(c.id, 'export_uitgevoerd', 'Klantgegevens geëxporteerd als Excel'); });
       setShowBulkMenu(false);
@@ -901,11 +918,19 @@ export function DatabasePage({ openCustomer }) {
   const exportCsv = () => {
     const rows = buildExportRows();
     const headers = EXPORT_COLS.map(c => c.key);
-    const escape = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const csv = [headers.map(escape), ...rows.map(r => headers.map(h => escape(r[h])))].map(r => r.join(',')).join('\n');
+    // Puntkomma: Nederlandse Excel opent een CSV met komma's in één kolom.
+    // Tekst die met = + - @ (of tab/CR) begint krijgt een ' ervoor, zodat Excel
+    // hem niet als formule uitvoert — klantnamen kunnen van buiten komen
+    // (websiteformulier, boekhoudimport). Getallen blijven getallen.
+    const escape = v => {
+      let t = String(v ?? '');
+      if (typeof v === 'string' && /^[=+\-@\t\r]/.test(t)) t = "'" + t;
+      return `"${t.replace(/"/g, '""')}"`;
+    };
+    const csv = [headers.map(escape), ...rows.map(r => headers.map(h => escape(r[h])))].map(r => r.join(';')).join('\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `BossBase-export-${TODAY}.csv`; a.click();
+    const a = document.createElement('a'); a.href = url; a.download = `BossBase-export-${vandaagIso()}.csv`; a.click();
     URL.revokeObjectURL(url);
     rows.forEach((_, i) => { const c = selectedCustomers[i]; if (c?.id) logTijdlijnSafe(c.id, 'export_uitgevoerd', 'Klantgegevens geëxporteerd als CSV'); });
     setShowBulkMenu(false);
@@ -928,6 +953,7 @@ export function DatabasePage({ openCustomer }) {
       (byCustomer[c.id]?.offertes || []).map(o => ({ offerte: o, customer: c }))
     );
     if (pairs.length === 0) { toast.error('Geen offertes gevonden voor de selectie'); return; }
+    const JSZip = await laadJSZip();
     const zip = new JSZip();
     setBulkDownloadProgress({ current: 0, total: pairs.length, label: 'offertes' });
     try {
@@ -939,7 +965,7 @@ export function DatabasePage({ openCustomer }) {
         const filename = `Offerte-${slugify(offerte.nummer)}-${slugify(customer.name)}.pdf`;
         zip.file(filename, b64, { base64: true });
       }
-      await triggerZipDownload(zip, `BossBase-offertes-${TODAY}.zip`);
+      await triggerZipDownload(zip, `BossBase-offertes-${vandaagIso()}.zip`);
       toast.success(`${pairs.length} offerte${pairs.length !== 1 ? 's' : ''} gedownload`);
     } catch (err) { toast.error('Download mislukt: ' + (err.message || '')); }
     finally { setBulkDownloadProgress(null); }
@@ -951,6 +977,7 @@ export function DatabasePage({ openCustomer }) {
       (byCustomer[c.id]?.facturen || []).map(f => ({ factuur: f, customer: c }))
     );
     if (pairs.length === 0) { toast.error('Geen facturen gevonden voor de selectie'); return; }
+    const JSZip = await laadJSZip();
     const zip = new JSZip();
     setBulkDownloadProgress({ current: 0, total: pairs.length, label: 'facturen' });
     try {
@@ -962,7 +989,7 @@ export function DatabasePage({ openCustomer }) {
         const filename = `Factuur-${slugify(factuur.nummer)}-${slugify(customer.name)}.pdf`;
         zip.file(filename, b64, { base64: true });
       }
-      await triggerZipDownload(zip, `BossBase-facturen-${TODAY}.zip`);
+      await triggerZipDownload(zip, `BossBase-facturen-${vandaagIso()}.zip`);
       toast.success(`${pairs.length} factuur${pairs.length !== 1 ? 'en' : ''} gedownload`);
     } catch (err) { toast.error('Download mislukt: ' + (err.message || '')); }
     finally { setBulkDownloadProgress(null); }
@@ -976,6 +1003,7 @@ export function DatabasePage({ openCustomer }) {
         .map(o => ({ offerte: o, customer: c }))
     );
     if (pairs.length === 0) { toast.error('Geen getekende offertes gevonden voor de selectie'); return; }
+    const JSZip = await laadJSZip();
     const zip = new JSZip();
     const mislukt = [];
     let gelukt = 0;
@@ -1003,7 +1031,7 @@ export function DatabasePage({ openCustomer }) {
         toast.error(`Geen enkele getekende offerte kon worden opgehaald. ${mislukt[0] || ''}`);
         return;
       }
-      await triggerZipDownload(zip, `BossBase-getekende-offertes-${TODAY}.zip`);
+      await triggerZipDownload(zip, `BossBase-getekende-offertes-${vandaagIso()}.zip`);
       if (mislukt.length) {
         toast.error(`${gelukt} van ${pairs.length} gedownload. Niet gelukt: ${mislukt.slice(0, 3).join(' · ')}${mislukt.length > 3 ? ` en nog ${mislukt.length - 3}` : ''}`);
       } else {
@@ -1021,6 +1049,7 @@ export function DatabasePage({ openCustomer }) {
         .map(f => ({ factuur: f, customer: c }))
     );
     if (pairs.length === 0) { toast.error('Geen creditfacturen gevonden voor de selectie'); return; }
+    const JSZip = await laadJSZip();
     const zip = new JSZip();
     setBulkDownloadProgress({ current: 0, total: pairs.length, label: 'creditfacturen' });
     try {
@@ -1032,7 +1061,7 @@ export function DatabasePage({ openCustomer }) {
         const filename = `Creditfactuur-${slugify(factuur.nummer)}-${slugify(customer.name)}.pdf`;
         zip.file(filename, b64, { base64: true });
       }
-      await triggerZipDownload(zip, `BossBase-creditfacturen-${TODAY}.zip`);
+      await triggerZipDownload(zip, `BossBase-creditfacturen-${vandaagIso()}.zip`);
       toast.success(`${pairs.length} creditfactuur${pairs.length !== 1 ? 'en' : ''} gedownload`);
     } catch (err) { toast.error('Download mislukt: ' + (err.message || '')); }
     finally { setBulkDownloadProgress(null); }
@@ -1048,6 +1077,7 @@ export function DatabasePage({ openCustomer }) {
     );
     const total = offertePairs.length + factuurPairs.length;
     if (total === 0) { toast.error('Geen documenten gevonden voor de selectie'); return; }
+    const JSZip = await laadJSZip();
     const zip = new JSZip();
     const offerteFolder = zip.folder('Offertes');
     const factuurFolder = zip.folder('Facturen');
@@ -1066,7 +1096,7 @@ export function DatabasePage({ openCustomer }) {
         const b64 = await getFactuurPdfBase64(factuur, regels, customer, company);
         factuurFolder.file(`Factuur-${slugify(factuur.nummer)}-${slugify(customer.name)}.pdf`, b64, { base64: true });
       }
-      await triggerZipDownload(zip, `BossBase-export-${TODAY}.zip`);
+      await triggerZipDownload(zip, `BossBase-export-${vandaagIso()}.zip`);
       toast.success(`${total} document${total !== 1 ? 'en' : ''} gedownload`);
     } catch (err) { toast.error('Download mislukt: ' + (err.message || '')); }
     finally { setBulkDownloadProgress(null); }
@@ -1130,7 +1160,7 @@ export function DatabasePage({ openCustomer }) {
           </p>
         </div>
         <div className="page-hd-actions">
-          <button className="btn btn-s btn-sm" onClick={() => setShowSaveSegment(s => !s)}>
+          <button className="btn btn-s btn-sm" data-rl="db-segment" onClick={() => setShowSaveSegment(s => !s)}>
             Segment opslaan
           </button>
         </div>
@@ -1190,10 +1220,10 @@ export function DatabasePage({ openCustomer }) {
       </div>
 
       {/* ── Body ── */}
-      <div className="afu2" style={{ display: 'grid', gridTemplateColumns: '216px 1fr', gap: 14, alignItems: 'start', position: 'relative', zIndex: 1 }}>
+      <div className="afu2" style={{ display: 'grid', gridTemplateColumns: '216px minmax(0, 1fr)', gap: 14, alignItems: 'start', position: 'relative', zIndex: 1 }}>
 
         {/* ── Sidebar ── */}
-        <div style={{
+        <div data-rl="db-geavanceerd" style={{
           background: 'white', borderRadius: 'var(--r14)',
           border: '1px solid var(--border)', boxShadow: T.shadow,
           padding: '4px 14px 14px',
@@ -1409,13 +1439,13 @@ export function DatabasePage({ openCustomer }) {
         <div style={{
           background: 'white', borderRadius: 'var(--r14)',
           border: '1px solid var(--border)', boxShadow: T.shadow,
-          overflow: 'hidden', display: 'flex', flexDirection: 'column',
+          overflowX: 'auto', display: 'flex', flexDirection: 'column', minWidth: 0,
         }}>
 
           {/* Column headers */}
-          <div style={{
+          <div data-rl="db-selectie" style={{
             display: 'grid', gridTemplateColumns: COLS, gap: 12, alignItems: 'center',
-            padding: '8px 16px', borderBottom: `1px solid ${T.borderXL}`,
+            padding: '8px 16px', borderBottom: `1px solid ${T.borderXL}`, minWidth: RIJ_MIN,
           }}>
             <Checkbox checked={allPageSelected} indeterminate={somePageSelected} onChange={toggleAll} />
             <div style={TH}>Klant</div>
@@ -1442,7 +1472,7 @@ export function DatabasePage({ openCustomer }) {
                 onMouseLeave={() => setHoveredRow(null)}
                 style={{
                   display: 'grid', gridTemplateColumns: COLS, gap: 12, alignItems: 'center',
-                  padding: '10px 16px',
+                  padding: '10px 16px', minWidth: RIJ_MIN,
                   borderLeft: `3px solid ${isSelected ? 'var(--p)' : 'transparent'}`,
                   borderBottom: i < pageSlice.length - 1 ? `1px solid ${T.borderXL}` : 'none',
                   background: isSelected ? T.rowSel : isHovered ? T.pageBg : 'white',
@@ -1539,6 +1569,7 @@ export function DatabasePage({ openCustomer }) {
                           boxShadow: '0 8px 24px rgba(0,0,0,.12)', minWidth: 160,
                         }}
                         onClick={e => e.stopPropagation()}
+                        data-rijmenu
                       >
                         <button
                           onClick={() => { setRowMenuOpen(null); setDeleteTarget({ id: c.id, name: c.name }); }}

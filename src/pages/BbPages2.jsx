@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+const FinancienGrafiek = lazy(() => import('./FinancienGrafiek.jsx'));
 import { Smartphone, Phone, Navigation, Camera, Clock, Package, CheckCircle2, ExternalLink, AlertTriangle } from 'lucide-react';
 import {
   I, CAL_EVENTS, HOURS_DATA, COSTS_DATA, TEAM_DATA, CUSTOMERS_DATA, QUOTES_DATA,
@@ -13,18 +14,17 @@ import { listLeveranciers } from '../services/leverancierService.js'
 import LeverancierSelect from '../components/LeverancierSelect.jsx'
 import { categorieOptiesUit } from '../lib/kostenCategorieen.js';
 import { useKostenCategorieen } from '../hooks/useKostenCategorieen.js';
-import { getFacturen, getAllFactuurRegels } from '../services/factuurService.js';
+import { getFacturen } from '../services/factuurService.js';
 import { getFinancienKpi } from '../services/financienService.js';
 import { getConnection } from '../services/accountingService.js';
 import { getBtwPeriodes, syncBtwData } from '../services/btwService.js';
 import { berekenBtwIndicatie } from '../services/btwIndicatieService.js';
 import { InfoTip, InfoUitklap } from '../components/Uitleg.jsx';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { listCustomers } from '../services/customerService.js';
 import { sumGefactureerd, sumBetaald, sumOpenstaand, withCustomerTotals, sumOmzetExclBtw } from '../services/customerTotalsService.js';
 import { getKostenOverzichtPerKlant, LEEG_OVERZICHT } from '../services/kostenOverzichtService.js';
 import { listActivities } from '../services/activityService.js';
-import { getConnectionStatus, startGoogleCalendarConnect, disconnectGoogleCalendar } from '../services/googleCalendarService.js';
+import { getConnectionStatus, startGoogleCalendarConnect, bevestigGoogleKoppeling, disconnectGoogleCalendar } from '../services/googleCalendarService.js';
 import { getWerkbonnen } from '../services/werkbonService.js';
 import { werkbonDagen, tijdenOpDag, tijdenVoorPersoon, ploegOpDag } from '../utils/werkbonDagen.js';
 import { voertuigVanPersoon } from '../utils/voertuigDagen.js';
@@ -37,6 +37,8 @@ import { usePlan } from '../hooks/usePlan.js';
 import { usePlanGuard } from '../components/PlanUpgradeModal.jsx';
 import { getBedrijfsinstellingen } from '../services/instellingenService.js';
 import { usePermissions } from '../hooks/usePermissions.js';
+import { LaadFout } from '../components/LaadFout.jsx';
+import { vandaagIso } from '../lib/datumTijd.js';
 import { useUrlTab } from '../hooks/useUrlTab.js';
 import { ActivityEditModal, NewCalendarEventModal, NewJobCostModal } from '../components/SharedModals.jsx';
 import { AgendaWerkbonPlanModal } from '../components/AgendaWerkbonPlanModal.jsx';
@@ -228,6 +230,16 @@ function AgendaTimeline({ dates, events, todayKey, onEventClick, startUur, eindU
 }
 
 // ── CALENDAR ─────────────────────────────────────────────────
+// "September 2026" of, voor een week over twee maanden, "September – Oktober 2026".
+// Eerst stond hier alleen de maand van de maandag, waardoor op 1 oktober nog
+// "September 2026 · Week 40" stond.
+function weekMaandLabel(van, tot, cap) {
+  const m1 = cap(NL_MONTHS[van.getMonth()]), m2 = cap(NL_MONTHS[tot.getMonth()]);
+  if (van.getMonth() === tot.getMonth()) return `${m1} ${van.getFullYear()}`;
+  if (van.getFullYear() === tot.getFullYear()) return `${m1} – ${m2} ${tot.getFullYear()}`;
+  return `${m1} ${van.getFullYear()} – ${m2} ${tot.getFullYear()}`;
+}
+
 export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpenActivityId, onNavConsumed }) {
   const toast = useToast();
   const { refreshKey, bumpRefresh, profile } = useProfile();
@@ -372,12 +384,29 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
   React.useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const g = q.get('google');
-    if (g === 'connected') toast.success('Google Agenda gekoppeld');
-    else if (g === 'error') toast.error('Google-koppeling mislukt: ' + (q.get('google_msg') || 'onbekende fout'));
+    const koppel = q.get('koppel');
+    // Alleen vaste teksten: google_msg komt uit de URL en mag nooit letterlijk
+    // in beeld (een link kon zo een eigen melding in het dashboard zetten).
+    const GOOGLE_FOUTEN = {
+      geen_code: 'Google gaf geen toestemming terug.',
+      ongeldige_state: 'De koppelaanvraag is verlopen of ongeldig. Probeer het opnieuw.',
+      token_exchange_mislukt: 'Google weigerde de koppeling. Probeer het opnieuw.',
+      opslaan_mislukt: 'De koppeling kon niet worden opgeslagen.',
+      geweigerd: 'Je hebt geen toestemming gegeven in Google.',
+    };
     if (g) {
       // Clean the query so a refresh doesn't re-toast.
       window.history.replaceState({}, '', window.location.pathname);
     }
+    if (g === 'bevestigen' && koppel) {
+      bevestigGoogleKoppeling(koppel)
+        .then(() => toast.success('Google Agenda gekoppeld'))
+        .catch(e => toast.error('Google-koppeling mislukt: ' + e.message))
+        .finally(loadGcalStatus);
+      return;
+    }
+    if (g === 'connected') toast.success('Google Agenda gekoppeld');
+    else if (g === 'error') toast.error('Google-koppeling mislukt. ' + (GOOGLE_FOUTEN[q.get('google_msg')] || 'Probeer het opnieuw.'));
     loadGcalStatus();
   }, [loadGcalStatus]);
 
@@ -419,7 +448,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
 
   const headerLabel = view === 'month'
     ? `${cap(NL_MONTHS[mMonth])} ${mYear}`
-    : `${cap(NL_MONTHS[weekStart.getMonth()])} ${weekStart.getFullYear()} · Week ${isoWeek}`;
+    : weekMaandLabel(weekStart, addDays(weekStart, 6), cap) + ` · Week ${isoWeek}`;
 
   // Nav buttons are shared across views → act on the active view.
   const goPrev = () => view === 'month'
@@ -477,7 +506,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
           <button className="btn btn-s btn-sm" onClick={goPrev} aria-label={view === 'month' ? 'Vorige maand' : 'Vorige week'}>{I.chev_l}</button>
           <button className="btn btn-s btn-sm" onClick={goToday}>Vandaag</button>
           <button className="btn btn-s btn-sm" onClick={goNext} aria-label={view === 'month' ? 'Volgende maand' : 'Volgende week'}>{I.chev_r}</button>
-          <div className="tabs">
+          <div className="tabs" data-rl="agenda-weergave">
             {['day','week','month'].map(v => (
               <button key={v} className={`tab${view === v ? ' active' : ''}`} onClick={() => setView(v)}>
                 {v === 'day' ? 'Dag' : v === 'week' ? 'Week' : 'Maand'}
@@ -487,7 +516,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
           {canPlanFromAgenda && (
             <button className="btn btn-s btn-sm" onClick={guardSchrijven('Een werkbon inplannen', () => setShowPlanWerkbon(true))}>{I.plus} Werkbon inplannen</button>
           )}
-          <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een afspraak inplannen', () => setShowNew(true))}>{I.plus} Toevoegen</button>
+          <button className="btn btn-p btn-sm" data-rl="agenda-toevoegen" onClick={guardSchrijven('Een afspraak inplannen', () => setShowNew(true))}>{I.plus} Toevoegen</button>
         </div>
       </div>
 
@@ -540,7 +569,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
       )}
 
       {!loading && !error && view === 'week' && (
-        <div className="afu3" style={{ overflowX: 'auto' }}>
+        <div className="afu3" data-rl="agenda-rooster" style={{ overflowX: 'auto' }}>
           <AgendaTimeline dates={weekDates} events={events} todayKey={todayKey} onEventClick={handleEventClick} startUur={agendaUren.start} eindUur={agendaUren.eind} />
         </div>
       )}
@@ -1170,7 +1199,12 @@ export function CostsPage() {
   // start en eind als dependency, niet het periode-object zelf: dat is bij elke
   // render een nieuw object en zou eindeloos opnieuw laden.
   const { start: periodeStart, eind: periodeEind } = periode;
+  // `leeft`: wissel je snel van periode, dan kan een ouder antwoord later
+  // binnenkomen dan het nieuwe. Zonder deze vlag won het laatst binnengekomen
+  // antwoord en stond het jaartotaal onder de kop "Oktober" (audit M24).
+  const [opnieuw, setOpnieuw] = useState(0);
   React.useEffect(() => {
+    let leeft = true;
     setLoading(true);
     Promise.all([
       listJobCosts({ vanDatum: periodeStart, totDatum: periodeEind }),
@@ -1180,14 +1214,16 @@ export function CostsPage() {
       listWerkbonInkopen({ vanDatum: periodeStart, totDatum: periodeEind }),
     ])
       .then(([costData, conn, inkoopData]) => {
+        if (!leeft) return;
         setCosts(costData);
         setWerkbonInkopen(inkoopData.map(werkbonInkoopAlsRij));
         if (conn?.administrationId) setMbAdminId(conn.administrationId);
-        setError('');
+        setError(null);
       })
-      .catch(err => setError(err.message || 'Kosten laden is mislukt.'))
-      .finally(() => setLoading(false));
-  }, [refreshKey, periodeStart, periodeEind]);
+      .catch(err => { if (leeft) setError(err); })
+      .finally(() => { if (leeft) setLoading(false); });
+    return () => { leeft = false; };
+  }, [refreshKey, periodeStart, periodeEind, opnieuw]);
   // De periode zit nu in de query zelf, dus hier blijven alleen de twee
   // dropdowns over.
   const filtered = costs.filter(r => {
@@ -1247,11 +1283,11 @@ export function CostsPage() {
       <div className="page-hd afu">
         <div><h1>Kosten</h1><p>Kosten bijhouden per klant en opdracht</p></div>
         <div className="page-hd-actions">
-          <button className="btn btn-p btn-sm" onClick={guardSchrijven('Kosten toevoegen', () => setShowNew(true))}>{I.plus} Kosten toevoegen</button>
+          <button className="btn btn-p btn-sm" data-rl="kosten-nieuw" onClick={guardSchrijven('Kosten toevoegen', () => setShowNew(true))}>{I.plus} Kosten toevoegen</button>
         </div>
       </div>
       {loading && <div className="card card-p">Kosten laden...</div>}
-      {error && <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>}
+      {error && <LaadFout fout={error} titel="Kosten laden is niet gelukt" onOpnieuw={() => setOpnieuw(n => n + 1)} />}
       {/* Groepering via kostenPerGroep — hoofdletterongevoelig en met een
           vangnet-groep, zodat de tegels altijd optellen tot het totaal. */}
       <div className="stats-row afu2" style={{ gridTemplateColumns: `repeat(${tegels.length},1fr)` }}>
@@ -1311,11 +1347,11 @@ export function CostsPage() {
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
             {/* Dezelfde bediening als de periodekeuze bij de btw-indicatie op
                 Financiën: tabs voor de keuze, zodat het vertrouwd oogt. */}
-            <div className="tabs">
+            <div className="tabs" data-rl="kosten-weergave">
               <button className={`tab${!toontMateriaal ? ' active' : ''}`} onClick={() => kiesWeergave('kosten')}>Geboekte kosten</button>
               <button className={`tab${toontMateriaal ? ' active' : ''}`} onClick={() => kiesWeergave('materiaal')}>Kosten op werkbonnen</button>
             </div>
-            <div className="tabs">
+            <div className="tabs" data-rl="kosten-periode">
               {PERIODE_TYPES.map(p => (
                 <button key={p.id} className={`tab${periodeType === p.id ? ' active' : ''}`} onClick={() => kiesPeriodeType(p.id)}>{p.label}</button>
               ))}
@@ -1496,7 +1532,6 @@ export function RevenuePage() {
   // daarna invullen.
   const [facturen, setFacturen] = useState([]);
   const [costsData, setCostsData] = useState([]);
-  const [allRegels, setAllRegels] = useState([]);
   const [chartMode, setChartMode] = useState('gefactureerd');
   const [chartPeriod, setChartPeriod] = useState('maand');
   const [loading, setLoading] = useState(true);
@@ -1513,30 +1548,40 @@ export function RevenuePage() {
   const [kpiVan, setKpiVan] = useState('');
   const [kpiTot, setKpiTot] = useState('');
 
-  const TODAY = new Date().toISOString().slice(0, 10);
+  const TODAY = vandaagIso();
 
+  // Laadfouten zichtbaar maken. Vroeger viel een mislukte lading terug op een
+  // lege lijst (.catch(() => [])) en toonde Financiën overal € 0,00 zonder
+  // melding — "ik heb niets openstaan" (audit M23).
+  const [laadFoutFin, setLaadFoutFin] = useState(null);
+  const [opnieuwFin, setOpnieuwFin] = useState(0);
   React.useEffect(() => {
+    let leeft = true;
     setLoading(true);
     // Alles wat niet in de gedeelde dataset zit: facturen en kosten voor de
-    // grafiek en de tabel, de factuurregels voor de btw-rubrieken, en de
-    // boekhoudkoppeling.
+    // grafiek en de tabel, en de boekhoudkoppeling. (Hier werden ook álle
+    // factuurregels van het bedrijf opgehaald, maar niets gebruikte ze; de
+    // btw-indicatie haalt zelf wat ze nodig heeft — audit 2026-10-01, P5.)
     Promise.all([
-      getFacturen().catch(() => []),
-      listJobCosts().then(alleenGeboekt).catch(() => []),
-      getAllFactuurRegels(),
+      getFacturen(),
+      listJobCosts().then(alleenGeboekt),
       getConnection(),
     ])
-      .then(([facturenData, costData, regelsData, mbConn]) => {
+      .then(([facturenData, costData, mbConn]) => {
+        if (!leeft) return;
+        setLaadFoutFin(null);
         setFacturen(facturenData);
         setCostsData(costData);
-        setAllRegels(regelsData);
         // Alleen Moneybird: dat is de enige koppeling die btw_periodes nog vult.
         // SnelStart stond hier als terugval, maar snelstart-sync-btw is eruit —
         // de scope btwaangiftes:read komt er niet. Een SnelStart-klant zag
         // daardoor een knop "Ophalen uit boekhouding" die niets kon ophalen.
         setMbConnection(mbConn);
-      }).catch(() => {}).finally(() => setLoading(false));
-  }, [refreshKey]);
+      })
+      .catch(err => { if (leeft) setLaadFoutFin(err); })
+      .finally(() => { if (leeft) setLoading(false); });
+    return () => { leeft = false; };
+  }, [refreshKey, opnieuwFin]);
 
   React.useEffect(() => {
     setBtwSelectedLabel(generatePeriodeOpties(btwPeriodeType)[0] || '');
@@ -1552,22 +1597,28 @@ export function RevenuePage() {
   }, [mbConnection, btwPeriodeType]);
 
   // Stelsel ophalen: bepaalt of omzet op factuur- of betaaldatum telt.
+  const [stelselBekend, setStelselBekend] = useState(false);
   React.useEffect(() => {
     getBedrijfsinstellingen()
       .then(s => { if (s?.btwStelsel) setBtwStelsel(s.btwStelsel); })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setStelselBekend(true));
   }, [refreshKey]);
 
   // Eigen BTW-indicatie voor de gekozen periode. Hangt niet aan een koppeling.
   React.useEffect(() => {
     const p = generatePeriodeRange(btwSelectedLabel, btwPeriodeType);
     if (!p) { setBtwIndicatie(null); return; }
+    // Pas rekenen als de pagina en het stelsel geladen zijn. Daarvoor draaide
+    // deze berekening (drie queries) eerst op lege data en daarna nog eens —
+    // de dubbele verzoeken op Financiën (audit 2026-10-01, P5).
+    if (loading || !stelselBekend) return;
     let leeft = true;
     berekenBtwIndicatie({ start: p.start, eind: p.eind, stelsel: btwStelsel })
       .then(r => { if (leeft) setBtwIndicatie(r); })
       .catch(() => { if (leeft) setBtwIndicatie(null); });
     return () => { leeft = false; };
-  }, [btwSelectedLabel, btwPeriodeType, btwStelsel, refreshKey, facturen, costsData]);
+  }, [btwSelectedLabel, btwPeriodeType, btwStelsel, loading, stelselBekend]); // na een refreshKey gaat loading eerst aan en dan uit: dat ververst
 
   // ── KPI ──────────────────────────────────────────────────────
   const kpiRange = React.useMemo(() => {
@@ -1616,6 +1667,7 @@ export function RevenuePage() {
   }, [kpiRange]);
 
   const [kpi, setKpi] = useState(null);
+  const [kpiFout, setKpiFout] = useState(null);
   React.useEffect(() => {
     if (!kpiDatums.van || !kpiDatums.tot) return undefined;
     let leeft = true;
@@ -1623,10 +1675,10 @@ export function RevenuePage() {
     // vorige bedragen staan tot de nieuwe binnen zijn. Dat leest rustiger dan
     // een tegel die even op nul springt.
     getFinancienKpi(kpiDatums)
-      .then(r => { if (leeft) setKpi(r); })
-      .catch(() => { if (leeft) setKpi(null); });
+      .then(r => { if (leeft) { setKpi(r); setKpiFout(null); } })
+      .catch(err => { if (leeft) { setKpi(null); setKpiFout(err); } });
     return () => { leeft = false; };
-  }, [kpiDatums.van, kpiDatums.tot, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [kpiDatums.van, kpiDatums.tot, refreshKey, opnieuwFin]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const omzetPeriode     = kpi?.gefactureerd ?? 0;
   const ontvangenPeriode = kpi?.ontvangen ?? 0;
@@ -1634,7 +1686,6 @@ export function RevenuePage() {
   const teVerwachten     = kpi?.teVerwachten ?? 0;
   const kostenPeriode    = kpi?.kosten ?? 0;
   const netto            = ontvangenPeriode - kostenPeriode;
-  const marge            = ontvangenPeriode > 0 ? Math.round((netto / ontvangenPeriode) * 100) : 0;
 
   // ── CHART DATA ────────────────────────────────────────────────
   const chartData = React.useMemo(() => {
@@ -1718,7 +1769,7 @@ export function RevenuePage() {
     const omzetExcl = sumOmzetExclBtw(facturen.filter(f => f.customerId === c.id));
     const profit = omzetExcl - kosten.totaal;
     const margin = omzetExcl > 0 ? Math.round((profit / omzetExcl) * 100) : 0;
-    return { ...c, materiaal: kosten.materiaal.bedrag, inkopen: kosten.inkopen.bedrag, uren: kosten.uren.uren, profit, margin };
+    return { ...c, materiaal: kosten.materiaal.bedrag, inkopen: kosten.inkopen.bedrag, uren: kosten.uren.uren, omzetExcl, profit, margin };
   });
   const som = veld => Math.round(rows.reduce((s, r) => s + (Number(r[veld]) || 0), 0) * 100) / 100;
   const totaalRij = {
@@ -1742,19 +1793,60 @@ export function RevenuePage() {
     finally { setBtwSyncing(false); }
   };
 
-  const handleExport = () => {
+  // Exporteert de tabel "Per klant / opdracht" als Excel-bestand, met dezelfde
+  // kolommen en dezelfde getallen als op het scherm. Hier stond een CSV-export
+  // die nog r.costs las, een veld dat sinds de kostenherziening niet meer
+  // bestaat: toFixed() op undefined gooide een fout en de knop deed niets.
+  // Excel in plaats van CSV: een CSV met punten als decimaalteken komt in een
+  // Nederlandse Excel in één kolom terecht, of met bedragen als tekst.
+  const handleExport = async () => {
     if (rows.length === 0) { toast.info('Geen financiële data om te exporteren'); return; }
-    const headers = ['Klant', 'Stad', 'Gefactureerd (€)', 'Kosten (€)', 'Betaald (€)', 'Openstaand (€)', 'Nettoresultaat (€)', 'Marge (%)', 'Status'];
-    const escape = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const csvRows = [
-      headers.map(escape).join(','),
-      ...rows.map(r => [r.name, r.city || '', r.total.toFixed(2), r.costs.toFixed(2), r.paid.toFixed(2), r.openstaand.toFixed(2), r.profit.toFixed(2), r.margin, r.stage === 'completed' || r.stage === 'paid' ? 'Afgerond' : 'In uitvoering'].map(escape).join(',')),
-    ];
-    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `bossbase-financien-export-${TODAY}.csv`; a.click();
-    URL.revokeObjectURL(url);
-    toast.success('Export gedownload');
+    if (!kostenPerKlant) { toast.info('De kosten per klant worden nog geladen. Probeer het zo opnieuw.'); return; }
+    try {
+      const { default: ExcelJS } = await import('exceljs');
+      const wb = new ExcelJS.Workbook();
+      // De tabel Per klant is cumulatief (alle periodes), niet de periode van de
+      // tegels erboven. Dat staat in de bladnaam en de bestandsnaam.
+      const ws = wb.addWorksheet('Per klant (alle periodes)');
+      const euro = '"€" #,##0.00;[Red]-"€" #,##0.00';
+      ws.columns = [
+        { header: 'Klant', key: 'klant', width: 32 },
+        { header: 'Plaats', key: 'plaats', width: 18 },
+        { header: 'Gefactureerd', key: 'gefactureerd', width: 16, style: { numFmt: euro } },
+        { header: 'Materiaal', key: 'materiaal', width: 14, style: { numFmt: euro } },
+        { header: 'Inkopen', key: 'inkopen', width: 14, style: { numFmt: euro } },
+        { header: 'Uren', key: 'uren', width: 10, style: { numFmt: '0.00' } },
+        { header: 'Betaald', key: 'betaald', width: 14, style: { numFmt: euro } },
+        { header: 'Openstaand', key: 'openstaand', width: 14, style: { numFmt: euro } },
+        { header: 'Brutowinst vóór arbeid', key: 'brutowinst', width: 22, style: { numFmt: euro } },
+        { header: 'Marge (%)', key: 'marge', width: 11 },
+      ];
+      ws.getRow(1).font = { bold: true };
+      const getal = v => Math.round((Number(v) || 0) * 100) / 100;
+      const totaalOmzetExcl = rows.reduce((t, r) => t + (Number(r.omzetExcl) || 0), 0);
+      rows.forEach(r => ws.addRow({
+        klant: r.name, plaats: r.city || '',
+        gefactureerd: getal(r.total), materiaal: getal(r.materiaal), inkopen: getal(r.inkopen),
+        uren: getal(r.uren), betaald: getal(r.paid), openstaand: getal(r.openstaand),
+        brutowinst: getal(r.profit), marge: r.margin,
+      }));
+      const totaal = ws.addRow({
+        klant: 'Totaal', plaats: '',
+        gefactureerd: totaalRij.total, materiaal: totaalRij.materiaal, inkopen: totaalRij.inkopen,
+        uren: totaalRij.uren, betaald: totaalRij.paid, openstaand: totaalRij.openstaand,
+        brutowinst: totaalRij.profit,
+        marge: totaalOmzetExcl > 0 ? Math.round((totaalRij.profit / totaalOmzetExcl) * 100) : 0,
+      });
+      totaal.font = { bold: true };
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `BossBase-financien-per-klant-alle-periodes-${vandaagIso()}.xlsx`; a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Export gedownload');
+    } catch (err) {
+      toast.error('Exporteren mislukt: ' + (err.message || ''));
+    }
   };
 
   const CHART_MODES = [
@@ -1778,7 +1870,9 @@ export function RevenuePage() {
     { label: 'Openstaand',             val: fmt(openstaand),       sub: 'Nog niet betaald, alle periodes',    icon: I.clock,  color: '#e8784a' },
     { label: 'Te verwachten',          val: fmt(teVerwachten),     sub: 'Geaccepteerde offertes',             icon: I.quotes  },
     { label: `Kosten ${periodeLabel}`, val: fmt(kostenPeriode),    sub: `Alle kostenregels ${periodeLabel}`,  icon: I.costs   },
-    { label: 'Nettoresultaat',         val: fmt(netto),            sub: `${marge}% marge ${periodeLabel}`,    icon: I.revenue, color: netto >= 0 ? '#15A34A' : '#dc2626' },
+    // Ontvangen is incl. btw, kosten excl. btw: geen nettoresultaat of marge,
+    // dus ook niet zo noemen. De te betalen btw zit er nog in.
+    { label: 'Ontvangen min kosten',   val: fmt(netto),            sub: `Ontvangen incl. btw, kosten excl. btw, ${periodeLabel}`, icon: I.revenue, color: netto >= 0 ? '#15A34A' : '#dc2626' },
   ];
 
   return (
@@ -1786,7 +1880,7 @@ export function RevenuePage() {
       <div className="page-hd afu">
         <div><h1>Financiën</h1><p>Financieel overzicht</p></div>
         <div className="page-hd-actions" style={{ flexWrap: 'wrap', gap: 8 }}>
-          <select value={kpiPeriode} onChange={e => setKpiPeriode(e.target.value)} style={{ fontSize: '.82rem' }}>
+          <select value={kpiPeriode} data-rl="financien-periode" onChange={e => setKpiPeriode(e.target.value)} style={{ fontSize: '.82rem' }}>
             <option value="deze-maand">Deze maand</option>
             <option value="vorige-maand">Vorige maand</option>
             <option value="dit-jaar">Dit jaar</option>
@@ -1797,20 +1891,23 @@ export function RevenuePage() {
             <input type="date" value={kpiVan} onChange={e => setKpiVan(e.target.value)} style={{ fontSize: '.82rem' }} />
             <input type="date" value={kpiTot} onChange={e => setKpiTot(e.target.value)} style={{ fontSize: '.82rem' }} />
           </>)}
-          <button className="btn btn-s btn-sm" onClick={handleExport}>Exporteren</button>
+          <button className="btn btn-s btn-sm" data-rl="financien-export" onClick={handleExport}>Exporteren</button>
         </div>
       </div>
 
       {/* De tegels hangen niet meer aan dit laden: die komen uit één RPC en
           staan er als eerste. Deze melding gaat alleen nog over de grafiek, de
           btw-kaart en de tabel per klant, die op de gedeelde dataset wachten. */}
-      {!kpi && (loading || gedeeldLaden) && <div className="card card-p">Financiën laden...</div>}
+      {(kpiFout || laadFoutFin) && (
+        <LaadFout fout={kpiFout || laadFoutFin} titel="Financiën laden is niet gelukt" onOpnieuw={() => setOpnieuwFin(n => n + 1)} />
+      )}
+      {!kpi && !kpiFout && !laadFoutFin && (loading || gedeeldLaden) && <div className="card card-p">Financiën laden...</div>}
 
-      <div className="stats-row afu2" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
+      <div className="stats-row afu2" data-rl="financien-tegels" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
         {KPI.map((k, i) => (
           <div key={i} className="sc">
             <div className="sc-top"><div className="sc-icon">{k.icon}</div></div>
-            <div className="sc-val" style={k.color ? { color: k.color } : {}}>{k.val}</div>
+            <div className="sc-val" style={k.color && !kpiFout ? { color: k.color } : {}}>{kpiFout ? '—' : k.val}</div>
             <div className="sc-label">{k.label}</div>
             <div className="sc-sub">{k.sub}</div>
           </div>
@@ -1835,23 +1932,14 @@ export function RevenuePage() {
         </div>
         <div style={{ overflowX: 'auto' }}>
           <div style={{ minWidth: 480 }}>
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--dl)' }} axisLine={false} tickLine={false} interval={chartPeriod === 'maand' ? 4 : 0} />
-                <YAxis
-                  tickFormatter={v => v === 0 ? '€0' : `€${(v / 1000).toFixed(0)}k`}
-                  tick={{ fontSize: 11, fill: 'var(--dl)' }}
-                  axisLine={false} tickLine={false} width={44}
-                />
-                <Tooltip
-                  formatter={(v, name) => [fmt(v), CHART_MODES.find(m => m.id === chartMode)?.label || name]}
-                  contentStyle={{ border: '1px solid var(--border)', borderRadius: 8, fontSize: '.8rem', boxShadow: 'none' }}
-                  cursor={{ fill: 'rgba(0,0,0,.03)' }}
-                />
-                <Bar dataKey={chartMode} fill={chartMode === 'kosten' ? '#dc2626' : '#1DDB62'} radius={[4, 4, 0, 0]} maxBarSize={32} />
-              </BarChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<div style={{ height: 240 }} />}>
+              <FinancienGrafiek
+                chartData={chartData}
+                chartMode={chartMode}
+                chartPeriod={chartPeriod}
+                modeLabel={CHART_MODES.find(m => m.id === chartMode)?.label}
+              />
+            </Suspense>
           </div>
         </div>
       </div>
@@ -1949,7 +2037,7 @@ export function RevenuePage() {
       )}
 
       <div className="tw afu3">
-        <div className="tw-hd"><div className="card-title">Per klant / opdracht</div></div>
+        <div className="tw-hd"><div className="card-title">Per klant / opdracht <span style={{ fontWeight: 400, color: 'var(--dm)', fontSize: '.8rem' }}>· alle periodes</span></div></div>
         <div style={{ overflowX: 'auto' }}>
           <table className="dt" style={{ minWidth: 860 }}>
             <thead>

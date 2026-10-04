@@ -4,7 +4,8 @@
 // verify_jwt=true: alleen de eigenaar van de sessie kan zijn eigen code checken.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { hashVerificationCode } from '../_shared/hashCode.ts'
+import { hashVerificationCode, legacyHashVerificationCode, LEGACY_TOT, gelijk } from '../_shared/hashCode.ts'
+import { legAkkoordVast } from '../_shared/akkoord.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -48,7 +49,7 @@ serve(async (req) => {
 
     // Meest recente, nog niet gebruikte code voor deze user.
     const { data: row } = await admin.from('email_verification_codes')
-      .select('id, code_hash, expires_at, verified_at, attempts')
+      .select('id, code_hash, expires_at, verified_at, attempts, created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
@@ -60,20 +61,38 @@ serve(async (req) => {
     if (new Date(row.expires_at) < new Date()) {
       return json({ success: false, code: 'EXPIRED', error: 'Code is verlopen. Vraag een nieuwe code aan.' }, 400)
     }
-    if (row.attempts >= MAX_ATTEMPTS) {
+    // Eerst de poging tellen, atomair: twee gelijktijdige verzoeken kunnen zo
+    // nooit samen meer dan MAX_ATTEMPTS pogingen opleveren. Geen rij terug =
+    // het maximum is bereikt.
+    const { data: poging } = await admin.rpc('bb_verificatie_poging', { p_id: row.id, p_max: MAX_ATTEMPTS })
+    if (poging === null || poging === undefined) {
       return json({ success: false, code: 'TOO_MANY', error: 'Te veel pogingen. Vraag een nieuwe code aan.' }, 400)
     }
 
-    // Hash de ingevoerde code en vergelijk.
-    const inputHash = await hashVerificationCode(String(code), userId)
-    if (inputHash !== row.code_hash) {
-      const newAttempts = row.attempts + 1
-      await admin.from('email_verification_codes').update({ attempts: newAttempts }).eq('id', row.id)
-      const remaining = MAX_ATTEMPTS - newAttempts
+    // Hash de ingevoerde code en vergelijk (constante tijd). Codes van vóór de
+    // overstap op HMAC gebruiken nog de oude hash.
+    const invoer = String(code)
+    let klopt = gelijk(await hashVerificationCode(invoer, userId), row.code_hash)
+    if (!klopt && row.created_at && row.created_at < LEGACY_TOT) {
+      klopt = gelijk(await legacyHashVerificationCode(invoer, userId), row.code_hash)
+    }
+    if (!klopt) {
+      const remaining = MAX_ATTEMPTS - Number(poging)
       if (remaining <= 0) {
         return json({ success: false, code: 'TOO_MANY', error: 'Te veel pogingen. Vraag een nieuwe code aan.' }, 400)
       }
       return json({ success: false, code: 'MISMATCH', remaining, error: `Code is onjuist. Nog ${remaining} ${remaining === 1 ? 'poging' : 'pogingen'}.` }, 400)
+    }
+
+    // Vangnet: kwam het akkoord bij registratie niet aan (akkoord-vastleggen
+    // faalde), leg het dan nu vast. Een account bestaat niet zonder akkoord.
+    try {
+      if (await legAkkoordVast(admin, user, req, 'registratie_vangnet')) {
+        console.log('[verify-code] Akkoord via vangnet vastgelegd', { user: userId })
+      }
+    } catch (e) {
+      console.error('[verify-code] Akkoord vastleggen mislukt', { user: userId, error: String(e) })
+      return json({ success: false, error: 'Account aanmaken mislukt. Probeer het opnieuw.' }, 500)
     }
 
     // ── Match → markeer geverifieerd ──────────────────────────────────────────
@@ -98,15 +117,24 @@ serve(async (req) => {
       })
       if (rpcErr) {
         console.error('[verify-code] provision_account fout:', rpcErr)
-        return json({ success: false, error: `Account aanmaken mislukt: ${rpcErr.message}` }, 500)
+        return json({ success: false, error: 'Account aanmaken mislukt. Probeer het opnieuw.' }, 500)
       }
       companyId = rpcData?.company_id || null
+
+      // De proef start op het pakket dat de klant bij aanmelden koos (groei of
+      // team). De trigger op companies zet altijd groei; alleen bij een vers
+      // aangemaakt bedrijf in de proefperiode zetten we hem om. Audit A2.
+      if (companyId && rpcData?.status === 'created' && meta.gekozen_pakket === 'team') {
+        const { error: pakketErr } = await admin.from('subscriptions')
+          .update({ plan: 'team' }).eq('company_id', companyId).eq('status', 'trial')
+        if (pakketErr) console.error('[verify-code] proefpakket zetten mislukt:', pakketErr.message)
+      }
     }
 
     console.log('[verify-code] Geverifieerd ✓', { user: userId })
     return json({ success: true, companyId })
   } catch (err) {
     console.error('[verify-code] Fout:', err)
-    return json({ success: false, error: String(err) }, 500)
+    return json({ success: false, error: 'Verifiëren mislukt door een interne fout. Probeer het opnieuw.' }, 500)
   }
 })

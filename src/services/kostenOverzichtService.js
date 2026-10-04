@@ -1,7 +1,6 @@
 import { supabase } from '../lib/supabase'
-import { getProjectCosts, isWerkbonMateriaal, inkoopwaardeVanKosten, toJobCost } from './jobCostService.js'
-import { listProjectKosten, listWerkbonKosten, toProjectKost } from './projectKostenService.js'
-import { getTimeEntries } from './projectsService.js'
+import { isWerkbonMateriaal, inkoopwaardeVanKosten, toJobCost } from './jobCostService.js'
+import { listWerkbonKosten, toProjectKost } from './projectKostenService.js'
 import { alleRijen } from '../lib/alleRijen.js'
 
 // Eén bron voor het kostenoverzicht, zowel van één project als van een hele
@@ -78,17 +77,6 @@ export function bouwKostenOverzicht({ jobCosts = [], projectKosten = [], urenReg
     boekingen: { regels: boekingRegels, bedrag: boekingenBedrag },
     totaal: rond(inkoop.materiaalInkoop + inkopenBedrag),
   }
-}
-
-/** Kostenoverzicht van één project. */
-export async function getProjectKostenOverzicht(projectId) {
-  if (!projectId) return { ...LEEG_OVERZICHT }
-  const [jobCosts, projectKosten, urenRegels] = await Promise.all([
-    getProjectCosts(projectId).catch(() => []),
-    listProjectKosten(projectId),           // fout hier is zichtbaar: de tab meldt hem
-    getTimeEntries(projectId).catch(() => []),
-  ])
-  return bouwKostenOverzicht({ jobCosts, projectKosten, urenRegels })
 }
 
 // Doorvragen tot alle rijen binnen zijn: zie lib/alleRijen.js.
@@ -169,7 +157,7 @@ export async function getKlantKostenOverzicht(customerId) {
     .from(tabel)
     .select(select, { count: 'exact' })
     .eq('customer_id', customerId)
-    .order('id', { ascending: true })).catch(() => [])
+    .order('id', { ascending: true }))
 
   const [projectRijen, werkbonRijen, dealRijen] = await Promise.all([
     idLijst('projects', 'id, customer_id'),
@@ -186,7 +174,7 @@ export async function getKlantKostenOverzicht(customerId) {
         .from('werkbonnen')
         .select('id, project_id, customer_id', { count: 'exact' })
         .in('project_id', eigenProjectIds)
-        .order('id', { ascending: true })).catch(() => [])
+        .order('id', { ascending: true }))
     : []
   const sleutels = klantSleutels(customerId, {
     projecten: projectRijen,
@@ -219,7 +207,7 @@ export async function getKlantKostenOverzicht(customerId) {
   try {
     jobCosts = bijKlant(await haalJobCosts(MET_INKOOP)).map(metMateriaalVelden)
   } catch {
-    jobCosts = bijKlant(await haalJobCosts('*').catch(() => [])).map(toJobCost)
+    jobCosts = bijKlant(await haalJobCosts('*')).map(toJobCost)
   }
   // Ontdubbelen op id: één rij is één kostenpost, ongeacht hoeveel routes er
   // naar deze klant leiden.
@@ -237,7 +225,6 @@ export async function getKlantKostenOverzicht(customerId) {
           .order('datum', { ascending: true })
           .order('id', { ascending: true }))
         .then(rows => rows.filter(r => inkoopHoortBijKlant(r, sleutels)).map(toProjectKost))
-        .catch(() => [])
       : [],
     werkbonIdLijst.length
       ? alleRijen(() => supabase
@@ -246,7 +233,6 @@ export async function getKlantKostenOverzicht(customerId) {
           .in('werkbon_id', werkbonIdLijst)
           .order('id', { ascending: true }))
         .then(rows => rows.map(naarUrenRegel))
-        .catch(() => [])
       : [],
   ])
 
@@ -314,21 +300,8 @@ export async function getWerkbonKostenBron(werkbonId) {
   try {
     jobCosts = (await haal(MET_INKOOP)).map(metMateriaalVelden)
   } catch {
-    jobCosts = (await haal('*').catch(() => [])).map(toJobCost)
+    jobCosts = (await haal('*')).map(toJobCost)
   }
   const projectKosten = await listWerkbonKosten(werkbonId)
   return { jobCosts, projectKosten }
-}
-
-/** Alleen de projectkosten van een klant, gegroepeerd per project (voor de lijst). */
-export function inkopenPerProject(regels = [], projecten = []) {
-  const naam = new Map(projecten.map(p => [p.id, p.name || p.naam || '']))
-  const per = new Map()
-  for (const r of regels) {
-    if (!per.has(r.projectId)) per.set(r.projectId, { projectId: r.projectId, naam: naam.get(r.projectId) || 'Project', regels: [], bedrag: 0 })
-    const groep = per.get(r.projectId)
-    groep.regels.push(r)
-    groep.bedrag = rond(groep.bedrag + (Number(r.bedrag) || 0))
-  }
-  return [...per.values()].sort((a, b) => a.naam.localeCompare(b.naam, 'nl'))
 }

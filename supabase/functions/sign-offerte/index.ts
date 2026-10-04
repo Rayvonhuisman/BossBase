@@ -3,6 +3,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
 import { opslagWaarde } from '../_shared/documentLink.ts'
+import {
+  maakOfferteExemplaar, bytesNaarBase64, isUuid, handtekeningUit, aanroeperGegevens, vandaagNl,
+} from '../_shared/ondertekendExemplaar.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -35,140 +38,144 @@ async function sendViaEdge(supabaseUrl: string, serviceKey: string, body: Record
   } catch { return false }
 }
 
-function dataUrlToBytes(dataUrl: string): Uint8Array {
-  const base64 = dataUrl.split(',')[1]
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return bytes
-}
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
 
-function base64ToBytes(b64: string): Uint8Array {
-  const binary = atob(b64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  return bytes
-}
-
+// Volgorde, en waarom (audit 2026-10-01, H4):
+//   1. Alles controleren zonder iets te schrijven: token (uuid), offerte bestaat,
+//      niet al getekend, niet vervangen, verzonden (geen concept of afgewezen),
+//      niet verlopen, pakket.
+//   2. Handtekening en het ondertekende exemplaar op een UNIEK pad opslaan. Het
+//      exemplaar maakt de server uit de database; een PDF van de ondertekenaar
+//      wordt genegeerd.
+//   3. Eén atomaire update met alle voorwaarden opnieuw in de WHERE. Wint een
+//      gelijktijdig verzoek, dan krijgt deze 0 rijen terug, ruimt hij zijn eigen
+//      bestanden op en antwoordt 409. Pas daarna mails en tijdlijn.
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   const warnings: string[] = []
 
   try {
-    const { sign_token, name, email, signature_data_url, signed_pdf_base64, pdf_fout } = await req.json()
+    const body = await req.json().catch(() => ({}))
+    const { sign_token, signature_data_url } = body
+    const name = String(body?.name ?? '').trim().slice(0, 200)
+    const email = String(body?.email ?? '').trim().toLowerCase().slice(0, 254)
 
-    // De ondertekende PDF wordt in de browser van de klant gemaakt. Mislukte dat,
-    // dan gingen beide mails zonder bijlage weg en wist niemand ervan: er werd
-    // niets opgeslagen en het scherm zei gewoon "u ontvangt een bevestiging".
-    if (pdf_fout) {
-      await logMailFout({
-        soort: 'ondertekende_pdf_offerte',
-        ontvanger: email ?? null,
-        fout: String(pdf_fout).slice(0, 500),
-        bron: 'sign-offerte',
-      })
+    if (!isUuid(sign_token)) return json({ success: false, code: 'ongeldig', error: 'Deze link is ongeldig.' }, 404)
+    if (!name || !email || !signature_data_url) {
+      return json({ success: false, error: 'Vul uw naam en e-mailadres in en zet uw handtekening.' }, 400)
     }
-
-    if (!sign_token || !name || !email || !signature_data_url) {
-      return new Response(JSON.stringify({ success: false, error: 'Verplichte velden ontbreken' }), {
-        status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
-      })
-    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ success: false, error: 'Vul een geldig e-mailadres in.' }, 400)
+    const sigBytes = handtekeningUit(signature_data_url)
+    if (!sigBytes) return json({ success: false, error: 'De handtekening kon niet worden gelezen. Probeer het opnieuw.' }, 400)
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const admin = createClient(supabaseUrl, serviceKey)
 
-    // ── STAP 1: Offerte ophalen ───────────────────────────────────────────────
+    // ── STAP 1: Offerte ophalen en controleren ───────────────────────────────
     const { data: offerte, error: offerteErr } = await admin
       .from('offertes')
-      .select('id, nummer, omschrijving, totaal_incl, company_id, customer_id, signed_at, snapshot_bedrijfsnaam')
+      .select('id, nummer, omschrijving, totaal_incl, totaal_excl, company_id, customer_id, signed_at, status, geldig_tot, vervangen_op, vervangen_door_nummer, snapshot_bedrijfsnaam')
       .eq('sign_token', sign_token)
       .maybeSingle()
 
     if (offerteErr) {
-      return new Response(JSON.stringify({ success: false, error: `DB fout bij ophalen offerte: ${offerteErr.message}` }), {
-        status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
-      })
+      console.error('sign-offerte ophalen', offerteErr.message)
+      return json({ success: false, error: 'De offerte kon niet worden geladen. Probeer het later opnieuw.' }, 500)
     }
-    if (!offerte) {
-      return new Response(JSON.stringify({ success: false, error: 'Offerte niet gevonden voor dit token' }), {
-        status: 404, headers: { ...CORS, 'Content-Type': 'application/json' },
-      })
+    if (!offerte) return json({ success: false, code: 'ongeldig', error: 'Deze offerte is niet gevonden. Controleer de link.' }, 404)
+
+    const { data: bedrijfNaamRij } = await admin.from('companies').select('name').eq('id', offerte.company_id).maybeSingle()
+    const bij = (bedrijfNaamRij?.name as string) || 'het bedrijf'
+    const weiger = (code: string, error: string) => json({ success: false, code, error }, 409)
+
+    if (offerte.signed_at) return weiger('al_ondertekend', 'Deze offerte is al ondertekend.')
+    if (offerte.vervangen_op) {
+      return weiger('vervangen', `Deze offerte is vervangen door een nieuwere versie${offerte.vervangen_door_nummer ? ` (${offerte.vervangen_door_nummer})` : ''}. Gebruik de link uit de laatste mail van ${bij}.`)
     }
-    if (offerte.signed_at) {
-      return new Response(JSON.stringify({ success: false, error: 'Offerte is al ondertekend' }), {
-        status: 409, headers: { ...CORS, 'Content-Type': 'application/json' },
-      })
+    if (offerte.status !== 'verzonden') {
+      return weiger('niet_ondertekenbaar', offerte.status === 'geaccepteerd'
+        ? 'Deze offerte is al geaccepteerd.'
+        : `Deze offerte kan niet (meer) worden ondertekend. Neem contact op met ${bij}.`)
+    }
+    const vandaag = vandaagNl()
+    if (offerte.geldig_tot && String(offerte.geldig_tot) < vandaag) {
+      const op = new Date(String(offerte.geldig_tot)).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
+      return weiger('verlopen', `Deze offerte was geldig tot ${op} en kan niet meer worden ondertekend. Vraag ${bij} om een nieuwe offerte.`)
     }
 
     // ── Feature-check (server-side, centrale matrix) ──────────────────────────
-    // Deze functie draait met service_role en omzeilt RLS, dus de check moet hier
-    // expliciet. Zonder 'digitale_handtekening' in het abonnement kan een offerte
-    // niet online ondertekend worden — ook niet met een geldig sign_token.
     const { data: heeftFeature } = await admin.rpc('bb_has_feature', {
       p_company_id: offerte.company_id,
       p_feature: 'digitale_handtekening',
     })
     if (heeftFeature !== true) {
-      return new Response(JSON.stringify({ success: false, error: 'Digitaal ondertekenen is voor deze offerte niet beschikbaar.' }), {
-        status: 403, headers: { ...CORS, 'Content-Type': 'application/json' },
-      })
+      return json({ success: false, error: 'Digitaal ondertekenen is voor deze offerte niet beschikbaar.' }, 403)
     }
 
-    // ── STAP 2: Handtekening uploaden naar storage ────────────────────────────
-    const sigFilename = `${offerte.id}.png`
-    let sigBytes: Uint8Array
-    try {
-      sigBytes = dataUrlToBytes(signature_data_url)
-    } catch (err) {
-      return new Response(JSON.stringify({ success: false, error: `Handtekening data ongeldig: ${err}` }), {
-        status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
-      })
-    }
-
+    // ── STAP 2: Handtekening en exemplaar opslaan (uniek pad) ─────────────────
+    const now = new Date().toISOString()
+    const { ip, userAgent } = aanroeperGegevens(req)
+    const uniek = crypto.randomUUID()
+    const sigFilename = `${offerte.id}-${uniek}.png`
     const { error: uploadErr } = await admin.storage
       .from('signatures')
-      .upload(sigFilename, sigBytes, { contentType: 'image/png', upsert: true })
-
+      .upload(sigFilename, sigBytes, { contentType: 'image/png', upsert: false })
     if (uploadErr) {
-      return new Response(JSON.stringify({ success: false, error: `Storage upload mislukt (signatures): ${uploadErr.message}` }), {
-        status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
-      })
+      console.error('sign-offerte handtekening', uploadErr.message)
+      return json({ success: false, error: 'De handtekening kon niet worden opgeslagen. Probeer het opnieuw.' }, 500)
     }
-
-    // De signatures-bucket is privé. Vroeger stond hier een ondertekende URL van
-    // 10 jaar; nu een van 24 uur (overgang voor oude app-tabbladen). De app
-    // vraagt bij het openen een link van 10 minuten op via document-url
-    // (_shared/documentLink.ts).
     const signatureUrl = await opslagWaarde(admin, 'signatures', sigFilename)
 
-    // ── STAP 3: Company ophalen (branding voor snapshot + response) ──────────
-    let company: Record<string, unknown> = {}
+    let exemplaar: Awaited<ReturnType<typeof maakOfferteExemplaar>> | null = null
+    let pdfPad: string | null = null
     try {
-      const { data, error } = await admin
+      exemplaar = await maakOfferteExemplaar(admin, offerte.id, { naam: name, email, tijdstip: now, ip, userAgent, handtekeningPng: sigBytes })
+      pdfPad = `${offerte.company_id}/offerte-${offerte.id}-${uniek.slice(0, 8)}-ondertekend.pdf`
+      const { error: pdfErr } = await admin.storage.from('signed-offertes')
+        .upload(pdfPad, exemplaar.pdf, { contentType: 'application/pdf', upsert: false })
+      if (pdfErr) { console.error('sign-offerte pdf opslaan', pdfErr.message); pdfPad = null; warnings.push('Ondertekend exemplaar opslaan mislukt') }
+    } catch (e) {
+      console.error('sign-offerte exemplaar maken', e)
+      warnings.push('Ondertekend exemplaar maken mislukt')
+      await logMailFout({ soort: 'ondertekende_pdf_offerte', ontvanger: null, companyId: offerte.company_id,
+        fout: `Exemplaar maken mislukt: ${String(e).slice(0, 300)}`, bron: 'sign-offerte', gerelateerdType: 'offerte', gerelateerdId: offerte.id })
+    }
+    const signedPdfUrl = pdfPad ? await opslagWaarde(admin, 'signed-offertes', pdfPad) : null
+
+    // ── STAP 3: Company ophalen (branding voor snapshot + mails) ─────────────
+    let company: Record<string, unknown> = {}
+    {
+      const { data } = await admin
         .from('companies')
         .select('name, email, logo_url, branding_color, address, postal_code, city, kvk, btw_number')
         .eq('id', offerte.company_id)
         .maybeSingle()
-      if (error) warnings.push(`Company ophalen: ${error.message}`)
-      else company = data || {}
-    } catch (err) {
-      warnings.push(`Company ophalen mislukt: ${err}`)
+      company = data || {}
     }
 
-    // ── STAP 4: Offerte updaten (ondertekenen) ───────────────────────────────
-    // Branding-snapshot bevriezen als die nog niet bij het versturen is gezet,
-    // zodat de ondertekende offerte er altijd hetzelfde uit blijft zien — ook
-    // als het bedrijf later zijn logo of kleur wijzigt.
-    const now = new Date().toISOString()
+    // ── STAP 4: Atomair ondertekenen ─────────────────────────────────────────
     const updatePayload: Record<string, unknown> = {
       signed_at: now,
       signature_url: signatureUrl,
       signed_by_name: name,
       signed_by_email: email,
       status: 'geaccepteerd',
+      signed_pdf_url: signedPdfUrl,
+      ondertekening_bewijs: {
+        versie: 1,
+        tijdstip: now, naam: name, email, ip, user_agent: userAgent,
+        nummer: offerte.nummer,
+        totaal_excl: exemplaar?.inhoud.totaal_excl ?? Number(offerte.totaal_excl || 0),
+        totaal_incl: exemplaar?.inhoud.totaal_incl ?? Number(offerte.totaal_incl || 0),
+        aantal_regels: exemplaar?.inhoud.regels.length ?? null,
+        inhoud_sha256: exemplaar?.documentHash ?? null,
+        pdf_sha256: pdfPad ? exemplaar?.pdfHash ?? null : null,
+        pdf_pad: pdfPad,
+        handtekening_pad: sigFilename,
+      },
     }
     if (!offerte.snapshot_bedrijfsnaam) {
       updatePayload.snapshot_logo_url = (company?.logo_url as string) ?? null
@@ -181,44 +188,28 @@ serve(async (req) => {
       updatePayload.snapshot_kvk = (company?.kvk as string) ?? null
       updatePayload.snapshot_btw = (company?.btw_number as string) ?? null
     }
-    const { error: updateErr } = await admin.from('offertes').update(updatePayload).eq('id', offerte.id)
+    const { data: gewonnen, error: updateErr } = await admin.from('offertes')
+      .update(updatePayload)
+      .eq('id', offerte.id)
+      .is('signed_at', null)
+      .eq('status', 'verzonden')
+      .is('vervangen_op', null)
+      .or(`geldig_tot.is.null,geldig_tot.gte.${vandaag}`)
+      .select('id')
 
-    if (updateErr) {
-      return new Response(JSON.stringify({ success: false, error: `Offerte update mislukt: ${updateErr.message}` }), {
-        status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
-      })
-    }
-
-    // ── STAP 5: PDF verwerken (frontend-gegenereerde PDF uploaden) ────────────
-    const pdfFilename = `offerte-${offerte.nummer}-ondertekend.pdf`
-    // Met bedrijfsmap ervoor: het offertenummer is alleen bínnen een bedrijf uniek,
-    // dus twee bedrijven met BB-150 overschreven elkaars ondertekende exemplaar.
-    const pdfPad = `${offerte.company_id}/${pdfFilename}`
-
-    if (signed_pdf_base64) {
-      try {
-        const pdfBytes = base64ToBytes(signed_pdf_base64)
-        const { error: pdfUploadErr } = await admin.storage
-          .from('signed-offertes')
-          .upload(pdfPad, pdfBytes, { contentType: 'application/pdf', upsert: true })
-
-        if (pdfUploadErr) {
-          warnings.push(`PDF upload mislukt (signed-offertes): ${pdfUploadErr.message}`)
-        } else {
-          // De bucket is privé. Opgeslagen: een link van 24 uur (overgang);
-          // offerte-pdf-url en document-url maken bij het openen een korte link.
-          const signedPdfUrl = await opslagWaarde(admin, 'signed-offertes', pdfPad)
-          if (signedPdfUrl) {
-            const { error: urlUpdateErr } = await admin.from('offertes')
-              .update({ signed_pdf_url: signedPdfUrl })
-              .eq('id', offerte.id)
-            if (urlUpdateErr) warnings.push(`PDF URL opslaan mislukt: ${urlUpdateErr.message}`)
-          }
-        }
-      } catch (pdfErr) {
-        warnings.push(`PDF verwerken mislukt: ${pdfErr}`)
+    if (updateErr || !gewonnen || gewonnen.length === 0) {
+      // Een gelijktijdig verzoek was eerder (of de status veranderde net). Eigen
+      // bestanden weg; die zijn nergens aan gekoppeld.
+      await admin.storage.from('signatures').remove([sigFilename]).catch(() => {})
+      if (pdfPad) await admin.storage.from('signed-offertes').remove([pdfPad]).catch(() => {})
+      if (updateErr) {
+        console.error('sign-offerte update', updateErr.message)
+        return json({ success: false, error: 'Ondertekenen is niet gelukt. Probeer het opnieuw.' }, 500)
       }
+      return weiger('al_ondertekend', 'Deze offerte is al ondertekend.')
     }
+
+    const exemplaarB64 = exemplaar && pdfPad ? bytesNaarBase64(exemplaar.pdf) : null
 
     // ── STAP 5b: Bevestigingsmails server-side versturen ─────────────────────
     // Verstuurd VANUIT de edge function (niet meer vanaf de publieke browser-
@@ -232,9 +223,9 @@ serve(async (req) => {
       const totaalFmt    = new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(offerte.totaal_incl || 0)
       const signedAtFmt  = new Date(now).toLocaleString('nl-NL')
       const omschrijving = (offerte.omschrijving as string) || ''
-      const hasPdf       = !!signed_pdf_base64
+      const hasPdf       = !!exemplaarB64
       const attachments  = hasPdf
-        ? [{ filename: `Offerte-${offerte.nummer}-ondertekend.pdf`, content: signed_pdf_base64 }]
+        ? [{ filename: `Offerte-${offerte.nummer}-ondertekend.pdf`, content: exemplaarB64 }]
         : undefined
 
       // 1) KLANT-bevestiging — bedrijfsbranding, reply-to naar het bedrijf.
@@ -244,7 +235,7 @@ serve(async (req) => {
       // aan en de klant kreeg onveranderd onze vaste tekst. Staat de template op
       // inactief of is hij leeg, dan blijft die vaste tekst de terugval.
       const { data: klantRij } = offerte.customer_id
-        ? await admin.from('customers').select('name').eq('id', offerte.customer_id).maybeSingle()
+        ? await admin.from('customers').select('name, email').eq('id', offerte.customer_id).maybeSingle()
         : { data: null }
       // {{klant_naam}}: de klant zoals hij in de administratie staat; valt terug op
       // de naam die de ondertekenaar zelf invulde.
@@ -304,8 +295,13 @@ ${hasPdf ? '<p>In de bijlage vindt u de ondertekende offerte.</p>' : ''}
         logoUrl,
         brandColor,
       })
+      // Naar het klantadres van de offerte én naar het adres van de ondertekenaar
+      // (als dat anders is). Alleen naar het zelf ingevulde adres sturen maakte het
+      // mogelijk een bevestiging naar een willekeurig adres te laten gaan zonder dat
+      // de klant zelf iets zag.
+      const ontvangers = [...new Set([(klantRij?.email as string | undefined)?.trim().toLowerCase(), email].filter(Boolean))] as string[]
       const klantBody: Record<string, unknown> = {
-        to: email, subject: klantOnderwerp, html: klantHtml, from_name: bedrijfsnaam,
+        to: ontvangers, subject: klantOnderwerp, html: klantHtml, from_name: bedrijfsnaam,
         soort: 'ondertekenbevestiging_klant',
         company_id: offerte.company_id,
         gerelateerd_type: 'offerte',
@@ -343,7 +339,7 @@ ${hasPdf ? '<p>De ondertekende offerte is als bijlage toegevoegd.</p>' : ''}`,
         if (!(await sendViaEdge(supabaseUrl, serviceKey, bedrijfBody))) warnings.push('Notificatiemail naar bedrijf mislukt')
       }
     } catch (mailErr) {
-      warnings.push(`Bevestigingsmails mislukt: ${mailErr}`)
+      console.error('sign-offerte mails', mailErr); warnings.push('Bevestigingsmails mislukt')
     }
 
     // ── STAP 5c: Tijdlijn op de klantkaart ───────────────────────────────────
@@ -360,7 +356,7 @@ ${hasPdf ? '<p>De ondertekende offerte is als bijlage toegevoegd.</p>' : ''}`,
         aangemaakt_op: now,
         meta: { nummer: offerte.nummer, signed_by: name, signed_by_email: email },
       })
-      if (tijdlijnErr) warnings.push(`Tijdlijnregel schrijven mislukt: ${tijdlijnErr.message}`)
+      if (tijdlijnErr) { console.error('sign-offerte tijdlijn', tijdlijnErr.message); warnings.push('Tijdlijnregel schrijven mislukt') }
     }
 
     // ── STAP 6: Response samenstellen ────────────────────────────────────────
@@ -387,8 +383,6 @@ ${hasPdf ? '<p>De ondertekende offerte is als bijlage toegevoegd.</p>' : ''}`,
     )
   } catch (err) {
     console.error('sign-offerte onverwachte fout:', err)
-    return new Response(JSON.stringify({ success: false, error: String(err) }), {
-      status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
-    })
+    return json({ success: false, error: 'Er ging iets mis bij het ondertekenen. Probeer het later opnieuw.' }, 500)
   }
 })

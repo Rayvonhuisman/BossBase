@@ -62,7 +62,13 @@ export function UitnodigingPage({ token, navigate }) {
       const { data, error: fnErr } = await supabase.functions.invoke('accept-invite', {
         body: { token, fullName: fullName.trim(), password },
       });
-      if (fnErr) throw new Error(fnErr.message);
+      if (fnErr) {
+        // Bij een foutstatus zit de echte melding (bijv. "het team zit vol") in
+        // de body; fnErr.message is alleen "non-2xx status code".
+        let melding = fnErr.message;
+        try { const b = await fnErr.context?.json(); if (b?.error) melding = b.error; } catch { /* body niet leesbaar */ }
+        throw new Error(melding);
+      }
       if (!data?.success) throw new Error(data?.error || 'Accepteren mislukt');
 
       // Direct inloggen

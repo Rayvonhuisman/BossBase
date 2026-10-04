@@ -1,8 +1,6 @@
 # Cookiebeleid BossBase
 
-> **CONCEPT — door een jurist laten nakijken vóór publicatie.**
-
-**Versie 2026-10 · geldig vanaf [datum van publicatie]**
+**Versie 2026-10 · geldig vanaf 1 oktober 2026**
 
 Dit cookiebeleid geldt voor de website bossbase.nl en voor de app BossBase. Het is
 van **BossBase, handelsnaam van NG E-Commerce B.V.**, Sodalietdreef 6, 7828 CR

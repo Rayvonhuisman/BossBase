@@ -68,9 +68,12 @@ serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
 
   const admin = makeAdminClient()
-  const antwoord = async (l: Log) => {
+  // opslaan=false voor weigeringen vóór de sleutelcontrole: die kan iedereen op
+  // internet veroorzaken, en een databaserij per verzoek liet een aanvaller de
+  // tabel onbeperkt vullen (audit B-15). Die gaan alleen naar de functielog.
+  const antwoord = async (l: Log, opslaan = true) => {
     console.log(`[snelstart-webhook] ${l.status} ${l.actie ?? '-'} ${l.companyId ?? '-'}: ${l.melding}`)
-    await log(admin, l)
+    if (opslaan) await log(admin, l)
     return l.uitkomst === 'verwerkt'
       ? json({ success: true }, l.status)
       : json({ error: l.melding }, l.status)
@@ -78,11 +81,11 @@ serve(async (req) => {
 
   const expected = Deno.env.get('SNELSTART_WEBHOOK_SECRET') ?? ''
   if (!expected) {
-    return antwoord({ uitkomst: 'fout', status: 503, melding: 'SNELSTART_WEBHOOK_SECRET ontbreekt' })
+    return antwoord({ uitkomst: 'fout', status: 503, melding: 'SNELSTART_WEBHOOK_SECRET ontbreekt' }, false)
   }
   const provided = new URL(req.url).searchParams.get('key') ?? ''
   if (!timingSafeEqual(provided, expected)) {
-    return antwoord({ uitkomst: 'geweigerd', status: 401, melding: 'Ongeldige key in URL' })
+    return antwoord({ uitkomst: 'geweigerd', status: 401, melding: 'Ongeldige key in URL' }, false)
   }
 
   const body = await req.json().catch(() => null)
@@ -90,14 +93,18 @@ serve(async (req) => {
   const actie = typeof body?.ActionType === 'string' ? body.ActionType : ''
   const referenceKey = typeof body?.ReferenceKey === 'string' ? body.ReferenceKey.trim() : ''
 
+  // Weigeringen zonder bekend bedrijf gaan alleen naar de functielog. Het
+  // publieke doorgeefluik /api/snelstart/webhook voegt de juiste URL-key toe,
+  // dus iedereen op internet komt tot hier; een databaserij per verzoek liet
+  // de tabel onbeperkt vullen (audit fix-ronde, zelfde patroon als B-15).
   if (!ACTIES.includes(actie)) {
-    return antwoord({ actie: actie || null, uitkomst: 'geweigerd', status: 400, melding: 'Onbekend ActionType' })
+    return antwoord({ actie: actie || null, uitkomst: 'geweigerd', status: 400, melding: 'Onbekend ActionType' }, false)
   }
   if (!referenceKey) {
-    return antwoord({ actie, uitkomst: 'geweigerd', status: 400, melding: 'ReferenceKey ontbreekt' })
+    return antwoord({ actie, uitkomst: 'geweigerd', status: 400, melding: 'ReferenceKey ontbreekt' }, false)
   }
   if (actie !== 'Delete' && !koppelSleutel) {
-    return antwoord({ actie, uitkomst: 'geweigerd', status: 400, melding: 'KoppelSleutel ontbreekt' })
+    return antwoord({ actie, uitkomst: 'geweigerd', status: 400, melding: 'KoppelSleutel ontbreekt' }, false)
   }
 
   try {
@@ -113,7 +120,7 @@ serve(async (req) => {
       return antwoord({
         actie, uitkomst: 'geweigerd', status: 404,
         melding: `Onbekende ReferenceKey (${referenceKey.slice(0, 8)}…)`,
-      })
+      }, false)
     }
     const companyId: string = ref.company_id
     const bedrijfNaam: string | null = (ref as any).companies?.name ?? null

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { signOfferte } from '../services/emailService.js'
-import { getOffertePdfUrl, getOffertePdfBase64 } from '../utils/generatePdf.js'
+import { getOffertePdfUrl } from '../utils/generatePdf.js'
 
 const fmt = n =>
   new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0)
@@ -51,6 +51,12 @@ export default function OfferteSigneren({ token }) {
   // die nooit komt, en wacht de klant op post die er niet is.
   const [mailFout, setMailFout] = useState('')
   const [superseded, setSuperseded] = useState(false)
+  // Kan deze offerte niet (meer) worden ondertekend — verlopen, nog een concept,
+  // afgewezen? Dan een eigen scherm met uitleg. De server controleert hetzelfde
+  // (sign-offerte); dit voorkomt dat de klant eerst tekent en dán pas hoort dat
+  // het niet kan.
+  const [blokkade, setBlokkade] = useState(null)
+  const [invoerFout, setInvoerFout] = useState('')
   const [hasSignature, setHasSignature] = useState(false)
   const [pdfLoading, setPdfLoading] = useState(false)
 
@@ -71,13 +77,22 @@ export default function OfferteSigneren({ token }) {
       if (off.signed_at) { setDone(true) }
       // Vervangen door een nieuwere versie → deze link is niet meer geldig.
       if (off.vervangen_op) { setSuperseded(true) }
+      else if (!off.signed_at) {
+        const vandaag = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Amsterdam' }).format(new Date())
+        if (off.status === 'geaccepteerd') {
+          setBlokkade({ titel: 'Deze offerte is al geaccepteerd', tekst: 'U hoeft niets meer te doen.' })
+        } else if (off.status !== 'verzonden') {
+          setBlokkade({ titel: 'Deze offerte kan niet worden ondertekend', tekst: 'Deze offerte staat niet (meer) open voor ondertekening.' })
+        } else if (off.geldig_tot && off.geldig_tot < vandaag) {
+          setBlokkade({ titel: 'Deze offerte is verlopen', tekst: `De offerte was geldig tot ${fmtDate(off.geldig_tot)}. Vraag om een nieuwe offerte.` })
+        }
+      }
       setOfferte(off)
       setItems(it.data || [])
       setCompany(co.data?.[0] || null)
       setKlant(cu.data?.[0] || null)
-      // Prefill met het adres waar de offerte naar verstuurd was (sent_to_email),
-      // of val terug op het emailadres van de klantkaart
-      const prefillEmail = off.sent_to_email || cu.data?.[0]?.email || ''
+      // Prefill met het e-mailadres van de klantkaart.
+      const prefillEmail = cu.data?.[0]?.email || ''
       if (prefillEmail) setForm(f => ({ ...f, email: prefillEmail }))
       if (cu.data?.[0]?.name) setForm(f => ({ ...f, name: cu.data[0].name }))
     }).catch(err => setError(err.message || 'Laden mislukt'))
@@ -166,78 +181,43 @@ export default function OfferteSigneren({ token }) {
   }
 
   const handleSubmit = async () => {
-    if (!form.name.trim()) { alert('Vul uw naam in'); return }
+    setInvoerFout('')
+    if (!form.name.trim()) { setInvoerFout('Vul uw naam in.'); return }
     if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      alert('Vul een geldig e-mailadres in'); return
+      setInvoerFout('Vul een geldig e-mailadres in.'); return
     }
-    if (!hasSignature) { alert('Teken eerst uw handtekening'); return }
+    if (!hasSignature) { setInvoerFout('Zet eerst uw handtekening.'); return }
 
     setSigning(true)
     try {
       const canvas = canvasRef.current
       const dataUrl = canvas.toDataURL('image/png')
 
-      // Genereer ondertekende PDF (nieuwe opmaak) vóór de edge function call
-      let signedPdfBase64 = null
-      let pdfFout = null
-      try {
-        const signedAtPreview = new Date().toISOString()
-        const mappedOfferte = {
-          nummer: offerte.nummer,
-          createdAt: offerte.created_at,
-          geldigTot: offerte.geldig_tot,
-          totaalExcl: offerte.totaal_excl,
-          totaalIncl: offerte.totaal_incl,
-          btwPct: offerte.btw_pct,
-          omschrijving: offerte.omschrijving,
-          notes: offerte.notes,
-          signedAt: signedAtPreview,
-          signedByName: form.name,
-          signedByEmail: form.email,
-          signatureDataUrl: dataUrl,
-        }
-        const mappedItems = (items || []).map(item => ({
-          omschrijving: item.omschrijving,
-          aantal: item.aantal,
-          prijsPer: item.prijs_per,
-          btwPct: item.btw_pct,
-          subtotaal: item.subtotaal,
-          type: item.type,
-        }))
-        signedPdfBase64 = await getOffertePdfBase64(
-          mappedOfferte, mappedItems, mapKlantForPdf(klant), mapCompanyForPdf(company))
-      } catch (pdfErr) {
-        console.warn('Ondertekend PDF genereren mislukt:', pdfErr.message)
-        pdfFout = pdfErr.message || String(pdfErr)
-      }
-
+      // Het ondertekende exemplaar maakt de server uit de offertegegevens; hier
+      // gaat alleen de handtekening mee.
       const result = await signOfferte({
         signToken: token,
         name: form.name,
         email: form.email,
         signatureDataUrl: dataUrl,
-        signedPdfBase64,
-        pdfFout,
       })
       setDone(true)
 
       // De tijdlijnregel én de bevestigingsmails gaan server-side, vanuit de
-      // sign-offerte edge function. Hier stond een anon-insert in klant_tijdlijn
-      // met een lege catch; RLS weigerde die en niemand merkte het, dus
-      // "offerte geaccepteerd" belandde nooit op de klanttijdlijn. Een fout die
-      // niemand ziet is erger dan een fout.
-      //
-      // Meldt de edge function alsnog iets, dan tonen we dat — het ondertekenen
-      // is gelukt, maar de gebruiker mag weten dat er iets niet is bijgewerkt.
+      // sign-offerte edge function. Meldt die dat een mail niet is verstuurd,
+      // dan zeggen we dat op het bedanktscherm.
       if (Array.isArray(result?.warnings) && result.warnings.length) {
-        console.warn('[offerte ondertekenen] server meldde:', result.warnings.join(' · '))
-        // Alleen de mailwaarschuwingen zijn iets voor de klant; een mislukte
-        // tijdlijnregel is ons probleem, niet het zijne.
         const mailWaarschuwingen = result.warnings.filter(w => /mail/i.test(w))
         if (mailWaarschuwingen.length) setMailFout(mailWaarschuwingen.join(' · '))
       }
     } catch (err) {
-      alert('Er is iets misgegaan: ' + err.message)
+      // Weigert de server omdat de offerte niet (meer) te tekenen is, dan het
+      // uitlegscherm; anders een melding onder de knop.
+      if (['verlopen', 'vervangen', 'niet_ondertekenbaar', 'al_ondertekend'].includes(err.code)) {
+        setBlokkade({ titel: err.code === 'al_ondertekend' ? 'Deze offerte is al ondertekend' : 'Deze offerte kan niet worden ondertekend', tekst: err.message })
+      } else {
+        setInvoerFout(err.message || 'Er is iets misgegaan. Probeer het opnieuw.')
+      }
     } finally {
       setSigning(false)
     }
@@ -334,6 +314,27 @@ export default function OfferteSigneren({ token }) {
                 Wilt u een bevestiging op papier of per mail? Neem dan contact op met {company?.name || 'het bedrijf'}.
               </div>
             )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (blokkade && !superseded) {
+    return (
+      <div style={styles.shell}>
+        <div style={styles.card}>
+          {company?.logo_url && (
+            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+              <img src={company.logo_url} alt={company.name} style={{ height: 48, objectFit: 'contain' }} />
+            </div>
+          )}
+          <div style={{ textAlign: 'center', padding: '32px 0' }}>
+            <div style={{ fontWeight: 800, fontSize: '1.25rem', marginBottom: 8 }}>{blokkade.titel}</div>
+            <div style={{ color: '#6b7280', fontSize: '.95rem', lineHeight: 1.6 }}>
+              Offerte <strong>{offerte?.nummer}</strong>. {blokkade.tekst}
+              <br />Vragen? Neem contact op met {company?.name || 'het bedrijf'}.
+            </div>
           </div>
         </div>
       </div>
@@ -499,6 +500,11 @@ export default function OfferteSigneren({ token }) {
           <strong>{company?.name || 'het bedrijf'}</strong>. Uw handtekening en gegevens worden opgeslagen.
         </div>
 
+        {invoerFout && (
+          <div role="alert" style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 10, background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', fontSize: '.88rem' }}>
+            {invoerFout}
+          </div>
+        )}
         <button
           onClick={handleSubmit}
           disabled={signing}

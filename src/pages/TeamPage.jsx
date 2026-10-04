@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { LaadFout } from '../components/LaadFout.jsx';
 import { I, ModalX, initials, Av } from '../bb-shared.jsx';
 import { InfoTip } from '../components/Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
@@ -34,7 +35,7 @@ function TeamAvatar({ member, idx, size = 'sm' }) {
   return <Av name={member.fullName || member.email || '?'} size={size} idx={idx % 6} />;
 }
 
-function InviteModal({ onClose, onSaved }) {
+function InviteModal({ onClose, onSaved, onLimiet }) {
   const toast = useToast();
   const [form, setForm] = useState({
     email: '',
@@ -63,6 +64,7 @@ function InviteModal({ onClose, onSaved }) {
       onClose();
     } catch (err) {
       toast.error(err.message || 'Opslaan mislukt');
+      if (err.code === 'gebruikerslimiet') { onClose(); onLimiet?.(); }
     } finally {
       setSaving(false);
     }
@@ -451,15 +453,22 @@ export function TeamPage() {
   // Gebruikerslimiet + rollen&rechten uit de centrale matrix. Server-side dwingt
   // een restrictive policy op company_members (limiet) en user_permissions
   // (feature) hetzelfde af.
-  const { plan, guardLimiet, guardFeature, planModal } = usePlanGuard();
+  const { plan, guardLimiet, guardFeature, planModal, toonBlokkade } = usePlanGuard();
+  // De database weigerde omdat het pakket vol zit: melding staat al als toast,
+  // nu door naar de abonnementspagina om te upgraden.
+  const naarUpgrade = () => toonBlokkade({ limiet: 'gebruikers' });
 
-  useEffect(() => {
+  const [laadFout, setLaadFout] = useState(null);
+  const laad = () => {
     setLoading(true);
+    setLaadFout(null);
     Promise.all([getTeamMembers(), getEigenaarId()])
       .then(([data, eigenaar]) => { setMembers(data); setEigenaarId(eigenaar); })
-      .catch(err => toast.error(err.message || 'Laden mislukt'))
+      // Niet "Nog geen teamleden" tonen als het laden mislukte.
+      .catch(err => setLaadFout(err))
       .finally(() => setLoading(false));
-  }, []);
+  };
+  useEffect(laad, []);
 
   const handleActivate = async (member) => {
     try {
@@ -468,6 +477,7 @@ export function TeamPage() {
       toast.success('Teamlid geactiveerd');
     } catch (err) {
       toast.error(err.message || 'Activeren mislukt');
+      if (err.code === 'gebruikerslimiet') naarUpgrade();
     }
   };
 
@@ -543,7 +553,7 @@ export function TeamPage() {
         </div>
         <div className="page-hd-actions">
           {isAdmin && (
-            <button className="btn btn-p" onClick={guardLimiet('gebruikers', () => setShowInvite(true))}>
+            <button className="btn btn-p" data-rl="team-uitnodigen" onClick={guardLimiet('gebruikers', () => setShowInvite(true))}>
               {I.plus} Teamlid uitnodigen
             </button>
           )}
@@ -578,7 +588,9 @@ export function TeamPage() {
         <div className="card card-p" style={{ textAlign: 'center', color: 'var(--dl)' }}>Laden…</div>
       )}
 
-      {!loading && members.length === 0 && (
+      {!loading && laadFout && <LaadFout titel="Team laden is niet gelukt" fout={laadFout} onOpnieuw={laad} />}
+
+      {!loading && !laadFout && members.length === 0 && (
         <div className="card card-p afu3" style={{ textAlign: 'center', color: 'var(--dl)', padding: '40px 20px' }}>
           <div style={{ marginBottom: 10, opacity: .5 }}>{I.team}</div>
           <div style={{ fontWeight: 600, marginBottom: 6 }}>Nog geen teamleden</div>
@@ -586,9 +598,12 @@ export function TeamPage() {
         </div>
       )}
 
-      {!loading && members.length > 0 && (
+      {!loading && !laadFout && members.length > 0 && (
         <div className="tw afu3">
-          <table className="dt">
+          {/* Minimale breedte: op tablet/half scherm scrolt de tabel in zijn
+              kader, in plaats van dat namen over drie regels breken en de knoppen
+              (Deactiveren) buiten beeld vallen (audit M38). */}
+          <table className="dt" style={{ minWidth: 980 }}>
             <thead>
               <tr>
                 <th>Naam</th>
@@ -635,6 +650,7 @@ export function TeamPage() {
                           <button
                             className="btn btn-ghost btn-sm"
                             title={plan.has('rollen_rechten') ? 'Rechten instellen' : 'Rollen & rechten zit niet in je abonnement'}
+                            data-rl="team-rechten"
                             onClick={guardFeature('rollen_rechten', () => setPermsMember(member))}
                             style={{ fontSize: '.78rem', opacity: plan.has('rollen_rechten') ? 1 : .6 }}
                           >
@@ -655,13 +671,14 @@ export function TeamPage() {
                                 disabled={isLaatsteAdmin(member)}
                                 title={isLaatsteAdmin(member) ? LAATSTE_ADMIN_REDEN : undefined}
                                 onClick={() => handleDeactivate(member)}
+                                data-rl="team-deactiveren"
                               >
                                 Deactiveren
                               </button>
                             ) : (
                               <button
                                 className="btn btn-s btn-sm"
-                                onClick={() => handleActivate(member)}
+                                onClick={guardLimiet('gebruikers', () => handleActivate(member))}
                               >
                                 Activeren
                               </button>
@@ -690,6 +707,7 @@ export function TeamPage() {
         <InviteModal
           onClose={() => setShowInvite(false)}
           onSaved={created => setMembers(ms => [...ms, created])}
+          onLimiet={naarUpgrade}
         />
       )}
 

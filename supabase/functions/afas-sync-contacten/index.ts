@@ -1,6 +1,9 @@
+import { heeftRecht, geenRecht } from '../_shared/eisRecht.ts'
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { alleRijen } from '../_shared/alleRijen.ts'
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { inactiefReden } from '../_shared/actieveGebruiker.ts'
+import { clientFout } from '../_shared/clientFout.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -63,6 +66,7 @@ serve(async (req) => {
     if (authErr || !user) {
       return new Response(JSON.stringify({ error: 'Niet ingelogd' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
+    if (!(await heeftRecht(user.id, 'klanten_bewerken'))) return geenRecht(corsHeaders)
     // service_role omzeilt RLS: zelf controleren dat account en bedrijf actief zijn.
     const inactief = await inactiefReden(user.id)
     if (inactief) return new Response(JSON.stringify({ error: inactief }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -217,10 +221,10 @@ serve(async (req) => {
     const allAfasContacts: any[] = [...afasOrgs, ...extraFromRel]
     console.log(`Totaal AFAS contacten na merge: ${allAfasContacts.length}`)
 
-    const { data: existingCustomers } = await supabase
+    const existingCustomers = await alleRijen(() => supabase
       .from('customers')
       .select('id, name, email')
-      .eq('company_id', companyId)
+      .eq('company_id', companyId))
 
     const byName = new Map<string, any>()
     for (const c of (existingCustomers || [])) {
@@ -306,7 +310,7 @@ serve(async (req) => {
   } catch (err) {
     console.error('Error:', err.message, err.stack)
     return new Response(
-      JSON.stringify({ success: false, error: err.message }),
+      JSON.stringify({ success: false, error: clientFout(err) }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     )
   }

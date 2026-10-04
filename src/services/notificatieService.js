@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase.js';
 import { getCompanyId } from '../lib/currentCompany.js';
 import { mailTemplate } from '../utils/mailTemplate.js';
+import { korteDatumNl } from '../lib/datumTijd.js';
 
 // HTML-escape voor door gebruikers ingevoerde waarden die in de rauwe `body`-HTML
 // van collega-mails terechtkomen (naam, notitietekst, deal-/werkbon-titel). De
@@ -109,15 +110,22 @@ function toAbsoluteUrl(link) {
   // detailvenster opent (preOpenWerkbonId en verwanten).
   const schoon = link.replace(/^\//, '')
   const [pagina, id] = schoon.split('/')
+  // Klant en leverancier zijn geen eigen pagina maar een kaart over de lijst
+  // heen, die opent met ?klant=<id> of ?lev=<id> (zie lib/route.js).
+  if (pagina === 'klant' && id) return `https://www.bossbase.nl/dashboard/customers?klant=${encodeURIComponent(id)}`
+  if (pagina === 'leverancier' && id) return `https://www.bossbase.nl/dashboard/leveranciers?lev=${encodeURIComponent(id)}`
   const basis = `https://www.bossbase.nl/dashboard/${pagina}`
   return id ? `${basis}?open=${encodeURIComponent(id)}` : basis
 }
 
-// Welke pagina's kunnen één item openen? Alleen deze hebben in App.jsx een
-// preOpen…Id dat op de navigatie-intentie luistert. Voor de rest — customers,
-// leveranciers, materialen, planning — heeft een id in de link geen zin: de
-// pagina doet er niets mee, en dan beloven we iets wat niet gebeurt.
+// Welke soorten items kunnen één item openen? De pagina's hebben in App.jsx een
+// preOpen…Id dat op de navigatie-intentie luistert; klant en leverancier openen
+// hun kaart. Voor de rest (materialen, planning) heeft een id geen zin.
 const DETAILPAGINA = {
+  // Klant en leverancier openen als kaart (?klant= / ?lev=); App.jsx en
+  // toAbsoluteUrl vertalen 'klant/<id>' en 'leverancier/<id>' daarnaar.
+  klant:      'klant',
+  leverancier:'leverancier',
   werkbon:    'werkbonnen',
   activiteit: 'activities',
   project:    'projecten',
@@ -183,7 +191,7 @@ export function stripMentions(text) {
 }
 
 // Create in-app notifications + optional email for all @mentions in a text
-export async function createMentionNotifications({ text, relatedType, relatedId, link, creatorId, creatorName, contextName }) {
+export async function createMentionNotifications({ text, relatedType, relatedId, link, creatorId: _creatorId, creatorName, contextName }) {
   const mentions = extractMentions(text);
   if (!mentions.length) return;
 
@@ -352,7 +360,7 @@ export async function meldPlanningWijziging({
   const companyId = await getCompanyId();
   if (!companyId) return;
 
-  const omschrijf = (d, s) => (d ? `${d}${s ? ` om ${String(s).slice(0, 5)}` : ''}` : 'niet ingepland');
+  const omschrijf = (d, s) => (d ? `${korteDatumNl(d)}${s ? ` om ${String(s).slice(0, 5)}` : ''}` : 'niet ingepland');
   const titelTekst = soort === 'afgehaald'
     ? `Je staat niet meer op ${werkbon.titel || 'een klus'}`
     : soort === 'ingepland'

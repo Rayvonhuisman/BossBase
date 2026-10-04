@@ -53,15 +53,6 @@ export function berekenUren(startTijd, eindTijd, pauzeMinuten = 0) {
   return Math.round((verschil / 60) * 100) / 100
 }
 
-/**
- * @deprecated Gebruik berekenUren(start, eind, pauze). Blijft bestaan omdat de
- * urenherinnering en de werkbonpagina hem nog aanroepen; zonder pauze is het
- * gedrag identiek aan vroeger.
- */
-export function calculateHours(startTijd, eindTijd, pauzeMinuten = 0) {
-  return berekenUren(startTijd, eindTijd, pauzeMinuten)
-}
-
 // ── FILTERS ──────────────────────────────────────────────────────────────────
 
 /**

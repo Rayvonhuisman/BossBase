@@ -606,7 +606,7 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
             )}
             {!editMode && (
               <>
-                <button className="btn btn-s btn-sm" onClick={() => requestNewActivity?.()}>{I.act} Nieuwe activiteit</button>
+                <button className="btn btn-s btn-sm" data-rl="nieuwe-activiteit" onClick={() => requestNewActivity?.()}>{I.act} Nieuwe activiteit</button>
                 {/* Deze maakt een deal aan, en deals_insert eist 'verkoop' —
                     die policy kent bb_gedeelde_werkruimte() bewust niet. Zonder
                     het recht opende deze knop een modal die de database stil
@@ -614,9 +614,9 @@ export function DashboardHome({ setPage, openCustomer, openDeal, openInvoice, op
                     INSERT-policy op activities vraagt alleen om het eigen
                     bedrijf, geen recht. */}
                 {magBewerken('verkoop') && (
-                  <button className="btn btn-s btn-sm" onClick={() => requestNewLead?.()}>{I.plus} Nieuwe aanvraag</button>
+                  <button className="btn btn-s btn-sm" data-rl="nieuwe-aanvraag" onClick={() => requestNewLead?.()}>{I.plus} Nieuwe aanvraag</button>
                 )}
-                <button className="btn btn-p btn-sm" onClick={enterEdit}>{I.edit} Dashboard aanpassen</button>
+                <button className="btn btn-p btn-sm" data-rl="dashboard-aanpassen" onClick={enterEdit}>{I.edit} Dashboard aanpassen</button>
               </>
             )}
           </div>

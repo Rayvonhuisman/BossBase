@@ -8,6 +8,7 @@
 // zou lopen — precies de overlap die het bij leveranciers eerder gaf.
 
 import { useEffect, useState } from 'react';
+import { leesbareFout } from '../components/LaadFout.jsx';
 import { I, ModalX, fmt, Av } from '../bb-shared.jsx';
 import { InfoTip } from '../components/Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
@@ -202,13 +203,13 @@ export default function LeveranciersPage({ openLeverancier }) {
             <button className={`tab${view === 'grid' ? ' active' : ''}`} onClick={() => { setView('grid'); localStorage.setItem('leveranciers_view', 'grid'); }}>Kaarten</button>
             <button className={`tab${view === 'table' ? ' active' : ''}`} onClick={() => { setView('table'); localStorage.setItem('leveranciers_view', 'table'); }}>Tabel</button>
           </div>
-          <button className="btn btn-p btn-sm" onClick={() => setShowNew(true)}>{I.plus} Nieuwe leverancier</button>
+          {(can('klanten_bewerken') || can('kosten')) && <button className="btn btn-p btn-sm" data-rl="lev-nieuw" onClick={() => setShowNew(true)}>{I.plus} Nieuwe leverancier</button>}
         </div>
       </div>
 
-      {error && <div className="card card-p" style={{ color: '#dc2626', marginBottom: 14 }}>{error}</div>}
+      {error && <div className="card card-p" style={{ color: '#dc2626', marginBottom: 14 }}>{leesbareFout(error)}</div>}
 
-      <div className="search afu2" style={{ maxWidth: 360, marginBottom: 14 }}>
+      <div className="search afu2" data-rl="lev-zoeken" style={{ maxWidth: 360, marginBottom: 14 }}>
         {I.search}
         <input placeholder="Zoek op naam, plaats of e-mail…" value={search} onChange={e => setSearch(e.target.value)} />
       </div>

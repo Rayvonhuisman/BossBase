@@ -148,4 +148,3 @@ export function statusInfo(status, domain) {
 }
 
 export const statusLabel = (status, domain) => statusInfo(status, domain).label;
-export const statusChipTone = (status, domain) => statusInfo(status, domain).chip;

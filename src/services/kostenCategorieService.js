@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
 import { getCompanyId } from '../lib/currentCompany'
+import { alleRijen } from '../lib/alleRijen.js'
 
 // Kostencategorieën per bedrijf.
 //
@@ -59,8 +60,14 @@ export async function updateKostenCategorie(id, input) {
 
 /** Hoeveel kostenposten gebruiken deze categorieën? Eén query voor de hele lijst. */
 export async function getCategorieGebruik() {
-  const { data, error } = await supabase.from('job_costs').select('category')
-  if (error) return {}
+  // Gepagineerd: één query gaf hooguit 1000 rijen, waardoor "Materiaal" bij
+  // Stamvol 668 posten telde in plaats van 883 (audit 2026-10-01, P8).
+  let data
+  try {
+    data = await alleRijen(() => supabase.from('job_costs')
+      .select('category', { count: 'exact' })
+      .order('id', { ascending: true }))
+  } catch { return {} }
   const uit = {}
   for (const r of (data || [])) {
     if (!r.category) continue

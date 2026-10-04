@@ -49,6 +49,11 @@ verify_jwt = false
 [functions.trial-mails]
 verify_jwt = false
 
+# Afmeldlink in de proefperiodemails: wordt aangeroepen zonder login (vanaf de
+# pagina /afmelden en door mailprogramma's). Controleert zelf de handtekening.
+[functions.trial-mails-afmelden]
+verify_jwt = false
+
 # Draait dagelijks op de cron; eist zelf het cron_secret uit de vault (verwijdert gegevens).
 [functions.opschonen]
 verify_jwt = false

@@ -8,7 +8,6 @@
 // tikken, en niets tonen wat er niet toe doet.
 
 import { useEffect, useRef, useState } from 'react';
-import { berekenUren } from '../services/urenService.js';
 
 // ── Pauze ───────────────────────────────────────────────────────────────────
 // Een knoppenrij en geen invoerveld: pauze is in de praktijk 0, 15, 30 of 60
@@ -91,107 +90,6 @@ export function rondAfOpVijf(tijd) {
   const uu = Math.floor(totaal / 60) % 24;
   const mm = totaal % 60;
   return `${String(uu).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
-}
-
-// ── Live totaal ─────────────────────────────────────────────────────────────
-// Toont wat er wordt opgeslagen, mét de pauze eraf. Dat is meteen de beste
-// uitleg van de nieuwe rekenregel: je ziet 8,00 naar 7,50 springen zodra je op
-// 30 tikt.
-export function UrenTotaal({ start, eind, pauze = 0, className }) {
-  const totaal = berekenUren(start, eind, pauze);
-  if (start && eind && totaal == null) {
-    // Twee verschillende fouten uit elkaar houden: een eindtijd vóór de starttijd
-    // is iets anders dan een pauze die de hele dag opeet, en de monteur moet
-    // weten welk veld hij moet aanpassen.
-    const eindVoorStart = berekenUren(start, eind, 0) == null;
-    return (
-      <div className={className} style={{ fontSize: '.8rem', color: '#b91c1c' }}>
-        {eindVoorStart
-          ? 'Eindtijd moet na de starttijd liggen.'
-          : `Na ${pauze} minuten pauze blijft er geen tijd over.`}
-      </div>
-    );
-  }
-  if (totaal == null) return null;
-  // Geen eigen kleur opdringen: de component staat zowel op een donkere kaart
-  // (werkbon) als op wit (urenpagina). De bijzin erft de kleur en wordt alleen
-  // gedempt, zodat hij op beide achtergronden leesbaar blijft.
-  return (
-    <span className={className} style={className ? undefined : { fontSize: '.9rem', fontWeight: 700 }}>
-      {totaal.toFixed(2).replace('.', ',')} uur
-      {Number(pauze) > 0 && (
-        <span className="uren-bijzin" style={{ marginLeft: 8 }}>
-          {pauze} min pauze eraf
-        </span>
-      )}
-    </span>
-  );
-}
-
-// ── Km en opmerking ─────────────────────────────────────────────────────────
-// Ingeklapt: de meeste regels hebben geen van beide, en een monteur die drie
-// tikken nodig heeft moet er geen zes doen.
-export function ExtraVelden({
-  km, onKm, opmerking, onOpmerking, disabled = false, inputClassName, open: openInitieel = false,
-}) {
-  const heeftInhoud = (km !== '' && km != null) || !!opmerking;
-  const [open, setOpen] = useState(openInitieel || heeftInhoud);
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        disabled={disabled}
-        style={{
-          // currentColor en geen kleurtoken: dit blok staat zowel op de donkere
-          // werkbonkaart als op een witte pagina. var(--pd) was donkergroen op
-          // bijna-zwart — net leesbaar, en dat is niet goed genoeg voor een knop.
-          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-          color: 'currentColor', opacity: .9, textDecoration: 'underline',
-          fontWeight: 600, fontSize: '.8rem', textAlign: 'left',
-        }}
-      >
-        + Kilometers of opmerking
-      </button>
-    );
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div>
-        <div style={{ fontSize: '.74rem', fontWeight: 600, opacity: .7, marginBottom: 3 }}>
-          Gereden kilometers <span style={{ fontWeight: 400 }}>(optioneel)</span>
-        </div>
-        <input
-          type="number"
-          min="0"
-          step="1"
-          inputMode="numeric"
-          className={inputClassName}
-          value={km ?? ''}
-          onChange={e => onKm(e.target.value)}
-          placeholder="bijv. 24"
-          disabled={disabled}
-          style={inputClassName ? undefined : { width: '100%' }}
-        />
-      </div>
-      <div>
-        <div style={{ fontSize: '.74rem', fontWeight: 600, opacity: .7, marginBottom: 3 }}>
-          Opmerking <span style={{ fontWeight: 400 }}>(optioneel)</span>
-        </div>
-        <input
-          type="text"
-          className={inputClassName}
-          value={opmerking ?? ''}
-          onChange={e => onOpmerking(e.target.value)}
-          placeholder="Bijvoorbeeld: extra tijd door vastzittende bouten"
-          disabled={disabled}
-          style={inputClassName ? undefined : { width: '100%' }}
-        />
-      </div>
-    </div>
-  );
 }
 
 // ── Keuzelijst ──────────────────────────────────────────────────────────────

@@ -81,6 +81,7 @@ serve(async (req) => {
     const session = await stripeFetch('/billing_portal/sessions', 'POST', params)
     return json({ url: session.url })
   } catch (e) {
-    return json({ error: (e as Error).message || 'Onbekende fout' }, 500)
+    console.error('[billing-portal]', (e as Error)?.message)
+    return json({ error: 'Abonnementsbeheer openen is niet gelukt. Probeer het later opnieuw.' }, 500)
   }
 })

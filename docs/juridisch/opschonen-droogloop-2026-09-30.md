@@ -2,10 +2,10 @@
 
 **Alleen lezen, alleen aantallen.** Uitgevoerd met
 `supabase/tests/opschonen_droogloop.sql` tegen productie. Geen namen,
-e-mailadressen of id's. Bij deze droogloop stond de cron **uit**. Sindsdien (30-09-2026 16:08,
-migratie 20260930160803) draait hij dagelijks om 03:30, zonder dat de termijnen
-zijn goedgekeurd; zie docs/uitrol-accountverwijdering.md. Oorspronkelijke tekst: gaat niet aan zonder apart
-besluit.
+e-mailadressen of id's. Bij deze droogloop stond de cron **uit**. Hij is op
+30-09-2026 even aangezet (migratie 20260930160803) en dezelfde dag weer
+gepauzeerd (migratie 20260930170500); hij draait nu **niet** en gaat niet aan
+zonder apart besluit over de termijnen. Zie docs/uitrol-accountverwijdering.md.
 
 ## Selectiecriteria
 

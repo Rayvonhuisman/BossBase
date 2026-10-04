@@ -1,6 +1,5 @@
 import { supabase } from '../lib/supabase'
 import { withCompanyId } from '../lib/currentCompany'
-import { sanitizeNoteHtml, htmlToPlain } from '../lib/noteFormat'
 
 // Notities + tijdlijn per leverancier. Eén op één het patroon van
 // klantTijdlijnService, zodat NotitieLog en de tijdlijn-render ongewijzigd
@@ -42,6 +41,9 @@ export async function getLeverancierNotities(leverancierId) {
 
 export async function addLeverancierNotitie(leverancierId, tekst) {
   if (!leverancierId) throw new Error('leverancierId is verplicht')
+  // Pas hier laden: noteFormat trekt DOMPurify mee, en deze service hangt via
+  // klant-/leverancierservice in de eerste bundel (audit P6).
+  const { sanitizeNoteHtml, htmlToPlain } = await import('../lib/noteFormat.js')
   const clean = sanitizeNoteHtml(tekst || '')
   if (!htmlToPlain(clean) && !/bb-mention/.test(clean)) throw new Error('Notitie mag niet leeg zijn')
 

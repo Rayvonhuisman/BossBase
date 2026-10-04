@@ -31,6 +31,7 @@ export type TrialMailGegevens = {
   naam: string
   trialEindigt: string | null   // ISO-datum
   appUrl: string
+  afmeldUrl: string             // pagina /afmelden met ondertekende link
 }
 
 const datumNL = (iso?: string | null) => {
@@ -77,12 +78,16 @@ export function trialMail(nummer: TrialMailNummer, g: TrialMailGegevens): Mail {
   const datum = esc(datumNL(g.trialEindigt))
   const dashboard = `${g.appUrl}/dashboard`
   const abonnement = `${g.appUrl}/dashboard/instellingen?tab=abonnement`
+  // Elke mail heeft een afmeldlink: verplicht voor mail met een aanbod aan
+  // eigen klanten zonder toestemming (art. 11.7 lid 3 Telecommunicatiewet).
+  const voet = `Wil je deze mails over je proefperiode niet meer krijgen? <a href="${esc(g.afmeldUrl)}" style="color:#6b7280;">Afmelden</a>.`
 
   switch (nummer) {
     // ── DAG 7 ────────────────────────────────────────────────────────────────
     case 7: return {
       subject: 'Hoe bevalt BossBase tot nu toe?',
       html: mailTemplate({
+        footerText: voet,
         title: 'Hoe bevalt BossBase tot nu toe?',
         preheader: 'Je bent nu een week met BossBase bezig — hoe gaat het?',
         body:
@@ -104,6 +109,7 @@ export function trialMail(nummer: TrialMailNummer, g: TrialMailGegevens): Mail {
     case 11: return {
       subject: 'Nog 3 dagen gratis proberen',
       html: mailTemplate({
+        footerText: voet,
         title: 'Nog 3 dagen gratis proberen',
         preheader: `Je proefperiode loopt tot ${datumNL(g.trialEindigt)}.`,
         body:
@@ -120,6 +126,7 @@ export function trialMail(nummer: TrialMailNummer, g: TrialMailGegevens): Mail {
     case 14: return {
       subject: 'Morgen stopt je proefperiode',
       html: mailTemplate({
+        footerText: voet,
         title: 'Morgen stopt je proefperiode',
         preheader: 'Daarna kun je je gegevens nog bekijken en exporteren.',
         body:
@@ -136,6 +143,7 @@ export function trialMail(nummer: TrialMailNummer, g: TrialMailGegevens): Mail {
     case 15: return {
       subject: 'Je account staat op pauze',
       html: mailTemplate({
+        footerText: voet,
         title: 'Je account staat op pauze',
         preheader: 'Alles wat je hebt opgebouwd blijft staan.',
         body:
@@ -152,6 +160,7 @@ export function trialMail(nummer: TrialMailNummer, g: TrialMailGegevens): Mail {
     case 30: return {
       subject: 'Je gegevens staan er nog',
       html: mailTemplate({
+        footerText: voet,
         title: 'Je gegevens staan er nog',
         preheader: 'Alles wat je hebt opgebouwd staat er nog precies zo bij.',
         body:

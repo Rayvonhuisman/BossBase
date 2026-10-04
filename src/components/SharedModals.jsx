@@ -1,25 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
+import { logFout, meldFout } from '../lib/stilleFouten.js';
+import { vandaagIso, korteDatumNl } from '../lib/datumTijd.js';
 import { I, ModalX, NotifyMailToggle, PIPELINE_STAGES, fmt } from '../bb-shared.jsx';
 import { InfoTip } from './Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { supabase } from '../lib/supabase';
-import { createCustomer } from '../services/customerService.js';
+import { createCustomer, KLANT_TYPES } from '../services/customerService.js';
 import { createDeal, markDealLost } from '../services/dealService.js';
 import { getLostReasons } from '../services/lostReasonService.js';
 import { createActivity, updateActivity, deleteActivity, buildDueAt, getActiviteitNotities, addActiviteitNotitie } from '../services/activityService.js';
 import { syncActivity } from '../services/googleCalendarService.js';
 import { useProfile } from '../lib/profileContext.jsx';
+import { usePermissions } from '../hooks/usePermissions.js';
 import { useData } from '../lib/dataContext.jsx';
 import { triggerAutoEmail } from '../services/emailService.js';
 import { getCompanyId } from '../lib/currentCompany.js';
 import { createCalendarEvent } from '../services/calendarService.js';
 import { createJobCost, updateJobCost } from '../services/jobCostService.js'
-import { listLeveranciers } from '../services/leverancierService.js'
 import LeverancierSelect from './LeverancierSelect.jsx'
 import BijlageDropzone from './BijlageDropzone.jsx'
 import { categorieOptiesUit, standaardCategorieUit, bonVerplichtUit, BON_VERPLICHT_MELDING } from '../lib/kostenCategorieen.js';
 import { useKostenCategorieen } from '../hooks/useKostenCategorieen.js';
-import { getWerkbonnen } from '../services/werkbonService.js';
 import { getProjects } from '../services/projectsService.js';
 import { calcBtw } from '../utils/btw.js';
 import { updateProfile } from '../services/profileService.js';
@@ -67,11 +68,13 @@ async function compressImage(file) {
 }
 
 // Customer form keeps friendly UI fields. customerService.mapCustomerFormToPayload
-// strips anything Supabase doesn't actually have (source, type, company_name).
+// zet ze om naar kolommen; type en source worden opgeslagen, company_name gaat
+// op in de naam.
 
 // ── NEW CUSTOMER MODAL ───────────────────────────────────────
 export function NewCustomerModal({ onClose, onSaved }) {
   const toast = useToast();
+  const { profile } = useProfile();
   const [form, setForm] = useState({
     name: '', company: '', email: '', phone: '', address: '', postcode: '', city: '',
     kvkNumber: '', btwNumber: '', iban: '',
@@ -82,7 +85,7 @@ export function NewCustomerModal({ onClose, onSaved }) {
   const [teamMembersNC, setTeamMembersNC] = useState([]);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  useEffect(() => { getTeamMembers().then(setTeamMembersNC).catch(() => {}); }, []);
+  useEffect(() => { getTeamMembers().then(setTeamMembersNC).catch(logFout('teamleden laden')); }, []);
 
   const validate = () => {
     const next = {};
@@ -98,6 +101,13 @@ export function NewCustomerModal({ onClose, onSaved }) {
     try {
       const created = await createCustomer(form);
       toast.success(`${created.name} is toegevoegd`);
+      // Taggen werd in het notitieveld aangeboden maar gaf niemand een melding.
+      if (profile?.id && form.notes) {
+        createMentionNotifications({
+          text: form.notes, relatedType: 'klant', relatedId: created.id, link: 'customers',
+          creatorId: profile.id, creatorName: profile.fullName, contextName: created.name,
+        }).catch(logFout('melding versturen'));
+      }
       onSaved?.(created);
       onClose();
     } catch (err) {
@@ -121,12 +131,10 @@ export function NewCustomerModal({ onClose, onSaved }) {
         <div className="fg">
           <div className="f">
             <label>Naam *</label>
-            <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="Voor- en achternaam" />
+            {/* Eén naamveld: de klanttabel kent geen aparte bedrijfsnaam. Een
+                los veld "Bedrijfsnaam" werd stil weggegooid (audit M31). */}
+            <input value={form.name} onChange={e => set('name', e.target.value)} placeholder="Naam van de persoon of het bedrijf" />
             {errors.name && <span className="bb-err">{errors.name}</span>}
-          </div>
-          <div className="f">
-            <label>Bedrijfsnaam</label>
-            <input value={form.company} onChange={e => set('company', e.target.value)} placeholder="Optioneel" />
           </div>
           <div className="f">
             <label>E-mail</label>
@@ -169,8 +177,7 @@ export function NewCustomerModal({ onClose, onSaved }) {
           <div className="f">
             <label>Type</label>
             <select value={form.type} onChange={e => set('type', e.target.value)}>
-              <option value="Zakelijk">Zakelijk</option>
-              <option value="Particulier">Particulier</option>
+              {KLANT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
           <div className="f">
@@ -206,7 +213,7 @@ export function VerlorenModal({ deal, lostStage, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [reasons, setReasons] = useState([]);
 
-  useEffect(() => { getLostReasons().then(setReasons).catch(() => {}); }, []);
+  useEffect(() => { getLostReasons().then(setReasons).catch(logFout('verliesredenen laden')); }, []);
   const opties = reasons.length ? reasons.map(r => r.label) : LOST_REASONS_FALLBACK;
 
   const bevestig = async () => {
@@ -295,7 +302,7 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
   const [teamMembersNL, setTeamMembersNL] = useState([]);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  useEffect(() => { getTeamMembers().then(setTeamMembersNL).catch(() => {}); }, []);
+  useEffect(() => { getTeamMembers().then(setTeamMembersNL).catch(logFout('teamleden laden')); }, []);
 
   // A real DB stage has a UUID id. The hardcoded fallbacks (PIPELINE_STAGES)
   // use slug ids — those would fail the deals.stage_id UUID check, so we
@@ -350,7 +357,7 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
           triggerAutoEmail('aanvraag_ontvangen',
             { klant_naam: cust.name, bedrijfsnaam: company?.name || 'BossBase' },
             cust.email, companyId, 'deal', deal.id, customerId)
-        );
+          ).then(ok => { if (ok === false) toast.error(`De bevestigingsmail aan ${cust.email} is niet verstuurd.`); });
       }
       toast.success('Nieuwe aanvraag toegevoegd');
       onSaved?.(deal);
@@ -448,7 +455,7 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
 export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCustId = '', defaultDealId = '' }) {
   const toast = useToast();
   const { company, profile } = useProfile();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = vandaagIso();
   const [form, setForm] = useState({
     title: '',
     type: 'task',
@@ -468,7 +475,7 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
   const [notifyMail, setNotifyMail] = useState(true);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(logFout('teamleden laden')); }, []);
 
   const dealsForCust = useMemo(() => {
     if (!deals) return [];
@@ -502,10 +509,10 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
       // Mention notifications in notes
       if (form.notes && profile?.id) {
         const custName = customers?.find(c => c.id === form.custId)?.name || '';
-        createMentionNotifications({ text: form.notes, relatedType: 'activiteit', relatedId: created.id, link: 'activities', creatorId: profile.id, creatorName: profile.fullName, contextName: custName }).catch(() => {});
+        createMentionNotifications({ text: form.notes, relatedType: 'activiteit', relatedId: created.id, link: 'activities', creatorId: profile.id, creatorName: profile.fullName, contextName: custName }).catch(logFout('melding versturen'));
       }
       // Assignment notification naar elke toegewezen medewerker (behalve jezelf)
-      notifyNewAssignees({ userIds: form.assignedToIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${form.date}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: created.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
+      notifyNewAssignees({ userIds: form.assignedToIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${korteDatumNl(form.date)}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: created.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(logFout('melding versturen'));
       if (form.type === 'visit' && form.custId) {
         const cust = customers?.find(c => c.id === form.custId);
         if (cust?.email) {
@@ -514,7 +521,7 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
             triggerAutoEmail('afspraak_bevestiging',
               { klant_naam: cust.name, bedrijfsnaam: company?.name || 'BossBase', afspraak_datum: dateStr, afspraak_tijd: form.time || '' },
               cust.email, companyId, 'activity', created.id, form.custId)
-          );
+          ).then(ok => { if (ok === false) toast.error(`De afspraakbevestiging aan ${cust.email} is niet verstuurd.`); });
         }
       }
       toast.success('Activiteit toegevoegd');
@@ -624,7 +631,7 @@ export function NewActivityModal({ onClose, onSaved, customers, deals, defaultCu
 // ── NEW CALENDAR EVENT MODAL ─────────────────────────────────
 export function NewCalendarEventModal({ onClose, onSaved, customers, defaultDate = '', defaultCustId = '' }) {
   const toast = useToast();
-  const today = defaultDate || new Date().toISOString().slice(0, 10);
+  const today = defaultDate || vandaagIso();
   const [form, setForm] = useState({
     title: '',
     type: 'event',
@@ -639,7 +646,7 @@ export function NewCalendarEventModal({ onClose, onSaved, customers, defaultDate
   const [saving, setSaving] = useState(false);
   const [teamMembersCE, setTeamMembersCE] = useState([]);
 
-  useEffect(() => { getTeamMembers().then(setTeamMembersCE).catch(() => {}); }, []);
+  useEffect(() => { getTeamMembers().then(setTeamMembersCE).catch(logFout('teamleden laden')); }, []);
   const set = (k, v) => {
     setForm(f => {
       const next = { ...f, [k]: v };
@@ -761,7 +768,7 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
   const [form, setForm] = useState({
     customer_id: defaultCustId,
     category: '',
-    cost_date: new Date().toISOString().slice(0, 10),
+    cost_date: vandaagIso(),
     project_id: '',
     werkbon_id: '',
     leverancier_id: '',
@@ -781,7 +788,7 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
   const { leveranciers: leverancierOpties = [], werkbonnen = [], refresh: verversGedeeld } = useData();
   const [projecten, setProjecten] = useState([]);
   useEffect(() => {
-    getProjects().then(setProjecten).catch(() => {});
+    getProjects().then(setProjecten).catch(logFout('projecten laden'));
   }, []);
   const [regels, setRegels] = useState(() => [newKostenRegel()]);
   const [bijlageFiles, setBijlageFiles] = useState([]);
@@ -1126,10 +1133,12 @@ export function NewJobCostModal({ onClose, onSaved, onAttached, customers, defau
 export function ActivityEditModal({ activity, customers, deals, onClose, onSaved, onDeleted }) {
   const toast = useToast();
   const { profile } = useProfile();
-  const role = profile?.role || 'medewerker';
-  const canEdit = role === 'admin' || role === 'planner';
+  const { magBewerken } = usePermissions();
+  // Volledig bewerken (titel, type, datum, toewijzing): beheerder of recht
+  // planning. Er bestaat geen rol 'planner'; dat is een recht.
+  const canEdit = magBewerken('planning');
   const [teamMembers, setTeamMembers] = useState([]);
-  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(logFout('teamleden laden')); }, []);
 
   // Notitielogboek van deze activiteit (losse rijen in activiteit_notities).
   const [activiteitNotities, setActiviteitNotities] = useState([]);
@@ -1138,7 +1147,7 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
     let alive = true;
     getActiviteitNotities(activity.id)
       .then(rows => { if (alive) setActiviteitNotities(rows); })
-      .catch(() => {});
+      .catch(meldFout(toast, 'De notities van deze activiteit konden niet worden geladen.'));
     return () => { alive = false; };
   }, [activity?.id]);
 
@@ -1222,11 +1231,11 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
       });
       if (form.notes && profile?.id) {
         const custName = customers?.find(c => c.id === form.custId)?.name || '';
-        createMentionNotifications({ text: form.notes, relatedType: 'activiteit', relatedId: activity.id, link: 'activities', creatorId: profile.id, creatorName: profile.fullName, contextName: custName }).catch(() => {});
+        createMentionNotifications({ text: form.notes, relatedType: 'activiteit', relatedId: activity.id, link: 'activities', creatorId: profile.id, creatorName: profile.fullName, contextName: custName }).catch(logFout('melding versturen'));
       }
       // Notificatie naar nieuw toegevoegde toegewezen medewerkers (behalve jezelf).
       const prevIds = activity?.assignedToIds || (activity?.assignee ? [activity.assignee] : []);
-      notifyNewAssignees({ userIds: form.assignedToIds, prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${form.date}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: activity.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(() => {});
+      notifyNewAssignees({ userIds: form.assignedToIds, prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail, type: 'toewijzing_activiteit', title: `Je bent toegewezen aan ${form.title}`, body: form.date ? `Datum: ${korteDatumNl(form.date)}` : undefined, link: 'activities', relatedType: 'activiteit', relatedId: activity.id, creatorId: profile?.id, creatorName: profile?.fullName }).catch(logFout('melding versturen'));
       toast.success('Activiteit bijgewerkt');
       onSaved?.(updated);
       onClose();

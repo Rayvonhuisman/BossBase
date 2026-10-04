@@ -195,8 +195,6 @@ const KOPPELINGEN = [
     tekst: "Betaalde facturen gaan naar Moneybird. Inkoopfacturen, bonnetjes en uitgaven komen terug als kosten.", pakket: "Groei en Team" },
   { naam: "SnelStart", src: "/brand/snelstart.svg", w: 158, h: 26, href: "/integraties/snelstart",
     tekst: "Facturen als verkoopboeking in SnelStart, met de PDF erbij. Inkoopfacturen komen terug als kosten.", pakket: "Groei en Team" },
-  { naam: "AFAS", src: "/brand/afas.png", w: 34, h: 34, href: "/integraties",
-    tekst: "Relaties en kosten uitwisselen met je AFAS-omgeving, zodat je boekhouding bij blijft.", pakket: "Groei en Team" },
   { naam: "Betaallink met iDEAL", src: "/brand/stripe.svg", w: 67, h: 28, href: "/integraties/stripe-betaallink",
     tekst: "Via je eigen Stripe-account staat er een betaallink in elke factuurmail. Na betaling gaat de factuur vanzelf op betaald.", pakket: "Team, of module bij Groei" },
 ]
@@ -237,7 +235,7 @@ const FAQ_FUNCTIES = [
   ["Ziet de klant mijn prijzen of notities op de werkbon?", "Nee. De ondertekenpagina en de PDF voor de klant tonen geen bedragen, geen inkoopprijzen en geen interne notities. Notities die je als 'voor klant' markeert, zijn wel zichtbaar."],
   ["Kan ik mijn klanten uit Excel importeren?", "Nee, een importfunctie is er niet. Je voert klanten in, of ze ontstaan uit een aanvraag. Exporteren naar Excel of CSV kan wel."],
   ["Kan de klant een offerte online afwijzen?", "Nee. Online kan de klant alleen akkoord geven en tekenen. Wijst hij af, dan zet je de status zelf op afgewezen."],
-  ["Werkt het op mijn telefoon?", "Ja, BossBase is ook op je telefoon te gebruiken. Je klant kan offertes en werkbonnen op elke telefoon ondertekenen."],
+  ["Werkt het op mijn telefoon?", "Het dashboard werkt op een tablet, laptop of computer, niet op een smalle telefoon, en er is geen app. Je klant kan offertes en werkbonnen wel op elke telefoon ondertekenen."],
 ]
 
 /* ── Pagina ── */

@@ -19,9 +19,12 @@
 // het volgende kwartier alsnog.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { vandaagIso, voegDagenToe } from '../_shared/datumTijd.ts'
+import { isScheduledCall } from '../_shared/scheduledSync.ts'
 import { mailTemplate, mailButton } from '../_shared/mailTemplate.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
 import { appOrigin } from '../_shared/stripe.ts'
+import { clientFout } from '../_shared/clientFout.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -46,13 +49,23 @@ function leesbaar(datum: string): string {
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
+  // Alleen de cron mag dit starten: die stuurt het geheim uit de vault mee
+  // (edge_cron_secret = CRON_SECRET). De anon-sleutel alleen is publiek en
+  // dus geen bewijs. Audit 2026-10-01, H7.
+  const aanroep = await req.clone().json().catch(() => ({}))
+  if (!isScheduledCall(aanroep)) {
+    return new Response(JSON.stringify({ error: 'Niet toegestaan' }), {
+      status: 403, headers: { ...CORS, 'Content-Type': 'application/json' },
+    })
+  }
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const admin = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 
     const { data: kandidaten, error } = await admin.rpc('bb_uren_herinnering_kandidaten')
-    if (error) return json({ success: false, error: error.message }, 500)
+    if (error) return json({ success: false, error: clientFout(error) }, 500)
     if (!kandidaten || kandidaten.length === 0) return json({ success: true, medewerkers: 0, verstuurd: 0 })
 
     // Per medewerker bundelen: één mail met al zijn open dagen.
@@ -146,12 +159,12 @@ serve(async (req) => {
 
     // De pop-up kijkt veertien dagen terug; wat ouder is dan twee maanden heeft
     // geen functie meer.
-    const grens = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10)
+    const grens = voegDagenToe(vandaagIso(), -60)
     await admin.from('uren_herinnering_mails').delete().lt('datum', grens)
 
     return json({ success: true, medewerkers: perUser.size, verstuurd, mislukt })
   } catch (e) {
     console.error('uren-herinnering', (e as Error).message)
-    return json({ success: false, error: String(e) }, 500)
+    return json({ success: false, error: 'Urenherinnering mislukt' }, 500)
   }
 })

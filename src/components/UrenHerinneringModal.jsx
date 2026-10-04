@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { logFout } from '../lib/stilleFouten.js';
 import { ModalX } from '../bb-shared.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { useData } from '../lib/dataContext.jsx';
@@ -131,7 +132,9 @@ function computeMissingEntries(uid, werkbonnen, activities, urenRows, moment = '
 const fmtDag = d => {
   const date = new Date(`${d}T00:00:00`);
   if (Number.isNaN(date.getTime())) return d;
-  return date.toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' });
+  // Alleen de eerste letter groot: "Vrijdag 18 september", niet "Vrijdag 18 September".
+  const t = date.toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long' });
+  return t.charAt(0).toUpperCase() + t.slice(1);
 };
 
 export function UrenHerinneringModal({ navigatePage }) {
@@ -172,7 +175,7 @@ export function UrenHerinneringModal({ navigatePage }) {
     let alive = true;
     getTeamMembers()
       .then(ms => { if (alive) setHeeftPersoneel((ms || []).filter(m => m.profileId).length > 1); })
-      .catch(() => {});
+      .catch(logFout('teamleden laden'));
     return () => { alive = false; };
   }, [isPersoneel, refreshKey]);
 
@@ -296,7 +299,7 @@ export function UrenHerinneringModal({ navigatePage }) {
             <div className="modal-title">Vul je werkdag in</div>
             <div className="modal-sub">
               Je stond {meer ? 'op deze dagen' : 'op deze dag'} gepland, maar er
-              {meer ? ' zijn' : ' is'} nog geen werkdag ingevuld. Doe het hier direct.
+              {meer ? ' zijn nog geen werkdagen' : ' is nog geen werkdag'} ingevuld. Doe het hier direct.
             </div>
           </div>
           <ModalX onClose={snooze} />
@@ -317,7 +320,7 @@ export function UrenHerinneringModal({ navigatePage }) {
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: e.contextLabel ? 6 : 10 }}>
-                  <div style={{ fontWeight: 700, textTransform: 'capitalize' }}>{fmtDag(e.date)}</div>
+                  <div style={{ fontWeight: 700 }}>{fmtDag(e.date)}</div>
                   {uren > 0 && (
                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--pd)' }}>{uren} uur</div>
                   )}

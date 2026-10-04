@@ -5,8 +5,9 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
-import { hashVerificationCode } from '../_shared/hashCode.ts'
+import { hashVerificationCode, nieuweCode } from '../_shared/hashCode.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
+import { clientFout } from '../_shared/clientFout.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -73,7 +74,7 @@ serve(async (req) => {
     }
 
     // ── Code genereren (6 cijfers), hashen, opslaan (10 min) ──────────────────
-    const code = String(Math.floor(100000 + Math.random() * 900000))
+    const code = nieuweCode()
     const codeHash = await hashVerificationCode(code, userId)
     const expiresAt = new Date(nowMs + 10 * 60 * 1000).toISOString()
 
@@ -122,6 +123,6 @@ serve(async (req) => {
     return json({ success: true })
   } catch (err) {
     console.error('[request-verification-code] Fout:', err)
-    return json({ success: false, error: String(err) }, 500)
+    return json({ success: false, error: clientFout(err) }, 500)
   }
 })

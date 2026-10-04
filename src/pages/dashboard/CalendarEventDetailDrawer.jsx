@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { logFout } from '../../lib/stilleFouten.js';
 import { MapPin } from 'lucide-react';
 import { I, fmt } from '../../bb-shared.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
+import { korteDatumNl } from '../../lib/datumTijd.js';
 import { useEscapeSluit } from '../../hooks/useEscapeSluit.js';
 import { usePermissions } from '../../hooks/usePermissions.js';
 import { useToast } from '../../lib/toast.jsx';
@@ -126,9 +128,9 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
   // ── Laad dropdown-data + teamleden (voor @ tagging) ───────────
   useEffect(() => {
     let alive = true;
-    listCustomers().then(d => { if (alive) setCustomers(d || []); }).catch(() => {});
-    listDeals().then(d => { if (alive) setDeals(d || []); }).catch(() => {});
-    getTeamMembers().then(d => { if (alive) setTeamMembers(d || []); }).catch(() => {});
+    listCustomers().then(d => { if (alive) setCustomers(d || []); }).catch(logFout('klanten laden'));
+    listDeals().then(d => { if (alive) setDeals(d || []); }).catch(logFout('aanvragen laden'));
+    getTeamMembers().then(d => { if (alive) setTeamMembers(d || []); }).catch(logFout('teamleden laden'));
     return () => { alive = false; };
   }, []);
 
@@ -137,12 +139,18 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
     let alive = true;
     if (!ev?.werkbonId) { setWerkbon(null); setTaken([]); setMaterialen([]); return; }
     setWbLoading(true);
+    const deels = [];
+    const of = (belofte, terug) => belofte.catch(e => { deels.push(e); return terug; });
     Promise.all([
-      getWerkbonById(ev.werkbonId).catch(() => null),
-      getWerkbonTaken(ev.werkbonId).catch(() => []),
-      getWerkbonMaterialen(ev.werkbonId).catch(() => []),
+      of(getWerkbonById(ev.werkbonId), null),
+      of(getWerkbonTaken(ev.werkbonId), []),
+      of(getWerkbonMaterialen(ev.werkbonId), []),
     ]).then(([w, t, m]) => {
       if (!alive) return;
+      if (deels.length) {
+        console.warn('[bb] gekoppelde werkbon deels geladen', deels);
+        toast.error('De gekoppelde werkbon kon niet volledig worden geladen. Ververs de pagina.');
+      }
       setWerkbon(w); setTaken(t || []); setMaterialen(m || []);
     }).finally(() => { if (alive) setWbLoading(false); });
     return () => { alive = false; };
@@ -166,6 +174,9 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
       });
       setEv(updated);
       toast.success('Agenda-item opgeslagen');
+      // De agenda achter de drawer laadt zijn items op refreshKey; zonder deze
+      // tik bleef daar de oude titel/tijd staan tot je de pagina herlaadde.
+      bumpRefresh?.([]);
     } catch (e) {
       toast.error(e.message || 'Opslaan mislukt');
     } finally {
@@ -242,7 +253,7 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
       creatorId: profile?.id,
       creatorName: profile?.fullName,
       contextName: ev.title,
-    }).catch(() => {});
+    }).catch(logFout('melding versturen'));
   };
 
   const HeadClose = (
@@ -284,7 +295,7 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
           <span className={`badge ${tone}`}>{typeLabel}</span>
           <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.3, color: '#0a0a0a', marginTop: 6 }}>{ev.title || 'Afspraak'}</div>
           <div style={{ marginTop: 6, fontSize: 13, color: '#6b7280' }}>
-            {ev.date || ''}{(ev.time || ev.end) ? ` · ${ev.time || ''}${ev.end ? `–${ev.end}` : ''}` : ''}
+            {ev.date ? korteDatumNl(ev.date) : ''}{(ev.time || ev.end) ? ` · ${ev.time || ''}${ev.end ? `–${ev.end}` : ''}` : ''}
           </div>
         </div>
         {HeadClose}
@@ -345,7 +356,7 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
         <Section title="Overzicht">
           <Row k="Titel" v={ev.title || ''} />
           <Row k="Type" v={typeLabel} />
-          <Row k="Datum" v={ev.date || ''} />
+          <Row k="Datum" v={ev.date ? korteDatumNl(ev.date) : ''} />
           <Row k="Starttijd" v={ev.time || ''} />
           <Row k="Eindtijd" v={ev.end || ''} />
           <Row k="Locatie" v={ev.location || ''} />

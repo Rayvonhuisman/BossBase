@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { wachtwoordFout } from '../_shared/wachtwoordEisen.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -15,6 +16,9 @@ serve(async (req) => {
   try {
     const { token, fullName, password } = await req.json()
     if (!token || !password) return json({ error: 'token en password zijn verplicht' }, 400)
+    // Dezelfde eisen als het formulier, maar dan op de server (audit B-6).
+    const zwak = wachtwoordFout(password)
+    if (zwak) return json({ error: zwak, code: 'WEAK' }, 400)
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -32,6 +36,23 @@ serve(async (req) => {
 
     if (!invite.invite_expires_at || new Date(invite.invite_expires_at) < new Date()) {
       return json({ error: 'Uitnodiging is verlopen' }, 410)
+    }
+
+    // 1b. Is er nog plek? De database houdt het hoe dan ook tegen (trigger
+    // bb_gebruikerslimiet op profiles), maar dan midden in createUser, met een
+    // nietszeggende fout van Auth. Hier vooraf, met een melding voor de
+    // uitgenodigde: die kan zelf niet upgraden, de beheerder wel.
+    const { data: plekVrij, error: plekErr } = await supabase.rpc('bb_gebruikersplek_vrij', {
+      p_company_id: invite.company_id, p_profile_id: null, p_email: invite.email,
+    })
+    if (plekErr) { console.error('[accept-invite] plek', plekErr.message); return json({ error: 'Controle mislukt. Probeer het opnieuw.' }, 500) }
+    if (plekVrij === false) {
+      const { data: bedrijf } = await supabase
+        .from('companies').select('name').eq('id', invite.company_id).maybeSingle()
+      return json({
+        error: `Het team van ${bedrijf?.name || 'dit bedrijf'} zit vol: het abonnement heeft geen plek meer vrij. Vraag de beheerder om het abonnement uit te breiden; daarna kun je deze uitnodiging alsnog accepteren.`,
+        code: 'gebruikerslimiet',
+      }, 409)
     }
 
     // 2. Maak auth-gebruiker aan (email_confirm: true = geen verificatiemail nodig)
@@ -58,7 +79,8 @@ serve(async (req) => {
         userId = existingId
         isExistingUser = true
       } else {
-        return json({ error: authErr.message }, 400)
+        console.error('[accept-invite] createUser', authErr.message)
+        return json({ error: 'Account aanmaken mislukt. Controleer je wachtwoord en probeer het opnieuw.' }, 400)
       }
     } else {
       userId = authData.user.id
@@ -118,12 +140,24 @@ serve(async (req) => {
 
     if (profileErr) {
       // Insert mislukt (profiel al aangemaakt door trigger): altijd updaten
-      await supabase.from('profiles').update({
+      const { error: updErr } = await supabase.from('profiles').update({
         company_id: invite.company_id,
         full_name: fullName || '',
         role: invite.role || 'medewerker',
         email_verified_at: nowIso,
       }).eq('id', userId)
+      // Werd stil genegeerd. Lukt dit niet (bijv. de gebruikerslimiet, als er
+      // tussen de controle hierboven en nu iemand bij is gekomen), dan mag de
+      // uitnodiging niet als geaccepteerd worden afgevinkt.
+      if (updErr) {
+        if (!isExistingUser) await supabase.auth.admin.deleteUser(userId)
+        return json({
+          error: updErr.hint === 'gebruikerslimiet'
+            ? 'Het team zit vol: het abonnement heeft geen plek meer vrij. Vraag de beheerder om het abonnement uit te breiden.'
+            : 'Accepteren mislukt. Probeer het opnieuw of vraag een nieuwe uitnodiging.',
+          code: updErr.hint === 'gebruikerslimiet' ? 'gebruikerslimiet' : undefined,
+        }, updErr.hint === 'gebruikerslimiet' ? 409 : 500)
+      }
     }
 
     // 4. Koppel company_members record aan het nieuwe profiel
@@ -137,6 +171,7 @@ serve(async (req) => {
 
     return json({ success: true })
   } catch (err) {
-    return json({ error: String(err) }, 500)
+    console.error('[accept-invite]', err)
+    return json({ error: 'Accepteren mislukt door een interne fout. Probeer het opnieuw.' }, 500)
   }
 })

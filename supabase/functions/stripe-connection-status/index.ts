@@ -77,6 +77,6 @@ serve(async (req) => {
     })
   } catch (err: any) {
     console.error('[stripe-connection-status]', err?.message)
-    return json({ error: err?.message || 'Status ophalen mislukt' }, 500)
+    return json({ error: 'Status ophalen is niet gelukt. Probeer het later opnieuw.' }, 500)
   }
 })

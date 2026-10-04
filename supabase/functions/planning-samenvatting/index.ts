@@ -14,8 +14,10 @@
 // liever een dag te laat dan helemaal niet.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { isScheduledCall } from '../_shared/scheduledSync.ts'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
+import { clientFout } from '../_shared/clientFout.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -42,6 +44,16 @@ function leesbaar(datum: string | null, tijd: string | null): string {
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
+  // Alleen de cron mag dit starten: die stuurt het geheim uit de vault mee
+  // (edge_cron_secret = CRON_SECRET). De anon-sleutel alleen is publiek en
+  // dus geen bewijs. Audit 2026-10-01, H7.
+  const aanroep = await req.clone().json().catch(() => ({}))
+  if (!isScheduledCall(aanroep)) {
+    return new Response(JSON.stringify({ error: 'Niet toegestaan' }), {
+      status: 403, headers: { ...CORS, 'Content-Type': 'application/json' },
+    })
+  }
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -53,7 +65,7 @@ serve(async (req) => {
       .is('verwerkt_op', null)
       .order('aangemaakt_op', { ascending: true })
       .limit(2000)
-    if (error) return json({ success: false, error: error.message }, 500)
+    if (error) return json({ success: false, error: clientFout(error) }, 500)
     if (!open || open.length === 0) return json({ success: true, medewerkers: 0, wijzigingen: 0 })
 
     // Per medewerker bundelen.
@@ -152,6 +164,6 @@ serve(async (req) => {
     return json({ success: true, medewerkers: perUser.size, verstuurd, mislukt: mislukt.length, wijzigingen: open.length })
   } catch (e) {
     console.error('planning-samenvatting', (e as Error).message)
-    return json({ success: false, error: String(e) }, 500)
+    return json({ success: false, error: clientFout(e) }, 500)
   }
 })

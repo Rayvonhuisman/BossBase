@@ -45,7 +45,12 @@ serve(async (req) => {
       },
       async zetWachtwoord(userId, wachtwoord) {
         const { error } = await supabase.auth.admin.updateUserById(userId, { password: wachtwoord })
-        return error ? error.message : null
+        if (error) return error.message
+        // Nieuw wachtwoord = alle bestaande sessies weg: wie een gestolen sessie
+        // had, kan die niet meer verversen (audit 2026-10-01, M12).
+        const { error: sessieErr } = await supabase.rpc('bb_sessies_intrekken', { p_user: userId })
+        if (sessieErr) console.error('[apply-password-reset] sessies intrekken mislukt:', sessieErr.message)
+        return null
       },
       async ruimOp(userId, behalveId) {
         await tabel().delete().eq('user_id', userId).neq('id', behalveId)
@@ -57,6 +62,6 @@ serve(async (req) => {
     return json(uitkomst.body, uitkomst.status)
   } catch (err) {
     console.error('[apply-password-reset] Fout:', err)
-    return json({ success: false, code: 'ERROR', error: String(err) }, 500)
+    return json({ success: false, code: 'ERROR', error: 'Wachtwoord instellen mislukt. Vraag een nieuwe link aan.' }, 500)
   }
 })

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Download, MoreVertical, Send, CheckCircle2, Copy } from 'lucide-react';
 import { NoteEditor } from '../components/NoteEditor.jsx';
-import { plainToEditorHtml } from '../lib/noteFormat.js';
+import { plainToEditorHtml, tekstNaarEditorHtml } from '../lib/noteFormat.js';
 import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
 import { InfoTip, InfoUitklap } from '../components/Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
@@ -16,8 +16,10 @@ import { getEigenEenheden } from '../services/eigenEenheidService.js';
 import { typeCfg, typeOptionsWith, applyTypeChange, omschrijvingFallback, reconstructRegel } from '../lib/regelTypes.js'
 import BtwRegimeSelect, { VerlegdUitleg } from '../components/BtwRegimeSelect.jsx';
 import { regimeVanPct, regimeVanRegel, regimeVoorOpslag } from '../lib/btwRegime.js';
+import { documentTotalen, regelBedrag } from '../utils/documentTotalen.js';
 import { NewFactuurModal, SendFactuurMailModal } from './FacturenPage.jsx';
 import { generateOffertePdf, previewOffertePdf, getOffertePdfBase64 } from '../utils/generatePdf.js';
+import { getCustomer } from '../services/customerService.js';
 import { mistGetekendePdf, stuurGetekendePdfNa } from '../services/getekendePdfService.js';
 import { buildCompanySnapshot, companyForDocument, isOfferteFullyLocked, isOfferteRevisable } from '../utils/documentSnapshot.js';
 import { getMailTemplate, sendEmail, substituteVars, substituteVarsHtml, logSentEmail } from '../services/emailService.js';
@@ -25,7 +27,21 @@ import { mailTemplate, mailButton } from '../utils/mailTemplate.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { statusInfo } from '../utils/statusColors.js';
 import ActieMenu from '../components/ActieMenu.jsx';
+import Rondleiding from '../components/Rondleiding.jsx';
 import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
+import { usePermissions } from '../hooks/usePermissions.js';
+import { LaadFout } from '../components/LaadFout.jsx';
+import { vandaagIso, voegDagenToe } from '../lib/datumTijd.js';
+import { opNaam } from '../lib/sorteren.js';
+
+// De klant voor een PDF. De gedeelde klantenlijst is kort na het openen van de
+// pagina (of via een gedeelde link) soms nog niet geladen; dan bleef het
+// AAN-blok leeg. In dat geval de klant zelf ophalen.
+async function klantVoorPdf(customers, customerId) {
+  const uitLijst = customers.find(c => String(c.id) === String(customerId));
+  if (uitLijst || !customerId) return uitLijst || null;
+  try { return await getCustomer(customerId); } catch { return null; }
+}
 
 const offerteBadge = status => {
   const s = statusInfo(status, 'offerte');
@@ -61,9 +77,7 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
     getBedrijfsinstellingen().then(s => {
       if (!s) return;
       setInstDefaults(s);
-      const d = new Date();
-      d.setDate(d.getDate() + (s.offerteGeldigDagen || 14));
-      const geldig = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const geldig = voegDagenToe(vandaagIso(), s.offerteGeldigDagen || 14);
       setForm(f => ({ ...f, geldig_tot: geldig }));
       setRegels(rs => rs.map((r, i) => i === 0 ? {
         ...r, btw: String(s.btwPct), btwRegime: regimeVanPct(s.btwPct),
@@ -82,18 +96,12 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
   }]);
   const removeRegel = (id) => setRegels(rs => rs.filter(r => r.id !== id));
 
-  const getRegelprijs = r => Math.round(Number(r.aantal || 0) * Number(r.eenheidsprijs || 0) * 100) / 100;
+  // Totalen volgens dezelfde regel als de database (utils/documentTotalen.js).
+  const getRegelprijs = r => regelBedrag(r.aantal, r.eenheidsprijs);
   const getEffBtw = r => r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw);
-
-  const totaalExcl = Math.round(regels.reduce((s, r) => s + getRegelprijs(r), 0) * 100) / 100;
-
-  const btwPerTarief = {};
-  for (const r of regels) {
-    const pct = getEffBtw(r);
-    const key = String(pct);
-    btwPerTarief[key] = Math.round(((btwPerTarief[key] || 0) + getRegelprijs(r) * pct / 100) * 100) / 100;
-  }
-  const totaalIncl = Math.round((totaalExcl + Object.values(btwPerTarief).reduce((s, v) => s + v, 0)) * 100) / 100;
+  const { excl: totaalExcl, btwPerTarief, incl: totaalIncl } = documentTotalen(regels, {
+    bedrag: getRegelprijs, pct: getEffBtw, regime: r => regimeVoorOpslag(regimeVanRegel(r)),
+  });
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
   const modalStyle = isMobile ? { width: '100vw', height: '100vh', maxWidth: '100vw', maxHeight: '100vh', borderRadius: 0, overflow: 'auto' } : { overflowX: 'hidden' };
@@ -146,12 +154,13 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
           </div>
           <ModalX onClose={onClose} />
         </div>
+        <Rondleiding pagina="venster-offerte" inVenster />
         <div className="fg">
-          <div className="f s2">
+          <div className="f s2" data-rl="vo-klant">
             <label>Klant *</label>
             <select value={form.customer_id} onChange={e => { set('customer_id', e.target.value); set('deal_id', ''); }}>
               <option value="">— Selecteer klant —</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {opNaam(customers).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           {form.customer_id && (
@@ -171,7 +180,7 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
           </div>
 
           {/* ── Regelitems ── */}
-          <div className="f s2" style={{ flexDirection: 'column', gap: 6 }}>
+          <div className="f s2" data-rl="vo-regels" style={{ flexDirection: 'column', gap: 6 }}>
             <label style={{ marginBottom: 0 }}>Regelitems</label>
 
             {isMobile ? (
@@ -255,7 +264,7 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
           </div>
 
           {/* ── Totalen ── */}
-          <div className="f s2" style={{ padding: '10px 14px', background: 'var(--pll)', borderRadius: 8, fontSize: 13 }}>
+          <div className="f s2" data-rl="vo-totaal" style={{ padding: '10px 14px', background: 'var(--pll)', borderRadius: 8, fontSize: 13 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--dl)' }}>Subtotaal excl. BTW</span>
@@ -275,11 +284,13 @@ export function NewOfferteModal({ customers, deals = [], prefillDealId = null, p
           </div>
 
           <div className="f s2">
-            <label>Notities</label>
-            <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Interne notities..." />
+            {/* Dit veld komt op de offerte-PDF en de ondertekenpagina: het is een
+                opmerking voor de klant, geen interne notitie (audit M21). */}
+            <label>Opmerking voor de klant</label>
+            <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Staat op de offerte die de klant ontvangt" />
           </div>
         </div>
-        <div className="fa">
+        <div className="fa" data-rl="vo-opslaan">
           <button className="btn btn-ghost" onClick={onClose}>Annuleren</button>
           {onSaveAndSend && <button className="btn btn-s" onClick={submitAndSend} disabled={saving} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Send size={14} />{saving ? 'Bezig...' : 'Opslaan en versturen'}</button>}
           <button className="btn btn-p" onClick={submit} disabled={saving}>{saving ? 'Opslaan...' : 'Opslaan'}</button>
@@ -332,17 +343,12 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
   const addRegel = () => setRegels(rs => [...rs, emptyRegel()]);
   const removeRegel = (id) => setRegels(rs => rs.filter(r => r.id !== id));
 
-  const getRegelprijs = r => Math.round(Number(r.aantal || 0) * Number(r.eenheidsprijs || 0) * 100) / 100;
+  // Totalen volgens dezelfde regel als de database (utils/documentTotalen.js).
+  const getRegelprijs = r => regelBedrag(r.aantal, r.eenheidsprijs);
   const getEffBtw = r => r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw);
-
-  const totaalExcl = Math.round(regels.reduce((s, r) => s + getRegelprijs(r), 0) * 100) / 100;
-  const btwPerTarief = {};
-  for (const r of regels) {
-    const pct = getEffBtw(r);
-    const key = String(pct);
-    btwPerTarief[key] = Math.round(((btwPerTarief[key] || 0) + getRegelprijs(r) * pct / 100) * 100) / 100;
-  }
-  const totaalIncl = Math.round((totaalExcl + Object.values(btwPerTarief).reduce((s, v) => s + v, 0)) * 100) / 100;
+  const { excl: totaalExcl, btwPerTarief, incl: totaalIncl } = documentTotalen(regels, {
+    bedrag: getRegelprijs, pct: getEffBtw, regime: r => regimeVoorOpslag(regimeVanRegel(r)),
+  });
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
   const modalStyle = isMobile ? { width: '100vw', height: '100vh', maxWidth: '100vw', maxHeight: '100vh', borderRadius: 0, overflow: 'auto' } : { overflowX: 'hidden' };
@@ -368,6 +374,9 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
         geldig_tot: form.geldig_tot || null, notes: form.notes, status: 'concept',
         marge_pct: 0, btw_pct: offerte.btwPct || 21,
         totaal_excl: totaalExcl, totaal_incl: totaalIncl, nummer,
+        // De nieuwe versie hoort bij dezelfde aanvraag; zonder deal_id schoof de
+        // deal niet naar Akkoord als de klant de nieuwe versie tekende.
+        deal_id: offerte.dealId || null,
       });
       await buildItems(created.id);
       await markOfferteVervangen(offerte.id, nummer);
@@ -435,7 +444,7 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
               <label>Klant</label>
               <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)} disabled={locked}>
                 <option value="">— Selecteer klant —</option>
-                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {opNaam(customers).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div className="f s2">
@@ -547,8 +556,8 @@ function EditOfferteModal({ offerte, customers, onClose, onSaved, onSaveAndSend 
             </div>
 
             <div className="f s2">
-              <label>Notities</label>
-              <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} disabled={locked} />
+              <label>Opmerking voor de klant</label>
+              <textarea rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} disabled={locked} placeholder="Staat op de offerte die de klant ontvangt" />
             </div>
           </div>
         )}
@@ -631,7 +640,7 @@ function CopyOfferteModal({ offerte, customers, onClose, onCopied }) {
               <label>Klant</label>
               <select value={customerId} onChange={e => setCustomerId(e.target.value)}>
                 <option value="">— Selecteer klant —</option>
-                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {opNaam(customers).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
           )}
@@ -655,6 +664,11 @@ function CopyOfferteModal({ offerte, customers, onClose, onCopied }) {
 }
 
 // ── VIEW OFFERTE MODAL ───────────────────────────────────────────────────────
+
+// Verwijderen kan niet meer zodra de klant akkoord heeft gegeven.
+function magOfferteVerwijderen(o) {
+  return !o.signedAt && o.status !== 'geaccepteerd';
+}
 
 function ViewOfferteModal({ offerte, customers, onClose, onSluitVoorActie, onMaakFactuur, onSendMail, onCopy, onEdit, onDelete, openCustomer }) {
   // Vóór een actie (mailen, wijzigen, kopiëren, verwijderen) sluit de weergave
@@ -684,7 +698,7 @@ function ViewOfferteModal({ offerte, customers, onClose, onSluitVoorActie, onMaa
     (async () => {
       setHerstel('bezig');
       try {
-        const customer = customers.find(c => String(c.id) === String(offerte.customerId));
+        const customer = await klantVoorPdf(customers, offerte.customerId);
         const regels = await getOfferteItems(offerte.id);
         const pdfBase64 = await getOffertePdfBase64(offerte, regels, customer, companyForDocument(offerte, company));
         await stuurGetekendePdfNa({ soort: 'offerte', id: offerte.id, pdfBase64 });
@@ -713,7 +727,7 @@ function ViewOfferteModal({ offerte, customers, onClose, onSluitVoorActie, onMaa
   const handleDownloadPdf = async () => {
     setPdfLoading(true);
     try {
-      const customer = customers.find(c => String(c.id) === String(offerte.customerId));
+      const customer = await klantVoorPdf(customers, offerte.customerId);
       const items = await getOfferteItems(offerte.id);
       await generateOffertePdf(offerte, items, customer, companyForDocument(offerte, company));
     } catch (err) {
@@ -727,7 +741,7 @@ function ViewOfferteModal({ offerte, customers, onClose, onSluitVoorActie, onMaa
   const handlePreviewPdf = async () => {
     setPreviewLoading(true);
     try {
-      const customer = customers.find(c => String(c.id) === String(offerte.customerId));
+      const customer = await klantVoorPdf(customers, offerte.customerId);
       const items = await getOfferteItems(offerte.id);
       await previewOffertePdf(offerte, items, customer, companyForDocument(offerte, company));
     } catch (err) {
@@ -774,7 +788,9 @@ function ViewOfferteModal({ offerte, customers, onClose, onSluitVoorActie, onMaa
     isGeaccepteerd && onMaakFactuur && primair?.label !== 'Maak factuur' && {
       label: 'Maak factuur', icon: I.brief, onClick: () => onMaakFactuur(offerte),
     },
-    onDelete && {
+    // Een ondertekende of geaccepteerde offerte is het akkoord van de klant:
+    // die blijft bewaard. Herzien of een nieuwe offerte maken kan altijd.
+    onDelete && magOfferteVerwijderen(offerte) && {
       label: 'Offerte verwijderen', icon: I.trash, gevaarlijk: true, scheiding: true,
       onClick: () => { sluitVoorActie(); onDelete(offerte); },
     },
@@ -837,7 +853,7 @@ function ViewOfferteModal({ offerte, customers, onClose, onSluitVoorActie, onMaa
                           {it.omschrijving || ''}
                           {it.eenheid ? <span style={{ color: 'var(--dl)', fontSize: '.76rem' }}> · {it.eenheid}</span> : null}
                         </td>
-                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{it.aantal}</td>
+                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{Number(it.aantal || 0).toLocaleString('nl-NL', { maximumFractionDigits: 3 })}</td>
                         <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(it.prijsPer)}</td>
                         <td style={{ textAlign: 'right', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(it.subtotaal)}</td>
                       </tr>
@@ -859,7 +875,7 @@ function ViewOfferteModal({ offerte, customers, onClose, onSluitVoorActie, onMaa
           </div>
           {offerte.notes && (
             <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>Notities</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--dl)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>Opmerking voor de klant</div>
               <div style={{ fontSize: 13, color: 'var(--tx)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{offerte.notes}</div>
             </div>
           )}
@@ -950,6 +966,14 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
   const appUrl = window.location.origin;
   const signLink = `${appUrl}/offerte/${offerte.sign_token || ''}`;
   const customer = customers.find(c => c.id == offerte.customerId);
+  // Is de klantenlijst nog niet geladen, haal dan het adres van de klant zelf op
+  // (anders bleef "Aan" leeg). Een al ingevuld adres blijft staan.
+  useEffect(() => {
+    if (customer || !offerte.customerId) return;
+    klantVoorPdf([], offerte.customerId).then(k => {
+      if (k?.email) setForm(f => (f.to ? f : { ...f, to: k.email }));
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const fmt2 = n => new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0);
   const fmtDate = d => d ? new Date(d).toLocaleDateString('nl-NL') : '';
 
@@ -976,7 +1000,8 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
           : kanOndertekenen
             ? `Beste ${vars.klant_naam},\n\nHierbij sturen wij u offerte ${offerte.nummer} toe.\n\nVia onderstaande knop kunt u de offerte bekijken en digitaal ondertekenen:\n{{link}}\n\nHeeft u vragen? Neem gerust contact met ons op.\n\nMet vriendelijke groet,\n${company?.name || ''}`
             : `Beste ${vars.klant_naam},\n\nHierbij sturen wij u offerte ${offerte.nummer} toe als bijlage.\n\nHeeft u vragen? Neem gerust contact met ons op.\n\nMet vriendelijke groet,\n${company?.name || ''}`;
-        const body = tpl ? rawBody : plainToEditorHtml(rawBody);
+        // Terugvaltekst zonder sjabloon: altijd escapen — de klantnaam is data.
+        const body = tpl ? rawBody : tekstNaarEditorHtml(rawBody);
         // Wat je in de composer ziet is wat de klant krijgt: zonder ondertekenlink
         // halen we de belofte er meteen uit, niet pas bij verzenden.
         setForm({ to: customer?.email || '', subject: sub, body: kanOndertekenen ? body : zonderOndertekenTekst(body) });
@@ -992,7 +1017,8 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
       let attachments = [];
       try {
         const items = await getOfferteItems(offerte.id);
-        const pdfBase64 = await getOffertePdfBase64(offerte, items, customer, companyForDocument(offerte, company));
+        const pdfKlant = await klantVoorPdf(customers, offerte.customerId);
+        const pdfBase64 = await getOffertePdfBase64(offerte, items, pdfKlant, companyForDocument(offerte, company));
         attachments = [{ filename: `Offerte-${offerte.nummer}.pdf`, content: pdfBase64 }];
       } catch (pdfErr) {
         console.warn('PDF bijlage genereren mislukt:', pdfErr.message);
@@ -1082,7 +1108,10 @@ export function SendOfferteMailModal({ offerte, customers, company, onClose, onS
 export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onItemClose, onItemLeave, preFillDealId, onNavConsumed, backKlant, onBackKlant }) {
   const toast = useToast();
   const { profile, company } = useProfile();
-  const canManageOffertes = profile?.role === 'admin' || profile?.role === 'planner';
+  // Beheren = admin of het recht 'offertes' (er bestaat geen rol "planner";
+  // zelfde regel als de database, audit M17).
+  const { magBewerken } = usePermissions();
+  const canManageOffertes = magBewerken('offertes');
   const [offertes, setOffertes] = useState([]);
   // Klanten en deals komen uit de gedeelde dataset; deze pagina haalde ze apart
   // op. De offertes zelf blijven eigen state: die worden hier na kopiëren,
@@ -1108,7 +1137,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
     setLoading(true);
     getOffertes()
       .then(o => { setOffertes(o); setError(''); })
-      .catch(err => setError(err.message || 'Laden mislukt'))
+      .catch(err => setError(err))
       .finally(() => setLoading(false));
   };
 
@@ -1164,7 +1193,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
   const handleRowPdf = async o => {
     try {
       const items = await getOfferteItems(o.id);
-      const customer = customers.find(c => String(c.id) === String(o.customerId));
+      const customer = await klantVoorPdf(customers, o.customerId);
       await previewOffertePdf(o, items, customer, companyForDocument(o, company));
     } catch (err) {
       toast.error(err.message || 'Voorbeeld maken mislukt');
@@ -1198,6 +1227,10 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
   };
 
   const handleDelete = async (o) => {
+    if (!magOfferteVerwijderen(o)) {
+      toast.error('Een ondertekende of geaccepteerde offerte kun je niet verwijderen.');
+      return;
+    }
     if (!window.confirm(`Offerte ${o.nummer} verwijderen?`)) return;
     try {
       await deleteOfferte(o.id);
@@ -1252,7 +1285,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
       // De klantenlijst staat al in de gedeelde dataset; die hoefde hier niet
       // opnieuw opgehaald te worden voor één naam op de PDF.
       const items = await getOfferteItems(o.id);
-      const customer = customers.find(c => c.id === o.customerId) || null;
+      const customer = await klantVoorPdf(customers, o.customerId);
       await generateOffertePdf(o, items, customer, companyForDocument(o, company));
     } catch (e) {
       toast.error('PDF genereren mislukt: ' + e.message);
@@ -1270,11 +1303,11 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
           <p style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <PlanStand limiet="offertes" />
           </p>
-          {error && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 4 }}>{error}</div>}
+          {error && <LaadFout fout={error} titel="Offertes laden is niet gelukt" onOpnieuw={load} />}
         </div>
         <div className="page-hd-actions">
           {canManageOffertes && (
-            <button className="btn btn-p" onClick={guardLimiet('offertes', () => setShowNew(true))}>
+            <button className="btn btn-p" data-rl="offertes-nieuw" onClick={guardLimiet('offertes', () => setShowNew(true))}>
               {I.plus} Nieuwe offerte
             </button>
           )}
@@ -1314,7 +1347,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
         </div>
 
         <div className="card">
-          <div className="tw-filter">
+          <div className="tw-filter" data-rl="offertes-filters">
             <div className="bb-filter-tabs">
               {filters.map(f => (
                 <button
@@ -1382,7 +1415,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
                             onClick={() => handleRowPdf(o)}
                           >{I.paperclip}</button>
                           <ActieMenu items={rijActies(o)} />
-                          {canManageOffertes && <button className="btn btn-xs btn-danger btn-icon" title="Verwijderen" onClick={() => handleDelete(o)}>{I.trash}</button>}
+                          {canManageOffertes && magOfferteVerwijderen(o) && <button className="btn btn-xs btn-danger btn-icon" title="Verwijderen" onClick={() => handleDelete(o)}>{I.trash}</button>}
                         </div>
                       </td>
                     </tr>

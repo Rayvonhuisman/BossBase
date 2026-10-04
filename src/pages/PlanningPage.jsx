@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { logFout, meldFout, AGENDA_NIET_BIJGEWERKT } from '../lib/stilleFouten.js';
 import { AlertTriangle, Lock, X } from 'lucide-react';
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
@@ -37,7 +38,7 @@ import { MemberMultiSelect } from '../components/MemberMultiSelect.jsx';
 import { AssigneeResponsibleSelect } from '../components/AssigneeResponsibleSelect.jsx';
 import { supabase } from '../lib/supabase.js';
 import { NoteEditor } from '../components/NoteEditor.jsx';
-import { lokaleDatum } from '../lib/datumTijd.js';
+import { lokaleDatum, korteDatumNl } from '../lib/datumTijd.js';
 
 // ── TIJDLIJN CONSTANTEN ───────────────────────────────────────────────────────
 
@@ -533,15 +534,15 @@ function QuickPlanModal({ werkbon, date, hour, teamMembers, profile, onClose, on
       notifyNewAssignees({
         userIds: assignedToIds.filter(id => !nieuweVerantw.includes(id)), prevUserIds: prevIds, members: teamMembers, sendMail: notifyMail,
         type: 'toewijzing_werkbon', title: `Je bent toegewezen aan ${werkbon.titel}`,
-        body: `Datum: ${date}${starttijd ? ` om ${starttijd}` : ''}`,
+        body: `Datum: ${korteDatumNl(date)}${starttijd ? ` om ${starttijd}` : ''}`,
         link: 'planning', relatedType: 'werkbon', relatedId: werkbon.id,
         creatorId: profile?.id, creatorName: profile?.fullName,
-      }).catch(() => {});
+      }).catch(logFout('melding versturen'));
       notifyNieuweVerantwoordelijken({
         userIds: verantwoordelijkeIds, prevUserIds: prevVerantw, members: teamMembers, sendMail: notifyMail,
         titel: werkbon.titel, link: 'planning', relatedId: werkbon.id,
         creatorId: profile?.id, creatorName: profile?.fullName,
-      }).catch(() => {});
+      }).catch(logFout('melding versturen'));
       // Wie al op de bon stond en blijft staan, hoort dat de dag/tijd verschuift.
       const blijvers = assignedToIds.filter(id => prevIds.includes(id));
       if (blijvers.length && (werkbon.geplandOp !== date || fmtTime(werkbon.starttijd) !== starttijd)) {
@@ -554,11 +555,11 @@ function QuickPlanModal({ werkbon, date, hour, teamMembers, profile, onClose, on
           oud: { datum: werkbon.geplandOp, start: fmtTime(werkbon.starttijd), eind: fmtTime(werkbon.eindtijd) },
           nieuw: { datum: date, start: starttijd, eind: eindtijd },
           creatorId: profile?.id,
-        }).catch(() => {});
+        }).catch(logFout('melding versturen'));
       }
       // Agenda bijwerken: één item per geplande dag. Heeft de werkbon meerdere
       // dagen, dan is hij door de nieuwe startdatum in zijn geheel verschoven.
-      syncWerkbonEvents(werkbon.id).catch(() => {});
+      syncWerkbonEvents(werkbon.id).catch(meldFout(toast, AGENDA_NIET_BIJGEWERKT));
       toast.success('Werkbon ingepland');
       onSaved(updated);
       onClose();
@@ -613,14 +614,6 @@ function QuickPlanModal({ werkbon, date, hour, teamMembers, profile, onClose, on
 
 // ── ACTIVITEIT INPLANNEN MODAL ────────────────────────────────────────────────
 
-const ACT_TYPES = [
-  { value: 'call',  label: 'Bellen'      },
-  { value: 'visit', label: 'Bezoek'      },
-  { value: 'task',  label: 'Vergadering' },
-  { value: 'task',  label: 'Klus'        },
-  { value: 'follow',label: 'Overig'      },
-];
-
 function PlanActivityModal({ teamMembers, customers, werkbonnen, profile, onClose, onSaved }) {
   const toast = useToast();
   const [form, setForm] = useState({
@@ -667,7 +660,7 @@ function PlanActivityModal({ teamMembers, customers, werkbonnen, profile, onClos
           customerId: form.customer_id || null,
           location: form.locatie || null,
           description: form.omschrijving || '',
-        }).catch(() => {});
+        }).catch(logFout('melding versturen'));
       }
 
       // Notificatie naar elke nieuw toegewezen medewerker (behalve jezelf).
@@ -675,17 +668,19 @@ function PlanActivityModal({ teamMembers, customers, werkbonnen, profile, onClos
         userIds: form.assigned_to_ids, members: teamMembers, sendMail: notifyMail,
         type: 'toewijzing_activiteit',
         title: `Je bent toegewezen aan ${form.titel.trim()}`,
-        body: `Datum: ${form.datum}${form.starttijd ? ` om ${form.starttijd}` : ''}`,
+        body: `Datum: ${korteDatumNl(form.datum)}${form.starttijd ? ` om ${form.starttijd}` : ''}`,
         link: 'planning', relatedType: 'activiteit', relatedId: created.id,
         creatorId: profile?.id, creatorName: profile?.fullName,
-      }).catch(() => {});
+      }).catch(logFout('melding versturen'));
 
       // Een bestaande werkbon koppelen mag hier; een werkbon AANMAKEN bewust
       // niet. Daarvoor staat de knop "Werkbon inplannen" ernaast: twee knoppen,
       // twee duidelijke wegen. Het aanmaken liep hier bovendien buiten de
       // rechtencheck om en een mislukking verdween stil in de catch.
       if (form.werkbon_id) {
-        supabase.from('werkbonnen').update({ activity_id: created.id }).eq('id', form.werkbon_id).then(() => {}).catch(() => {});
+        supabase.from('werkbonnen').update({ activity_id: created.id }).eq('id', form.werkbon_id)
+          .then(({ error }) => { if (error) throw error; })
+          .catch(meldFout(toast, 'De activiteit is ingepland, maar kon niet aan de werkbon worden gekoppeld. Koppel hem opnieuw vanuit de werkbon.'));
       }
 
       toast.success('Activiteit ingepland');
@@ -848,19 +843,19 @@ function PlanModal({ teamMembers, customers, projects, profile, onClose, onSaved
         body: `Datum: ${planningLabel(wb)}${form.starttijd ? ` om ${form.starttijd}` : ''}`,
         link: 'planning', relatedType: 'werkbon', relatedId: wb.id,
         creatorId: profile?.id, creatorName: profile?.fullName,
-      }).catch(() => {});
+      }).catch(logFout('melding versturen'));
       notifyNieuweVerantwoordelijken({
         userIds: form.verantwoordelijke_ids, members: teamMembers, sendMail: notifyMail,
         titel: form.titel.trim(), link: 'planning', relatedId: wb.id,
         creatorId: profile?.id, creatorName: profile?.fullName,
-      }).catch(() => {});
+      }).catch(logFout('melding versturen'));
       // Het omschrijvingsveld nodigt uit om te taggen; dat leverde niemand iets op.
       createMentionNotifications({
         text: form.omschrijving, relatedType: 'werkbon', relatedId: wb.id, link: 'planning',
         creatorId: profile?.id, creatorName: profile?.fullName, contextName: form.titel.trim(),
-      }).catch(() => {});
+      }).catch(logFout('melding versturen'));
       // Agenda: één item per geplande dag.
-      syncWerkbonEvents(wb.id).catch(() => {});
+      syncWerkbonEvents(wb.id).catch(meldFout(toast, AGENDA_NIET_BIJGEWERKT));
       toast.success('Werkbon ingepland');
       onSaved(wb);
       onClose();
@@ -1020,19 +1015,19 @@ function DetailModal({ werkbon, teamMembers, profile, onClose, onUpdated, openCu
         body: dagen.length ? `Datum: ${planningLabel({ dagen })}${form.starttijd ? ` om ${String(form.starttijd).slice(0, 5)}` : ''}` : undefined,
         link: 'planning', relatedType: 'werkbon', relatedId: werkbon.id,
         creatorId: profile?.id, creatorName: profile?.fullName,
-      }).catch(() => {});
+      }).catch(logFout('melding versturen'));
       notifyNieuweVerantwoordelijken({
         userIds: form.verantwoordelijke_ids, prevUserIds: prevVerantw, members: teamMembers, sendMail: notifyMail,
         titel: form.titel.trim() || werkbon.titel, link: 'planning', relatedId: werkbon.id,
         creatorId: profile?.id, creatorName: profile?.fullName,
-      }).catch(() => {});
+      }).catch(logFout('melding versturen'));
       // Van de bon af gehaald: dat hoorde je tot nu toe helemaal niet.
       if (eraf.length) {
         meldPlanningWijziging({
           userIds: eraf, soort: 'afgehaald', werkbon: bonInfo,
           oud: { datum: werkbon.geplandOp, start: fmtTime(werkbon.starttijd), eind: fmtTime(werkbon.eindtijd) },
           creatorId: profile?.id,
-        }).catch(() => {});
+        }).catch(logFout('melding versturen'));
       }
       // Blijft staan, maar op een andere dag of tijd.
       if (blijvers.length && verschoven) {
@@ -1041,7 +1036,7 @@ function DetailModal({ werkbon, teamMembers, profile, onClose, onUpdated, openCu
           oud: { datum: werkbon.geplandOp, start: fmtTime(werkbon.starttijd), eind: fmtTime(werkbon.eindtijd) },
           nieuw: { datum: nieuweDatum, start: fmtTime(nieuweStart), eind: fmtTime(form.eindtijd) },
           creatorId: profile?.id,
-        }).catch(() => {});
+        }).catch(logFout('melding versturen'));
       }
       // Per DAG: bij een meerdaagse klus kan iemand die al op de bon staat er een
       // dag bij krijgen of er eentje kwijtraken. Dat viel buiten de diff hierboven,
@@ -1062,19 +1057,19 @@ function DetailModal({ werkbon, teamMembers, profile, onClose, onUpdated, openCu
         for (const d of erbij) {
           meldPlanningWijziging({
             userIds: [uid], soort: 'ingepland', werkbon: bonInfo, nieuw: d, creatorId: profile?.id,
-          }).catch(() => {});
+          }).catch(logFout('melding versturen'));
         }
         for (const d of kwijt) {
           meldPlanningWijziging({
             userIds: [uid], soort: 'afgehaald', werkbon: bonInfo, oud: d, creatorId: profile?.id,
-          }).catch(() => {});
+          }).catch(logFout('melding versturen'));
         }
       }
       // Taggen in de omschrijving leverde niemand een melding op.
       createMentionNotifications({
         text: form.omschrijving, relatedType: 'werkbon', relatedId: werkbon.id, link: 'planning',
         creatorId: profile?.id, creatorName: profile?.fullName, contextName: form.titel.trim() || werkbon.titel,
-      }).catch(() => {});
+      }).catch(logFout('melding versturen'));
       let vers = updated;
       try {
         vers = await zetWerkbonDagen(werkbon.id, dagen);
@@ -1082,7 +1077,7 @@ function DetailModal({ werkbon, teamMembers, profile, onClose, onUpdated, openCu
         toast.error(`Opgeslagen, maar de dagen niet: ${e.message || 'onbekende fout'}`);
       }
       // Agenda bijwerken: één item per geplande dag; niet meer ingepland = weg.
-      syncWerkbonEvents(werkbon.id).catch(() => {});
+      syncWerkbonEvents(werkbon.id).catch(meldFout(toast, AGENDA_NIET_BIJGEWERKT));
       onUpdated(vers);
       toast.success('Opgeslagen');
       onClose();
@@ -1281,13 +1276,18 @@ export function PlanningPage({ openCustomer } = {}) {
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    const deelsMislukt = [];
     try {
       const [wbs, members, projs, acts] = await Promise.all([
         getWerkbonnen(),
-        getActiveTeamMembers({ includeSelf: true }).catch(() => []),
-        getProjects().catch(() => []),
-        listActivities().catch(() => []),
+        getActiveTeamMembers({ includeSelf: true }).catch(e => { deelsMislukt.push(e); return []; }),
+        getProjects().catch(e => { deelsMislukt.push(e); return []; }),
+        listActivities().catch(e => { deelsMislukt.push(e); return []; }),
       ]);
+      if (deelsMislukt.length) {
+        console.warn('[bb] planning deels geladen', deelsMislukt);
+        toast.error('Niet alles kon worden geladen: teamleden, projecten of activiteiten kunnen ontbreken. Ververs de pagina.');
+      }
       setWerkbonnen(wbs);
       setTeamMembers(members);
       setProjects(projs);
@@ -1312,7 +1312,7 @@ export function PlanningPage({ openCustomer } = {}) {
   useEffect(() => {
     if (!metVoertuigen) { setVoertuigen([]); return undefined; }
     let bezig = true;
-    getVoertuigen({ inclusiefInactief: true }).then(l => { if (bezig) setVoertuigen(l); }).catch(() => {});
+    getVoertuigen({ inclusiefInactief: true }).then(l => { if (bezig) setVoertuigen(l); }).catch(logFout('voertuigen laden'));
     return () => { bezig = false; };
   }, [metVoertuigen]);
   const actieveVoertuigen = useMemo(() => voertuigen.filter(v => v.actief), [voertuigen]);
@@ -1475,7 +1475,7 @@ export function PlanningPage({ openCustomer } = {}) {
         oud: { datum: b._datum, start: fmtTime(b.start ?? w.starttijd), eind: fmtTime(b.eind ?? w.eindtijd) },
         nieuw: { datum: b._datum, start: minsToTime(start), eind: minsToTime(eind) },
         creatorId: profile?.id,
-      }).catch(() => {});
+      }).catch(logFout('melding versturen'));
       // Agenda-items per dag en per persoon volgen de werkbon.
       try {
         await syncWerkbonEvents(w.id);
@@ -1509,7 +1509,7 @@ export function PlanningPage({ openCustomer } = {}) {
         oud: { datum: a.date, start: fmtTime(a.time), eind: fmtTime(a.endTime) },
         nieuw: { datum: updated.date, start: fmtTime(updated.time), eind: fmtTime(updated.endTime) },
         creatorId: profile?.id,
-      }).catch(() => {});
+      }).catch(logFout('melding versturen'));
       // Zelfde als na het activiteitenvenster: het agenda-item bestaat of komt er.
       try {
         await upsertActivityEvent({
@@ -1562,7 +1562,7 @@ export function PlanningPage({ openCustomer } = {}) {
               <button key={v} className={`tab${zicht === v ? ' active' : ''}`} onClick={() => setZicht(v)}>{l}</button>
             ))}
           </div>
-          <div className="tabs" style={{ marginLeft: 8 }}>
+          <div className="tabs" data-rl="planning-weergave" style={{ marginLeft: 8 }}>
             {[['totaal','Totaal'],['medewerker','Medewerker'], ...(metVoertuigen ? [['voertuig','Voertuig']] : [])].map(([v, l]) => (
               <button key={v} className={`tab${viewMode === v ? ' active' : ''}`} onClick={() => setViewMode(v)}>{l}</button>
             ))}
@@ -1580,7 +1580,7 @@ export function PlanningPage({ openCustomer } = {}) {
               {actieveVoertuigen.map(v => <option key={v.id} value={v.id}>{v.naam}{v.kenteken ? ` (${v.kenteken})` : ''}</option>)}
             </select>
           )}
-          <button className="btn btn-s btn-sm" onClick={() => setShowPlanModal(true)}>
+          <button className="btn btn-s btn-sm" data-rl="planning-werkbon" onClick={() => setShowPlanModal(true)}>
             {I.plus} Werkbon inplannen
           </button>
           <button className="btn btn-p btn-sm" onClick={() => setShowPlanActivityModal(true)}>
@@ -1595,7 +1595,7 @@ export function PlanningPage({ openCustomer } = {}) {
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
 
           {/* ── NIET-INGEPLAND PANEEL ── */}
-          <div style={{ marginBottom: 12 }}>
+          <div style={{ marginBottom: 12 }} data-rl="planning-niet-ingepland">
             <button onClick={() => setShowUnplanned(v => !v)}
               style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: '3px 0', marginBottom: 6 }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--dk)', textTransform: 'uppercase', letterSpacing: '.04em' }}>
@@ -1621,7 +1621,7 @@ export function PlanningPage({ openCustomer } = {}) {
           {/* ── TIJDLIJN GRID ── */}
           <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start' }}>
             {/* Tijdlijn + kolommen */}
-            <div className="card" style={{ flex: 1, padding: 0, overflow: 'hidden', minWidth: 0 }}>
+            <div className="card" data-rl="planning-tijdlijn" style={{ flex: 1, padding: 0, overflow: 'hidden', minWidth: 0 }}>
               {/* Dagkoppen en tijdlijn schuiven samen horizontaal: op een
                   telefoon past een hele week niet, en dan moet elke dagkop
                   boven zijn eigen kolom blijven staan. In de dagweergave is er
@@ -1889,9 +1889,9 @@ export function PlanningPage({ openCustomer } = {}) {
                 end: updated.endTime || '',
                 customerId: updated.custId || null,
                 location: updated.location || null,
-              }).catch(() => {});
+              }).catch(meldFout(toast, AGENDA_NIET_BIJGEWERKT));
             } else {
-              deleteActivityEvent(updated.id).catch(() => {});
+              deleteActivityEvent(updated.id).catch(meldFout(toast, AGENDA_NIET_BIJGEWERKT));
             }
             setSelectedActivity(null);
           }}

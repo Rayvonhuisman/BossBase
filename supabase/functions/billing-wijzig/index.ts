@@ -33,7 +33,7 @@ import {
   stripeFetch, json, CORS, eisAbonnementsbeheerder,
   tierPriceId, modulePriceId, extraUserPriceId, duidItems, naarISO, bouwItemMutaties,
   zetJaarverplichting, isJaar,
-  MODULE_BESCHIKBAAR, MODULE_VEREIST, inbegrepenGebruikers,
+  MODULE_BESCHIKBAAR, MODULE_VEREIST, inbegrepenGebruikers, benodigdeGebruikers, teWeinigGebruikers,
 } from '../_shared/billing.ts'
 
 const TIERS = ['starter', 'groei', 'team']
@@ -72,6 +72,10 @@ serve(async (req) => {
 
     if (!TIERS.includes(doelTier)) return json({ error: 'Onbekend pakket' }, 400)
 
+    // ── Minstens zoveel plekken als er gebruikers zijn ─────────────────────────
+    const weigering = teWeinigGebruikers(doelTier, extra, await benodigdeGebruikers(admin, companyId))
+    if (weigering) return weigering
+
     // ── Loopt er wel een abonnement? ─────────────────────────────────────────
     const { data: rij } = await admin
       .from('subscriptions')
@@ -89,7 +93,7 @@ serve(async (req) => {
     // ── 2. Mag deze overstap? ────────────────────────────────────────────────
     const { data: oordeel, error: oordeelFout } = await admin
       .rpc('bb_mag_wisselen', { p_company_id: companyId, p_doel_tier: doelTier })
-    if (oordeelFout) return json({ error: `Controle mislukt: ${oordeelFout.message}` }, 500)
+    if (oordeelFout) { console.error('[billing-wijzig] controle', oordeelFout.message); return json({ error: 'Controle mislukt. Probeer het later opnieuw.' }, 500) }
 
     // Reset de looptijd? Alleen bij een tier-upgrade van een JAARabonnement.
     // bb_mag_wisselen rekent het uit; wij voeren het alleen uit, zodat scherm en
@@ -295,6 +299,7 @@ serve(async (req) => {
           : 'Je abonnement is bijgewerkt. Het verschil wordt verrekend op je volgende factuur.',
     })
   } catch (e) {
-    return json({ error: (e as Error).message || 'Onbekende fout' }, 500)
+    console.error('[billing-wijzig]', (e as Error)?.message)
+    return json({ error: 'Wijzigen is niet gelukt. Probeer het later opnieuw.' }, 500)
   }
 })

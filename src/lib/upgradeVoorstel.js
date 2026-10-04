@@ -2,7 +2,7 @@
 // Uit UpgradeFlow gehaald zodat de abonnementspagina en de (eventuele) modal
 // dezelfde vertaling gebruiken. De kop kan zo nooit iets anders beweren dan de
 // knop doet.
-import { tierLabel, EXTRA_USER_PRICE } from './tiers.js';
+import { tierLabel, EXTRA_USER_PRICE, betaaldeGebruikers } from './tiers.js';
 import {
   moduleLabel, modulePrice, getLimitDef, featureLabel,
   tierForFeature, tierForLimit, moduleForFeature, moduleMetVereisten,
@@ -75,13 +75,13 @@ export function bedenkVoorstel({ aanleiding, plan, stand }) {
       const prijs = meegenomen.reduce((s, k) => s + modulePrice(k), 0);
       return {
         kop: `${featureLabel(key)} zit niet in je abonnement`,
-        uitleg: `Je kunt het bijkopen als module — je hoeft er niet voor over te stappen naar een groter pakket.`,
+        uitleg: `Je kunt het bijkopen als module. Je hoeft er niet voor over te stappen naar een groter pakket.`,
         tier: huidig,
         modules: meegenomen,
         extra: stand?.extraGebruikers ?? 0,
         wat: meegenomen.length > 1
-          ? `${meegenomen.map(moduleLabel).join(' + ')} — samen ${euro(prijs)} per maand erbij. ${moduleLabel(module.key)} werkt alleen samen met ${moduleLabel(module.vereist)}.`
-          : `${moduleLabel(module.key)} — ${euro(prijs)} per maand erbij.`,
+          ? `${meegenomen.map(moduleLabel).join(' + ')}: samen ${euro(prijs)} per maand erbij. ${moduleLabel(module.key)} werkt alleen samen met ${moduleLabel(module.vereist)}.`
+          : `${moduleLabel(module.key)}: ${euro(prijs)} per maand erbij.`,
       };
     }
     const doel = tierForFeature(key) || 'team';
@@ -107,7 +107,9 @@ export function bedenkVoorstel({ aanleiding, plan, stand }) {
         uitleg: `Je hebt nu ${inGebruik} gebruiker${inGebruik === 1 ? '' : 's'}.`,
         tier: huidig,
         modules: stand?.modules ?? [],
-        extra: Math.max((stand?.extraGebruikers ?? 0) + 1, 1),
+        // Het echte aantal plus de nieuwe collega, niet "wat er nu in Stripe
+        // staat + 1": dat gaf bij een bedrijf zonder Stripe te weinig plekken.
+        extra: Math.max((stand?.extraGebruikers ?? 0) + 1, betaaldeGebruikers(huidig, inGebruik + 1), 1),
         wat: `Elke extra gebruiker kost ${euro(EXTRA_USER_PRICE)} per maand.`,
       };
     }
@@ -117,9 +119,12 @@ export function bedenkVoorstel({ aanleiding, plan, stand }) {
       uitleg: `Je hebt er ${inGebruik}. Voor meer teamleden is er ${tierLabel(doel)}.`,
       tier: doel,
       modules: stand?.modules ?? [],
-      extra: stand?.extraGebruikers ?? 0,
+      // Alle huidige gebruikers plus de nieuwe; bij Team telt ook de eerste mee.
+      // Was: het aantal extra gebruikers uit Stripe (vaak 0), waardoor een
+      // bedrijf met 9 gebruikers Team voor 1 gebruiker kreeg voorgesteld.
+      extra: Math.max(stand?.extraGebruikers ?? 0, betaaldeGebruikers(doel, inGebruik + 1)),
       wat: TIER_LIMITS[doel]?.gebruikers == null
-        ? `${tierLabel(doel)} heeft geen maximum aantal gebruikers — je betaalt ${euro(EXTRA_USER_PRICE)} per extra gebruiker.`
+        ? `${tierLabel(doel)} heeft geen maximum aantal gebruikers. Je betaalt ${euro(EXTRA_USER_PRICE)} per extra gebruiker.`
         : `${tierLabel(doel)} gaat tot ${TIER_LIMITS[doel].gebruikers} gebruikers.`,
     };
   }

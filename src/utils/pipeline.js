@@ -60,16 +60,6 @@ export function buildStageIndex(stages = []) {
   return idx;
 }
 
-// Categorie van een deal ('open' als de fase onbekend is).
-export function dealCategory(deal, stageIndex) {
-  return stageIndex.get(deal?.stage)?.category || 'open';
-}
-
-// De order (volgnummer) van een deal binnen de pipeline; -1 als onbekend.
-export function dealOrder(deal, stageIndex) {
-  return stageIndex.get(deal?.stage)?.order ?? -1;
-}
-
 // Het stage_id van de eerste pipeline-fase (de "nieuwe aanvragen").
 export function firstStageId(stages = []) {
   return stages.length ? [...stages].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))[0]?.id : null;

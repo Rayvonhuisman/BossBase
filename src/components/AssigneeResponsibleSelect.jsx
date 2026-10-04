@@ -22,6 +22,7 @@ export function AssigneeResponsibleSelect({
   fieldStyle,
   assignedLabel = 'Gekoppelde medewerkers',
   children, // extra inhoud onder de koppel-select (bv. NotifyMailToggle)
+  rl, // aanwijspunt voor de rondleiding (data-rl)
 }) {
   const gekoppelde = members.filter(m => assignedIds.includes(m.id));
 
@@ -33,7 +34,7 @@ export function AssigneeResponsibleSelect({
 
   return (
     <>
-      <div className={fieldClassName} style={fieldStyle}>
+      <div className={fieldClassName} style={fieldStyle} data-rl={rl}>
         <label>{assignedLabel} <span style={{ fontSize: 11, color: 'var(--dl)', fontWeight: 400 }}>(meerdere mogelijk)</span></label>
         <MemberMultiSelect members={members} value={assignedIds} onChange={handleAssigned} disabled={disabled} />
         {children}

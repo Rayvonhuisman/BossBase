@@ -16,6 +16,8 @@
 //                                   zonder iets vast te leggen
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { vandaagIso } from '../_shared/datumTijd.ts'
+import { isScheduledCall } from '../_shared/scheduledSync.ts'
 import { appOrigin } from '../_shared/stripe.ts'
 import {
   trialMail, TRIAL_AFZENDER, TRIAL_REPLY_TO, TRIAL_MAIL_NUMMERS,
@@ -33,12 +35,13 @@ const json = (body: unknown, status = 200) =>
   })
 
 import { logMailFout } from '../_shared/mailFout.ts'
+import { afmeldLinks } from '../_shared/afmelden.ts'
 
 // Rechtstreeks naar Resend, net als check-herinneringen. Niet via send-email:
 // die functie eist een ingelogde gebruiker of het interne secret, en weigert
 // bovendien post van een read-only account — precies de bedrijven die mail 15
 // en 30 moeten krijgen.
-async function verstuur(to: string, subject: string, html: string, soort = 'trial'): Promise<string | null> {
+async function verstuur(to: string, subject: string, html: string, soort = 'trial', eenKlikAfmelden?: string): Promise<string | null> {
   const apiKey = Deno.env.get('RESEND_API_KEY')
   const fromEmail = Deno.env.get('RESEND_FROM_EMAIL') || 'noreply@bossbase.nl'
   if (!apiKey) { console.warn('RESEND_API_KEY niet ingesteld — mail overgeslagen'); return null }
@@ -52,6 +55,13 @@ async function verstuur(to: string, subject: string, html: string, soort = 'tria
       subject,
       html,
       reply_to: TRIAL_REPLY_TO,
+      // Afmelden met één klik vanuit het mailprogramma (RFC 8058).
+      ...(eenKlikAfmelden ? {
+        headers: {
+          'List-Unsubscribe': `<${eenKlikAfmelden}>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        },
+      } : {}),
     }),
   })
   const data = await res.json().catch(() => ({}))
@@ -73,24 +83,24 @@ async function verstuur(to: string, subject: string, html: string, soort = 'tria
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
+  // Alleen de cron mag dit starten: die stuurt het geheim uit de vault mee
+  // (edge_cron_secret = CRON_SECRET). De anon-sleutel alleen is publiek en
+  // dus geen bewijs. Audit 2026-10-01, H7.
+  const aanroep = await req.clone().json().catch(() => ({}))
+  if (!isScheduledCall(aanroep)) {
+    return new Response(JSON.stringify({ error: 'Niet toegestaan' }), {
+      status: 403, headers: { ...CORS, 'Content-Type': 'application/json' },
+    })
+  }
+
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
   const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-  // GEEN vrij te kiezen ontvanger. Deze functie staat op verify_jwt=false — de
-  // cron heeft geen ingelogde gebruiker — en is daarmee vanaf internet
-  // aanroepbaar. Een `naar`-parameter in het verzoek zou dit een open mailrelay
-  // maken.
-  //
-  // Een sleutelcontrole leek de oplossing, maar bleek onhoudbaar: de bestaande
-  // cron authenticeert met de anon-sleutel uit de vault (zie
-  // check-herinneringen), niet met de service-role. Vergelijken met
-  // SUPABASE_SERVICE_ROLE_KEY zou de cron dus buitensluiten, en een eigen secret
-  // is één ding extra dat stil kan breken.
-  //
-  // Daarom: de ontvangers komen UITSLUITEND uit de database, en de bekijkmodus
-  // stuurt alleen naar ons eigen interne adres. Wie deze functie ongevraagd
-  // aanroept, kan hooguit de mails van vandaag een paar uur vervroegen — en de
-  // claim in trial_mails zorgt dat het er nooit twee worden.
+  // GEEN vrij te kiezen ontvanger: de ontvangers komen uitsluitend uit de
+  // database, en de bekijkmodus stuurt alleen naar ons eigen interne adres.
+  // Aanroepen kan alleen met het cron-geheim (hierboven); ook `vandaag` en
+  // `bekijken` zijn daarmee alleen voor ons. Het antwoord bevat geen namen of
+  // e-mailadressen van klanten.
 
   const db = createClient(supabaseUrl, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -105,7 +115,7 @@ serve(async (req) => {
   const appUrl = appOrigin('')
 
   const uitslag = {
-    datum: vandaag ?? new Date().toISOString().slice(0, 10),
+    datum: vandaag ?? vandaagIso(),
     verstuurd: 0,
     overgeslagen: 0,
     mislukt: 0,
@@ -118,14 +128,16 @@ serve(async (req) => {
     // raakt geen enkel bedrijf — puur om te zien hoe ze eruitzien.
     if (bekijken) {
       const overMorgen = new Date(Date.now() + 3 * 86400_000).toISOString()
+      const voorbeeld = await afmeldLinks(appUrl, '00000000-0000-4000-8000-000000000000')
       for (const nummer of TRIAL_MAIL_NUMMERS) {
         const m = trialMail(nummer as TrialMailNummer, {
           naam: 'Niels',
           trialEindigt: overMorgen,
           appUrl,
+          afmeldUrl: voorbeeld.pagina,
         })
         const id = await verstuur(internAdres, `[dag ${nummer}] ${m.subject}`, m.html, `trial_${nummer}_bekijk`)
-        if (id) { uitslag.verstuurd++; uitslag.details.push(`dag ${nummer} → ${internAdres}`) }
+        if (id) { uitslag.verstuurd++; uitslag.details.push(`dag ${nummer} verstuurd`) }
         else    { uitslag.mislukt++;   uitslag.details.push(`dag ${nummer} MISLUKT`) }
       }
       return json({ modus: 'bekijken', ...uitslag })
@@ -146,34 +158,36 @@ serve(async (req) => {
       })
       if (geclaimd !== true) {
         uitslag.overgeslagen++
-        uitslag.details.push(`${k.bedrijfsnaam}: dag ${k.mail} al verstuurd`)
+        uitslag.details.push(`dag ${k.mail} al verstuurd`)
         continue
       }
 
+      const afmelden = await afmeldLinks(appUrl, k.company_id)
       const m = trialMail(k.mail as TrialMailNummer, {
         naam: k.naam,
         trialEindigt: k.trial_eindigt,
         appUrl,
+        afmeldUrl: afmelden.pagina,
       })
 
-      const messageId = await verstuur(k.naar, m.subject, m.html, `trial_${k.mail}`)
+      const messageId = await verstuur(k.naar, m.subject, m.html, `trial_${k.mail}`, afmelden.eenKlik)
       if (messageId) {
         await db.rpc('bb_trial_mail_verstuurd', {
           p_company_id: k.company_id, p_mail: k.mail, p_message_id: messageId,
         })
         uitslag.verstuurd++
-        uitslag.details.push(`${k.bedrijfsnaam}: dag ${k.mail} → ${k.naar}`)
+        uitslag.details.push(`dag ${k.mail} verstuurd`)
       } else {
         // Claim teruggeven zodat de volgende run het opnieuw probeert.
         await db.rpc('bb_geef_trial_mail_vrij', { p_company_id: k.company_id, p_mail: k.mail })
         uitslag.mislukt++
-        uitslag.details.push(`${k.bedrijfsnaam}: dag ${k.mail} MISLUKT — morgen opnieuw`)
+        uitslag.details.push(`dag ${k.mail} MISLUKT — morgen opnieuw`)
       }
     }
 
     return json(uitslag)
   } catch (e) {
     console.error('trial-mails:', e)
-    return json({ error: (e as Error).message, ...uitslag }, 500)
+    return json({ error: 'Trial-mails mislukt', ...uitslag }, 500)
   }
 })

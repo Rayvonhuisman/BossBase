@@ -49,9 +49,17 @@ serve(async (req) => {
 
     const admin = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
 
-    const { data: profile } = await admin.from('profiles').select('company_id').eq('id', user.id).maybeSingle()
+    const { data: profile } = await admin.from('profiles').select('company_id, role').eq('id', user.id).maybeSingle()
     const companyId = profile?.company_id
     if (!companyId) return json({ error: 'Geen bedrijf gekoppeld' }, 400)
+
+    // Alleen de eigenaar of een beheerder koppelt Stripe: bij de onboarding
+    // kies je de bankrekening waarop het bedrijf zijn geld ontvangt. Audit
+    // 2026-10-01, H8 — een medewerker kon dat eerder ook.
+    const { data: bedrijf } = await admin.from('companies').select('eigenaar_id').eq('id', companyId).maybeSingle()
+    if (profile?.role !== 'admin' && bedrijf?.eigenaar_id !== user.id) {
+      return json({ error: 'Alleen de eigenaar of een beheerder kan Stripe koppelen.' }, 403)
+    }
 
     // ── HARDE feature-check (server-side, centrale matrix) ──────────────────────
     const { data: heeftFeature } = await userClient.rpc('bb_has_feature', { p_feature: VEREISTE_FEATURE })
@@ -125,6 +133,6 @@ serve(async (req) => {
     return json({ url: link.url })
   } catch (err: any) {
     console.error('[stripe-connect-start]', err?.message)
-    return json({ error: err?.message || 'Onboarding starten mislukt' }, 500)
+    return json({ error: 'Onboarding starten is niet gelukt. Probeer het later opnieuw.' }, 500)
   }
 })

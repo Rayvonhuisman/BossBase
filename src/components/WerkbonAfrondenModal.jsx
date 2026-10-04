@@ -21,7 +21,7 @@ import HandtekeningCanvas from './HandtekeningCanvas.jsx';
 import {
   signWerkbon, verstuurWerkbonTerOndertekening, bouwPdfData, bouwPdfWerkbon,
 } from '../services/werkbonOndertekenenService.js';
-import { getWerkbonPdfBase64, getWerkbonPdfUrl } from '../utils/generateWerkbonPdf.js';
+import { getWerkbonPdfUrl } from '../utils/generateWerkbonPdf.js';
 
 const uurFmt = n => `${Number(n || 0).toFixed(2).replace('.', ',')} u`;
 
@@ -78,29 +78,13 @@ export default function WerkbonAfrondenModal({
 
     setBezig(true);
     try {
-      // PDF mét handtekening, hier in de browser. Mislukt dat, dan gaat het
-      // tekenen door: de handtekening in de database is het bewijsstuk.
-      let pdfBase64 = null;
-      let pdfFout = null;
-      try {
-        pdfBase64 = await getWerkbonPdfBase64(...pdfArgs({
-          ondertekendOp: new Date().toISOString(),
-          ondertekendDoorNaam: naam.trim(),
-          ondertekendDoorEmail: email.trim(),
-          handtekeningDataUrl: dataUrl,
-        }));
-      } catch (e) {
-        console.warn('[werkbon] PDF met handtekening mislukt:', e.message);
-        pdfFout = e.message || String(e);
-      }
-
+      // Het ondertekende exemplaar maakt de server; hier gaat alleen de
+      // handtekening mee.
       const res = await signWerkbon({
         signToken: werkbon.signToken,
         name: naam.trim(),
         email: email.trim(),
         signatureDataUrl: dataUrl,
-        signedPdfBase64: pdfBase64,
-        pdfFout,
       });
       onKlaar?.({ ondertekend: true, resultaat: res });
     } catch (e) {

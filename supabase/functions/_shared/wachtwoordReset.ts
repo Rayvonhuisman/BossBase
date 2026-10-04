@@ -2,6 +2,8 @@
 // zonder deploy te testen is (supabase/tests/wachtwoord_reset_test.ts).
 // apply-password-reset levert de opslag; hier staat de volgorde.
 
+import { wachtwoordFout } from './wachtwoordEisen.ts'
+
 export type ResetToken = { id: string; user_id: string; expires_at: string; used_at: string | null }
 
 export type ResetOpslag = {
@@ -48,6 +50,11 @@ export async function pasResetToe(
 
   // checkOnly = alleen valideren, wachtwoord nog niet instellen.
   if (checkOnly) return { status: 200, body: { success: true, code: 'VALID' } }
+
+  // Wachtwoordeisen server-side, vóór het claimen: een te zwak wachtwoord kost
+  // de link niet.
+  const zwak = wachtwoordFout(newPassword)
+  if (zwak) return fout(400, 'WEAK', zwak)
 
   // Eerst claimen, dan pas het wachtwoord zetten. Voorheen werd het token pas
   // ná het wijzigen gemarkeerd, zodat twee verzoeken tegelijk allebei slaagden.

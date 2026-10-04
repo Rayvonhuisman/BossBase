@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { logFout } from '../lib/stilleFouten.js';
+import { leesbareFout } from '../components/LaadFout.jsx';
+import { vandaagIso } from '../lib/datumTijd.js';
 import { useToast } from '../lib/toast.jsx';
+import { usePermissions } from '../hooks/usePermissions.js';
 import { useProfile } from '../lib/profileContext.jsx';
 import { useData } from '../lib/dataContext.jsx';
 import { useUrlTab } from '../hooks/useUrlTab.js';
@@ -15,7 +19,7 @@ import { I } from '../bb-shared.jsx';
 import { usePlanGuard } from '../components/PlanUpgradeModal.jsx';
 
 // ── Date / time helpers ─────────────────────────────────────────────────────
-const todayIso = () => new Date().toISOString().slice(0, 10);
+const todayIso = () => vandaagIso();
 const fmtNL = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${d}-${m}-${y}`; };
 const MONTHS_NL = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
 const DAYS_NL = ['Zondag','Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag'];
@@ -38,7 +42,8 @@ const fmtTimeRange = (s, e) => {
 };
 
 
-const fmtUren = n => (n == null || Number.isNaN(n)) ? '' : Number(n).toFixed(2);
+// Nederlandse notatie: "8,25", niet "8.25".
+const fmtUren = n => (n == null || Number.isNaN(n)) ? '' : Number(n).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // ── Period navigation (zelfde patroon/stijl als de Agenda) ──────────────────
 // Datumhelpers gelijk aan CalendarPage: maandag-start, ISO-weeknummer.
@@ -147,7 +152,7 @@ function PeriodTabs({ value, onChange }) {
     { id: 'maand', label: 'Maand' },
   ];
   return (
-    <div className="tabs" role="tablist">
+    <div data-rl="uren-periode" className="tabs" role="tablist">
       {tabs.map(t => (
         <button
           key={t.id}
@@ -172,7 +177,7 @@ const SOORTEN = [
 
 function SoortTabs({ value, onChange }) {
   return (
-    <div className="tabs" role="tablist">
+    <div className="tabs" role="tablist" data-rl="uren-soort">
       {SOORTEN.map(t => (
         <button
           key={t.id}
@@ -410,7 +415,7 @@ function MobileList({ rows, onEdit, onDelete }) {
             <span className="uren2-mgroup-day">
               {dayLabel(g.datum)} <span className="uren2-mgroup-date">{fmtNL(g.datum)}</span>
             </span>
-            <span className="uren2-mgroup-total">{g.totalUren.toFixed(2)} uur</span>
+            <span className="uren2-mgroup-total">{fmtUren(g.totalUren)} uur</span>
           </div>
           {g.items.map(r => (
             <div key={r.id} className="uren2-mcard">
@@ -468,7 +473,7 @@ function ModalShell({ open, onClose, busy, mobile, children, maxWidth = 640 }) {
 }
 
 // ── Register / Edit modal ───────────────────────────────────────────────────
-function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = [], profiles = [], canBookForOthers = false, currentProfileId, onClose, onSave, mobile }) {
+function UrenModal({ open, mode, initial, klanten: _klanten, werkbonnen: _werkbonnen = [], projecten: _projecten = [], profiles = [], canBookForOthers = false, currentProfileId, onClose, onSave, mobile }) {
   const empty = useMemo(() => ({
     datum: todayIso(),
     start_tijd: '',
@@ -607,7 +612,7 @@ function UrenModal({ open, mode, initial, klanten, werkbonnen = [], projecten = 
             />
             {hint !== null && (
               <div className="uren2-hint">
-                ≈ {hint.toFixed(2)} uur{Number(form.pauze_minuten) > 0 ? ` (${form.pauze_minuten} min pauze eraf)` : ''}
+                ≈ {fmtUren(hint)} uur{Number(form.pauze_minuten) > 0 ? ` (${form.pauze_minuten} min pauze eraf)` : ''}
               </div>
             )}
             {timeInvalid && (
@@ -686,7 +691,10 @@ export function UrenPageV2({ navigatePage } = {}) {
   const toast = useToast();
   const { profile, bumpRefresh } = useProfile();
   const { guardSchrijven, planModal } = usePlanGuard();
-  const canBookForOthers = ['admin', 'planner'].includes(profile?.role);
+  // Werkdagen van een collega boeken: beheerder of recht planning (zelfde regel
+  // als de database, urenregistratie-policies).
+  const { magBewerken } = usePermissions();
+  const canBookForOthers = magBewerken('planning');
   const [allRows, setAllRows] = useState([]);
   // Werkbonuren komen uit een eigen tabel en zijn hier alleen ter inzage.
   const [werkbonUren, setWerkbonUren] = useState([]);
@@ -722,14 +730,19 @@ export function UrenPageV2({ navigatePage } = {}) {
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    const deels = [];
     Promise.all([
       getUrenregistratie(),
-      getProjects().catch(() => []),
-      getAlleWerkbonUren().catch(() => []),
+      getProjects().catch(e => { deels.push(e); return []; }),
+      getAlleWerkbonUren().catch(e => { deels.push(e); return []; }),
     ])
       .then(([r, p, wu]) => {
         if (!alive) return;
         setAllRows(r); setProjecten(p); setWerkbonUren(wu); setError('');
+        if (deels.length) {
+          console.warn('[bb] uren deels geladen', deels);
+          toast.error('De werkbonuren of projecten konden niet worden geladen; totalen kunnen te laag zijn. Ververs de pagina.');
+        }
       })
       .catch(err => { if (!alive) return; setError(err.message || 'Laden mislukt'); })
       .finally(() => { if (alive) setLoading(false); });
@@ -742,7 +755,7 @@ export function UrenPageV2({ navigatePage } = {}) {
     let alive = true;
     getTeamMembers()
       .then(ms => { if (alive) setTeamMembers((ms || []).filter(m => m.profileId)); })
-      .catch(() => {});
+      .catch(logFout('teamleden laden'));
     return () => { alive = false; };
   }, [canBookForOthers]);
 
@@ -889,6 +902,7 @@ export function UrenPageV2({ navigatePage } = {}) {
         <button
           type="button"
           className="uren2-btn uren2-btn-primary uren2-hd-cta"
+          data-rl="uren-nieuw"
           onClick={guardSchrijven('Uren boeken', () => setModal({ mode: 'register', initial: null }))}
         >
           <span className="uren2-btn-ic">{Ic.Plus}</span>
@@ -899,7 +913,7 @@ export function UrenPageV2({ navigatePage } = {}) {
       {error && (
         <div className="uren2-error-strip">
           <span className="uren2-error-strip-ic">{Ic.Alert}</span>
-          Kon urenregistraties niet laden — {error}
+          Kon urenregistraties niet laden — {leesbareFout(error)}
         </div>
       )}
 
@@ -910,21 +924,21 @@ export function UrenPageV2({ navigatePage } = {}) {
             <KpiCard
               icon={Ic.Clock}
               label="Werkdaguren"
-              value={vergelijkKpis.dag.toFixed(2)}
+              value={fmtUren(vergelijkKpis.dag)}
               unit="uur"
               hint={`Som over ${periodNoun(periodType)}`}
             />
             <KpiCard
               icon={Ic.Clock}
               label="Op klussen"
-              value={vergelijkKpis.klus.toFixed(2)}
+              value={fmtUren(vergelijkKpis.klus)}
               unit="uur"
               hint="Geboekt op werkbonnen"
             />
             <KpiCard
               icon={Ic.Trend}
               label="Verschil"
-              value={vergelijkKpis.verschil.toFixed(2)}
+              value={fmtUren(vergelijkKpis.verschil)}
               unit="uur"
               hint="Werkdag min klus"
             />
@@ -934,7 +948,7 @@ export function UrenPageV2({ navigatePage } = {}) {
             <KpiCard
               icon={Ic.Clock}
               label={soort === 'werkbon' ? 'Totaal werkbonuren' : 'Totaal uren'}
-              value={kpis.totaal.toFixed(2)}
+              value={fmtUren(kpis.totaal)}
               unit="uur"
               hint={`Som over ${periodNoun(periodType)}`}
             />
@@ -947,7 +961,7 @@ export function UrenPageV2({ navigatePage } = {}) {
             <KpiCard
               icon={Ic.Trend}
               label="Gem. per dag"
-              value={kpis.gemPerDag.toFixed(2)}
+              value={fmtUren(kpis.gemPerDag)}
               unit="uur"
               hint={`Over ${kpis.dagen} ${kpis.dagen === 1 ? 'dag' : 'dagen'}`}
             />

@@ -1,17 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { vandaagIso, voegDagenToe } from '../lib/datumTijd.js';
 import { Download, Send, CheckCircle2 } from 'lucide-react';
 import { NoteEditor } from '../components/NoteEditor.jsx';
-import { plainToEditorHtml } from '../lib/noteFormat.js';
+import { plainToEditorHtml, tekstNaarEditorHtml } from '../lib/noteFormat.js';
 import { I, ModalX, fmt, BackToKlant } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { useData } from '../lib/dataContext.jsx';
+import { usePermissions } from '../hooks/usePermissions.js';
+import { LaadFout } from '../components/LaadFout.jsx';
 import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
 import { createFactuurPaymentLink, getStripeConnection } from '../services/stripeService.js';
 import {
-  getFacturen, createFactuur, updateFactuur, deleteFactuur,
-  generateFactuurNummer, getFactuurRegels, createFactuurRegel,
-  generateCreditFactuurNummer, createCreditFactuur, uploadFactuurPdf, getFactuurDocumentUrl,
+  getFacturen, updateFactuur, deleteFactuur, maakFactuurMetRegels,
+  generateFactuurNummer, getFactuurRegels,
+  createCreditFactuur, uploadFactuurPdf, getFactuurDocumentUrl,
   getFacturenMetDocument, FACTUUR_STATUS_OPTIONS, kopieerFactuur,
 } from '../services/factuurService.js';
 import { getProjects } from '../services/projectsService.js';
@@ -20,22 +23,33 @@ import { getEigenEenheden } from '../services/eigenEenheidService.js';
 import { typeCfg, typeOptionsWith, applyTypeChange, omschrijvingFallback } from '../lib/regelTypes.js';
 import BtwRegimeSelect, { VerlegdUitleg } from '../components/BtwRegimeSelect.jsx';
 import { regimeVanPct, regimeVanRegel, regimeVoorOpslag } from '../lib/btwRegime.js';
-import { previewFactuurPdf, getFactuurPdfBase64 } from '../utils/generatePdf.js';
+import { previewFactuurPdf, getFactuurPdfBase64, formatIban } from '../utils/generatePdf.js';
+import { openstaandPerFactuur } from '../services/customerTotalsService.js';
+import { documentTotalen, regelBedrag } from '../utils/documentTotalen.js';
 import { buildCompanySnapshot, companyForDocument, isFactuurLocked, isGeimporteerdeFactuur } from '../utils/documentSnapshot.js';
 import { bewaarFactuurPdf, PDF_STATUSSEN } from '../utils/bewaarFactuurPdf.js';
-import { getMailTemplate, sendEmail, substituteVars, substituteVarsHtml, logSentEmail } from '../services/emailService.js';
+import { getMailTemplate, sendEmail, substituteVars, substituteVarsHtml, logSentEmail, escapeHtml } from '../services/emailService.js';
 import { mailTemplate, mailButton } from '../utils/mailTemplate.js';
 import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { statusInfo } from '../utils/statusColors.js';
 import ActieMenu from '../components/ActieMenu.jsx';
+import { opNaam } from '../lib/sorteren.js';
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 
-const TODAY = () => new Date().toISOString().slice(0, 10);
-const THIS_MONTH = () => new Date().toISOString().slice(0, 7);
+// Nederlandse kalenderdag, niet de UTC-dag: tussen 00:00 en 02:00 gaf
+// toISOString() nog de datum van gisteren (audit M20).
+const TODAY = () => vandaagIso();
+const THIS_MONTH = () => vandaagIso().slice(0, 7);
+// Standaard betaaltermijn als de klant er geen heeft (= default van
+// facturen.betaaltermijn_dagen in de database).
+const STANDAARD_BETAALTERMIJN = 14;
 
+// Te laat = verstuurd, niet betaald, niet gecrediteerd en geen creditnota, en
+// de vervaldatum is voorbij. Concepten zijn nooit naar de klant gegaan; een
+// gecrediteerde factuur is niet meer verschuldigd (audit 2026-10-01, H9).
 const isVerlopen = f =>
-  f.status !== 'betaald' && f.vervaldatum && f.vervaldatum < TODAY();
+  ['verzonden', 'geboekt'].includes(f.status) && !f.gecrediteerd && !f.isCredit && f.vervaldatum && f.vervaldatum < TODAY();
 
 const displayStatus = f => (isVerlopen(f) ? 'verlopen' : f.status);
 
@@ -77,18 +91,16 @@ const emptyRegel = (defaults) => ({
   btwRegime: regimeVanPct(defaults?.btwPct ?? 21),
 });
 
+// Totalen volgens dezelfde regel als de database (utils/documentTotalen.js).
 function useRegelTotals(regels) {
-  const getRegelprijs = r => Math.round(Number(r.aantal || 0) * Number(r.eenheidsprijs || 0) * 100) / 100;
+  const getRegelprijs = r => regelBedrag(r.aantal, r.eenheidsprijs);
   const getEffBtw = r => r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw);
-  const totaalExcl = Math.round(regels.reduce((s, r) => s + getRegelprijs(r), 0) * 100) / 100;
-  const btwPerTarief = {};
-  for (const r of regels) {
-    const pct = getEffBtw(r);
-    const key = String(pct);
-    btwPerTarief[key] = Math.round(((btwPerTarief[key] || 0) + getRegelprijs(r) * pct / 100) * 100) / 100;
-  }
-  const totaalIncl = Math.round((totaalExcl + Object.values(btwPerTarief).reduce((s, v) => s + v, 0)) * 100) / 100;
-  return { getRegelprijs, totaalExcl, btwPerTarief, totaalIncl };
+  const t = documentTotalen(regels, {
+    bedrag: getRegelprijs,
+    pct: getEffBtw,
+    regime: r => regimeVoorOpslag(regimeVanRegel(r)),
+  });
+  return { getRegelprijs, totaalExcl: t.excl, btwPerTarief: t.btwPerTarief, totaalIncl: t.incl };
 }
 
 function RegelItemsForm({ regels, setRegels, defaults, eenheden = [] }) {
@@ -224,10 +236,6 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
     getBedrijfsinstellingen().then(s => {
       if (!s) return;
       setInstDefaults(s);
-      const d = new Date();
-      d.setDate(d.getDate() + (s.offerteGeldigDagen || 14));
-      const verval = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      set('vervaldatum', verval);
       if (!prefill?.regels?.length) {
         setRegels(rs => rs.map((r, i) => i === 0 ? {
           ...r, btw: String(s.btwPct), btwRegime: regimeVanPct(s.btwPct),
@@ -238,6 +246,16 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
   }, []);
 
   const selectedCustomer = form.customer_id ? customers.find(c => String(c.id) === String(form.customer_id)) : null;
+
+  // Vervaldatum = factuurdatum + betaaltermijn van de klant (anders 14 dagen).
+  // Vroeger: + het aantal dagen dat een ófferte geldig is (audit M22). Past de
+  // gebruiker de datum zelf aan, dan blijft die staan.
+  const betaaltermijn = Number(selectedCustomer?.betaaltermijnDagen) || STANDAARD_BETAALTERMIJN;
+  const vervalHandmatig = useRef(false);
+  useEffect(() => {
+    if (vervalHandmatig.current || !form.factuurdatum) return;
+    set('vervaldatum', voegDagenToe(form.factuurdatum, betaaltermijn));
+  }, [form.factuurdatum, betaaltermijn]);
   const missingFields = selectedCustomer ? [
     !selectedCustomer.address && 'adres',
     !selectedCustomer.city && 'plaats',
@@ -249,7 +267,6 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
     generateFactuurNummer().then(setNummer);
   }, []);
 
-  const { totaalExcl, totaalIncl } = useRegelTotals(regels);
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
   const modalStyle = isMobile
@@ -260,13 +277,19 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
   const doCreate = async () => {
     if (!form.customer_id) { toast.error('Selecteer een klant'); return null; }
     if (hasIncompleteCustomer) { toast.error('Vul eerst de klantgegevens aan voordat je een factuur aanmaakt'); return null; }
-    const created = await createFactuur({ ...form, project_id: form.project_id || null, status: 'aangemaakt', nummer, betalingskenmerk: nummer, totaal_excl: totaalExcl, totaal_incl: totaalIncl });
-    for (let i = 0; i < regels.length; i++) {
-      const r = regels[i];
-      const omschrijving = r.omschrijving.trim() || omschrijvingFallback(r.type, eenheden);
-      const btwPct = r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw);
-      await createFactuurRegel({ factuur_id: created.id, type: r.type, omschrijving, aantal: Number(r.aantal || 1), eenheidsprijs: Number(r.eenheidsprijs || 0), btw_pct: btwPct, btw_regime: regimeVoorOpslag(regimeVanRegel(r)), volgorde: i });
-    }
+    // Kop en regels in één transactie; het btw-percentage volgt uit het regime.
+    const created = await maakFactuurMetRegels({
+      ...form, project_id: form.project_id || null, status: 'concept', nummer, betalingskenmerk: nummer,
+      betaaltermijn_dagen: betaaltermijn,
+    }, regels.map((r, i) => ({
+      type: r.type,
+      omschrijving: r.omschrijving.trim() || omschrijvingFallback(r.type, eenheden),
+      aantal: Number(r.aantal || 1),
+      eenheidsprijs: Number(r.eenheidsprijs || 0),
+      btw_pct: r.btw === 'anders' ? Number(r.btwAnders || 0) : Number(r.btw),
+      btw_regime: regimeVoorOpslag(regimeVanRegel(r)),
+      volgorde: i,
+    })));
     return created;
   };
 
@@ -308,7 +331,7 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
             <label>Klant *</label>
             <select value={form.customer_id} onChange={e => { set('customer_id', e.target.value); set('project_id', ''); }}>
               <option value="">— Selecteer klant —</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {opNaam(customers).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           {form.customer_id && projects.filter(p => p.customerId === form.customer_id).length > 0 && (
@@ -345,7 +368,7 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
           </div>
           <div className="f">
             <label>Vervaldatum</label>
-            <input type="date" value={form.vervaldatum} onChange={e => set('vervaldatum', e.target.value)} />
+            <input type="date" value={form.vervaldatum} onChange={e => { vervalHandmatig.current = true; set('vervaldatum', e.target.value); }} />
           </div>
 
           <RegelItemsForm regels={regels} setRegels={setRegels} defaults={instDefaults} eenheden={eenheden} />
@@ -384,8 +407,14 @@ function EditFactuurModal({ factuur, customers, company, onClose, onSaved, onSav
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const locked = isFactuurLocked(factuur);
+  const [aantalRegels, setAantalRegels] = useState(null);
+  useEffect(() => {
+    getFactuurRegels(factuur.id).then(r => setAantalRegels(r.length)).catch(() => setAantalRegels(null));
+  }, [factuur.id]);
 
   const doSave = async () => {
+    const weigering = statusWeigering(factuur, form.status, aantalRegels);
+    if (weigering) throw new Error(weigering);
     // Een verstuurde factuur is alleen-lezen: enkel de status (bijv. betaald
     // markeren) mag nog wijzigen, de inhoud niet.
     const payload = locked ? { status: form.status } : form;
@@ -440,7 +469,7 @@ function EditFactuurModal({ factuur, customers, company, onClose, onSaved, onSav
             </select>
           </div>
           <div className="f">
-            <label>Betaaltermijn</label>
+            <label>Vervaldatum</label>
             <input type="date" value={form.vervaldatum} onChange={e => set('vervaldatum', e.target.value)} disabled={locked} />
           </div>
           <div className="f s2">
@@ -638,6 +667,22 @@ function paperclipCfg(factuur, heeftDocument) {
 
 // ── VIEW FACTUUR MODAL ────────────────────────────────────────────────────────
 
+// Verwijderen mag alleen bij een concept, of bij een factuur die uit de
+// boekhouding is geïmporteerd (die is geen boekstuk van BossBase zelf).
+function magFactuurVerwijderen(f) {
+  return ['concept', 'aangemaakt'].includes(f.status) || isGeimporteerdeFactuur(f);
+}
+
+// Geeft een melding terug als deze statuswijziging niet mag, anders null.
+// Een concept zonder regels op betaald zetten zou een "betaalde" factuur van
+// € 0 opleveren die nooit verstuurd is.
+function statusWeigering(f, nieuweStatus, aantalRegels) {
+  if (nieuweStatus === 'betaald' && ['concept', 'aangemaakt'].includes(f.status) && aantalRegels === 0) {
+    return 'Deze factuur heeft nog geen regels. Voeg eerst regels toe en verstuur hem, daarna kun je hem op betaald zetten.';
+  }
+  return null;
+}
+
 function ViewFactuurModal({ factuur, customers, onClose, onSluitVoorActie, onRefresh, onSendMail, onEdit, onDelete, onCopy }) {
   // Vóór een actie (mailen, wijzigen, kopiëren, verwijderen) sluit de weergave
   // zonder terug te gaan in de geschiedenis. Terug zou, als je hier vanaf een
@@ -649,13 +694,16 @@ function ViewFactuurModal({ factuur, customers, onClose, onSluitVoorActie, onRef
   // melding zelf — onder meer achter "Origineel document uit de boekhouding
   // openen", precies op het moment dat er iets uit te leggen viel.
   const toast = useToast();
-  const { company, profile } = useProfile();
+  const { company } = useProfile();
   // Betaalherinneringen zijn een feature (Groei+). Zonder die feature tonen we
   // de knoppen niet; server-side blokkeert een trigger op facturen het zetten
   // van herinnering_*_verstuurd_at alsnog.
   const { plan, guardFeature, planModal } = usePlanGuard();
   const kanHerinneren = plan.has('betaalherinneringen');
-  const canManage = profile?.role === 'admin' || profile?.role === 'planner';
+  // Beheren = admin of het recht 'facturen' (er bestaat geen rol "planner";
+  // zelfde regel als de database, audit M17).
+  const { magBewerken } = usePermissions();
+  const canManage = magBewerken('facturen');
   // Uit de boekhouding opgehaald: alleen tonen, niets mee doen. Zie
   // isGeimporteerdeFactuur — versturen of crediteren zou een tweede
   // werkelijkheid maken naast die van SnelStart.
@@ -668,7 +716,7 @@ function ViewFactuurModal({ factuur, customers, onClose, onSluitVoorActie, onRef
   const [pdfLoading, setPdfLoading] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [showCrediteer, setShowCrediteer] = useState(false);
-  const isOverdue = factuur.status !== 'betaald' && factuur.vervaldatum && factuur.vervaldatum < new Date().toISOString().slice(0, 10);
+  const isOverdue = isVerlopen(factuur);
 
   useEffect(() => {
     getFactuurRegels(factuur.id).then(setRegels).catch(() => {});
@@ -739,6 +787,8 @@ function ViewFactuurModal({ factuur, customers, onClose, onSluitVoorActie, onRef
     : canManage && !uitBoekhouding && factuur.status === 'verzonden'
       ? { label: 'Markeer als betaald', icon: <CheckCircle2 size={15} />,
           onClick: async () => {
+            const weigering = statusWeigering(factuur, 'betaald', regels.length);
+            if (weigering) { toast.error(weigering); return; }
             try { await updateFactuur(factuur.id, { status: 'betaald' }); onRefresh?.(); toast.success('Factuur op betaald gezet'); }
             catch (err) { toast.error(err.message || 'Mislukt'); }
           } }
@@ -776,7 +826,10 @@ function ViewFactuurModal({ factuur, customers, onClose, onSluitVoorActie, onRef
       label: 'Crediteer factuur', icon: I.euro, gevaarlijk: true, scheiding: true,
       onClick: () => setShowCrediteer(true),
     },
-    canManage && {
+    // Verwijderen alleen zolang het een concept is (of een import uit de
+    // boekhouding): een verstuurde factuur of creditnota is een boekstuk met
+    // een nummer in de reeks en valt onder de bewaarplicht. Daarna: crediteren.
+    canManage && magFactuurVerwijderen(factuur) && {
       label: 'Factuur verwijderen', icon: I.trash, gevaarlijk: true, scheiding: !canCrediteer,
       onClick: () => { sluitVoorActie(); onDelete?.(factuur); },
     },
@@ -798,7 +851,7 @@ function ViewFactuurModal({ factuur, customers, onClose, onSluitVoorActie, onRef
             <div><div style={DL_STYLE}>Status</div><div>{factuurBadge(factuur)}</div></div>
             <div><div style={DL_STYLE}>Factuurdatum</div><div>{fmtDate(factuur.factuurdatum)}</div></div>
             <div>
-              <div style={DL_STYLE}>Betaaltermijn</div>
+              <div style={DL_STYLE}>Vervaldatum</div>
               <div style={{ color: isOverdue ? '#dc2626' : 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>
                 {fmtDate(factuur.vervaldatum)}
                 {isOverdue && <span className="badge b-declined" style={{ fontSize: 10 }}>Te laat</span>}
@@ -866,8 +919,11 @@ function ViewFactuurModal({ factuur, customers, onClose, onSluitVoorActie, onRef
             <select
               value={factuur.status}
               onChange={async e => {
+                const nieuw = e.target.value;
+                const weigering = statusWeigering(factuur, nieuw, regels.length);
+                if (weigering) { toast.error(weigering); return; }
                 try {
-                  await updateFactuur(factuur.id, { status: e.target.value });
+                  await updateFactuur(factuur.id, { status: nieuw });
                   onRefresh?.();
                 } catch (err) { toast.error(err.message || 'Status wijzigen mislukt'); }
               }}
@@ -939,15 +995,22 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
       if (stripeAllowed) {
         try { const conn = await getStripeConnection(); stripeActive = !!conn?.chargesEnabled; } catch { /* geen koppeling */ }
       }
+      // Rekeningnummer: van de verstuurde factuur (bevroren) of het bedrijf nu.
+      // Zonder IBAN kon de klant niet overmaken (audit 2026-10-01, H11).
+      const docBedrijf = companyForDocument(factuur, company);
+      const ibanTekst = docBedrijf?.iban
+        ? `${formatIban(docBedrijf.iban)}${(docBedrijf.ibanTnv || docBedrijf.name) ? ` t.n.v. ${docBedrijf.ibanTnv || docBedrijf.name}` : ''}`
+        : '';
       const vars = {
         klant_naam: customer?.name || factuur.customerName || 'klant',
         bedrijfsnaam: company?.name || 'ons bedrijf',
         factuur_nummer: factuur.nummer,
         totaal_bedrag: fmt2(factuur.totaalIncl),
         vervaldatum: fmtD(factuur.vervaldatum),
+        iban: ibanTekst,
         betaalinstructie: stripeActive
-          ? `U kunt de factuur eenvoudig online betalen via de knop hieronder, of het bedrag overmaken onder vermelding van ${factuur.nummer}.`
-          : `Gelieve het totaalbedrag voor de betaaltermijn over te maken onder vermelding van ${factuur.nummer}.`,
+          ? `U kunt de factuur eenvoudig online betalen via de knop hieronder, of het bedrag overmaken${ibanTekst ? ` op ${ibanTekst}` : ''} onder vermelding van ${factuur.nummer}.`
+          : `Gelieve het totaalbedrag voor de betaaltermijn over te maken${ibanTekst ? ` op ${ibanTekst}` : ''} onder vermelding van ${factuur.nummer}.`,
       };
       try {
         const tpl = await getMailTemplate(templateType);
@@ -959,7 +1022,15 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
         const rawBody = tpl
           ? substituteVarsHtml(plainToEditorHtml(tpl.body || ''), vars)
           : `Beste ${vars.klant_naam},\n\nHierbij uw factuur ${factuur.nummer}.\n\n${vars.betaalinstructie}\n\nMet vriendelijke groet,\n${company?.name || ''}`;
-        if (alive) setForm({ to: customer?.email || '', subject: sub, body: tpl ? rawBody : plainToEditorHtml(rawBody) });
+        // Terugvaltekst zonder sjabloon: altijd escapen — de klantnaam is data.
+        let body = tpl ? rawBody : tekstNaarEditorHtml(rawBody);
+        // Staat het rekeningnummer nog nergens in de tekst (de meeste sjablonen
+        // hebben geen {{betaalinstructie}}), dan een regel met de betaalgegevens
+        // vóór de afsluiting. Creditnota's niet: daar valt niets te betalen.
+        if (ibanTekst && !factuur.isCredit && !body.replace(/\s/g, '').includes(docBedrijf.iban.replace(/\s/g, '').toUpperCase())) {
+          body = insertPayButtonBeforeClosing(body, `<p>Betaalgegevens: ${escapeHtml(ibanTekst)}, onder vermelding van ${escapeHtml(factuur.betalingskenmerk || factuur.nummer)}.</p>`);
+        }
+        if (alive) setForm({ to: customer?.email || '', subject: sub, body });
       } catch {
         if (alive) setForm({ to: customer?.email || '', subject: `Factuur ${factuur.nummer}`, body: '' });
       } finally {
@@ -1014,7 +1085,7 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
       if ((templateType === 'factuur') && (factuur.status === 'aangemaakt' || factuur.status === 'concept')) {
         // Bij versturen: bedrijfs-branding bevriezen op de factuur, zodat latere
         // logo-/kleurwijzigingen deze verstuurde factuur niet meer veranderen.
-        await updateFactuur(factuur.id, { status: 'verzonden', ...buildCompanySnapshot(company) });
+        await updateFactuur(factuur.id, { status: 'verzonden', ...buildCompanySnapshot(company, { metIban: true }) });
       }
       if (templateType === 'herinnering_1') {
         await updateFactuur(factuur.id, { herinnering_1_verstuurd_at: new Date().toISOString() });
@@ -1078,8 +1149,11 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
 // zetten de geschiedenisstap; zonder die props werkt de pagina op eigen state.
 export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onItemClose, onItemLeave, onNavConsumed, backKlant, onBackKlant }) {
   const toast = useToast();
-  const { profile, company } = useProfile();
-  const canManage = profile?.role === 'admin' || profile?.role === 'planner';
+  const { company } = useProfile();
+  // Beheren = admin of het recht 'facturen' (er bestaat geen rol "planner";
+  // zelfde regel als de database, audit M17).
+  const { magBewerken } = usePermissions();
+  const canManage = magBewerken('facturen');
   const [facturen, setFacturen] = useState([]);
   // Factuur-id's waarvan een brondocument is bewaard: onze eigen PDF bij het
   // versturen, of het document dat uit de boekhouding is meegekomen.
@@ -1109,7 +1183,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
         // Eén listing van de bucket, niet één check per rij.
         getFacturenMetDocument(f[0]?.companyId).then(setMetDocument).catch(() => {});
       })
-      .catch(err => setError(err.message || 'Laden mislukt'))
+      .catch(err => setError(err))
       .finally(() => setLoading(false));
   };
 
@@ -1131,12 +1205,18 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
     }
   }, [preOpenFactuurId, loading, facturen, onItemOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const today = TODAY();
   const thisMonth = THIS_MONTH();
 
   // 'geboekt' = uit SnelStart opgehaald en daar nog niet afgeletterd; dat is
   // net zo goed openstaand als een eigen verzonden factuur.
-  const kpiOpenstaand = facturen.filter(f => ['verzonden', 'geboekt'].includes(f.status) && !isVerlopen(f));
+  // Openstaand = verstuurd en nog verschuldigd, nog niet over de vervaldatum.
+  // Gecrediteerde facturen en creditnota's tellen niet mee (die maakten de tegel
+  // negatief: € −9.799,10 in de audit).
+  // Bedrag per factuur volgens de ene definitie (customerTotalsService,
+  // gelijk aan bb_openstaand_per_factuur): restant na eigen creditnota's.
+  const kpiOpenstaand = openstaandPerFactuur(facturen)
+    .filter(o => o.bedrag > 0 && !(o.factuur.vervaldatum && o.factuur.vervaldatum < TODAY()))
+    .map(o => ({ ...o.factuur, totaalIncl: o.bedrag }));
   const kpiBetaaldMaand = facturen.filter(f => f.status === 'betaald' && f.betaaldOp?.startsWith(thisMonth));
   const kpiVerlopen = facturen.filter(f => isVerlopen(f));
 
@@ -1152,7 +1232,9 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
   const filtered = facturen.filter(f => {
     if (activeFilter === 'gecrediteerd') return f.gecrediteerd || f.isCredit;
     const ds = displayStatus(f);
-    if (activeFilter && ds !== activeFilter) return false;
+    // De tab heet "Aangemaakt", maar de database noemt dat 'concept'.
+    if (activeFilter === 'aangemaakt') { if (!['concept', 'aangemaakt'].includes(ds)) return false; }
+    else if (activeFilter && ds !== activeFilter) return false;
     if (search) {
       const q = search.toLowerCase();
       const cn = f.customerName || customers.find(c => c.id == f.customerId)?.name || '';
@@ -1226,6 +1308,10 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
   };
 
   const handleDelete = async f => {
+    if (!magFactuurVerwijderen(f)) {
+      toast.error('Een verstuurde factuur of creditnota kun je niet verwijderen. Crediteer hem in plaats daarvan.');
+      return;
+    }
     if (!window.confirm(`Factuur ${f.nummer} verwijderen?`)) return;
     try {
       // De factuur is weg zodra deleteFactuur klaar is; een waarschuwing gaat
@@ -1263,11 +1349,11 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
           <p style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <PlanStand limiet="facturen" />
           </p>
-          {error && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 4 }}>{error}</div>}
+          {error && <LaadFout fout={error} titel="Facturen laden is niet gelukt" onOpnieuw={load} />}
         </div>
         <div className="page-hd-actions">
           {canManage && (
-            <button className="btn btn-p" onClick={guardLimiet('facturen', () => setShowNew(true))}>
+            <button className="btn btn-p" data-rl="facturen-nieuw" onClick={guardLimiet('facturen', () => setShowNew(true))}>
               {I.plus} Nieuwe factuur
             </button>
           )}
@@ -1275,7 +1361,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
       </div>
 
       <div className="afu2">
-        <div className="stats-row" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 20 }}>
+        <div className="stats-row" data-rl="facturen-tellers" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 20 }}>
           <div className="sc">
             <div className="sc-top"><div className="sc-icon">{I.brief}</div></div>
             <div className="sc-val">{facturen.length}</div>
@@ -1299,7 +1385,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
         </div>
 
         <div className="card">
-          <div className="tw-filter">
+          <div className="tw-filter" data-rl="facturen-filters">
             <div className="bb-filter-tabs">
               {filters.map(f => (
                 <button key={f.value} className={`bb-filter-tab${activeFilter === f.value ? ' on' : ''}`} onClick={() => setActiveFilter(f.value)}>
@@ -1322,7 +1408,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
                   <th className="th">Excl. BTW</th>
                   <th className="th">Incl. BTW</th>
                   <th className="th">Status</th>
-                  <th className="th">Betaaltermijn</th>
+                  <th className="th">Vervaldatum</th>
                   <th className="th">Acties</th>
                 </tr>
               </thead>
@@ -1387,7 +1473,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
                             );
                           })()}
                           <ActieMenu items={rijActies(f)} />
-                          {canManage && <button className="btn btn-xs btn-danger btn-icon" title="Verwijderen" onClick={() => handleDelete(f)}>{I.trash}</button>}
+                          {canManage && magFactuurVerwijderen(f) && <button className="btn btn-xs btn-danger btn-icon" title="Verwijderen" onClick={() => handleDelete(f)}>{I.trash}</button>}
                         </div>
                       </td>
                     </tr>

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { I, PIPELINE_STAGES, fmt, Av, ModalX, stageBadgeStyle } from '../bb-shared.jsx';
+import { LaadFout } from '../components/LaadFout.jsx';
+import { I, PIPELINE_STAGES, fmt, ModalX, stageBadgeStyle } from '../bb-shared.jsx';
 import { listDeals, listPipelineStages, updateDealStage, markDealLost, updateDeal, zetDealAfgerond } from '../services/dealService.js';
 import { getLostReasons } from '../services/lostReasonService.js';
 import { listActivities } from '../services/activityService.js';
 import { listCustomers } from '../services/customerService.js';
-import { createProject } from '../services/projectsService.js';
 import { useProfile, displayName } from '../lib/profileContext.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { ActivityEditModal, NewLeadModal } from '../components/SharedModals.jsx';
@@ -28,7 +28,7 @@ function PriorityBadge({ priority, style }) {
 // gerenderd en is verwijderd.
 
 // ── MOBILE PIPELINE (swipeable carousel) ─────────────────────
-function MobilePipeline({ stages, dealsInStage, openDeal, moveDeal, markLost, lostStageId, setNewStage, setShowNew, customers, geenVervolg }) {
+function MobilePipeline({ stages, dealsInStage, openDeal, moveDeal: _moveDeal, markLost, lostStageId, setNewStage, setShowNew, customers, geenVervolg }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
@@ -178,77 +178,8 @@ function MobilePipeline({ stages, dealsInStage, openDeal, moveDeal, markLost, lo
   );
 }
 
-// ── MAAK PROJECT MODAL ───────────────────────────────────────
-function MaakProjectModal({ deal, customers, onClose, setPage }) {
-  const toast = useToast();
-  const [form, setForm] = useState({
-    name: deal.title || '',
-    customer_id: deal.custId || '',
-    project_value: deal.value || 0,
-  });
-  const [saving, setSaving] = useState(false);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-
-  const submit = async () => {
-    if (!form.name.trim()) { toast.error('Projectnaam is verplicht'); return; }
-    setSaving(true);
-    try {
-      const created = await createProject({
-        name: form.name.trim(),
-        customer_id: form.customer_id || null,
-        deal_id: deal.id,
-        project_value: Number(form.project_value || 0),
-      });
-      toast.success('Project aangemaakt');
-      onClose();
-      setPage?.('projecten', { id: created.id });
-    } catch (e) {
-      toast.error(e.message || 'Aanmaken mislukt');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="overlay" onClick={e => e.target === e.currentTarget && !saving && onClose()}>
-      <div className="modal" style={{ maxWidth: 420 }}>
-        <div className="modal-hd">
-          <div>
-            <div className="modal-title">Project aanmaken</div>
-            <div className="modal-sub">{deal.customerName} — {deal.title}</div>
-          </div>
-          <ModalX onClose={onClose} />
-        </div>
-        <div className="fg">
-          <div className="f s2">
-            <label>Projectnaam *</label>
-            <input type="text" value={form.name} onChange={e => set('name', e.target.value)} autoFocus />
-          </div>
-          <div className="f s2">
-            <label>Klant</label>
-            <select value={form.customer_id} onChange={e => set('customer_id', e.target.value)}>
-              <option value="">— Geen —</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-          <div className="f s2">
-            <label>Projectwaarde (€)</label>
-            <input type="number" min="0" step="0.01" value={form.project_value} onChange={e => set('project_value', e.target.value)} />
-          </div>
-        </div>
-        <div className="fa">
-          <button className="btn btn-ghost" onClick={onClose}>Annuleren</button>
-          <button className="btn btn-p" onClick={submit} disabled={saving || !form.name.trim()}>
-            {saving ? 'Aanmaken...' : 'Project aanmaken'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── PIPELINE ─────────────────────────────────────────────────
-export function Pipeline({ openDeal, setPage }) {
+export function Pipeline({ openDeal }) {
   const toast = useToast();
   const { refreshKey, bumpRefresh } = useProfile();
   const { guardSchrijven, planModal } = usePlanGuard();
@@ -283,7 +214,6 @@ export function Pipeline({ openDeal, setPage }) {
 
   const [showNew, setShowNew] = useState(false);
   const [newStage, setNewStage] = useState(null);
-  const [maakProjectDeal, setMaakProjectDeal] = useState(null);
   const [hideLost, setHideLost] = useState(() => localStorage.getItem('pipeline_hide_lost') === 'true');
 
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 767);
@@ -362,9 +292,9 @@ export function Pipeline({ openDeal, setPage }) {
     setLoading(true);
     Promise.all([
       listDeals(), listPipelineStages(), listCustomers(),
-      getLostReasons().catch(() => []),
-      getTeamMembers().catch(() => []),
-      listActivities().catch(() => []),
+      getLostReasons().catch(e => { console.warn('[bb] verliesredenen laden mislukt', e); return []; }),
+      getTeamMembers().catch(e => { console.warn('[bb] teamleden laden mislukt', e); return []; }),
+      listActivities().catch(e => { console.warn('[bb] activiteiten laden mislukt', e); return []; }),
     ])
       .then(([dealData, stageData, customerData, reasonData, teamData, activityData]) => {
         setDeals(dealData);
@@ -649,11 +579,11 @@ export function Pipeline({ openDeal, setPage }) {
           <p>{totalShown} {totalShown === 1 ? 'traject' : 'trajecten'} · {fmt(totalValue)} totaal</p>
         </div>
         <div className="page-hd-actions">
-          <button className={`btn btn-s btn-sm${showFilter ? ' active' : ''}`} onClick={() => setShowFilter(s => !s)}>
+          <button className={`btn btn-s btn-sm${showFilter ? ' active' : ''}`} data-rl="pipeline-filter" onClick={() => setShowFilter(s => !s)}>
             {I.flag} Filter{filterActive ? ' (actief)' : ''}
           </button>
           {magDealsBeheren && (
-            <button className="btn btn-p btn-sm" onClick={guardSchrijven('Een aanvraag toevoegen', () => { setNewStage(null); setShowNew(true); })}>{I.plus} Nieuwe aanvraag</button>
+            <button className="btn btn-p btn-sm" data-rl="pipeline-nieuw" onClick={guardSchrijven('Een aanvraag toevoegen', () => { setNewStage(null); setShowNew(true); })}>{I.plus} Nieuwe aanvraag</button>
           )}
         </div>
       </div>
@@ -704,7 +634,7 @@ export function Pipeline({ openDeal, setPage }) {
       )}
 
       {loading && <div className="card card-p">Pipeline laden...</div>}
-      {error && <div className="card card-p" style={{ color: '#dc2626' }}>{error}</div>}
+      {error && <LaadFout titel="Pipeline laden is niet gelukt" fout={error} onOpnieuw={reload} />}
 
       {!loading && !error && totalShown === 0 && (
         <div className="pipe-empty afu3">
@@ -905,7 +835,7 @@ export function Pipeline({ openDeal, setPage }) {
               return (
                 <>
                   <div className="card-menu-label">Prioriteit</div>
-                  {[['high', 'Hoog'], ['med', 'Normaal'], ['low', 'Laag']].map(([val, label]) => (
+                  {[['high', 'Hoog'], ['med', 'Normaal'], ['low', 'Laag']].map(([val]) => (
                     <button
                       key={val}
                       className="card-menu-item"
@@ -977,14 +907,6 @@ export function Pipeline({ openDeal, setPage }) {
           stages={stages}
           defaultStage={newStage || ''}
           onSaved={onSaved}
-        />
-      )}
-      {maakProjectDeal && (
-        <MaakProjectModal
-          deal={maakProjectDeal}
-          customers={customers}
-          onClose={() => setMaakProjectDeal(null)}
-          setPage={setPage}
         />
       )}
 

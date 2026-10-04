@@ -1,5 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { clientFout } from '../_shared/clientFout.ts'
+import { alleRijen } from '../_shared/alleRijen.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -50,7 +52,7 @@ serve(async (req) => {
       .in('form_id', (formulieren || []).map((f: any) => f.id))
       .select('id, status')
       .maybeSingle()
-    if (error) return json({ error: error.message }, 500)
+    if (error) return json({ error: clientFout(error) }, 500)
     if (!data) return json({ error: 'Aanvraag niet gevonden' }, 404)
     return json({ aanvraag: data })
   }
@@ -58,6 +60,21 @@ serve(async (req) => {
   // Aanvragen via bossbase.nl (formulieren met bestemming 'superadmin').
   const { data: saFormulieren } = await svc.from('website_forms').select('id').eq('settings->>bestemming', 'superadmin')
   const saFormIds = (saFormulieren || []).map((f: any) => f.id)
+
+  // Platformbreed boven 1000 rijen gaf één query stil te weinig terug, en
+  // daarmee te lage tellingen per bedrijf (audit 2026-10-01, P8). Daarom
+  // gepagineerd. Fouten gaan, net als eerst, als lege lijst door.
+  const alle = (maak: () => any) => alleRijen(maak).then(data => ({ data })).catch(() => ({ data: [] }))
+  const alleAuthGebruikers = async () => {
+    const users: any[] = []
+    for (let page = 1; ; page++) {
+      const { data, error } = await svc.auth.admin.listUsers({ perPage: 1000, page })
+      if (error) break
+      users.push(...(data?.users || []))
+      if (!data?.users || data.users.length < 1000) break
+    }
+    return { data: { users } }
+  }
 
   // Alle queries parallel
   const [
@@ -68,15 +85,15 @@ serve(async (req) => {
       'id, name, email, phone, address, city, postal_code, kvk, btw_number, website, logo_url, branding_color, created_at, status'
     ).order('created_at', { ascending: false }),
     svc.from('subscriptions').select('*'),
-    svc.from('profiles').select('id, company_id, full_name, role, created_at, is_super_admin'),
-    svc.auth.admin.listUsers({ perPage: 1000, page: 1 }),
-    svc.from('customers').select('company_id'),
-    svc.from('projects').select('company_id'),
-    svc.from('offertes').select('company_id'),
-    svc.from('facturen').select('company_id'),
-    svc.from('werkbonnen').select('company_id'),
-    svc.from('activities').select('company_id, created_at'),
-    svc.from('facturen').select('id, company_id').eq('status', 'betaald'),
+    alle(() => svc.from('profiles').select('id, company_id, full_name, role, created_at, is_super_admin')),
+    alleAuthGebruikers(),
+    alle(() => svc.from('customers').select('company_id')),
+    alle(() => svc.from('projects').select('company_id')),
+    alle(() => svc.from('offertes').select('company_id')),
+    alle(() => svc.from('facturen').select('company_id')),
+    alle(() => svc.from('werkbonnen').select('company_id')),
+    alle(() => svc.from('activities').select('company_id, created_at')),
+    alle(() => svc.from('facturen').select('id, company_id').eq('status', 'betaald')),
   ])
 
   const { data: inquiries } = saFormIds.length
@@ -91,11 +108,14 @@ serve(async (req) => {
   const betaaldIds = (betaaldFactRes.data || []).map((f: any) => f.id)
   let regels: any[] = []
   if (betaaldIds.length > 0) {
-    const { data: regelData } = await svc
-      .from('factuur_regels')
-      .select('factuur_id, company_id, regelprijs')
-      .in('factuur_id', betaaldIds)
-    regels = regelData || []
+    // Per blok van 200 facturen (lengte van de URL) en per blok gepagineerd.
+    for (let i = 0; i < betaaldIds.length; i += 200) {
+      const blok = betaaldIds.slice(i, i + 200)
+      regels.push(...await alleRijen(() => svc
+        .from('factuur_regels')
+        .select('factuur_id, company_id, regelprijs')
+        .in('factuur_id', blok)))
+    }
   }
 
   const companies  = companiesRes.data  || []

@@ -46,7 +46,7 @@ export function BeeldKlantbeheer() {
   return (
     <Beeld>
       <div className="hv-frame hf-frame hf-kk">
-        <FrameBar url="app.bossbase.nl/klanten/bakker-loodgieters" />
+        <FrameBar url="bossbase.nl/dashboard/klanten/bakker-loodgieters" />
         <div className="hf-kk-head">
           <span className="hf-kk-wie"><i className="hf-av">BL</i><span><b>Bakker Loodgieters</b><small>Vijzelstraat 21, Utrecht · 030 123 45 67</small></span></span>
           <span className="hv-badge hv-badge-ok"><i className="hf-dot" />Actief</span>
@@ -122,12 +122,12 @@ export function BeeldOffertes() {
   )
 }
 
-/* ── 03 Werkbonnen: de werkbon in de app, de ondertekenpagina op de telefoon ── */
+/* ── 03 Werkbonnen: de werkbon in het dashboard, de ondertekenpagina op de telefoon ── */
 export function BeeldWerkbonnen() {
   return (
     <Beeld>
       <div className="hv-frame hf-frame hf-wb">
-        <FrameBar url="app.bossbase.nl/werkbonnen" />
+        <FrameBar url="bossbase.nl/dashboard/werkbonnen" />
         <img src="/screens/werkbon.webp" alt="Een werkbon in BossBase met klant, adres, planning en de knoppen Bel klant, Route en Afronden" width="1600" height="1000" loading="lazy" decoding="async" />
       </div>
       <div className="hf-phone">
@@ -160,7 +160,7 @@ export function BeeldPlanning() {
   return (
     <Beeld>
       <div className="hv-frame hf-frame hf-pl">
-        <FrameBar url="app.bossbase.nl/planning" />
+        <FrameBar url="bossbase.nl/dashboard/planning" />
         <img src="/screens/planning.webp" alt="De weekplanning in BossBase met de werkbonnen van één medewerker per dag" width="1600" height="1000" loading="lazy" decoding="async" />
       </div>
       <div className="hf-kaartje hf-sleep">
@@ -187,7 +187,7 @@ export function BeeldUren() {
   return (
     <Beeld>
       <div className="hv-frame hf-frame hf-ur">
-        <FrameBar url="app.bossbase.nl/uren" />
+        <FrameBar url="bossbase.nl/dashboard/uren" />
         <div className="hf-ur-head">
           <span className="hf-ur-wie"><i className="hf-av hf-av-blauw">TV</i><span><b>Thomas Visser</b><small>Week 40 · 28 sep t/m 2 okt</small></span></span>
           <span className="hf-toggle"><span className="actief">Werkdagen</span><span>Werkbonuren</span></span>

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { leesbareFout } from '../components/LaadFout.jsx';
+import { vandaagIso } from '../lib/datumTijd.js';
 import { I, ModalX, NotifyMailToggle, fmt, fmt0, BackToKlant } from '../bb-shared.jsx';
 import { InfoTip } from '../components/Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
@@ -64,7 +66,6 @@ export function NewProjectModal({ onClose, onSaved, customers, deals, offertes, 
     customer_id: prefillCustomerId || '',
     deal_id: '',
     offerte_id: '',
-    status: 'concept',
     project_value: '',
     quoted_hours: '',
     start_date: '',
@@ -103,7 +104,9 @@ export function NewProjectModal({ onClose, onSaved, customers, deals, offertes, 
       const saved = await createProject({
         name,
         description: form.description || null,
-        status: form.status,
+        // Geen status: de database begint op 'gepland' en daarna volgt hij de
+        // werkbonnen. Hier stond 'concept', en dat weigert de statuscontrole
+        // sinds de drie statussen (20260917150000).
         customer_id: form.customer_id || null,
         deal_id: form.deal_id || null,
         offerte_id: form.offerte_id || null,
@@ -303,9 +306,9 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
   const { can } = usePermissions();
   const { guardSchrijven, planModal } = usePlanGuard();
   const magBedragen = can('projectbedragen');
-  // Projecten bewerken/aanmaken: admin/planner-rol óf het 'projecten_bewerken'-recht.
+  // Projecten bewerken/aanmaken: admin óf het 'projecten_bewerken'-recht.
   // Zien mag iedereen; RLS bepaalt welke projecten zichtbaar zijn.
-  const canManage = ['admin', 'planner'].includes(profile?.role) || can('projecten_bewerken');
+  const canManage = profile?.role === 'admin' || can('projecten_bewerken');
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
@@ -411,7 +414,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
         <div>
           <h1>Projecten</h1>
           <p>Beheer projecten, uren, offertes en facturatie</p>
-          {err && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 4 }}>{err}</div>}
+          {err && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 4 }}>{leesbareFout(err)}</div>}
         </div>
         <div className="page-hd-actions">
           {canManage && (
@@ -424,7 +427,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
 
       <div className="afu2">
         {/* KPI cards */}
-        <div className="stats-row" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 20 }}>
+        <div className="stats-row" data-rl="projecten-tellers" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 20 }}>
           <div className="sc">
             <div className="sc-top"><div className="sc-icon">{I.projects}</div></div>
             <div className="sc-val">{kpi.active}</div>
@@ -452,7 +455,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
         </div>
 
         <div className="card">
-          <div className="tw-filter">
+          <div className="tw-filter" data-rl="projecten-filters">
             <div className="bb-filter-tabs">
               {filterTabs.map(f => (
                 <button
@@ -499,7 +502,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
                   <tr>
                     <th className="th">Project</th>
                     <th className="th">Klant</th>
-                    <th className="th">Status</th>
+                    <th className="th" data-rl="projecten-status">Status</th>
                     {magBedragen && <th className="th">Waarde</th>}
                     {magBedragen && <th className="th">Gefactureerd</th>}
                     <th className="th">Uren</th>
@@ -509,7 +512,7 @@ export function ProjectsPage({ openCustomer, setPage, openInvoice, preOpenProjec
                 </thead>
                 <tbody>
                   {filtered.map(p => {
-                    const isOverdue = p.deadline && p.deadline < new Date().toISOString().slice(0, 10) && p.status !== 'afgerond';
+                    const isOverdue = p.deadline && p.deadline < vandaagIso() && p.status !== 'afgerond';
                     return (
                       <tr key={p.id} style={{ cursor: 'pointer' }} onClick={() => setOpenProjectId(p.id)}>
                         <td className="td">

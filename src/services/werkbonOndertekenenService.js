@@ -135,12 +135,10 @@ export function bouwPdfWerkbon(werkbon, extra = {}) {
  * Roept de sign-werkbon edge function aan. Werkt zowel vanaf de publieke pagina
  * (geen sessie) als vanuit de app.
  */
-export async function signWerkbon({ signToken, name, email, signatureDataUrl, signedPdfBase64, pdfFout }) {
+export async function signWerkbon({ signToken, name, email, signatureDataUrl }) {
+  // Het ondertekende exemplaar maakt de server uit de database. Een PDF uit de
+  // browser gaat niet meer mee: die kon de ondertekenaar zelf samenstellen.
   const body = { sign_token: signToken, name, email, signature_data_url: signatureDataUrl }
-  if (signedPdfBase64) body.signed_pdf_base64 = signedPdfBase64
-  // Mislukte de PDF in de browser, dan gaat de reden mee zodat de server het kan
-  // vastleggen: anders gaan de mails zonder bijlage en merkt niemand het.
-  if (pdfFout) body.pdf_fout = String(pdfFout).slice(0, 500)
 
   const { data, error } = await supabase.functions.invoke('sign-werkbon', { body })
   if (error) {
@@ -228,7 +226,7 @@ ${mailButton('Werkbon bekijken en ondertekenen', link, company?.brandingColor)}
     toEmail: adres, subject: onderwerp, bodyHtml: html,
     relatedType: 'werkbon', relatedId: werkbon.id,
     customerId: werkbon.customerId || werkbon.customer_id || null,
-  }).catch(() => {})
+  }).catch(e => console.warn('[bb] mailarchief bijwerken mislukt', e))
 
   // Vastleggen waar de link heen is; de ondertekenpagina vult het adres
   // daarmee voor, en op de werkbon is te zien dat er al iets verstuurd is.
@@ -316,7 +314,7 @@ export async function verstuurWaarschuwing({ werkbon, notitie, constatering, gev
     toEmail: adres, subject: onderwerp, bodyHtml: html,
     relatedType: 'werkbon', relatedId: werkbon?.id,
     customerId: werkbon?.customerId || werkbon?.customer_id || null,
-  }).catch(() => {})
+  }).catch(e => console.warn('[bb] mailarchief bijwerken mislukt', e))
 
   const bijgewerkt = await legWaarschuwingVast(notitie.id, { note: wat, gevolg: gev, email: adres })
   return { email: adres, notitie: bijgewerkt }

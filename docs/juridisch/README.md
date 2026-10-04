@@ -1,13 +1,22 @@
 # Juridische pagina's: stand van zaken
 
-**Status: CONCEPT, niet gepubliceerd, niet juridisch getoetst.** Er zijn geen
-goedgekeurde teksten. De website linkt niet naar `/privacy` of `/voorwaarden`
-(die geven een echte 404).
+**Status: gepubliceerd op 1 oktober 2026, versie 2026-10.** Niet juridisch
+getoetst. De pagina's op de site worden bij de build rechtstreeks uit deze
+bestanden gemaakt (`?juridisch` in `scripts/vite-plugin-content.mjs`). De build
+weigert een document met een concept-markering of een open plek tussen
+[vierkante haken], en een versie die afwijkt van wat bij het akkoord wordt
+vastgelegd (`supabase/functions/_shared/akkoord.ts`). Nieuwe versie: verhoog
+hem in het document én in `akkoord.ts`.
 
-- `privacyverklaring-CONCEPT.md` — concept op basis van vastgestelde feiten.
-- `verwerkersovereenkomst-CONCEPT.md` — concept op basis van vastgestelde feiten.
-- Hieronder: wat de eigenaren moeten aanleveren (deel 1) en wat onderzocht is
-  (deel 2).
+- `algemene-voorwaarden.md` → /voorwaarden
+- `privacyverklaring.md` → /privacy
+- `verwerkersovereenkomst.md` → /verwerkersovereenkomst
+- `cookiebeleid.md` → /cookieverklaring
+- /subverwerkers staat in `src/pages/marketing/SubverwerkersPage.jsx`.
+
+Het akkoord bij registratie (versie, tijdstip, IP) staat in de tabel
+`juridisch_akkoord`. Alles hieronder is het onderzoek van september 2026 en
+beschrijft de stand van toen.
 
 ## Privacy-informatie op de website nu
 

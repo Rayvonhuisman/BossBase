@@ -1,41 +1,46 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { logFout } from './lib/stilleFouten.js';
+import { vandaagIso } from './lib/datumTijd.js';
 import { createPortal } from 'react-dom';
 import { Wrench, AlertTriangle } from 'lucide-react';
 import { I, Logo, initials } from './bb-shared.jsx';
 import { LoginPage, RegisterFlow, EmailVerificationScreen } from './pages/BbAuth.jsx';
-import { ResetPasswordPage } from './pages/ResetPasswordPage.jsx';
-import { UitnodigingPage } from './pages/UitnodigingPage.jsx';
-import OfferteSigneren from './pages/OfferteSigneren.jsx';
-import WerkbonOndertekenen from './pages/WerkbonOndertekenen.jsx';
-import { DashboardHome } from './pages/dashboard/DashboardHome.jsx';
-import { Pipeline } from './pages/BbDashboard.jsx';
-import { ProjectDetailDrawer } from './pages/projects/ProjectDetailDrawer.jsx';
+const AfmeldenPage = lazy(() => import('./pages/AfmeldenPage.jsx').then(m => ({ default: m.AfmeldenPage })));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage.jsx').then(m => ({ default: m.ResetPasswordPage })));
+const UitnodigingPage = lazy(() => import('./pages/UitnodigingPage.jsx').then(m => ({ default: m.UitnodigingPage })));
+const OfferteSigneren = lazy(() => import('./pages/OfferteSigneren.jsx'));
+const WerkbonOndertekenen = lazy(() => import('./pages/WerkbonOndertekenen.jsx'));
+const DashboardHome = lazy(() => import('./pages/dashboard/DashboardHome.jsx').then(m => ({ default: m.DashboardHome })));
+const Pipeline = lazy(() => import('./pages/BbDashboard.jsx').then(m => ({ default: m.Pipeline })));
+const ProjectDetailDrawer = lazy(() => import('./pages/projects/ProjectDetailDrawer.jsx').then(m => ({ default: m.ProjectDetailDrawer })));
 import { getProjectByDeal } from './services/projectsService.js';
 import { leesRoute, bouwRoute } from './lib/route.js';
 import { schrijfEntry, sluitDelta, huidigeIndex } from './lib/geschiedenis.js';
 import { useEscapeSluit } from './hooks/useEscapeSluit.js';
-import AbonnementPage from './pages/AbonnementPage.jsx';
-import { CalendarEventDetailDrawer } from './pages/dashboard/CalendarEventDetailDrawer.jsx';
+const AbonnementPage = lazy(() => import('./pages/AbonnementPage.jsx'));
+const CalendarEventDetailDrawer = lazy(() => import('./pages/dashboard/CalendarEventDetailDrawer.jsx').then(m => ({ default: m.CalendarEventDetailDrawer })));
 import { PageErrorBoundary } from './components/PageErrorBoundary.jsx';
-import { CustomerPage, CustomersPage, ActivitiesPage } from './pages/BbPages1.jsx';
-import { ActivitiesPageV2 } from './pages/ActivitiesPageV2.jsx';
+import { LaadScherm } from './components/LaadFout.jsx';
+const CustomerPage = lazy(() => import('./pages/BbPages1.jsx').then(m => ({ default: m.CustomerPage })));
+const CustomersPage = lazy(() => import('./pages/BbPages1.jsx').then(m => ({ default: m.CustomersPage })));
+const ActivitiesPageV2 = lazy(() => import('./pages/ActivitiesPageV2.jsx').then(m => ({ default: m.ActivitiesPageV2 })));
 // Zware pagina's (recharts, exceljs, jszip, jspdf) lazy laden → uit de eerste bundle.
 const CalendarPage = lazy(() => import('./pages/BbPages2.jsx').then(m => ({ default: m.CalendarPage })));
 const CostsPage    = lazy(() => import('./pages/BbPages2.jsx').then(m => ({ default: m.CostsPage })));
 const RevenuePage  = lazy(() => import('./pages/BbPages2.jsx').then(m => ({ default: m.RevenuePage })));
-import { InstellingenPage } from './pages/InstellingenPage.jsx';
-import { TeamPage } from './pages/TeamPage.jsx';
+const InstellingenPage = lazy(() => import('./pages/InstellingenPage.jsx').then(m => ({ default: m.InstellingenPage })));
+const TeamPage = lazy(() => import('./pages/TeamPage.jsx').then(m => ({ default: m.TeamPage })));
 const OffertesPage = lazy(() => import('./pages/OffertesPage.jsx').then(m => ({ default: m.OffertesPage })));
 const FacturenPage = lazy(() => import('./pages/FacturenPage.jsx').then(m => ({ default: m.FacturenPage })));
-import { UrenPageV2 as UrenPage } from './pages/UrenPageV2.jsx';
-import { WerkbonPageV2 as WerkbonPage } from './pages/WerkbonPageV2.jsx';
-import { PlanningPage } from './pages/PlanningPage.jsx';
-import { ProjectsPage } from './pages/ProjectsPage.jsx';
+const UrenPage = lazy(() => import('./pages/UrenPageV2.jsx').then(m => ({ default: m.UrenPageV2 })));
+const WerkbonPage = lazy(() => import('./pages/WerkbonPageV2.jsx').then(m => ({ default: m.WerkbonPageV2 })));
+const PlanningPage = lazy(() => import('./pages/PlanningPage.jsx').then(m => ({ default: m.PlanningPage })));
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage.jsx').then(m => ({ default: m.ProjectsPage })));
 const DatabasePage = lazy(() => import('./pages/DatabasePage.jsx').then(m => ({ default: m.DatabasePage })));
 const LeveranciersPage = lazy(() => import('./pages/LeveranciersPage.jsx'));
 const LeverancierPage  = lazy(() => import('./pages/LeverancierPage.jsx'));
 const MaterialenPage   = lazy(() => import('./pages/MaterialenPage.jsx'));
-import { SuperAdminPage } from './pages/SuperAdminPage.jsx';
+const SuperAdminPage = lazy(() => import('./pages/SuperAdminPage.jsx').then(m => ({ default: m.SuperAdminPage })));
 import { createMissingProfile, getSession, logout, onAuthStateChange } from './services/authService.js';
 import { getCurrentUserContext } from './services/profileService.js';
 import { getPlanStatus, fallbackPlanStatus } from './services/planService.js';
@@ -51,9 +56,8 @@ import { clearCompanyId, setCompanyId } from './lib/currentCompany.js';
 import { ToastProvider, useToast } from './lib/toast.jsx';
 import { UploadProvider } from './lib/uploadContext.jsx';
 import { UrenHerinneringModal } from './components/UrenHerinneringModal.jsx';
-import { CookieverklaringPage } from './pages/CookieverklaringPage.jsx';
-import { BetaalStatusPage } from './pages/BetaalStatusPage.jsx';
-import { BetaalPage } from './pages/BetaalPage.jsx';
+const BetaalStatusPage = lazy(() => import('./pages/BetaalStatusPage.jsx').then(m => ({ default: m.BetaalStatusPage })));
+const BetaalPage = lazy(() => import('./pages/BetaalPage.jsx').then(m => ({ default: m.BetaalPage })));
 import { ProfileContext, displayName, profileInitials } from './lib/profileContext.jsx';
 import { DataContext, useData } from './lib/dataContext.jsx';
 import MobileBlock from './components/MobileBlock.jsx';
@@ -65,13 +69,26 @@ import { getOffertes } from './services/offerteService.js';
 import { getWerkbonnen } from './services/werkbonService.js';
 import { staatOpDag } from './utils/werkbonDagen.js';
 import { firstStageId } from './utils/pipeline.js';
-import { ActivityEditModal, NewActivityModal, NewLeadModal, ProfileModal } from './components/SharedModals.jsx';
+const ActivityEditModal = lazy(() => import('./components/SharedModals.jsx').then(m => ({ default: m.ActivityEditModal })));
+const NewActivityModal = lazy(() => import('./components/SharedModals.jsx').then(m => ({ default: m.NewActivityModal })));
+const NewLeadModal = lazy(() => import('./components/SharedModals.jsx').then(m => ({ default: m.NewLeadModal })));
+const ProfileModal = lazy(() => import('./components/SharedModals.jsx').then(m => ({ default: m.ProfileModal })));
 import { supabase } from './lib/supabase.js';
 import { listNotifications, markNotificationRead, markAllNotificationsRead } from './services/notificatieService.js';
 import { isDemo } from './lib/supabase.js';
+import Rondleiding, { StartRondleiding } from './components/Rondleiding.jsx';
+import { RL_START } from './lib/rondleidingen.js';
 import { isAppPath } from './lib/appRoutes.js';
 import { meet } from './lib/meting.js';
 import { DEMO_SESSION, DEMO_USER, DEMO_PROFILE, DEMO_COMPANY, DEMO_PLAN_STATUS, DEMO_PERMISSIONS } from './demo/demoSessie.js';
+
+// Onderdelen die pas laden als ze nodig zijn (lazy hierboven). Buiten de
+// pagina-Suspense in de shell krijgen ze een eigen grens, zodat het openen van
+// een drawer of venster de rest van het scherm niet even laat verdwijnen.
+// Zo hoeft een klant die een offerte ondertekent niet het hele dashboard te
+// downloaden (audit 2026-10-01, P6).
+const Wacht = ({ children, fallback = null }) => <Suspense fallback={fallback}>{children}</Suspense>;
+const PubliekLaden = <div className="auth-shell" />;
 
 // Basispad van de app-shell. Eén constante, zodat het pad op één plek staat in
 // plaats van verspreid door de routerlogica.
@@ -79,6 +96,29 @@ import { DEMO_SESSION, DEMO_USER, DEMO_PROFILE, DEMO_COMPANY, DEMO_PLAN_STATUS, 
 // kader. Eén constante in plaats van overal een aparte tak: elke plek die het
 // pad leest of schrijft gebruikt deze waarde.
 const BASISPAD = isDemo ? '/demo' : '/dashboard';
+
+// ── Terug naar de link na inloggen ─────────────────────────────────────────
+// Wie uitgelogd een link uit een mail opent (/dashboard/werkbonnen/<id>,
+// …?tab=abonnement), komt op /login. Zonder dit belandde hij daarna op het
+// dashboard en was het item kwijt (audit 2026-10-01, M25). Alleen paden binnen
+// het dashboard; nooit een volledige URL, zodat dit geen open redirect wordt.
+const DOEL_SLEUTEL = 'bb.naInloggen';
+function bewaarDoelVoorInloggen() {
+  try {
+    const { pathname, search } = window.location;
+    if (pathname.startsWith(BASISPAD + '/') || (pathname === BASISPAD && search)) {
+      sessionStorage.setItem(DOEL_SLEUTEL, pathname + search);
+    }
+  } catch { /* geen sessionStorage: dan gewoon naar het dashboard */ }
+}
+function haalDoelNaInloggen() {
+  try {
+    const doel = sessionStorage.getItem(DOEL_SLEUTEL);
+    sessionStorage.removeItem(DOEL_SLEUTEL);
+    if (doel && /^\/[a-z]/i.test(doel) && !doel.startsWith('//') && (doel.startsWith(BASISPAD + '/') || doel.startsWith(BASISPAD + '?'))) return doel;
+  } catch { /* idem */ }
+  return null;
+}
 
 // De URL is de bron van waarheid voor wat er open staat. Zie lib/route.js.
 
@@ -272,7 +312,7 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, compan
           )}
         </div>
 
-        <nav className="sb-nav" ref={navRef}
+        <nav className="sb-nav" ref={navRef} data-rl="menu"
           onMouseEnter={e => e.currentTarget.classList.add('hov')}
           onMouseLeave={e => e.currentTarget.classList.remove('hov')}>
           {SECTIONS.map(sec => {
@@ -395,7 +435,7 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, compan
 function BossKnop({ onClick }) {
   const [mislukt, setMislukt] = useState(false);
   return (
-    <button className="tb-boss" title="Vraag het Boss" aria-label="Vraag het Boss" onClick={onClick}>
+    <button className="tb-boss" title="Vraag het Boss" aria-label="Vraag het Boss" data-rl="boss" onClick={onClick}>
       {mislukt
         ? <span className="tb-boss-val" aria-hidden="true">B</span>
         : <img src="/boss-avatar.png" alt="" onError={() => setMislukt(true)} />}
@@ -406,6 +446,8 @@ function BossKnop({ onClick }) {
 function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, onLogout, openCustomer, openLeverancier, openDeal, navigatePage, refreshKey, onOpenBoss }) {
   const { customers: dCustomers, leveranciers: dLeveranciers = [], deals: dDeals, stages: dStages = [], activities: dActivities, offertes: dOffertes, werkbonnen: dWerkbonnen, refresh: refreshData } = useData();
   const [openMenu, setOpenMenu] = useState(null);
+  // Escape sluit het open menu (meldingen, profiel), net als drawers en vensters.
+  useEscapeSluit(() => setOpenMenu(null), openMenu !== null);
   const [search, setSearch] = useState('');
   // Zoekbalk staat ingeklapt tot je op het icoon klikt. Escape of een klik
   // ernaast klapt hem weer in; een lopende zoekterm blijft dan wel staan.
@@ -464,7 +506,7 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
 
   // Ephemere notificaties afgeleid uit gedeelde data — geen extra queries.
   const notifData = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = vandaagIso();
     const eersteFase = firstStageId(dStages);
     return {
       overdue: dActivities.filter(a => a.status !== 'completed' && a.status !== 'done' && a.dueAt && a.dueAt.slice(0, 10) < today).slice(0, 5),
@@ -661,7 +703,7 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
         <MeldKnop pagina={pageMeta.title} />
         <BossKnop onClick={onOpenBoss} />
         <div className="tb-anchor">
-          <button className="ib" title="Meldingen" onClick={() => setOpenMenu(m => m === 'notif' ? null : 'notif')}>
+          <button className="ib" title="Meldingen" data-rl="meldingen" onClick={() => setOpenMenu(m => m === 'notif' ? null : 'notif')}>
             {I.bell}
             {hasUnread && <span className="ndot" />}
           </button>
@@ -675,7 +717,7 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
                     disabled={markingAll}
                     onClick={async () => {
                       setMarkingAll(true);
-                      await markAllNotificationsRead().catch(() => {});
+                      await markAllNotificationsRead().catch(logFout('meldingen als gelezen markeren'));
                       await loadDbNotifs();
                       setMarkingAll(false);
                     }}
@@ -696,7 +738,7 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
                     : n.type.startsWith('toewijzing') ? '→' : '●';
                   const handleClick = async () => {
                     if (isUnread) {
-                      await markNotificationRead(n.id).catch(() => {});
+                      await markNotificationRead(n.id).catch(logFout('melding als gelezen markeren'));
                       setDbNotifs(prev => prev.map(x => x.id === n.id ? { ...x, readAt: new Date().toISOString() } : x));
                     }
                     close();
@@ -709,7 +751,19 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
                       // ('deal/<id>'). Oude meldingen wezen naar de vervallen
                       // pagina Aanvragen; die gaan naar de pipeline.
                       if (pagina === 'deal' && id) openDeal(id);
+                      // Klantkaart/leverancierskaart. Oude meldingen hebben link
+                      // 'customers' zonder id; dan het id uit related_id.
+                      else if (pagina === 'klant' && id) openCustomer(id);
+                      else if (pagina === 'customers' && n.relatedType === 'klant' && n.relatedId) openCustomer(n.relatedId);
+                      else if (pagina === 'leverancier' && id && openLeverancier) openLeverancier(id);
                       else if (pagina === 'aanvragen') navigatePage('pipeline');
+                      // 'instellingen/abonnement': een tabblad, geen item. Het
+                      // tabblad staat in ?tab=; daarna pakt de popstate-afhandeling
+                      // (App én useUrlTab) de nieuwe URL op.
+                      else if (pagina === 'instellingen' && id) {
+                        try { window.history.pushState({}, '', `/dashboard/instellingen?tab=${id}`); } catch { /* niet blokkerend */ }
+                        window.dispatchEvent(new PopStateEvent('popstate'));
+                      }
                       else if (pagina) navigatePage(pagina, id ? { id } : undefined);
                     }
                   };
@@ -825,6 +879,7 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
               <div className="tb-pop-menu">
                 <button onClick={() => { close(); onOpenProfile(); }}>{I.cust} Mijn profiel</button>
                 <button onClick={() => { close(); navigatePage('revenue'); }}>{I.chart} Financiën</button>
+                <button onClick={() => { close(); window.dispatchEvent(new Event(RL_START)); }}>{I.info} Rondleiding</button>
                 <div className="menu-divider" />
                 <button className="danger" onClick={() => { close(); onLogout(); }}>{I.logout} Uitloggen</button>
               </div>
@@ -834,13 +889,15 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
       </div>
     </header>
     {notifActivity && (
-      <ActivityEditModal
-        activity={notifActivity}
-        customers={notifCustomers}
-        onClose={() => setNotifActivity(null)}
-        onSaved={updated => { setNotifActivity(null); refreshData(); }}
-        onDeleted={() => { setNotifActivity(null); refreshData(); }}
-      />
+      <Wacht>
+        <ActivityEditModal
+          activity={notifActivity}
+          customers={notifCustomers}
+          onClose={() => setNotifActivity(null)}
+          onSaved={updated => { setNotifActivity(null); refreshData(['activities']); }}
+          onDeleted={() => { setNotifActivity(null); refreshData(['activities']); }}
+        />
+      </Wacht>
     )}
     </>
   );
@@ -851,7 +908,7 @@ function Topbar({ pageMeta, profile, user, loading, onHamburger, onOpenProfile, 
 // sluiten op één plek staat — bij het kruisje en de klik ernaast.
 function KlantkaartPaneel(props) {
   useEscapeSluit(props.onClose);
-  return <CustomerPage {...props} />;
+  return <Wacht fallback={<div style={{ padding: 24, color: 'var(--dl)' }}>Laden…</div>}><CustomerPage {...props} /></Wacht>;
 }
 
 // ── CUSTOMER DRAWER ──────────────────────────────────────────
@@ -909,6 +966,7 @@ function DealDrawer({ dealId, customers, deals, offertes, onClose, onChanged, se
   }
 
   return (
+    <Wacht fallback={<><div className="drawer-overlay" onClick={onClose} /><div className="drawer"><div className="drawer-body" style={{ padding: 32, textAlign: 'center', color: 'var(--dl)' }}>Project laden…</div></div></>}>
     <ProjectDetailDrawer
       projectId={projectId}
       customers={customers}
@@ -922,6 +980,7 @@ function DealDrawer({ dealId, customers, deals, offertes, onClose, onChanged, se
       openInvoice={openInvoice}
       setPage={setPage}
     />
+    </Wacht>
   );
 }
 
@@ -932,7 +991,9 @@ function CalEventDrawer({ eventId, onClose, setPage, openCustomer, openDeal }) {
       <div className="drawer-overlay" onClick={onClose} />
       <div className="drawer">
         <div className="drawer-body">
-          <CalendarEventDetailDrawer eventId={eventId} onClose={onClose} setPage={setPage} openCustomer={openCustomer} openDeal={openDeal} />
+          <Wacht fallback={<div style={{ padding: 24, color: 'var(--dl)' }}>Laden…</div>}>
+            <CalendarEventDetailDrawer eventId={eventId} onClose={onClose} setPage={setPage} openCustomer={openCustomer} openDeal={openDeal} />
+          </Wacht>
         </div>
       </div>
     </>
@@ -1054,7 +1115,10 @@ function AppInner() {
 
   const PAGE_META = useMemo(() => {
     const name = displayName(profile, user);
-    const greet = name ? `Goedemorgen, ${name}` : profileLoading ? 'Profiel laden…' : 'Welkom terug';
+    // Zelfde dagdeel als op het dashboard; stond vast op "Goedemorgen".
+    const uur = new Date().getHours();
+    const dagdeel = uur < 12 ? 'Goedemorgen' : uur < 18 ? 'Goedemiddag' : 'Goedenavond';
+    const greet = name ? `${dagdeel}, ${name}` : profileLoading ? 'Profiel laden…' : 'Welkom terug';
     return {
       dashboard:  { title: 'Dashboard',    sub: greet },
       aanvragen:  { title: 'Aanvragen',    sub: 'Binnengekomen via je website' },
@@ -1074,6 +1138,9 @@ function AppInner() {
       offertes:    { title: 'Offertes',     sub: 'Offertes aanmaken en beheren' },
       team:        { title: 'Team',         sub: 'Teamleden en uitnodigingen' },
       instellingen:{ title: 'Instellingen', sub: 'Bedrijfsprofiel en standaardwaarden' },
+      // Ontbraken: de kop viel dan terug op "Dashboard" (audit C-11).
+      database:    { title: 'Database',     sub: 'Alle klanten, documenten en exports' },
+      abonnement:  { title: 'Abonnement',   sub: 'Kies of wijzig je pakket' },
     };
   }, [profile, user, profileLoading]);
 
@@ -1121,19 +1188,40 @@ function AppInner() {
     const { data } = onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       if (!nextSession && window.location.pathname.startsWith(BASISPAD)) {
+        bewaarDoelVoorInloggen();
         navigate('/login', true);
       }
     });
     return () => data.subscription.unsubscribe();
   }, []);
 
-  const refreshProfile = useCallback(async () => {
+  // Bij inloggen roepen zowel de inlogknop als het sessie-effect refreshProfile
+  // aan; dat haalde profiel, bedrijf, tier, rechten en abonnementsstand dubbel op
+  // (audit 2026-10-01, P4). Een lopende lading wordt nu gedeeld.
+  const lopendProfiel = useRef(null);
+  const refreshProfile = useCallback(() => {
+    if (lopendProfiel.current) return lopendProfiel.current;
+    const p = laadProfiel().finally(() => { lopendProfiel.current = null; });
+    lopendProfiel.current = p;
+    return p;
+  }, []);
+
+  const laadProfiel = async () => {
     authLog('refreshProfile START');
     setProfileLoading(true);
     setProfileError(null);
     try {
       const ctx = await getCurrentUserContext();
       authLog('profile geladen', { role: ctx.profile?.role, id: ctx.profile?.id });
+      // Profiel kon niet worden gelezen (netwerk, server): niet doorgaan met een
+      // halve shell zonder rol en rechten, maar het laadscherm met de fout en
+      // "Opnieuw proberen" laten staan. Een ontbrékend profiel (geen fout) gaat
+      // hieronder door het herstelpad.
+      if (ctx.user && !ctx.profile && ctx.profileError) {
+        setPermissionsLoaded(false);
+        setProfileError(ctx.profileError);
+        return ctx;
+      }
       setUser(ctx.user);
       setProfile(ctx.profile);
       setCompany(ctx.company);
@@ -1203,7 +1291,7 @@ function AppInner() {
     } finally {
       setProfileLoading(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
     if (sessionUserId) refreshProfile();
@@ -1469,12 +1557,25 @@ function AppInner() {
       toast.error(err.message || 'Uitloggen mislukt');
     }
     closeCustomer();
+    try { sessionStorage.removeItem(DOEL_SLEUTEL); } catch { /* geen opslag */ }
     navigate('/login', true);
   };
 
   const requestNewLead = useCallback(() => setGlobalLeadModal(true), []);
   const requestNewActivity = useCallback((opts = {}) => setGlobalActivityModal(opts), []);
-  const bumpRefresh = useCallback(() => setRefreshKey(k => k + 1), []);
+  // bumpRefresh(['deals']) ververst van de gedeelde lijsten alleen wat genoemd
+  // is; zonder argument (of met een klik-event) alles, zoals altijd. Pagina's
+  // laden hun eigen gegevens hoe dan ook opnieuw via refreshKey. Vroeger haalde
+  // elke wijziging alle zeven bedrijfslijsten opnieuw op (audit 2026-10-01, P4).
+  const teVerversen = useRef(null); // null = alles; anders een Set met soorten
+  const bumpRefresh = useCallback((soorten) => {
+    if (Array.isArray(soorten) && teVerversen.current !== 'alles') {
+      teVerversen.current = new Set([...(teVerversen.current || []), ...soorten]);
+    } else {
+      teVerversen.current = 'alles';
+    }
+    setRefreshKey(k => k + 1);
+  }, []);
 
   // Draait op sessionUserId, niet op de sessie zelf — zie de toelichting daar.
   useEffect(() => {
@@ -1483,26 +1584,30 @@ function AppInner() {
     setGlobalDataLoading(true);
     // Eén gedeelde fetch voor de hele dashboard-shell (dashboard, sidebar-badges,
     // notificaties en zoeken delen deze data via DataContext).
-    Promise.all([
-      listCustomers().catch(() => []),
-      listDeals().catch(() => []),
-      listPipelineStages().catch(() => []),
-      listActivities().catch(() => []),
-      getOffertes().catch(() => []),
-      getWerkbonnen().catch(() => []),
-      listLeveranciers().catch(() => []),
-    ])
-      .then(([cs, ds, st, acts, offs, wbs, levs]) => {
-        if (!alive) return;
-        setGlobalCustomers(cs);
-        setGlobalDeals(ds);
-        setGlobalStages(st);
-        setGlobalActivities(acts);
-        setGlobalOffertes(offs);
-        setGlobalWerkbonnen(wbs);
-        setGlobalLeveranciers(levs);
+    // Mislukt een lijst, dan blijft de vorige stand staan (niet leegmaken: een
+    // lege klantenlijst leest als "al mijn klanten zijn weg") en krijgt de
+    // gebruiker één melding. Vroeger werd elke fout stil een lege lijst.
+    let mislukt = 0;
+    const of = (belofte, zet) => belofte.then(
+      rijen => { if (alive) zet(rijen); },
+      fout => { mislukt += 1; console.warn('[bb] gedeelde lijst laden mislukt', fout); },
+    );
+    const gevraagd = teVerversen.current;
+    teVerversen.current = null;
+    const nodig = soort => refreshKey === 0 || gevraagd === 'alles' || !gevraagd || gevraagd.has(soort);
+    const lijsten = [
+      ['customers', listCustomers, setGlobalCustomers],
+      ['deals', listDeals, setGlobalDeals],
+      ['stages', listPipelineStages, setGlobalStages],
+      ['activities', listActivities, setGlobalActivities],
+      ['offertes', getOffertes, setGlobalOffertes],
+      ['werkbonnen', getWerkbonnen, setGlobalWerkbonnen],
+      ['leveranciers', listLeveranciers, setGlobalLeveranciers],
+    ];
+    Promise.all(lijsten.filter(([soort]) => nodig(soort)).map(([, laad, zet]) => of(laad(), zet)))
+      .then(() => {
+        if (alive && mislukt) toast.error('Niet alle gegevens konden worden geladen. Controleer je verbinding; ververs de pagina als iets ontbreekt.');
       })
-      .catch(() => {})
       .finally(() => { if (alive) setGlobalDataLoading(false); });
     return () => { alive = false; };
   }, [sessionUserId, refreshKey]);
@@ -1518,7 +1623,7 @@ function AppInner() {
     let alive = true;
     getPlanStatus()
       .then(st => { if (alive && st) setPlanStatus(st); })
-      .catch(() => {});
+      .catch(logFout('abonnementsstand verversen'));
     return () => { alive = false; };
   }, [sessionUserId, refreshKey, profile?.companyId]);
 
@@ -1658,27 +1763,29 @@ function AppInner() {
     return <div className="auth-shell"><div className="auth-card afu"><div className="auth-logo"><Logo /></div><div className="auth-title">BossBase laden...</div></div></div>;
   }
 
-  if (route === '/cookieverklaring') {
-    return <CookieverklaringPage navigate={navigate} />;
-  }
-
   // Publieke, permanente betaallink → tussenpagina die de verse sessie regelt.
   if (route.startsWith('/betaal/')) {
     const token = route.replace('/betaal/', '').split('?')[0].split('/')[0];
-    return <BetaalPage token={token} />;
+    return <Wacht fallback={PubliekLaden}><BetaalPage token={token} /></Wacht>;
   }
 
   // Publieke bedankpagina's ná een Stripe-betaling (klanten van onze gebruikers).
   if (route === '/betaald') {
-    return <BetaalStatusPage status="success" />;
+    return <Wacht fallback={PubliekLaden}><BetaalStatusPage status="success" /></Wacht>;
+  }
+  // Afmelden voor de proefperiodemails (link onderaan de mail). Zonder login.
+  if (route === '/afmelden') {
+    return <Wacht fallback={PubliekLaden}><AfmeldenPage /></Wacht>;
   }
   if (route === '/betaling-geannuleerd') {
-    return <BetaalStatusPage status="cancelled" />;
+    return <Wacht fallback={PubliekLaden}><BetaalStatusPage status="cancelled" /></Wacht>;
   }
 
   if (route === '/login') {
     if (session) {
-      navigate('/dashboard', true);
+      const doel = haalDoelNaInloggen();
+      if (doel) window.location.replace(doel);
+      else navigate('/dashboard', true);
       return null;
     }
     return (
@@ -1687,6 +1794,10 @@ function AppInner() {
         // Force a fresh profile fetch immediately after login so the
         // dashboard renders with real data instead of a flash of skeletons.
         await refreshProfile();
+        // Kwam je via een link uit een mail? Dan daarheen, met een verse lading
+        // zodat pagina, item en tabblad uit de URL worden opgepakt.
+        const doel = haalDoelNaInloggen();
+        if (doel) { window.location.replace(doel); return; }
         navigate('/dashboard', true);
       }}
       onRegister={() => navigate('/register')}
@@ -1713,24 +1824,24 @@ function AppInner() {
 
   if (route === '/reset-password') {
     const resetToken = new URLSearchParams(window.location.search).get('token') || '';
-    return <ResetPasswordPage token={resetToken} navigate={navigate} />;
+    return <Wacht fallback={PubliekLaden}><ResetPasswordPage token={resetToken} navigate={navigate} /></Wacht>;
   }
 
   if (route.startsWith('/uitnodiging/')) {
     const token = route.replace('/uitnodiging/', '').split('?')[0];
-    return <UitnodigingPage token={token} navigate={navigate} />;
+    return <Wacht fallback={PubliekLaden}><UitnodigingPage token={token} navigate={navigate} /></Wacht>;
   }
 
   if (route.startsWith('/offerte/')) {
     const token = route.replace('/offerte/', '').split('?')[0];
-    return <OfferteSigneren token={token} />;
+    return <Wacht fallback={PubliekLaden}><OfferteSigneren token={token} /></Wacht>;
   }
 
   // Publieke ondertekenpagina van een werkbon. Staat bewust vóór de
   // mobiel-blokkade verderop: juist op een telefoon tekent de klant.
   if (route.startsWith('/werkbon/')) {
     const token = route.replace('/werkbon/', '').split('?')[0];
-    return <WerkbonOndertekenen token={token} />;
+    return <Wacht fallback={PubliekLaden}><WerkbonOndertekenen token={token} /></Wacht>;
   }
 
   if (route === '/superadmin') {
@@ -1741,12 +1852,14 @@ function AppInner() {
     if (!permissionsLoaded || !profile) {
       return <div style={{ background: '#0D0D0D', minHeight: '100dvh' }} />;
     }
-    const ALLOWED = ['info@bossbase.nl', 'nielsgrevink@gmail.com'];
-    if (profile.isSuperAdmin !== true || !ALLOWED.includes(profile.email)) {
+    // Alleen profiles.is_super_admin telt: die kan een gebruiker niet zelf zetten
+    // (trigger a0_protect_privileges) en super-admin-data controleert hem op de
+    // server. Geen e-mailadressen meer in de publieke bundel (audit F9).
+    if (profile.isSuperAdmin !== true) {
       navigate('/dashboard', true);
       return null;
     }
-    return <SuperAdminPage navigate={navigate} profile={profile} />;
+    return <Wacht fallback={PubliekLaden}><SuperAdminPage navigate={navigate} profile={profile} /></Wacht>;
   }
 
   // /api/ is van Vercel (serverfuncties, o.a. de SnelStart-webhook) en komt hier
@@ -1763,6 +1876,7 @@ function AppInner() {
   }
 
   if (!session) {
+    bewaarDoelVoorInloggen();
     navigate('/login', true);
     return null;
   }
@@ -1770,7 +1884,9 @@ function AppInner() {
   const meta = PAGE_META[page] || PAGE_META.dashboard;
 
   const sidebarBadges = {
-    pipeline: globalDeals.filter(d => d.stage === 'new_lead').length,
+    // stage is een uuid; 'new_lead' kwam nooit voor, dus de badge stond altijd
+    // op 0 (audit A11). Nu: nieuwe aanvragen in de eerste fase, zoals de bel.
+    pipeline: globalDeals.filter(d => d.stage === firstStageId(globalStages) && d.status === 'open' && !d.afgerondOp).length,
     // Openstaand = vandaag + te laat. Gebruik dezelfde, in de service (lokale
     // tijdzone) berekende status als de Activiteiten-pagina — één bron. De oude
     // eigen UTC-datumvergelijking (toISOString) miste op de dag-/tijdzonegrens
@@ -1780,7 +1896,9 @@ function AppInner() {
 
   if (!permissionsLoaded) {
     authLog('shell GEBLOKKEERD — wacht op permissionsLoaded');
-    return <div style={{ background: 'var(--bg)', minHeight: '100dvh' }} />;
+    // Spinner, en na tien seconden (of bij een fout) een melding met opnieuw
+    // proberen. Was een volledig wit scherm, ook als het laden mislukt was.
+    return <LaadScherm fout={profileLoading ? null : profileError} onOpnieuw={() => { refreshProfile(); }} />;
   }
 
   // E-mailverificatie-gate: een ingelogde gebruiker met een profiel zonder
@@ -1908,6 +2026,8 @@ function AppInner() {
                 <Suspense fallback={<div style={{ padding: 24, color: 'var(--dl)' }}>Laden…</div>}>
                   {renderPage()}
                 </Suspense>
+                <Rondleiding pagina={page} />
+                <StartRondleiding rol={profile?.role || ''} company={company} />
               </PageErrorBoundary>
             )}
           </div>
@@ -1940,7 +2060,7 @@ function AppInner() {
             deals={globalDeals}
             offertes={globalOffertes}
             onClose={closeDeal}
-            onChanged={bumpRefresh}
+            onChanged={() => bumpRefresh(['deals', 'offertes', 'werkbonnen', 'activities'])}
             setPage={navigatePage}
             openCustomer={openCustomer}
             openInvoice={openInvoice}
@@ -1957,6 +2077,7 @@ function AppInner() {
           />
         )}
 
+        <Wacht>
         {openProfile && (
           <ProfileModal
             onClose={() => setOpenProfile(false)}
@@ -1975,7 +2096,8 @@ function AppInner() {
             customers={globalCustomers}
             stages={globalStages}
             onSaved={() => {
-              bumpRefresh();
+              // Een nieuwe aanvraag kan ook een nieuwe klant maken.
+              bumpRefresh(['deals', 'customers']);
               if (page !== 'pipeline') navigatePage('pipeline');
             }}
           />
@@ -1988,9 +2110,10 @@ function AppInner() {
             deals={globalDeals}
             defaultCustId={globalActivityModal.defaultCustId || ''}
             defaultDealId={globalActivityModal.defaultDealId || ''}
-            onSaved={() => bumpRefresh()}
+            onSaved={() => bumpRefresh(['activities'])}
           />
         )}
+        </Wacht>
       </div>
       <UrenHerinneringModal navigatePage={navigatePage} />
       </DataContext.Provider>

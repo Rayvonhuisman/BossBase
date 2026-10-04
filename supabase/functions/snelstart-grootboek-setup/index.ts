@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient } from "../_shared/scheduledSync.ts"
 import { getActieveGrootboeken } from "../_shared/snelstart.ts"
 import { standaardIndeling } from "../_shared/grootboekKeuze.ts"
+import { clientFout } from '../_shared/clientFout.ts'
 
 // Controleert of de administratie de omzet-grootboeken heeft die de koppeling
 // nodig heeft.
@@ -96,6 +97,6 @@ serve(async (req) => {
 
   } catch (err: any) {
     console.error('Error:', err?.message, err?.stack)
-    return json({ success: false, error: err?.message }, 500)
+    return json({ success: false, error: clientFout(err) }, 500)
   }
 })

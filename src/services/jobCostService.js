@@ -22,9 +22,6 @@ export function costCategoryMeta(cat) {
   return { label, bg: "#f3f4f6", color: "#6b7280" }
 }
 
-// Lijst voor dropdowns (vaste categorieën, consistente casing).
-export const COST_CATEGORY_OPTIONS = Object.values(COST_CATEGORIES).map(c => c.label)
-
 // kosten-bijlagen is een PRIVÉ bucket. De `bijlage_url`-kolom bevat een JSON-
 // array met opslagpaden ({company_id}/bestand). Deze helper geeft een tijdelijke
 // signed URL terug voor de eerste bijlage (legacy: een opgeslagen http-URL wordt
@@ -44,26 +41,14 @@ export async function getKostenBijlageUrl(stored) {
 }
 
 
-// Bonnen uploaden naar de privé-bucket en de opslagpaden teruggeven. Gedeeld
-// door de kostenmodal en het snelle kostenformulier in de projectdrawer, zodat
-// beide dezelfde padopbouw gebruiken — de SnelStart-koppeling leest deze paden
-// weer uit om het document aan de inkoopboeking te hangen.
-//
-// Geeft een array met paden terug; de aanroeper zet die als JSON in bijlage_url.
-export async function uploadKostenBonnen(files, companyId) {
-  if (!files?.length) return []
-  const cid = companyId || (await supabase.auth.getUser()
-    .then(({ data }) => supabase.from('profiles').select('company_id').eq('id', data?.user?.id).maybeSingle())
-    .then(({ data }) => data?.company_id))
-  if (!cid) throw new Error('Geen bedrijf gevonden voor de bijlage')
-
-  return await Promise.all(files.map(async (file) => {
-    const ext = (file.name || 'bestand').split('.').pop()
-    const path = `${cid}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-    const { error } = await supabase.storage.from('kosten-bijlagen').upload(path, file)
-    if (error) throw error
-    return path
-  }))
+// Opslagpaden uit bijlage_url (JSON-array of één pad). Oude publieke http-URL's
+// zijn geen pad in onze bucket en blijven buiten beschouwing.
+function bijlagePaden(stored) {
+  if (!stored) return []
+  let items
+  try { items = JSON.parse(stored) } catch { items = [stored] }
+  return (Array.isArray(items) ? items : [items])
+    .filter(p => typeof p === 'string' && p && !p.startsWith('http'))
 }
 
 // Real DB columns: id, company_id, deal_id, description, amount, category,
@@ -164,25 +149,6 @@ export const isWerkbonMateriaal = k => Boolean(k?.werkbonMateriaalId ?? k?.werkb
  * ander bedrag tonen.
  */
 export const alleenGeboekt = (kosten = []) => kosten.filter(k => !isWerkbonMateriaal(k))
-
-/**
- * Splitst kosten in kostprijs (alles) en boekhoudkosten (wat naar de
- * boekhouding gaat). Geeft { kostprijs, boekhouding, werkbonMateriaal }.
- */
-export function kostenSplitsing(kosten = []) {
-  let kostprijs = 0
-  let werkbonMateriaal = 0
-  for (const k of kosten) {
-    const bedrag = Number(k.amt ?? k.amount) || 0
-    kostprijs += bedrag
-    if (isWerkbonMateriaal(k)) werkbonMateriaal += bedrag
-  }
-  return {
-    kostprijs: Math.round(kostprijs * 100) / 100,
-    boekhouding: Math.round((kostprijs - werkbonMateriaal) * 100) / 100,
-    werkbonMateriaal: Math.round(werkbonMateriaal * 100) / 100,
-  }
-}
 
 /**
  * Inkoopwaarde van de kosten — de basis voor een brutowinst.
@@ -315,7 +281,7 @@ export async function deleteJobCost(id) {
   // de FK (ON DELETE CASCADE) ruimt de kost dan mee op. Zo blijven materiaal en
   // kost in sync, ongeacht vanaf welke kant je verwijdert.
   const { data: cost } = await supabase
-    .from('job_costs').select('werkbon_materiaal_id, externe_referentie').eq('id', id).maybeSingle()
+    .from('job_costs').select('werkbon_materiaal_id, externe_referentie, bijlage_url').eq('id', id).maybeSingle()
   if (cost?.werkbon_materiaal_id) {
     const { error } = await supabase.from('werkbon_materialen').delete().eq('id', cost.werkbon_materiaal_id)
     if (error) throw error
@@ -325,6 +291,16 @@ export async function deleteJobCost(id) {
   }
   const { error } = await supabase.from('job_costs').delete().eq('id', id)
   if (error) throw error
+
+  // De bon(nen) in de opslag mee weggooien: de privacyverklaring belooft dat
+  // verwijderde gegevens ook echt weg zijn, en een bon zonder kostenpost is
+  // door niemand meer te vinden. Mislukt het, dan is de kostenpost toch weg;
+  // het bestand blijft dan staan tot de opschoning.
+  const paden = bijlagePaden(cost?.bijlage_url)
+  if (paden.length) {
+    const { error: opslagFout } = await supabase.storage.from('kosten-bijlagen').remove(paden)
+    if (opslagFout) console.warn('Bon verwijderen uit de opslag mislukt:', opslagFout.message)
+  }
 
   // Onthouden dat deze kostenpost hier bewust weg is, zodat de import hem niet
   // terughaalt.

@@ -70,13 +70,15 @@ export async function loginWithEmail(email, password) {
   return data
 }
 
-export async function registerWithEmail({ email, password, fullName, companyName, phone, kvk }) {
+export async function registerWithEmail({ email, password, fullName, companyName, phone, kvk, pakket }) {
   // Auth-user aanmaken. Alle registratie-gegevens in metadata opslaan zodat
   // verify-code het bedrijf later (na e-mailverificatie) kan provisionen.
   const signup = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { full_name: fullName, company_name: companyName, phone: phone || null, kvk: kvk || null } },
+    // gekozen_pakket: de proef start op het pakket dat de klant in stap 3 koos
+    // (verify-code zet hem bij het aanmaken van het bedrijf).
+    options: { data: { full_name: fullName, company_name: companyName, phone: phone || null, kvk: kvk || null, gekozen_pakket: pakket === 'team' ? 'team' : 'groei' } },
   })
   if (signup.error) throw signup.error
 
@@ -89,8 +91,18 @@ export async function registerWithEmail({ email, password, fullName, companyName
   // Confirm email UIT → er is een sessie. We provisionen het bedrijf NIET meer
   // hier; dat gebeurt pas ná e-mailverificatie in verify-code. Stuur de
   // 6-cijferige code (best-effort; het verificatiescherm heeft een resend).
+  // Eerst het akkoord met de voorwaarden vastleggen (versie, tijdstip, IP; de
+  // edge function bepaalt die zelf). Mislukt dat twee keer, dan legt
+  // verify-code het alsnog vast, zodat een account nooit zonder akkoord bestaat.
+  await legAkkoordVast().catch(() => legAkkoordVast()).catch(() => {})
   await requestVerificationCode().catch(() => {})
   return { ...signup.data, requiresVerification: true }
+}
+
+async function legAkkoordVast() {
+  const { data, error } = await supabase.functions.invoke('akkoord-vastleggen')
+  if (error || !data?.success) throw error || new Error('Akkoord vastleggen mislukt')
+  return data
 }
 
 // Vraag een (nieuwe) 6-cijferige verificatiecode aan voor de ingelogde user.
@@ -207,20 +219,11 @@ export async function createMissingProfile() {
     .maybeSingle()
   if (existing?.company_id) return existing
 
-  // Controleer of er een uitnodiging bestaat voor dit emailadres.
-  // company_members is niet leesbaar via RLS als company_id NULL is,
-  // dus gebruiken we een SECURITY DEFINER RPC die auth.users kan lezen.
-  const { data: inviteCompanyId } = await supabase.rpc("get_invite_company_for_current_user")
-  if (inviteCompanyId) {
-    // Koppel aan het bedrijf van de uitnodiging — geen nieuw bedrijf aanmaken
-    await supabase
-      .from("profiles")
-      .update({ company_id: inviteCompanyId, role: "medewerker" })
-      .eq("id", user.id)
-    return { id: user.id, company_id: inviteCompanyId }
-  }
+  // Een uitnodiging accepteren gaat alleen via de link uit de mail
+  // (accept-invite). Op basis van alleen het e-mailadres koppelen we nooit aan
+  // een bedrijf — dat was te kapen door je eerder te registreren dan de genodigde.
 
-  // Geen uitnodiging → nieuw bedrijf aanmaken via SECURITY DEFINER RPC.
+  // Nieuw bedrijf aanmaken via SECURITY DEFINER RPC (eist een geverifieerd e-mailadres).
   const { data: rpcData, error: rpcError } = await supabase.rpc("provision_account", {
     p_company_name: companyName,
     p_full_name:    fullName,

@@ -314,7 +314,9 @@ ul{list-style:none}
 .page-hd{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;gap:12px;flex-wrap:wrap}
 .page-hd h1{font-size:22px;font-weight:700;letter-spacing:-.025em;color:var(--dk);margin:0 0 3px}
 .page-hd p{font-size:13px;color:var(--dmu);margin:0}
-.page-hd-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex-shrink:0}
+/* flex-shrink:1 + min-width:0: op een smal scherm loopt de knoppenrij anders
+   rechts uit beeld (Agenda "+ Toevoegen" op 820px, audit M38). */
+.page-hd-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex-shrink:1;min-width:0;justify-content:flex-end}
 
 .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:var(--r10);font-size:.84rem;font-weight:600;transition:all .18s ease;white-space:nowrap}
 .btn-p{background:var(--p);color:var(--dk);font-weight:700;border:1.5px solid var(--p);box-shadow:none;filter:none;transition:all .15s ease}
@@ -382,7 +384,9 @@ ul{list-style:none}
 .av-5{background:#e0f2fe;color:#0369a1}
 
 /* TABLE */
-.tw{background:white;border-radius:var(--r14);border:1px solid var(--border);overflow:hidden;box-shadow:var(--shadow-sm)}
+/* overflow-x:auto i.p.v. hidden: een tabel die breder is dan het scherm scrolt nu
+   in zijn kader, in plaats van dat de laatste kolom (knoppen) wordt afgekapt. */
+.tw{background:white;border-radius:var(--r14);border:1px solid var(--border);overflow-x:auto;box-shadow:var(--shadow-sm)}
 .tw-hd{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);gap:10px;flex-wrap:wrap}
 .dt{width:100%;border-collapse:collapse;font-size:.84rem}
 .dt thead tr{background:#f9f9f8}
@@ -412,7 +416,8 @@ ul{list-style:none}
 .trend-neu{background:#f3f4f6;color:#6b7280}
 
 /* TABS */
-.tabs{display:flex;gap:2px;padding:3px;background:var(--bgs);border-radius:var(--r10);border:1px solid var(--border);width:fit-content}
+.tabs{display:flex;gap:2px;padding:3px;background:var(--bgs);border-radius:var(--r10);border:1px solid var(--border);width:fit-content;max-width:100%;overflow-x:auto;scrollbar-width:thin}
+.tabs .tab{flex-shrink:0;white-space:nowrap}
 .tab{padding:6px 14px;border-radius:var(--r8);font-size:.8rem;font-weight:600;color:var(--dmu);transition:all .15s ease}
 .tab.active{background:white;color:var(--dk);box-shadow:var(--shadow-xs)}
 .tab:hover:not(.active){color:var(--dk)}
@@ -3495,3 +3500,31 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .bb-mailframe{display:block;width:100%;height:420px;border:0;background:#fff;border-radius:var(--r8)}
 @media(max-width:900px){.bb-mailframe{height:320px}}
 @media(max-width:640px){.bb-mailframe{height:260px}}
+
+/* ── Rondleiding (onboarding): Boss als gids ──────────────────────────────── */
+/* De markering dimt de pagina met een grote schaduw en laat het aangewezen
+   onderdeel vrij. Boss staat ernaast in een tegeltje, met zijn tekstballon. */
+.rl-laag{position:fixed;inset:0;z-index:1500}
+.rl-vanger{position:absolute;inset:0}
+.rl-dim{background:rgba(13,13,13,.45);animation:fadeIn .2s ease both}
+.rl-spot{position:fixed;box-shadow:0 0 0 9999px rgba(13,13,13,.45),0 0 0 2px var(--p),0 0 0 6px rgba(29,219,98,.25);pointer-events:none}
+.rl-gids{position:fixed;display:flex;align-items:flex-end;gap:10px;width:min(400px,calc(100vw - 24px));animation:fadeUp .22s cubic-bezier(.22,1,.36,1) both}
+.rl-boss{flex:0 0 64px;height:64px;border-radius:50%;background:var(--pl);border:2px solid var(--p);box-shadow:0 8px 24px rgba(0,0,0,.22);overflow:hidden}
+/* Het plaatje heeft een doorzichtige achtergrond en vult het rondje helemaal. */
+.rl-boss img{width:100%;height:100%;object-fit:cover;object-position:center top;display:block}
+.rl-ballon{position:relative;flex:1;min-width:0;background:var(--bg);border-radius:var(--r16);padding:14px 16px 10px;box-shadow:0 18px 48px rgba(0,0,0,.2)}
+/* Het staartje van de ballon wijst naar Boss. */
+.rl-ballon::before{content:"";position:absolute;left:-7px;bottom:22px;width:14px;height:14px;background:var(--bg);transform:rotate(45deg);border-radius:2px}
+.rl-teller{font-size:.7rem;font-weight:700;color:var(--dmu);letter-spacing:.02em;margin-bottom:3px}
+.rl-titel{font-size:.98rem;font-weight:800;letter-spacing:-.01em;color:var(--dk);margin-bottom:5px}
+.rl-tekst{font-size:.84rem;line-height:1.45;color:var(--dm);margin:0 0 10px}
+.rl-noot{color:var(--dmu);font-size:.78rem}
+.rl-knoppen{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.rl-knoppen .btn-ghost{padding-left:0}
+.rl-knoppen-rechts{display:flex;gap:6px}
+.rl-geen-meer{display:block;margin-top:6px;font-size:.72rem;color:var(--dl);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline}
+.rl-geen-meer:hover{color:var(--dmu)}
+.rl-gids-welkom .rl-boss{flex-basis:84px;height:84px}
+/* Na de rondleiding licht de Boss-knop rechtsboven even op. */
+@keyframes rlPuls{0%,100%{box-shadow:0 0 0 0 rgba(29,219,98,0)}50%{box-shadow:0 0 0 7px rgba(29,219,98,.35)}}
+.rl-boss-puls{border-radius:50%;animation:rlPuls 1s ease 3}

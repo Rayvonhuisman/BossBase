@@ -10,22 +10,28 @@ export async function getBillingStatus() {
   const { data, error } = await supabase.rpc('get_billing_status')
   if (error) throw error
   if (!data) return null
+  // Definitief geannuleerd in Stripe (customer.subscription.deleted). Dan loopt
+  // er niets meer: geen looptijd, geen geplande opzegging om in te trekken, en
+  // een nieuw abonnement afsluiten moet kunnen. De subscription-id blijft in de
+  // tabel staan (voor de historie), dus heeftStripe alleen is niet genoeg.
+  const definitief = data.stripeStatus === 'canceled'
   return {
     tier: data.tier,
     status: data.status || null,
     stripeStatus: data.stripeStatus || null,
-    heeftStripe: !!data.heeftStripe,
+    definitiefOpgezegd: definitief,
+    heeftStripe: !!data.heeftStripe && !definitief,
     billingInterval: data.billingInterval || 'maand',
     extraGebruikers: Number(data.extraGebruikers || 0),
     trial: !!data.trial,
     trialEindigtOp: data.trialEindigtOp || null,
     periodeStart: data.periodeStart || null,
     verlengtOp: data.verlengtOp || null,
-    opzeggenPerEindePeriode: !!data.opzeggenPerEindePeriode,
+    opzeggenPerEindePeriode: !!data.opzeggenPerEindePeriode && !definitief,
     welkomstactie: data.welkomstactie || null,
-    heeftVerplichting: !!data.heeftVerplichting,
+    heeftVerplichting: !!data.heeftVerplichting && !definitief,
     verplichtingTot: data.verplichtingTot || null,
-    stoptNaLooptijd: !!data.stoptNaLooptijd,
+    stoptNaLooptijd: !!data.stoptNaLooptijd && !definitief,
     magDirectOpzeggen: data.magDirectOpzeggen !== false,
     opzegbaarPer: data.opzegbaarPer || null,
     stoptOp: data.stoptOp || null,
@@ -39,18 +45,6 @@ export async function getBillingStatus() {
     modules: Array.isArray(data.modules) ? data.modules : [],
     limieten: data.limieten || {},
   }
-}
-
-// Wat verhindert een overstap naar `doelTier`? Lege lijst = het mag.
-// Dezelfde controle die de edge function server-side afdwingt, zodat de UI
-// vooraf kan tonen wat er weg moet in plaats van achteraf te weigeren.
-export async function getDowngradeBlokkades(doelTier) {
-  const { data, error } = await supabase.rpc('bb_downgrade_blokkades', { p_doel_tier: doelTier })
-  if (error) throw error
-  return (data || []).map(b => ({
-    limiet: b.limiet, label: b.label,
-    gebruikt: Number(b.gebruikt), maximum: Number(b.maximum), teveel: Number(b.teveel),
-  }))
 }
 
 // Foutmelding uit een edge function halen. Die geeft bij een 4xx een JSON-body

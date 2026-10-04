@@ -1,6 +1,8 @@
+import { heeftRecht, geenRecht } from '../_shared/eisRecht.ts'
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { inactiefReden } from '../_shared/actieveGebruiker.ts'
+import { clientFout } from '../_shared/clientFout.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,6 +46,7 @@ serve(async (req) => {
     if (authErr || !user) {
       return new Response(JSON.stringify({ error: 'Niet ingelogd' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
+    if (!(await heeftRecht(user.id, 'kosten'))) return geenRecht(corsHeaders)
     // service_role omzeilt RLS: zelf controleren dat account en bedrijf actief zijn.
     const inactief = await inactiefReden(user.id)
     if (inactief) return new Response(JSON.stringify({ error: inactief }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -115,7 +118,7 @@ serve(async (req) => {
   } catch (err: any) {
     console.error('Error:', err.message, err.stack)
     return new Response(
-      JSON.stringify({ success: false, error: err.message }),
+      JSON.stringify({ success: false, error: clientFout(err) }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     )
   }

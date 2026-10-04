@@ -96,6 +96,38 @@ const PAGINAS = [
     load: () => import('../pages/marketing/SubverwerkersPage.jsx'),
     breadcrumbs: [HOME, { naam: 'Subverwerkers', pad: '/subverwerkers' }],
   },
+  {
+    path: '/voorwaarden',
+    title: 'Algemene voorwaarden | BossBase',
+    description: 'De afspraken tussen BossBase en jou als ondernemer: proefperiode, abonnement, betalen, je gegevens, opzeggen en aansprakelijkheid.',
+    src: ['src/pages/marketing/juridisch/VoorwaardenPage.jsx'],
+    load: () => import('../pages/marketing/juridisch/VoorwaardenPage.jsx'),
+    breadcrumbs: [HOME, { naam: 'Algemene voorwaarden', pad: '/voorwaarden' }],
+  },
+  {
+    path: '/privacy',
+    title: 'Privacyverklaring | BossBase',
+    description: 'Welke gegevens BossBase verwerkt, waarvoor, op welke grondslag en hoe lang, met wie we ze delen en welke rechten je hebt.',
+    src: ['src/pages/marketing/juridisch/PrivacyverklaringPage.jsx'],
+    load: () => import('../pages/marketing/juridisch/PrivacyverklaringPage.jsx'),
+    breadcrumbs: [HOME, { naam: 'Privacyverklaring', pad: '/privacy' }],
+  },
+  {
+    path: '/verwerkersovereenkomst',
+    title: 'Verwerkersovereenkomst | BossBase',
+    description: 'De verwerkersovereenkomst tussen BossBase en jou als klant: welke gegevens we voor je verwerken, beveiliging, subverwerkers en datalekken.',
+    src: ['src/pages/marketing/juridisch/VerwerkersovereenkomstPage.jsx'],
+    load: () => import('../pages/marketing/juridisch/VerwerkersovereenkomstPage.jsx'),
+    breadcrumbs: [HOME, { naam: 'Verwerkersovereenkomst', pad: '/verwerkersovereenkomst' }],
+  },
+  {
+    path: '/cookieverklaring',
+    title: 'Cookiebeleid | BossBase',
+    description: 'BossBase zet geen cookies. Wat we meten met Vercel Web Analytics, wat de app in je browser bewaart en waarom er geen cookiebanner is.',
+    src: ['src/pages/marketing/juridisch/CookiebeleidPage.jsx'],
+    load: () => import('../pages/marketing/juridisch/CookiebeleidPage.jsx'),
+    breadcrumbs: [HOME, { naam: 'Cookiebeleid', pad: '/cookieverklaring' }],
+  },
 ];
 
 export const NIET_GEVONDEN = {

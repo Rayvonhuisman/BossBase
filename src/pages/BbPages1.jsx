@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { leesbareFout } from '../components/LaadFout.jsx';
+import { logFout, meldFout } from '../lib/stilleFouten.js';
+import { vandaagIso } from '../lib/datumTijd.js';
 import SyncIndicator from '../components/SyncIndicator.jsx';
 import DOMPurify from 'dompurify';
 import { mailVoorbeeldDocument } from '../utils/mailFrame.js';
@@ -7,7 +10,7 @@ import {
   I, CUSTOMERS_DATA, DEALS, ACTIVITIES_DATA, QUOTES_DATA, COSTS_DATA,
   fmt, custById, stageLabel, stageCol, Av, StatusBadge, ModalX, CostCategoryBadge,
 } from '../bb-shared.jsx';
-import { createCustomer, deleteCustomer, getCustomer, listCustomers, updateCustomer } from '../services/customerService.js';
+import { createCustomer, deleteCustomer, getCustomer, listCustomers, updateCustomer, KLANT_TYPES } from '../services/customerService.js';
 import { customerTotals, listCustomersWithTotals } from '../services/customerTotalsService.js';
 import { getKlantNotities, addKlantNotitie, getTijdlijnByCustomer, logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { NoteEditor, renderNote } from '../components/NoteEditor.jsx';
@@ -26,6 +29,7 @@ import { korteDatum } from '../utils/werkbonDagen.js';
 import { PlanningRegels, losseRegels, planRegels, samenOpDatum } from '../components/PlanningBlok.jsx';
 import { WerkbonModal } from './WerkbonPageV2.jsx';
 import { NewOfferteModal, OfferteBadge } from './OffertesPage.jsx';
+import Rondleiding from '../components/Rondleiding.jsx';
 import { NewFactuurModal, FactuurBadge } from './FacturenPage.jsx';
 import { NewProjectModal, KlusBadge } from './ProjectsPage.jsx';
 import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
@@ -44,7 +48,7 @@ import { mailTemplate } from '../utils/mailTemplate.js';
 import { getEmailTemplates } from '../services/instellingenService.js';
 
 // Customer form keeps friendly UI fields; service-layer maps to real DB columns.
-// `type` and `source` are local-only display state for now (no DB columns yet).
+// `type` en `source` worden opgeslagen (customers.type / customers.source).
 const emptyCustomerForm = { name: '', company: '', email: '', phone: '', city: '', address: '', postcode: '', kvkNumber: '', btwNumber: '', iban: '', type: 'Zakelijk', source: 'Handmatig', notes: '' };
 
 // Zelfde datumweergave als de project-tab (ProjectDetailDrawer) zodat de
@@ -120,7 +124,7 @@ function KlantTabbalk({ tabs, labels, actief, onKies }) {
   }
 
   return (
-    <div className="kk-tabs-wrap" ref={wrapRef} style={{ position: 'relative' }}>
+    <div className="kk-tabs-wrap" ref={wrapRef} data-rl="kk-tabs" style={{ position: 'relative' }}>
       {/* Onzichtbare meetstrook met alle tabs op ware grootte. */}
       <div className="tabs kk-tabs kk-tabs-meter" aria-hidden style={{ position: 'absolute', visibility: 'hidden', pointerEvents: 'none', top: 0, left: 0 }}>
         {tabs.map(t => <button key={t} className="tab" tabIndex={-1}>{labels[t]}</button>)}
@@ -234,7 +238,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   const [showActivityModal, setShowActivityModal] = useState(false);
   // Inkopen toevoegen: dezelfde invoerregel als op het project (KostenInvoerRegel).
   const [leveranciers, setLeveranciers] = useState([]);
-  useEffect(() => { listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(() => {}); }, []);
+  useEffect(() => { listLeveranciers({ inclusiefInactief: false }).then(setLeveranciers).catch(logFout('leveranciers laden')); }, []);
   const [selectedAct, setSelectedAct] = useState(null);
   const [cOffertes, setOffertes] = useState([]);
   const [cFacturen, setFacturen] = useState([]);
@@ -306,8 +310,8 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   useEffect(() => {
     if (tab !== 'emails' || !custId) return;
     setSentEmailsLoading(true);
-    getSentEmailsByCustomer(custId).then(setSentEmails).catch(() => {}).finally(() => setSentEmailsLoading(false));
-    getEmailTemplates().then(tpls => setEmailTemplates(tpls.filter(t => t.actief))).catch(() => {});
+    getSentEmailsByCustomer(custId).then(setSentEmails).catch(meldFout(toast, 'De verstuurde e-mails konden niet worden geladen.')).finally(() => setSentEmailsLoading(false));
+    getEmailTemplates().then(tpls => setEmailTemplates(tpls.filter(t => t.actief))).catch(logFout('mailtemplates laden'));
     setExpandedEmailId(null);
   }, [tab, custId]);
 
@@ -320,18 +324,26 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    // Een deel dat niet laadt, mag de klantkaart niet tegenhouden, maar ook niet
+    // stil als "geen facturen" of "€ 0 kosten" in beeld komen.
+    const deels = [];
+    const of = (belofte, terug) => belofte.catch(e => { deels.push(e); return terug; });
     Promise.all([
       getCustomer(custId), listActivities(),
-      getOffertesByCustomer(custId).catch(() => []),
-      getFacturenByCustomer(custId).catch(() => []),
-      getProjectsByCustomer(custId).catch(() => []),
-      getKlantNotities(custId).catch(() => []),
-      getTijdlijnByCustomer(custId).catch(() => []),
-      getWerkbonnen().catch(() => []),
-      getKlantKostenOverzicht(custId).catch(() => LEEG_OVERZICHT),
+      of(getOffertesByCustomer(custId), []),
+      of(getFacturenByCustomer(custId), []),
+      of(getProjectsByCustomer(custId), []),
+      of(getKlantNotities(custId), []),
+      of(getTijdlijnByCustomer(custId), []),
+      of(getWerkbonnen(), []),
+      of(getKlantKostenOverzicht(custId), LEEG_OVERZICHT),
     ])
     .then(([customer, activities, offertes, facturen, projecten, notities, tl, werkbonnen, overzicht]) => {
       if (!alive) return;
+      if (deels.length) {
+        console.warn('[bb] klantkaart deels geladen', deels);
+        toast.error('Niet alles van deze klant kon worden geladen. Bedragen en lijsten kunnen onvolledig zijn; ververs de pagina.');
+      }
       setKostenOverzicht(overzicht);
       setCustomer(customer);
       setKlantNotities(notities);
@@ -348,7 +360,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
     return () => { alive = false; };
   }, [custId, refreshKey]);
 
-  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(() => {}); }, []);
+  useEffect(() => { getTeamMembers().then(setTeamMembers).catch(logFout('teamleden laden')); }, []);
 
   // Moet vóór early returns staan (Rules of Hooks)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -394,9 +406,9 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   // datum: voor de klant is het één agenda, ongeacht waar het vandaan komt.
   const losRegels = losseRegels(cActs);
   const planningRegels = samenOpDatum(planRegels(planWerkbonnen, naamVan), losRegels);
-  const komendeRegels = planningRegels.filter(r => r.datum >= new Date().toISOString().slice(0, 10));
+  const komendeRegels = planningRegels.filter(r => r.datum >= vandaagIso());
   const alleRegels = samenOpDatum(planRegels(cWerkbonnen, naamVan), losRegels);
-  const vandaagIso = new Date().toISOString().slice(0, 10);
+  const vandaagStr = vandaagIso();
 
   const cQuotes = [];
   // Zelfde definitie als de klantenlijst, Financiën en de database-export.
@@ -449,7 +461,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
     if (!activityTitle.trim()) return;
     setSavingActivity(true);
     try {
-      const created = await createActivity({ title: activityTitle, customer_id: c.id, type: 'task', completed: false, due_at: buildDueAt(new Date().toISOString().slice(0, 10)) });
+      const created = await createActivity({ title: activityTitle, customer_id: c.id, type: 'task', completed: false, due_at: buildDueAt(vandaagIso()) });
       setActs(a => [created, ...a]);
       setActivityTitle('');
       toast.success('Activiteit toegevoegd');
@@ -471,7 +483,10 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   const reloadCosts = async () => {
     try {
       setKostenOverzicht(await getKlantKostenOverzicht(custId));
-    } catch { /* ignore */ }
+    } catch (e) {
+      console.warn('[bb] kostenoverzicht verversen mislukt', e);
+      toast.error('Het kostenoverzicht kon niet worden ververst. Ververs de pagina.');
+    }
   };
 
   // De klantgegevens-tab toont het label alleen als de tabbalk de ruimte heeft;
@@ -516,7 +531,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
           creatorId: profile.id,
           creatorName: profile.fullName,
           contextName: c.name,
-        }).catch(() => {});
+        }).catch(logFout('melding versturen'));
       }
       clearText('');
       onDone?.();
@@ -545,7 +560,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
         creatorId: profile.id,
         creatorName: profile.fullName,
         contextName: c.name,
-      }).catch(() => {});
+      }).catch(logFout('melding versturen'));
     }
     toast.success('Notitie opgeslagen');
   };
@@ -601,7 +616,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
       });
       toast.success('E-mail verstuurd');
       logTijdlijnSafe(c?.id, 'email_verstuurd', `E-mail verstuurd: ${emailForm.subject}`, { to: emailForm.to, subject: emailForm.subject });
-      getSentEmailsByCustomer(custId).then(setSentEmails).catch(() => {});
+      getSentEmailsByCustomer(custId).then(setSentEmails).catch(logFout('verstuurde e-mails verversen'));
       setEmailForm(f => ({ ...f, templateId: '', subject: '', body: '' }));
     } catch (err) {
       toast.error(err.message || 'Versturen mislukt');
@@ -680,7 +695,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
             </div>
             {c.phone && <a href={`tel:${c.phone}`} className="btn btn-s btn-sm" style={{ flexShrink: 0, marginLeft: 12 }}>{I.call} {c.phone}</a>}
           </div>
-          <div style={{ fontSize: '.82rem', color: 'var(--dmu)', marginBottom: 10 }}>{c.company} · {c.city}</div>
+          <div style={{ fontSize: '.82rem', color: 'var(--dmu)', marginBottom: 10 }}>{[c.company, c.city].filter(Boolean).join(' · ')}</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-start', marginLeft: 0, paddingLeft: 0 }}>
             {/* Toont zichzelf alleen als de betreffende koppeling ook echt
                 actief is — een oud id van een losgekoppelde boekhouding gaf
@@ -692,7 +707,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
 
       {/* Quick stats (projectbedragen) — gefactureerd/betaald/kosten/winst per klant */}
       {can('projectbedragen') && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
+        <div data-rl="kk-cijfers" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
           {[
             { label: 'Gefactureerd',      val: fmt(totalGefactureerd) },
             { label: 'Betaald',           val: fmt(totalBetaald),    green: totalBetaald > 0 },
@@ -707,6 +722,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
         </div>
       )}
 
+      <Rondleiding pagina="klantkaart" inLa />
       {/* Tabs */}
       <KlantTabbalk tabs={TABS} labels={TAB_LABELS} actief={tab} onKies={setTab} />
 
@@ -714,7 +730,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
       {tab === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Planning van alle werkbonnen van deze klant. */}
-          <div className="card card-p">
+          <div className="card card-p" data-rl="kk-planning">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <button type="button" className="kk-blok-titel" onClick={() => setTab('planning')}>
                 Planning <span className="kk-pijl">→</span>
@@ -741,7 +757,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
           </div>
 
           {/* Notities blok */}
-          <div className="card card-p">
+          <div className="card card-p" data-rl="kk-notities">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <button type="button" className="kk-blok-titel" onClick={() => setTab('notities')}>Notities <span className="kk-pijl">→</span></button>
             </div>
@@ -1061,7 +1077,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
             {/* Zelfde invoerregel als op het project. Een inkoop hoort bij een
                 project; heeft de klant er meer, dan kies je dat vooraan. Zelfde
                 recht als de kostentab van het project. */}
-            {(['admin', 'planner'].includes(profile?.role) || can('projecten_bewerken')) && (
+            {(profile?.role === 'admin' || can('projecten_bewerken')) && (
               <div ref={kostenKolommen.ref} style={{ marginTop: 10 }}>
                 <KostenInvoerRegel
                   kolommen={kostenKolommen}
@@ -1128,7 +1144,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
                 <PlanningRegels
                   regels={alleRegels}
                   onOpen={openRegel}
-                  vandaag={vandaagIso}
+                  vandaag={vandaagStr}
                   toonTitel
                   variant="lrow"
                 />
@@ -1339,7 +1355,7 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
             { key: 'kvkNumber', label: 'KvK-nummer',  type: 'input' },
             { key: 'btwNumber', label: 'BTW-nummer',  type: 'input' },
             { key: 'iban',      label: 'IBAN',        type: 'input' },
-            { key: 'type',      label: 'Type',        type: 'select', options: ['Particulier', 'Bedrijf', 'VvE', 'Aannemer'] },
+            { key: 'type',      label: 'Type',        type: 'select', options: KLANT_TYPES },
             { key: 'source',    label: 'Bron',        type: 'input' },
           ].map(field => {
             const isActive = editingField === field.key;
@@ -1473,7 +1489,15 @@ export function CustomersPage({ openCustomer }) {
   const toast = useToast();
   const { refreshKey, bumpRefresh } = useProfile();
   const { can } = usePermissions();
-  const [search, setSearch] = useState('');
+  // De zoekterm overleeft het openen van een klant: de lijst wordt dan opnieuw
+  // opgebouwd (naast de klantkaart) en begon eerst weer leeg, met alle klanten.
+  const [search, setSearchState] = useState(() => {
+    try { return sessionStorage.getItem('bb.klanten.zoek') || ''; } catch { return ''; }
+  });
+  const setSearch = v => {
+    setSearchState(v);
+    try { sessionStorage.setItem('bb.klanten.zoek', v); } catch { /* geen opslag: alleen niet onthouden */ }
+  };
   const [view, setView] = useState(() => localStorage.getItem('customers_view') || 'grid');
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1521,25 +1545,25 @@ export function CustomersPage({ openCustomer }) {
           </p>
         </div>
         <div className="page-hd-actions">
-          <div className="tabs">
+          <div className="tabs" data-rl="klanten-weergave">
             <button className={`tab${view === 'grid' ? ' active' : ''}`} onClick={() => { setView('grid'); localStorage.setItem('customers_view', 'grid'); }}>Kaarten</button>
             <button className={`tab${view === 'table' ? ' active' : ''}`} onClick={() => { setView('table'); localStorage.setItem('customers_view', 'table'); }}>Tabel</button>
           </div>
-          <button className="btn btn-p btn-sm" onClick={guardLimiet('klanten', () => setShowNew(true))}>{I.plus} Nieuwe klant</button>
+          {can('klanten_bewerken') && <button className="btn btn-p btn-sm" data-rl="klanten-nieuw" onClick={guardLimiet('klanten', () => setShowNew(true))}>{I.plus} Nieuwe klant</button>}
         </div>
       </div>
-      {error && <div className="card card-p" style={{ color: '#dc2626', marginBottom: 14 }}>{error}</div>}
-      <div className="search afu2" style={{ maxWidth: 360, marginBottom: 14 }}>
+      {error && <div className="card card-p" style={{ color: '#dc2626', marginBottom: 14 }}>{leesbareFout(error)}</div>}
+      <div className="search afu2" data-rl="klanten-zoeken" style={{ maxWidth: 360, marginBottom: 14 }}>
         {I.search}
         <input placeholder="Zoek op naam of bedrijf…" value={search} onChange={e => setSearch(e.target.value)} />
       </div>
       {loading && <div className="card card-p">Klanten laden...</div>}
       {!loading && filtered.length === 0 && <div className="empty"><div className="empty-title">Geen klanten gevonden</div><div className="empty-sub">Maak je eerste klant aan of pas je zoekopdracht aan.</div></div>}
       {!loading && filtered.length > 0 && (view === 'grid' ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, alignItems: 'stretch' }} className="afu2 cust-card-grid">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(260px, 100%), 1fr))', gap: 12, alignItems: 'stretch' }} className="afu2 cust-card-grid">
           {filtered.map(c => {
             return (
-              <div key={c.id} className="card card-p" style={{ cursor: 'pointer', transition: 'all .18s ease', display: 'flex', flexDirection: 'column' }}
+              <div key={c.id} className="card card-p" style={{ cursor: 'pointer', transition: 'all .18s ease', display: 'flex', flexDirection: 'column', minWidth: 0, overflowWrap: 'anywhere' }}
                 onClick={() => openCustomer(c.id)}
                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.borderColor = 'rgba(29,219,98,.3)'; }}
                 onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.borderColor = ''; }}>

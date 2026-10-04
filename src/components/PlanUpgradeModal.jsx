@@ -28,7 +28,6 @@ export function usePlanGuard(setPage = null) {
   // Eén blokkade-object voor alle drie de gevallen: {limiet}, {feature} of
   // {readonly, actie}. Zo kan er nooit meer dan één melding tegelijk openstaan.
   const [blokkade, setBlokkade] = useState(null);
-  const sluit = () => setBlokkade(null);
 
   // Read-only gaat vóór limiet en feature. Wie geen lopend abonnement heeft,
   // heeft niets aan "je hebt 20 van de 20 offertes gebruikt" — het probleem is

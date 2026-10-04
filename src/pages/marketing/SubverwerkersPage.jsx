@@ -1,6 +1,6 @@
 // De actuele lijst subverwerkers. De algemene voorwaarden (art. 6.4) en de
 // verwerkersovereenkomst (art. 5) verwijzen hiernaar. Houd hem gelijk met
-// Bijlage/art. 5 van docs/juridisch/verwerkersovereenkomst-CONCEPT.md en §4 van
+// Bijlage/art. 5 van docs/juridisch/verwerkersovereenkomst.md en §4 van
 // de privacyverklaring; een wijziging kondigen we 30 dagen vooraf aan.
 import { PaginaSchil, PaginaKop, Sectie } from '../../marketing/templates/Onderdelen.jsx';
 import { EXPLOITANT_REGEL } from '../../marketing/site.js';

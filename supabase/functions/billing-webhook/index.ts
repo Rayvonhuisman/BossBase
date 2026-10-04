@@ -26,6 +26,8 @@ import {
 } from '../_shared/billing.ts'
 import { klantMail, internMail } from '../_shared/websiteMail.ts'
 import { welkomMail } from '../_shared/welkomMail.ts'
+import { opzeggenBijStripe } from '../_shared/opzeggen.ts'
+import { clientFout } from '../_shared/clientFout.ts'
 
 // Maandprijs van de hostingmodule — noemen we in de klantmail zodat die kosten
 // niet als verrassing komen. Uit de matrix (plan_modules), niet hardcoded.
@@ -205,7 +207,7 @@ serve(async (req) => {
     .insert({ event_id: eventId, type })
   if (claimErr) {
     if (claimErr.code === '23505') return ok('al verwerkt')
-    return new Response(JSON.stringify({ error: claimErr.message }), {
+    return new Response(JSON.stringify({ error: clientFout(claimErr) }), {
       status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
     })
   }
@@ -329,6 +331,15 @@ serve(async (req) => {
     })
     if (syncErr) throw new Error(syncErr.message)
 
+    // Definitief beëindigd: een geplande opzegging bestaat dan niet meer. Zonder
+    // dit bleef stopt_na_looptijd op true staan en bood de app "Opzegging
+    // intrekken" aan op een abonnement dat Stripe al had geannuleerd.
+    if (stripeStatus === 'canceled') {
+      await admin.from('subscriptions')
+        .update({ stopt_na_looptijd: false, cancel_at_period_end: false, stopt_op: null })
+        .eq('stripe_subscription_id', subscriptionId)
+    }
+
     // Heeft de databaseregel het event afgewezen (bv. DB-proefperiode), dan
     // raken we ook de modules niet aan.
     if (typeof resultaat === 'string' && resultaat.startsWith('genegeerd')) {
@@ -382,21 +393,16 @@ serve(async (req) => {
       const eindeLooptijd = rij?.verplichting_tot ? new Date(rij.verplichting_tot) : null
       const opzegdatum = sub?.cancel_at ? new Date(Number(sub.cancel_at) * 1000) : null
 
-      if (eindeLooptijd && eindeLooptijd > new Date() && opzegdatum && opzegdatum < eindeLooptijd) {
-        // Opzegdatum naar het einde van de looptijd schuiven. Via cancel_at op
-        // het abonnement, want een portal-opzegging zet de schedule op
-        // `released` en die is dan niet meer bij te werken.
-        const eindeUnix = Math.floor(eindeLooptijd.getTime() / 1000)
-        await stripeFetch(`/subscriptions/${subscriptionId}`, 'POST', {
-          'cancel_at': String(eindeUnix),
+      if (stripeStatus !== 'canceled' && eindeLooptijd && eindeLooptijd > new Date() && opzegdatum && opzegdatum < eindeLooptijd) {
+        // Opzegdatum naar het einde van de looptijd schuiven. Hangt het
+        // abonnement nog aan een actief schema, dan via het schema (Stripe
+        // weigert cancel_at rechtstreeks); een portal-opzegging heeft het schema
+        // meestal al vrijgegeven, en dan via cancel_at. Zie _shared/opzeggen.ts.
+        await opzeggenBijStripe({
+          subscriptionId,
+          scheduleId: rij?.stripe_schedule_id ?? null,
+          verplichtingTot: rij?.verplichting_tot ?? null,
         })
-        if (rij?.stripe_schedule_id) {
-          try {
-            await stripeFetch(`/subscription_schedules/${rij.stripe_schedule_id}`, 'POST', { end_behavior: 'cancel' })
-          } catch (e) {
-            if (!/released|completed|canceled/i.test((e as Error).message)) throw e
-          }
-        }
         await admin.rpc('bb_stripe_sync_schedule', {
           p_subscription_id: subscriptionId,
           p_schedule_id: rij?.stripe_schedule_id ?? null,

@@ -13,25 +13,6 @@ import { alleRijen } from '../lib/alleRijen.js'
 //
 // Werkt zonder boekhoudkoppeling: iedereen heeft facturen en kosten.
 
-// Rubrieken die we uit eigen data kunnen afleiden, en de rest.
-export const RUBRIEKEN = [
-  { code: '1a', label: 'Leveringen/diensten belast met hoog tarief', kanWij: true },
-  { code: '1b', label: 'Leveringen/diensten belast met laag tarief', kanWij: true },
-  { code: '1c', label: 'Leveringen/diensten belast met overige tarieven', kanWij: false },
-  { code: '1d', label: 'Privégebruik', kanWij: false },
-  { code: '1e', label: 'Leveringen/diensten met 0%, vrijgesteld of btw verlegd', kanWij: true },
-  // 2a is de ONTVANGENDE kant: btw die naar jou is verlegd bij een inkoop.
-  // Dat houden wij niet bij. Wat wij factureren met btw verlegd hoort in 1e —
-  // zo staat het ook in SnelStart's eigen handleiding.
-  { code: '2a', label: 'Btw verlegd naar u (bij inkoop)', kanWij: false },
-  { code: '3a', label: 'Leveringen naar landen buiten de EU', kanWij: false },
-  { code: '3b', label: 'Leveringen naar landen binnen de EU', kanWij: false },
-  { code: '3c', label: 'Installatie/afstandsverkopen binnen de EU', kanWij: false },
-  { code: '4a', label: 'Leveringen uit landen buiten de EU', kanWij: false },
-  { code: '4b', label: 'Leveringen uit landen binnen de EU', kanWij: false },
-  { code: '5b', label: 'Voorbelasting', kanWij: true },
-]
-
 const rond = n => Math.round((Number(n) || 0) * 100) / 100
 
 // Regime van een factuurregel. Rijen van vóór de btw_regime-migratie hebben het
