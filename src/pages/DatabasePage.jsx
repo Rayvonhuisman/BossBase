@@ -37,7 +37,7 @@ const daysAgo = n => { const d = new Date(); d.setDate(d.getDate() - n); return 
 
 const EMPTY_FILTERS = {
   stad: '', aanmaakVan: '', aanmaakTot: '',
-  heeftKvk: 'alles', heeftMoneybird: 'alles',
+  heeftKvk: 'alles', heeftMoneybird: 'alles', heeftSnelstart: 'alles',
   geenProject: false, laatsteContactDagen: '',
   projectStatussen: [], projectStartVan: '', projectStartTot: '',
   projectDeadlineVan: '', projectDeadlineTot: '',
@@ -275,7 +275,7 @@ function FilterBar({ quickTab, setQuickTab, searchQuery, setSearchQuery, filters
     { value: '90', label: 'Ouder dan 90 dagen' },
     { value: '180', label: 'Ouder dan 180 dagen' },
   ];
-  const moneybirdOptions = [
+  const syncOptions = [
     { value: 'alles', label: 'Alles' },
     { value: 'ja', label: 'Gesynchroniseerd' },
     { value: 'nee', label: 'Niet gesynchroniseerd' },
@@ -313,9 +313,8 @@ function FilterBar({ quickTab, setQuickTab, searchQuery, setSearchQuery, filters
       <QuickDropdown label="Stad" options={stadOptions} value={filters.stad} onChange={v => setFilter('stad', v)} />
       <QuickDropdown label="Project status" options={projectStatusOptions} value={filters.projectStatussen[0] || ''} onChange={v => setFilter('projectStatussen', v ? [v] : [])} />
       <QuickDropdown label="Laatste contact" options={contactOptions} value={filters.laatsteContactDagen} onChange={v => setFilter('laatsteContactDagen', v)} />
-      {connectedIntegrations?.has('moneybird') && <QuickDropdown label="Moneybird sync" options={moneybirdOptions} value={filters.heeftMoneybird} onChange={v => setFilter('heeftMoneybird', v)} />}
-      {connectedIntegrations?.has('snelstart') && <QuickDropdown label="SnelStart sync" options={moneybirdOptions} value={filters.heeftMoneybird} onChange={v => setFilter('heeftMoneybird', v)} />}
-      {connectedIntegrations?.has('afas') && <QuickDropdown label="AFAS sync" options={moneybirdOptions} value={filters.heeftMoneybird} onChange={v => setFilter('heeftMoneybird', v)} />}
+      {connectedIntegrations?.has('moneybird') && <QuickDropdown label="Moneybird sync" options={syncOptions} value={filters.heeftMoneybird} onChange={v => setFilter('heeftMoneybird', v)} />}
+      {connectedIntegrations?.has('snelstart') && <QuickDropdown label="SnelStart sync" options={syncOptions} value={filters.heeftSnelstart} onChange={v => setFilter('heeftSnelstart', v)} />}
 
       <div style={{ flex: 1 }} />
 
@@ -630,6 +629,11 @@ export function DatabasePage({ openCustomer }) {
         const heeft = Boolean(c.moneybirdId);
         if (filters.heeftMoneybird === 'ja' && !heeft) return false;
         if (filters.heeftMoneybird === 'nee' && heeft) return false;
+      }
+      if (filters.heeftSnelstart !== 'alles') {
+        const heeft = Boolean(c.snelstartId);
+        if (filters.heeftSnelstart === 'ja' && !heeft) return false;
+        if (filters.heeftSnelstart === 'nee' && heeft) return false;
       }
       if (filters.geenProject && rel.projects.length > 0) return false;
       if (filters.laatsteContactDagen) {
@@ -1261,16 +1265,7 @@ export function DatabasePage({ openCustomer }) {
             )}
             {connectedIntegrations.has('snelstart') && (
               <FilterRow label="SnelStart sync">
-                <select value={filters.heeftMoneybird} onChange={e => setFilter('heeftMoneybird', e.target.value)} style={FIN}>
-                  <option value="alles">Alles</option>
-                  <option value="ja">Gesynchroniseerd</option>
-                  <option value="nee">Niet gesynchroniseerd</option>
-                </select>
-              </FilterRow>
-            )}
-            {connectedIntegrations.has('afas') && (
-              <FilterRow label="AFAS sync">
-                <select value={filters.heeftMoneybird} onChange={e => setFilter('heeftMoneybird', e.target.value)} style={FIN}>
+                <select value={filters.heeftSnelstart} onChange={e => setFilter('heeftSnelstart', e.target.value)} style={FIN}>
                   <option value="alles">Alles</option>
                   <option value="ja">Gesynchroniseerd</option>
                   <option value="nee">Niet gesynchroniseerd</option>
