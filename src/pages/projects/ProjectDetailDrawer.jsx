@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { listLeveranciers } from '../../services/leverancierService.js';
 import { Maximize2, Minimize2, AlertTriangle, AlertOctagon, Check, X, Edit2, Trash2 } from 'lucide-react';
 import { updateCustomer, getCustomer } from '../../services/customerService.js';
@@ -221,6 +221,33 @@ function OverviewTab({
   const [toewijzenBezig, setToewijzenBezig] = useState(false);
   const [toonVerloren, setToonVerloren] = useState(false);
   const [toonToewijzen, setToonToewijzen] = useState(false);
+  // Ernaast klikken sluit de lijst. Elke klik op een naam is al opgeslagen
+  // (wijzigToewijzing schrijft meteen weg), dus dit hoeft niets te bewaren -
+  // het haalt alleen de lijst weg als je klaar bent. Zonder dit bleef hij
+  // openstaan zonder uitweg.
+  const toewijzenRef = useRef(null);
+  useEffect(() => {
+    if (!toonToewijzen) return undefined;
+    const buiten = e => {
+      if (!toewijzenRef.current?.contains(e.target)) setToonToewijzen(false);
+    };
+    // preventDefault: dan laat useEscapeSluit de projectkaart zelf open (die
+    // luistert op window, deze op document en loopt dus eerder). Zonder dit
+    // sloot Escape de lijst én de hele kaart.
+    const opEscape = e => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      setToonToewijzen(false);
+    };
+    // mousedown en niet click: een klik die buiten begint maar binnen eindigt
+    // (slepen) zou anders ongemerkt doorgaan voor "ernaast geklikt".
+    document.addEventListener('mousedown', buiten);
+    document.addEventListener('keydown', opEscape);
+    return () => {
+      document.removeEventListener('mousedown', buiten);
+      document.removeEventListener('keydown', opEscape);
+    };
+  }, [toonToewijzen]);
   const [dealLokaal, setDealLokaal] = useState(null);
   const huidigeDeal = dealLokaal?.id === deal?.id ? dealLokaal : deal;
   // Bedragen op projecten horen achter 'projectbedragen'. Dat recht bestond al
@@ -558,7 +585,7 @@ function OverviewTab({
           {/* Wie het behandelt. Dicht als knop met de namen erop: de lijst toont
               alle teamleden en zou het blok anders uit elkaar duwen. */}
           {magVerkoop && (
-            <div style={{ marginTop: 12 }} data-rl="pk-behandeld">
+            <div style={{ marginTop: 12 }} ref={toewijzenRef} data-rl="pk-behandeld">
               <div style={labelStyle}>Behandeld door</div>
               {toonToewijzen ? (
                 <MemberMultiSelect
