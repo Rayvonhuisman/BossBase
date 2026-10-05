@@ -215,12 +215,14 @@ export const RONDLEIDINGEN = {
   // Het tabblad Websiteformulier heeft een eigen rondleiding: wie Instellingen
   // al kende toen dit tabblad erbij kwam, krijgt hem zo toch de eerste keer.
   websiteformulier: [
-    { doel: 'wf-uitleg', titel: 'Stap voor stap',
-      tekst: 'Klik hier voor de uitleg: hoe je het formulier op je website zet, ook in WordPress en Wix.' },
-    { doel: 'wf-code', titel: 'De code voor je website',
-      tekst: 'Kopieer deze code en plak hem in je website. Er zit geen geheime sleutel in, dus je kunt hem gerust doorsturen naar wie je website bouwt.' },
-    { doel: 'wf-test', titel: 'Even testen',
-      tekst: 'Stuur een testaanvraag. Hij verschijnt meteen in je pipeline, als klant en project.' },
+    { doel: 'wf-stappen', titel: 'Vijf korte stappen',
+      tekst: 'Ik loop met je door vijf korte stappen. Daarna komen aanvragen van je website vanzelf in je pipeline.' },
+    { doel: 'wf-uitleg', titel: 'Meer uitleg',
+      tekst: 'Klik hier als je het stap voor stap wilt lezen, ook voor WordPress en Wix.' },
+    { doel: 'wf-aanpassen', titel: 'Aanpassen',
+      tekst: 'Wil je iets veranderen? Hier loop je de stappen opnieuw door.' },
+    { doel: 'wf-meer', titel: 'Meer instellingen',
+      tekst: 'Je websites, de kleur, je privacylink en het aan- of uitzetten vind je hier.' },
   ],
 
   // ── Vensters ──────────────────────────────────────────────────────────────

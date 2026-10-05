@@ -3323,7 +3323,7 @@ export function InstellingenPage({ openDeal } = {}) {
       )}
 
       {!loading && tab === 'websiteformulier' && canCompanySettings && plan.has('leads') && (
-        <WebsiteformulierSectie openDeal={openDeal} />
+        <WebsiteformulierSectie openDeal={openDeal} naarBedrijfsprofiel={() => setTab('bedrijf')} />
       )}
 
       {!loading && tab === 'abonnement' && isAdmin && <AbonnementSectie />}

@@ -72,68 +72,70 @@ klant al (zelfde e-mailadres), dan komt het project bij die klant, anders wordt 
 aangemaakt met naam, e-mail, telefoon en adres, en bron **Website**. De beheerder en
 collega's met het recht *Verkooppijplijn* krijgen een melding. Op de projectkaart
 staat in het blok **De aanvraag** precies wat er is ingevuld, met de eigen velden
-onderaan onder hun eigen naam, en bij **Via** staat **Website**. Foto's die de klant meestuurt, staan bij de foto's van de aanvraag.
-Het zit in alle pakketten (Starter, Groei en Team).
+onderaan onder hun eigen naam, en bij **Via** staat **Website**. Foto's die de klant
+meestuurt, staan bij de foto's van de aanvraag. Het zit in alle pakketten (Starter,
+Groei en Team).
 
-Naast de titel staat een **info-icoontje**: dat opent een pagina met de uitleg stap
-voor stap, ook voor WordPress en Wix.
+Je stelt het in met een **wizard van vijf stappen**, één stap tegelijk, met
+**Volgende** en **Vorige**. Elke stap wordt meteen opgeslagen. Bovenaan staat een
+**info-icoontje** dat een pagina opent met de hele uitleg, ook voor WordPress en Wix.
 
-**Stap 1. Op welke website staat het formulier?** Typ het adres van je website
-(bijvoorbeeld mijnbedrijf.nl) en klik **Toevoegen**; het komt erin met en zonder www.
-Alleen van deze adressen worden aanvragen aangenomen. Zonder adres werkt het
-formulier nog nergens. Een Wix-site zonder eigen domein: vul het wixsite.com-adres in.
+1. **Heb je al een contactformulier op je website?** **Ja**: we koppelen je bestaande
+   formulier (bijvoorbeeld Contact Form 7, WPForms of Elementor); dat blijft werken
+   zoals het werkte, je krijgt ook je eigen mail nog, en BossBase krijgt een kopie.
+   **Nee**: je krijgt een kant-en-klaar formulier in de merkkleur uit het
+   bedrijfsprofiel.
+2. **Wat is het adres van je website?** Eén veld; zonder https:// of www mag ook.
+   Alleen vanaf dit adres worden aanvragen aangenomen (met en zonder www). Bij **Ja**
+   zoekt BossBase meteen het formulier op die pagina op en leest de velden; vul je
+   alleen je website in, dan kijkt hij ook op /contact en /offerte-aanvragen. Lukt
+   dat niet, dan staat erbij waarom (pagina bestaat niet, website blokkeert ons,
+   formulier wordt later geladen, of het is Wix) en kun je **Zelf de velden
+   invullen**.
+3. **De velden.** Bij **Nee**: zet telefoon, adres, postcode, plaats, gewenste datum
+   en foto's (maximaal 5) aan of uit; naam, e-mail en omschrijving staan er altijd in.
+   Ernaast zie je een voorbeeld. Met **+ Eigen veld** voeg je eigen vragen toe, zoals
+   "Soort dak": een naam, een soort (Tekst, Getal, Keuze uit opties, Ja/nee of Datum;
+   bij een keuze de opties met komma's ertussen, minstens twee) en **Verplicht**. Bij
+   **Ja**: per veld van je formulier staat al een voorstel waar het in BossBase komt
+   (naam, e-mailadres, telefoon, adres, postcode, plaats, omschrijving, gewenste datum,
+   foto's of **Eigen veld…** met een eigen naam). Het e-mailadres moet gekoppeld zijn.
+   Twee velden bij hetzelfde BossBase-veld (voornaam en achternaam) worden
+   samengevoegd. Met **+ Veld toevoegen** voeg je zelf een veldnaam toe (het
+   name-attribuut, bijvoorbeeld your-name bij Contact Form 7 of form_fields[name] bij
+   Elementor).
+4. **Op welke soort website zet je het?** Kies **WordPress**, **Wix** of **Anders**.
+   Je krijgt de code met een kopieerknop en drie korte stappen:
+   - WordPress, kant-en-klaar: pagina bewerken, blok **Aangepaste HTML** toevoegen,
+     code plakken en **Bijwerken**.
+   - WordPress, koppelen: plugin **WPCode** installeren, **Code Snippets › Header &
+     Footer**, code bij **Footer** plakken en opslaan.
+   - Wix: je krijgt een link in plaats van code. **Toevoegen › Code insluiten › Een
+     site insluiten**, link plakken, vak ongeveer 750 pixels hoog, publiceren.
+     Koppelen kan bij Wix niet; de wizard stelt dan voor het kant-en-klare formulier
+     te gebruiken.
+   - Anders: plak de code in een blok voor eigen HTML (kant-en-klaar) of in de footer
+     (koppelen) en publiceer.
+   Er zit geen geheime sleutel in de code.
+5. **Test het.** **Testaanvraag versturen** zet een aanvraag van "Test Aanvraag" in je
+   pipeline, met voorbeeldwaarden in je eigen velden; met **Bekijk in de pipeline**
+   open je hem. Met **Klaar** zet je het formulier aan.
 
-**Stap 2. Hoe wil je het formulier gebruiken?** Twee manieren:
-- **Kant-en-klaar formulier**: plakken en klaar, in de merkkleur uit het
-  bedrijfsprofiel. Naam, e-mailadres en omschrijving staan er altijd in; telefoon,
-  adres, postcode, plaats, gewenste datum en foto's (maximaal 5) zet je aan of uit.
-  Optioneel een link naar je privacyverklaring. Rechts zie je een voorbeeld.
-  Met **+ Eigen veld** voeg je zelf vragen toe, zoals "Soort dak" of "Oppervlakte in
-  m²": een naam, een soort (Tekst, Getal, Keuze uit opties, Ja/nee of Datum; bij een
-  keuze typ je de opties met komma's ertussen, minstens twee) en **Verplicht** aan of
-  uit. Maximaal 20 eigen velden.
-- **Koppelen aan je eigen formulier**: je bestaande formulier (bijvoorbeeld Contact
-  Form 7, WPForms of Elementor) blijft werken zoals het werkte, en BossBase krijgt
-  een kopie. Vul de pagina met je formulier in (zonder https:// of www mag ook) en
-  klik **Velden ophalen**. De website komt dan vanzelf bij stap 1 te staan en alles
-  wordt meteen opgeslagen; apart opslaan hoeft niet. Kies per veld waar het in
-  BossBase hoort: naam, e-mailadres, telefoonnummer, adres, postcode, plaats,
-  omschrijving van de aanvraag, gewenste datum of foto's. Past een veld nergens bij
-  (bijvoorbeeld "Soort dak"), kies dan **Eigen veld…** en geef het een naam; zo komt
-  het in BossBase binnen. Lukt ophalen niet, dan staat erbij waarom (pagina bestaat
-  niet, website blokkeert ons, formulier wordt pas later geladen, of het is Wix) en
-  wat je kunt doen. Vul dan zelf de veldnaam in (het name-attribuut, bijvoorbeeld
-  your-name bij Contact Form 7 of form_fields[name] bij Elementor) met **+ Veld
-  toevoegen**. Het
-  e-mailadres moet gekoppeld zijn. Twee velden bij hetzelfde BossBase-veld (voornaam
-  en achternaam) worden samengevoegd. Wat je niet koppelt, gaat niet naar BossBase.
-
-Klik **Opslaan**. Met het vinkje **Aanvragen ontvangen** zet je het formulier aan of uit.
-
-**Stap 3. Plak de code in je website.** Klik **Code kopiëren**. Er zit geen geheime
-sleutel in; je kunt de code gerust doorsturen naar wie je website bouwt.
-- WordPress, kant-en-klaar: pagina bewerken, blok **Aangepaste HTML** (Custom HTML),
-  code plakken, **Bijwerken**. Elementor: widget **HTML**. Klassieke editor: tabblad
-  **Tekst**.
-- WordPress, koppelen: plugin **WPCode** installeren, **Code Snippets › Header &
-  Footer**, code in **Footer** plakken, opslaan. Leeg daarna een eventuele cache.
-- Wix: gebruik het kant-en-klare formulier met de link (**Link kopiëren**). In de
-  editor: **Elementen toevoegen › Code insluiten › Een site insluiten**, link plakken,
-  vak ongeveer 750 pixels hoog maken, publiceren. Koppelen aan een formulier van Wix
-  zelf kan niet.
-- Squarespace (blok Code), Webflow (Embed) en Jimdo (Widget/HTML) werken als WordPress.
-
-**Stap 4. Testen.** **Testaanvraag versturen** zet een aanvraag van "Test Aanvraag" in
-je pipeline, met voorbeeldwaarden in je eigen velden; met **Bekijken** open je hem. Daarna kun je zelf je formulier op je site
-invullen. Testaanvragen kun je gewoon verwijderen.
+Daarna zie je het **eindscherm** "Je websiteformulier staat aan", met de manier, je
+website, de velden en je eigen velden onder elkaar. Met **Aanpassen** loop je de
+wizard opnieuw door, met **Code bekijken** ga je naar de code. Onder **Meer
+instellingen**: **Aanvragen ontvangen** (aan/uit), je **Websites** (ook een tweede
+site toevoegen of er een weghalen), de **Kleur** (die wijzig je in Bedrijfsprofiel),
+een link naar je privacyverklaring, de **Link naar het formulier** (voor Wix en
+andere sitebouwers), en de uitleg stap voor stap. Klik daar op **Opslaan**.
 
 **Spam en veiligheid:** een verborgen veld dat alleen robots invullen, een limiet per
-IP-adres en per e-mailadres, en alleen de opgegeven adressen.
+IP-adres en per e-mailadres, en alleen de opgegeven websites.
 
-**Komt er niets binnen?** Controleer of **Aanvragen ontvangen** aan staat en is
-opgeslagen, of het juiste adres (met of zonder www) bij stap 1 staat, bij koppelen of
-het e-mailveld gekoppeld is en de code op de pagina met het formulier staat, en leeg
-de cache van je website. Een nieuw adres werkt binnen een minuut.
+**Komt er niets binnen?** Controleer onder Meer instellingen of **Aanvragen
+ontvangen** aan staat en je website bij Websites staat (met of zonder www), bij
+koppelen of het e-mailadres gekoppeld is en de code op de pagina met het formulier
+staat, en leeg de cache van je website. Een nieuw adres werkt binnen een minuut.
 
 ### Voertuigen, Abonnement, Integraties
 Zie werkbonnen-en-planning, abonnementen en integraties.
