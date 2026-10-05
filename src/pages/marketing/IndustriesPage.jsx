@@ -1,11 +1,11 @@
 // Voor wie (/voor-wie), herontwerp 2026 in de stijl van de homepage. Ontwerp:
 // Claude Design, artboard "Voor wie". Eén keuze (zzp'er of bedrijf met team)
 // stuurt het keuzepaneel in de kop én het blok eronder. De branches staan als
-// stapel: elke kaart plakt bij het scrollen bovenaan (position: sticky) en de
-// volgende schuift eroverheen. Alleen bevestigde functies; de teksten komen
+// stapel: één kaart in beeld; bij het scrollen schuift de voorste naar boven weg
+// en komt de volgende tevoorschijn (scrollvoortgang, zie Branches). Alleen bevestigde functies; de teksten komen
 // overeen met de branchepagina's onder /voor-wie/*.
 // Stijlen: fp-* (gedeeld) en vw-* in bossbase-mkt.css.
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Nav, Footer } from './MktShared';
 import { HI, useGa, Faq, Afsluiting } from './HvBlokken';
 import { Kruimelpad } from '../../marketing/templates/Onderdelen.jsx';
@@ -189,34 +189,76 @@ function Situatie({ situatie, setSituatie, navigate }) {
   );
 }
 
+// De stapel: een venster dat bij het scrollen op zijn plek blijft (sticky). Daarin
+// staan de bloktitel en de kaarten; de kaarten liggen op elkaar, de eerste bovenop. Per STAP pixels scrollen schuift
+// de voorste kaart onder de titel weg en komt de volgende naar voren. Op een smal
+// scherm en bij "minder beweging" staan de kaarten gewoon onder elkaar (CSS).
+const STAP = 420;      // scrollafstand per kaart
+const KAART_H = 340;   // hoogte van het venster, ruim boven de hoogste kaart
+const BOVEN = 96;      // afstand tot de bovenrand, onder de navigatie
+
 function Branches({ navigate }) {
   const go = useGa(navigate);
+  const ref = useRef(null);
+  const vensterRef = useRef(null);
+  const [s, setS] = useState(0);
+  const [vensterH, setVensterH] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let raf = 0;
+    const meet = () => {
+      raf = 0;
+      setS(Math.max(0, BOVEN - el.getBoundingClientRect().top));
+      if (vensterRef.current) setVensterH(vensterRef.current.offsetHeight);
+    };
+    const plan = () => { if (!raf) raf = requestAnimationFrame(meet); };
+    meet();
+    window.addEventListener('scroll', plan, { passive: true });
+    window.addEventListener('resize', plan);
+    return () => { window.removeEventListener('scroll', plan); window.removeEventListener('resize', plan); if (raf) cancelAnimationFrame(raf); };
+  }, []);
+  const n = BRANCHES.length;
   return (
     <section className="hv-sectie hv-sectie-creme" id="branches">
       <div className="container">
-        <div className="hv-kop">
-          <span className="hv-kicker">Per branche</span>
-          <h2>Speciaal voor jouw vakgebied.</h2>
-          <p>Herkenbare problemen per vak, en wat BossBase eraan doet. Scroll door de vakken; elk vak heeft een eigen pagina met de volledige uitleg.</p>
-        </div>
-        <div className="vw-stapel">
-          {BRANCHES.map((b, i) => (
-            <a key={b.naam} href={b.href} className="vw-vak" style={{ '--i': i }} onClick={e => go(e, b.href)}>
-              <span className="vw-vak-kop">
-                <span className="vw-vak-h"><span className="hv-tegel hv-tegel-groot">{HI[b.icoon]}</span><span><b>{b.naam}</b><small>{b.tag}</small></span></span>
-                <span className="vw-vak-intro">{b.intro}</span>
-                <span className="hv-link">{b.link} {HI.arrow}</span>
-              </span>
-              <span className="vw-vak-kolom">
-                <span className="vw-label">Herkenbaar</span>
-                <ul>{b.pijn.map(t => <li key={t}><i className="hf-rond rood">{HI.x}</i>{t}</li>)}</ul>
-              </span>
-              <span className="vw-vak-kolom">
-                <span className="vw-label">Met BossBase</span>
-                <ul>{b.doet.map(t => <li key={t}><i className="hf-rond groen">{HI.check}</i>{t}</li>)}</ul>
-              </span>
-            </a>
-          ))}
+        <div className="vw-stapel" ref={ref} style={{ '--stapel-h': `${(n - 1) * STAP + (vensterH || KAART_H + 230) + 40}px`, '--venster-h': `${KAART_H}px`, '--boven': `${BOVEN}px` }}>
+          <div className="vw-venster" ref={vensterRef}>
+            <div className="hv-kop">
+              <span className="hv-kicker">Per branche</span>
+              <h2>Speciaal voor jouw vakgebied.</h2>
+              <p>Herkenbare problemen per vak, en wat BossBase eraan doet. Scroll door de vakken; elk vak heeft een eigen pagina met de volledige uitleg.</p>
+            </div>
+            <div className="vw-kaarten">
+            {BRANCHES.map((b, i) => {
+              const weg = i === n - 1 ? 0 : Math.min(1, Math.max(0, (s - i * STAP) / STAP));
+              const diepte = Math.min(3, Math.max(0, i - s / STAP));
+              const stijl = {
+                '--y': `${Math.round(diepte * 16 - weg * (KAART_H + 60))}px`,
+                '--schaal': (1 - diepte * 0.035).toFixed(3),
+                zIndex: n - i,
+              };
+              const verborgen = weg >= 1;
+              return (
+                <a key={b.naam} href={b.href} className={`vw-vak${verborgen ? ' weg' : ''}`} style={stijl} tabIndex={verborgen ? -1 : undefined} aria-hidden={verborgen || undefined} onClick={e => go(e, b.href)}>
+                  <span className="vw-vak-kop">
+                    <span className="vw-vak-h"><span className="hv-tegel hv-tegel-groot">{HI[b.icoon]}</span><span><b>{b.naam}</b><small>{b.tag}</small></span></span>
+                    <span className="vw-vak-intro">{b.intro}</span>
+                    <span className="hv-link">{b.link} {HI.arrow}</span>
+                  </span>
+                  <span className="vw-vak-kolom">
+                    <span className="vw-label">Herkenbaar</span>
+                    <ul>{b.pijn.map(t => <li key={t}><i className="hf-rond rood">{HI.x}</i>{t}</li>)}</ul>
+                  </span>
+                  <span className="vw-vak-kolom">
+                    <span className="vw-label">Met BossBase</span>
+                    <ul>{b.doet.map(t => <li key={t}><i className="hf-rond groen">{HI.check}</i>{t}</li>)}</ul>
+                  </span>
+                </a>
+              );
+            })}
+            </div>
+          </div>
         </div>
       </div>
     </section>
