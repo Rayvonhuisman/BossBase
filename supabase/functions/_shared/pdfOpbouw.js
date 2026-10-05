@@ -385,7 +385,10 @@ export async function buildPdf(doc, type, document, regels, customer, company, o
     doc.text(euro(prijs), COL_X[2] + COL_W[2] - 1, y, { align: 'right' });
 
     const btwPct = r.btwPct !== undefined ? r.btwPct : (document.btwPct ?? 21);
-    doc.text(`${btwPct}%`, COL_X[3] + COL_W[3] - 1, y, { align: 'right' });
+    // Bij verlegd en vrijgesteld zegt "0%" niets: de kolom noemt het regime.
+    const regime = regimeVoorOpslag(r.btwRegime || regimeVanPct(btwPct));
+    const btwTekst = regime === 'verlegd' ? 'verlegd' : regime === 'vrijgesteld' ? 'vrijgesteld' : `${btwPct}%`;
+    doc.text(btwTekst, COL_X[3] + COL_W[3] - 1, y, { align: 'right' });
 
     const bedrag = type === 'factuur' ? r.regelprijs : r.subtotaal;
     doc.setFont('helvetica', 'bold');
