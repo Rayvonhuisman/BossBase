@@ -39,8 +39,13 @@ anders op het bedrijfsmailadres).
 
 ### Algemeen
 - Kaart **Algemeen**: **Uurtarief**, **Reiskosten (€/km)**, **BTW (%)**,
-  **BTW-stelsel** (factuurstelsel of kasstelsel) en **Offerte geldig (dagen)**. Deze
-  waarden worden vooraf ingevuld bij nieuwe offertes en facturen.
+  **BTW-stelsel** (factuurstelsel of kasstelsel), **Offerte geldig (dagen)** en
+  **Betaaltermijn facturen (dagen)**. Deze waarden worden vooraf ingevuld bij nieuwe
+  offertes en facturen.
+- **Offerte geldig (dagen)** bepaalt tot wanneer een offerte geldig is.
+  **Betaaltermijn facturen (dagen)** bepaalt de vervaldatum van een nieuwe factuur
+  (standaard 14 dagen). Dat zijn twee aparte instellingen. Bestaande facturen houden
+  hun vervaldatum.
 - Kaart **Herinneringen**: de urenherinnering (zie uren).
 - Kaart **Agenda**: **Eerste zichtbare uur** en **Laatste zichtbare uur**.
 - Kaart **Eigen prijzen / eenheden**: eigen regeltypes voor offertes en facturen, met
