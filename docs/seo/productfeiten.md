@@ -102,10 +102,11 @@ of staat het onder "Bestaat niet", dan beloven we het niet.
 - **Moneybird**: instellen met API-token en administratie-ID.
   - BossBase → Moneybird: een factuur gaat naar Moneybird zodra hij betaald is
     (contact, factuur en betaling). Moneybird kiest het btw-tarief.
-  - Moneybird → BossBase (elk uur, ook handmatig): inkoopfacturen, bonnetjes en
-    uitgaven worden kosten; verkoopfacturen die niet uit BossBase komen; de
-    betaalstatus van gesynchroniseerde facturen.
-  - Contacten: twee kanten op, elk uur. Btw-overzicht: dagelijks.
+  - Moneybird → BossBase (alleen handmatig, met de knop Kosten importeren):
+    inkoopfacturen, bonnetjes en uitgaven worden kosten; verkoopfacturen die niet
+    uit BossBase komen; de betaalstatus van gesynchroniseerde facturen.
+  - Contacten: twee kanten op, handmatig. Btw-overzicht: bij het synchroniseren.
+    Er draait geen automatische synchronisatie (sinds 2026-10-05 ook officieel uit).
 - **SnelStart**: koppelsleutel invoeren.
   - BossBase → SnelStart: facturen als verkoopboeking (bij betaald markeren en
     dagelijks), met PDF. Geen betaalregistratie.

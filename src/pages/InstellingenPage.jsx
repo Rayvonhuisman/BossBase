@@ -154,6 +154,22 @@ const VASTE_WERKWIJZE = (
   </>
 );
 
+// Moneybird werkt (nog) anders dan SnelStart: er draait geen automatische sync,
+// en facturen gaan pas bij betaald. De gedeelde tekst hierboven beloofde voor
+// Moneybird dingen die niet gebeurden (audit M35). Tot de herbouw staat hier wat
+// de koppeling echt doet.
+const VASTE_WERKWIJZE_MONEYBIRD = (
+  <>
+    <strong>Wat er meegaat.</strong> Synchroniseren gaat met de hand, met de
+    knoppen hieronder. Een factuur gaat naar Moneybird zodra hij betaald is
+    (zelf gemarkeerd of via de betaallink), samen met de betaling; concepten en
+    onbetaalde facturen niet. <em>Kosten importeren</em> haalt inkoopfacturen,
+    bonnetjes en uitgaven op als kostenregels (maximaal 100 per soort per keer)
+    en zet facturen die in Moneybird betaald zijn ook hier op betaald.
+    Kosten die je in BossBase invoert, gaan niet naar Moneybird.
+  </>
+);
+
 // Alle mogelijke tab-ids (permissie-onafhankelijk) — weert onbekende ?tab=-waarden.
 const SETTINGS_TAB_IDS = ['profiel', 'bedrijf', 'standaard', 'templates', 'pipeline', 'websiteformulier', 'voertuigen', 'abonnement', 'integraties'];
 
@@ -965,7 +981,7 @@ export function InstellingenPage({ openDeal } = {}) {
         const delen = [];
         if (result.imported) delen.push(`${result.imported} klanten opgehaald`);
         if (result.bijgewerkt) delen.push(`${result.bijgewerkt} klanten bijgewerkt`);
-        if (result.exported) delen.push(`${result.exported} klanten naar SnelStart`);
+        if (result.exported) delen.push(`${result.exported} klanten naar Moneybird`);
         if (lev.geimporteerd) delen.push(`${lev.geimporteerd} leveranciers opgehaald`);
         if (lev.bijgewerkt) delen.push(`${lev.bijgewerkt} leveranciers bijgewerkt`);
         if (result.overgeslagenUitPrullenbak) {
@@ -1494,7 +1510,7 @@ export function InstellingenPage({ openDeal } = {}) {
     {
       id: 'moneybird',
       naam: 'Moneybird',
-      omschrijving: 'Synchroniseer facturen automatisch naar Moneybird en importeer inkoopfacturen als kostenregels.',
+      omschrijving: 'Zet betaalde facturen door naar Moneybird en haal inkoopfacturen op als kostenregels.',
       logo: { src: '/brand/moneybird.svg', alt: 'Moneybird' },
       status: { actief: !!mbConnection?.connected, label: mbConnection?.connected ? 'Actief' : 'Niet gekoppeld' },
       gate: boekhoudGate,
@@ -1530,7 +1546,7 @@ export function InstellingenPage({ openDeal } = {}) {
       // Geen instellingen: de werkwijze ligt vast (zie toelichting bij Synchroniseren).
       instellingen: null,
       sync: !boekhoudGate && (mbConnection?.connected || mbConnection?.lastSyncedAt) ? {
-        toelichting: VASTE_WERKWIJZE,
+        toelichting: VASTE_WERKWIJZE_MONEYBIRD,
         laatsteSync: mbConnection?.lastSyncedAt || null,
         acties: mbConnection?.connected ? [
           { label: mbImporting ? 'Importeren...' : 'Kosten importeren', onClick: handleMbImport, disabled: mbImporting },

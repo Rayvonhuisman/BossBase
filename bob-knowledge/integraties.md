@@ -13,15 +13,20 @@ Te vinden onder **Instellingen**, tabblad **Integraties**. Er zijn drie koppelin
 **Verbinding testen** en daarna **Opslaan**.
 
 **Wat er gebeurt:**
-- Een factuur die je op betaald zet, gaat direct naar Moneybird.
-- Een nieuwe of gewijzigde klant gaat naar Moneybird.
-- Elk uur haalt BossBase je inkoopfacturen, bonnetjes en uitgaven op; die komen op de
-  pagina **Kosten** met het label MB. Een factuur die in Moneybird als betaald staat,
-  gaat ook in BossBase op betaald.
-- Elk uur worden klanten in beide richtingen bijgewerkt.
-- Elke ochtend komen de btw-cijfers binnen voor de btw-kaart op Financiën.
-
-Zelf synchroniseren kan met **Kosten importeren** en **Contacten synchroniseren**.
+- Een factuur die je op betaald zet (zelf of via de betaallink), gaat direct naar
+  Moneybird, met de betaling. Concepten en onbetaalde facturen gaan niet mee.
+- Een nieuwe klant gaat naar Moneybird; wijzigingen aan een klant die al in Moneybird
+  staat ook.
+- Er draait **geen automatische synchronisatie**. Synchroniseren doe je zelf, in de
+  Moneybird-kaart, tabblad **Synchroniseren**:
+  - **Kosten importeren** haalt inkoopfacturen, bonnetjes en uitgaven op (maximaal 100
+    per soort per keer); die komen op de pagina **Kosten** met het label MB. Facturen die
+    in Moneybird als betaald staan, gaan ook in BossBase op betaald. De btw-cijfers voor
+    de btw-kaart op Financiën worden dan ook bijgewerkt.
+  - **Contacten synchroniseren** zet nieuwe klanten in beide richtingen over.
+- Kosten die je in BossBase invoert, gaan niet naar Moneybird.
+- BossBase stuurt geen btw-tarief en geen grootboekrekening mee; Moneybird kiest zelf
+  het standaardtarief. Controleer de eerste facturen in Moneybird.
 
 ## SnelStart (Groei en Team)
 

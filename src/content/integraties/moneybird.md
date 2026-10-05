@@ -5,7 +5,7 @@
   "volgorde": 1,
   "kruimel": "Moneybird",
   "title": "Moneybird koppelen aan BossBase | BossBase",
-  "description": "Koppel BossBase aan Moneybird: betaalde facturen gaan naar Moneybird, inkoopfacturen en bonnetjes komen als kosten terug. Vanaf het Groei-pakket.",
+  "description": "Koppel BossBase aan Moneybird: betaalde facturen gaan naar Moneybird, inkoopfacturen en bonnetjes haal je op als kosten. Vanaf het Groei-pakket.",
   "kicker": "Koppeling · Moneybird",
   "h1": "BossBase koppelen aan Moneybird",
   "lead": "Je doet het werk in BossBase, je boekhouding in Moneybird. De koppeling zet betaalde facturen door naar Moneybird en haalt inkoopfacturen, bonnetjes en uitgaven terug als kosten.",
@@ -15,18 +15,18 @@
   "puntenTitel": "Wat er wordt uitgewisseld",
   "punten": [
     { "titel": "Facturen naar Moneybird", "tekst": "Zodra een factuur in BossBase betaald is (zelf gemarkeerd of via de betaallink), maakt BossBase in Moneybird het contact en de factuur aan en registreert de betaling." },
-    { "titel": "Kosten uit Moneybird", "tekst": "Inkoopfacturen, bonnetjes en uitgaven uit Moneybird komen in BossBase binnen als kosten. Elk uur, of direct met de knop." },
-    { "titel": "Contacten twee kanten op", "tekst": "Klanten en contactgegevens worden elk uur tussen BossBase en Moneybird gelijkgetrokken." },
+    { "titel": "Kosten uit Moneybird", "tekst": "Inkoopfacturen, bonnetjes en uitgaven uit Moneybird komen in BossBase binnen als kosten, met één klik op Kosten importeren." },
+    { "titel": "Contacten twee kanten op", "tekst": "Een nieuwe klant in BossBase komt ook in Moneybird. Met Contacten synchroniseren haal je nieuwe contacten uit Moneybird op en zet je ontbrekende klanten erheen." },
     { "titel": "Betaalstatus terug", "tekst": "Wordt een doorgezette factuur in Moneybird als betaald gemarkeerd, dan neemt BossBase dat over." },
     { "titel": "Verkoopfacturen van buiten", "tekst": "Verkoopfacturen die je in Moneybird maakte (niet vanuit BossBase), komen ook in BossBase binnen." },
-    { "titel": "Btw-overzicht", "tekst": "BossBase haalt dagelijks het btw-overzicht op, voor je eigen inzicht." }
+    { "titel": "Btw-overzicht", "tekst": "BossBase haalt het btw-overzicht uit Moneybird op wanneer je synchroniseert, voor je eigen inzicht." }
   ],
   "stappen": {
     "titel": "Zo koppel je Moneybird",
     "items": [
       { "titel": "Maak een API-token in Moneybird", "tekst": "In je Moneybird-account maak je een token aan waarmee BossBase namens jou mag lezen en schrijven." },
       { "titel": "Vul token en administratie-ID in", "tekst": "In BossBase ga je naar Instellingen, Koppelingen, en vul je het token en het ID van je administratie in." },
-      { "titel": "Test en klaar", "tekst": "BossBase controleert de verbinding. Daarna lopen de synchronisaties vanzelf." }
+      { "titel": "Test en synchroniseer", "tekst": "BossBase controleert de verbinding. Betaalde facturen gaan daarna vanzelf naar Moneybird; kosten en contacten haal je op met de knoppen in de Moneybird-kaart." }
     ]
   },
   "faq": [
@@ -48,6 +48,7 @@ Zonder koppeling typ je facturen twee keer: in je werkprogramma en in je boekhou
 
 ## Goed om te weten
 
-- BossBase stuurt alleen **betaalde** facturen door. Openstaande facturen beheer je in BossBase, met herinneringen en eventueel een [betaallink](/integraties/stripe-betaallink).
+- BossBase stuurt alleen **betaalde** facturen door, en die gaan vanzelf. Openstaande facturen beheer je in BossBase, met herinneringen en eventueel een [betaallink](/integraties/stripe-betaallink).
+- Kosten en contacten haal je op met een klik in de Moneybird-kaart; er draait geen automatische synchronisatie op de achtergrond.
 - De koppeling hoort bij het Groei- en Teampakket. Tijdens de gratis proefperiode kun je hem uitproberen.
 - Je gebruikt je eigen Moneybird-abonnement; BossBase vervangt je boekhoudpakket niet.
