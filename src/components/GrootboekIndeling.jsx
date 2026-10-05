@@ -1,7 +1,14 @@
-// Boekhoudinstellingen voor SnelStart: welke grootboekrekening krijgt elke
-// kostencategorie en omzetsoort, en welke categorieën bestaan er?
+// Boekhoudinstellingen voor SnelStart en Moneybird: welke grootboekrekening
+// krijgt elke kostencategorie en omzetsoort, en welke categorieën bestaan er?
+// Bij Moneybird daarnaast: welk btw-tarief van de administratie hoort bij welke
+// btw-soort. SnelStart kent vaste btw-soorten; Moneybird heeft per administratie
+// eigen tarieven, dus die moeten gekoppeld worden.
 //
-// Staat INLINE in de Instellingen-tab van de SnelStart-drawer. Was een modal,
+// Wat per pakket verschilt staat in PAKKET hieronder: SnelStart kiest een
+// rekening op nummer en controleert hem op grootboekfunctie, Moneybird kiest op
+// id en kijkt naar het soort rekening (omzet of kosten).
+//
+// Staat INLINE in de Instellingen-tab van de koppelingsdrawer. Was een modal,
 // maar dan moest je vanuit de instellingen nóg een keer doorklikken om je
 // instellingen te zien; alles wat je aan deze koppeling kunt instellen hoort op
 // één plek. (Die modal was overigens nooit een echte modal: de klassen
@@ -49,9 +56,10 @@ const OMZET_FUNCTIE = {
 // Komt een categorie bij elk btw-tarief op dezelfde rekening uit, dan is dat één
 // regel. Pakt hij per tarief anders uit, dan MOET dat te zien zijn — anders
 // belooft het scherm iets anders dan er geboekt wordt.
-function standaardTekst(std) {
-  if (!std) return 'vraagpost';
-  if (std.soort === 'een') return `${std.nummer} — ${std.omschrijving}`;
+function standaardTekst(std, leeg = 'vraagpost') {
+  if (!std) return leeg;
+  // Moneybird levert een kant-en-klaar label (de rekening heeft niet altijd een code).
+  if (std.soort === 'een') return std.label || `${std.nummer} — ${std.omschrijving}`;
   return std.perTarief
     .map(p => `${p.pct}% → ${p.nummer ? `${p.nummer} ${p.omschrijving}` : 'vraagpost'}`)
     .join(' · ');
@@ -59,9 +67,54 @@ function standaardTekst(std) {
 
 const isGesplitst = std => std?.soort === 'per_tarief';
 
-export default function GrootboekIndeling() {
+// Wat er per pakket anders is. De rest van het scherm is voor beide gelijk.
+const PAKKET = {
+  snelstart: {
+    naam: 'SnelStart',
+    waarde: g => String(g.nummer),
+    label: g => `${g.nummer} — ${g.omschrijving}`,
+    gekozen: v => v?.nummer,
+    // Wat er wordt opgeslagen bij een keuze.
+    keuze: g => ({ nummer: g.nummer, id: g.id, omschrijving: g.omschrijving }),
+    pastKosten: g => INKOOP_FUNCTIES.includes(String(g.grootboekfunctie || g.functie || '')),
+    pastOmzet: regime => g => String(g.grootboekfunctie || g.functie || '') === OMZET_FUNCTIE[regime],
+    // Regels met een afwijkend percentage (oude data, bijvoorbeeld 6%) gaan naar
+    // de overige-omzetrekening, niet naar de hoge.
+    overigeOmzet: g => String(g.grootboekfunctie || g.functie || '') === 'VerkopenOmzetOverig',
+    zonderRekening: 'op de vraagpost te staan, met een markering voor je boekhouder',
+    leegStandaard: 'vraagpost',
+  },
+  moneybird: {
+    naam: 'Moneybird',
+    waarde: g => String(g.id),
+    label: g => (g.code ? `${g.code} — ${g.naam}` : g.naam),
+    gekozen: v => v?.id,
+    // Moneybird heeft niet altijd een rekeningcode; die is alleen voor de weergave.
+    keuze: g => ({ nummer: /^\d+$/.test(String(g.code || '')) ? Number(g.code) : null, id: g.id, omschrijving: g.code ? `${g.code} ${g.naam}` : g.naam }),
+    pastKosten: g => g.soort === 'kosten',
+    pastOmzet: () => g => g.soort === 'omzet',
+    // In Moneybird zit het btw-tarief niet in de rekening maar in het tarief per
+    // regel; een afwijkend percentage hoeft dus geen eigen omzetrekening.
+    overigeOmzet: null,
+    zonderRekening: 'op Algemene kosten te staan, met een melding in Meldingen',
+    leegStandaard: 'niet gevonden',
+  },
+};
+
+// Btw-tarieven (alleen Moneybird). Verkoop per btw-regime van een factuurregel,
+// inkoop per percentage van een kostenpost.
+const BTW_RIJEN = [
+  ...BTW_REGIMES.map(r => ({ sleutel: `btw:${r.value}`, label: r.label, soort: 'verkoop', groep: 'Btw op facturen' })),
+  { sleutel: 'btwinkoop:21', label: '21% — normaal', soort: 'inkoop', groep: 'Btw op kosten' },
+  { sleutel: 'btwinkoop:9', label: '9% — verlaagd', soort: 'inkoop', groep: 'Btw op kosten' },
+  { sleutel: 'btwinkoop:0', label: '0% — geen btw', soort: 'inkoop', groep: 'Btw op kosten' },
+];
+
+export default function GrootboekIndeling({ provider = 'snelstart' }) {
+  const pakket = PAKKET[provider] || PAKKET.snelstart;
   const toast = useToast();
   const [rekeningen, setRekeningen] = useState(null);
+  const [btwTarieven, setBtwTarieven] = useState([]);
   const [standaarden, setStandaarden] = useState({});
   const [voorkeuren, setVoorkeuren] = useState({});
   const [categorieen, setCategorieen] = useState([]);
@@ -76,13 +129,14 @@ export default function GrootboekIndeling() {
     setFout(null);
     try {
       const [lijst, gekozen, cats, tellingen] = await Promise.all([
-        getGrootboekrekeningen(),
-        getGrootboekVoorkeuren(),
+        getGrootboekrekeningen(provider),
+        getGrootboekVoorkeuren(provider),
         listKostenCategorieen({ inclusiefInactief: true }),
         getCategorieGebruik(),
       ]);
       setRekeningen(lijst.grootboeken ?? lijst);
       setStandaarden(lijst.standaarden || {});
+      setBtwTarieven(lijst.btwTarieven || []);
       setVoorkeuren(gekozen);
       setCategorieen(cats);
       setGebruik(tellingen);
@@ -93,7 +147,7 @@ export default function GrootboekIndeling() {
     }
   };
 
-  useEffect(() => { laad(); }, []);
+  useEffect(() => { laad(); }, [provider]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rijen = useMemo(() => [
     ...categorieen.filter(c => c.actief).map(c => ({
@@ -102,39 +156,39 @@ export default function GrootboekIndeling() {
       groep: 'Kosten',
       // Een zelf toegevoegde categorie heeft geen ingebouwde standaard.
       verplicht: !c.standaard,
-      past: g => INKOOP_FUNCTIES.includes(String(g.grootboekfunctie || g.functie || '')),
+      past: pakket.pastKosten,
     })),
     ...BTW_REGIMES.map(r => ({
       sleutel: `omzet:${r.value}`,
       label: r.label,
       groep: 'Omzet',
       verplicht: false,
-      past: g => String(g.grootboekfunctie || g.functie || '') === OMZET_FUNCTIE[r.value],
+      past: pakket.pastOmzet(r.value),
     })),
-    // Regels met een afwijkend percentage (oude data, bijvoorbeeld 6%) gaan naar
-    // de overige-omzetrekening, niet naar de hoge. Eigen regel, anders zou de
-    // regel "21% — normaal" ook voor die boekingen lijken te gelden.
-    {
+    // Eigen regel, anders zou de regel "21% — normaal" ook voor die boekingen
+    // lijken te gelden. Alleen waar het pakket er een aparte rekening voor kent.
+    ...(pakket.overigeOmzet ? [{
       sleutel: 'omzet:overig',
       label: 'Afwijkend percentage',
       groep: 'Omzet',
       verplicht: false,
-      past: g => String(g.grootboekfunctie || g.functie || '') === 'VerkopenOmzetOverig',
-    },
-  ], [categorieen]);
+      past: pakket.overigeOmzet,
+    }] : []),
+  ], [categorieen, pakket]);
 
-  const ontbrekend = rijen.filter(r => r.verplicht && !voorkeuren[r.sleutel]?.nummer);
+  // Keuzelijsten met btw-tarieven; alleen bij een pakket dat ze levert.
+  const btwRijen = provider === 'moneybird' ? BTW_RIJEN : [];
 
-  const kies = async (rij, nummer) => {
-    const gb = rekeningen?.find(g => String(g.nummer) === String(nummer)) || null;
+  const ontbrekend = rijen.filter(r => r.verplicht && !pakket.gekozen(voorkeuren[r.sleutel]));
+
+  const kies = async (rij, waarde, bron = rekeningen) => {
+    const gb = (bron || []).find(g => pakket.waarde(g) === String(waarde)) || null;
     const vorige = voorkeuren[rij.sleutel];
+    const keuze = gb ? pakket.keuze(gb) : null;
     // Optimistisch: een keuzelijst die pas na de round-trip verspringt voelt stuk.
-    setVoorkeuren(v => ({
-      ...v,
-      [rij.sleutel]: gb ? { nummer: gb.nummer, omschrijving: gb.omschrijving } : undefined,
-    }));
+    setVoorkeuren(v => ({ ...v, [rij.sleutel]: keuze || undefined }));
     try {
-      await setGrootboekVoorkeur(rij.sleutel, gb ? { nummer: gb.nummer, id: gb.id, omschrijving: gb.omschrijving } : null);
+      await setGrootboekVoorkeur(rij.sleutel, keuze, provider);
     } catch (err) {
       setVoorkeuren(v => ({ ...v, [rij.sleutel]: vorige }));
       toast.error(err.message || 'Opslaan mislukt');
@@ -187,7 +241,7 @@ export default function GrootboekIndeling() {
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontWeight: 700, fontSize: '.9rem', display: 'flex', alignItems: 'center', gap: 6 }}>
             Grootboekindeling
-            <InfoTip tekst="Hoe BossBase jouw boekingen indeelt in SnelStart." />
+            <InfoTip tekst={`Hoe BossBase jouw boekingen indeelt in ${pakket.naam}.`} />
           </div>
         </div>
 
@@ -211,9 +265,8 @@ export default function GrootboekIndeling() {
                   </div>
                   <div>
                     {ontbrekend.map(r => r.label).join(', ')} {ontbrekend.length === 1 ? 'is' : 'zijn'} zelf toegevoegd,
-                    dus BossBase weet niet waar {ontbrekend.length === 1 ? 'die' : 'die'} hoort te boeken. Tot je een rekening
-                    kiest komen kosten in {ontbrekend.length === 1 ? 'deze categorie' : 'deze categorieën'} op de vraagpost
-                    te staan, met een markering voor je boekhouder.
+                    dus BossBase weet niet waar die hoort te boeken. Tot je een rekening
+                    kiest komen kosten in {ontbrekend.length === 1 ? 'deze categorie' : 'deze categorieën'} {pakket.zonderRekening}.
                   </div>
                 </div>
               )}
@@ -234,10 +287,10 @@ export default function GrootboekIndeling() {
                   }}>{groep}</div>
 
                   {rijen.filter(r => r.groep === groep).map(rij => {
-                    const gekozen = voorkeuren[rij.sleutel];
+                    const gekozen = pakket.gekozen(voorkeuren[rij.sleutel]);
                     const opties = (rekeningen || []).filter(rij.past);
                     const standaard = standaarden[rij.sleutel];
-                    const mist = rij.verplicht && !gekozen?.nummer;
+                    const mist = rij.verplicht && !gekozen;
                     return (
                       <div key={rij.sleutel} style={{
                         display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', flexWrap: 'wrap',
@@ -246,7 +299,7 @@ export default function GrootboekIndeling() {
                           {rij.label}{rij.verplicht ? ' *' : ''}
                         </div>
                         <select
-                          value={gekozen?.nummer ?? ''}
+                          value={gekozen ?? ''}
                           onChange={e => kies(rij, e.target.value)}
                           style={{
                             flex: '1 1 280px', minWidth: 0, fontSize: 12.5,
@@ -258,15 +311,15 @@ export default function GrootboekIndeling() {
                               ? '— kies een rekening —'
                               : isGesplitst(standaard)
                                 ? 'Standaard — hangt af van het btw-tarief'
-                                : `Standaard — ${standaardTekst(standaard)}`}
+                                : `Standaard — ${standaardTekst(standaard, pakket.leegStandaard)}`}
                           </option>
                           {opties.map(g => (
-                            <option key={g.nummer} value={g.nummer}>{g.nummer} — {g.omschrijving}</option>
+                            <option key={pakket.waarde(g)} value={pakket.waarde(g)}>{pakket.label(g)}</option>
                           ))}
                         </select>
                         {/* Een categorie die per tarief ergens anders landt kan
                             niet in één regel eerlijk worden samengevat. */}
-                        {!gekozen?.nummer && isGesplitst(standaard) && (
+                        {!gekozen && isGesplitst(standaard) && (
                           <div style={{ flex: '1 1 100%', fontSize: 11, color: 'var(--dl)', paddingLeft: 160 }}>
                             {standaardTekst(standaard)}
                           </div>
@@ -276,6 +329,45 @@ export default function GrootboekIndeling() {
                             Dan is de standaard óók machteloos. */}
                         {opties.length === 0 && (
                           <div style={{ fontSize: 11, color: 'var(--rd)' }}>Geen passende rekening in je administratie</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+
+              {/* ── Btw-tarieven (Moneybird) ────────────────────────────── */}
+              {btwRijen.length > 0 && ['Btw op facturen', 'Btw op kosten'].map(groep => (
+                <div key={groep} style={{ marginBottom: 16 }}>
+                  <div style={{
+                    fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em',
+                    color: 'var(--dl)', marginBottom: 6,
+                  }}>{groep}</div>
+                  {btwRijen.filter(r => r.groep === groep).map(rij => {
+                    const gekozen = voorkeuren[rij.sleutel]?.id;
+                    const opties = btwTarieven.filter(t => t.soort === rij.soort);
+                    const standaard = standaarden[rij.sleutel];
+                    return (
+                      <div key={rij.sleutel} style={{
+                        display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', flexWrap: 'wrap',
+                      }}>
+                        <div style={{ flex: '0 0 150px', fontSize: 12.5, color: 'var(--dk)' }}>{rij.label}</div>
+                        <select
+                          value={gekozen ?? ''}
+                          onChange={e => kies(rij, e.target.value, btwTarieven)}
+                          style={{ flex: '1 1 280px', minWidth: 0, fontSize: 12.5, borderColor: !gekozen && !standaard ? 'var(--rd)' : undefined }}
+                        >
+                          <option value="">
+                            {standaard ? `Standaard — ${standaard.label}` : '— kies een btw-tarief —'}
+                          </option>
+                          {opties.map(t => (
+                            <option key={t.id} value={String(t.id)}>{t.naam}</option>
+                          ))}
+                        </select>
+                        {!gekozen && !standaard && (
+                          <div style={{ flex: '1 1 100%', fontSize: 11, color: 'var(--rd)', paddingLeft: 160 }}>
+                            Geen passend tarief gevonden. Kies er een, anders worden regels met deze btw-soort niet geboekt.
+                          </div>
                         )}
                       </div>
                     );
@@ -350,13 +442,13 @@ export default function GrootboekIndeling() {
             disabled={ophalen}
             onClick={async () => {
               if (!(await bevestig(
-                'Alles opnieuw ophalen uit SnelStart?\n\n'
+                `Alles opnieuw ophalen uit ${pakket.naam}?\n\n`
                 + 'Ook wat je hier eerder hebt verwijderd komt dan terug. '
                 + 'Wat in BossBase is gemaakt en al geboekt is, blijft ongemoeid.',
               ))) return;
               setOphalen(true);
               try {
-                const r = await haalAllesOpnieuwOp();
+                const r = await haalAllesOpnieuwOp(provider);
                 const i = r?.imported || {};
                 const c = r?.contacten || {};
                 const lev = c.leveranciers || {};

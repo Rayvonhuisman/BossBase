@@ -342,22 +342,37 @@ export async function updateContactInMoneybird(customerId) {
  * lijsten die uit elkaar lopen geeft een scherm dat iets anders belooft dan de
  * sync doet.
  */
-export async function getGrootboekrekeningen() {
-  const { data, error } = await supabase.functions.invoke('snelstart-grootboek-setup', {
+// Per provider de functie die de rekeningen (en bij Moneybird de btw-tarieven)
+// uit de administratie van de klant ophaalt.
+const INSTELLINGEN_FUNCTIE = {
+  snelstart: 'snelstart-grootboek-setup',
+  moneybird: 'moneybird-instellingen',
+}
+
+export async function getGrootboekrekeningen(provider = 'snelstart') {
+  const { data, error } = await supabase.functions.invoke(INSTELLINGEN_FUNCTIE[provider], {
     body: { lijst: true },
   })
   if (error) throw error
-  return { grootboeken: data?.grootboeken || [], standaarden: data?.standaarden || {} }
+  return {
+    grootboeken: data?.grootboeken || [],
+    standaarden: data?.standaarden || {},
+    // Alleen Moneybird: btw-tarieven bestaan daar per administratie en moeten
+    // gekoppeld worden. SnelStart kent vaste btw-soorten.
+    btwTarieven: data?.btwTarieven || [],
+  }
 }
 
-export async function getGrootboekVoorkeuren() {
+export async function getGrootboekVoorkeuren(provider = 'snelstart') {
   const { data, error } = await supabase
     .from('grootboek_voorkeuren')
-    .select('sleutel, grootboek_nummer, omschrijving')
-    .eq('provider', 'snelstart')
+    .select('sleutel, grootboek_nummer, grootboek_id, omschrijving')
+    .eq('provider', provider)
   if (error) throw error
   const uit = {}
-  for (const r of (data || [])) uit[r.sleutel] = { nummer: r.grootboek_nummer, omschrijving: r.omschrijving }
+  for (const r of (data || [])) {
+    uit[r.sleutel] = { nummer: r.grootboek_nummer, id: r.grootboek_id, omschrijving: r.omschrijving }
+  }
   return uit
 }
 
@@ -365,19 +380,21 @@ export async function getGrootboekVoorkeuren() {
  * Legt één keuze vast, of wist hem als `grootboek` leeg is — dan valt de
  * koppeling terug op de standaardindeling.
  */
-export async function setGrootboekVoorkeur(sleutel, grootboek) {
+export async function setGrootboekVoorkeur(sleutel, grootboek, provider = 'snelstart') {
   const companyId = await getCompanyId()
-  if (!grootboek?.nummer) {
+  // SnelStart kiest op nummer, Moneybird op id: zonder een van beide is er
+  // niets gekozen en valt de koppeling terug op de standaard.
+  if (!grootboek?.nummer && !grootboek?.id) {
     const { error } = await supabase.from('grootboek_voorkeuren')
-      .delete().eq('company_id', companyId).eq('provider', 'snelstart').eq('sleutel', sleutel)
+      .delete().eq('company_id', companyId).eq('provider', provider).eq('sleutel', sleutel)
     if (error) throw error
     return null
   }
   const rij = {
     company_id: companyId,
-    provider: 'snelstart',
+    provider,
     sleutel,
-    grootboek_nummer: Number(grootboek.nummer),
+    grootboek_nummer: Number(grootboek.nummer) || null,
     grootboek_id: grootboek.id || null,
     omschrijving: grootboek.omschrijving || null,
     updated_at: new Date().toISOString(),
@@ -410,15 +427,20 @@ export async function controleerSnelStartAdministratie() {
  * geïmporteerde factuur hingen. Relaties eerst, zodat de facturen en kosten
  * daarna aan een bestaande klant of leverancier gekoppeld kunnen worden.
  */
-export async function haalAllesOpnieuwOp() {
+export async function haalAllesOpnieuwOp(provider = 'snelstart') {
   const companyId = await getCompanyId()
   const { error } = await supabase
     .from('import_genegeerd')
     .delete()
     .eq('company_id', companyId)
-    .eq('provider', 'snelstart')
+    .eq('provider', provider)
   if (error) throw error
 
+  if (provider === 'moneybird') {
+    const contacten = await syncContactenMetMoneybird()
+    const boekingen = await importKostenVanuitMoneybird()
+    return { contacten, ...boekingen }
+  }
   const contacten = await syncContactenMetSnelStart()
   const boekingen = await importKostenVanuitSnelStart()
   return { contacten, ...boekingen }
@@ -451,9 +473,16 @@ const PRULLENBAK_LABEL = {
  * @returns {Promise<string|null>} null als het goed ging, anders de melding
  *   voor de gebruiker.
  */
-export async function negeerBijImport(soort, externeReferentie, reden) {
+export async function negeerBijImport(soort, externeReferentie, reden, provider = null) {
   if (!externeReferentie) return null
-  const externeId = String(externeReferentie).replace(/^snelstart_/, '').split('_')[0]
+  // De provider volgt uit het voorvoegsel van de referentie ('snelstart_…',
+  // 'moneybird_…'). Een kaal id (customers.snelstart_id, leveranciers.moneybird_id)
+  // heeft dat niet; dan geeft de aanroeper hem mee. Zonder beide: SnelStart, zoals
+  // het altijd was.
+  const ref = String(externeReferentie)
+  const uitRef = ref.startsWith('moneybird_') ? 'moneybird' : ref.startsWith('snelstart_') ? 'snelstart' : null
+  const bron = provider || uitRef || 'snelstart'
+  const externeId = ref.replace(new RegExp(`^${bron}_`), '').split('_')[0]
   if (!externeId) return null
 
   const melding = `${PRULLENBAK_LABEL[soort] || 'Het record'} is verwijderd, maar kon niet in de `
@@ -462,7 +491,7 @@ export async function negeerBijImport(soort, externeReferentie, reden) {
   try {
     const companyId = await getCompanyId()
     const { error } = await supabase.from('import_genegeerd')
-      .upsert({ company_id: companyId, provider: 'snelstart', soort, externe_id: externeId, reden: reden || null },
+      .upsert({ company_id: companyId, provider: bron, soort, externe_id: externeId, reden: reden || null },
               { onConflict: 'company_id,provider,soort,externe_id' })
     if (error) {
       console.error('Prullenbak niet bijgewerkt:', error.message)

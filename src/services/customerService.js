@@ -137,7 +137,7 @@ export async function deleteCustomer(id) {
   // Eerst opzoeken, daarna pas verwijderen: na de delete is de rij weg en is
   // niet meer te achterhalen of hij uit SnelStart kwam.
   const { data: bestaand } = await supabase
-    .from("customers").select("snelstart_id").eq("id", id).maybeSingle()
+    .from("customers").select("snelstart_id, moneybird_id").eq("id", id).maybeSingle()
 
   const { error } = await supabase.from("customers").delete().eq("id", id)
   if (error) throw error
@@ -149,8 +149,13 @@ export async function deleteCustomer(id) {
   //
   // Retourwaarde in plaats van een throw: de klant is echt weg, dus de lijst mag
   // bijgewerkt worden — maar een mislukte prullenbak moet de gebruiker wel zien.
+  // Per koppeling waar hij in stond. Mislukt er een, dan die melding tonen.
+  const meldingen = []
   if (bestaand?.snelstart_id) {
-    return await negeerBijImport('klant', bestaand.snelstart_id, 'verwijderd in BossBase')
+    meldingen.push(await negeerBijImport('klant', bestaand.snelstart_id, 'verwijderd in BossBase', 'snelstart'))
   }
-  return null
+  if (bestaand?.moneybird_id) {
+    meldingen.push(await negeerBijImport('klant', bestaand.moneybird_id, 'verwijderd in BossBase', 'moneybird'))
+  }
+  return meldingen.find(Boolean) || null
 }

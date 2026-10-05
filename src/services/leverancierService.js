@@ -104,7 +104,7 @@ export async function deleteLeverancier(id) {
   // job_costs.leverancier_id staat op ON DELETE RESTRICT: een leverancier met
   // kosten kan niet weg — die kosten zouden onboekbaar worden. Zet hem inactief.
   const { data: bestaand } = await supabase
-    .from('leveranciers').select('snelstart_id').eq('id', id).maybeSingle()
+    .from('leveranciers').select('snelstart_id, moneybird_id').eq('id', id).maybeSingle()
 
   const { error } = await supabase.from('leveranciers').delete().eq('id', id)
   if (error) throw error
@@ -116,10 +116,15 @@ export async function deleteLeverancier(id) {
 //
 // Retourwaarde in plaats van een throw: de leverancier is echt weg, dus de lijst
 // mag bijgewerkt worden — maar een mislukte prullenbak moet de gebruiker zien.
+  // Per koppeling waar hij in stond. Mislukt er een, dan die melding tonen.
+  const meldingen = []
   if (bestaand?.snelstart_id) {
-    return await negeerBijImport('leverancier', bestaand.snelstart_id, 'verwijderd in BossBase')
+    meldingen.push(await negeerBijImport('leverancier', bestaand.snelstart_id, 'verwijderd in BossBase', 'snelstart'))
   }
-  return null
+  if (bestaand?.moneybird_id) {
+    meldingen.push(await negeerBijImport('leverancier', bestaand.moneybird_id, 'verwijderd in BossBase', 'moneybird'))
+  }
+  return meldingen.find(Boolean) || null
 }
 
 // Hoeveel kosten hangen er aan deze leveranciers? Voedt de kolom "kosten" in het

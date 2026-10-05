@@ -1440,6 +1440,54 @@ export function InstellingenPage({ openDeal } = {}) {
     );
   };
 
+  // De Meldingen-tab van een boekhoudkoppeling. Voor SnelStart en Moneybird
+  // dezelfde opbouw, zodat beide koppelingen hun fouten op dezelfde manier laten
+  // zien: eerst wat de automatische run opleverde, dan de laatste handmatige.
+  const boekhoudMeldingen = ({
+    naam, laatsteAutoRun, fouten = [], meldingen = [], kostenResterend = 0,
+    adresWaarschuwingen = [], syncKnop,
+  }) => [
+    // Uit de laatste automatische run. Die fouten stonden tot nu toe alleen
+    // in de functielogs: mislukt er 's nachts een boeking, dan hoort dat
+    // 's ochtends met een teller op je scherm te staan.
+    laatsteAutoRun?.fout ? {
+      toon: 'fout',
+      titel: 'De automatische synchronisatie is afgebroken',
+      tekst: laatsteAutoRun.fout,
+    } : null,
+    laatsteAutoRun?.fouten?.length ? {
+      toon: 'fout',
+      titel: `${laatsteAutoRun.fouten.length} ${laatsteAutoRun.fouten.length === 1 ? 'regel is' : 'regels zijn'} niet geboekt bij de automatische synchronisatie`,
+      items: laatsteAutoRun.fouten,
+    } : null,
+    laatsteAutoRun?.meldingen?.length ? {
+      toon: 'waarschuwing',
+      titel: 'Aandachtspunten uit de automatische synchronisatie',
+      items: laatsteAutoRun.meldingen,
+    } : null,
+    fouten.length ? {
+      toon: 'fout',
+      titel: `${fouten.length} ${fouten.length === 1 ? 'regel is' : 'regels zijn'} niet geboekt`,
+      items: fouten,
+    } : null,
+    meldingen.length ? {
+      toon: 'waarschuwing',
+      titel: 'Velden overgeslagen',
+      items: meldingen,
+    } : null,
+    kostenResterend > 0 ? {
+      toon: 'waarschuwing',
+      titel: `Nog ${kostenResterend} ${kostenResterend === 1 ? 'kostenpost' : 'kostenposten'} te synchroniseren`,
+      tekst: `Kosten worden per 50 tegelijk geboekt. Klik nog een keer op “${syncKnop}” om verder te gaan.`,
+    } : null,
+    adresWaarschuwingen.length ? {
+      toon: 'waarschuwing',
+      titel: `${adresWaarschuwingen.length} ${adresWaarschuwingen.length === 1 ? 'klant is' : 'klanten zijn'} zonder compleet adres doorgezet`,
+      tekst: `${naam} accepteert ze wel, maar in je boekhouding staat dan een relatie zonder adresgegevens. Vul ze aan bij de klant en synchroniseer opnieuw.`,
+      items: adresWaarschuwingen.map(w => `${w.klant} — mist ${w.mist.join(', ')}`),
+    } : null,
+  ].filter(Boolean);
+
   const INTEGRATIES = [
     // Google Agenda — verborgen tot de OAuth-koppeling geconfigureerd is.
     {
@@ -1650,47 +1698,15 @@ export function InstellingenPage({ openDeal } = {}) {
           { label: ssSyncingContacten ? 'Synchroniseren...' : 'Contacten synchroniseren', onClick: handleSsSyncContacten, disabled: ssSyncingContacten },
         ] : [],
       } : null,
-      meldingen: boekhoudGate ? [] : [
-        // Uit de laatste automatische run. Die fouten stonden tot nu toe alleen
-        // in de functielogs: mislukt er 's nachts een boeking, dan hoort dat
-        // 's ochtends met een teller op je scherm te staan.
-        ssLaatsteAutoRun?.fout ? {
-          toon: 'fout',
-          titel: 'De automatische synchronisatie is afgebroken',
-          tekst: ssLaatsteAutoRun.fout,
-        } : null,
-        ssLaatsteAutoRun?.fouten?.length ? {
-          toon: 'fout',
-          titel: `${ssLaatsteAutoRun.fouten.length} ${ssLaatsteAutoRun.fouten.length === 1 ? 'regel is' : 'regels zijn'} niet geboekt bij de automatische synchronisatie`,
-          items: ssLaatsteAutoRun.fouten,
-        } : null,
-        ssLaatsteAutoRun?.meldingen?.length ? {
-          toon: 'waarschuwing',
-          titel: 'Aandachtspunten uit de automatische synchronisatie',
-          items: ssLaatsteAutoRun.meldingen,
-        } : null,
-        ssFouten.length ? {
-          toon: 'fout',
-          titel: `${ssFouten.length} ${ssFouten.length === 1 ? 'regel is' : 'regels zijn'} niet geboekt`,
-          items: ssFouten,
-        } : null,
-        ssMeldingen.length ? {
-          toon: 'waarschuwing',
-          titel: 'Velden overgeslagen',
-          items: ssMeldingen,
-        } : null,
-        ssKostenResterend > 0 ? {
-          toon: 'waarschuwing',
-          titel: `Nog ${ssKostenResterend} ${ssKostenResterend === 1 ? 'kostenpost' : 'kostenposten'} te synchroniseren`,
-          tekst: 'Kosten worden per 50 tegelijk geboekt. Klik nog een keer op “Kosten/facturen synchroniseren” om verder te gaan.',
-        } : null,
-        ssAdresWaarschuwingen.length ? {
-          toon: 'waarschuwing',
-          titel: `${ssAdresWaarschuwingen.length} ${ssAdresWaarschuwingen.length === 1 ? 'klant is' : 'klanten zijn'} zonder compleet adres doorgezet`,
-          tekst: 'SnelStart accepteert ze wel, maar in je boekhouding staat dan een relatie zonder adresgegevens. Vul ze aan bij de klant en synchroniseer opnieuw.',
-          items: ssAdresWaarschuwingen.map(w => `${w.klant} — mist ${w.mist.join(', ')}`),
-        } : null,
-      ].filter(Boolean),
+      meldingen: boekhoudGate ? [] : boekhoudMeldingen({
+        naam: 'SnelStart',
+        laatsteAutoRun: ssLaatsteAutoRun,
+        fouten: ssFouten,
+        meldingen: ssMeldingen,
+        kostenResterend: ssKostenResterend,
+        adresWaarschuwingen: ssAdresWaarschuwingen,
+        syncKnop: 'Kosten/facturen synchroniseren',
+      }),
     },
 
     // AFAS — verborgen, nog niet actief.

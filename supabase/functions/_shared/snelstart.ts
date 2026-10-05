@@ -1,4 +1,5 @@
 import { kiesOmzetGrootboek, kiesInkoopGrootboek } from "./grootboekKeuze.ts"
+import { getGenegeerd as getGenegeerdVoor, getVoorkeurRijen } from "./boekhouding.ts"
 import { vandaagIso } from "./datumTijd.ts"
 
 // Gedeelde SnelStart B2B-Api v2 client voor edge functions.
@@ -331,17 +332,12 @@ export type Voorkeuren = Record<string, number | null | undefined>
 
 // Leest de instellingen van één bedrijf. Leeg als er niets is ingesteld — dan
 // gelden de standaard voorkeursnummers uit grootboekKeuze.ts.
+// Een leesfout geeft een lege lijst (zie getVoorkeurRijen): dan gewoon door met
+// de standaardmapping in plaats van de hele sync laten klappen.
 export async function getGrootboekVoorkeuren(admin: any, companyId: string): Promise<Voorkeuren> {
-  const { data, error } = await admin
-    .from('grootboek_voorkeuren')
-    .select('sleutel, grootboek_nummer')
-    .eq('company_id', companyId)
-    .eq('provider', 'snelstart')
-  // Bestaat de tabel nog niet (migratie niet gedraaid), dan gewoon door met de
-  // standaardmapping in plaats van de hele sync laten klappen.
-  if (error) { console.warn('Grootboekvoorkeuren niet gelezen:', error.message); return {} }
+  const rijen = await getVoorkeurRijen(admin, companyId, 'snelstart')
   const uit: Voorkeuren = {}
-  for (const r of (data || [])) uit[r.sleutel] = Number(r.grootboek_nummer) || null
+  for (const [sleutel, r] of Object.entries(rijen)) uit[sleutel] = r.nummer
   return uit
 }
 
@@ -872,16 +868,8 @@ export const isSysteemrelatie = (relatie: any): boolean => {
 }
 
 /** Alles wat de gebruiker bewust heeft weggegooid; die halen we niet terug. */
-export async function getGenegeerd(admin: any, companyId: string, soort: string): Promise<Set<string>> {
-  const { data, error } = await admin
-    .from('import_genegeerd')
-    .select('externe_id')
-    .eq('company_id', companyId)
-    .eq('provider', 'snelstart')
-    .eq('soort', soort)
-  if (error) { console.warn('Prullenbak niet gelezen:', error.message); return new Set() }
-  return new Set((data || []).map((r: any) => String(r.externe_id)))
-}
+export const getGenegeerd = (admin: any, companyId: string, soort: string): Promise<Set<string>> =>
+  getGenegeerdVoor(admin, companyId, 'snelstart', soort)
 
 /**
  * Haalt één relatie op en zet hem als leverancier in BossBase, of geeft de
