@@ -15,6 +15,11 @@
 //
 // Env: SUPABASE_URL en SUPABASE_SERVICE_ROLE_KEY (door Supabase geïnjecteerd).
 // Geen extra secrets nodig.
+//
+// Websiteformulieren van bedrijven (Instellingen › Websiteformulier) lopen hier
+// ook doorheen: het kant-en-klare formulier (public/aanvraagformulier.html) en
+// het koppelscript (public/formulier.js). Zie de kop van
+// _shared/websiteAanvraagHandler.ts voor wat daarbij anders is.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
 import {
@@ -23,6 +28,13 @@ import {
   type AanvraagOpslag,
   type Logger,
 } from '../_shared/websiteAanvraagHandler.ts'
+
+// De pagina's van BossBase waarop het kant-en-klare formulier draait (in een
+// iframe op de website van het bedrijf).
+const siteOrigin = (() => {
+  try { return new URL(Deno.env.get('SITE_URL') || 'https://www.bossbase.nl').origin } catch { return 'https://www.bossbase.nl' }
+})()
+const PAGINA_HERKOMSTEN = [...new Set(['https://www.bossbase.nl', 'https://bossbase.nl', siteOrigin])]
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -175,10 +187,83 @@ const opslag: AanvraagOpslag = {
     if (insFout) throw insFout
   },
 
+  async configuratie(formulier) {
+    const { data: bedrijf, error } = await admin
+      .from('companies')
+      .select('name, branding_color')
+      .eq('id', formulier.company_id)
+      .single()
+    if (error) throw error
+    const s = formulier.settings || {}
+    return {
+      bedrijf: bedrijf?.name || '',
+      kleur: /^#[0-9a-fA-F]{6}$/.test(bedrijf?.branding_color || '') ? bedrijf.branding_color : '#1DDB62',
+      modus: s.modus === 'koppelen' ? 'koppelen' : 'kant_en_klaar',
+      velden: Array.isArray(s.velden) ? s.velden : [],
+      koppeling: Array.isArray(s.koppeling) ? s.koppeling : [],
+      privacy_url: typeof s.privacy_url === 'string' ? s.privacy_url : null,
+    }
+  },
+
+  // Dezelfde regel als bb_has_permission('instellingen'): actief, in dit
+  // bedrijf, en beheerder of met het recht.
+  async magTesten(jwt, companyId) {
+    const { data: u, error } = await admin.auth.getUser(jwt)
+    if (error || !u?.user) return false
+    const { data: p } = await admin
+      .from('profiles')
+      .select('company_id, role, actief')
+      .eq('id', u.user.id)
+      .maybeSingle()
+    if (!p || p.company_id !== companyId || p.actief === false) return false
+    if (p.role === 'admin') return true
+    const { data: recht } = await admin
+      .from('user_permissions')
+      .select('user_id')
+      .eq('user_id', u.user.id)
+      .eq('company_id', companyId)
+      .eq('permission', 'instellingen')
+      .eq('granted', true)
+      .maybeSingle()
+    return !!recht
+  },
+
+  async dealVan(inquiryId) {
+    const { data } = await admin.from('inquiries').select('deal_id').eq('id', inquiryId).single()
+    return (data?.deal_id as string | null) ?? null
+  },
+
+  // Zelfde plek en vorm als een foto die je in de app bij de aanvraag zet
+  // (projectsService.uploadProjectFoto): privébucket, pad
+  // <bedrijf>/<project>/<uuid>.<ext>, en alleen het pad in project_fotos.
+  async bewaarFotos(inquiryId, companyId, fotos) {
+    const { data: inq, error } = await admin.from('inquiries').select('deal_id').eq('id', inquiryId).single()
+    if (error) throw error
+    if (!inq?.deal_id) return 0
+    const { data: project, error: pFout } = await admin
+      .from('projects').select('id').eq('deal_id', inq.deal_id).eq('company_id', companyId).maybeSingle()
+    if (pFout) throw pFout
+    if (!project) return 0
+
+    let aantal = 0
+    for (const f of fotos) {
+      const ext = f.type === 'image/png' ? 'png' : f.type === 'image/webp' ? 'webp' : 'jpg'
+      const pad = `${companyId}/${project.id}/${crypto.randomUUID()}.${ext}`
+      const { error: upFout } = await admin.storage.from('project-fotos').upload(pad, f.bytes, { contentType: f.type })
+      if (upFout) throw upFout
+      const { error: insFout } = await admin.from('project_fotos').insert({
+        company_id: companyId, project_id: project.id, url: pad, categorie: 'website',
+      })
+      if (insFout) throw insFout
+      aantal++
+    }
+    return aantal
+  },
+
   async hash(waarde) {
     const sig = await crypto.subtle.sign('HMAC', await hmacSleutel, new TextEncoder().encode(waarde))
     return Array.from(new Uint8Array(sig), b => b.toString(16).padStart(2, '0')).join('')
   },
 }
 
-Deno.serve(req => verwerkVerzoek(req, opslag, log))
+Deno.serve(req => verwerkVerzoek(req, opslag, log, { paginaHerkomsten: PAGINA_HERKOMSTEN }))

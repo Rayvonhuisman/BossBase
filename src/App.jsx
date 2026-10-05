@@ -1754,7 +1754,7 @@ function AppInner() {
       case 'uren':        return <UrenPage navigatePage={navigatePage} />;
       case 'database':    return <DatabasePage openCustomer={openCustomer} />;
       case 'team':        return <TeamPage />;
-      case 'instellingen':return <InstellingenPage />;
+      case 'instellingen':return <InstellingenPage openDeal={openDeal} />;
       default:            return <DashboardHome {...props} />;
     }
   };

@@ -20,6 +20,7 @@ import { usePermissions } from '../hooks/usePermissions.js';
 import { useUrlTab } from '../hooks/useUrlTab.js';
 import { useUploads } from '../lib/uploadContext.jsx';
 import { InfoTip, InfoUitklap } from '../components/Uitleg.jsx';
+import { WebsiteformulierSectie } from './instellingen/WebsiteformulierSectie.jsx';
 import {
   getBedrijfsinstellingen,
   upsertBedrijfsinstellingen,
@@ -153,10 +154,10 @@ const VASTE_WERKWIJZE = (
 );
 
 // Alle mogelijke tab-ids (permissie-onafhankelijk) — weert onbekende ?tab=-waarden.
-const SETTINGS_TAB_IDS = ['profiel', 'bedrijf', 'standaard', 'templates', 'pipeline', 'voertuigen', 'abonnement', 'integraties'];
+const SETTINGS_TAB_IDS = ['profiel', 'bedrijf', 'standaard', 'templates', 'pipeline', 'websiteformulier', 'voertuigen', 'abonnement', 'integraties'];
 
 
-export function InstellingenPage() {
+export function InstellingenPage({ openDeal } = {}) {
   const toast = useToast();
   const { company, refresh, profile } = useProfile();
   const plan = usePlan();
@@ -1240,6 +1241,9 @@ export function InstellingenPage() {
       { id: 'standaard', label: 'Algemeen' },
       { id: 'templates', label: 'E-mailtemplates' },
       { id: 'pipeline', label: 'Pipeline' },
+      // Aanvragen via de eigen website horen bij 'leads', en dat zit in elk
+      // pakket (features.js). Toch via de matrix, niet hard aan.
+      ...(plan.has('leads') ? [{ id: 'websiteformulier', label: 'Websiteformulier' }] : []),
       // Voertuigen is een feature uit de matrix (Team, of module bij Groei).
       ...(isAdmin && plan.has('voertuigen') ? [{ id: 'voertuigen', label: 'Voertuigen' }] : []),
       // Abonnement is voorbehouden aan de eigenaar/admin — een aparte gate
@@ -3164,6 +3168,10 @@ export function InstellingenPage() {
             )}
           </div>
         </div>
+      )}
+
+      {!loading && tab === 'websiteformulier' && canCompanySettings && plan.has('leads') && (
+        <WebsiteformulierSectie openDeal={openDeal} />
       )}
 
       {!loading && tab === 'abonnement' && isAdmin && <AbonnementSectie />}

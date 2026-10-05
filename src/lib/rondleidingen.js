@@ -206,8 +206,21 @@ export const RONDLEIDINGEN = {
       tekst: 'Je eigen profiel, en als beheerder alles van je bedrijf.' },
     { doel: 'instellingen-tab-standaard', titel: 'Algemeen',
       tekst: 'Je tarieven, btw, hoe lang een offerte geldig is, de betaaltermijn van je facturen en de urenherinnering voor je team.' },
+    { doel: 'instellingen-tab-websiteformulier', titel: 'Websiteformulier',
+      tekst: 'Krijg aanvragen van je eigen website meteen op je bord. Je plakt één stukje code in je site, en ik zet elke aanvraag als klant en project in je pipeline.' },
     { doel: 'instellingen-tab-abonnement', titel: 'Abonnement',
       tekst: 'Je pakket, modules en gebruikers, en verzoeken van je team.' },
+  ],
+
+  // Het tabblad Websiteformulier heeft een eigen rondleiding: wie Instellingen
+  // al kende toen dit tabblad erbij kwam, krijgt hem zo toch de eerste keer.
+  websiteformulier: [
+    { doel: 'wf-uitleg', titel: 'Stap voor stap',
+      tekst: 'Klik hier voor de uitleg: hoe je het formulier op je website zet, ook in WordPress en Wix.' },
+    { doel: 'wf-code', titel: 'De code voor je website',
+      tekst: 'Kopieer deze code en plak hem in je website. Er zit geen geheime sleutel in, dus je kunt hem gerust doorsturen naar wie je website bouwt.' },
+    { doel: 'wf-test', titel: 'Even testen',
+      tekst: 'Stuur een testaanvraag. Hij verschijnt meteen in je pipeline, als klant en project.' },
   ],
 
   // ── Vensters ──────────────────────────────────────────────────────────────

@@ -35,7 +35,8 @@ Hoe er geteld wordt:
 
 ## Wat zit in welk pakket
 
-**In alle pakketten:** klanten, aanvragen en pipeline, offertes en facturen als PDF,
+**In alle pakketten:** klanten, aanvragen en pipeline (ook het websiteformulier voor
+aanvragen van je eigen website), offertes en facturen als PDF,
 agenda, werkbonnen (ook laten ondertekenen door de klant), uren, materialen,
 adressen automatisch aanvullen, afspraakherinneringen en e-mailtemplates aanpassen.
 
