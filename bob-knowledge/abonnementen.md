@@ -11,10 +11,11 @@
 |---|---|---|
 | **Starter** | € 29 per maand | 1 gebruiker, meer kan niet |
 | **Groei** | € 39 per maand | 1 gebruiker inbegrepen, + € 10 per extra gebruiker, tot 2 gebruikers |
-| **Team** | € 59 per maand | + € 10 per gebruiker (ook de eerste), geen maximum |
+| **Team** | € 69 per maand met 1 gebruiker | + € 10 per extra gebruiker, geen maximum |
 
-Groei met twee personen kost dus € 49 per maand. Wil je meer dan twee gebruikers, dan
-is Team nodig.
+Alle prijzen zijn exclusief btw. Groei met twee personen kost dus € 49 per maand. Wil je
+meer dan twee gebruikers, dan is Team nodig. Team bestaat uit € 59 voor het pakket plus
+€ 10 per gebruiker, ook voor de eerste: met 1 gebruiker € 69, met 3 gebruikers € 89.
 
 ### Limieten
 Alleen **Starter** heeft limieten:

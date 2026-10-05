@@ -7,7 +7,7 @@
 // beoordelingen of klantaantallen: die hebben we niet aantoonbaar.
 
 import { SITE_URL, SITE_NAAM, CONTACT_EMAIL, OG_BEELD, EXPLOITANT, absoluteUrl } from './site.js';
-import { TIERS } from '../lib/tiers.js';
+import { TIERS, prijsMetEenGebruiker } from '../lib/tiers.js';
 
 const ORGANISATIE = {
   '@type': 'Organization',
@@ -32,11 +32,12 @@ function softwareApplication() {
     offers: TIERS.map(t => ({
       '@type': 'Offer',
       name: t.label,
-      price: String(t.price),
+      // Wat je met één gebruiker betaalt (Team: € 59 + € 10 voor de eerste gebruiker).
+      price: String(prijsMetEenGebruiker(t.id)),
       priceCurrency: 'EUR',
       priceSpecification: {
         '@type': 'UnitPriceSpecification',
-        price: String(t.price),
+        price: String(prijsMetEenGebruiker(t.id)),
         priceCurrency: 'EUR',
         unitText: 'MON',
         valueAddedTaxIncluded: false,

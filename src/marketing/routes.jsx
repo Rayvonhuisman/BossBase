@@ -33,7 +33,7 @@ const PAGINAS = [
   {
     path: '/prijzen',
     title: 'Prijzen – vanaf € 29 per maand excl. btw | BossBase',
-    description: 'Starter € 29, Groei € 39 en Team € 59 per maand, excl. btw. Maandabonnement maandelijks opzegbaar; jaarabonnement met welkomstactie. Probeer 14 dagen gratis.',
+    description: 'Starter € 29, Groei € 39 en Team € 69 per maand (met 1 gebruiker), excl. btw. Maandabonnement maandelijks opzegbaar; jaarabonnement met welkomstactie. Probeer 14 dagen gratis.',
     src: ['src/pages/marketing/PricingPage.jsx'],
     load: () => import('../pages/marketing/PricingPage.jsx'),
     breadcrumbs: [HOME, { naam: 'Prijzen', pad: '/prijzen' }],

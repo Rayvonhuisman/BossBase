@@ -1,6 +1,6 @@
 import { useState, useEffect, Fragment } from "react"
 import { Nav, Footer, Reveal, I, ScrollLine, initChoreo } from "./MktShared"
-import { tierLabel, tierPrice, extraUserLabel, YEARLY_FREE_MONTHS, WELKOMSTACTIES, welkomstactiesVoor } from "../../lib/tiers.js"
+import { tierLabel, prijsMetEenGebruiker, extraUserLabel, YEARLY_FREE_MONTHS, WELKOMSTACTIES, welkomstactiesVoor } from "../../lib/tiers.js"
 import {
   TIER_FEATURES, TIER_LIMITS, ZICHTBARE_FEATURES, MODULES,
   featureLabel, getLimitDef, moduleLabel, modulePrice,
@@ -217,8 +217,8 @@ export default function PricingPage({ navigate }) {
                     <div className="tier">{tierLabel(t.id)}</div>
                     <div className="who">{t.who}</div>
                     <div className="amount">
-                      <strong>€ {tierPrice(t.id)}</strong>
-                      <span>/ maand{yearly ? " · 12 maandtermijnen" : " · per maand opzegbaar"}</span>
+                      <strong>€ {prijsMetEenGebruiker(t.id)}</strong>
+                      <span>/ maand excl. btw{yearly ? " · 12 maandtermijnen" : " · per maand opzegbaar"}</span>
                     </div>
                     <div className="extra-user">{t.hasExtra ? extraUserLabel(t.id) : " "}</div>
                     <ul>{t.features.map(f => <li key={f}>{I.check} {f}</li>)}</ul>

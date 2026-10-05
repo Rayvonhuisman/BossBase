@@ -111,9 +111,15 @@ export const getTier    = id => TIERS.find(t => t.id === id) || null
 export const tierLabel  = id => getTier(id)?.label || id
 export const tierPrice  = id => getTier(id)?.price ?? 0
 
+// Wat een klant met één gebruiker betaalt (excl. btw). Dit is de prijs die we
+// tonen: bij Team zit de eerste gebruiker niet in de pakketprijs, dus Team kost
+// met één gebruiker € 59 + € 10 = € 69. tierPrice() blijft de kale pakketprijs
+// (zoals Stripe hem als los item kent).
+export const prijsMetEenGebruiker = id => tierPrice(id) + gebruikersPrijs(id, 1)
+
 // Tekst voor de gebruikersregel op de prijskaarten. Bij Team zit er geen
 // gebruiker in de prijs, dus daar telt de eerste ook mee.
 export const extraUserLabel = tier =>
   inbegrepenGebruikers(tier) === 0
-    ? `+ € ${EXTRA_USER_PRICE} per gebruiker (ook de eerste)`
+    ? `incl. 1 gebruiker · + € ${EXTRA_USER_PRICE} per extra gebruiker`
     : `+ € ${EXTRA_USER_PRICE} per extra gebruiker`
