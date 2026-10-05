@@ -51,11 +51,16 @@ de mail **Aanvraag ontvangen**, tenzij die uit staat onder Instellingen,
 E-mailtemplates.
 
 ### Aanvragen van je website
-Vult iemand het contactformulier op jouw website in, dan staat de aanvraag meteen in
-de eerste fase van je pipeline, met een project erbij. Bestaat de klant nog niet, dan
-wordt hij aangemaakt. De beheerder en collega's met het recht *Verkooppijplijn*
-krijgen een melding bij de bel. Op de projectkaart zie je bij **Via** dat hij van het
-websiteformulier komt.
+Vult iemand het formulier op jouw website in, dan staat de aanvraag meteen in de
+eerste fase van je pipeline, met een project erbij. Bestaat de klant al (zelfde
+e-mailadres), dan komt het project bij die klant; anders wordt hij aangemaakt, met
+bron **Website**. De beheerder en collega's met het recht *Verkooppijplijn* krijgen
+een melding bij de bel. Op de projectkaart staat in het blok **De aanvraag** onder
+**Ingevuld op de website** precies wat de klant heeft ingevuld (naam, e-mail,
+telefoon, adres, postcode, plaats, gewenste datum), meegestuurde foto's bij de
+foto's, en bij **Via** staat **Website**. Een testaanvraag heet "Testaanvraag via de
+website". Het formulier op je website zet je op onder **Instellingen**, tabblad
+**Websiteformulier** (zie instellingen).
 
 ### Een aanvraag verplaatsen
 Sleep de kaart naar een andere kolom. Je kunt de fase ook kiezen op de projectkaart,

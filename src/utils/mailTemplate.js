@@ -69,7 +69,9 @@ export function mailTemplate({
   let headerHtml;
   if (isSystem) {
     headerHtml = `<img src="${safeUrl(logoUrl) || BOSSBASE_LOGO_URL}" alt="BossBase" width="32" height="32" style="display:inline-block;vertical-align:middle;border-radius:8px;border:0;outline:none;text-decoration:none;"><span style="vertical-align:middle;margin-left:9px;font-size:20px;font-weight:700;color:#0a0a0a;letter-spacing:-0.5px;">BossBase</span>`;
-  } else if (logoUrl) {
+  } else if (safeUrl(logoUrl)) {
+    // Alleen een plaatje als er een geldige logo-URL is; anders de bedrijfsnaam
+    // als tekst — nooit een leeg of gebroken plaatje.
     headerHtml = `<img src="${safeUrl(logoUrl)}" alt="${esc(companyName)}" height="40" style="max-height:48px;max-width:220px;display:inline-block;border:0;outline:none;text-decoration:none;">`;
   } else {
     headerHtml = `<span style="font-size:20px;font-weight:700;color:#0a0a0a;letter-spacing:-0.5px;">${esc(companyName)}</span>`;

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
-import { tierLabel, tierPrice, EXTRA_USER_PRICE, welkomstactieLabel, getWelkomstactie } from '../lib/tiers.js';
+import { tierLabel, tierPrice, EXTRA_USER_PRICE, welkomstactieLabel, getWelkomstactie, betaaldeGebruikers } from '../lib/tiers.js';
 import { moduleLabel, modulePrice, getLimitDef, TIER_LIMITS } from '../lib/features.js';
 import { getBillingStatus, openPortal, zegOp } from '../services/billingService.js';
 import { readonlyTekst, READONLY_BEWAARD } from '../lib/readonly.js';
@@ -169,8 +169,17 @@ export function AbonnementSectie() {
             {/* extraGebruikers is wat er APART gefactureerd wordt; bij Team is dat
                 ook de eerste gebruiker. Het totaal aantal gebruikers is dus dit
                 plus wat er in het pakket zit. */}
-            € {tierPrice(stand.tier) + (stand.extraGebruikers || 0) * EXTRA_USER_PRICE} p/mnd
-            {stand.extraGebruikers > 0 && ` (${tierLabel(stand.tier)} + ${stand.extraGebruikers} × € ${EXTRA_USER_PRICE})`}
+            {(() => {
+              // Wat er apart wordt gefactureerd: in Stripe (extraGebruikers), en
+              // tijdens de proef of zonder Stripe wat het aantal gebruikers kost.
+              // Bij Team telt de eerste gebruiker mee: één gebruiker = € 69.
+              const gebruikt = Number(stand.limieten?.gebruikers?.gebruikt ?? stand.gebruikers ?? 1) || 1
+              const apart = Math.max(stand.extraGebruikers || 0, betaaldeGebruikers(stand.tier, gebruikt))
+              return <>
+                € {tierPrice(stand.tier) + apart * EXTRA_USER_PRICE} p/mnd excl. btw
+                {apart > 0 && ` (${tierLabel(stand.tier)} € ${tierPrice(stand.tier)} + ${apart} × € ${EXTRA_USER_PRICE})`}
+              </>
+            })()}
           </div>
         </div>
 

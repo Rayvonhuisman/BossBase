@@ -218,7 +218,7 @@ export default function PricingPage({ navigate }) {
                     <div className="who">{t.who}</div>
                     <div className="amount">
                       <strong>€ {tierPrice(t.id)}</strong>
-                      <span>/ maand{yearly ? " · 12 maandtermijnen" : " · per maand opzegbaar"}</span>
+                      <span>/ maand excl. btw{yearly ? " · 12 maandtermijnen" : " · per maand opzegbaar"}</span>
                     </div>
                     <div className="extra-user">{t.hasExtra ? extraUserLabel(t.id) : " "}</div>
                     <ul>{t.features.map(f => <li key={f}>{I.check} {f}</li>)}</ul>

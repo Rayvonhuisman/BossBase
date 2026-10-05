@@ -54,6 +54,7 @@ import { MeldKnop } from './components/Meldpunt.jsx';
 import { featureLabel } from './lib/features.js';
 import { clearCompanyId, setCompanyId } from './lib/currentCompany.js';
 import { ToastProvider, useToast } from './lib/toast.jsx';
+import { BevestigVenster } from './lib/bevestig.jsx';
 import { UploadProvider } from './lib/uploadContext.jsx';
 import { UrenHerinneringModal } from './components/UrenHerinneringModal.jsx';
 const BetaalStatusPage = lazy(() => import('./pages/BetaalStatusPage.jsx').then(m => ({ default: m.BetaalStatusPage })));
@@ -1754,7 +1755,7 @@ function AppInner() {
       case 'uren':        return <UrenPage navigatePage={navigatePage} />;
       case 'database':    return <DatabasePage openCustomer={openCustomer} />;
       case 'team':        return <TeamPage />;
-      case 'instellingen':return <InstellingenPage />;
+      case 'instellingen':return <InstellingenPage openDeal={openDeal} />;
       default:            return <DashboardHome {...props} />;
     }
   };
@@ -2127,6 +2128,8 @@ export default function App() {
       <UploadProvider>
         <AppInner />
       </UploadProvider>
+      {/* Eén bevestigingsvenster voor de hele app (lib/bevestig.jsx). */}
+      <BevestigVenster />
     </ToastProvider>
   );
 }

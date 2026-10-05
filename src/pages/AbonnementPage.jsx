@@ -438,7 +438,7 @@ export default function AbonnementPage({ setPage }) {
                   <div className="ab-wie">{VOOR_WIE[t.id]}</div>
                   <div className="ab-prijs">
                     <strong>€ {tierPrice(t.id)}</strong>
-                    <span>/ maand{interval === 'jaar' ? ' · 12 mnd' : ''}</span>
+                    <span>/ maand excl. btw{interval === 'jaar' ? ' · 12 mnd' : ''}</span>
                   </div>
                   <div className="ab-extra-user">{extraUserLabel(t.id)}</div>
 

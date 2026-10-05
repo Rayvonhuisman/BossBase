@@ -4,6 +4,7 @@ import LeverancierSelect from './LeverancierSelect.jsx';
 import { InfoTip } from './Uitleg.jsx';
 import { useToast } from '../lib/toast.jsx';
 import { updateProjectKost, deleteProjectKost } from '../services/projectKostenService.js';
+import { bevestig } from '../lib/bevestig.jsx';
 
 // Een kostenpost (inkoop) toevoegen: één regel, overal hetzelfde.
 //
@@ -195,7 +196,7 @@ export function useInkopenBewerken(setLijst) {
     }
   };
   const verwijder = async rij => {
-    if (!window.confirm(`"${rij.naam}" verwijderen?`)) return;
+    if (!(await bevestig(`"${rij.naam}" verwijderen?`))) return;
     try {
       await deleteProjectKost(rij.id);
       setLijst(l => l.filter(x => x.id !== rij.id));

@@ -19,6 +19,7 @@ import { listCustomers } from '../../services/customerService.js';
 import { listDeals } from '../../services/dealService.js';
 import { getTeamMembers, createMentionNotifications } from '../../services/notificatieService.js';
 import NotitieLog, { toLogItem } from '../../components/NotitieLog.jsx';
+import { bevestig } from '../../lib/bevestig.jsx';
 
 const TYPE_LABEL = { job: 'Klus', visit: 'Opname', activity: 'Activiteit', event: 'Afspraak' };
 const TYPE_TONE = { job: 'b-orange', visit: 'b-new', activity: 'b-blue', event: 'b-green' };
@@ -185,7 +186,7 @@ export function CalendarEventDetailDrawer({ eventId, onClose, openCustomer, open
   };
 
   const handleDelete = async () => {
-    if (!ev || !window.confirm('Dit agenda-item verwijderen?')) return;
+    if (!ev || !(await bevestig('Dit agenda-item verwijderen?'))) return;
     setDeleting(true);
     try {
       await deleteCalendarEvent(ev.id);

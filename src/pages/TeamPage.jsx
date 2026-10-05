@@ -19,6 +19,7 @@ import { AvatarUpload } from '../components/AvatarUpload.jsx';
 import { getUserPermissions, setUserPermissions } from '../services/permissionsService.js';
 import { AVAILABLE_PERMISSIONS, PERMISSION_GROUPS, WARN_ON_ENABLE } from '../config/permissions.js';
 import { usePlanGuard, PlanStand } from '../components/PlanUpgradeModal.jsx';
+import { bevestig } from '../lib/bevestig.jsx';
 
 function TeamAvatar({ member, idx, size = 'sm' }) {
   if (member.avatarUrl) {
@@ -296,16 +297,16 @@ function PermissionsModal({ member, onClose, onSaved }) {
   const WARN_TEXT = 'Let op: dit geeft brede inzage in projecten, werkbonnen of agenda van collega’s. Weet je zeker dat je dit wilt aanzetten?';
 
   // Eén subrecht togglen; waarschuw bij het AANzetten van brede-inzage-rechten.
-  const toggleSub = key => {
+  const toggleSub = async key => {
     const turningOn = !perms[key];
-    if (turningOn && WARN_ON_ENABLE.includes(key) && !window.confirm(WARN_TEXT)) return;
+    if (turningOn && WARN_ON_ENABLE.includes(key) && !(await bevestig(WARN_TEXT))) return;
     setPerms(p => ({ ...p, [key]: !p[key] }));
   };
 
   // Hoofdrecht togglen → cascadeert naar alle subrechten. Waarschuw als het
   // aanzetten een brede-inzage-subrecht meeneemt.
-  const setGroup = (group, value) => {
-    if (value && group.subs.some(s => WARN_ON_ENABLE.includes(s.key) && !perms[s.key]) && !window.confirm(WARN_TEXT)) return;
+  const setGroup = async (group, value) => {
+    if (value && group.subs.some(s => WARN_ON_ENABLE.includes(s.key) && !perms[s.key]) && !(await bevestig(WARN_TEXT))) return;
     setPerms(p => { const next = { ...p }; group.subs.forEach(s => { next[s.key] = value; }); return next; });
   };
 
@@ -491,7 +492,7 @@ export function TeamPage() {
   };
 
   const handleDelete = async (member) => {
-    if (!window.confirm('Teamlid verwijderen?')) return;
+    if (!(await bevestig('Teamlid verwijderen?'))) return;
     try {
       await deleteTeamMember(member.id);
       setMembers(ms => ms.filter(m => m.id !== member.id));

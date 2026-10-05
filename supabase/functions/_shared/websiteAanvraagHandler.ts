@@ -15,6 +15,20 @@
 //   6. rate limit per formulier en e-mail
 //   7. opslaan; company_id komt uit het formulier, nooit uit de body
 //   8. melden (best effort)
+//
+// Uitbreiding voor de websiteformulieren van bedrijven (Instellingen ›
+// Websiteformulier), naast het formulier van bossbase.nl:
+//   - GET ?formulier=<token> geeft de openbare instellingen van een formulier
+//     (bedrijfsnaam, kleur, velden, koppeling). Niets daarvan is geheim.
+//   - multipart/form-data: veld 'gegevens' is dezelfde JSON, plus maximaal
+//     FOTO_LIMIETEN.aantal foto's in 'fotos'. Die komen bij het project.
+//   - Het kant-en-klare formulier draait op een pagina van BossBase in een
+//     iframe. De Origin is dan BossBase; die pagina stuurt in 'ingebed_op' de
+//     origins van de pagina's eromheen (location.ancestorOrigins, die een
+//     pagina niet kan vervalsen), en díe moeten op de domeinlijst staan.
+//   - Testen vanuit Instellingen: met een geldige sessie van iemand uit
+//     hetzelfde bedrijf die het formulier mag beheren. Dan geldt de
+//     domeinlijst niet, en is het altijd een testaanvraag.
 
 import { leesAanvraag, type SchoneAanvraag } from './websiteAanvraag.ts'
 
@@ -35,6 +49,10 @@ export interface NieuweAanvraag {
   phone: string | null
   subject: string | null
   message: string
+  address: string | null
+  postcode: string | null
+  city: string | null
+  gewenste_datum: string | null
   source: string
   source_url: string | null
   status: 'nieuw'
@@ -60,6 +78,24 @@ export interface AanvraagOpslag {
   meld(companyId: string, melding: Melding): Promise<void>
   /** Eenrichtings-hash (HMAC) zodat er nooit een ruw IP of e-mailadres in de limiettabel staat. */
   hash(waarde: string): Promise<string>
+  /** Openbare instellingen voor het formulier op de website (GET). */
+  configuratie?(formulier: Formulier): Promise<Record<string, unknown>>
+  /** Mag deze sessie (Bearer-token) voor dit bedrijf een testaanvraag sturen? */
+  magTesten?(jwt: string, companyId: string): Promise<boolean>
+  /** Zet de foto's bij het project van deze aanvraag. Geeft het aantal terug. */
+  bewaarFotos?(inquiryId: string, companyId: string, fotos: Foto[]): Promise<number>
+  /** Het project (deal) dat de trigger van deze aanvraag maakte. */
+  dealVan?(inquiryId: string): Promise<string | null>
+}
+
+export interface Foto {
+  bytes: Uint8Array
+  type: 'image/jpeg' | 'image/png' | 'image/webp'
+}
+
+export interface Opties {
+  /** Origins van de pagina's van BossBase zelf, waar het kant-en-klare formulier draait. */
+  paginaHerkomsten?: string[]
 }
 
 export interface Logger {
@@ -72,7 +108,37 @@ export const LIMIETEN = {
   ipPogingen: 10, ipVenster: 10 * 60,
   formulierPogingen: 200, formulierVenster: 60 * 60,
   emailPogingen: 5, emailVenster: 60 * 60,
+  configPogingen: 120, configVenster: 10 * 60,
 } as const
+
+// Foto's worden in de browser al verkleind (lange zijde 1600px, JPEG), dus een
+// foto is zelden meer dan een halve megabyte. Dit is de bovengrens.
+export const FOTO_LIMIETEN = {
+  aantal: 5,
+  bytesPerFoto: 6 * 1024 * 1024,
+  maxBodyBytes: 32 * 1024 * 1024,
+} as const
+
+// Herkent het bestandstype aan de eerste bytes, niet aan wat de browser zegt.
+export function fotoType(b: Uint8Array): Foto['type'] | null {
+  if (b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg'
+  if (b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png'
+  if (b.length > 12 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46
+      && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return 'image/webp'
+  return null
+}
+
+// 'https://www.voorbeeld.nl/pad' → 'https://www.voorbeeld.nl'; onzin → null.
+function alsOrigin(v: unknown): string | null {
+  if (typeof v !== 'string' || v.length > 300) return null
+  try {
+    const u = new URL(v)
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null
+    return u.origin
+  } catch {
+    return null
+  }
+}
 
 const stilleLogger: Logger = { info() {}, fout() {} }
 
@@ -80,7 +146,7 @@ function corsHeaders(origin: string | null, toegestaan: boolean): Record<string,
   const h: Record<string, string> = { Vary: 'Origin' }
   if (origin && toegestaan) {
     h['Access-Control-Allow-Origin'] = origin
-    h['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+    h['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
     h['Access-Control-Allow-Headers'] = 'content-type, authorization, apikey, x-client-info'
     h['Access-Control-Max-Age'] = '600'
   }
@@ -127,12 +193,36 @@ export function kiesOntvangers(
     .map(p => p.id)
 }
 
-export async function verwerkVerzoek(req: Request, opslag: AanvraagOpslag, log: Logger = stilleLogger): Promise<Response> {
+async function geefConfiguratie(req: Request, opslag: AanvraagOpslag, cors: Record<string, string>, log: Logger) {
+  const token = new URL(req.url).searchParams.get('formulier') || ''
+  if (!/^[A-Za-z0-9_-]{16,128}$/.test(token) || !opslag.configuratie) {
+    return antwoord(404, { ok: false, fout: 'formulier_onbekend' }, cors)
+  }
+  try {
+    if (!(await opslag.claimPoging(`cfg:${await opslag.hash(clientIp(req))}`, LIMIETEN.configPogingen, LIMIETEN.configVenster))) {
+      return antwoord(429, { ok: false, fout: 'te_veel_pogingen' }, cors)
+    }
+    const formulier = await opslag.zoekFormulier(token)
+    // Het formulier van bossbase.nl zelf heeft geen openbare instellingen nodig.
+    if (!formulier || !formulier.is_active || formulier.settings?.bestemming === 'superadmin') {
+      return antwoord(404, { ok: false, fout: 'formulier_onbekend' }, cors)
+    }
+    return antwoord(200, { ok: true, ...(await opslag.configuratie(formulier)) }, cors)
+  } catch (e) {
+    log.fout('configuratie laden mislukt', { soort: (e as Error)?.name })
+    return antwoord(500, { ok: false, fout: 'serverfout' }, cors)
+  }
+}
+
+export async function verwerkVerzoek(
+  req: Request, opslag: AanvraagOpslag, log: Logger = stilleLogger, opties: Opties = {},
+): Promise<Response> {
   const origin = req.headers.get('origin')
+  const paginaHerkomsten = new Set(opties.paginaHerkomsten || [])
   let herkomstOk = false
   if (origin) {
     try {
-      herkomstOk = (await opslag.bekendeHerkomsten()).has(origin)
+      herkomstOk = paginaHerkomsten.has(origin) || (await opslag.bekendeHerkomsten()).has(origin)
     } catch (e) {
       log.fout('herkomsten laden mislukt', { soort: (e as Error)?.name })
     }
@@ -140,22 +230,56 @@ export async function verwerkVerzoek(req: Request, opslag: AanvraagOpslag, log: 
   const cors = corsHeaders(origin, herkomstOk)
 
   if (req.method === 'OPTIONS') return new Response(null, { status: herkomstOk ? 204 : 403, headers: cors })
+  if (req.method === 'GET' && new URL(req.url).searchParams.has('formulier')) {
+    if (origin && !herkomstOk) return antwoord(403, { ok: false, fout: 'herkomst_niet_toegestaan' }, cors)
+    return geefConfiguratie(req, opslag, cors, log)
+  }
   if (req.method !== 'POST') {
-    return antwoord(405, { ok: false, fout: 'methode_niet_toegestaan' }, { ...cors, Allow: 'POST, OPTIONS' })
+    return antwoord(405, { ok: false, fout: 'methode_niet_toegestaan' }, { ...cors, Allow: 'GET, POST, OPTIONS' })
   }
   // Een browser op een onbekende site krijgt geen CORS-headers en kan het
   // antwoord dus niet lezen. Weigeren maakt dat expliciet en voorkomt dat we
   // voor zo'n pagina toch een aanvraag opslaan.
   if (origin && !herkomstOk) return antwoord(403, { ok: false, fout: 'herkomst_niet_toegestaan' }, cors)
 
-  if (!(req.headers.get('content-type') || '').toLowerCase().includes('application/json')) {
+  const soort = (req.headers.get('content-type') || '').toLowerCase()
+  const metFotos = soort.startsWith('multipart/form-data')
+  if (!soort.includes('application/json') && !metFotos) {
     return antwoord(415, { ok: false, fout: 'ongeldig_verzoek' }, cors)
   }
   const lengte = Number(req.headers.get('content-length') || 0)
-  if (lengte > LIMIETEN.maxBodyTekens) return antwoord(413, { ok: false, fout: 'te_groot' }, cors)
+  if (lengte > (metFotos ? FOTO_LIMIETEN.maxBodyBytes : LIMIETEN.maxBodyTekens)) {
+    return antwoord(413, { ok: false, fout: 'te_groot' }, cors)
+  }
 
   try {
-    const ruw = await req.text()
+    let ruw: string
+    const fotos: Foto[] = []
+    if (metFotos) {
+      let delen: FormData
+      try {
+        delen = await req.formData()
+      } catch {
+        return antwoord(400, { ok: false, fout: 'ongeldig_verzoek' }, cors)
+      }
+      const g = delen.get('gegevens')
+      ruw = typeof g === 'string' ? g : ''
+      const bestanden = delen.getAll('fotos').filter((f): f is File => typeof f !== 'string')
+      if (bestanden.length > FOTO_LIMIETEN.aantal) {
+        return antwoord(400, { ok: false, fout: 'validatie', velden: { fotos: `Maximaal ${FOTO_LIMIETEN.aantal} foto's` } }, cors)
+      }
+      for (const f of bestanden) {
+        if (f.size > FOTO_LIMIETEN.bytesPerFoto) {
+          return antwoord(400, { ok: false, fout: 'validatie', velden: { fotos: 'Een foto is te groot' } }, cors)
+        }
+        const bytes = new Uint8Array(await f.arrayBuffer())
+        const type = fotoType(bytes)
+        if (!type) return antwoord(400, { ok: false, fout: 'validatie', velden: { fotos: 'Alleen foto\'s (JPG, PNG of WebP)' } }, cors)
+        fotos.push({ bytes, type })
+      }
+    } else {
+      ruw = await req.text()
+    }
     if (ruw.length > LIMIETEN.maxBodyTekens) return antwoord(413, { ok: false, fout: 'te_groot' }, cors)
 
     let body: unknown
@@ -188,14 +312,41 @@ export async function verwerkVerzoek(req: Request, opslag: AanvraagOpslag, log: 
       return antwoord(404, { ok: false, fout: 'formulier_onbekend' }, cors)
     }
     const domeinen = formulier.allowed_domains || []
-    if (origin && domeinen.length > 0 && !domeinen.includes(origin)) {
+    const bedrijfsformulier = formulier.settings?.bestemming !== 'superadmin'
+    // Het kant-en-klare formulier op een pagina van BossBase, ingebed op de
+    // website van het bedrijf: dan telt waar die pagina in staat.
+    const ingebedOp = Array.isArray((body as Record<string, unknown>)?.ingebed_op)
+      ? ((body as Record<string, unknown>).ingebed_op as unknown[]).slice(0, 10).map(alsOrigin).filter((o): o is string => !!o)
+      : []
+    let herkomstGoed: boolean
+    if (bedrijfsformulier) {
+      // Een bedrijfsformulier werkt alleen op de opgegeven domeinen. Een lege
+      // lijst betekent dus: nog nergens.
+      herkomstGoed = !!origin && (
+        domeinen.includes(origin)
+        || (paginaHerkomsten.has(origin) && ingebedOp.some(o => domeinen.includes(o)))
+      )
+    } else {
+      herkomstGoed = !origin || domeinen.length === 0 || domeinen.includes(origin)
+    }
+
+    // Testaanvraag vanuit Instellingen: alleen met een sessie uit dit bedrijf.
+    let test = false
+    const bearer = (req.headers.get('authorization') || '').match(/^Bearer\s+(\S+)$/i)?.[1]
+    // Altijd controleren als er een sessie meekomt (ook vanaf een toegestaan
+    // domein), zodat een test nooit op de limiet per e-mailadres stukloopt.
+    // Een bezoekersformulier stuurt nooit een Authorization-header mee.
+    if (bearer && opslag.magTesten && bedrijfsformulier) {
+      test = await opslag.magTesten(bearer, formulier.company_id)
+    }
+    if (!herkomstGoed && !test) {
       log.info('geweigerd: herkomst hoort niet bij dit formulier', { formulier: formulier.id })
       return antwoord(403, { ok: false, fout: 'herkomst_niet_toegestaan' }, cors)
     }
 
-    const binnenLimiet =
+    const binnenLimiet = test || (
       await opslag.claimPoging(`form:${formulier.id}`, LIMIETEN.formulierPogingen, LIMIETEN.formulierVenster)
-      && await opslag.claimPoging(`email:${await opslag.hash(a.email.toLowerCase())}`, LIMIETEN.emailPogingen, LIMIETEN.emailVenster)
+      && await opslag.claimPoging(`email:${await opslag.hash(a.email.toLowerCase())}`, LIMIETEN.emailPogingen, LIMIETEN.emailVenster))
     if (!binnenLimiet) {
       log.info('geweigerd: te veel pogingen (formulier/e-mail)', { formulier: formulier.id })
       return antwoord(429, { ok: false, fout: 'te_veel_pogingen' }, cors)
@@ -207,6 +358,8 @@ export async function verwerkVerzoek(req: Request, opslag: AanvraagOpslag, log: 
       privacy: { akkoord: true, versie: a.privacy_versie, akkoord_op: new Date().toISOString() },
     }
     if (a.branche) metadata.branche = a.branche
+    if (fotos.length) metadata.fotos = fotos.length
+    if (ingebedOp.length && origin && paginaHerkomsten.has(origin)) metadata.ingebed_op = ingebedOp[0]
 
     const { id, dubbel } = await opslag.bewaar({
       company_id: formulier.company_id,
@@ -217,10 +370,14 @@ export async function verwerkVerzoek(req: Request, opslag: AanvraagOpslag, log: 
       phone: a.phone,
       subject: a.subject,
       message: a.message,
+      address: a.address,
+      postcode: a.postcode,
+      city: a.city,
+      gewenste_datum: a.gewenste_datum,
       source: bron,
       source_url: a.source_url,
       status: 'nieuw',
-      is_test: a.is_test,
+      is_test: a.is_test || test,
       submission_id: a.submission_id,
       metadata,
     })
@@ -232,15 +389,30 @@ export async function verwerkVerzoek(req: Request, opslag: AanvraagOpslag, log: 
       return antwoord(200, { ok: true }, cors)
     }
 
+    if (id && fotos.length && opslag.bewaarFotos) {
+      // Na het opslaan: de trigger heeft dan het project gemaakt. Mislukt dit,
+      // dan staat de aanvraag er wel; die is belangrijker dan de foto's.
+      try {
+        await opslag.bewaarFotos(id, formulier.company_id, fotos)
+      } catch (e) {
+        log.fout('foto\'s opslaan mislukt', { soort: (e as Error)?.name, formulier: formulier.id })
+      }
+    }
+
     if (id) {
       try {
-        await opslag.meld(formulier.company_id, meldingVoor(a, id))
+        await opslag.meld(formulier.company_id, meldingVoor({ ...a, is_test: a.is_test || test }, id))
       } catch (e) {
         log.fout('melding maken mislukt', { soort: (e as Error)?.name })
       }
     }
 
-    log.info('aanvraag opgeslagen', { formulier: formulier.id, test: a.is_test })
+    log.info('aanvraag opgeslagen', { formulier: formulier.id, test: a.is_test || test })
+    // Alleen de tester krijgt te zien wélk project er is gemaakt, om er
+    // meteen naartoe te kunnen. Een bezoeker heeft daar niets aan.
+    if (test && id && opslag.dealVan) {
+      return antwoord(200, { ok: true, deal_id: await opslag.dealVan(id).catch(() => null) }, cors)
+    }
     return antwoord(200, { ok: true }, cors)
   } catch (e) {
     log.fout('verwerken mislukt', { soort: (e as Error)?.name, code: (e as { code?: string })?.code })

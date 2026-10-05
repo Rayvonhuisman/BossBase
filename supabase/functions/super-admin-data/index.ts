@@ -82,10 +82,10 @@ serve(async (req) => {
     custRes, projRes, offRes, factRes, wbRes, actRes, betaaldFactRes,
   ] = await Promise.all([
     svc.from('companies').select(
-      'id, name, email, phone, address, city, postal_code, kvk, btw_number, website, logo_url, branding_color, created_at, status'
+      'id, name, email, phone, address, city, postal_code, kvk, btw_number, website, logo_url, branding_color, created_at, status, branche'
     ).order('created_at', { ascending: false }),
     svc.from('subscriptions').select('*'),
-    alle(() => svc.from('profiles').select('id, company_id, full_name, role, created_at, is_super_admin')),
+    alle(() => svc.from('profiles').select('id, company_id, full_name, role, created_at, is_super_admin, telefoon')),
     alleAuthGebruikers(),
     alle(() => svc.from('customers').select('company_id')),
     alle(() => svc.from('projects').select('company_id')),
@@ -145,6 +145,7 @@ serve(async (req) => {
         id: m.id,
         fullName: m.full_name || '',
         email: au?.email || '',
+        telefoon: m.telefoon || '',
         role: m.role || 'medewerker',
         createdAt: m.created_at,
         lastLogin: login,
@@ -162,6 +163,7 @@ serve(async (req) => {
       postalCode: company.postal_code || '',
       kvk: company.kvk || '',
       btwNumber: company.btw_number || '',
+      branche: company.branche || '',
       website: company.website || '',
       logoUrl: company.logo_url || '',
       brandingColor: company.branding_color || '#f97316',

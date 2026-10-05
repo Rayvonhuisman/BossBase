@@ -33,6 +33,7 @@ import { usePermissions } from '../hooks/usePermissions.js';
 import { LaadFout } from '../components/LaadFout.jsx';
 import { vandaagIso, voegDagenToe } from '../lib/datumTijd.js';
 import { opNaam } from '../lib/sorteren.js';
+import { bevestig } from '../lib/bevestig.jsx';
 
 // De klant voor een PDF. De gedeelde klantenlijst is kort na het openen van de
 // pagina (of via een gedeelde link) soms nog niet geladen; dan bleef het
@@ -1231,7 +1232,7 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
       toast.error('Een ondertekende of geaccepteerde offerte kun je niet verwijderen.');
       return;
     }
-    if (!window.confirm(`Offerte ${o.nummer} verwijderen?`)) return;
+    if (!(await bevestig(`Offerte ${o.nummer} verwijderen?`))) return;
     try {
       await deleteOfferte(o.id);
       setOffertes(prev => prev.filter(x => x.id !== o.id));

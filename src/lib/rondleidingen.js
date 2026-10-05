@@ -205,9 +205,22 @@ export const RONDLEIDINGEN = {
     { doel: 'instellingen-tabs', titel: 'Instellingen',
       tekst: 'Je eigen profiel, en als beheerder alles van je bedrijf.' },
     { doel: 'instellingen-tab-standaard', titel: 'Algemeen',
-      tekst: 'Je tarieven, btw en hoe lang een offerte geldig is, en de urenherinnering voor je team.' },
+      tekst: 'Je tarieven, btw, hoe lang een offerte geldig is, de betaaltermijn van je facturen en de urenherinnering voor je team.' },
+    { doel: 'instellingen-tab-websiteformulier', titel: 'Websiteformulier',
+      tekst: 'Krijg aanvragen van je eigen website meteen op je bord. Je plakt één stukje code in je site, en ik zet elke aanvraag als klant en project in je pipeline.' },
     { doel: 'instellingen-tab-abonnement', titel: 'Abonnement',
       tekst: 'Je pakket, modules en gebruikers, en verzoeken van je team.' },
+  ],
+
+  // Het tabblad Websiteformulier heeft een eigen rondleiding: wie Instellingen
+  // al kende toen dit tabblad erbij kwam, krijgt hem zo toch de eerste keer.
+  websiteformulier: [
+    { doel: 'wf-uitleg', titel: 'Stap voor stap',
+      tekst: 'Klik hier voor de uitleg: hoe je het formulier op je website zet, ook in WordPress en Wix.' },
+    { doel: 'wf-code', titel: 'De code voor je website',
+      tekst: 'Kopieer deze code en plak hem in je website. Er zit geen geheime sleutel in, dus je kunt hem gerust doorsturen naar wie je website bouwt.' },
+    { doel: 'wf-test', titel: 'Even testen',
+      tekst: 'Stuur een testaanvraag. Hij verschijnt meteen in je pipeline, als klant en project.' },
   ],
 
   // ── Vensters ──────────────────────────────────────────────────────────────
@@ -267,7 +280,9 @@ export const START = [
   { tab: 'bedrijf', doel: 'set-bedrijf-opslaan', titel: 'Opslaan',
     tekst: 'Klaar met invullen? Sla het hier op.' },
   { tab: 'standaard', doel: 'set-algemeen', titel: 'Je standaardwaarden',
-    tekst: 'Je uurtarief, btw en hoe lang een offerte geldig is. Die vul ik bij elke nieuwe offerte en factuur vanzelf in. Dat aantal dagen is ook de betaaltermijn op je facturen.' },
+    tekst: 'Je uurtarief, btw en hoe lang een offerte geldig is. Die vul ik bij elke nieuwe offerte en factuur vanzelf in.' },
+  { tab: 'standaard', doel: 'set-betaaltermijn', titel: 'Je betaaltermijn',
+    tekst: 'Na hoeveel dagen je klant moet betalen. Daarmee zet ik de vervaldatum op elke nieuwe factuur. Standaard is dat 14 dagen.' },
   { tab: 'standaard', doel: 'set-herinneringen', titel: 'Herinneringen',
     tekst: 'Wil je dat je team een seintje krijgt als de uren nog niet zijn ingevuld? Zet het hier aan.' },
   { tab: 'templates', doel: 'set-templates', titel: 'Je mails',

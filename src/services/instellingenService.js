@@ -13,6 +13,9 @@ const toBedrijfsinstellingen = row => ({
   // 'factuur' = omzet telt op factuurdatum, 'kas' = op betaaldatum.
   btwStelsel: row.btw_stelsel === 'kas' ? 'kas' : 'factuur',
   offerteGeldigDagen: Number(row.offerte_geldig_dagen || 14),
+  // Na hoeveel dagen een nieuwe factuur vervalt, als de klant geen eigen
+  // termijn heeft. Los van hoe lang een offerte geldig is.
+  betaaltermijnDagen: Number(row.betaaltermijn_dagen ?? 14),
   // Interval (min) waarmee de uren-herinnering-pop-up terugkeert. 0 = uit.
   urenHerinneringIntervalMin: Number(row.uren_herinnering_interval_min ?? 60),
   // Wanneer een werkdag gaat meetellen: 'na_werkdag', 'einde_dag' of
@@ -94,6 +97,7 @@ export async function upsertBedrijfsinstellingen(input) {
   const marge = input.standaard_marge ?? input.standaardMarge
   const btw = input.btw_pct ?? input.btwPct
   const geldig = input.offerte_geldig_dagen ?? input.offerteGeldigDagen
+  const termijn = input.betaaltermijn_dagen ?? input.betaaltermijnDagen
   const herinnering = input.uren_herinnering_interval_min ?? input.urenHerinneringIntervalMin
   const stelsel = input.btw_stelsel ?? input.btwStelsel
   const agStart = input.agenda_start_uur ?? input.agendaStartUur
@@ -104,6 +108,7 @@ export async function upsertBedrijfsinstellingen(input) {
     standaard_marge: marge != null ? Number(marge) : undefined,
     btw_pct: btw != null ? Number(btw) : undefined,
     offerte_geldig_dagen: geldig != null ? Number(geldig) : undefined,
+    betaaltermijn_dagen: termijn != null && termijn !== '' ? Number(termijn) : undefined,
     uren_herinnering_interval_min: herinnering != null ? Number(herinnering) : undefined,
     uren_herinnering_moment: ['na_werkdag', 'einde_dag', 'volgende_ochtend'].includes(input.uren_herinnering_moment)
       ? input.uren_herinnering_moment : undefined,

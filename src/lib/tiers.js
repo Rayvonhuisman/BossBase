@@ -115,5 +115,5 @@ export const tierPrice  = id => getTier(id)?.price ?? 0
 // gebruiker in de prijs, dus daar telt de eerste ook mee.
 export const extraUserLabel = tier =>
   inbegrepenGebruikers(tier) === 0
-    ? `+ € ${EXTRA_USER_PRICE} per gebruiker (ook de eerste)`
+    ? `+ € ${EXTRA_USER_PRICE} per gebruiker per maand`
     : `+ € ${EXTRA_USER_PRICE} per extra gebruiker`

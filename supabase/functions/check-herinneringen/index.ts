@@ -165,7 +165,10 @@ serve(async (req) => {
       // tekst, dan een regel met de betaalgegevens eronder.
       const metBetaalgegevens = (html: string) =>
         ibanRuw && !html.replace(/\s/g, '').toUpperCase().includes(ibanRuw)
-          ? `${html}<p>Betaalgegevens: ${escapeHtml(ibanTekst)}, onder vermelding van ${escapeHtml(f.betalingskenmerk || f.nummer)}.</p>`
+          ? `${html}<p>Betaalgegevens: ${escapeHtml(ibanTekst)}${
+              // "Onder vermelding van …" één keer: noemt het sjabloon het al, dan niet nog eens.
+              /onder\s+vermelding\s+van/i.test(html.replace(/<[^>]*>/g, ' ')) ? '' : `, onder vermelding van ${escapeHtml(f.betalingskenmerk || f.nummer)}`
+            }.</p>`
           : html
 
       // Herinnering 1

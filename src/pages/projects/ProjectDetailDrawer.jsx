@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listLeveranciers } from '../../services/leverancierService.js';
 import { Maximize2, Minimize2, AlertTriangle, AlertOctagon, Check, X, Edit2, Trash2 } from 'lucide-react';
-import { updateCustomer } from '../../services/customerService.js';
+import { updateCustomer, getCustomer } from '../../services/customerService.js';
 import { I, ModalX, fmt, fmt0 } from '../../bb-shared.jsx';
 import { InfoTip, InfoUitklap } from '../../components/Uitleg.jsx';
 import { useToast } from '../../lib/toast.jsx';
@@ -47,6 +47,7 @@ import NotitieLog, { toLogItem } from '../../components/NotitieLog.jsx';
 import { getTeamMembers, createMentionNotifications, notifyNewAssignees } from '../../services/notificatieService.js';
 import { statusInfo } from '../../utils/statusColors.js';
 import Rondleiding from '../../components/Rondleiding.jsx';
+import { bevestig } from '../../lib/bevestig.jsx';
 
 const TABS = [
   { id: 'overview',   label: 'Overzicht' },
@@ -380,6 +381,15 @@ function OverviewTab({
   const [klantLokaal, setKlantLokaal] = useState(null);
   const klantUitLijst = customers.find(c => c.id === project.customerId) || null;
   const klant = (klantLokaal && klantLokaal.id === project.customerId) ? klantLokaal : klantUitLijst;
+  // Een klant die net is binnengekomen (websiteformulier, een collega) staat
+  // nog niet in de lijst die de pagina eerder ophaalde. Dan zelf ophalen, anders
+  // blijven adres en contact leeg tot de volgende verversing.
+  useEffect(() => {
+    if (!project.customerId || klantUitLijst || klantLokaal?.id === project.customerId) return undefined;
+    let leeft = true;
+    getCustomer(project.customerId).then(k => { if (leeft && k) setKlantLokaal(k); }).catch(() => {});
+    return () => { leeft = false; };
+  }, [project.customerId, klantUitLijst, klantLokaal?.id]);
   const magKlantBewerken = magBewerken('klanten_bewerken');
   const [klantVeld, setKlantVeld] = useState(null);
   const [klantDraft, setKlantDraft] = useState('');
@@ -480,7 +490,7 @@ function OverviewTab({
   };
 
   const verwijderFoto = async (foto) => {
-    if (!window.confirm('Deze foto verwijderen?')) return;
+    if (!(await bevestig('Deze foto verwijderen?'))) return;
     try {
       await deleteProjectFoto(foto.id, foto.url);
       setFotos(l => l.filter(x => x.id !== foto.id));
@@ -603,6 +613,38 @@ function OverviewTab({
           </div>
         )}
 
+        {/* Wat er op het websiteformulier is ingevuld, precies dat en niet
+            meer: lege velden vallen weg. De omschrijving staat al hierboven;
+            alleen als iemand die tekst heeft aangepast, tonen we het origineel. */}
+        {bron?.velden?.length > 0 && (
+          <div style={{ marginTop: 14, padding: '10px 12px', borderRadius: 'var(--r8)', background: 'var(--bgs)', border: '1px solid var(--br)' }}>
+            <div style={{ ...labelStyle, marginBottom: 6 }}>
+              Ingevuld op de website{bron.isTest ? ' (testaanvraag)' : ''}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 14, rowGap: 4, fontSize: 13 }}>
+              {bron.velden
+                .filter(v => v.key !== 'omschrijving' || v.waarde.trim() !== aanvraagTekst.trim())
+                .map(v => (
+                  <div key={v.key} style={{ display: 'contents' }}>
+                    <div style={{ color: 'var(--dmu)' }}>{v.label}</div>
+                    <div style={{ fontWeight: 600, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      {v.key === 'email' ? <a href={`mailto:${v.waarde}`} style={{ color: 'inherit' }}>{v.waarde}</a>
+                        : v.key === 'telefoon' ? <a href={`tel:${v.waarde.replace(/[^\d+]/g, '')}`} style={{ color: 'inherit' }}>{v.waarde}</a>
+                        : v.key === 'gewensteDatum' && /^\d{4}-\d{2}-\d{2}$/.test(v.waarde) ? fmtDate(v.waarde)
+                        : v.waarde}
+                    </div>
+                  </div>
+                ))}
+              {bron.fotos > 0 && (
+                <>
+                  <div style={{ color: 'var(--dmu)' }}>Foto's</div>
+                  <div style={{ fontWeight: 600 }}>{bron.fotos === 1 ? '1 foto, hieronder' : `${bron.fotos} foto's, hieronder`}</div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginTop: 14 }}>
           <div>
             <div style={labelStyle}>Waar</div>
@@ -627,6 +669,7 @@ function OverviewTab({
                 zeggen we niets in plaats van "handmatig" te beweren. */}
             <div style={{ fontWeight: 600, fontSize: 13 }}>
               {bron?.bron === 'bossbase_website' ? 'Websiteformulier'
+                : bron?.bron === 'website' ? 'Website'
                 : bron?.bron ? bron.bron
                 : magVerkoop ? 'Handmatig aangemaakt'
                 : '—'}
@@ -1813,7 +1856,7 @@ export function ProjectDetailDrawer({
   };
 
   const handleDeleteNote = async id => {
-    if (!confirm('Notitie verwijderen?')) return;
+    if (!(await bevestig('Notitie verwijderen?'))) return;
     try {
       await deleteProjectNote(id);
       setNotes(prev => prev.filter(n => n.id !== id));
@@ -1823,7 +1866,7 @@ export function ProjectDetailDrawer({
   };
 
   const handleDeleteProject = async () => {
-    if (!confirm(`Project "${project?.name}" definitief verwijderen?`)) return;
+    if (!(await bevestig(`Project "${project?.name}" definitief verwijderen?`))) return;
     try {
       await deleteProject(projectId);
       toast.success('Project verwijderd');

@@ -34,8 +34,12 @@ Klik op **Nieuwe factuur**.
   naar de klant.
 - **Project** (optioneel).
 - **Factuurdatum**: standaard vandaag.
-- **Vervaldatum**: standaard vandaag plus het aantal dagen uit Instellingen,
-  Algemeen (standaard 14).
+- **Vervaldatum**: de factuurdatum plus de betaaltermijn. Die stel je in onder
+  **Instellingen**, tabblad **Algemeen**, bij **Betaaltermijn facturen (dagen)**
+  (standaard 14). Heeft een klant een eigen betaaltermijn, dan geldt die. Die zet
+  je op de klantkaart, tabblad **Gegevens**, bij **Betaaltermijn (dagen)**; leeg
+  betekent de standaard uit Instellingen. Je kunt de vervaldatum op de factuur ook
+  zelf aanpassen.
 - **Regels**: zoals bij offertes, met per regel een eigen btw-tarief (21%, 9%, 0%
   vrijgesteld of 0% btw verlegd). Verlegde btw kan niet samen met belaste regels op
   één factuur.

@@ -46,6 +46,7 @@ import { getMailTemplate, sendEmail, substituteVars, substituteVarsHtml, logSent
 import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { mailTemplate } from '../utils/mailTemplate.js';
 import { getEmailTemplates } from '../services/instellingenService.js';
+import { bevestig } from '../lib/bevestig.jsx';
 
 // Customer form keeps friendly UI fields; service-layer maps to real DB columns.
 // `type` en `source` worden opgeslagen (customers.type / customers.source).
@@ -425,9 +426,17 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
   const omzetExclBtw = sumOmzetExclBtw(cFacturen);
   const profit = omzetExclBtw - totalCosts;
   const margin = omzetExclBtw > 0 ? Math.round((profit / omzetExclBtw) * 100) : 0;
-  const startEdit = (key) => { setEditingField(key); setFieldDraft(c[key] || ''); };
+  const startEdit = (key) => { setEditingField(key); setFieldDraft(c[key] ?? ''); };
   const cancelEdit = () => { setEditingField(null); setFieldDraft(''); };
   const saveField = async (key) => {
+    // Betaaltermijn: een heel aantal dagen, of leeg voor de standaard.
+    if (key === 'betaaltermijnDagen') {
+      const v = String(fieldDraft ?? '').trim();
+      if (v !== '' && !(/^\d+$/.test(v) && Number(v) <= 365)) {
+        toast.error('Vul een aantal dagen in (0 tot 365), of laat het leeg voor de standaard.');
+        return;
+      }
+    }
     setSavingField(true);
     try {
       const saved = await updateCustomer(c.id, { ...c, [key]: fieldDraft });
@@ -1357,6 +1366,8 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
             { key: 'iban',      label: 'IBAN',        type: 'input' },
             { key: 'type',      label: 'Type',        type: 'select', options: KLANT_TYPES },
             { key: 'source',    label: 'Bron',        type: 'input' },
+            { key: 'betaaltermijnDagen', label: 'Betaaltermijn (dagen)', type: 'input',
+              toon: v => `${v} dagen`, leeg: 'Standaard uit Instellingen' },
           ].map(field => {
             const isActive = editingField === field.key;
             return (
@@ -1400,8 +1411,10 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
                   </div>
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
-                    <span className="cust-info-val" style={{ flex: 1, color: c[field.key] ? undefined : 'var(--dl)' }}>
-                      {c[field.key] || ''}
+                    <span className="cust-info-val" style={{ flex: 1, color: (c[field.key] || c[field.key] === 0) ? undefined : 'var(--dl)' }}>
+                      {(c[field.key] || c[field.key] === 0)
+                        ? (field.toon ? field.toon(c[field.key]) : c[field.key])
+                        : (field.leeg || '')}
                     </span>
                     {can('klanten_bewerken') && (
                       <button onClick={() => startEdit(field.key)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', display: 'flex', alignItems: 'center', padding: 2, flexShrink: 0 }}>
@@ -1522,7 +1535,7 @@ export function CustomersPage({ openCustomer }) {
     (c.company || '').toLowerCase().includes(search.toLowerCase())
   );
   const remove = async id => {
-    if (!confirm('Weet je zeker dat je deze klant wilt verwijderen?')) return;
+    if (!(await bevestig('Weet je zeker dat je deze klant wilt verwijderen?'))) return;
     try {
       const waarschuwing = await deleteCustomer(id);
       setCustomers(cs => cs.filter(c => c.id !== id));

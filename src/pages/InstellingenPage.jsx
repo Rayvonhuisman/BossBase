@@ -20,6 +20,7 @@ import { usePermissions } from '../hooks/usePermissions.js';
 import { useUrlTab } from '../hooks/useUrlTab.js';
 import { useUploads } from '../lib/uploadContext.jsx';
 import { InfoTip, InfoUitklap } from '../components/Uitleg.jsx';
+import { WebsiteformulierSectie } from './instellingen/WebsiteformulierSectie.jsx';
 import {
   getBedrijfsinstellingen,
   upsertBedrijfsinstellingen,
@@ -48,6 +49,7 @@ import { AvatarUpload } from '../components/AvatarUpload.jsx';
 import { PasswordRequirements, PasswordMatch, passwordValid } from '../components/PasswordStrength.jsx';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
+import { BRANCHES } from '../lib/branches.js';
 import { comprimeerAfbeelding, LOGO_MAX_ZIJDE } from '../utils/afbeeldingComprimeren.js';
 import {
   getConnection,
@@ -69,6 +71,7 @@ import {
   importKostenVanuitAfas,
   syncContactenMetAfas,
 } from '../services/accountingService.js';
+import { bevestig } from '../lib/bevestig.jsx';
 
 const ALL_TEMPLATE_CONFIGS = [
   { type: 'offerte', label: 'Offerte', vars: ['klant_naam','bedrijfsnaam','offerte_nummer','totaal_bedrag','vervaldatum','link'], showAutoToggle: false, showAutoDagen: false },
@@ -152,10 +155,10 @@ const VASTE_WERKWIJZE = (
 );
 
 // Alle mogelijke tab-ids (permissie-onafhankelijk) — weert onbekende ?tab=-waarden.
-const SETTINGS_TAB_IDS = ['profiel', 'bedrijf', 'standaard', 'templates', 'pipeline', 'voertuigen', 'abonnement', 'integraties'];
+const SETTINGS_TAB_IDS = ['profiel', 'bedrijf', 'standaard', 'templates', 'pipeline', 'websiteformulier', 'voertuigen', 'abonnement', 'integraties'];
 
 
-export function InstellingenPage() {
+export function InstellingenPage({ openDeal } = {}) {
   const toast = useToast();
   const { company, refresh, profile } = useProfile();
   const plan = usePlan();
@@ -196,7 +199,7 @@ export function InstellingenPage() {
   // Bedrijfsprofiel
   const [bedrijfForm, setBedrijfForm] = useState({
     name: '', email: '', phone: '', kvk: '', btw_number: '',
-    address: '', city: '', postal_code: '', website: '', branding_color: '#1DDB62',
+    address: '', city: '', postal_code: '', website: '', branche: '', branding_color: '#1DDB62',
     iban: '', iban_tnv: '',
   });
   const [savingBedrijf, setSavingBedrijf] = useState(false);
@@ -208,6 +211,7 @@ export function InstellingenPage() {
     reiskosten_per_km: 0.23,
     btw_pct: 21,
     offerte_geldig_dagen: 14,
+    betaaltermijn_dagen: 14,
     agenda_start_uur: 7,
     agenda_eind_uur: 20,
     uren_herinnering_interval_min: 60,
@@ -379,7 +383,7 @@ export function InstellingenPage() {
   };
 
   const handleStripeDisconnect = async () => {
-    if (!window.confirm('Stripe-koppeling ontkoppelen? Je account bij Stripe blijft bestaan.')) return;
+    if (!(await bevestig('Stripe-koppeling ontkoppelen? Je account bij Stripe blijft bestaan.'))) return;
     setStripeBusy(true);
     try {
       await disconnectStripe();
@@ -410,6 +414,7 @@ export function InstellingenPage() {
             reiskosten_per_km: instellingen.reiskostenPerKm ?? 0.23,
             btw_pct: instellingen.btwPct ?? 21,
             offerte_geldig_dagen: instellingen.offerteGeldigDagen ?? 14,
+            betaaltermijn_dagen: instellingen.betaaltermijnDagen ?? 14,
             uren_herinnering_interval_min: instellingen.urenHerinneringIntervalMin ?? 60,
             uren_herinnering_moment: instellingen.urenHerinneringMoment,
             uren_herinnering_dagen: instellingen.urenHerinneringDagen,
@@ -512,9 +517,14 @@ export function InstellingenPage() {
     return () => { gestopt = true; clearTimeout(timer); };
   }, [ssActivatie, canCompanySettings]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Het formulier volgt het bedrijf uit de database, maar overschrijft nooit wat
+  // iemand al heeft getypt en nog niet heeft opgeslagen. Een logo uploaden laadt
+  // het bedrijf opnieuw; zonder dit verdwenen ingevulde velden (KvK, IBAN, adres)
+  // en sloeg "Opslaan" daarna lege waarden op.
+  const vorigBedrijf = useRef(null);
   useEffect(() => {
     if (company) {
-      setBedrijfForm({
+      const uitDatabase = {
         name: company.name || '',
         email: company.email || '',
         reply_to_email: company.replyToEmail || '',
@@ -525,10 +535,21 @@ export function InstellingenPage() {
         city: company.city || '',
         postal_code: company.postalCode || '',
         website: company.website || '',
+        branche: company.branche || '',
         branding_color: company.brandingColor || '#1DDB62',
         iban: company.iban || '',
         iban_tnv: company.ibanTnv || '',
+      };
+      const vorig = vorigBedrijf.current;
+      setBedrijfForm(huidig => {
+        if (!vorig) return uitDatabase;
+        const samen = { ...uitDatabase };
+        for (const k of Object.keys(uitDatabase)) {
+          if (huidig[k] !== vorig[k]) samen[k] = huidig[k];
+        }
+        return samen;
       });
+      vorigBedrijf.current = uitDatabase;
     }
   }, [company]);
 
@@ -569,24 +590,18 @@ export function InstellingenPage() {
         behoudTransparantie: true,
       });
       const ext = teUploaden.name.split('.').pop().toLowerCase() || 'jpg';
-      const path = `${company.id}/logo.${ext}`;
+      // Elke upload een eigen bestandsnaam, en oude versies blijven staan. Een
+      // verstuurde mail of PDF verwijst naar de publieke URL van het logo dat op
+      // dat moment gold; werd dat bestand overschreven of opgeruimd, dan toonde
+      // de mail bij de klant later een gebroken afbeelding. Logo's zijn
+      // verkleind en klein; ze verdwijnen met de rest van de bedrijfsgegevens
+      // na de bewaartermijn (opschonen).
+      const path = `${company.id}/logo-${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from('bedrijf-logos')
-        .upload(path, teUploaden, { upsert: true, contentType: teUploaden.type });
+        .upload(path, teUploaden, { upsert: false, contentType: teUploaden.type });
       if (uploadError) throw uploadError;
       const { data: { publicUrl } } = supabase.storage.from('bedrijf-logos').getPublicUrl(path);
-
-      // Oude logobestanden met een ándere extensie opruimen. De naam is
-      // logo.<ext>, dus een PNG die na het comprimeren een JPG wordt laat het
-      // origineel anders als wees achter — en dat is precies het geval dat we
-      // hier proberen op te lossen. Best-effort: het logo staat al goed.
-      try {
-        const { data: bestaand } = await supabase.storage.from('bedrijf-logos').list(company.id);
-        const wezen = (bestaand || [])
-          .filter(f => /^logo\./i.test(f.name) && `${company.id}/${f.name}` !== path)
-          .map(f => `${company.id}/${f.name}`);
-        if (wezen.length) await supabase.storage.from('bedrijf-logos').remove(wezen);
-      } catch { /* opruimen mag het uploaden niet laten falen */ }
 
       await updateCompany(company.id, { logo_url: publicUrl });
       await refresh();
@@ -613,7 +628,7 @@ export function InstellingenPage() {
     }
     setSavingBedrijf(true);
     try {
-      await updateCompany(company.id, { ...bedrijfForm, iban: ibanOpslaan(bedrijfForm.iban), iban_tnv: bedrijfForm.iban_tnv.trim() || null });
+      await updateCompany(company.id, { ...bedrijfForm, iban: ibanOpslaan(bedrijfForm.iban), iban_tnv: bedrijfForm.iban_tnv.trim() || null, branche: bedrijfForm.branche || null });
       await refresh();
       toast.success('Bedrijfsprofiel opgeslagen');
     } catch (err) {
@@ -668,7 +683,7 @@ export function InstellingenPage() {
   };
 
   const removeEenheid = async (id) => {
-    if (!window.confirm('Deze eigen eenheid verwijderen? Bestaande offertes/facturen behouden hun bedrag.')) return;
+    if (!(await bevestig('Deze eigen eenheid verwijderen? Bestaande offertes/facturen behouden hun bedrag.'))) return;
     try {
       await deleteEigenEenheid(id);
       setEenheden(list => list.filter(x => x.id !== id));
@@ -736,7 +751,7 @@ export function InstellingenPage() {
   };
 
   const handleDeleteTemplate = async (t) => {
-    if (!confirm(`Template "${t.name || t.type}" verwijderen? Dit kan niet ongedaan worden gemaakt.`)) return;
+    if (!(await bevestig(`Template "${t.name || t.type}" verwijderen? Dit kan niet ongedaan worden gemaakt.`))) return;
     try {
       await deleteEmailTemplate(t.id);
       const remaining = templates.filter(x => x.id !== t.id);
@@ -775,7 +790,7 @@ export function InstellingenPage() {
     const kop = geraakt.length
       ? `Let op: deze fase is gekoppeld aan ${geraakt.join(' en ')}. Die koppeling vervalt.\n\n`
       : '';
-    if (!window.confirm(`${kop}Fase verwijderen? Dit kan niet ongedaan worden gemaakt.`)) return;
+    if (!(await bevestig(`${kop}Fase verwijderen? Dit kan niet ongedaan worden gemaakt.`))) return;
     try {
       await deletePipelineStage(id);
       setStages(s => s.filter(st => st.id !== id));
@@ -846,7 +861,7 @@ export function InstellingenPage() {
   };
 
   const handleDeleteReason = async (id) => {
-    if (!window.confirm('Verloren-reden verwijderen? Bestaande leads met deze reden behouden hun opgeslagen tekst.')) return;
+    if (!(await bevestig('Verloren-reden verwijderen? Bestaande leads met deze reden behouden hun opgeslagen tekst.'))) return;
     try {
       await deleteLostReason(id);
       setLostReasons(s => s.filter(r => r.id !== id));
@@ -1010,10 +1025,10 @@ export function InstellingenPage() {
   // SnelStart tot de klant hem daar intrekt, en dat staat er daarom bij: anders
   // denkt iemand dat hij klaar is terwijl de sleutel nog bruikbaar is.
   const handleSsLoskoppelen = async () => {
-    if (!window.confirm(
+    if (!(await bevestig(
       'SnelStart loskoppelen? Er wordt niets verwijderd uit je boekhouding of uit BossBase, '
       + 'maar er wordt niet meer gesynchroniseerd. Trek de koppeling daarna ook in bij SnelStart zelf.'
-    )) return;
+    ))) return;
     setSsLoskoppelen(true);
     try {
       const conn = await disconnectConnection('snelstart');
@@ -1227,6 +1242,9 @@ export function InstellingenPage() {
       { id: 'standaard', label: 'Algemeen' },
       { id: 'templates', label: 'E-mailtemplates' },
       { id: 'pipeline', label: 'Pipeline' },
+      // Aanvragen via de eigen website horen bij 'leads', en dat zit in elk
+      // pakket (features.js). Toch via de matrix, niet hard aan.
+      ...(plan.has('leads') ? [{ id: 'websiteformulier', label: 'Websiteformulier' }] : []),
       // Voertuigen is een feature uit de matrix (Team, of module bij Groei).
       ...(isAdmin && plan.has('voertuigen') ? [{ id: 'voertuigen', label: 'Voertuigen' }] : []),
       // Abonnement is voorbehouden aan de eigenaar/admin — een aparte gate
@@ -2082,6 +2100,14 @@ export function InstellingenPage() {
               <input value={bedrijfForm.website} onChange={e => setBedrijf('website', e.target.value)} placeholder="Nog niet ingevuld" />
             </div>
             <div className="f">
+              <label htmlFor="bedrijf-branche">Branche</label>
+              <select id="bedrijf-branche" value={bedrijfForm.branche} onChange={e => setBedrijf('branche', e.target.value)}>
+                <option value="">Nog niet gekozen</option>
+                {[...BRANCHES, ...(bedrijfForm.branche && !BRANCHES.includes(bedrijfForm.branche) ? [bedrijfForm.branche] : [])]
+                  .map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </div>
+            <div className="f">
               <label>IBAN <span style={{ fontSize: '.75rem', color: 'var(--dmu)', fontWeight: 400 }}>(komt op je facturen)</span></label>
               <input value={bedrijfForm.iban} onChange={e => setBedrijf('iban', e.target.value)} placeholder="NL00 BANK 0123 4567 89" autoComplete="off" />
             </div>
@@ -2170,6 +2196,20 @@ export function InstellingenPage() {
                 step="1"
                 value={standaardForm.offerte_geldig_dagen}
                 onChange={e => setStandaard('offerte_geldig_dagen', e.target.value)}
+              />
+            </div>
+            <div className="f" data-rl="set-betaaltermijn">
+              <label>
+                Betaaltermijn facturen (dagen)
+                <InfoTip tekst="Na hoeveel dagen een nieuwe factuur vervalt. Heeft een klant een eigen betaaltermijn, dan geldt die. Bestaande facturen houden hun vervaldatum." />
+              </label>
+              <input
+                type="number"
+                step="1"
+                min="0"
+                max="365"
+                value={standaardForm.betaaltermijn_dagen}
+                onChange={e => setStandaard('betaaltermijn_dagen', e.target.value)}
               />
             </div>
           </div>
@@ -2646,8 +2686,8 @@ export function InstellingenPage() {
 
                 <div className="fa" style={{ flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
                   {stdCfg && DEFAULT_BODY[activeTemplateType] && (
-                    <button className="btn btn-ghost btn-sm" onClick={() => {
-                      if (confirm('Template terugzetten naar standaard?')) {
+                    <button className="btn btn-ghost btn-sm" onClick={async () => {
+                      if ((await bevestig('Template terugzetten naar standaard?'))) {
                         setTemplateField(t.id, 'body', plainToEditorHtml(DEFAULT_BODY[activeTemplateType] || ''));
                       }
                     }}>Reset</button>
@@ -3115,7 +3155,7 @@ export function InstellingenPage() {
                           <div style={{ display: 'flex', gap: 4 }}>
                             <button className="btn-icon" title="Bewerken" onClick={() => { setEditingVoertuigId(v.id); setEditingVoertuigForm({ naam: v.naam, kenteken: v.kenteken, zitplaatsen: v.zitplaatsen ?? '', kleur: v.kleur, actief: v.actief }); }}>{I.edit}</button>
                             <button className="btn-icon" title="Verwijderen" onClick={async () => {
-                              if (!confirm(`Voertuig "${v.naam}" verwijderen?`)) return;
+                              if (!(await bevestig(`Voertuig "${v.naam}" verwijderen?`))) return;
                               try { await deleteVoertuig(v.id); setVoertuigen(prev => prev.filter(x => x.id !== v.id)); toast.success('Verwijderd'); }
                               catch (e) { toast.error(e.message || 'Verwijderen mislukt'); }
                             }}>{I.trash}</button>
@@ -3129,6 +3169,10 @@ export function InstellingenPage() {
             )}
           </div>
         </div>
+      )}
+
+      {!loading && tab === 'websiteformulier' && canCompanySettings && plan.has('leads') && (
+        <WebsiteformulierSectie openDeal={openDeal} />
       )}
 
       {!loading && tab === 'abonnement' && isAdmin && <AbonnementSectie />}

@@ -105,4 +105,4 @@ In BossBase volg je aanvragen in de **pipeline**, in alle pakketten.
 - **Offertes** maak en verstuur je per mail met PDF, met een geldigheidsdatum (standaard 14 dagen, instelbaar). In Groei en Team kan de klant de offerte online ondertekenen; de deal gaat dan naar de fase "Akkoord". Zie [offertes](/offertes).
 - **E-mailtemplates** voor terugkerende berichten zoals je eerste reactie.
 
-Over binnenkomende aanvragen: aanvragen via een website die BossBase voor je bouwt, komen automatisch als lead in BossBase binnen. Er is geen formulier dat je zelf op een andere website kunt zetten; aanvragen via telefoon, mail of een eigen website voer je zelf in.
+Over binnenkomende aanvragen: met het **websiteformulier** (Instellingen, in alle pakketten) komen aanvragen van je eigen website automatisch in de pipeline, als project met de klant erbij. Je plakt een kant-en-klaar formulier in je website, of koppelt je bestaande formulier, bijvoorbeeld in WordPress. Aanvragen via telefoon of mail voer je zelf in.

@@ -70,7 +70,7 @@ export async function loginWithEmail(email, password) {
   return data
 }
 
-export async function registerWithEmail({ email, password, fullName, companyName, phone, kvk, pakket }) {
+export async function registerWithEmail({ email, password, fullName, companyName, phone, kvk, trade, pakket }) {
   // Auth-user aanmaken. Alle registratie-gegevens in metadata opslaan zodat
   // verify-code het bedrijf later (na e-mailverificatie) kan provisionen.
   const signup = await supabase.auth.signUp({
@@ -78,7 +78,8 @@ export async function registerWithEmail({ email, password, fullName, companyName
     password,
     // gekozen_pakket: de proef start op het pakket dat de klant in stap 3 koos
     // (verify-code zet hem bij het aanmaken van het bedrijf).
-    options: { data: { full_name: fullName, company_name: companyName, phone: phone || null, kvk: kvk || null, gekozen_pakket: pakket === 'team' ? 'team' : 'groei' } },
+    // branche en phone zet verify-code op companies.branche en profiles.telefoon.
+    options: { data: { full_name: fullName, company_name: companyName, phone: phone?.trim() || null, kvk: kvk || null, branche: trade || null, gekozen_pakket: pakket === 'team' ? 'team' : 'groei' } },
   })
   if (signup.error) throw signup.error
 

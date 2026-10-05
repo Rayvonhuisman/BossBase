@@ -259,25 +259,44 @@ export async function getProjectByDeal(dealId) {
 }
 
 /**
- * Waar de aanvraag vandaan kwam: 'bossbase_website', of null.
+ * Waar de aanvraag vandaan kwam ('website', 'bossbase_website'), en wat er op
+ * het formulier is ingevuld. Of null.
  *
  * deals heeft geen source-kolom; de bron staat op inquiries, de tabel die het
- * websiteformulier vult (edge function public-website-inquiry, andere repo).
+ * websiteformulier vult (edge function public-website-inquiry).
  * inquiries_select eist 'verkoop', dus zonder dat recht komt hier niets terug —
  * en dan hoort het veld leeg te blijven in plaats van "handmatig" te beweren.
  * Geeft null bij geen rij én bij geen recht; de UI onderscheidt die twee zelf
  * op can('verkoop').
+ *
+ * `velden` bevat alleen wat de bezoeker echt heeft ingevuld (lege velden
+ * vallen weg), in de volgorde van het formulier.
  */
 export async function getAanvraagBron(dealId) {
   if (!dealId) return null
   const { data, error } = await supabase
     .from('inquiries')
-    .select('source, created_at')
+    .select('source, created_at, is_test, name, email, phone, address, postcode, city, gewenste_datum, message, metadata')
     .eq('deal_id', dealId)
     .order('created_at', { ascending: true })
     .limit(1)
   if (error) return null
-  return data?.length ? { bron: data[0].source || null, binnenOp: data[0].created_at || null } : null
+  if (!data?.length) return null
+  const r = data[0]
+  const velden = [
+    ['naam', 'Naam', r.name],
+    ['email', 'E-mailadres', r.email],
+    ['telefoon', 'Telefoonnummer', r.phone],
+    ['adres', 'Adres', r.address],
+    ['postcode', 'Postcode', r.postcode],
+    ['plaats', 'Plaats', r.city],
+    ['gewensteDatum', 'Gewenste datum', r.gewenste_datum],
+    ['omschrijving', 'Omschrijving', r.message],
+  ]
+    .filter(([, , w]) => w != null && String(w).trim() !== '')
+    .map(([key, label, waarde]) => ({ key, label, waarde: String(waarde) }))
+  const fotos = Number(r.metadata?.fotos || 0)
+  return { bron: r.source || null, binnenOp: r.created_at || null, isTest: !!r.is_test, velden, fotos }
 }
 
 // =============================================================================

@@ -63,6 +63,7 @@ import { createProjectKost } from '../services/projectKostenService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { documentUrl } from '../services/documentService.js';
 import Rondleiding from '../components/Rondleiding.jsx';
+import { bevestig } from '../lib/bevestig.jsx';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 
@@ -129,9 +130,19 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
     locatie: werkbon?.locatie || '',
     notes: werkbon?.notes || '',
     status: werkbon?.status || 'gepland',
-    assignedToIds: werkbon?.assignedToIds || (werkbon?.assignedTo ? [werkbon.assignedTo] : []),
-    verantwoordelijkeIds: werkbon?.verantwoordelijkeIds || (werkbon?.assignedTo ? [werkbon.assignedTo] : []),
+    // Een nieuwe werkbon: wie hem aanmaakt is standaard gekoppeld én
+    // verantwoordelijke (is er maar één gebruiker, dan is dat dus altijd goed).
+    // Een bestaande werkbon houdt wat er staat.
+    assignedToIds: werkbon?.assignedToIds || (werkbon?.assignedTo ? [werkbon.assignedTo] : (!isEdit && profile?.id ? [profile.id] : [])),
+    verantwoordelijkeIds: werkbon?.verantwoordelijkeIds || (werkbon?.assignedTo ? [werkbon.assignedTo] : (!isEdit && profile?.id ? [profile.id] : [])),
   }));
+  // Was het profiel bij het openen nog niet geladen, vul het dan alsnog in —
+  // alleen bij een nieuwe werkbon en alleen zolang er nog niemand gekozen is.
+  useEffect(() => {
+    if (isEdit || !profile?.id) return;
+    setForm(f => (f.assignedToIds.length || f.verantwoordelijkeIds.length
+      ? f : { ...f, assignedToIds: [profile.id], verantwoordelijkeIds: [profile.id] }));
+  }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [planning, setPlanning] = useState(() => (werkbon ? { ...planningUitWerkbon(werkbon), ...voertuigPlanningUitWerkbon(werkbon) } : legePlanning()));
   // Meerdere dagen plannen hoort bij de planningsmodule (Team, of als module bij
   // Groei) — zelfde gate als de planningspagina. Zonder module: één datum.
@@ -403,7 +414,13 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
               verantwoordelijkeIds={form.verantwoordelijkeIds}
               disabled={saving}
               fieldClassName="f full"
-              onChange={({ assignedIds, verantwoordelijkeIds }) => setForm(f => ({ ...f, assignedToIds: assignedIds, verantwoordelijkeIds }))}
+              onChange={({ assignedIds, verantwoordelijkeIds }) => setForm(f => ({
+                ...f,
+                assignedToIds: assignedIds,
+                // Eén gekoppelde medewerker en nog geen verantwoordelijke: dan is
+                // dat de verantwoordelijke (anders weigert opslaan).
+                verantwoordelijkeIds: !verantwoordelijkeIds.length && assignedIds.length === 1 ? [...assignedIds] : verantwoordelijkeIds,
+              }))}
             >
               <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />
             </AssigneeResponsibleSelect>
@@ -1883,7 +1900,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
   };
 
   const handleDeleteTaak = async t => {
-    if (!confirm(`Taak "${t.omschrijving}" verwijderen?`)) return;
+    if (!(await bevestig(`Taak "${t.omschrijving}" verwijderen?`))) return;
     try {
       await deleteWerkbonTaak(t.id);
       const newTaken = taken.filter(x => x.id !== t.id);
@@ -1934,7 +1951,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
   };
 
   const handleDeleteMaterial = async m => {
-    if (!confirm(`Materiaal "${m.naam}" verwijderen?`)) return;
+    if (!(await bevestig(`Materiaal "${m.naam}" verwijderen?`))) return;
     try {
       await deleteWerkbonMateriaal(m.id);
       setMaterialen(prev => prev.filter(x => x.id !== m.id));
@@ -2087,7 +2104,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
   };
 
   const handleDeleteFoto = async foto => {
-    if (!confirm('Foto verwijderen?')) return;
+    if (!(await bevestig('Foto verwijderen?'))) return;
     try {
       await deleteWerkbonFoto(foto.id, foto.url);
       setFotos(prev => prev.filter(f => f.id !== foto.id));
@@ -2119,7 +2136,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
   };
 
   const handleDeleteMeerwerk = async t => {
-    if (!confirm(`Meerwerk "${t.omschrijving}" verwijderen?`)) return;
+    if (!(await bevestig(`Meerwerk "${t.omschrijving}" verwijderen?`))) return;
     try {
       await deleteWerkbonTaak(t.id);
       setMeerwerk(prev => prev.filter(x => x.id !== t.id));

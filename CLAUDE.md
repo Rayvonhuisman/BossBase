@@ -121,6 +121,23 @@ Draai de migratie vóór de frontend als de frontend nieuwe kolommen schrijft.
 Leest hij ze alleen, bouw dan een terugval in (zie `selectWithDealsFallback` in
 `jobCostService.js` als patroon) zodat de volgorde niet uitmaakt.
 
+## Elke wijziging voor de gebruiker: Boss en de rondleiding
+
+Verandert er iets wat de gebruiker ziet of doet, loop dan altijd deze twee na:
+
+- **Kennisbank van Boss: altijd bijwerken.** Pas het juiste bestand in
+  `bob-knowledge/` aan, draai `node scripts/gen-boss-kennis.mjs` (schrijft
+  `supabase/functions/_shared/bossKennis.ts`; nooit met de hand bewerken) en
+  deploy daarna `supabase functions deploy boss-chat`. Zonder die deploy
+  vertelt Boss nog het oude verhaal.
+- **Rondleiding (`src/lib/rondleidingen.js`): alleen bijwerken als de wijziging
+  iets raakt wat er al in staat**: een knop of veld met een `data-rl` dat
+  verplaatst, hernoemd of verwijderd is. Een nieuw onderdeel krijgt alleen een
+  stap als het een belangrijk nieuw scherm of venster is, en dan **eerst aan de
+  gebruiker vragen**.
+
+Meld in je rapport wat je aan beide hebt aangepast, ook als dat "niets" is.
+
 ## Uren
 
 Twee soorten, twee tabellen, bewust gescheiden:

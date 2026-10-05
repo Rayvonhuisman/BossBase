@@ -129,6 +129,19 @@ serve(async (req) => {
           .update({ plan: 'team' }).eq('company_id', companyId).eq('status', 'trial')
         if (pakketErr) console.error('[verify-code] proefpakket zetten mislukt:', pakketErr.message)
       }
+
+      // Branche en telefoonnummer uit het aanmeldformulier. Best-effort: een
+      // fout hier mag het account niet tegenhouden, het bedrijf bestaat al.
+      const branche = typeof meta.branche === 'string' ? meta.branche.trim().slice(0, 60) : ''
+      if (companyId && rpcData?.status === 'created' && branche) {
+        const { error: brancheErr } = await admin.from('companies').update({ branche }).eq('id', companyId)
+        if (brancheErr) console.error('[verify-code] branche zetten mislukt:', brancheErr.message)
+      }
+      const telefoon = typeof meta.phone === 'string' ? meta.phone.trim().slice(0, 30) : ''
+      if (telefoon) {
+        const { error: telErr } = await admin.from('profiles').update({ telefoon }).eq('id', userId).is('telefoon', null)
+        if (telErr) console.error('[verify-code] telefoon zetten mislukt:', telErr.message)
+      }
     }
 
     console.log('[verify-code] Geverifieerd ✓', { user: userId })

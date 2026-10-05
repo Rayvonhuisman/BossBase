@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Aanvraagformulier</title>
+<!--
+  Het kant-en-klare websiteformulier van een bedrijf (Instellingen ›
+  Websiteformulier). Staat in een iframe op de website van dat bedrijf; zie
+  public/formulier.js. Los van de React-app: dit laadt op andermans website en
+  moet dus klein en snel zijn.
+-->
+<style>
+  :root { --kleur: #1DDB62; --op-kleur: #0b1f12; --tekst: #1f2937; --zacht: #6b7280; --rand: #d1d5db; --fout: #b91c1c; --vlak: #ffffff; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: transparent; }
+  body { font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: var(--tekst); }
+  form, .klaar, .melding { background: var(--vlak); border: 1px solid #e5e7eb; border-radius: 12px; padding: 22px; }
+  h1 { font-size: 19px; margin: 0 0 4px; }
+  .intro { color: var(--zacht); margin: 0 0 18px; font-size: 14px; }
+  .rij { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .rij.adres { grid-template-columns: 1fr 2fr; }
+  @media (max-width: 480px) { .rij, .rij.adres { grid-template-columns: 1fr; gap: 0; } }
+  .veld { margin-bottom: 14px; }
+  label { display: block; font-weight: 600; font-size: 13.5px; margin-bottom: 5px; }
+  .opt { color: var(--zacht); font-weight: 400; }
+  input[type=text], input[type=email], input[type=tel], input[type=date], textarea {
+    width: 100%; font: inherit; color: inherit; padding: 10px 12px; border: 1px solid var(--rand); border-radius: 8px; background: #fff;
+  }
+  textarea { min-height: 120px; resize: vertical; }
+  input:focus, textarea:focus { outline: 2px solid var(--kleur); outline-offset: 0; border-color: var(--kleur); }
+  .fout { color: var(--fout); font-size: 13px; margin-top: 4px; }
+  .veld.heeft-fout input, .veld.heeft-fout textarea { border-color: var(--fout); }
+  .fotos-lijst { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .fotos-lijst figure { margin: 0; position: relative; width: 72px; height: 56px; border-radius: 6px; overflow: hidden; border: 1px solid var(--rand); }
+  .fotos-lijst img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .fotos-lijst button { position: absolute; top: 2px; right: 2px; border: 0; background: rgba(255,255,255,.92); border-radius: 4px; cursor: pointer; font-size: 12px; line-height: 1; padding: 3px 5px; }
+  .akkoord { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; font-size: 13.5px; }
+  .akkoord input { margin-top: 3px; }
+  .akkoord a { color: inherit; }
+  .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+  button.verstuur { width: 100%; border: 0; border-radius: 8px; padding: 12px 16px; font: inherit; font-weight: 700; cursor: pointer; background: var(--kleur); color: var(--op-kleur); }
+  button.verstuur[disabled] { opacity: .65; cursor: wait; }
+  .algemeen { margin-top: 10px; }
+  .klaar h1 { margin-bottom: 6px; }
+  .voorbeeld { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-bottom: 14px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+  <div id="laden" class="melding">Formulier laden…</div>
+  <div id="onbekend" class="melding" hidden>Dit formulier is niet (meer) beschikbaar.</div>
+
+  <form id="formulier" novalidate hidden>
+    <div id="voorbeeld" class="voorbeeld" hidden>Voorbeeld: zo ziet het formulier eruit op je website. Hier kun je niet versturen.</div>
+    <h1 id="kop">Vraag een offerte aan</h1>
+    <p class="intro" id="intro">Vul het formulier in, dan nemen we zo snel mogelijk contact met je op.</p>
+
+    <div class="rij">
+      <div class="veld" data-veld="name"><label for="name">Naam</label><input id="name" name="name" type="text" autocomplete="name" maxlength="120" required></div>
+      <div class="veld" data-veld="email"><label for="email">E-mailadres</label><input id="email" name="email" type="email" autocomplete="email" maxlength="254" required></div>
+    </div>
+    <div class="veld" data-veld="phone" hidden><label for="phone">Telefoonnummer <span class="opt">(optioneel)</span></label><input id="phone" name="phone" type="tel" autocomplete="tel" maxlength="40"></div>
+    <div class="veld" data-veld="address" hidden><label for="address">Adres van de klus <span class="opt">(straat en huisnummer)</span></label><input id="address" name="address" type="text" autocomplete="street-address" maxlength="200"></div>
+    <div class="rij adres">
+      <div class="veld" data-veld="postcode" hidden><label for="postcode">Postcode</label><input id="postcode" name="postcode" type="text" autocomplete="postal-code" maxlength="16"></div>
+      <div class="veld" data-veld="city" hidden><label for="city">Plaats</label><input id="city" name="city" type="text" autocomplete="address-level2" maxlength="120"></div>
+    </div>
+    <div class="veld" data-veld="message"><label for="message">Waar gaat het om?</label><textarea id="message" name="message" maxlength="5000" required placeholder="Wat moet er gebeuren? Hoe groot is het ongeveer?"></textarea></div>
+    <div class="veld" data-veld="gewenste_datum" hidden><label for="gewenste_datum">Wanneer zou je het willen? <span class="opt">(optioneel)</span></label><input id="gewenste_datum" name="gewenste_datum" type="date"></div>
+    <div class="veld" data-veld="fotos" hidden>
+      <label for="fotos">Foto's <span class="opt">(optioneel, maximaal 5)</span></label>
+      <input id="fotos" type="file" accept="image/*" multiple>
+      <div class="fotos-lijst" id="fotos-lijst"></div>
+    </div>
+
+    <div class="hp" aria-hidden="true"><label for="bedrijfswebsite">Laat dit veld leeg</label><input id="bedrijfswebsite" name="bedrijfswebsite" type="text" tabindex="-1" autocomplete="off"></div>
+
+    <div class="veld" data-veld="privacy_akkoord">
+      <label class="akkoord"><input id="privacy_akkoord" type="checkbox"> <span id="akkoord-tekst">Ik ga akkoord dat mijn gegevens worden gebruikt om contact met mij op te nemen over deze aanvraag.</span></label>
+    </div>
+
+    <button class="verstuur" id="verstuur" type="submit">Aanvraag versturen</button>
+    <div class="fout algemeen" id="algemene-fout" role="alert" hidden></div>
+  </form>
+
+  <div id="klaar" class="klaar" hidden>
+    <h1>Bedankt voor je aanvraag!</h1>
+    <p id="klaar-tekst">We hebben je aanvraag ontvangen en nemen zo snel mogelijk contact met je op.</p>
+  </div>
+
+  <script src="/aanvraagformulier.js"></script>
+</body>
+</html>

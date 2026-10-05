@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { vandaagIso, voegDagenToe } from '../lib/datumTijd.js';
+import { getCustomer } from '../services/customerService.js';
 import { Download, Send, CheckCircle2 } from 'lucide-react';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml, tekstNaarEditorHtml } from '../lib/noteFormat.js';
@@ -34,6 +35,7 @@ import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { statusInfo } from '../utils/statusColors.js';
 import ActieMenu from '../components/ActieMenu.jsx';
 import { opNaam } from '../lib/sorteren.js';
+import { bevestig } from '../lib/bevestig.jsx';
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -247,10 +249,27 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
 
   const selectedCustomer = form.customer_id ? customers.find(c => String(c.id) === String(form.customer_id)) : null;
 
-  // Vervaldatum = factuurdatum + betaaltermijn van de klant (anders 14 dagen).
+  // Vervaldatum = factuurdatum + betaaltermijn: die van de klant als hij er een
+  // heeft, anders de betaaltermijn uit Instellingen > Algemeen, anders 14 dagen.
   // Vroeger: + het aantal dagen dat een ófferte geldig is (audit M22). Past de
   // gebruiker de datum zelf aan, dan blijft die staan.
-  const betaaltermijn = Number(selectedCustomer?.betaaltermijnDagen) || STANDAARD_BETAALTERMIJN;
+  // De termijn van de klant vers ophalen: de klantenlijst is bij het inloggen
+  // geladen en kent een termijn die net op de klantkaart is gezet nog niet.
+  // 0 is een geldige termijn (direct betalen); alleen leeg valt terug.
+  const [klantTermijn, setKlantTermijn] = useState(null);
+  useEffect(() => {
+    const lijst = selectedCustomer?.betaaltermijnDagen;
+    setKlantTermijn(lijst != null && lijst !== '' ? Number(lijst) : null);
+    if (!form.customer_id) return undefined;
+    let weg = false;
+    getCustomer(form.customer_id)
+      .then(k => { if (!weg) setKlantTermijn(k?.betaaltermijnDagen != null && k.betaaltermijnDagen !== '' ? Number(k.betaaltermijnDagen) : null); })
+      .catch(() => {});
+    return () => { weg = true; };
+  }, [form.customer_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const bedrijfTermijn = Number.isFinite(Number(instDefaults?.betaaltermijnDagen)) && instDefaults?.betaaltermijnDagen != null
+    ? Number(instDefaults.betaaltermijnDagen) : null;
+  const betaaltermijn = klantTermijn ?? bedrijfTermijn ?? STANDAARD_BETAALTERMIJN;
   const vervalHandmatig = useRef(false);
   useEffect(() => {
     if (vervalHandmatig.current || !form.factuurdatum) return;
@@ -1028,7 +1047,11 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
         // hebben geen {{betaalinstructie}}), dan een regel met de betaalgegevens
         // vóór de afsluiting. Creditnota's niet: daar valt niets te betalen.
         if (ibanTekst && !factuur.isCredit && !body.replace(/\s/g, '').includes(docBedrijf.iban.replace(/\s/g, '').toUpperCase())) {
-          body = insertPayButtonBeforeClosing(body, `<p>Betaalgegevens: ${escapeHtml(ibanTekst)}, onder vermelding van ${escapeHtml(factuur.betalingskenmerk || factuur.nummer)}.</p>`);
+          // "Onder vermelding van …" staat er één keer in: noemt het sjabloon het
+          // al (het standaardsjabloon doet dat), dan alleen het rekeningnummer.
+          const kenmerkAlGenoemd = /onder\s+vermelding\s+van/i.test(body.replace(/<[^>]*>/g, ' '));
+          const kenmerkTekst = kenmerkAlGenoemd ? '' : `, onder vermelding van ${escapeHtml(factuur.betalingskenmerk || factuur.nummer)}`;
+          body = insertPayButtonBeforeClosing(body, `<p>Betaalgegevens: ${escapeHtml(ibanTekst)}${kenmerkTekst}.</p>`);
         }
         if (alive) setForm({ to: customer?.email || '', subject: sub, body });
       } catch {
@@ -1312,7 +1335,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
       toast.error('Een verstuurde factuur of creditnota kun je niet verwijderen. Crediteer hem in plaats daarvan.');
       return;
     }
-    if (!window.confirm(`Factuur ${f.nummer} verwijderen?`)) return;
+    if (!(await bevestig(`Factuur ${f.nummer} verwijderen?`))) return;
     try {
       // De factuur is weg zodra deleteFactuur klaar is; een waarschuwing gaat
       // alleen over de prullenbak. De lijst werken we dus hoe dan ook bij.

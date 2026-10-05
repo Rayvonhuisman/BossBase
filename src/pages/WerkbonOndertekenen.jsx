@@ -58,6 +58,8 @@ export default function WerkbonOndertekenen({ token }) {
   const [signing, setSigning] = useState(false)
   const [klaar, setKlaar] = useState(false)
   const [pdfBezig, setPdfBezig] = useState(false)
+  // Melding onder de knop in plaats van een browser-pop-up.
+  const [melding, setMelding] = useState('')
   // Wat er zojuist is getekend. De werkbon in de status komt uit de RPC en weet
   // nog van niets; zonder dit levert "Werkbon downloaden" op het bedankscherm
   // een bon met een leeg handtekeningvak — precies het bewijsstuk dat ontbreekt.
@@ -164,17 +166,18 @@ export default function WerkbonOndertekenen({ token }) {
         window.open(url, '_blank')
       }
     } catch (err) {
-      alert('PDF maken mislukt: ' + err.message)
+      setMelding('De PDF kon niet worden gemaakt. Probeer het opnieuw.')
     } finally {
       setPdfBezig(false)
     }
   }
 
   const onderteken = async () => {
-    if (!form.name.trim()) { alert('Vul uw naam in'); return }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) { alert('Vul een geldig e-mailadres in'); return }
+    setMelding('')
+    if (!form.name.trim()) { setMelding('Vul uw naam in.'); return }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) { setMelding('Vul een geldig e-mailadres in.'); return }
     const dataUrl = canvasRef.current?.dataUrl()
-    if (!dataUrl) { alert('Zet eerst uw handtekening'); return }
+    if (!dataUrl) { setMelding('Zet eerst uw handtekening.'); return }
 
     setSigning(true)
     try {
@@ -195,7 +198,7 @@ export default function WerkbonOndertekenen({ token }) {
       })
       setKlaar(true)
     } catch (err) {
-      alert('Er is iets misgegaan: ' + err.message)
+      setMelding(err.message || 'Er is iets misgegaan. Probeer het opnieuw.')
     } finally {
       setSigning(false)
     }
@@ -241,6 +244,7 @@ export default function WerkbonOndertekenen({ token }) {
         <button onClick={bekijkPdf} disabled={pdfBezig} style={st.pdfKnop}>
           {pdfBezig ? 'PDF laden…' : 'Werkbon downloaden'}
         </button>
+        {melding && <div role="alert" style={{ marginTop: 10, color: '#b91c1c', fontSize: '.9rem', textAlign: 'center' }}>{melding}</div>}
       </Schil>
     )
   }
@@ -436,6 +440,7 @@ export default function WerkbonOndertekenen({ token }) {
       >
         {signing ? 'Bezig met ondertekenen…' : 'Akkoord en ondertekenen'}
       </button>
+      {melding && <div role="alert" style={{ marginTop: 10, color: '#b91c1c', fontSize: '.9rem', textAlign: 'center' }}>{melding}</div>}
     </Schil>
   )
 }
