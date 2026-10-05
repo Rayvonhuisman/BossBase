@@ -8,16 +8,26 @@
 // exemplaar uit de gegevens in de database op het moment van tekenen, en legt hij
 // een SHA-256 van de inhoud en van het bestand vast in `ondertekening_bewijs`.
 //
-// Wat erin staat is bewust beperkt tot wat de klant ook op de ondertekenpagina
-// ziet: geen interne notities, geen inkoopprijzen, geen marge. Bij de werkbon
-// komen de regels uit dezelfde sign-token-functies als de publieke pagina; die
-// zijn de afscherming.
+// De opmaak is dezelfde als die van de PDF in de app: logo, huisstijl, alle
+// regels en totalen, en bij de werkbon het uitgevoerde werk, de uren, het
+// materiaal (zonder prijzen), de klantnotities en de foto's. Dat komt doordat
+// beide dezelfde code gebruiken (_shared/pdfOpbouw.js, jsPDF); hier staat alleen
+// wat de server anders doet: de gegevens uit de database halen en de
+// afbeeldingen ophalen zonder browser. Onder de handtekening staan daarnaast het
+// IP-adres en het kenmerk.
 //
-// De opmaak is eenvoudiger dan de PDF die de app maakt (geen logo, geen foto's).
-// Dat is een keuze: dit document moet kloppen en niet te vervalsen zijn; de
-// mooie PDF blijft beschikbaar in de app en op de ondertekenpagina.
+// Wat erin staat is beperkt tot wat de klant ook op de ondertekenpagina ziet:
+// geen interne notities, geen inkoopprijzen, geen marge. De werkbon komt uit
+// dezelfde sign-token-functies als de publieke pagina; die zijn de afscherming.
+//
+// Het kenmerk (`inhoud_sha256`) is de SHA-256 van een JSON-weergave van wat er
+// is getekend (zie `inhoud` hieronder: per soort de regels, totalen, uren,
+// materiaal en notities). `pdf_sha256` is de hash van het bestand zelf.
 
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'https://esm.sh/pdf-lib@1.17.1'
+import { jsPDF } from 'npm:jspdf@4.2.1'
+import { buildPdf, buildWerkbonPdf } from './pdfOpbouw.js'
+import { regimeVanPct } from './btwRegime.js'
+import { bouwPdfData } from './werkbonPdfData.js'
 
 export type Ondertekening = {
   naam: string
@@ -40,180 +50,192 @@ export function bytesNaarBase64(bytes: Uint8Array): string {
   return btoa(s)
 }
 
-// ── Tekst ──────────────────────────────────────────────────────────────────
-// De standaardfonts van PDF kennen alleen WinAnsi. Een teken daarbuiten (een
-// emoji in een omschrijving) zou het hele document laten mislukken; dat wordt
-// een vraagteken.
-const WINANSI_EXTRA = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ'
-function veilig(s: unknown): string {
-  return Array.from(String(s ?? '').replace(/\r/g, '').replace(/\t/g, ' '))
-    .map(ch => {
-      const c = ch.codePointAt(0)!
-      if (ch === '\n') return ch
-      if ((c >= 0x20 && c <= 0x7e) || (c >= 0xa0 && c <= 0xff) || WINANSI_EXTRA.includes(ch)) return ch
-      return '?'
-    }).join('')
-}
+// ── Afbeeldingen zonder browser ─────────────────────────────────────────────
+// De app verkleint afbeeldingen met een canvas; dat bestaat hier niet. Foto's
+// worden bij het uploaden al verkleind (afbeeldingComprimeren), en een logo is
+// klein, dus hier alleen de afmetingen uitlezen en op maat zetten.
 
-const euro = (n: unknown) => new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0)
-const getal = (n: unknown) => new Intl.NumberFormat('nl-NL', { maximumFractionDigits: 2 }).format(Number(n) || 0)
-const datumNl = (d: unknown) => d ? new Date(String(d)).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Amsterdam' }) : ''
-const tijdNl = (d: unknown) => d ? new Date(String(d)).toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' }) : ''
+const MIME_FORMAAT: Record<string, string> = { 'image/png': 'PNG', 'image/jpeg': 'JPEG', 'image/jpg': 'JPEG', 'image/webp': 'WEBP', 'image/gif': 'GIF' }
 
-class Schrijver {
-  doc: PDFDocument; f: PDFFont; fb: PDFFont; page!: PDFPage; y = 0
-  readonly L = 50; readonly R = 545; readonly TOP = 790; readonly BOTTOM = 60
-  constructor(doc: PDFDocument, f: PDFFont, fb: PDFFont) { this.doc = doc; this.f = f; this.fb = fb; this.nieuwePagina() }
-  nieuwePagina() { this.page = this.doc.addPage([595.28, 841.89]); this.y = this.TOP }
-  ruimte(h: number) { if (this.y - h < this.BOTTOM) this.nieuwePagina() }
-  breek(tekst: string, breedte: number, size: number, font = this.f): string[] {
-    const regels: string[] = []
-    for (const alinea of veilig(tekst).split('\n')) {
-      let huidig = ''
-      for (const woord of alinea.split(' ')) {
-        const poging = huidig ? `${huidig} ${woord}` : woord
-        if (font.widthOfTextAtSize(poging, size) <= breedte) { huidig = poging; continue }
-        if (huidig) regels.push(huidig)
-        // Eén woord breder dan de kolom: hard afbreken.
-        let w = woord
-        while (font.widthOfTextAtSize(w, size) > breedte && w.length > 1) {
-          let n = w.length
-          while (n > 1 && font.widthOfTextAtSize(w.slice(0, n), size) > breedte) n--
-          regels.push(w.slice(0, n)); w = w.slice(n)
-        }
-        huidig = w
+function afmetingenUitBytes(b: Uint8Array): { w: number; h: number } | null {
+  const u32 = (i: number) => (b[i] << 24 | b[i + 1] << 16 | b[i + 2] << 8 | b[i + 3]) >>> 0
+  const u16le = (i: number) => b[i] | b[i + 1] << 8
+  // PNG
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return { w: u32(16), h: u32(20) }
+  // GIF
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return { w: u16le(6), h: u16le(8) }
+  // JPEG: zoek het SOF-segment
+  if (b[0] === 0xff && b[1] === 0xd8) {
+    let i = 2
+    while (i + 9 < b.length) {
+      if (b[i] !== 0xff) { i++; continue }
+      const m = b[i + 1]
+      const len = b[i + 2] << 8 | b[i + 3]
+      if ((m >= 0xc0 && m <= 0xc3) || (m >= 0xc5 && m <= 0xc7) || (m >= 0xc9 && m <= 0xcb) || (m >= 0xcd && m <= 0xcf)) {
+        return { h: b[i + 5] << 8 | b[i + 6], w: b[i + 7] << 8 | b[i + 8] }
       }
-      regels.push(huidig)
+      i += 2 + len
     }
-    return regels
+    return null
   }
-  tekst(t: string, opts: { size?: number; bold?: boolean; x?: number; breedte?: number; kleur?: [number, number, number] } = {}) {
-    const size = opts.size ?? 10, font = opts.bold ? this.fb : this.f, x = opts.x ?? this.L
-    const regels = this.breek(t, opts.breedte ?? (this.R - x), size, font)
-    for (const r of regels) {
-      this.ruimte(size + 4)
-      this.page.drawText(r, { x, y: this.y - size, size, font, color: rgb(...(opts.kleur ?? [0.1, 0.1, 0.12])) })
-      this.y -= size + 4
+  // WebP
+  if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45) {
+    const soort = String.fromCharCode(b[12], b[13], b[14], b[15])
+    if (soort === 'VP8 ') return { w: u16le(26) & 0x3fff, h: u16le(28) & 0x3fff }
+    if (soort === 'VP8L') {
+      const bits = b[21] | b[22] << 8 | b[23] << 16 | b[24] << 24
+      return { w: (bits & 0x3fff) + 1, h: ((bits >> 14) & 0x3fff) + 1 }
     }
+    if (soort === 'VP8X') return { w: 1 + (b[24] | b[25] << 8 | b[26] << 16), h: 1 + (b[27] | b[28] << 8 | b[29] << 16) }
   }
-  rechts(t: string, x: number, y: number, size = 10, bold = false) {
-    const font = bold ? this.fb : this.f, s = veilig(t)
-    this.page.drawText(s, { x: x - font.widthOfTextAtSize(s, size), y, size, font, color: rgb(0.1, 0.1, 0.12) })
-  }
-  lijn() { this.ruimte(8); this.page.drawLine({ start: { x: this.L, y: this.y - 3 }, end: { x: this.R, y: this.y - 3 }, thickness: 0.5, color: rgb(0.8, 0.8, 0.82) }); this.y -= 8 }
-  wit(h: number) { this.y -= h }
+  return null
 }
 
-async function handtekeningBlok(w: Schrijver, o: Ondertekening, documentHash: string) {
-  w.wit(10); w.lijn()
-  w.tekst('Ondertekening', { size: 12, bold: true })
-  if (o.handtekeningPng) {
-    try {
-      const img = await w.doc.embedPng(o.handtekeningPng)
-      const schaal = Math.min(220 / img.width, 80 / img.height, 1)
-      const h = img.height * schaal
-      w.ruimte(h + 6)
-      w.page.drawImage(img, { x: w.L, y: w.y - h, width: img.width * schaal, height: h })
-      w.y -= h + 6
-    } catch { w.tekst('(handtekening kon niet in het document worden opgenomen; hij is apart bewaard)', { size: 8 }) }
-  }
-  w.tekst(`Ondertekend door: ${o.naam} (${o.email})`)
-  w.tekst(`Datum en tijd: ${tijdNl(o.tijdstip)}`)
-  if (o.ip) w.tekst(`IP-adres: ${o.ip}`, { size: 8 })
-  if (o.userAgent) w.tekst(`Browser: ${o.userAgent.slice(0, 160)}`, { size: 8 })
-  w.wit(6)
-  w.tekst(`Documentkenmerk (SHA-256 van de inhoud): ${documentHash}`, { size: 7, kleur: [0.4, 0.4, 0.45] })
-  w.tekst('Dit exemplaar is op het moment van ondertekenen door BossBase op de server opgemaakt uit de gegevens van het document. Het kenmerk is vastgelegd bij het document.', { size: 7, kleur: [0.4, 0.4, 0.45] })
+function dataUrlBytes(dataUrl: string): { mime: string; bytes: Uint8Array } | null {
+  const m = /^data:([^;]+);base64,(.*)$/s.exec(dataUrl || '')
+  if (!m) return null
+  const bin = atob(m[2])
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return { mime: m[1].toLowerCase(), bytes }
 }
 
-function partijen(w: Schrijver, bedrijf: Record<string, any>, klant: Record<string, any> | null) {
-  const startY = w.y, kolom = 260
-  const blok = (x: number, kop: string, regels: string[]) => {
-    w.y = startY
-    w.tekst(kop, { size: 8, bold: true, x, breedte: kolom, kleur: [0.4, 0.4, 0.45] })
-    for (const r of regels.filter(Boolean)) w.tekst(r, { size: 9, x, breedte: kolom })
-    return w.y
+const naarDataUrlVanBytes = (bytes: Uint8Array, mime: string) => `data:${mime};base64,${bytesNaarBase64(bytes)}`
+
+function serverOmgeving(admin: any) {
+  return {
+    // Alleen http(s) of een opslagpad in een van onze buckets.
+    async naarDataUrl(url: string): Promise<string | null> {
+      try {
+        if (!url) return null
+        if (url.startsWith('data:')) return url
+        if (!/^https:\/\//i.test(url)) return null
+        const res = await fetch(url)
+        if (!res.ok) return null
+        const mime = (res.headers.get('content-type') || 'image/png').split(';')[0].trim().toLowerCase()
+        if (!MIME_FORMAAT[mime]) return null
+        const bytes = new Uint8Array(await res.arrayBuffer())
+        if (bytes.length > 8_000_000) return null
+        return naarDataUrlVanBytes(bytes, mime)
+      } catch { return null }
+    },
+    async bereidAfbeelding(dataUrl: string, maxWmm: number, maxHmm: number) {
+      const d = dataUrlBytes(dataUrl)
+      if (!d) return null
+      const formaat = MIME_FORMAAT[d.mime]
+      const dims = afmetingenUitBytes(d.bytes)
+      if (!formaat || !dims?.w || !dims?.h) return null
+      const schaal = Math.min(maxWmm / dims.w, maxHmm / dims.h)
+      return { dataUrl, formaat, breedte: dims.w * schaal, hoogte: dims.h * schaal }
+    },
+    async afmetingen(dataUrl: string) {
+      const d = dataUrlBytes(dataUrl)
+      return d ? afmetingenUitBytes(d.bytes) : null
+    },
+    // Geen documentUrl en geen supabaseUrl: de handtekening geven we zelf mee.
+    _admin: admin,
   }
-  const y1 = blok(w.L, 'VAN', [bedrijf?.name, bedrijf?.address, [bedrijf?.postal_code, bedrijf?.city].filter(Boolean).join(' '),
-    bedrijf?.email, bedrijf?.kvk ? `KvK ${bedrijf.kvk}` : '', bedrijf?.btw_number ? `Btw ${bedrijf.btw_number}` : ''])
-  const y2 = blok(w.L + kolom + 15, 'AAN', [klant?.name, klant?.address, [klant?.postcode, klant?.city].filter(Boolean).join(' '), klant?.email])
-  w.y = Math.min(y1, y2) - 8
+}
+
+async function opslagNaarDataUrl(admin: any, bucket: string, pad: string): Promise<string | null> {
+  try {
+    const { data, error } = await admin.storage.from(bucket).download(pad)
+    if (error || !data) return null
+    const mime = (data.type || 'image/jpeg').toLowerCase()
+    if (!MIME_FORMAAT[mime]) return null
+    return naarDataUrlVanBytes(new Uint8Array(await data.arrayBuffer()), mime)
+  } catch { return null }
+}
+
+const handtekeningDataUrl = (o: Ondertekening) =>
+  o.handtekeningPng ? `data:image/png;base64,${bytesNaarBase64(o.handtekeningPng)}` : null
+
+function nieuwDocument() {
+  return new jsPDF({ unit: 'mm', format: 'a4' })
+}
+
+const pdfBytes = (doc: any) => new Uint8Array(doc.output('arraybuffer'))
+
+// Bedrijf zoals de app het aan de PDF geeft: live gegevens, met de bevroren
+// snapshot van het document eroverheen als die er is (companyForDocument).
+function bedrijfVoorDocument(live: Record<string, any> | null, doc: Record<string, any>) {
+  const basis = {
+    name: live?.name || '', address: live?.address || '', postalCode: live?.postal_code || '',
+    city: live?.city || '', email: live?.email || '', phone: live?.phone || '', kvk: live?.kvk || '',
+    btwNumber: live?.btw_number || '', logoUrl: live?.logo_url || '', brandingColor: live?.branding_color || '#1DDB62',
+    iban: live?.iban || '', ibanTnv: live?.iban_tnv || '',
+  }
+  const heeftSnapshot = !!(doc?.snapshot_bedrijfsnaam || doc?.snapshot_logo_url || doc?.snapshot_branding_color)
+  if (!heeftSnapshot) return basis
+  return {
+    ...basis,
+    name: doc.snapshot_bedrijfsnaam ?? basis.name,
+    logoUrl: doc.snapshot_logo_url ?? basis.logoUrl,
+    brandingColor: doc.snapshot_branding_color ?? basis.brandingColor,
+    address: doc.snapshot_adres ?? basis.address,
+    postalCode: doc.snapshot_postcode ?? basis.postalCode,
+    city: doc.snapshot_plaats ?? basis.city,
+    email: doc.snapshot_email ?? basis.email,
+    kvk: doc.snapshot_kvk ?? basis.kvk,
+    btwNumber: doc.snapshot_btw ?? basis.btwNumber,
+  }
 }
 
 // ── Offerte ────────────────────────────────────────────────────────────────
 
 export async function maakOfferteExemplaar(admin: any, offerteId: string, o: Ondertekening) {
   const { data: off, error } = await admin.from('offertes')
-    .select('id, nummer, omschrijving, created_at, geldig_tot, totaal_excl, totaal_incl, company_id, customer_id')
+    .select('id, nummer, omschrijving, created_at, verzonden_op, geldig_tot, btw_pct, notes, totaal_excl, totaal_incl, company_id, customer_id, sign_token, snapshot_logo_url, snapshot_branding_color, snapshot_bedrijfsnaam, snapshot_adres, snapshot_postcode, snapshot_plaats, snapshot_email, snapshot_kvk, snapshot_btw')
     .eq('id', offerteId).maybeSingle()
   if (error || !off) throw new Error('offerte niet gevonden')
-  const [{ data: regels }, { data: bedrijf }, { data: klant }] = await Promise.all([
+  const [{ data: regels, error: regelsFout }, { data: bedrijf }, { data: klant }] = await Promise.all([
     admin.from('offerte_items')
       .select('omschrijving, eenheid, aantal, prijs_per, subtotaal, btw_pct, btw_regime, volgorde, type')
       .eq('offerte_id', off.id).order('volgorde', { ascending: true }),
-    admin.from('companies').select('name, address, postal_code, city, email, kvk, btw_number').eq('id', off.company_id).maybeSingle(),
+    admin.from('companies').select('name, address, postal_code, city, email, phone, kvk, btw_number, logo_url, branding_color, iban, iban_tnv').eq('id', off.company_id).maybeSingle(),
     off.customer_id
-      ? admin.from('customers').select('name, address, postcode, city, email').eq('id', off.customer_id).maybeSingle()
+      ? admin.from('customers').select('name, address, postcode, city, email, phone, kvk_number, btw_number').eq('id', off.customer_id).maybeSingle()
       : Promise.resolve({ data: null }),
   ])
+  // Liever geen exemplaar dan een exemplaar zonder regels.
+  if (regelsFout) throw new Error(`offerteregels: ${regelsFout.message}`)
+
+  // Zelfde vorm als toOfferteItem in de app.
+  const items = (regels || []).map((r: any) => ({
+    omschrijving: r.omschrijving, eenheid: r.eenheid || '', type: r.type || null,
+    btwPct: r.btw_pct != null ? Number(r.btw_pct) : null,
+    btwRegime: r.btw_regime || regimeVanPct(r.btw_pct),
+    aantal: Number(r.aantal || 1), prijsPer: Number(r.prijs_per || 0), subtotaal: Number(r.subtotaal || 0),
+  }))
 
   const inhoud = {
     soort: 'offerte', id: off.id, nummer: off.nummer, omschrijving: off.omschrijving ?? '',
     totaal_excl: Number(off.totaal_excl || 0), totaal_incl: Number(off.totaal_incl || 0),
-    regels: (regels || []).map((r: any) => ({
-      omschrijving: r.omschrijving ?? '', eenheid: r.eenheid ?? '', aantal: Number(r.aantal || 0),
-      prijs_per: Number(r.prijs_per || 0), subtotaal: Number(r.subtotaal || 0),
-      btw_pct: Number(r.btw_pct ?? 0), btw_regime: r.btw_regime ?? null,
+    opmerking: off.notes ?? '',
+    regels: items.map((r: any) => ({
+      omschrijving: r.omschrijving ?? '', eenheid: r.eenheid, aantal: r.aantal, prijs_per: r.prijsPer,
+      subtotaal: r.subtotaal, btw_pct: r.btwPct, btw_regime: r.btwRegime,
     })),
   }
   const documentHash = await sha256Hex(JSON.stringify(inhoud))
 
-  const doc = await PDFDocument.create()
-  doc.setTitle(`Offerte ${off.nummer ?? ''} - ondertekend`)
-  doc.setProducer('BossBase'); doc.setCreator('BossBase')
-  const w = new Schrijver(doc, await doc.embedFont(StandardFonts.Helvetica), await doc.embedFont(StandardFonts.HelveticaBold))
-
-  w.tekst(`Offerte ${off.nummer ?? ''}`, { size: 18, bold: true })
-  w.tekst('Ondertekend exemplaar', { size: 10, kleur: [0.4, 0.4, 0.45] })
-  w.wit(8)
-  partijen(w, bedrijf || {}, klant)
-  w.tekst(`Datum: ${datumNl(off.created_at)}${off.geldig_tot ? `   ·   Geldig tot: ${datumNl(off.geldig_tot)}` : ''}`, { size: 9 })
-  if (off.omschrijving) { w.wit(4); w.tekst(off.omschrijving, { size: 10 }) }
-  w.wit(10)
-
-  // Kolommen: omschrijving | aantal | prijs | btw | totaal
-  const kop = () => {
-    w.ruimte(16)
-    const y = w.y - 9
-    w.page.drawText('Omschrijving', { x: w.L, y, size: 8, font: w.fb })
-    w.rechts('Aantal', 360, y, 8, true); w.rechts('Prijs', 430, y, 8, true)
-    w.rechts('Btw', 475, y, 8, true); w.rechts('Totaal', w.R, y, 8, true)
-    w.y -= 13; w.lijn()
+  const document = {
+    id: off.id, nummer: off.nummer || '', omschrijving: off.omschrijving || '',
+    createdAt: off.created_at, verzondenOp: off.verzonden_op, geldigTot: off.geldig_tot,
+    btwPct: Number(off.btw_pct || 21), notes: off.notes || '',
+    signedAt: o.tijdstip, signedByName: o.naam, signedByEmail: o.email,
+    signatureDataUrl: handtekeningDataUrl(o),
+    ondertekeningExtra: { ip: o.ip, kenmerk: documentHash },
   }
-  kop()
-  for (const r of inhoud.regels) {
-    const omschr = w.breek(r.omschrijving || '-', 245, 9)
-    const h = omschr.length * 13
-    if (w.y - h < w.BOTTOM) { w.nieuwePagina(); kop() }
-    const y = w.y - 9
-    omschr.forEach((t, i) => w.page.drawText(t, { x: w.L, y: y - i * 13, size: 9, font: w.f }))
-    w.rechts(`${getal(r.aantal)} ${veilig(r.eenheid)}`.trim(), 360, y, 9)
-    w.rechts(euro(r.prijs_per), 430, y, 9)
-    w.rechts(r.btw_regime === 'verlegd' ? 'verlegd' : r.btw_regime === 'vrijgesteld' ? 'vrij' : `${getal(r.btw_pct)}%`, 475, y, 9)
-    w.rechts(euro(r.subtotaal), w.R, y, 9)
-    w.y -= h + 2
-  }
-  w.lijn()
-  const totaal = (label: string, bedrag: number, bold = false) => {
-    w.ruimte(15); const y = w.y - 10
-    w.rechts(label, 430, y, 10, bold); w.rechts(euro(bedrag), w.R, y, 10, bold); w.y -= 15
-  }
-  totaal('Totaal excl. btw', inhoud.totaal_excl)
-  totaal('Btw', inhoud.totaal_incl - inhoud.totaal_excl)
-  totaal('Totaal incl. btw', inhoud.totaal_incl, true)
+  const customer = klant ? {
+    name: klant.name || '', address: klant.address || '', postcode: klant.postcode || '', city: klant.city || '',
+    email: klant.email || '', phone: klant.phone || '', kvkNumber: klant.kvk_number || '', btwNumber: klant.btw_number || '',
+  } : null
 
-  await handtekeningBlok(w, o, documentHash)
-  const pdf = await doc.save()
+  const doc = nieuwDocument()
+  doc.setProperties({ title: `Offerte ${off.nummer ?? ''} - ondertekend`, creator: 'BossBase' })
+  await buildPdf(doc, 'offerte', document, items, customer, bedrijfVoorDocument(bedrijf, off), serverOmgeving(admin))
+  const pdf = pdfBytes(doc)
   return { pdf, documentHash, pdfHash: await sha256Hex(pdf), inhoud, klantEmail: (klant?.email as string) || null, klantNaam: (klant?.name as string) || null }
 }
 
@@ -225,58 +247,68 @@ export async function maakWerkbonExemplaar(admin: any, signToken: string, o: Ond
     if (error) throw new Error(`${naam}: ${error.message}`)
     return data || []
   }
-  const [[wb], taken, uren, materialen, notities, uitvoerders, [bedrijf], [klant]] = await Promise.all([
+  const [[wb], taken, uren, materialen, notities, uitvoerders, fotos, [bedrijf], [klant]] = await Promise.all([
     rpc('get_werkbon_by_sign_token'), rpc('get_werkbon_taken_by_sign_token'), rpc('get_werkbon_uren_by_sign_token'),
     rpc('get_werkbon_materialen_by_sign_token'), rpc('get_werkbon_notities_by_sign_token'),
-    rpc('get_werkbon_uitvoerders_by_sign_token'), rpc('get_company_by_werkbon_token'), rpc('get_customer_by_werkbon_token'),
+    rpc('get_werkbon_uitvoerders_by_sign_token'), rpc('get_werkbon_fotos_by_sign_token'),
+    rpc('get_company_by_werkbon_token'), rpc('get_customer_by_werkbon_token'),
   ])
   if (!wb) throw new Error('werkbon niet gevonden')
 
-  // Zelfde selectie als bouwPdfData in de app: alleen afgevinkte taken en
-  // meerwerk; geen namen bij de uren; materiaal zonder prijzen.
+  // Zelfde zeef als de app (bouwPdfData): alleen afgevinkte taken en meerwerk,
+  // geen namen bij de uren, materiaal zonder prijzen, alleen klantnotities (de
+  // RPC levert alleen die).
+  const data = bouwPdfData({
+    taken: taken.map((t: any) => ({ omschrijving: t.omschrijving, afgerond: t.afgerond, isMeerwerk: t.is_meerwerk })),
+    uren, materialen,
+    notities: notities.map((n: any) => ({ ...n, voor_klant: true })),
+    fotos: [],
+  })
+  // Foto's: alleen bestanden in de map van dit bedrijf en deze werkbon (zelfde
+  // regel als de fotoactie van sign-werkbon, audit M14).
+  const prefix = `${wb.company_id}/${wb.id}/`
+  for (const f of fotos) {
+    const pad = String(f.pad || '').split('?')[0].replace(/^.*\/werkbon-fotos\//, '')
+    if (!pad.startsWith(prefix)) continue
+    const dataUrl = await opslagNaarDataUrl(admin, 'werkbon-fotos', pad)
+    if (dataUrl) data.fotos.push({ dataUrl, categorie: f.categorie || '' } as any)
+  }
+
   const inhoud = {
     soort: 'werkbon', id: wb.id, nummer: wb.nummer, titel: wb.titel ?? '', locatie: wb.locatie ?? '',
-    taken: taken.filter((t: any) => t.afgerond && !t.is_meerwerk).map((t: any) => t.omschrijving ?? ''),
-    meerwerk: taken.filter((t: any) => t.afgerond && t.is_meerwerk).map((t: any) => t.omschrijving ?? ''),
-    uren: uren.map((u: any) => ({ datum: u.datum, start: u.start_tijd, eind: u.eind_tijd, pauze: u.pauze_minuten ?? 0, uren: Number(u.uren || 0), notitie: u.notitie ?? '' })),
-    materialen: materialen.map((m: any) => ({ naam: m.naam ?? '', eenheid: m.eenheid ?? '', aantal: Number(m.aantal || 0) })),
-    notities: notities.map((n: any) => ({ note: n.note ?? '', gevolg: n.gevolg ?? '', waarschuwing: n.waarschuwing_verzonden_op ?? null })),
+    omschrijving: wb.omschrijving ?? '',
+    taken: data.taken.map((t: any) => t.omschrijving ?? ''),
+    meerwerk: data.meerwerk.map((t: any) => t.omschrijving ?? ''),
+    uren: data.uren.map((u: any) => ({ datum: u.datum, start: u.startTijd, eind: u.eindTijd, pauze: u.pauzeMinuten ?? 0, uren: Number(u.uren || 0), notitie: u.notitie ?? '' })),
+    materialen: data.materialen,
+    notities: data.notities.map((n: any) => n.note ?? ''),
+    waarschuwingen: data.waarschuwingen.map((n: any) => ({ note: n.note ?? '', gevolg: n.gevolg ?? '', verzonden: n.verzondenOp ?? null })),
+    fotos: data.fotos.length,
   }
   const documentHash = await sha256Hex(JSON.stringify(inhoud))
 
-  const doc = await PDFDocument.create()
-  doc.setTitle(`Werkbon ${wb.nummer ?? ''} - ondertekend`)
-  doc.setProducer('BossBase'); doc.setCreator('BossBase')
-  const w = new Schrijver(doc, await doc.embedFont(StandardFonts.Helvetica), await doc.embedFont(StandardFonts.HelveticaBold))
-
-  w.tekst(`Werkbon ${wb.nummer ?? ''}`, { size: 18, bold: true })
-  w.tekst('Ondertekend exemplaar', { size: 10, kleur: [0.4, 0.4, 0.45] })
-  w.wit(8)
-  partijen(w, bedrijf || {}, klant || null)
-  if (wb.titel) w.tekst(wb.titel, { size: 12, bold: true })
-  if (wb.locatie) w.tekst(`Locatie: ${wb.locatie}`, { size: 9 })
-  if (wb.omschrijving) w.tekst(wb.omschrijving, { size: 9 })
-  const namen = uitvoerders.map((u: any) => u.naam).filter(Boolean)
-  if (namen.length) w.tekst(`Uitgevoerd door: ${namen.join(', ')}`, { size: 9 })
-
-  const sectie = (kop: string, regels: string[]) => {
-    if (!regels.length) return
-    w.wit(8); w.tekst(kop, { size: 11, bold: true })
-    for (const r of regels) w.tekst(`•  ${r}`, { size: 9, x: w.L + 6 })
+  const werkbon = {
+    id: wb.id, signToken, nummer: wb.nummer, titel: wb.titel, omschrijving: wb.omschrijving, locatie: wb.locatie,
+    geplandOp: wb.gepland_op, gestartOp: wb.gestart_op, afgerondOp: wb.afgerond_op,
+    ondertekendOp: o.tijdstip, ondertekendDoorNaam: o.naam, ondertekendDoorEmail: o.email,
+    handtekeningDataUrl: handtekeningDataUrl(o),
+    uitvoerders: uitvoerders.map((u: any) => u.naam).filter(Boolean),
+    ondertekeningExtra: { ip: o.ip, kenmerk: documentHash },
   }
-  sectie('Uitgevoerd werk', inhoud.taken)
-  sectie('Meerwerk', inhoud.meerwerk)
-  const t5 = (t: unknown) => String(t ?? '').slice(0, 5)
-  sectie('Uren', inhoud.uren.map(u =>
-    `${datumNl(u.datum)}  ${t5(u.start)}-${t5(u.eind)}  pauze ${u.pauze} min  =  ${getal(u.uren)} uur${u.notitie ? `  (${u.notitie})` : ''}`))
-  if (inhoud.uren.length) w.tekst(`Totaal: ${getal(inhoud.uren.reduce((s, u) => s + u.uren, 0))} uur`, { size: 9, bold: true })
-  sectie('Materiaal', inhoud.materialen.map(m => `${getal(m.aantal)} ${m.eenheid}  ${m.naam}`.replace(/\s+/g, ' ')))
-  sectie('Toelichting', inhoud.notities.filter(n => !n.waarschuwing).map(n => n.note))
-  sectie('Verstuurde waarschuwingen', inhoud.notities.filter(n => n.waarschuwing)
-    .map(n => `${datumNl(n.waarschuwing)}: ${n.note}${n.gevolg ? ` — gevolg: ${n.gevolg}` : ''}`))
+  const company = bedrijf ? {
+    name: bedrijf.name || '', address: bedrijf.address || '', postalCode: bedrijf.postal_code || '', city: bedrijf.city || '',
+    email: bedrijf.email || '', phone: bedrijf.phone || '', kvk: bedrijf.kvk || '', btwNumber: bedrijf.btw_number || '',
+    logoUrl: bedrijf.logo_url || '', brandingColor: bedrijf.branding_color || '#1DDB62',
+  } : {}
+  const customer = klant ? {
+    name: klant.name || '', address: klant.address || '', postcode: klant.postcode || '', city: klant.city || '',
+    email: klant.email || '', phone: klant.phone || '',
+  } : null
 
-  await handtekeningBlok(w, o, documentHash)
-  const pdf = await doc.save()
+  const doc = nieuwDocument()
+  doc.setProperties({ title: `Werkbon ${wb.nummer ?? ''} - ondertekend`, creator: 'BossBase' })
+  await buildWerkbonPdf(doc, werkbon, data, customer, company, serverOmgeving(admin))
+  const pdf = pdfBytes(doc)
   return { pdf, documentHash, pdfHash: await sha256Hex(pdf), inhoud, klantEmail: (klant?.email as string) || null, klantNaam: (klant?.name as string) || null }
 }
 
