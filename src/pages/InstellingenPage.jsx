@@ -208,6 +208,7 @@ export function InstellingenPage() {
     reiskosten_per_km: 0.23,
     btw_pct: 21,
     offerte_geldig_dagen: 14,
+    betaaltermijn_dagen: 14,
     agenda_start_uur: 7,
     agenda_eind_uur: 20,
     uren_herinnering_interval_min: 60,
@@ -410,6 +411,7 @@ export function InstellingenPage() {
             reiskosten_per_km: instellingen.reiskostenPerKm ?? 0.23,
             btw_pct: instellingen.btwPct ?? 21,
             offerte_geldig_dagen: instellingen.offerteGeldigDagen ?? 14,
+            betaaltermijn_dagen: instellingen.betaaltermijnDagen ?? 14,
             uren_herinnering_interval_min: instellingen.urenHerinneringIntervalMin ?? 60,
             uren_herinnering_moment: instellingen.urenHerinneringMoment,
             uren_herinnering_dagen: instellingen.urenHerinneringDagen,
@@ -2170,6 +2172,20 @@ export function InstellingenPage() {
                 step="1"
                 value={standaardForm.offerte_geldig_dagen}
                 onChange={e => setStandaard('offerte_geldig_dagen', e.target.value)}
+              />
+            </div>
+            <div className="f" data-rl="set-betaaltermijn">
+              <label>
+                Betaaltermijn facturen (dagen)
+                <InfoTip tekst="Na hoeveel dagen een nieuwe factuur vervalt. Heeft een klant een eigen betaaltermijn, dan geldt die. Bestaande facturen houden hun vervaldatum." />
+              </label>
+              <input
+                type="number"
+                step="1"
+                min="0"
+                max="365"
+                value={standaardForm.betaaltermijn_dagen}
+                onChange={e => setStandaard('betaaltermijn_dagen', e.target.value)}
               />
             </div>
           </div>

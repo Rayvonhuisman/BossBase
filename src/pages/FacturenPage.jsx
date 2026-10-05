@@ -247,10 +247,14 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
 
   const selectedCustomer = form.customer_id ? customers.find(c => String(c.id) === String(form.customer_id)) : null;
 
-  // Vervaldatum = factuurdatum + betaaltermijn van de klant (anders 14 dagen).
+  // Vervaldatum = factuurdatum + betaaltermijn: die van de klant als hij er een
+  // heeft, anders de betaaltermijn uit Instellingen > Algemeen, anders 14 dagen.
   // Vroeger: + het aantal dagen dat een ófferte geldig is (audit M22). Past de
   // gebruiker de datum zelf aan, dan blijft die staan.
-  const betaaltermijn = Number(selectedCustomer?.betaaltermijnDagen) || STANDAARD_BETAALTERMIJN;
+  const klantTermijn = Number(selectedCustomer?.betaaltermijnDagen) || null;
+  const bedrijfTermijn = Number.isFinite(Number(instDefaults?.betaaltermijnDagen)) && instDefaults?.betaaltermijnDagen != null
+    ? Number(instDefaults.betaaltermijnDagen) : null;
+  const betaaltermijn = klantTermijn ?? bedrijfTermijn ?? STANDAARD_BETAALTERMIJN;
   const vervalHandmatig = useRef(false);
   useEffect(() => {
     if (vervalHandmatig.current || !form.factuurdatum) return;
