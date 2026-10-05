@@ -129,9 +129,19 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
     locatie: werkbon?.locatie || '',
     notes: werkbon?.notes || '',
     status: werkbon?.status || 'gepland',
-    assignedToIds: werkbon?.assignedToIds || (werkbon?.assignedTo ? [werkbon.assignedTo] : []),
-    verantwoordelijkeIds: werkbon?.verantwoordelijkeIds || (werkbon?.assignedTo ? [werkbon.assignedTo] : []),
+    // Een nieuwe werkbon: wie hem aanmaakt is standaard gekoppeld én
+    // verantwoordelijke (is er maar één gebruiker, dan is dat dus altijd goed).
+    // Een bestaande werkbon houdt wat er staat.
+    assignedToIds: werkbon?.assignedToIds || (werkbon?.assignedTo ? [werkbon.assignedTo] : (!isEdit && profile?.id ? [profile.id] : [])),
+    verantwoordelijkeIds: werkbon?.verantwoordelijkeIds || (werkbon?.assignedTo ? [werkbon.assignedTo] : (!isEdit && profile?.id ? [profile.id] : [])),
   }));
+  // Was het profiel bij het openen nog niet geladen, vul het dan alsnog in —
+  // alleen bij een nieuwe werkbon en alleen zolang er nog niemand gekozen is.
+  useEffect(() => {
+    if (isEdit || !profile?.id) return;
+    setForm(f => (f.assignedToIds.length || f.verantwoordelijkeIds.length
+      ? f : { ...f, assignedToIds: [profile.id], verantwoordelijkeIds: [profile.id] }));
+  }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [planning, setPlanning] = useState(() => (werkbon ? { ...planningUitWerkbon(werkbon), ...voertuigPlanningUitWerkbon(werkbon) } : legePlanning()));
   // Meerdere dagen plannen hoort bij de planningsmodule (Team, of als module bij
   // Groei) — zelfde gate als de planningspagina. Zonder module: één datum.
@@ -403,7 +413,13 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
               verantwoordelijkeIds={form.verantwoordelijkeIds}
               disabled={saving}
               fieldClassName="f full"
-              onChange={({ assignedIds, verantwoordelijkeIds }) => setForm(f => ({ ...f, assignedToIds: assignedIds, verantwoordelijkeIds }))}
+              onChange={({ assignedIds, verantwoordelijkeIds }) => setForm(f => ({
+                ...f,
+                assignedToIds: assignedIds,
+                // Eén gekoppelde medewerker en nog geen verantwoordelijke: dan is
+                // dat de verantwoordelijke (anders weigert opslaan).
+                verantwoordelijkeIds: !verantwoordelijkeIds.length && assignedIds.length === 1 ? [...assignedIds] : verantwoordelijkeIds,
+              }))}
             >
               <NotifyMailToggle checked={notifyMail} onChange={setNotifyMail} style={{ marginTop: 8 }} />
             </AssigneeResponsibleSelect>
