@@ -46,8 +46,10 @@ laatste onder de knop met de drie puntjes.
   mails terugzien die naar deze klant zijn gestuurd.
 - **Tijdlijn**: alles wat er met de klant is gebeurd: offertes, facturen, projecten,
   notities, mails, fasewijzigingen.
-- **Gegevens**: alle klantgegevens, ook Type en Bron, elk met een potloodje om te
-  wijzigen (recht *Klanten bewerken*). Het type staat ook bovenaan de klantkaart.
+- **Gegevens**: alle klantgegevens, ook Type, Bron en **Betaaltermijn (dagen)**,
+  elk met een potloodje om te wijzigen (recht *Klanten bewerken*). Het type staat
+  ook bovenaan de klantkaart. Een betaaltermijn bij de klant gaat voor de standaard
+  uit Instellingen; leeg laten betekent de standaard.
 
 De fase van een aanvraag, wie hem behandelt, en project voltooien of verloren doe je
 op de **projectkaart**, niet op de klantkaart.
