@@ -588,24 +588,18 @@ export function InstellingenPage() {
         behoudTransparantie: true,
       });
       const ext = teUploaden.name.split('.').pop().toLowerCase() || 'jpg';
-      const path = `${company.id}/logo.${ext}`;
+      // Elke upload een eigen bestandsnaam, en oude versies blijven staan. Een
+      // verstuurde mail of PDF verwijst naar de publieke URL van het logo dat op
+      // dat moment gold; werd dat bestand overschreven of opgeruimd, dan toonde
+      // de mail bij de klant later een gebroken afbeelding. Logo's zijn
+      // verkleind en klein; ze verdwijnen met de rest van de bedrijfsgegevens
+      // na de bewaartermijn (opschonen).
+      const path = `${company.id}/logo-${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from('bedrijf-logos')
-        .upload(path, teUploaden, { upsert: true, contentType: teUploaden.type });
+        .upload(path, teUploaden, { upsert: false, contentType: teUploaden.type });
       if (uploadError) throw uploadError;
       const { data: { publicUrl } } = supabase.storage.from('bedrijf-logos').getPublicUrl(path);
-
-      // Oude logobestanden met een ándere extensie opruimen. De naam is
-      // logo.<ext>, dus een PNG die na het comprimeren een JPG wordt laat het
-      // origineel anders als wees achter — en dat is precies het geval dat we
-      // hier proberen op te lossen. Best-effort: het logo staat al goed.
-      try {
-        const { data: bestaand } = await supabase.storage.from('bedrijf-logos').list(company.id);
-        const wezen = (bestaand || [])
-          .filter(f => /^logo\./i.test(f.name) && `${company.id}/${f.name}` !== path)
-          .map(f => `${company.id}/${f.name}`);
-        if (wezen.length) await supabase.storage.from('bedrijf-logos').remove(wezen);
-      } catch { /* opruimen mag het uploaden niet laten falen */ }
 
       await updateCompany(company.id, { logo_url: publicUrl });
       await refresh();
