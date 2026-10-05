@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { vandaagIso, voegDagenToe } from '../lib/datumTijd.js';
+import { getCustomer } from '../services/customerService.js';
 import { Download, Send, CheckCircle2 } from 'lucide-react';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml, tekstNaarEditorHtml } from '../lib/noteFormat.js';
@@ -251,7 +252,20 @@ export function NewFactuurModal({ customers, projects = [], prefill, onClose, on
   // heeft, anders de betaaltermijn uit Instellingen > Algemeen, anders 14 dagen.
   // Vroeger: + het aantal dagen dat een ófferte geldig is (audit M22). Past de
   // gebruiker de datum zelf aan, dan blijft die staan.
-  const klantTermijn = Number(selectedCustomer?.betaaltermijnDagen) || null;
+  // De termijn van de klant vers ophalen: de klantenlijst is bij het inloggen
+  // geladen en kent een termijn die net op de klantkaart is gezet nog niet.
+  // 0 is een geldige termijn (direct betalen); alleen leeg valt terug.
+  const [klantTermijn, setKlantTermijn] = useState(null);
+  useEffect(() => {
+    const lijst = selectedCustomer?.betaaltermijnDagen;
+    setKlantTermijn(lijst != null && lijst !== '' ? Number(lijst) : null);
+    if (!form.customer_id) return undefined;
+    let weg = false;
+    getCustomer(form.customer_id)
+      .then(k => { if (!weg) setKlantTermijn(k?.betaaltermijnDagen != null && k.betaaltermijnDagen !== '' ? Number(k.betaaltermijnDagen) : null); })
+      .catch(() => {});
+    return () => { weg = true; };
+  }, [form.customer_id]); // eslint-disable-line react-hooks/exhaustive-deps
   const bedrijfTermijn = Number.isFinite(Number(instDefaults?.betaaltermijnDagen)) && instDefaults?.betaaltermijnDagen != null
     ? Number(instDefaults.betaaltermijnDagen) : null;
   const betaaltermijn = klantTermijn ?? bedrijfTermijn ?? STANDAARD_BETAALTERMIJN;

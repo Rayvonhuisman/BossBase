@@ -85,6 +85,13 @@ export function mapCustomerFormToPayload(form = {}) {
   }
   // Drop nulls so we don't overwrite values during partial updates.
   Object.keys(payload).forEach(k => payload[k] == null && delete payload[k])
+  // Betaaltermijn: leeg betekent "de standaard uit Instellingen", dus null moet
+  // hier wél worden opgeslagen. Alleen als het veld meekomt (de klantkaart
+  // stuurt de hele klant mee; het venster Nieuwe klant kent het veld niet).
+  if ('betaaltermijnDagen' in form) {
+    const v = form.betaaltermijnDagen
+    payload.betaaltermijn_dagen = v === '' || v == null ? null : Number(v)
+  }
   return payload
 }
 
