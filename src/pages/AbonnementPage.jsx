@@ -6,7 +6,7 @@ import { usePlan } from '../hooks/usePlan.js';
 import {
   TIERS, tierLabel, tierPrice, EXTRA_USER_PRICE,
   welkomstactiesVoor, welkomstactieLabel, kortingMaandenVoorActie,
-  inbegrepenGebruikers, betaaldeGebruikers, gebruikersPrijs, extraUserLabel, prijsMetEenGebruiker,
+  inbegrepenGebruikers, betaaldeGebruikers, gebruikersPrijs, extraUserLabel,
 } from '../lib/tiers.js';
 import {
   MODULES, modulePrice, canBuyModule, getLimitDef, featureLabel,
@@ -437,7 +437,7 @@ export default function AbonnementPage({ setPage }) {
                   </div>
                   <div className="ab-wie">{VOOR_WIE[t.id]}</div>
                   <div className="ab-prijs">
-                    <strong>€ {prijsMetEenGebruiker(t.id)}</strong>
+                    <strong>€ {tierPrice(t.id)}</strong>
                     <span>/ maand excl. btw{interval === 'jaar' ? ' · 12 mnd' : ''}</span>
                   </div>
                   <div className="ab-extra-user">{extraUserLabel(t.id)}</div>

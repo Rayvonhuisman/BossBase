@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react"
 import { Search } from "lucide-react"
 import { Nav, Footer, Reveal, I, ScrollLine, initChoreo } from "./MktShared"
-import { tierLabel, prijsMetEenGebruiker, YEARLY_FREE_MONTHS } from "../../lib/tiers.js"
+import { tierLabel, tierPrice, YEARLY_FREE_MONTHS } from "../../lib/tiers.js"
 import { TIER_LIMITS } from "../../lib/features.js"
 
 // "1 gebruiker" / "tot 2 gebruikers" / "onbeperkt gebruikers" uit de matrix.
@@ -30,7 +30,7 @@ const FAQ_DATA = [
       // Gebruikersaantallen komen uit de matrix (features.js), niet uit los
       // opgeschreven tekst — stond hier eerder op "tot 5" en "tot 15" terwijl de
       // software Groei op 2 zet en Team onbeperkt laat.
-      { q: "Welke abonnementen zijn er?", a: `We hebben drie plannen: ${tierLabel('starter')} (€ ${prijsMetEenGebruiker('starter')}/maand, ${gebruikersTekst('starter')}), ${tierLabel('groei')} (€ ${prijsMetEenGebruiker('groei')}/maand, ${gebruikersTekst('groei')}) en ${tierLabel('team')} (€ ${prijsMetEenGebruiker('team')}/maand met 1 gebruiker, ${gebruikersTekst('team')}). Prijzen per maand, exclusief btw. Bij een jaarabonnement kies je één welkomstactie: de eerste ${YEARLY_FREE_MONTHS} maanden gratis, of (vanaf ${tierLabel('groei')}) een gratis website, waarvan de hosting € 5 per maand kost.` },
+      { q: "Welke abonnementen zijn er?", a: `We hebben drie plannen: ${tierLabel('starter')} (€ ${tierPrice('starter')}/maand, ${gebruikersTekst('starter')}), ${tierLabel('groei')} (€ ${tierPrice('groei')}/maand, ${gebruikersTekst('groei')}) en ${tierLabel('team')} (€ ${tierPrice('team')}/maand, ${gebruikersTekst('team')}). Prijzen per maand, exclusief btw. Bij een jaarabonnement kies je één welkomstactie: de eerste ${YEARLY_FREE_MONTHS} maanden gratis, of (vanaf ${tierLabel('groei')}) een gratis website, waarvan de hosting € 5 per maand kost.` },
       { q: "Hoe zit het met opzeggen?", a: "Een maandabonnement is per maand opzegbaar. Een jaarabonnement loopt 12 maanden; opzeggen kan tegen het einde daarvan, en daarna loopt het maandelijks door. Je klanten exporteer je als Excel of CSV, en je offertes en facturen als PDF." },
       { q: "Verandert mijn looptijd als ik upgrade?", a: "Bij een jaarabonnement wel: stap je over naar een groter pakket, dan begint de looptijd van 12 maanden opnieuw vanaf dat moment. De nieuwe einddatum staat in het scherm voordat je bevestigt. Modules bijkopen en teamleden toevoegen veranderen je looptijd niet, en een maandabonnement blijft per maand opzegbaar." },
       { q: "Hoe betaal ik mijn abonnement?", a: "Via Stripe, ook bij een jaarabonnement (in 12 maandtermijnen). Welke betaalmethoden je kunt kiezen, zie je bij het afrekenen." },
