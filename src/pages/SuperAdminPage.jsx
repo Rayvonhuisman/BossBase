@@ -4,6 +4,7 @@ import { Meldingen } from '../components/Meldingen.jsx'
 import { X } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 import { TIERS, tierLabel, tierPrice } from '../lib/tiers.js'
+import { BRANCHES } from '../lib/branches.js'
 
 // De superadmin: wat er via bossbase.nl binnenkomt, en welke bedrijven er zijn
 // met welk abonnement. Zelfde bouwstenen als het dashboard (page-hd, sc-kaarten,
@@ -81,6 +82,12 @@ function PlanBadge({ plan }) {
   return <span className="badge b-concept">{tierLabel(plan)}</span>
 }
 
+const GEEN_BRANCHE = '__geen__'
+
+// Het telefoonnummer dat bij het aanmelden is opgegeven (profiles.telefoon).
+// Accounts van vóór oktober 2026 hebben er geen.
+const aanmeldTelefoon = c => (c.members || []).find(m => m.telefoon)?.telefoon || ''
+
 const isBetalend = c => c.subscription?.status === 'actief' && c.status !== 'geblokkeerd'
 
 // ── Hoofdcomponent ───────────────────────────────────────────────────────────
@@ -101,6 +108,8 @@ export function SuperAdminPage({ navigate, profile }) {
   const [saving,      setSaving]      = useState(false)
   const [aanvraagId,  setAanvraagId]  = useState(() => new URLSearchParams(window.location.search).get('aanvraag'))
   const [alleAanvragen, setAlleAanvragen] = useState(false)
+  // '' = alle bedrijven, GEEN_BRANCHE = bedrijven zonder branche (van vóór de keuze werd opgeslagen)
+  const [brancheFilter, setBrancheFilter] = useState('')
 
   // ── Data laden ─────────────────────────────────────────────────────────────
   const load = async (keepDrawerId = null) => {
@@ -223,6 +232,15 @@ export function SuperAdminPage({ navigate, profile }) {
   const betalend = companies.filter(isBetalend)
   const mrr = betalend.reduce((sum, c) => sum + tierPrice(c.subscription.plan), 0)
   const zichtbareAanvragen = alleAanvragen ? aanvragen : aanvragen.filter(a => !AFGEHANDELD.has(a.status))
+  // Vaste lijst plus wat er verder in de data staat (een oude of hernoemde branche).
+  const brancheOpties = useMemo(() => {
+    const extra = companies.map(c => c.branche).filter(b => b && !BRANCHES.includes(b))
+    return [...BRANCHES, ...new Set(extra)].map(b => ({ b, n: companies.filter(c => c.branche === b).length }))
+  }, [companies])
+  const zonderBranche = companies.filter(c => !c.branche).length
+  const zichtbareBedrijven = brancheFilter === GEEN_BRANCHE
+    ? companies.filter(c => !c.branche)
+    : brancheFilter ? companies.filter(c => c.branche === brancheFilter) : companies
   const openAanvraag = useMemo(() => aanvragen.find(a => a.id === aanvraagId) || null, [aanvragen, aanvraagId])
 
   // Niet-geautoriseerd? Render NIETS. Staat na alle hooks zodat het aantal
@@ -287,11 +305,22 @@ export function SuperAdminPage({ navigate, profile }) {
         {/* ── Bedrijven en abonnementen ───────────────────────────────────── */}
         <div className="card card-p afu2" style={{ marginBottom: 20 }}>
           <div className="lsec-hd">
-            <div className="lsec-title">Bedrijven en abonnementen ({companies.length})</div>
+            <div className="lsec-title">Bedrijven en abonnementen ({zichtbareBedrijven.length})</div>
+            <select
+              aria-label="Filter op branche"
+              value={brancheFilter}
+              onChange={e => setBrancheFilter(e.target.value)}
+              style={{ fontSize: 13, padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg, #fff)', color: 'inherit' }}
+            >
+              <option value="">Alle branches</option>
+              {brancheOpties.map(({ b, n }) => <option key={b} value={b}>{b} ({n})</option>)}
+              <option value={GEEN_BRANCHE}>Geen branche ({zonderBranche})</option>
+            </select>
           </div>
           {loading && companies.length === 0 && <div className="lsec-empty">Laden…</div>}
+          {!loading && companies.length > 0 && zichtbareBedrijven.length === 0 && <div className="lsec-empty">Geen bedrijven in deze branche</div>}
           <div className="lrows">
-            {companies.map(c => (
+            {zichtbareBedrijven.map(c => (
               <div key={c.id} className="lrow" onClick={() => openDrawer(c)}>
                 {c.logoUrl
                   ? <img src={c.logoUrl} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain', background: 'var(--bgs)', flexShrink: 0 }} />
@@ -299,7 +328,7 @@ export function SuperAdminPage({ navigate, profile }) {
                 <div className="lrow-main">
                   <div className="lrow-title">{c.name}</div>
                   <div className="lrow-sub">
-                    {[c.email, `${c.memberCount} ${c.memberCount === 1 ? 'gebruiker' : 'gebruikers'}`, c.lastLogin ? `laatst ingelogd ${fmtRelative(c.lastLogin)}` : 'nooit ingelogd'].filter(Boolean).join(' · ')}
+                    {[c.branche, c.email, aanmeldTelefoon(c), `${c.memberCount} ${c.memberCount === 1 ? 'gebruiker' : 'gebruikers'}`, c.lastLogin ? `laatst ingelogd ${fmtRelative(c.lastLogin)}` : 'nooit ingelogd'].filter(Boolean).join(' · ')}
                   </div>
                 </div>
                 <PlanBadge plan={c.subscription?.plan || 'trial'} />
@@ -477,6 +506,7 @@ function CompanyDrawer({ company, notes, onNotesChange, onSaveNotes, onPlanSelec
 
           <DrawerSection title="Bedrijfsgegevens">
             <DrawerRow label="Naam"       value={company.name} />
+            <DrawerRow label="Branche"    value={company.branche || ''} />
             <DrawerRow label="E-mail"     value={company.email || ''} />
             <DrawerRow label="Telefoon"   value={company.phone || ''} />
             <DrawerRow label="Adres"      value={company.address ? `${company.address}, ${company.postalCode || ''} ${company.city || ''}`.trim().replace(/^,\s*/, '') : ''} />
@@ -498,7 +528,7 @@ function CompanyDrawer({ company, notes, onNotesChange, onSaveNotes, onPlanSelec
                   </div>
                   <div className="lrow-main">
                     <div className="lrow-title">{m.fullName || m.email}</div>
-                    <div className="lrow-sub">{m.email}</div>
+                    <div className="lrow-sub">{[m.email, m.telefoon].filter(Boolean).join(' · ')}</div>
                   </div>
                   <span className="badge b-concept">{m.role}</span>
                   {m.isSuperAdmin && <span className="badge b-blue">super admin</span>}

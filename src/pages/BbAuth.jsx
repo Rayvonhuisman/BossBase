@@ -6,7 +6,9 @@ import {
 } from 'lucide-react';
 import { loginWithEmail, registerWithEmail, requestPasswordReset, resendVerificationEmail, requestVerificationCode, verifyCode, vertaalAuthFout } from '../services/authService.js';
 import { PasswordRequirements, PasswordMatch, passwordValid } from '../components/PasswordStrength.jsx';
+import { telefoonFout } from '../lib/telefoon.js';
 
+// Labels gelijk aan BRANCHES in lib/branches.js; die lijst toont Instellingen.
 const TRADES = [
   { Icon: Paintbrush, label: 'Schilder' }, { Icon: Trees, label: 'Hovenier' },
   { Icon: Hammer, label: 'Aannemer' }, { Icon: AppWindow, label: 'Kozijnen' },
@@ -305,7 +307,10 @@ export function RegisterFlow({ onDone, onBack }) {
   const [needsConfirmation, setNeedsConfirmation] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
-  const steps = ['Account', 'Bedrijf', 'Setup', 'Team'];
+  // Collega's uitnodigen zit niet in het aanmelden: dat kan pas als het bedrijf
+  // bestaat (na de e-mailverificatie) en gaat via Team > Teamlid uitnodigen.
+  const steps = ['Account', 'Bedrijf', 'Pakket'];
+  const laatsteStap = steps.length - 1;
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const validateAccount = () => {
@@ -326,7 +331,7 @@ export function RegisterFlow({ onDone, onBack }) {
 
   const validateCompany = () => {
     if (!form.companyName.trim()) return 'Vul je bedrijfsnaam in.';
-    return '';
+    return telefoonFout(form.phone);
   };
 
   const next = () => {
@@ -369,12 +374,11 @@ export function RegisterFlow({ onDone, onBack }) {
     finally { setResendLoading(false); }
   };
 
-  const stepTitles = ['Maak je account aan', 'Vertel over je bedrijf', 'Welk pakket past bij je?', 'Nodig je team uit'];
+  const stepTitles = ['Maak je account aan', 'Vertel over je bedrijf', 'Welk pakket past bij je?'];
   const stepSubs = [
-    'Naam, e-mail en wachtwoord — klaar.',
+    'Naam, e-mail en wachtwoord. Meer is het niet.',
     'We passen BossBase aan op jouw branche.',
-    'Kies waar je nu staat — 14 dagen gratis proberen, zonder creditcard.',
-    'Optioneel — je kunt dit later ook doen.',
+    'Kies waar je nu staat. 14 dagen gratis proberen, zonder creditcard.',
   ];
 
   const StepDots = () => (
@@ -459,7 +463,7 @@ export function RegisterFlow({ onDone, onBack }) {
                 ))}
               </div>
             </div>
-            <div className="auth-field"><label>Telefoon</label><input value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="06-12345678" /></div>
+            <div className="auth-field"><label>Telefoon</label><input type="tel" autoComplete="tel" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="06-12345678" /></div>
             <div className="auth-field"><label>KvK-nummer</label><input value={form.kvk} onChange={e => set('kvk', e.target.value)} placeholder="12345678" /></div>
           </>
         )}
@@ -471,14 +475,14 @@ export function RegisterFlow({ onDone, onBack }) {
               <button className={`setup-option${setup === 'groei' ? ' selected' : ''}`} onClick={() => setSetup('groei')}>
                 <div className="setup-option-icon"><User size={20} strokeWidth={1.9} /></div>
                 <div>
-                  <div className="setup-option-label">Groei — voor 1-2 personen</div>
+                  <div className="setup-option-label">Groei, voor 1-2 personen</div>
                   <div className="setup-option-sub">Je werkt alleen of met z'n tweeën. Offertes, facturen, planning en uren, alles in één.</div>
                 </div>
               </button>
               <button className={`setup-option${setup === 'team' ? ' selected' : ''}`} onClick={() => setSetup('team')}>
                 <div className="setup-option-icon"><Users size={20} strokeWidth={1.9} /></div>
                 <div>
-                  <div className="setup-option-label">Team — voor 2+ personen</div>
+                  <div className="setup-option-label">Team, voor 2+ personen</div>
                   <div className="setup-option-sub">Meerdere medewerkers of bussen. Met rollen en rechten, teamplanning en voertuigen.</div>
                 </div>
               </button>
@@ -488,35 +492,21 @@ export function RegisterFlow({ onDone, onBack }) {
                 <Sparkles size={15} strokeWidth={1.9} /> 14 dagen gratis proberen
               </div>
               <p>
-                Je probeert je keuze 14 dagen gratis en volledig — <strong>geen creditcard nodig</strong>.
-                Daarna stopt het vanzelf, tenzij je een abonnement afsluit. Je gegevens blijven bewaard
-                en je kunt altijd nog wisselen van pakket.
+                Je probeert je keuze 14 dagen gratis, zonder creditcard. Daarna stopt het vanzelf,
+                tenzij je een abonnement afsluit.
               </p>
             </div>
           </>
         )}
-        {step === 3 && (
-          // Collega's uitnodigen kan pas als het bedrijf bestaat, dus ná de
-          // e-mailverificatie. Hier stonden invoervelden die nergens heen gingen
-          // (audit 2026-10-01, A1); nu zeggen we eerlijk hoe het wél werkt.
-          <div style={{ marginBottom: 14, padding: 12, background: 'var(--bgs)', borderRadius: 'var(--r8)', border: '1px solid var(--border)', fontSize: '.85rem', color: 'var(--dm)', lineHeight: 1.55 }}>
-            <strong>Je team uitnodigen doe je straks in BossBase.</strong><br />
-            Zodra je account klaar is, ga je naar <strong>Team</strong> en klik je op <strong>Teamlid uitnodigen</strong>.
-            Je collega krijgt dan een uitnodiging per e-mail.
-            {setup === 'team'
-              ? ' In je proefperiode op Team kun je zoveel collega\'s uitnodigen als je wilt.'
-              : ' Op Groei werk je met maximaal 2 gebruikers, inclusief jezelf.'}
-          </div>
-        )}
         {error && <div style={{ color: '#dc2626', fontSize: '.78rem', fontWeight: 600, marginTop: 10 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
           {step > 0 && <button className="btn btn-s" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setStep(s => s - 1)}>Terug</button>}
-          {step < 3
+          {step < laatsteStap
             ? <button className="auth-submit" style={{ flex: 1 }} onClick={next} disabled={step === 0 && !step0Valid}>Volgende →</button>
             : <button className="auth-submit" style={{ flex: 1 }} onClick={submit} disabled={loading}>{loading ? 'Bezig...' : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>BossBase starten <Rocket size={16} strokeWidth={1.8} /></span>}</button>
           }
         </div>
-        {step === 3 && (
+        {step === laatsteStap && (
           // Het akkoord wordt bij het klikken vastgelegd (versie, tijdstip, IP):
           // registerWithEmail → edge function akkoord-vastleggen.
           <p className="auth-privacy" style={{ fontSize: '.78rem', lineHeight: 1.5, color: 'var(--dmu)', margin: '10px 0 0' }}>
@@ -524,11 +514,6 @@ export function RegisterFlow({ onDone, onBack }) {
             de <a href="/verwerkersovereenkomst" target="_blank" rel="noopener" style={{ textDecoration: 'underline' }}>verwerkersovereenkomst</a>.
             In de <a href="/privacy" target="_blank" rel="noopener" style={{ textDecoration: 'underline' }}>privacyverklaring</a> lees je hoe we met je gegevens omgaan.
           </p>
-        )}
-        {step === 3 && (
-          <div className="auth-link">
-            <a href="#" onClick={e => { e.preventDefault(); submit(); }}>Overslaan, later doen</a>
-          </div>
         )}
         {step === 0 && (
           <div className="auth-link">

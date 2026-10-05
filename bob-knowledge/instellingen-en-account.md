@@ -31,7 +31,7 @@ Wijzigingen in de bedrijfsinstellingen slaat in de praktijk de beheerder op.
 ### Bedrijfsprofiel
 Logo (**Logo uploaden**, tot 10 MB, JPG of PNG), merkkleur, bedrijfsnaam,
 e-mailadres, **Antwoord e-mailadres**, telefoon, KvK-nummer (8 cijfers), btw-nummer,
-website en adres. Klik **Opslaan**.
+website, branche en adres. Klik **Opslaan**.
 
 Logo en merkkleur staan op je offertes, facturen en de mails aan je klanten. Antwoordt
 een klant op een mail, dan komt het antwoord binnen op het antwoord-e-mailadres (of
@@ -95,7 +95,9 @@ Onderaan **Mijn profiel**, in de **Gevarenzone**.
 ## Registreren
 
 Een nieuw bedrijf aanmelden gaat in een paar stappen: je account (naam, e-mail,
-wachtwoord), je bedrijf (bedrijfsnaam, telefoon, KvK) en welk pakket bij je past.
+wachtwoord), je bedrijf (bedrijfsnaam, branche, telefoonnummer en KvK) en welk pakket
+bij je past. Het telefoonnummer is verplicht; een buitenlands nummer kan ook, met
+landcode (bijv. +32).
 Daarna krijg je een **code van 6 cijfers** per mail om je e-mailadres te bevestigen.
 De code is 10 minuten geldig; na een minuut kun je een nieuwe laten sturen.
 

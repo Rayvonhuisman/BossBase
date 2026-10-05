@@ -48,6 +48,7 @@ import { AvatarUpload } from '../components/AvatarUpload.jsx';
 import { PasswordRequirements, PasswordMatch, passwordValid } from '../components/PasswordStrength.jsx';
 import { NoteEditor } from '../components/NoteEditor.jsx';
 import { plainToEditorHtml } from '../lib/noteFormat.js';
+import { BRANCHES } from '../lib/branches.js';
 import { comprimeerAfbeelding, LOGO_MAX_ZIJDE } from '../utils/afbeeldingComprimeren.js';
 import {
   getConnection,
@@ -196,7 +197,7 @@ export function InstellingenPage() {
   // Bedrijfsprofiel
   const [bedrijfForm, setBedrijfForm] = useState({
     name: '', email: '', phone: '', kvk: '', btw_number: '',
-    address: '', city: '', postal_code: '', website: '', branding_color: '#1DDB62',
+    address: '', city: '', postal_code: '', website: '', branche: '', branding_color: '#1DDB62',
     iban: '', iban_tnv: '',
   });
   const [savingBedrijf, setSavingBedrijf] = useState(false);
@@ -527,6 +528,7 @@ export function InstellingenPage() {
         city: company.city || '',
         postal_code: company.postalCode || '',
         website: company.website || '',
+        branche: company.branche || '',
         branding_color: company.brandingColor || '#1DDB62',
         iban: company.iban || '',
         iban_tnv: company.ibanTnv || '',
@@ -615,7 +617,7 @@ export function InstellingenPage() {
     }
     setSavingBedrijf(true);
     try {
-      await updateCompany(company.id, { ...bedrijfForm, iban: ibanOpslaan(bedrijfForm.iban), iban_tnv: bedrijfForm.iban_tnv.trim() || null });
+      await updateCompany(company.id, { ...bedrijfForm, iban: ibanOpslaan(bedrijfForm.iban), iban_tnv: bedrijfForm.iban_tnv.trim() || null, branche: bedrijfForm.branche || null });
       await refresh();
       toast.success('Bedrijfsprofiel opgeslagen');
     } catch (err) {
@@ -2082,6 +2084,14 @@ export function InstellingenPage() {
             <div className="f">
               <label>Website</label>
               <input value={bedrijfForm.website} onChange={e => setBedrijf('website', e.target.value)} placeholder="Nog niet ingevuld" />
+            </div>
+            <div className="f">
+              <label htmlFor="bedrijf-branche">Branche</label>
+              <select id="bedrijf-branche" value={bedrijfForm.branche} onChange={e => setBedrijf('branche', e.target.value)}>
+                <option value="">Nog niet gekozen</option>
+                {[...BRANCHES, ...(bedrijfForm.branche && !BRANCHES.includes(bedrijfForm.branche) ? [bedrijfForm.branche] : [])]
+                  .map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
             </div>
             <div className="f">
               <label>IBAN <span style={{ fontSize: '.75rem', color: 'var(--dmu)', fontWeight: 400 }}>(komt op je facturen)</span></label>
