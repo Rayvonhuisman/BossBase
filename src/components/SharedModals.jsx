@@ -291,6 +291,8 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
     description: '',
     priority: 'med',
     newCustomerName: '',
+    newCustomerEmail: '',
+    newCustomerPhone: '',
     // Wie de aanvraag behandelen. Standaard degene die hem aanmaakt: een leeg
     // veld zou betekenen dat aanvragen opnieuw zonder eigenaar ontstaan, en dat
     // was nu juist het probleem.
@@ -315,6 +317,7 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
     if (!form.title.trim()) next.title = 'Titel is verplicht';
     if (createNewCust) {
       if (!form.newCustomerName.trim()) next.newCustomerName = 'Naam klant is verplicht';
+      if (!isEmail(form.newCustomerEmail.trim())) next.newCustomerEmail = 'Ongeldig e-mailadres';
     } else {
       if (!form.customer_id) next.customer_id = 'Kies een klant of maak een nieuwe aan';
     }
@@ -329,7 +332,13 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
     try {
       let customerId = form.customer_id;
       if (createNewCust) {
-        const created = await createCustomer({ name: form.newCustomerName });
+        // E-mail en telefoon meteen mee: zonder e-mailadres kun je later geen
+        // offerte of factuur naar deze klant mailen.
+        const created = await createCustomer({
+          name: form.newCustomerName,
+          email: form.newCustomerEmail.trim(),
+          phone: form.newCustomerPhone.trim(),
+        });
         customerId = created.id;
       }
       const dealInput = {
@@ -396,6 +405,11 @@ export function NewLeadModal({ onClose, onSaved, customers, stages, defaultStage
               <>
                 <input value={form.newCustomerName} onChange={e => set('newCustomerName', e.target.value)} placeholder="Naam nieuwe klant" />
                 {errors.newCustomerName && <span className="bb-err">{errors.newCustomerName}</span>}
+                <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                  <input type="email" value={form.newCustomerEmail} onChange={e => set('newCustomerEmail', e.target.value)} placeholder="E-mailadres (voor offertes en facturen)" style={{ flex: 1 }} />
+                  <input type="tel" value={form.newCustomerPhone} onChange={e => set('newCustomerPhone', e.target.value)} placeholder="Telefoonnummer" style={{ flex: 1 }} />
+                </div>
+                {errors.newCustomerEmail && <span className="bb-err">{errors.newCustomerEmail}</span>}
               </>
             ) : (
               <>
