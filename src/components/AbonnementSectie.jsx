@@ -8,6 +8,7 @@ import { readonlyTekst, READONLY_BEWAARD } from '../lib/readonly.js';
 import { gaNaarAbonnement } from '../lib/abonnementNav.js';
 import { getOpenUpgradeVerzoeken, rondUpgradeVerzoekAf } from '../services/planService.js';
 import { vandaagIso } from '../lib/datumTijd.js';
+import { bevestig } from '../lib/bevestig.jsx';
 
 // Abonnementssectie in Instellingen: huidig pakket, status, verlengdatum,
 // verbruik tegen de limieten, modules en de knoppen om te wijzigen.
@@ -115,12 +116,13 @@ export function AbonnementSectie() {
       // betaalde periode; daarna blokkeert bb_readonly_reden nieuw werk en
       // versturen (zie docs/uitrol-accountverwijdering.md voor wat precies).
       // Accounts worden hier niet gedeactiveerd: dat is "Bedrijf sluiten".
-      if (!window.confirm(
-        `Abonnement opzeggen ${wanneer}?\n\n`
-        + 'Jij en je team kunnen tot die datum gewoon doorwerken. Daarna kun je geen nieuwe klanten, '
-        + 'offertes, facturen, werkbonnen, uren of afspraken meer vastleggen en niets meer versturen. '
-        + 'Je gegevens blijven staan en worden niet verwijderd.',
-      )) return;
+      if (!(await bevestig({
+        titel: `Abonnement opzeggen ${wanneer}?`,
+        tekst: 'Jij en je team kunnen tot die datum gewoon doorwerken. Daarna staat je account op '
+          + 'alleen-lezen: je kunt alles bekijken en exporteren, maar niets meer toevoegen, wijzigen, '
+          + 'verwijderen of versturen. Je gegevens blijven staan en worden niet verwijderd.',
+        knop: 'Opzeggen',
+      }))) return;
     }
     setBezig(true);
     try {
