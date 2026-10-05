@@ -515,9 +515,14 @@ export function InstellingenPage() {
     return () => { gestopt = true; clearTimeout(timer); };
   }, [ssActivatie, canCompanySettings]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Het formulier volgt het bedrijf uit de database, maar overschrijft nooit wat
+  // iemand al heeft getypt en nog niet heeft opgeslagen. Een logo uploaden laadt
+  // het bedrijf opnieuw; zonder dit verdwenen ingevulde velden (KvK, IBAN, adres)
+  // en sloeg "Opslaan" daarna lege waarden op.
+  const vorigBedrijf = useRef(null);
   useEffect(() => {
     if (company) {
-      setBedrijfForm({
+      const uitDatabase = {
         name: company.name || '',
         email: company.email || '',
         reply_to_email: company.replyToEmail || '',
@@ -532,7 +537,17 @@ export function InstellingenPage() {
         branding_color: company.brandingColor || '#1DDB62',
         iban: company.iban || '',
         iban_tnv: company.ibanTnv || '',
+      };
+      const vorig = vorigBedrijf.current;
+      setBedrijfForm(huidig => {
+        if (!vorig) return uitDatabase;
+        const samen = { ...uitDatabase };
+        for (const k of Object.keys(uitDatabase)) {
+          if (huidig[k] !== vorig[k]) samen[k] = huidig[k];
+        }
+        return samen;
       });
+      vorigBedrijf.current = uitDatabase;
     }
   }, [company]);
 
