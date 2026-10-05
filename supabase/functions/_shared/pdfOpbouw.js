@@ -492,7 +492,7 @@ export async function buildPdf(doc, type, document, regels, customer, company, o
     const klantBtw = customer?.btwNumber || customer?.btw_number;
     const regelsTekst = [];
     if (regimes.includes('verlegd')) {
-      regelsTekst.push(`Btw verlegd: de btw wordt afgedragen door de opdrachtgever${klantBtw ? ` (btw-nummer ${klantBtw})` : ''}.`);
+      regelsTekst.push(`Btw verlegd.${klantBtw ? ` Btw-nummer afnemer: ${klantBtw}` : ''}`);
     }
     if (regimes.includes('vrijgesteld')) regelsTekst.push('Een deel van deze factuur is vrijgesteld van btw.');
     if (!document.isCredit && company?.iban) {
