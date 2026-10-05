@@ -201,6 +201,7 @@ const opslag: AanvraagOpslag = {
       modus: s.modus === 'koppelen' ? 'koppelen' : 'kant_en_klaar',
       velden: Array.isArray(s.velden) ? s.velden : [],
       koppeling: Array.isArray(s.koppeling) ? s.koppeling : [],
+      eigen_velden: Array.isArray(s.eigen_velden) ? s.eigen_velden : [],
       privacy_url: typeof s.privacy_url === 'string' ? s.privacy_url : null,
     }
   },

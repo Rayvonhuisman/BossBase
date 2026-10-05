@@ -116,6 +116,7 @@
 
   function leesFormulier(form) {
     var data = {};
+    var eigen = {};
     var fotos = [];
     for (var i = 0; i < koppeling.length; i++) {
       var k = koppeling[i];
@@ -128,17 +129,24 @@
         }
         if ((el.type === 'checkbox' || el.type === 'radio') && !el.checked) continue;
         if (el.type === 'file' || el.type === 'password') continue;
-        var waarde = el.tagName === 'SELECT' && el.multiple
+        // Een aangevinkt vakje zonder eigen waarde stuurt "on"; dat leest als Ja.
+        var waarde = el.type === 'checkbox' && (el.value === 'on' || el.value === '') ? 'Ja' : el.tagName === 'SELECT' && el.multiple
           ? Array.prototype.filter.call(el.options, function (o) { return o.selected; }).map(function (o) { return o.value; }).join(', ')
           : String(el.value || '').trim();
         if (!waarde) continue;
+        // Een eigen veld van het bedrijf ("Soort dak"): op veldnaam. De server
+        // zoekt er de naam bij uit de instellingen.
+        if (k.doel === 'eigen') {
+          eigen[k.veld] = eigen[k.veld] ? eigen[k.veld] + ', ' + waarde : waarde;
+          continue;
+        }
         // Twee velden op één BossBase-veld (voornaam + achternaam, of twee
         // vragen samen in de omschrijving) worden samengevoegd.
         data[k.doel] = data[k.doel] ? data[k.doel] + (k.doel === 'message' ? '\n' : ' ') + waarde : waarde;
       }
     }
     var hp = form.querySelector('input[name="bossbase_hp"]');
-    return { data: data, fotos: fotos.slice(0, MAX_FOTOS), honeypot: hp ? hp.value : '' };
+    return { data: data, eigen: eigen, fotos: fotos.slice(0, MAX_FOTOS), honeypot: hp ? hp.value : '' };
   }
 
   function verkleinFoto(bestand) {
@@ -171,6 +179,7 @@
       city: d.city || '',
       gewenste_datum: d.gewenste_datum || '',
       message: d.message || ('Aanvraag via het formulier op ' + location.hostname),
+      eigen: gelezen.eigen,
       source_url: location.href,
       // De toestemming regelt het formulier van het bedrijf zelf.
       privacy_akkoord: true,

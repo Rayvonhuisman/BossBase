@@ -53,6 +53,7 @@ export interface NieuweAanvraag {
   postcode: string | null
   city: string | null
   gewenste_datum: string | null
+  eigen_velden: { naam: string; waarde: string }[]
   source: string
   source_url: string | null
   status: 'nieuw'
@@ -191,6 +192,52 @@ export function kiesOntvangers(
   return profielen
     .filter(p => p.role === 'admin' || metVerkoopRecht.has(p.id))
     .map(p => p.id)
+}
+
+// ── Eigen velden ─────────────────────────────────────────────────────────────
+// Wat een eigen veld heet en of het verplicht is, komt uit het formulier zelf
+// (settings), nooit uit de browser. Bij het kant-en-klare formulier is de
+// sleutel het id van het veld; bij koppelen de veldnaam op de eigen website.
+// Onbekende sleutels vallen weg. De naam wordt op de aanvraag vastgelegd, zodat
+// een later hernoemd veld een oude aanvraag niet verandert.
+interface EigenVeldDef { id: string; naam: string; soort: string; opties?: string[]; verplicht?: boolean }
+
+export function eigenVelden(
+  settings: Record<string, unknown>, ingevuld: Record<string, string>,
+): { ok: true; velden: { naam: string; waarde: string }[] } | { ok: false; fout: string } {
+  const uit: { naam: string; waarde: string }[] = []
+  if (settings.modus === 'koppelen') {
+    const koppeling = Array.isArray(settings.koppeling) ? settings.koppeling as Record<string, string>[] : []
+    for (const k of koppeling) {
+      if (k?.doel !== 'eigen' || !k.naam) continue
+      const w = ingevuld[k.veld]
+      if (w) uit.push({ naam: k.naam, waarde: w })
+    }
+    return { ok: true, velden: uit }
+  }
+  const defs = Array.isArray(settings.eigen_velden) ? settings.eigen_velden as EigenVeldDef[] : []
+  for (const d of defs) {
+    if (!d?.id || !d.naam) continue
+    let w = ingevuld[d.id] ?? ''
+    if (!w) {
+      if (d.verplicht) return { ok: false, fout: `Vul "${d.naam}" in` }
+      continue
+    }
+    if (d.soort === 'getal') {
+      const n = w.replace(/\s/g, '').replace(',', '.')
+      if (!/^-?\d+(\.\d+)?$/.test(n)) return { ok: false, fout: `"${d.naam}" moet een getal zijn` }
+    } else if (d.soort === 'keuze') {
+      if (!(d.opties || []).includes(w)) return { ok: false, fout: `Kies bij "${d.naam}" een van de opties` }
+    } else if (d.soort === 'janee') {
+      const j = w.toLowerCase()
+      if (!['ja', 'nee', 'true', 'false'].includes(j)) return { ok: false, fout: `Kies bij "${d.naam}" ja of nee` }
+      w = j === 'ja' || j === 'true' ? 'Ja' : 'Nee'
+    } else if (d.soort === 'datum') {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(w)) return { ok: false, fout: `"${d.naam}" moet een datum zijn` }
+    }
+    uit.push({ naam: d.naam, waarde: w })
+  }
+  return { ok: true, velden: uit }
 }
 
 async function geefConfiguratie(req: Request, opslag: AanvraagOpslag, cors: Record<string, string>, log: Logger) {
@@ -353,6 +400,8 @@ export async function verwerkVerzoek(
     }
 
     const settings = formulier.settings || {}
+    const eigen = bedrijfsformulier ? eigenVelden(settings, a.eigen) : { ok: true as const, velden: [] }
+    if (!eigen.ok) return antwoord(400, { ok: false, fout: 'validatie', velden: { eigen: eigen.fout } }, cors)
     const bron = typeof settings.source === 'string' && settings.source ? settings.source : 'website'
     const metadata: Record<string, unknown> = {
       privacy: { akkoord: true, versie: a.privacy_versie, akkoord_op: new Date().toISOString() },
@@ -374,6 +423,7 @@ export async function verwerkVerzoek(
       postcode: a.postcode,
       city: a.city,
       gewenste_datum: a.gewenste_datum,
+      eigen_velden: eigen.velden,
       source: bron,
       source_url: a.source_url,
       status: 'nieuw',

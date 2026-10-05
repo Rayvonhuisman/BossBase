@@ -23,6 +23,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var form = $('formulier');
   var fotos = [];
+  var eigenVelden = [];   // [{ id, naam, soort, opties, verplicht }] uit de instellingen
   var submissionId = nieuweId();
   var bezig = false;
 
@@ -91,9 +92,87 @@
       tekst.appendChild(a);
       tekst.appendChild(document.createTextNode('.'));
     }
+    eigenVelden = Array.isArray(cfg.eigen_velden) ? cfg.eigen_velden : [];
+    bouwEigenVelden();
     $('voorbeeld').hidden = !voorbeeld;
     form.hidden = false;
     meldHoogte();
+  }
+
+  // Eigen velden van het bedrijf, zoals "Soort dak" of "Oppervlakte in m²".
+  // Alles met textContent en createElement: de namen komen van het bedrijf en
+  // worden nooit als HTML gelezen.
+  function bouwEigenVelden() {
+    var plek = $('eigen-velden');
+    plek.textContent = '';
+    eigenVelden.forEach(function (v) {
+      var id = 'eigen-' + v.id;
+      var blok = document.createElement('div');
+      blok.className = 'veld';
+      blok.setAttribute('data-veld', 'eigen:' + v.id);
+      var label = document.createElement(v.soort === 'janee' ? 'div' : 'label');
+      label.className = v.soort === 'janee' ? 'label' : '';
+      if (v.soort !== 'janee') label.htmlFor = id;
+      else label.style.cssText = 'font-weight:600;font-size:13.5px;margin-bottom:5px';
+      label.appendChild(document.createTextNode(v.naam + ' '));
+      if (!v.verplicht) {
+        var opt = document.createElement('span');
+        opt.className = 'opt';
+        opt.textContent = '(optioneel)';
+        label.appendChild(opt);
+      }
+      blok.appendChild(label);
+      var el;
+      if (v.soort === 'keuze') {
+        el = document.createElement('select');
+        var leeg = document.createElement('option');
+        leeg.value = '';
+        leeg.textContent = 'Maak een keuze';
+        el.appendChild(leeg);
+        (v.opties || []).forEach(function (o) {
+          var op = document.createElement('option');
+          op.value = o;
+          op.textContent = o;
+          el.appendChild(op);
+        });
+      } else if (v.soort === 'janee') {
+        el = document.createElement('div');
+        el.className = 'janee';
+        ['Ja', 'Nee'].forEach(function (w) {
+          var l = document.createElement('label');
+          var r = document.createElement('input');
+          r.type = 'radio';
+          r.name = id;
+          r.value = w.toLowerCase();
+          l.appendChild(r);
+          l.appendChild(document.createTextNode(w));
+          el.appendChild(l);
+        });
+      } else {
+        el = document.createElement('input');
+        el.type = v.soort === 'getal' ? 'text' : v.soort === 'datum' ? 'date' : 'text';
+        if (v.soort === 'getal') el.inputMode = 'decimal';
+        el.maxLength = 1000;
+      }
+      if (v.soort !== 'janee') el.id = id;
+      blok.appendChild(el);
+      plek.appendChild(blok);
+    });
+  }
+
+  function leesEigenVelden() {
+    var uit = {};
+    eigenVelden.forEach(function (v) {
+      var w = '';
+      if (v.soort === 'janee') {
+        var gekozen = form.querySelector('input[name="eigen-' + v.id + '"]:checked');
+        w = gekozen ? gekozen.value : '';
+      } else {
+        w = ($('eigen-' + v.id).value || '').trim();
+      }
+      if (w) uit[v.id] = w;
+    });
+    return uit;
   }
 
   function onbekend() {
@@ -198,11 +277,17 @@
     if (!waarde('email')) lokaal.email = 'Vul je e-mailadres in';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(waarde('email'))) lokaal.email = 'Dit e-mailadres klopt niet';
     if (!waarde('message')) lokaal.message = 'Vertel kort waar het om gaat';
+    var eigen = leesEigenVelden();
+    eigenVelden.forEach(function (v) {
+      var w = eigen[v.id];
+      if (!w && v.verplicht) lokaal['eigen:' + v.id] = 'Vul dit in';
+      else if (w && v.soort === 'getal' && !/^-?\d+([.,]\d+)?$/.test(w.replace(/\s/g, ''))) lokaal['eigen:' + v.id] = 'Vul een getal in';
+    });
     if (!$('privacy_akkoord').checked) lokaal.privacy_akkoord = 'Vink dit aan om te kunnen versturen';
     var sleutels = Object.keys(lokaal);
     if (sleutels.length) {
       sleutels.forEach(function (k) { veldFout(k, lokaal[k]); });
-      var eerste = form.querySelector('.heeft-fout input, .heeft-fout textarea');
+      var eerste = form.querySelector('.heeft-fout input, .heeft-fout textarea, .heeft-fout select');
       if (eerste) eerste.focus();
       meldHoogte();
       return;
@@ -218,6 +303,7 @@
       city: waarde('city'),
       gewenste_datum: waarde('gewenste_datum'),
       message: waarde('message'),
+      eigen: eigen,
       privacy_akkoord: true,
       privacy_versie: 'kant-en-klaar-2026-10-05',
       submission_id: submissionId,
@@ -255,7 +341,9 @@
         if (res.b.fout === 'validatie' && res.b.velden) {
           var getoond = false;
           for (var k in res.b.velden) getoond = veldFout(k, res.b.velden[k]) || getoond;
-          if (!getoond) algemeneFout('Controleer de ingevulde gegevens.');
+          // Een eigen veld meldt de server met zijn naam erin ("Vul "Soort dak" in").
+          if (res.b.velden.eigen) algemeneFout(res.b.velden.eigen);
+          else if (!getoond) algemeneFout('Controleer de ingevulde gegevens.');
           meldHoogte();
         } else if (res.b.fout === 'te_veel_pogingen') {
           algemeneFout('Er zijn net veel aanvragen verstuurd. Probeer het over een paar minuten opnieuw.');

@@ -57,7 +57,8 @@ e-mailadres), dan komt het project bij die klant; anders wordt hij aangemaakt, m
 bron **Website**. De beheerder en collega's met het recht *Verkooppijplijn* krijgen
 een melding bij de bel. Op de projectkaart staat in het blok **De aanvraag** onder
 **Ingevuld op de website** precies wat de klant heeft ingevuld (naam, e-mail,
-telefoon, adres, postcode, plaats, gewenste datum), meegestuurde foto's bij de
+telefoon, adres, postcode, plaats, gewenste datum, en daaronder de eigen velden van
+je formulier zoals "Soort dak", met hun eigen naam), meegestuurde foto's bij de
 foto's, en bij **Via** staat **Website**. Een testaanvraag heet "Testaanvraag via de
 website". Het formulier op je website zet je op onder **Instellingen**, tabblad
 **Websiteformulier** (zie instellingen).

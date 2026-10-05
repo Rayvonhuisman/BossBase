@@ -25,7 +25,7 @@
   .veld { margin-bottom: 14px; }
   label { display: block; font-weight: 600; font-size: 13.5px; margin-bottom: 5px; }
   .opt { color: var(--zacht); font-weight: 400; }
-  input[type=text], input[type=email], input[type=tel], input[type=date], textarea {
+  input[type=text], input[type=email], input[type=tel], input[type=date], input[type=number], select, textarea {
     width: 100%; font: inherit; color: inherit; padding: 10px 12px; border: 1px solid var(--rand); border-radius: 8px; background: #fff;
   }
   textarea { min-height: 120px; resize: vertical; }
@@ -38,6 +38,8 @@
   .fotos-lijst button { position: absolute; top: 2px; right: 2px; border: 0; background: rgba(255,255,255,.92); border-radius: 4px; cursor: pointer; font-size: 12px; line-height: 1; padding: 3px 5px; }
   .akkoord { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; font-size: 13.5px; }
   .akkoord input { margin-top: 3px; }
+  .janee { display: flex; gap: 18px; font-weight: 400; }
+  .janee label { display: flex; gap: 6px; align-items: center; font-weight: 400; margin: 0; }
   .akkoord a { color: inherit; }
   .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
   button.verstuur { width: 100%; border: 0; border-radius: 8px; padding: 12px 16px; font: inherit; font-weight: 700; cursor: pointer; background: var(--kleur); color: var(--op-kleur); }
@@ -69,6 +71,7 @@
     </div>
     <div class="veld" data-veld="message"><label for="message">Waar gaat het om?</label><textarea id="message" name="message" maxlength="5000" required placeholder="Wat moet er gebeuren? Hoe groot is het ongeveer?"></textarea></div>
     <div class="veld" data-veld="gewenste_datum" hidden><label for="gewenste_datum">Wanneer zou je het willen? <span class="opt">(optioneel)</span></label><input id="gewenste_datum" name="gewenste_datum" type="date"></div>
+    <div id="eigen-velden"></div>
     <div class="veld" data-veld="fotos" hidden>
       <label for="fotos">Foto's <span class="opt">(optioneel, maximaal 5)</span></label>
       <input id="fotos" type="file" accept="image/*" multiple>

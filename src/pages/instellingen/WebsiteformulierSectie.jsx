@@ -5,8 +5,8 @@ import { useUrlTab } from '../../hooks/useUrlTab.js';
 import { InfoTip } from '../../components/Uitleg.jsx';
 import Rondleiding from '../../components/Rondleiding.jsx';
 import {
-  BOSSBASE_VELDEN, haalWebsiteformulier, slaWebsiteformulierOp, naarDomeinen,
-  insluitcode, formulierLink, stelDoelVoor, leesVeldenVanSite, verstuurTestaanvraag,
+  BOSSBASE_VELDEN, EIGEN_SOORTEN, nieuwEigenVeld, haalWebsiteformulier, slaWebsiteformulierOp, naarDomeinen,
+  naarPaginaUrl, isBossBasePagina, insluitcode, formulierLink, stelDoelVoor, leesVeldenVanSite, verstuurTestaanvraag,
 } from '../../services/websiteformulierService.js';
 import { WebsiteformulierUitleg } from './WebsiteformulierUitleg.jsx';
 
@@ -67,7 +67,7 @@ export function WebsiteformulierSectie({ openDeal }) {
   useEffect(() => {
     let leeft = true;
     haalWebsiteformulier()
-      .then(r => { if (!leeft) return; setOpgeslagen(r); setF(r); })
+      .then(r => { if (!leeft) return; setOpgeslagen(r); setF(r); setPagina(r?.paginaUrl || ''); })
       .catch(e => { if (leeft) setFout(e.message || 'Het websiteformulier kon niet worden geladen.'); })
       .finally(() => { if (leeft) setLaden(false); });
     return () => { leeft = false; };
@@ -107,32 +107,66 @@ export function WebsiteformulierSectie({ openDeal }) {
     if (!doelen.includes('email')) koppelingFouten.push('Koppel het veld voor het e-mailadres: zonder e-mailadres kan BossBase de aanvraag niet aan een klant koppelen.');
   }
 
-  const opslaan = async () => {
-    if (domeinInvoer.trim()) {
-      toast.error('Je hebt een domein ingetypt maar nog niet toegevoegd. Klik op Toevoegen.');
-      return;
-    }
+  const eigenFout = f.eigenVelden.some(v => !v.naam?.trim())
+    ? 'Geef elk eigen veld een naam.'
+    : f.eigenVelden.some(v => v.soort === 'keuze' && (v.opties || []).filter(o => o.trim()).length < 2)
+      ? 'Een keuzeveld heeft minstens twee opties nodig.'
+      : f.koppeling.some(k => k.doel === 'eigen' && k.veld?.trim() && !k.naam?.trim())
+        ? 'Geef elk eigen veld bij de koppeling een naam.'
+        : '';
+
+  // Slaat op wat er nu staat. Geeft het opgeslagen formulier terug, of null.
+  const bewaar = async (wat = f, { stil = false } = {}) => {
     setBezig(true);
     try {
-      const r = await slaWebsiteformulierOp(f);
+      const r = await slaWebsiteformulierOp(wat);
       setOpgeslagen(r);
-      setF(r);
+      // Bij het stille opslaan van "Velden ophalen" blijven de koppelregels op
+      // het scherm staan zoals ze waren, ook die nog niet af zijn.
+      setF(oud => (stil ? { ...r, koppeling: oud.koppeling } : r));
       setVoorbeeldSleutel(n => n + 1);
-      toast.success('Websiteformulier opgeslagen');
+      if (!stil) toast.success('Websiteformulier opgeslagen');
+      return r;
     } catch (e) {
       toast.error(e.message || 'Opslaan mislukt');
+      return null;
     } finally {
       setBezig(false);
     }
   };
 
+  const opslaan = async () => {
+    if (domeinInvoer.trim()) {
+      toast.error('Je hebt een domein ingetypt maar nog niet toegevoegd. Klik op Toevoegen.');
+      return;
+    }
+    if (eigenFout) {
+      toast.error(eigenFout);
+      return;
+    }
+    await bewaar();
+  };
+
+  // "Velden ophalen" zet het domein van de pagina zelf bij je websites en slaat
+  // meteen op, met de link erbij. Zo hoef je niet eerst los op te slaan.
   const haalVelden = async () => {
+    const url = naarPaginaUrl(pagina);
+    if (!url) {
+      toast.error('Dit is geen webadres. Typ het adres van de pagina met je formulier, bijvoorbeeld mijnbedrijf.nl/contact.');
+      return;
+    }
+    setPagina(url);
     setLezen(true);
     setGevonden(null);
     try {
-      const formulieren = await leesVeldenVanSite(pagina.trim());
+      const host = new URL(url).hostname;
+      const { domeinen: erbij } = naarDomeinen(host);
+      const nieuw = isBossBasePagina(url) ? [] : erbij.filter(d => !f.domeinen.includes(d));
+      const r = await bewaar({ ...f, domeinen: [...f.domeinen, ...nieuw], paginaUrl: url }, { stil: true });
+      if (!r) return;
+      if (nieuw.length) toast.success(`${host.replace(/^www\./, '')} staat nu bij je websites en is opgeslagen.`);
+      const formulieren = await leesVeldenVanSite(url);
       setGevonden(formulieren);
-      if (!formulieren.length) toast.error('Geen formulier gevonden op deze pagina. Vul de veldnamen zelf in, of gebruik het kant-en-klare formulier.');
     } catch (e) {
       toast.error(e.message);
     } finally {
@@ -145,12 +179,24 @@ export function WebsiteformulierSectie({ openDeal }) {
     setGevonden(null);
   };
 
+  const zetEigen = (i, velden) => zet('eigenVelden', f.eigenVelden.map((v, j) => (j === i ? { ...v, ...velden } : v)));
+
   const test = async () => {
     setTestBezig(true);
     setTestDeal(undefined);
     try {
-      const velden = f.modus === 'koppelen' ? f.koppeling.map(k => k.doel) : opgeslagen.velden;
-      setTestDeal(await verstuurTestaanvraag(f.token, velden));
+      const velden = opgeslagen.modus === 'koppelen' ? opgeslagen.koppeling.map(k => k.doel) : opgeslagen.velden;
+      // Voorbeeldwaarden voor de eigen velden, zodat ook die in de test zitten.
+      const eigen = {};
+      if (opgeslagen.modus === 'koppelen') {
+        for (const k of opgeslagen.koppeling) if (k.doel === 'eigen') eigen[k.veld] = 'Test';
+      } else {
+        for (const v of opgeslagen.eigenVelden) {
+          eigen[v.id] = v.soort === 'getal' ? '12' : v.soort === 'keuze' ? v.opties[0]
+            : v.soort === 'janee' ? 'ja' : v.soort === 'datum' ? new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10) : 'Test';
+        }
+      }
+      setTestDeal(await verstuurTestaanvraag(f.token, velden, eigen));
     } catch (e) {
       toast.error(e.message);
     } finally {
@@ -216,7 +262,7 @@ export function WebsiteformulierSectie({ openDeal }) {
         />
         <button type="button" className="btn btn-s" onClick={voegDomeinenToe} disabled={!domeinInvoer.trim()}>Toevoegen</button>
       </div>
-      <div style={{ ...hint, marginTop: 6 }}>We voegen het adres met en zonder www toe. Staat je site op Wix zonder eigen domein, vul dan je wixsite.com-adres in.</div>
+      <div style={{ ...hint, marginTop: 6 }}>We voegen het adres met en zonder www toe.</div>
 
       {/* ── 2. Manier ── */}
       <div style={stapKop}>2. Hoe wil je het formulier gebruiken?</div>
@@ -247,6 +293,41 @@ export function WebsiteformulierSectie({ openDeal }) {
                 {v.label}
               </label>
             ))}
+            <div style={{ fontWeight: 600, fontSize: 13, margin: '16px 0 6px' }}>Eigen velden</div>
+            <div style={{ ...hint, marginBottom: 8 }}>Vraag wat jij wilt weten, zoals "Soort dak" of "Oppervlakte in m²".</div>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {f.eigenVelden.map((v, i) => (
+                <div key={v.id} style={{ border: '1px solid var(--br)', borderRadius: 'var(--r8)', padding: 10, display: 'grid', gap: 8 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 140px auto', gap: 8 }}>
+                    <input value={v.naam} onChange={e => zetEigen(i, { naam: e.target.value })} placeholder="Naam, bijv. Soort dak" aria-label="Naam van het veld" maxLength={80} />
+                    <select value={v.soort} onChange={e => zetEigen(i, { soort: e.target.value })} aria-label="Soort veld">
+                      {EIGEN_SOORTEN.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+                    </select>
+                    <button type="button" className="btn btn-s btn-sm" aria-label="Veld verwijderen" onClick={() => zet('eigenVelden', f.eigenVelden.filter((_, j) => j !== i))}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                  {v.soort === 'keuze' && (
+                    <input
+                      value={(v.opties || []).join(', ')}
+                      onChange={e => zetEigen(i, { opties: e.target.value.split(',').map(o => o.trimStart()) })}
+                      placeholder="Opties, gescheiden door komma's: Plat, Schuin, Weet ik niet"
+                      aria-label="Opties"
+                    />
+                  )}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                    <input type="checkbox" style={{ accentColor: 'var(--p)' }} checked={!!v.verplicht} onChange={e => zetEigen(i, { verplicht: e.target.checked })} />
+                    Verplicht
+                  </label>
+                </div>
+              ))}
+              <div>
+                <button type="button" className="btn btn-s btn-sm" onClick={() => zet('eigenVelden', [...f.eigenVelden, nieuwEigenVeld()])} disabled={f.eigenVelden.length >= 20}>
+                  <Plus size={14} /> Eigen veld
+                </button>
+              </div>
+              {eigenFout && <div style={{ ...hint, color: '#b45309' }}>{eigenFout}</div>}
+            </div>
             <div className="f" style={{ marginTop: 12 }}>
               <label>Link naar je privacyverklaring <span style={{ fontWeight: 400, color: 'var(--dl)' }}>(optioneel)</span></label>
               <input value={f.privacyUrl} onChange={e => zet('privacyUrl', e.target.value)} placeholder="https://mijnbedrijf.nl/privacy" />
@@ -268,15 +349,15 @@ export function WebsiteformulierSectie({ openDeal }) {
           <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>Welk veld van jouw formulier hoort waarbij?</div>
           <div style={{ ...hint, marginBottom: 10 }}>
             Vul het adres in van de pagina met je formulier, dan zoeken wij de velden op. Lukt dat niet (bij Wix of een formulier dat pas later laadt), vul dan zelf de naam van het veld in: het <code>name</code>-attribuut.
+            {' '}Past een veld nergens bij, zoals "Soort dak", kies dan <strong>Eigen veld</strong> en geef het een naam.
           </div>
           <div className="f" style={{ display: 'flex', flexDirection: 'row', gap: 8 }}>
             <input value={pagina} onChange={e => setPagina(e.target.value)} placeholder="https://mijnbedrijf.nl/contact" aria-label="Pagina met je formulier" style={{ flex: 1 }} />
-            <button type="button" className="btn btn-s" onClick={haalVelden} disabled={lezen || !pagina.trim() || gewijzigd}
-              title={gewijzigd ? 'Sla eerst op, zodat we je domeinen kennen' : undefined}>
+            <button type="button" className="btn btn-s" onClick={haalVelden} disabled={lezen || bezig || !pagina.trim()}>
               {lezen ? 'Zoeken…' : 'Velden ophalen'}
             </button>
           </div>
-          {gewijzigd && <div style={{ ...hint, marginTop: 4 }}>Sla eerst op om velden op te halen.</div>}
+          <div style={{ ...hint, marginTop: 4 }}>Het adres mag zonder https:// of www. We zetten je website meteen bij stap 1 en slaan op.</div>
           {gevonden?.length > 0 && (
             <div style={{ marginTop: 10, padding: 12, border: '1px solid var(--br)', borderRadius: 'var(--r8)', background: 'var(--bgs)' }}>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
@@ -309,12 +390,25 @@ export function WebsiteformulierSectie({ openDeal }) {
                 <div className="f" style={{ margin: 0, alignSelf: 'start' }}>
                   <select
                     value={k.doel}
-                    onChange={e => zet('koppeling', f.koppeling.map((x, j) => j === i ? { ...x, doel: e.target.value } : x))}
+                    onChange={e => zet('koppeling', f.koppeling.map((x, j) => (j === i
+                      ? { ...x, doel: e.target.value, naam: e.target.value === 'eigen' ? (x.naam || x.label || x.veld) : x.naam }
+                      : x)))}
                     aria-label="Hoort bij"
                   >
                     <option value="">Niet gebruiken</option>
                     {BOSSBASE_VELDEN.map(v => <option key={v.key} value={v.key}>{v.label}</option>)}
+                    <option value="eigen">Eigen veld…</option>
                   </select>
+                  {k.doel === 'eigen' && (
+                    <input
+                      style={{ marginTop: 6 }}
+                      value={k.naam ?? ''}
+                      onChange={e => zet('koppeling', f.koppeling.map((x, j) => j === i ? { ...x, naam: e.target.value } : x))}
+                      placeholder="Naam in BossBase, bijv. Soort dak"
+                      aria-label="Naam van het eigen veld"
+                      maxLength={80}
+                    />
+                  )}
                 </div>
                 <button type="button" className="btn btn-s btn-sm" style={{ alignSelf: 'start' }} aria-label="Regel verwijderen"
                   onClick={() => zet('koppeling', f.koppeling.filter((_, j) => j !== i))}>
@@ -329,6 +423,7 @@ export function WebsiteformulierSectie({ openDeal }) {
             </div>
           </div>
           {koppelingFouten.map(t => <div key={t} style={{ ...hint, color: '#b45309', marginTop: 8 }}>{t}</div>)}
+          {eigenFout && <div style={{ ...hint, color: '#b45309', marginTop: 8 }}>{eigenFout}</div>}
           <div style={{ ...hint, marginTop: 8 }}>
             Twee velden bij hetzelfde BossBase-veld (bijvoorbeeld voornaam en achternaam) worden samengevoegd.
             {' '}Velden die je niet koppelt, gaan niet naar BossBase.
@@ -337,7 +432,7 @@ export function WebsiteformulierSectie({ openDeal }) {
       )}
 
       <div className="fa">
-        <button className="btn btn-p" onClick={opslaan} disabled={bezig || !gewijzigd}>
+        <button className="btn btn-p" onClick={opslaan} disabled={bezig || !gewijzigd || !!eigenFout}>
           {bezig ? 'Opslaan…' : gewijzigd ? 'Opslaan' : 'Opgeslagen'}
         </button>
       </div>

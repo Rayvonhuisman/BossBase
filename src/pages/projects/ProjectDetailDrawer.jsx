@@ -630,7 +630,7 @@ function OverviewTab({
                     <div style={{ fontWeight: 600, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                       {v.key === 'email' ? <a href={`mailto:${v.waarde}`} style={{ color: 'inherit' }}>{v.waarde}</a>
                         : v.key === 'telefoon' ? <a href={`tel:${v.waarde.replace(/[^\d+]/g, '')}`} style={{ color: 'inherit' }}>{v.waarde}</a>
-                        : v.key === 'gewensteDatum' && /^\d{4}-\d{2}-\d{2}$/.test(v.waarde) ? fmtDate(v.waarde)
+                        : (v.key === 'gewensteDatum' || v.eigen) && /^\d{4}-\d{2}-\d{2}$/.test(v.waarde) ? fmtDate(v.waarde)
                         : v.waarde}
                     </div>
                   </div>

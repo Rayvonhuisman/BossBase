@@ -71,8 +71,8 @@ wordt een project in de eerste fase van de pipeline, met de klant erbij: bestaat
 klant al (zelfde e-mailadres), dan komt het project bij die klant, anders wordt hij
 aangemaakt met naam, e-mail, telefoon en adres, en bron **Website**. De beheerder en
 collega's met het recht *Verkooppijplijn* krijgen een melding. Op de projectkaart
-staat in het blok **De aanvraag** precies wat er is ingevuld, en bij **Via** staat
-**Website**. Foto's die de klant meestuurt, staan bij de foto's van de aanvraag.
+staat in het blok **De aanvraag** precies wat er is ingevuld, met de eigen velden
+onderaan onder hun eigen naam, en bij **Via** staat **Website**. Foto's die de klant meestuurt, staan bij de foto's van de aanvraag.
 Het zit in alle pakketten (Starter, Groei en Team).
 
 Naast de titel staat een **info-icoontje**: dat opent een pagina met de uitleg stap
@@ -88,13 +88,23 @@ formulier nog nergens. Een Wix-site zonder eigen domein: vul het wixsite.com-adr
   bedrijfsprofiel. Naam, e-mailadres en omschrijving staan er altijd in; telefoon,
   adres, postcode, plaats, gewenste datum en foto's (maximaal 5) zet je aan of uit.
   Optioneel een link naar je privacyverklaring. Rechts zie je een voorbeeld.
+  Met **+ Eigen veld** voeg je zelf vragen toe, zoals "Soort dak" of "Oppervlakte in
+  m²": een naam, een soort (Tekst, Getal, Keuze uit opties, Ja/nee of Datum; bij een
+  keuze typ je de opties met komma's ertussen, minstens twee) en **Verplicht** aan of
+  uit. Maximaal 20 eigen velden.
 - **Koppelen aan je eigen formulier**: je bestaande formulier (bijvoorbeeld Contact
   Form 7, WPForms of Elementor) blijft werken zoals het werkte, en BossBase krijgt
-  een kopie. Vul de pagina met je formulier in en klik **Velden ophalen** (dat kan
-  pas na opslaan, en alleen voor een pagina op een van je adressen). Kies per veld
-  waar het in BossBase hoort: naam, e-mailadres, telefoonnummer, adres, postcode,
-  plaats, omschrijving van de aanvraag, gewenste datum of foto's. Lukt ophalen niet,
-  vul dan zelf de veldnaam in (het name-attribuut) met **+ Veld toevoegen**. Het
+  een kopie. Vul de pagina met je formulier in (zonder https:// of www mag ook) en
+  klik **Velden ophalen**. De website komt dan vanzelf bij stap 1 te staan en alles
+  wordt meteen opgeslagen; apart opslaan hoeft niet. Kies per veld waar het in
+  BossBase hoort: naam, e-mailadres, telefoonnummer, adres, postcode, plaats,
+  omschrijving van de aanvraag, gewenste datum of foto's. Past een veld nergens bij
+  (bijvoorbeeld "Soort dak"), kies dan **Eigen veld…** en geef het een naam; zo komt
+  het in BossBase binnen. Lukt ophalen niet, dan staat erbij waarom (pagina bestaat
+  niet, website blokkeert ons, formulier wordt pas later geladen, of het is Wix) en
+  wat je kunt doen. Vul dan zelf de veldnaam in (het name-attribuut, bijvoorbeeld
+  your-name bij Contact Form 7 of form_fields[name] bij Elementor) met **+ Veld
+  toevoegen**. Het
   e-mailadres moet gekoppeld zijn. Twee velden bij hetzelfde BossBase-veld (voornaam
   en achternaam) worden samengevoegd. Wat je niet koppelt, gaat niet naar BossBase.
 
@@ -114,7 +124,7 @@ sleutel in; je kunt de code gerust doorsturen naar wie je website bouwt.
 - Squarespace (blok Code), Webflow (Embed) en Jimdo (Widget/HTML) werken als WordPress.
 
 **Stap 4. Testen.** **Testaanvraag versturen** zet een aanvraag van "Test Aanvraag" in
-je pipeline; met **Bekijken** open je hem. Daarna kun je zelf je formulier op je site
+je pipeline, met voorbeeldwaarden in je eigen velden; met **Bekijken** open je hem. Daarna kun je zelf je formulier op je site
 invullen. Testaanvragen kun je gewoon verwijderen.
 
 **Spam en veiligheid:** een verborgen veld dat alleen robots invullen, een limiet per

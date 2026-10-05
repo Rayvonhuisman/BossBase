@@ -270,13 +270,14 @@ export async function getProjectByDeal(dealId) {
  * op can('verkoop').
  *
  * `velden` bevat alleen wat de bezoeker echt heeft ingevuld (lege velden
- * vallen weg), in de volgorde van het formulier.
+ * vallen weg), in de volgorde van het formulier, met daarna de eigen velden
+ * van het bedrijf.
  */
 export async function getAanvraagBron(dealId) {
   if (!dealId) return null
   const { data, error } = await supabase
     .from('inquiries')
-    .select('source, created_at, is_test, name, email, phone, address, postcode, city, gewenste_datum, message, metadata')
+    .select('source, created_at, is_test, name, email, phone, address, postcode, city, gewenste_datum, message, metadata, eigen_velden')
     .eq('deal_id', dealId)
     .order('created_at', { ascending: true })
     .limit(1)
@@ -295,6 +296,11 @@ export async function getAanvraagBron(dealId) {
   ]
     .filter(([, , w]) => w != null && String(w).trim() !== '')
     .map(([key, label, waarde]) => ({ key, label, waarde: String(waarde) }))
+  // De eigen velden van het bedrijf ("Soort dak"), onder de vaste, met de naam
+  // die ze hadden toen de aanvraag binnenkwam.
+  for (const [i, e] of (Array.isArray(r.eigen_velden) ? r.eigen_velden : []).entries()) {
+    if (e?.naam && String(e.waarde ?? '').trim()) velden.push({ key: `eigen-${i}`, label: e.naam, waarde: String(e.waarde), eigen: true })
+  }
   const fotos = Number(r.metadata?.fotos || 0)
   return { bron: r.source || null, binnenOp: r.created_at || null, isTest: !!r.is_test, velden, fotos }
 }

@@ -28,8 +28,8 @@ export function WebsiteformulierUitleg({ onTerug }) {
         Met het websiteformulier komen aanvragen van je eigen website meteen in BossBase. Elke aanvraag wordt een
         project in de eerste fase van je pipeline, met de klant erbij: bestaat de klant al (zelfde e-mailadres), dan
         komt hij bij die klant, anders maken we hem aan. Jij en je collega's met het recht Verkooppijplijn krijgen een
-        melding. Op de projectkaart zie je bij <strong>De aanvraag</strong> precies wat er is ingevuld, en bij Via
-        staat <strong>Website</strong>.
+        melding. Op de projectkaart zie je bij <strong>De aanvraag</strong> precies wat er is ingevuld, je eigen velden
+        onderaan met hun eigen naam, en bij Via staat <strong>Website</strong>.
       </p>
 
       <div style={blok}>
@@ -46,12 +46,21 @@ export function WebsiteformulierUitleg({ onTerug }) {
         <p style={tekst}><strong>Kant-en-klaar formulier</strong>: je hebt nog geen formulier, of je wilt het simpel houden.
           Kies welke velden erin staan (telefoon, adres, postcode, plaats, gewenste datum, foto's). Naam, e-mailadres en
           omschrijving staan er altijd in. Het formulier krijgt de kleur uit je bedrijfsprofiel.</p>
+        <p style={tekst}>Wil je iets vragen wat er niet tussen staat, zoals "Soort dak" of "Oppervlakte in m²"? Klik
+          op <strong>Eigen veld</strong>, geef het een naam en kies de soort: tekst, getal, keuze uit opties (die typ je
+          met komma's ertussen), ja/nee of datum. Vink <strong>Verplicht</strong> aan als de klant het moet invullen.</p>
         <p style={tekst}><strong>Koppelen aan je eigen formulier</strong>: je hebt al een formulier, bijvoorbeeld van
           Contact Form 7, WPForms of Elementor. Dat blijft precies werken zoals nu (je krijgt ook gewoon nog je eigen
-          mail); BossBase krijgt een kopie. Vul het adres van de pagina met je formulier in en klik op{' '}
-          <strong>Velden ophalen</strong>. Kies bij elk veld waar het in BossBase hoort: naam, e-mail, telefoon, adres,
-          postcode, plaats, omschrijving, gewenste datum of foto's. Het e-mailadres moet je koppelen. Twee velden bij
-          hetzelfde BossBase-veld, zoals voornaam en achternaam, voegen we samen.</p>
+          mail); BossBase krijgt een kopie. Vul het adres van de pagina met je formulier in (zonder https:// of www mag
+          ook) en klik op <strong>Velden ophalen</strong>. Je website komt dan meteen bij stap 1 te staan en alles wordt
+          opgeslagen. Kies bij elk veld waar het in BossBase hoort: naam, e-mail, telefoon, adres, postcode, plaats,
+          omschrijving, gewenste datum of foto's. Past een veld nergens bij, zoals "Soort dak", kies dan{' '}
+          <strong>Eigen veld</strong> en geef het de naam die je in BossBase wilt zien. Het e-mailadres moet je koppelen.
+          Twee velden bij hetzelfde BossBase-veld, zoals voornaam en achternaam, voegen we samen.</p>
+        <p style={tekst}>Lukt <strong>Velden ophalen</strong> niet, dan zegt BossBase waarom: de pagina bestaat niet, je
+          website blokkeert ons, of het formulier wordt pas later geladen. Vul de veldnamen dan zelf in met{' '}
+          <strong>Veld toevoegen</strong>: dat is het <code>name</code>-attribuut van het veld (in Contact Form 7
+          bijvoorbeeld <code>your-name</code>, in Elementor <code>form_fields[name]</code>).</p>
       </div>
 
       <div style={blok}>
@@ -98,7 +107,7 @@ export function WebsiteformulierUitleg({ onTerug }) {
       <div style={blok}>
         <h3 style={kop}>Stap 4. Test het</h3>
         <p style={tekst}>Klik op <strong>Testaanvraag versturen</strong>. Er komt dan een aanvraag van "Test Aanvraag"
-          in je pipeline; met <strong>Bekijken</strong> open je hem meteen. Vul daarna zelf het formulier op je website in
+          in je pipeline, met voorbeeldwaarden in je eigen velden; met <strong>Bekijken</strong> open je hem meteen. Vul daarna zelf het formulier op je website in
           om te zien dat ook dat aankomt. Testaanvragen kun je gewoon verwijderen.</p>
       </div>
 
