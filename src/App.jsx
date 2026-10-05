@@ -15,6 +15,7 @@ const Pipeline = lazy(() => import('./pages/BbDashboard.jsx').then(m => ({ defau
 const ProjectDetailDrawer = lazy(() => import('./pages/projects/ProjectDetailDrawer.jsx').then(m => ({ default: m.ProjectDetailDrawer })));
 import { getProjectByDeal } from './services/projectsService.js';
 import { leesRoute, bouwRoute } from './lib/route.js';
+import { vangMoneybirdTerug } from './lib/moneybirdTerug.js';
 import { schrijfEntry, sluitDelta, huidigeIndex } from './lib/geschiedenis.js';
 import { useEscapeSluit } from './hooks/useEscapeSluit.js';
 const AbonnementPage = lazy(() => import('./pages/AbonnementPage.jsx'));
@@ -97,6 +98,10 @@ const PubliekLaden = <div className="auth-shell" />;
 // kader. Eén constante in plaats van overal een aparte tak: elke plek die het
 // pad leest of schrijft gebruikt deze waarde.
 const BASISPAD = isDemo ? '/demo' : '/dashboard';
+
+// Terug van Moneybird (OAuth): vóórdat de router de URL leest. Zie
+// lib/moneybirdTerug.js.
+vangMoneybirdTerug(BASISPAD);
 
 // ── Terug naar de link na inloggen ─────────────────────────────────────────
 // Wie uitgelogd een link uit een mail opent (/dashboard/werkbonnen/<id>,

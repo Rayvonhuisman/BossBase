@@ -54,8 +54,12 @@ import { comprimeerAfbeelding, LOGO_MAX_ZIJDE } from '../utils/afbeeldingComprim
 import {
   getConnection,
   getLaatsteSyncRun,
-  saveConnection,
-  testMoneybirdConnection,
+  getMoneybirdKoppeling,
+  startMoneybirdKoppeling,
+  verwerkMoneybirdTerug,
+  kiesMoneybirdAdministratie,
+  testMoneybirdKoppeling,
+  loskoppelenMoneybird,
   importKostenVanuitMoneybird,
   syncContactenMetMoneybird,
   saveSnelStartConnection,
@@ -72,6 +76,7 @@ import {
   syncContactenMetAfas,
 } from '../services/accountingService.js';
 import { bevestig } from '../lib/bevestig.jsx';
+import { neemMoneybirdTerug, MONEYBIRD_TERUG_PARAM } from '../lib/moneybirdTerug.js';
 
 const ALL_TEMPLATE_CONFIGS = [
   { type: 'offerte', label: 'Offerte', vars: ['klant_naam','bedrijfsnaam','offerte_nummer','totaal_bedrag','vervaldatum','link'], showAutoToggle: false, showAutoDagen: false },
@@ -291,10 +296,13 @@ export function InstellingenPage({ openDeal } = {}) {
 
   // Moneybird
   const [mbConnection, setMbConnection] = useState(null);
-  const [mbForm, setMbForm] = useState({ apiToken: '', administrationId: '' });
-  const [mbEditing, setMbEditing] = useState(false);
+  // Status uit get_moneybird_koppeling: gekoppeld, administratie, eventuele fout.
+  const [mbKoppeling, setMbKoppeling] = useState(null);
+  // Terug van Moneybird: null | 'bezig' | { state, administraties, gekozen } | { fout }.
+  const [mbTerug, setMbTerug] = useState(null);
+  const [mbStarten, setMbStarten] = useState(false);
   const [mbTesting, setMbTesting] = useState(false);
-  const [mbSaving, setMbSaving] = useState(false);
+  const [mbLoskoppelen, setMbLoskoppelen] = useState(false);
   const [mbImporting, setMbImporting] = useState(false);
   const [mbSyncingContacten, setMbSyncingContacten] = useState(false);
 
@@ -454,10 +462,8 @@ export function InstellingenPage({ openDeal } = {}) {
         // Tokens worden NOOIT geprefill: ze zijn server-side afgeschermd en niet
         // meer leesbaar. We tonen alleen de status; niet-geheime velden
         // (administratie/omgeving) mogen wel voor het gemak vooringevuld worden.
-        if (mbConn) {
-          setMbConnection(mbConn);
-          setMbForm({ apiToken: '', administrationId: mbConn.administrationId });
-        }
+        if (mbConn) setMbConnection(mbConn);
+        getMoneybirdKoppeling().then(setMbKoppeling).catch(() => {});
         if (ssConn) {
           setSsConnection(ssConn);
           setSsForm({ clientKey: '' });
@@ -487,6 +493,40 @@ export function InstellingenPage({ openDeal } = {}) {
   // tweede ronde niets meer terwijl de opruiming het wachten van de eerste al
   // heeft gestopt. Resultaat: eeuwig "Bezig met koppelen...". Nu draagt de state
   // de bedoeling, en die overleeft een herstart van het effect.
+  // ── Terug van Moneybird ────────────────────────────────────────────────────
+  // Code en state staan in sessionStorage (App.jsx ving de terugkeer-URL op).
+  // Eén keer verwerken: een ref, zodat StrictMode's dubbele effect de code niet
+  // twee keer inwisselt.
+  const mbTerugVerwerkt = useRef(false);
+  useEffect(() => {
+    if (mbTerugVerwerkt.current || !canCompanySettings) return;
+    let params;
+    try { params = new URLSearchParams(window.location.search); } catch { return; }
+    if (params.get(MONEYBIRD_TERUG_PARAM) !== 'terug') return;
+    mbTerugVerwerkt.current = true;
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete(MONEYBIRD_TERUG_PARAM);
+      window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    } catch { /* URL niet beschikbaar */ }
+
+    const terug = neemMoneybirdTerug();
+    if (!terug?.state) return;
+    setMbTerug('bezig');
+    verwerkMoneybirdTerug(terug)
+      .then(async r => {
+        if (r.klaar) {
+          setMbTerug(null);
+          toast.success(`Moneybird is gekoppeld met ${r.administratie}`);
+          meldAdministratieCheck(r);
+          await ververMoneybird();
+        } else {
+          setMbTerug({ state: r.state, administraties: r.administraties, gekozen: r.administraties?.[0]?.id || '' });
+        }
+      })
+      .catch(err => setMbTerug({ fout: err.message || 'Koppelen mislukt' }));
+  }, [canCompanySettings]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const ssRetourVerwerkt = useRef(false);
 
   useEffect(() => {
@@ -908,41 +948,84 @@ export function InstellingenPage({ openDeal } = {}) {
     }
   };
 
-  const handleMbTest = async () => {
-    if (!mbForm.apiToken || !mbForm.administrationId) {
-      toast.error('Vul API token en administratie-ID in');
-      return;
+  // Na (ont)koppelen beide statussen opnieuw ophalen: de oude getConnection
+  // voedt de sync-knoppen, get_moneybird_koppeling de koppelkaart.
+  const ververMoneybird = async () => {
+    const [conn, koppeling] = await Promise.all([
+      getConnection().catch(() => null),
+      getMoneybirdKoppeling().catch(() => null),
+    ]);
+    setMbConnection(conn);
+    if (koppeling) setMbKoppeling(koppeling);
+  };
+
+  // Naar Moneybird om in te loggen en toestemming te geven. Een volledige
+  // navigatie, geen popup: Moneybird toont een eigen inlogscherm, en een
+  // geblokkeerde popup is een doodlopend spoor. Moneybird stuurt de browser
+  // terug naar /dashboard/koppelen/moneybird (zie lib/moneybirdTerug.js).
+  const handleMbKoppelen = async () => {
+    setMbStarten(true);
+    try {
+      window.location.href = await startMoneybirdKoppeling();
+    } catch (err) {
+      toast.error(err.message || 'De Moneybird-koppeling kon niet worden gestart');
+      setMbStarten(false);
     }
+  };
+
+  const meldAdministratieCheck = (r) => {
+    if (r?.check?.status === 'gewisseld') {
+      const h = r.check.hersteld || {};
+      toast.info(
+        `${r.check.melding} (${h.klanten ?? 0} klanten, ${h.leveranciers ?? 0} leveranciers, `
+        + `${h.facturen ?? 0} facturen en ${h.kosten ?? 0} kosten worden opnieuw geboekt.)`,
+        { duration: 12000 },
+      );
+    }
+  };
+
+  const handleMbKies = async () => {
+    if (!mbTerug?.state || !mbTerug?.gekozen) return;
+    setMbTerug(t => ({ ...t, bezig: true }));
+    try {
+      const r = await kiesMoneybirdAdministratie(mbTerug.state, mbTerug.gekozen);
+      setMbTerug(null);
+      toast.success(`Moneybird is gekoppeld met ${r.administratie}`);
+      meldAdministratieCheck(r);
+      await ververMoneybird();
+    } catch (err) {
+      setMbTerug({ fout: err.message || 'Koppelen mislukt' });
+    }
+  };
+
+  const handleMbTest = async () => {
     setMbTesting(true);
     try {
-      const result = await testMoneybirdConnection(mbForm.apiToken, mbForm.administrationId);
-      if (result?.success) {
-        toast.success('Verbinding met Moneybird gelukt');
-      } else {
-        toast.error(result?.error || 'Verbinding mislukt');
-      }
+      const r = await testMoneybirdKoppeling();
+      toast.success(`Verbinding met Moneybird gelukt (${r.administratie})`);
+      await ververMoneybird();
     } catch (err) {
       toast.error(err.message || 'Verbinding mislukt');
+      await ververMoneybird();
     } finally {
       setMbTesting(false);
     }
   };
 
-  const handleMbSave = async () => {
-    if (!mbForm.apiToken || !mbForm.administrationId) {
-      toast.error('Vul API token en administratie-ID in');
-      return;
-    }
-    setMbSaving(true);
+  const handleMbLoskoppelen = async () => {
+    if (!(await bevestig(
+      'Moneybird loskoppelen? Er wordt niets verwijderd uit je boekhouding of uit BossBase, '
+      + 'maar er wordt niet meer gesynchroniseerd. BossBase trekt zijn toegang bij Moneybird in.'
+    ))) return;
+    setMbLoskoppelen(true);
     try {
-      const saved = await saveConnection(mbForm);
-      setMbConnection(saved);
-      setMbEditing(false);
-      toast.success('Moneybird-koppeling opgeslagen');
+      await loskoppelenMoneybird();
+      await ververMoneybird();
+      toast.success('Moneybird losgekoppeld');
     } catch (err) {
-      toast.error(err.message || 'Opslaan mislukt');
+      toast.error(err.message || 'Loskoppelen mislukt');
     } finally {
-      setMbSaving(false);
+      setMbLoskoppelen(false);
     }
   };
 
@@ -1556,42 +1639,76 @@ export function InstellingenPage({ openDeal } = {}) {
       },
     },
 
-    // Moneybird
+    // Moneybird — koppelen via OAuth: inloggen bij Moneybird, toestemming geven
+    // en een administratie kiezen. Geen token plakken; de tokens blijven
+    // server-side (edge function moneybird-oauth).
     {
       id: 'moneybird',
       naam: 'Moneybird',
       omschrijving: 'Zet betaalde facturen door naar Moneybird en haal inkoopfacturen op als kostenregels.',
       logo: { src: '/brand/moneybird.svg', alt: 'Moneybird' },
-      status: { actief: !!mbConnection?.connected, label: mbConnection?.connected ? 'Actief' : 'Niet gekoppeld' },
+      status: {
+        actief: !!mbKoppeling?.gekoppeld && !mbKoppeling?.fout,
+        label: mbKoppeling?.gekoppeld
+          ? (mbKoppeling.fout ? 'Opnieuw koppelen' : 'Actief')
+          : mbTerug ? 'Koppelen...' : 'Niet gekoppeld',
+      },
       gate: boekhoudGate,
       koppeling: {
-        velden: [
-          {
-            key: 'token', label: 'API token', type: 'password', name: 'moneybird-api-token',
-            value: mbForm.apiToken, onChange: v => setMbForm(f => ({ ...f, apiToken: v })),
-            placeholder: 'Moneybird API token...',
-            disabled: !!(mbConnection?.connected && !mbEditing),
+        activatie: mbKoppeling?.gekoppeld ? {
+          titel: 'Gekoppeld met Moneybird',
+          tekst: `Administratie: ${mbKoppeling.administratieNaam || mbKoppeling.administrationId}. `
+            + 'Loskoppelen stopt de synchronisatie; er wordt niets verwijderd.',
+          actie: {
+            label: mbLoskoppelen ? 'Loskoppelen...' : 'Loskoppelen',
+            onClick: handleMbLoskoppelen,
+            disabled: mbLoskoppelen,
+            variant: 's',
           },
-          {
-            key: 'administratie', label: 'Administratie-ID',
-            hint: <>Te vinden in de URL: moneybird.com/<strong>123456789</strong>/…</>,
-            value: mbForm.administrationId, onChange: v => setMbForm(f => ({ ...f, administrationId: v })),
-            placeholder: 'bijv. 123456789',
-            disabled: !!(mbConnection?.connected && !mbEditing),
+        } : {
+          titel: 'Koppelen met Moneybird',
+          tekst: 'Je gaat naar Moneybird, logt daar in en geeft BossBase toegang. '
+            + 'Heb je meer administraties, dan kies je er daarna één. Daarna kom je hier vanzelf terug.',
+          melding: mbTerug === 'bezig' ? (
+            <div style={{ fontSize: '.8rem', color: 'var(--dm)' }}>Even geduld: de koppeling wordt afgerond…</div>
+          ) : mbTerug?.administraties ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ fontSize: '.82rem', color: 'var(--dm)' }}>
+                Je Moneybird-account heeft meer administraties. Welke hoort bij dit bedrijf?
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <select
+                  value={mbTerug.gekozen}
+                  onChange={e => setMbTerug(t => ({ ...t, gekozen: e.target.value }))}
+                  style={{ flex: '1 1 220px', minWidth: 0 }}
+                >
+                  {mbTerug.administraties.map(a => <option key={a.id} value={a.id}>{a.naam}</option>)}
+                </select>
+                <button className="btn btn-p btn-sm" onClick={handleMbKies} disabled={!mbTerug.gekozen || mbTerug.bezig}>
+                  {mbTerug.bezig ? 'Koppelen...' : 'Deze administratie koppelen'}
+                </button>
+              </div>
+            </div>
+          ) : null,
+          actie: mbTerug?.administraties ? null : {
+            label: mbStarten || mbTerug === 'bezig' ? 'Bezig met koppelen...' : 'Koppel met Moneybird',
+            onClick: handleMbKoppelen,
+            disabled: mbStarten || mbTerug === 'bezig',
           },
-        ],
-        acties: mbConnection?.connected && !mbEditing
-          ? [{ label: 'Wijzigen', onClick: () => setMbEditing(true) }]
-          : [
-              {
-                label: mbTesting ? 'Testen...' : 'Verbinding testen', onClick: handleMbTest,
-                disabled: mbTesting || !mbForm.apiToken || !mbForm.administrationId,
-              },
-              {
-                label: mbSaving ? 'Opslaan...' : 'Opslaan', variant: 'p', onClick: handleMbSave,
-                disabled: mbSaving || !mbForm.apiToken || !mbForm.administrationId,
-              },
-            ],
+        },
+        velden: [],
+        fout: mbTerug?.fout ? <><strong>Koppelen met Moneybird is mislukt.</strong> {mbTerug.fout}</>
+          : mbKoppeling?.gekoppeld && mbKoppeling.fout ? (
+            <>
+              <strong>De koppeling werkt niet meer.</strong> {mbKoppeling.fout}{' '}
+              <button className="btn btn-s btn-sm" onClick={handleMbKoppelen} disabled={mbStarten} style={{ marginLeft: 6 }}>
+                Opnieuw koppelen
+              </button>
+            </>
+          ) : null,
+        acties: mbKoppeling?.gekoppeld
+          ? [{ label: mbTesting ? 'Testen...' : 'Verbinding testen', onClick: handleMbTest, disabled: mbTesting }]
+          : [],
       },
       // Geen instellingen: de werkwijze ligt vast (zie toelichting bij Synchroniseren).
       instellingen: null,

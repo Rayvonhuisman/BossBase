@@ -68,12 +68,67 @@ export async function saveConnection({ apiToken, administrationId, provider = 'm
   return rpcRowToStatus(data)
 }
 
-export async function testMoneybirdConnection(apiToken, administrationId) {
-  const { data, error } = await supabase.functions.invoke('moneybird-test', {
-    body: { api_token: apiToken, administration_id: administrationId },
-  })
-  if (error) throw error
+// ── Moneybird: koppelen via OAuth ───────────────────────────────────────────
+// Geen token plakken meer: de klant logt in bij Moneybird en kiest een
+// administratie. De tokens blijven server-side (edge function moneybird-oauth).
+
+// Een fout uit een edge function staat in de body; supabase-js geeft dan alleen
+// "non-2xx status code". Haal de echte melding eruit.
+async function moneybirdActie(body) {
+  const { data, error } = await supabase.functions.invoke('moneybird-oauth', { body })
+  if (error) {
+    let melding = error.message
+    try { melding = (await error.context?.json?.())?.error || melding } catch { /* geen json */ }
+    throw new Error(melding)
+  }
+  if (data?.success === false) throw new Error(data.error || 'Er ging iets mis met de Moneybird-koppeling')
   return data
+}
+
+/** Status van de Moneybird-koppeling, zonder geheimen. */
+export async function getMoneybirdKoppeling() {
+  const { data, error } = await supabase.rpc('get_moneybird_koppeling')
+  if (error) throw error
+  const r = (data || [])[0]
+  if (!r) return { gekoppeld: false }
+  return {
+    gekoppeld: !!r.gekoppeld,
+    administrationId: r.administration_id || '',
+    administratieNaam: r.administratie_naam || '',
+    fout: r.koppeling_fout || null,
+    lastSyncedAt: r.last_synced_at || null,
+    volledigGesynctOp: r.volledig_gesynct_op || null,
+    webhookActief: !!r.webhook_actief,
+  }
+}
+
+/** Geeft de inlog-URL van Moneybird; de aanroeper stuurt de browser erheen. */
+export async function startMoneybirdKoppeling() {
+  const r = await moneybirdActie({ actie: 'start' })
+  return r.url
+}
+
+/** Verwerkt de terugkeer van Moneybird. Geeft { klaar } of { administraties, state }. */
+export async function verwerkMoneybirdTerug({ code, state, fout }) {
+  const r = await moneybirdActie({ actie: 'terug', code, state, fout })
+  vergeetKoppelStatus('moneybird')
+  return r
+}
+
+export async function kiesMoneybirdAdministratie(state, administrationId) {
+  const r = await moneybirdActie({ actie: 'kies', state, administration_id: administrationId })
+  vergeetKoppelStatus('moneybird')
+  return r
+}
+
+export async function testMoneybirdKoppeling() {
+  return moneybirdActie({ actie: 'test' })
+}
+
+export async function loskoppelenMoneybird() {
+  const r = await moneybirdActie({ actie: 'los' })
+  vergeetKoppelStatus('moneybird')
+  return r
 }
 
 // Koppelstatus kort cachen, zodat de guards hieronder geen extra verkeer geven.
