@@ -1803,7 +1803,11 @@ export function ProjectDetailDrawer({
   }, [fullscreen]);
 
   const loadAll = async () => {
-    setLoading(true);
+    // Alleen de eerste keer (of bij een ander project) "Project laden…". Een
+    // verversing daarna (refreshKey, na bijvoorbeeld een toewijzing) werkt de
+    // kaart stil bij: anders verdween het hele overzicht even, en ging de lijst
+    // "Behandeld door" na elke aangevinkte naam dicht.
+    if (!project || project.id !== projectId) setLoading(true);
     setNietLaadbaar('');
     const deels = [];
     const of = (belofte, terug) => belofte.catch(e => { deels.push(e); return terug; });
