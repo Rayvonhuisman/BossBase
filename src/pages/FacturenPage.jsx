@@ -1028,7 +1028,11 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
         // hebben geen {{betaalinstructie}}), dan een regel met de betaalgegevens
         // vóór de afsluiting. Creditnota's niet: daar valt niets te betalen.
         if (ibanTekst && !factuur.isCredit && !body.replace(/\s/g, '').includes(docBedrijf.iban.replace(/\s/g, '').toUpperCase())) {
-          body = insertPayButtonBeforeClosing(body, `<p>Betaalgegevens: ${escapeHtml(ibanTekst)}, onder vermelding van ${escapeHtml(factuur.betalingskenmerk || factuur.nummer)}.</p>`);
+          // "Onder vermelding van …" staat er één keer in: noemt het sjabloon het
+          // al (het standaardsjabloon doet dat), dan alleen het rekeningnummer.
+          const kenmerkAlGenoemd = /onder\s+vermelding\s+van/i.test(body.replace(/<[^>]*>/g, ' '));
+          const kenmerkTekst = kenmerkAlGenoemd ? '' : `, onder vermelding van ${escapeHtml(factuur.betalingskenmerk || factuur.nummer)}`;
+          body = insertPayButtonBeforeClosing(body, `<p>Betaalgegevens: ${escapeHtml(ibanTekst)}${kenmerkTekst}.</p>`);
         }
         if (alive) setForm({ to: customer?.email || '', subject: sub, body });
       } catch {
