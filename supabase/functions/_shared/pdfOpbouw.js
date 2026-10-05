@@ -64,14 +64,26 @@ export const fmtDate = d => {
   return `${parts[2]}-${parts[1]}-${parts[0]}`;
 };
 
+// Altijd Nederlandse tijd: op de server (Deno, UTC) stond een ondertekening
+// van 14:39 anders als 12:39 in het exemplaar.
 export const fmtDateTime = d => {
   if (!d) return '';
   try {
     return new Date(d).toLocaleString('nl-NL', {
       day: 'numeric', month: 'numeric', year: 'numeric',
       hour: '2-digit', minute: '2-digit', second: '2-digit',
+      timeZone: 'Europe/Amsterdam',
     });
   } catch { return String(d); }
+};
+
+// Datum van een tijdstip (ISO) als DD-MM-JJJJ, in Nederlandse tijd. Een
+// handtekening van 00:30 viel met .slice(0, 10) op de UTC-dag ervoor.
+export const fmtDatumVanTijdstip = d => {
+  if (!d) return '';
+  try {
+    return fmtDate(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Amsterdam', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(d)));
+  } catch { return fmtDate(String(d).slice(0, 10)); }
 };
 
 const TYPE_OMSCHR_DEFAULT = {
@@ -250,7 +262,7 @@ export async function buildPdf(doc, type, document, regels, customer, company, o
   } else {
     metaRow('Geldig tot', fmtDate(document.geldigTot));
     const signedAt = document.signedAt || document.signed_at;
-    if (signedAt) metaRow('Ondertekend', fmtDate(signedAt?.slice(0, 10)));
+    if (signedAt) metaRow('Ondertekend', fmtDatumVanTijdstip(signedAt));
   }
 
   y = Math.max(y + 26, metaY) + 5;
@@ -582,7 +594,7 @@ export async function buildPdf(doc, type, document, regels, customer, company, o
     tc(C.muted);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
-    doc.text(`Akkoord · ${fmtDate(signedAt?.slice(0, 10))}`, W - M, y + 8, { align: 'right' });
+    doc.text(`Akkoord · ${fmtDatumVanTijdstip(signedAt)}`, W - M, y + 8, { align: 'right' });
 
     // Velden
     let fy = y + 20;
@@ -771,7 +783,7 @@ export async function buildWerkbonPdf(doc, werkbon, data, customer, company, omg
     metaRow('Locatie', kort);
   }
   if (werkbon?.ondertekendOp) {
-    metaRow('Ondertekend', fmtDate(String(werkbon.ondertekendOp).slice(0, 10)));
+    metaRow('Ondertekend', fmtDatumVanTijdstip(werkbon.ondertekendOp));
   }
 
   y = Math.max(y + 26, metaY) + 5;
@@ -1121,7 +1133,7 @@ export async function buildWerkbonPdf(doc, werkbon, data, customer, company, omg
     tc(C.dark); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
     doc.text('Akkoord met het uitgevoerde werk', M + 13, y + 8);
     tc(C.muted); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5);
-    doc.text(`Ondertekend · ${fmtDate(String(ondertekendOp).slice(0, 10))}`, W - M, y + 8, { align: 'right' });
+    doc.text(`Ondertekend · ${fmtDatumVanTijdstip(ondertekendOp)}`, W - M, y + 8, { align: 'right' });
 
     let fy = y + 20;
     [['Ondertekend door', naam || ''],
