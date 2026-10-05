@@ -42,6 +42,7 @@ import { vandaagIso } from '../lib/datumTijd.js';
 import { useUrlTab } from '../hooks/useUrlTab.js';
 import { ActivityEditModal, NewCalendarEventModal, NewJobCostModal } from '../components/SharedModals.jsx';
 import { AgendaWerkbonPlanModal } from '../components/AgendaWerkbonPlanModal.jsx';
+import { bevestig } from '../lib/bevestig.jsx';
 
 // ── Local date helpers ───────────────────────────────────────
 // All comparisons use LOCAL date parts (never toISOString) so a day can't
@@ -416,7 +417,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
     catch (e) { toast.error(e.message || 'Koppelen mislukt'); setGcal(g => ({ ...g, busy: false })); }
   };
   const handleGcalDisconnect = async () => {
-    if (!window.confirm('Google Agenda-koppeling verbreken?')) return;
+    if (!(await bevestig('Google Agenda-koppeling verbreken?'))) return;
     setGcal(g => ({ ...g, busy: true }));
     try {
       await disconnectGoogleCalendar();
@@ -955,7 +956,7 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
     const msg = kostenBron
       ? `Weet je zeker dat je deze kostenregel wilt verwijderen? Dit verwijdert alleen de regel in BossBase, niet in ${kostenBron}.`
       : 'Weet je zeker dat je deze kostenregel wilt verwijderen?';
-    if (!window.confirm(msg)) return;
+    if (!(await bevestig(msg))) return;
     setDeleting(true);
     try {
       // De kostenpost is weg zodra deleteJobCost klaar is; een waarschuwing gaat

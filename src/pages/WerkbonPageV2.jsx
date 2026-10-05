@@ -63,6 +63,7 @@ import { createProjectKost } from '../services/projectKostenService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { documentUrl } from '../services/documentService.js';
 import Rondleiding from '../components/Rondleiding.jsx';
+import { bevestig } from '../lib/bevestig.jsx';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 
@@ -1899,7 +1900,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
   };
 
   const handleDeleteTaak = async t => {
-    if (!confirm(`Taak "${t.omschrijving}" verwijderen?`)) return;
+    if (!(await bevestig(`Taak "${t.omschrijving}" verwijderen?`))) return;
     try {
       await deleteWerkbonTaak(t.id);
       const newTaken = taken.filter(x => x.id !== t.id);
@@ -1950,7 +1951,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
   };
 
   const handleDeleteMaterial = async m => {
-    if (!confirm(`Materiaal "${m.naam}" verwijderen?`)) return;
+    if (!(await bevestig(`Materiaal "${m.naam}" verwijderen?`))) return;
     try {
       await deleteWerkbonMateriaal(m.id);
       setMaterialen(prev => prev.filter(x => x.id !== m.id));
@@ -2103,7 +2104,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
   };
 
   const handleDeleteFoto = async foto => {
-    if (!confirm('Foto verwijderen?')) return;
+    if (!(await bevestig('Foto verwijderen?'))) return;
     try {
       await deleteWerkbonFoto(foto.id, foto.url);
       setFotos(prev => prev.filter(f => f.id !== foto.id));
@@ -2135,7 +2136,7 @@ export function WerkbonPageV2({ preOpenWerkbonId, onItemOpen, onItemClose, onNav
   };
 
   const handleDeleteMeerwerk = async t => {
-    if (!confirm(`Meerwerk "${t.omschrijving}" verwijderen?`)) return;
+    if (!(await bevestig(`Meerwerk "${t.omschrijving}" verwijderen?`))) return;
     try {
       await deleteWerkbonTaak(t.id);
       setMeerwerk(prev => prev.filter(x => x.id !== t.id));

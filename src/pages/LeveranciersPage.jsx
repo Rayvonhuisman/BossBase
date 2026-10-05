@@ -19,6 +19,7 @@ import AdresZoeker from '../components/AdresZoeker.jsx';
 import {
   createLeverancier, deleteLeverancier, getLeverancierKostenTotalen,
 } from '../services/leverancierService.js';
+import { bevestig } from '../lib/bevestig.jsx';
 
 const LEEG = {
   naam: '', contactpersoon: '', email: '', telefoon: '', mobiel: '', website: '',
@@ -180,7 +181,7 @@ export default function LeveranciersPage({ openLeverancier }) {
       );
       return;
     }
-    if (!confirm('Weet je zeker dat je deze leverancier wilt verwijderen?')) return;
+    if (!(await bevestig('Weet je zeker dat je deze leverancier wilt verwijderen?'))) return;
     try {
       const waarschuwing = await deleteLeverancier(l.id);
       if (waarschuwing) toast.error(waarschuwing, { duration: 10000 });

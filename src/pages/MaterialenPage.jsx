@@ -18,6 +18,7 @@ import {
   listMaterialen, createMateriaal, updateMateriaal, deleteMateriaal, marge, EENHEDEN,
 } from '../services/materiaalService.js';
 import LeverancierSelect from '../components/LeverancierSelect.jsx';
+import { bevestig } from '../lib/bevestig.jsx';
 
 const LEEG = {
   naam: '', eenheid: 'stuk', inkoopprijs: '', verkoopprijs: '',
@@ -181,7 +182,7 @@ export default function MaterialenPage() {
     m.naam.toLowerCase().includes(term) || (m.artikelnummer || '').toLowerCase().includes(term));
 
   const verwijder = async m => {
-    if (!confirm(`"${m.naam}" verwijderen? Werkbonregels die dit materiaal gebruiken blijven bestaan met hun eigen prijzen.`)) return;
+    if (!(await bevestig(`"${m.naam}" verwijderen? Werkbonregels die dit materiaal gebruiken blijven bestaan met hun eigen prijzen.`))) return;
     try {
       await deleteMateriaal(m.id);
       setLijst(l => l.filter(x => x.id !== m.id));

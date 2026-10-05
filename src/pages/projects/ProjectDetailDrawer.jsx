@@ -47,6 +47,7 @@ import NotitieLog, { toLogItem } from '../../components/NotitieLog.jsx';
 import { getTeamMembers, createMentionNotifications, notifyNewAssignees } from '../../services/notificatieService.js';
 import { statusInfo } from '../../utils/statusColors.js';
 import Rondleiding from '../../components/Rondleiding.jsx';
+import { bevestig } from '../../lib/bevestig.jsx';
 
 const TABS = [
   { id: 'overview',   label: 'Overzicht' },
@@ -489,7 +490,7 @@ function OverviewTab({
   };
 
   const verwijderFoto = async (foto) => {
-    if (!window.confirm('Deze foto verwijderen?')) return;
+    if (!(await bevestig('Deze foto verwijderen?'))) return;
     try {
       await deleteProjectFoto(foto.id, foto.url);
       setFotos(l => l.filter(x => x.id !== foto.id));
@@ -1855,7 +1856,7 @@ export function ProjectDetailDrawer({
   };
 
   const handleDeleteNote = async id => {
-    if (!confirm('Notitie verwijderen?')) return;
+    if (!(await bevestig('Notitie verwijderen?'))) return;
     try {
       await deleteProjectNote(id);
       setNotes(prev => prev.filter(n => n.id !== id));
@@ -1865,7 +1866,7 @@ export function ProjectDetailDrawer({
   };
 
   const handleDeleteProject = async () => {
-    if (!confirm(`Project "${project?.name}" definitief verwijderen?`)) return;
+    if (!(await bevestig(`Project "${project?.name}" definitief verwijderen?`))) return;
     try {
       await deleteProject(projectId);
       toast.success('Project verwijderd');

@@ -256,7 +256,7 @@ export default function OfferteSigneren({ token }) {
         window.open(pdfUrl, '_blank')
       }
     } catch (err) {
-      alert('PDF genereren mislukt: ' + err.message)
+      setInvoerFout('De PDF kon niet worden gemaakt. Probeer het opnieuw.')
     } finally {
       setPdfLoading(false)
     }

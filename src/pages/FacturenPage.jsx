@@ -35,6 +35,7 @@ import { logTijdlijnSafe } from '../services/klantTijdlijnService.js';
 import { statusInfo } from '../utils/statusColors.js';
 import ActieMenu from '../components/ActieMenu.jsx';
 import { opNaam } from '../lib/sorteren.js';
+import { bevestig } from '../lib/bevestig.jsx';
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 
@@ -1334,7 +1335,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
       toast.error('Een verstuurde factuur of creditnota kun je niet verwijderen. Crediteer hem in plaats daarvan.');
       return;
     }
-    if (!window.confirm(`Factuur ${f.nummer} verwijderen?`)) return;
+    if (!(await bevestig(`Factuur ${f.nummer} verwijderen?`))) return;
     try {
       // De factuur is weg zodra deleteFactuur klaar is; een waarschuwing gaat
       // alleen over de prullenbak. De lijst werken we dus hoe dan ook bij.

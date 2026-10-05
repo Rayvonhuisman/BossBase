@@ -30,6 +30,7 @@ import AdresZoeker from './AdresZoeker.jsx';
 import { useUploads } from '../lib/uploadContext.jsx';
 import { getTeamMembers, createMentionNotifications, notifyNewAssignees } from '../services/notificatieService.js';
 import { MemberMultiSelect } from './MemberMultiSelect.jsx';
+import { bevestig } from '../lib/bevestig.jsx';
 
 const isEmail = v => !v || /^\S+@\S+\.\S+$/.test(v);
 
@@ -1290,7 +1291,7 @@ export function ActivityEditModal({ activity, customers, deals, onClose, onSaved
 
   const handleDelete = async () => {
     if (!canEdit) return;
-    if (!window.confirm('Activiteit verwijderen? Dit kan niet ongedaan worden gemaakt.')) return;
+    if (!(await bevestig('Activiteit verwijderen? Dit kan niet ongedaan worden gemaakt.'))) return;
     setDeleting(true);
     try {
       await deleteActivity(activity.id);

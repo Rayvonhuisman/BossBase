@@ -28,6 +28,7 @@ import {
   deleteKostenCategorie, getCategorieGebruik,
 } from '../services/kostenCategorieService.js';
 import { ververKostenCategorieen } from '../hooks/useKostenCategorieen.js';
+import { bevestig } from '../lib/bevestig.jsx';
 
 // Welke functies mag een rekening dragen om bij deze regel te passen? Dezelfde
 // controle als server-side in grootboekKeuze.ts — zo zie je alleen rekeningen
@@ -165,7 +166,7 @@ export default function GrootboekIndeling() {
   };
 
   const verwijder = async cat => {
-    if (!confirm(`"${cat.naam}" verwijderen?`)) return;
+    if (!(await bevestig(`"${cat.naam}" verwijderen?`))) return;
     try {
       await deleteKostenCategorie(cat.id, cat.naam);
       setCategorieen(cs => cs.filter(c => c.id !== cat.id));
@@ -348,11 +349,11 @@ export default function GrootboekIndeling() {
             className="btn btn-s btn-sm"
             disabled={ophalen}
             onClick={async () => {
-              if (!confirm(
+              if (!(await bevestig(
                 'Alles opnieuw ophalen uit SnelStart?\n\n'
                 + 'Ook wat je hier eerder hebt verwijderd komt dan terug. '
                 + 'Wat in BossBase is gemaakt en al geboekt is, blijft ongemoeid.',
-              )) return;
+              ))) return;
               setOphalen(true);
               try {
                 const r = await haalAllesOpnieuwOp();

@@ -71,6 +71,7 @@ import {
   importKostenVanuitAfas,
   syncContactenMetAfas,
 } from '../services/accountingService.js';
+import { bevestig } from '../lib/bevestig.jsx';
 
 const ALL_TEMPLATE_CONFIGS = [
   { type: 'offerte', label: 'Offerte', vars: ['klant_naam','bedrijfsnaam','offerte_nummer','totaal_bedrag','vervaldatum','link'], showAutoToggle: false, showAutoDagen: false },
@@ -382,7 +383,7 @@ export function InstellingenPage({ openDeal } = {}) {
   };
 
   const handleStripeDisconnect = async () => {
-    if (!window.confirm('Stripe-koppeling ontkoppelen? Je account bij Stripe blijft bestaan.')) return;
+    if (!(await bevestig('Stripe-koppeling ontkoppelen? Je account bij Stripe blijft bestaan.'))) return;
     setStripeBusy(true);
     try {
       await disconnectStripe();
@@ -682,7 +683,7 @@ export function InstellingenPage({ openDeal } = {}) {
   };
 
   const removeEenheid = async (id) => {
-    if (!window.confirm('Deze eigen eenheid verwijderen? Bestaande offertes/facturen behouden hun bedrag.')) return;
+    if (!(await bevestig('Deze eigen eenheid verwijderen? Bestaande offertes/facturen behouden hun bedrag.'))) return;
     try {
       await deleteEigenEenheid(id);
       setEenheden(list => list.filter(x => x.id !== id));
@@ -750,7 +751,7 @@ export function InstellingenPage({ openDeal } = {}) {
   };
 
   const handleDeleteTemplate = async (t) => {
-    if (!confirm(`Template "${t.name || t.type}" verwijderen? Dit kan niet ongedaan worden gemaakt.`)) return;
+    if (!(await bevestig(`Template "${t.name || t.type}" verwijderen? Dit kan niet ongedaan worden gemaakt.`))) return;
     try {
       await deleteEmailTemplate(t.id);
       const remaining = templates.filter(x => x.id !== t.id);
@@ -789,7 +790,7 @@ export function InstellingenPage({ openDeal } = {}) {
     const kop = geraakt.length
       ? `Let op: deze fase is gekoppeld aan ${geraakt.join(' en ')}. Die koppeling vervalt.\n\n`
       : '';
-    if (!window.confirm(`${kop}Fase verwijderen? Dit kan niet ongedaan worden gemaakt.`)) return;
+    if (!(await bevestig(`${kop}Fase verwijderen? Dit kan niet ongedaan worden gemaakt.`))) return;
     try {
       await deletePipelineStage(id);
       setStages(s => s.filter(st => st.id !== id));
@@ -860,7 +861,7 @@ export function InstellingenPage({ openDeal } = {}) {
   };
 
   const handleDeleteReason = async (id) => {
-    if (!window.confirm('Verloren-reden verwijderen? Bestaande leads met deze reden behouden hun opgeslagen tekst.')) return;
+    if (!(await bevestig('Verloren-reden verwijderen? Bestaande leads met deze reden behouden hun opgeslagen tekst.'))) return;
     try {
       await deleteLostReason(id);
       setLostReasons(s => s.filter(r => r.id !== id));
@@ -1024,10 +1025,10 @@ export function InstellingenPage({ openDeal } = {}) {
   // SnelStart tot de klant hem daar intrekt, en dat staat er daarom bij: anders
   // denkt iemand dat hij klaar is terwijl de sleutel nog bruikbaar is.
   const handleSsLoskoppelen = async () => {
-    if (!window.confirm(
+    if (!(await bevestig(
       'SnelStart loskoppelen? Er wordt niets verwijderd uit je boekhouding of uit BossBase, '
       + 'maar er wordt niet meer gesynchroniseerd. Trek de koppeling daarna ook in bij SnelStart zelf.'
-    )) return;
+    ))) return;
     setSsLoskoppelen(true);
     try {
       const conn = await disconnectConnection('snelstart');
@@ -2685,8 +2686,8 @@ export function InstellingenPage({ openDeal } = {}) {
 
                 <div className="fa" style={{ flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
                   {stdCfg && DEFAULT_BODY[activeTemplateType] && (
-                    <button className="btn btn-ghost btn-sm" onClick={() => {
-                      if (confirm('Template terugzetten naar standaard?')) {
+                    <button className="btn btn-ghost btn-sm" onClick={async () => {
+                      if ((await bevestig('Template terugzetten naar standaard?'))) {
                         setTemplateField(t.id, 'body', plainToEditorHtml(DEFAULT_BODY[activeTemplateType] || ''));
                       }
                     }}>Reset</button>
@@ -3154,7 +3155,7 @@ export function InstellingenPage({ openDeal } = {}) {
                           <div style={{ display: 'flex', gap: 4 }}>
                             <button className="btn-icon" title="Bewerken" onClick={() => { setEditingVoertuigId(v.id); setEditingVoertuigForm({ naam: v.naam, kenteken: v.kenteken, zitplaatsen: v.zitplaatsen ?? '', kleur: v.kleur, actief: v.actief }); }}>{I.edit}</button>
                             <button className="btn-icon" title="Verwijderen" onClick={async () => {
-                              if (!confirm(`Voertuig "${v.naam}" verwijderen?`)) return;
+                              if (!(await bevestig(`Voertuig "${v.naam}" verwijderen?`))) return;
                               try { await deleteVoertuig(v.id); setVoertuigen(prev => prev.filter(x => x.id !== v.id)); toast.success('Verwijderd'); }
                               catch (e) { toast.error(e.message || 'Verwijderen mislukt'); }
                             }}>{I.trash}</button>

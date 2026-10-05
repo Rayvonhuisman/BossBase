@@ -46,6 +46,7 @@ import { getMailTemplate, sendEmail, substituteVars, substituteVarsHtml, logSent
 import { plainToEditorHtml } from '../lib/noteFormat.js';
 import { mailTemplate } from '../utils/mailTemplate.js';
 import { getEmailTemplates } from '../services/instellingenService.js';
+import { bevestig } from '../lib/bevestig.jsx';
 
 // Customer form keeps friendly UI fields; service-layer maps to real DB columns.
 // `type` en `source` worden opgeslagen (customers.type / customers.source).
@@ -1534,7 +1535,7 @@ export function CustomersPage({ openCustomer }) {
     (c.company || '').toLowerCase().includes(search.toLowerCase())
   );
   const remove = async id => {
-    if (!confirm('Weet je zeker dat je deze klant wilt verwijderen?')) return;
+    if (!(await bevestig('Weet je zeker dat je deze klant wilt verwijderen?'))) return;
     try {
       const waarschuwing = await deleteCustomer(id);
       setCustomers(cs => cs.filter(c => c.id !== id));

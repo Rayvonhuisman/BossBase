@@ -5,6 +5,8 @@ import { X } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
 import { TIERS, tierLabel, tierPrice } from '../lib/tiers.js'
 import { BRANCHES } from '../lib/branches.js'
+import { bevestig } from '../lib/bevestig.jsx';
+import { useToast } from '../lib/toast.jsx';
 
 // De superadmin: wat er via bossbase.nl binnenkomt, en welke bedrijven er zijn
 // met welk abonnement. Zelfde bouwstenen als het dashboard (page-hd, sc-kaarten,
@@ -92,6 +94,7 @@ const isBetalend = c => c.subscription?.status === 'actief' && c.status !== 'geb
 
 // ── Hoofdcomponent ───────────────────────────────────────────────────────────
 export function SuperAdminPage({ navigate, profile }) {
+  const toast = useToast()
   // Laag 2 — beveiliging binnen de pagina zelf. Naast de route-guard in
   // App.jsx checkt de pagina nogmaals onafhankelijk of de gebruiker een
   // super admin is. `authorized` wordt vóór de hooks berekend zodat het
@@ -166,7 +169,7 @@ export function SuperAdminPage({ navigate, profile }) {
       setDrawerPlan(false)
       await load(drawer?.id === company.id ? company.id : null)
     } catch (err) {
-      alert('Opslaan mislukt: ' + err.message)
+      toast.error('Opslaan mislukt: ' + err.message)
     } finally {
       setSaving(false)
     }
@@ -184,7 +187,7 @@ export function SuperAdminPage({ navigate, profile }) {
       }
       await load(drawer?.id === company.id ? company.id : null)
     } catch (err) {
-      alert('Opslaan mislukt: ' + err.message)
+      toast.error('Opslaan mislukt: ' + err.message)
     } finally {
       setSaving(false)
     }
@@ -200,7 +203,7 @@ export function SuperAdminPage({ navigate, profile }) {
       if (error) throw error
       await load(drawer.id)
     } catch (err) {
-      alert('Opslaan mislukt: ' + err.message)
+      toast.error('Opslaan mislukt: ' + err.message)
     } finally {
       setSaving(false)
     }
@@ -221,7 +224,7 @@ export function SuperAdminPage({ navigate, profile }) {
       if (data?.error) throw new Error(data.error)
       setAanvragen(lijst => lijst.map(a => a.id === id ? { ...a, status } : a))
     } catch (err) {
-      alert('Opslaan mislukt: ' + err.message)
+      toast.error('Opslaan mislukt: ' + err.message)
     } finally {
       setSaving(false)
     }
@@ -443,8 +446,8 @@ function CompanyDrawer({ company, notes, onNotesChange, onSaveNotes, onPlanSelec
 
   const isBlocked = company.status === 'geblokkeerd'
 
-  const handleBlock = () => {
-    if (!confirm(`Weet je zeker dat je "${company.name}" wilt blokkeren? Alle gebruikers worden direct uitgelogd.`)) return
+  const handleBlock = async () => {
+    if (!(await bevestig(`Weet je zeker dat je "${company.name}" wilt blokkeren? Alle gebruikers worden direct uitgelogd.`))) return
     onStatusSelect(company, 'geblokkeerd')
   }
   const handleUnblock = () => onStatusSelect(company, 'actief')
