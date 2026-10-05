@@ -149,8 +149,10 @@ const VASTE_WERKWIJZE = (
     <strong>Wat er meegaat.</strong> Al je facturen worden geboekt, behalve
     concepten — die zijn nog niet verstuurd en horen dus niet in de boekhouding.
     Kosten gaan altijd mee: inkoopfacturen komen binnen als kostenregels, en
-    handmatige kosten gaan als vraagpost de andere kant op. Facturen die uit de
-    boekhouding zijn opgehaald gaan nooit terug.
+    kosten die je in BossBase invoert gaan naar de boekhouding op de
+    grootboekrekening van hun categorie (zie Instellingen). Alleen als er geen
+    passende rekening is, komen ze op de vraagpost, om na te lopen. Facturen
+    die uit de boekhouding zijn opgehaald gaan nooit terug.
   </>
 );
 
