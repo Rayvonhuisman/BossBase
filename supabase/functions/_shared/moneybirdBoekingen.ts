@@ -55,10 +55,31 @@ const round2 = (n: number) => Math.round(Number(n || 0) * 100) / 100
 const MAX_BIJLAGE_BYTES = 10 * 1024 * 1024
 const KLANT_JOIN = 'customers(id, name, type, email, phone, address, postcode, city, contactpersoon, kvk_number, btw_number, iban, betaaltermijn_dagen, moneybird_id, moneybird_versie, moneybird_hash)'
 
-type Context = { k: MbKoppeling; ind: Indeling; voork: Record<string, VoorkeurRij>; meldingen: string[] }
+// klantContact/levContact: welk Moneybird-contact een klant of leverancier in
+// DEZE run al kreeg. Elke factuur draagt een eigen kopie van zijn klant (join);
+// zonder dit kreeg de tweede factuur van een nieuwe klant een tweede contact,
+// want Moneybird's zoekfunctie ziet een net aangemaakt contact nog niet (cache).
+// Gevonden bij de eerste echte sync op 2026-10-06.
+type Context = {
+  k: MbKoppeling; ind: Indeling; voork: Record<string, VoorkeurRij>; meldingen: string[]
+  klantContact: Map<string, string>; levContact: Map<string, string>
+}
 
 export async function laadContext(k: MbKoppeling, meldingen: string[] = []): Promise<Context> {
-  return { k, ind: await laadIndeling(k), voork: await getVoorkeurRijen(k.admin, k.companyId, 'moneybird'), meldingen }
+  return {
+    k, ind: await laadIndeling(k), voork: await getVoorkeurRijen(k.admin, k.companyId, 'moneybird'), meldingen,
+    klantContact: new Map(), levContact: new Map(),
+  }
+}
+
+/** Het al bekende contact van deze rij: uit deze run, anders opnieuw uit de database. */
+async function bekendContact(ctx: Context, tabel: 'customers' | 'leveranciers', rij: any): Promise<void> {
+  if (rij.moneybird_id || !rij.id) return
+  const cache = tabel === 'customers' ? ctx.klantContact : ctx.levContact
+  const uitRun = cache.get(rij.id)
+  if (uitRun) { rij.moneybird_id = uitRun; return }
+  const { data } = await ctx.k.admin.from(tabel).select('moneybird_id, moneybird_hash').eq('id', rij.id).maybeSingle()
+  if (data?.moneybird_id) { rij.moneybird_id = data.moneybird_id; rij.moneybird_hash = data.moneybird_hash }
 }
 
 function plusDagen(iso: string, dagen: number): string {
@@ -101,7 +122,9 @@ export async function pushFactuur(ctx: Context, factuur: any): Promise<{ moneybi
   if (verlegd && !String(klant.btw_number || '').trim()) {
     throw new Error(`Btw verlegd vraagt om het btw-nummer van de klant, en "${klant.name}" heeft er geen. Vul het aan bij de klant.`)
   }
+  await bekendContact(ctx, 'customers', klant)
   const contactId = await zorgVoorKlantContact(k, klant, ctx.meldingen)
+  ctx.klantContact.set(klant.id, contactId)
   if (verlegd) await werkKlantContactBij(k, klant, ctx.meldingen)
 
   const details = regels.map((r: any) => regelNaarDetail(ctx, r, factuur.nummer))
@@ -216,7 +239,9 @@ export async function pushKost(ctx: Context, cost: any): Promise<boolean> {
   if (!cost.leveranciers?.naam) {
     throw new Error('Geen leverancier ingevuld — vul die aan bij de kostenpost en synchroniseer opnieuw')
   }
+  await bekendContact(ctx, 'leveranciers', cost.leveranciers)
   const contactId = await zorgVoorLeverancierContact(k, cost.leveranciers, ctx.meldingen)
+  if (cost.leveranciers.id) ctx.levContact.set(cost.leveranciers.id, contactId)
   const pct = Number(cost.btw_percentage ?? 21)
   const categorie = String(cost.category || '').trim() || 'Overig'
   const omschrijving = cost.description || categorie
@@ -357,8 +382,19 @@ export async function syncBoekingen(k: MbKoppeling): Promise<BoekingenUitslag> {
       }
     }
 
+    // De stappen hieronder staan los van elkaar: mislukt er een (bijvoorbeeld
+    // een filter dat Moneybird weigert), dan gaan de andere gewoon door en komt
+    // de fout in Meldingen. Alleen de limiet stopt alles, want die geldt voor
+    // alle verzoeken.
+    const stap = async (naam: string, fn: () => Promise<void>) => {
+      if (tijdOp()) { u.rest = true; return }
+      try { await fn() } catch (err: any) {
+        if (isLimiet(err)) throw err
+        u.fouten.push(`${naam}: ${err?.message}`)
+      }
+    }
     // ── 3. Betaalstatus uit Moneybird ────────────────────────────────────────
-    if (!tijdOp()) {
+    await stap('Betaalstatus ophalen', async () => {
       const open = await alleRijen(() => db.from('facturen')
         .select('id, nummer, moneybird_id, externe_referentie').eq('company_id', co)
         .in('status', ['verzonden', 'geboekt']).not('moneybird_id', 'is', null))
@@ -383,16 +419,14 @@ export async function syncBoekingen(k: MbKoppeling): Promise<BoekingenUitslag> {
           u.betaaldUitMoneybird++
         }
       }
-    }
+    })
 
     // ── 4. Inkoopfacturen en bonnetjes uit Moneybird ─────────────────────────
-    if (!tijdOp()) await importKosten(ctx, u)
-
+    await stap('Inkoopfacturen ophalen', () => importKosten(ctx, u))
     // ── 5. Verkoopfacturen die in Moneybird zijn gemaakt ─────────────────────
-    if (!tijdOp()) await importVerkoop(ctx, u)
-
+    await stap('Verkoopfacturen ophalen', () => importVerkoop(ctx, u))
     // ── 6. Kosten naar Moneybird ─────────────────────────────────────────────
-    if (!tijdOp()) await exportKosten(ctx, u)
+    await stap('Kosten naar Moneybird', () => exportKosten(ctx, u))
   } catch (err: any) {
     if (!isLimiet(err)) throw err
     u.rest = true

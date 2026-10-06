@@ -158,9 +158,14 @@ export function kiesVerkoopTarief(ind: Indeling, voork: Record<string, VoorkeurR
   if (eigen && ind.tarieven.some(t => t.id === eigen && t.soort === 'verkoop')) return eigen
   const std = standaardVerkoopTarief(ind.tarieven, regime)
   if (!std) {
-    throw new Error(
-      `Er is geen btw-tarief voor ${REGIME_TEKST[regime] ?? regime} gevonden in je Moneybird-administratie. `
-      + 'Kies het tarief onder Integraties › Moneybird › Instellingen.')
+    // Een nieuwe Moneybird-administratie heeft standaard geen tarief voor btw
+    // verlegd, en de API kan er geen aanmaken. Het 0%-tarief gebruiken zou
+    // fiscaal fout zijn (andere aangifterubriek), dus: zeggen wat te doen.
+    throw new Error(regime === 'verlegd'
+      ? 'Je Moneybird-administratie heeft nog geen btw-tarief voor btw verlegd. Maak het aan in Moneybird '
+        + '(Instellingen › Btw-tarieven, soort "Btw verlegd") en synchroniseer opnieuw, of kies het onder Integraties › Moneybird › Instellingen.'
+      : `Er is geen btw-tarief voor ${REGIME_TEKST[regime] ?? regime} gevonden in je Moneybird-administratie. `
+        + 'Maak het aan in Moneybird (Instellingen › Btw-tarieven) of kies het onder Integraties › Moneybird › Instellingen.')
   }
   return std.id
 }
@@ -173,7 +178,7 @@ export function kiesInkoopTarief(ind: Indeling, voork: Record<string, VoorkeurRi
   if (!std) {
     throw new Error(
       `Er is geen btw-tarief voor inkoop met ${p}% gevonden in je Moneybird-administratie. `
-      + 'Kies het tarief onder Integraties › Moneybird › Instellingen.')
+      + 'Maak het aan in Moneybird (Instellingen › Btw-tarieven, voor inkoop) of kies het onder Integraties › Moneybird › Instellingen.')
   }
   return std.id
 }
@@ -186,9 +191,10 @@ export function standaardIndeling(ind: Indeling, kostenCategorieen: string[]): R
   }
   for (const cat of kostenCategorieen) {
     const { rekening, gok } = standaardKosten(ind.rekeningen, cat)
-    // Een categorie die op algemene kosten terugvalt, tonen we als standaard
-    // alleen als hij daar ook echt hoort; anders als "kies een rekening".
-    zet(`kosten:${cat}`, rekening && (!gok || /algemene|overig/i.test(cat)) ? rekening.id : null, rekening && label(rekening))
+    // Valt een categorie terug op algemene kosten, dan zegt het scherm dat
+    // eerlijk: daar boekt de sync hem ook (met een melding).
+    const passend = !gok || /algemene|overig/i.test(cat)
+    zet(`kosten:${cat}`, rekening?.id, rekening && (passend ? label(rekening) : `${label(rekening)} (geen eigen rekening gevonden)`))
   }
   for (const regime of ['normaal', 'verlaagd', 'vrijgesteld', 'verlegd']) {
     const r = standaardOmzet(ind.rekeningen, regime)

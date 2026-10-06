@@ -358,8 +358,11 @@ export async function haalAdministraties(accessToken: string): Promise<{ id: str
 
 // Lijsten en synchronisatie van documenten en facturen filteren standaard op
 // "dit jaar", en een filter vervangt álle standaardwaarden. Een vaste naam voor
-// "alles" bestaat niet (period:all is ongeldig); dit bereik dekt alles.
-export const MB_HELE_PERIODE = 'period:20000101..20991231'
+// "alles" bestaat niet (period:all is ongeldig), en een eigen bereik mag hooguit
+// 10 jaar beslaan ("Period is invalid", gemeten 2026-10-06). Daarom: 8 jaar
+// terug tot en met volgend jaar. Dat dekt de wettelijke bewaartermijn van 7 jaar.
+const ditJaar = new Date().getUTCFullYear()
+export const MB_HELE_PERIODE = `period:${ditJaar - 8}0101..${ditJaar + 1}1231`
 
 /** Bedragen gaan als string met punt naar Moneybird, afgerond op centen. */
 export const mbBedrag = (n: number) => (Math.round(Number(n || 0) * 100) / 100).toFixed(2)

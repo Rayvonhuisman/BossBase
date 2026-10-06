@@ -69,7 +69,8 @@ export function contactNaarKlant(c: any): Record<string, unknown> {
     contactpersoon: tekst(c?.attention) || tekst(c?.send_invoices_to_attention),
     kvk_number: tekst(c?.chamber_of_commerce),
     btw_number: metNlPrefix(c?.tax_number),
-    iban: tekst(c?.bank_account),
+    // bank_account is in Moneybird een weerspiegeling van sepa_iban.
+    iban: tekst(c?.sepa_iban) || tekst(c?.bank_account),
   }
 }
 
@@ -103,8 +104,18 @@ export function klantNaarContact(r: any): Record<string, unknown> {
     send_invoices_to_attention: r.contactpersoon || '',
     tax_number: r.btw_number || '',
     chamber_of_commerce: r.kvk_number || '',
-    bank_account: r.iban || '',
+    ...ibanVelden(r.iban, r.name),
   }
+}
+
+/**
+ * Het IBAN gaat via sepa_iban: Moneybird accepteert bank_account wel, maar slaat
+ * het niet op (gemeten 2026-10-06; bank_account weerspiegelt sepa_iban). Daarmee
+ * gaat automatisch incasso NIET aan — dat is sepa_active, en die blijft uit.
+ */
+function ibanVelden(iban: unknown, naam: unknown): Record<string, string> {
+  const i = String(iban ?? '').replace(/\s/g, '').toUpperCase()
+  return { sepa_iban: i, sepa_iban_account_name: i ? String(naam || '').trim() : '' }
 }
 
 /** BossBase-leverancier → velden voor Moneybird. */
@@ -119,7 +130,7 @@ export function leverancierNaarContact(r: any): Record<string, unknown> {
     send_invoices_to_attention: r.contactpersoon || '',
     tax_number: r.btw_number || '',
     chamber_of_commerce: r.kvk_number || '',
-    bank_account: r.iban || '',
+    ...ibanVelden(r.iban, r.naam),
   }
 }
 
@@ -138,7 +149,7 @@ const CONTACTVELDEN: Record<string, string[]> = {
   name: ['company_name', 'firstname', 'lastname'], naam: ['company_name', 'firstname', 'lastname'],
   email: ['send_invoices_to_email'], phone: ['phone'], telefoon: ['phone'], address: ['address1'],
   postcode: ['zipcode'], city: ['city'], contactpersoon: ['send_invoices_to_attention'],
-  kvk_number: ['chamber_of_commerce'], btw_number: ['tax_number'], iban: ['bank_account'],
+  kvk_number: ['chamber_of_commerce'], btw_number: ['tax_number'], iban: ['sepa_iban'],
 }
 
 /**
@@ -171,7 +182,7 @@ export async function voegSamen(
 // weigert Moneybird een veld, dan laten we dat veld weg, proberen opnieuw en
 // melden welk veld is overgeslagen — zoals de SnelStart-koppeling doet.
 const VELD_LABEL: Record<string, string> = {
-  tax_number: 'btw-nummer', bank_account: 'IBAN', chamber_of_commerce: 'KvK-nummer',
+  tax_number: 'btw-nummer', sepa_iban: 'IBAN', sepa_iban_account_name: 'IBAN-tenaamstelling', chamber_of_commerce: 'KvK-nummer',
   send_invoices_to_email: 'e-mailadres', zipcode: 'postcode', phone: 'telefoonnummer',
 }
 const RISICOVELDEN = Object.keys(VELD_LABEL)
@@ -322,9 +333,13 @@ export async function importeerLeverancier(
   }
   const { data: nieuw } = await k.admin.from('leveranciers')
     .insert({ company_id: k.companyId, moneybird_id: id, moneybird_versie: Number(contact.version) || null, actief: true, ...velden })
-    .select('id').single()
-  if (nieuw?.id) cache?.set(id, nieuw.id)
-  return nieuw?.id ?? null
+    .select(LEV_KOLOMMEN).single()
+  if (!nieuw?.id) return null
+  // Meteen een vingerafdruk: hier is nu gelijk aan daar, dus de contactensync
+  // hoeft hem niet terug te sturen.
+  await k.admin.from('leveranciers').update({ moneybird_hash: await vingerafdruk(leverancierNaarContact(nieuw)) }).eq('id', nieuw.id)
+  cache?.set(id, nieuw.id)
+  return nieuw.id
 }
 
 /**
