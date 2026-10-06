@@ -60,7 +60,7 @@ const FUNCTIES = {
   'boss-chat': { messages: [{ role: 'user', content: 'hoi' }] },
   'create-notification': { userId: U.actief, title: 'test', type: 'info' },
   'getekende-pdf-nazenden': { soort: 'offerte', id: id() },
-  'google-calendar-auth-url': {}, 'moneybird-update-contact': { customerId: id() },
+  'google-calendar-auth-url': {}, 'moneybird-sync': { onderdeel: 'contacten' },
   'offerte-pdf-url': { offerteId: id() },
   'send-email': { to: 'ontvanger@example.test', subject: 'test', html: '<p>test</p>' },
   'stripe-connect-start': {}, 'stripe-connection-status': {},

@@ -117,7 +117,6 @@ export async function createCustomer(input) {
   const { data, error } = await safeInsert(supabase, "customers", payload)
   if (error) throw error
   const customer = toCustomer(data)
-  supabase.functions.invoke('moneybird-update-contact', { body: { customer_id: customer.id } }).catch(() => {})
   logTijdlijnSafe(customer.id, 'klant_aangemaakt', 'Klant toegevoegd aan het systeem')
   return customer
 }
@@ -126,11 +125,9 @@ export async function updateCustomer(id, input) {
   const payload = mapCustomerFormToPayload(input)
   const { data, error } = await supabase.from("customers").update(payload).eq("id", id).select().single()
   if (error) throw error
-  const customer = toCustomer(data)
-  if (customer.moneybirdId) {
-    supabase.functions.invoke('moneybird-update-contact', { body: { customer_id: id } }).catch(() => {})
-  }
-  return customer
+  // Naar de boekhouding gaat het bij de volgende synchronisatie: die ziet aan
+  // de vingerafdruk (moneybird_hash) dat de klant hier gewijzigd is.
+  return toCustomer(data)
 }
 
 export async function deleteCustomer(id) {

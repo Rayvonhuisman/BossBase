@@ -16,7 +16,6 @@ import { getKlantNotities, addKlantNotitie, getTijdlijnByCustomer, logTijdlijnSa
 import { NoteEditor, renderNote } from '../components/NoteEditor.jsx';
 import NotitieLog, { toLogItem } from '../components/NotitieLog.jsx';
 import { getTeamMembers, createMentionNotifications } from '../services/notificatieService.js';
-import { updateContactInMoneybird } from '../services/accountingService.js';
 import { buildDueAt, createActivity, listActivities, updateActivity } from '../services/activityService.js';
 import { getKlantKostenOverzicht, LEEG_OVERZICHT } from '../services/kostenOverzichtService.js';
 import { sumOmzetExclBtw } from '../services/customerTotalsService.js';

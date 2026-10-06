@@ -29,7 +29,7 @@ supabase/tests/lokaal/start.sh           # gateway (54321) en functies (54330)
 
 cd supabase/tests/lokaal
 node test.mjs                            # opzeggen, rechten, toegang na deactivatie, opschonen
-FUNCTIES=afas-import-kosten,afas-sync-contacten,boss-chat,create-notification,getekende-pdf-nazenden,google-calendar-auth-url,moneybird-update-contact,offerte-pdf-url,send-email,stripe-connect-start,stripe-connection-status,sync-activity-to-google,stripe-create-payment-link,meldpunt,document-url,billing-checkout \
+FUNCTIES=afas-import-kosten,afas-sync-contacten,boss-chat,create-notification,getekende-pdf-nazenden,google-calendar-auth-url,moneybird-sync,offerte-pdf-url,send-email,stripe-connect-start,stripe-connection-status,sync-activity-to-google,stripe-create-payment-link,meldpunt,document-url,billing-checkout \
   ./start.sh                             # (opnieuw, met alle functies voor de volgende test)
 node test_functies.mjs                   # statuscontrole per functie, beperking na afloop, document-url
                                          # (legt lokaal een schrijflog-trigger op elke tabel)
