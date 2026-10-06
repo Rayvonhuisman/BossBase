@@ -50,11 +50,12 @@ const DOMAINS = {
     verlopen:   ['red',   'Te laat'],
     te_laat:    ['red',   'Te laat'],
     vervallen:  ['red',   'Te laat'],
-    // Uit SnelStart opgehaald, niet in BossBase gemaakt. Eigen kleur zodat je in
+    // Uit de boekhouding (SnelStart of Moneybird) opgehaald, niet in BossBase
+    // gemaakt. Eigen kleur zodat je in
     // de lijst meteen ziet welk deel van het omzetbeeld uit de boekhouding komt
     // — die facturen hebben geen regels met eigen prijzen, geen PDF en zijn
     // niet te bewerken.
-    geboekt:    ['purple', 'Uit SnelStart'],
+    geboekt:    ['purple', 'Uit boekhouding'],
   },
   // OFFERTE — Concept = grijs, Verzonden = blauw, Geaccepteerd = groen, Afgewezen = rood.
   offerte: {

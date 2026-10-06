@@ -356,5 +356,10 @@ export async function haalAdministraties(accessToken: string): Promise<{ id: str
   }))
 }
 
+// Lijsten en synchronisatie van documenten en facturen filteren standaard op
+// "dit jaar", en een filter vervangt álle standaardwaarden. Een vaste naam voor
+// "alles" bestaat niet (period:all is ongeldig); dit bereik dekt alles.
+export const MB_HELE_PERIODE = 'period:20000101..20991231'
+
 /** Bedragen gaan als string met punt naar Moneybird, afgerond op centen. */
 export const mbBedrag = (n: number) => (Math.round(Number(n || 0) * 100) / 100).toFixed(2)

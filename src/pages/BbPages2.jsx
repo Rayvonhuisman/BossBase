@@ -896,7 +896,7 @@ function KostenDetailModal({ cost, mbAdminId, customers, onUpdate, onDelete, onC
   const filteredWerkbonnen = custId ? werkbonnen.filter(w => w.customerId === custId) : werkbonnen;
 
   // Bron van een geïmporteerde kostenregel: SnelStart-refs zijn 'snelstart_…',
-  // al het overige externe komt uit Moneybird ('purchase_'/'receipt_'/'mutation_').
+  // al het overige externe komt uit Moneybird ('moneybird_…', vroeger 'purchase_'/'receipt_').
   const kostenBron = cost.externeRef
     ? (cost.externeRef.startsWith('snelstart_') ? 'SnelStart' : 'Moneybird')
     : null;

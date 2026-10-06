@@ -179,23 +179,54 @@ export async function syncFactuurNaarMoneybird(factuurId) {
 }
 
 export async function importKostenVanuitMoneybird() {
-  const { data, error } = await supabase.functions.invoke('moneybird-import-kosten', {
-    body: {},
-  })
-  if (error) throw error
-  // BTW data syncen voor beide periode types (fouten hier falen stil)
-  await Promise.allSettled([
-    supabase.functions.invoke('moneybird-sync-btw', { body: { periode_type: 'kwartaal' } }),
-    supabase.functions.invoke('moneybird-sync-btw', { body: { periode_type: 'maand' } }),
-  ])
-  return data
+  const data = await moneybirdSync('kosten-facturen')
+  const b = data?.['kosten-facturen'] || {}
+  // Btw-overzicht voor de btw-kaart bijwerken. Fouten hier falen stil: de
+  // synchronisatie zelf is geslaagd.
+  // Eén aanroep: de functie werkt maand en kwartaal in één keer bij.
+  await supabase.functions.invoke('moneybird-sync-btw', { body: {} }).catch(() => {})
+  return {
+    success: true,
+    exported: b.exported || {},
+    imported: b.imported || {},
+    betaaldUitMoneybird: b.betaaldUitMoneybird || 0,
+    overgeslagenUitPrullenbak: b.overgeslagenUitPrullenbak || 0,
+    kostenResterend: b.kostenResterend || 0,
+    fouten: b.fouten || [],
+    meldingen: b.meldingen || [],
+    rest: !!data?.rest,
+  }
 }
 
 export async function syncContactenMetMoneybird() {
-  const { data, error } = await supabase.functions.invoke('moneybird-sync-contacten', {
-    body: {},
-  })
-  if (error) throw error
+  const data = await moneybirdSync('contacten')
+  // Zelfde vorm als bij SnelStart, zodat het scherm één melding kan bouwen.
+  const c = data?.contacten || {}
+  return {
+    success: true,
+    imported: c.klanten?.geimporteerd || 0,
+    bijgewerkt: c.klanten?.bijgewerkt || 0,
+    exported: c.klanten?.geexporteerd || 0,
+    doorgestuurd: (c.klanten?.doorgestuurd || 0) + (c.leveranciers?.doorgestuurd || 0),
+    leveranciers: { geimporteerd: c.leveranciers?.geimporteerd || 0, bijgewerkt: c.leveranciers?.bijgewerkt || 0 },
+    overgeslagenUitPrullenbak: c.overgeslagenUitPrullenbak || 0,
+    adresWaarschuwingen: c.adresWaarschuwingen || [],
+    fouten: c.fouten || [],
+    meldingen: c.meldingen || [],
+    rest: !!data?.rest,
+  }
+}
+
+// De nieuwe Moneybird-sync (edge function moneybird-sync). Fouten staan in de
+// body; zie moneybirdActie.
+async function moneybirdSync(onderdeel) {
+  const { data, error } = await supabase.functions.invoke('moneybird-sync', { body: { onderdeel } })
+  if (error) {
+    let melding = error.message
+    try { melding = (await error.context?.json?.())?.error || melding } catch { /* geen json */ }
+    throw new Error(melding)
+  }
+  if (data?.success === false) throw new Error(data.error || 'Synchroniseren met Moneybird mislukt')
   return data
 }
 
@@ -367,14 +398,6 @@ export async function importKostenVanuitAfas() {
 export async function syncContactenMetAfas() {
   const { data, error } = await supabase.functions.invoke('afas-sync-contacten', {
     body: {},
-  })
-  if (error) throw error
-  return data
-}
-
-export async function updateContactInMoneybird(customerId) {
-  const { data, error } = await supabase.functions.invoke('moneybird-update-contact', {
-    body: { customer_id: customerId },
   })
   if (error) throw error
   return data

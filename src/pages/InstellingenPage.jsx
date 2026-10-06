@@ -161,19 +161,20 @@ const VASTE_WERKWIJZE = (
   </>
 );
 
-// Moneybird werkt (nog) anders dan SnelStart: er draait geen automatische sync,
-// en facturen gaan pas bij betaald. De gedeelde tekst hierboven beloofde voor
-// Moneybird dingen die niet gebeurden (audit M35). Tot de herbouw staat hier wat
-// de koppeling echt doet.
+// Moneybird volgt dezelfde vaste werkwijze als SnelStart, met twee verschillen:
+// betalingen gaan wél heen en weer, en facturen gaan als externe factuur met
+// ons eigen nummer en onze PDF.
 const VASTE_WERKWIJZE_MONEYBIRD = (
   <>
-    <strong>Wat er meegaat.</strong> Synchroniseren gaat met de hand, met de
-    knoppen hieronder. Een factuur gaat naar Moneybird zodra hij betaald is
-    (zelf gemarkeerd of via de betaallink), samen met de betaling; concepten en
-    onbetaalde facturen niet. <em>Kosten importeren</em> haalt inkoopfacturen,
-    bonnetjes en uitgaven op als kostenregels (maximaal 100 per soort per keer)
-    en zet facturen die in Moneybird betaald zijn ook hier op betaald.
-    Kosten die je in BossBase invoert, gaan niet naar Moneybird.
+    <strong>Wat er meegaat.</strong> Al je facturen worden geboekt, behalve
+    concepten, als externe factuur met je eigen factuurnummer en je PDF erbij.
+    Betaalde facturen krijgen hun betaling in Moneybird, en wat in Moneybird
+    betaald is, staat hier ook op betaald. Kosten gaan altijd mee:
+    inkoopfacturen en bonnetjes komen binnen als kostenregels, en kosten die je
+    in BossBase invoert gaan naar Moneybird op de grootboekrekening van hun
+    categorie (zie Instellingen). Klanten en leveranciers worden beide kanten op
+    bijgewerkt. Facturen die uit Moneybird zijn opgehaald gaan nooit terug.
+    Elke nacht synchroniseert BossBase vanzelf.
   </>
 );
 
@@ -303,6 +304,13 @@ export function InstellingenPage({ openDeal } = {}) {
   const [mbStarten, setMbStarten] = useState(false);
   const [mbTesting, setMbTesting] = useState(false);
   const [mbLoskoppelen, setMbLoskoppelen] = useState(false);
+  // Uitkomst van de laatste handmatige sync en de laatste automatische run,
+  // voor het tabblad Meldingen — zelfde opbouw als bij SnelStart.
+  const [mbFouten, setMbFouten] = useState([]);
+  const [mbMeldingen, setMbMeldingen] = useState([]);
+  const [mbAdresWaarschuwingen, setMbAdresWaarschuwingen] = useState([]);
+  const [mbKostenResterend, setMbKostenResterend] = useState(0);
+  const [mbLaatsteAutoRun, setMbLaatsteAutoRun] = useState(null);
   const [mbImporting, setMbImporting] = useState(false);
   const [mbSyncingContacten, setMbSyncingContacten] = useState(false);
 
@@ -464,6 +472,7 @@ export function InstellingenPage({ openDeal } = {}) {
         // (administratie/omgeving) mogen wel voor het gemak vooringevuld worden.
         if (mbConn) setMbConnection(mbConn);
         getMoneybirdKoppeling().then(setMbKoppeling).catch(() => {});
+        getLaatsteSyncRun('moneybird').then(setMbLaatsteAutoRun).catch(() => {});
         if (ssConn) {
           setSsConnection(ssConn);
           setSsForm({ clientKey: '' });
@@ -1033,21 +1042,26 @@ export function InstellingenPage({ openDeal } = {}) {
     setMbImporting(true);
     try {
       const result = await importKostenVanuitMoneybird();
-      if (result?.success) {
-        const imp = result.imported;
-        if (imp && typeof imp === 'object') {
-          const total = (imp.inkoopfacturen || 0) + (imp.bonnetjes || 0) + (imp.mutaties || 0) + (imp.verkoopfacturen || 0);
-          toast.success(`${total} items geïmporteerd (${imp.inkoopfacturen || 0} facturen, ${imp.bonnetjes || 0} bonnetjes, ${imp.mutaties || 0} mutaties, ${imp.verkoopfacturen || 0} verkoopfacturen)`);
-        } else {
-          toast.success(`${imp ?? 0} items geïmporteerd`);
-        }
-        const refreshed = await getConnection();
-        if (refreshed) setMbConnection(refreshed);
-      } else {
-        toast.error(result?.error || 'Importeren mislukt');
-      }
+      // Beide richtingen benoemen, en alleen wat er gebeurd is — zoals bij SnelStart.
+      const uit = result.exported || {};
+      const inn = result.imported || {};
+      const delen = [];
+      if (uit.facturen) delen.push(`${uit.facturen} facturen naar Moneybird`);
+      if (uit.kosten) delen.push(`${uit.kosten} kosten naar Moneybird`);
+      if (uit.betalingen) delen.push(`${uit.betalingen} betalingen geregistreerd`);
+      if (result.betaaldUitMoneybird) delen.push(`${result.betaaldUitMoneybird} facturen betaald volgens Moneybird`);
+      if (inn.inkoopfacturen) delen.push(`${inn.inkoopfacturen} inkoopfacturen en bonnetjes opgehaald`);
+      if (inn.verkoopfacturen) delen.push(`${inn.verkoopfacturen} verkoopfacturen opgehaald`);
+      if (result.overgeslagenUitPrullenbak) delen.push(`${result.overgeslagenUitPrullenbak} overgeslagen (eerder verwijderd)`);
+      if (!delen.length) delen.push('niets te synchroniseren — alles was al bij');
+      toast.success(delen.join(', '));
+      setMbKostenResterend(result.kostenResterend ?? 0);
+      setMbFouten(result.fouten || []);
+      setMbMeldingen(result.meldingen || []);
+      await ververMoneybird();
+      getLaatsteSyncRun('moneybird').then(setMbLaatsteAutoRun).catch(() => {});
     } catch (err) {
-      toast.error(err.message || 'Importeren mislukt');
+      toast.error(err.message || 'Synchroniseren mislukt');
     } finally {
       setMbImporting(false);
     }
@@ -1067,12 +1081,17 @@ export function InstellingenPage({ openDeal } = {}) {
         if (result.imported) delen.push(`${result.imported} klanten opgehaald`);
         if (result.bijgewerkt) delen.push(`${result.bijgewerkt} klanten bijgewerkt`);
         if (result.exported) delen.push(`${result.exported} klanten naar Moneybird`);
+        if (result.doorgestuurd) delen.push(`${result.doorgestuurd} wijzigingen naar Moneybird`);
         if (lev.geimporteerd) delen.push(`${lev.geimporteerd} leveranciers opgehaald`);
         if (lev.bijgewerkt) delen.push(`${lev.bijgewerkt} leveranciers bijgewerkt`);
         if (result.overgeslagenUitPrullenbak) {
           delen.push(`${result.overgeslagenUitPrullenbak} overgeslagen (eerder verwijderd)`);
         }
         toast.success(delen.length ? delen.join(', ') : 'Contacten waren al bij — niets gewijzigd');
+        setMbFouten(result.fouten || []);
+        setMbMeldingen(result.meldingen || []);
+        setMbAdresWaarschuwingen(result.adresWaarschuwingen || []);
+        getMoneybirdKoppeling().then(setMbKoppeling).catch(() => {});
       } else {
         toast.error(result?.error || 'Synchronisatie mislukt');
       }
@@ -1458,7 +1477,7 @@ export function InstellingenPage({ openDeal } = {}) {
   const syncBezig = ssImporting || ssSyncingContacten || mbImporting || mbSyncingContacten;
   const syncTekst = ssImporting ? 'Bezig met synchroniseren met SnelStart'
     : ssSyncingContacten ? 'Bezig met klanten synchroniseren met SnelStart'
-    : mbImporting ? 'Bezig met importeren uit Moneybird'
+    : mbImporting ? 'Bezig met synchroniseren met Moneybird'
     : 'Bezig met contacten synchroniseren met Moneybird';
 
 
@@ -1710,16 +1729,28 @@ export function InstellingenPage({ openDeal } = {}) {
           ? [{ label: mbTesting ? 'Testen...' : 'Verbinding testen', onClick: handleMbTest, disabled: mbTesting }]
           : [],
       },
-      // Geen instellingen: de werkwijze ligt vast (zie toelichting bij Synchroniseren).
-      instellingen: null,
-      sync: !boekhoudGate && (mbConnection?.connected || mbConnection?.lastSyncedAt) ? {
+      // Grootboekrekeningen en btw-tarieven van de administratie, zoals bij SnelStart.
+      instellingen: !boekhoudGate && mbKoppeling?.gekoppeld ? {
+        inhoud: <GrootboekIndeling provider="moneybird" />,
+      } : null,
+      sync: !boekhoudGate && (mbKoppeling?.gekoppeld || mbKoppeling?.lastSyncedAt) ? {
+        status: autoSyncStatus(mbLaatsteAutoRun),
         toelichting: VASTE_WERKWIJZE_MONEYBIRD,
-        laatsteSync: mbConnection?.lastSyncedAt || null,
-        acties: mbConnection?.connected ? [
-          { label: mbImporting ? 'Importeren...' : 'Kosten importeren', onClick: handleMbImport, disabled: mbImporting },
+        laatsteSync: mbKoppeling?.lastSyncedAt || null,
+        acties: mbKoppeling?.gekoppeld ? [
+          { label: mbImporting ? 'Synchroniseren...' : 'Kosten/facturen synchroniseren', onClick: handleMbImport, disabled: mbImporting },
           { label: mbSyncingContacten ? 'Synchroniseren...' : 'Contacten synchroniseren', onClick: handleMbSyncContacten, disabled: mbSyncingContacten },
         ] : [],
       } : null,
+      meldingen: boekhoudGate ? [] : boekhoudMeldingen({
+        naam: 'Moneybird',
+        laatsteAutoRun: mbLaatsteAutoRun,
+        fouten: mbFouten,
+        meldingen: mbMeldingen,
+        kostenResterend: mbKostenResterend,
+        adresWaarschuwingen: mbAdresWaarschuwingen,
+        syncKnop: 'Kosten/facturen synchroniseren',
+      }),
     },
 
     // SnelStart — twee wegen naar dezelfde koppeling.
