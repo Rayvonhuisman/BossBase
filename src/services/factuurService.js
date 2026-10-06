@@ -43,6 +43,14 @@ export async function uploadFactuurPdf(factuurId, companyId, pdfBase64) {
       .update({ snelstart_bijlage_gesynct: false })
       .eq('id', factuurId)
       .eq('snelstart_bijlage_gesynct', true)
+    // Zelfde voor Moneybird. Daar is deze PDF het enige document bij de factuur
+    // (Moneybird maakt voor een externe factuur geen eigen PDF); de sync vervangt
+    // de oude bijlage door deze.
+    await supabase
+      .from('facturen')
+      .update({ moneybird_bijlage_gesynct: false })
+      .eq('id', factuurId)
+      .eq('moneybird_bijlage_gesynct', true)
     return true
   } catch {
     return false

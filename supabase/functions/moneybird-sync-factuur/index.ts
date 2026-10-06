@@ -4,7 +4,7 @@ import { makeAdminClient, isScheduledCall } from "../_shared/scheduledSync.ts"
 import { clientFout } from '../_shared/clientFout.ts'
 import { markeerGesynct } from "../_shared/boekhouding.ts"
 import { laadKoppeling, Tijdsbudget } from "../_shared/moneybird.ts"
-import { laadContext, pushFactuur, pushFactuurPdf, pushBetaling } from "../_shared/moneybirdBoekingen.ts"
+import { laadContext, pushFactuur, pushFactuurPdf, pushBetaling, verrekenCredit } from "../_shared/moneybirdBoekingen.ts"
 
 // Boekt ÉÉN factuur in Moneybird als externe verkoopfactuur, met PDF, en
 // registreert de betaling als hij betaald is (zie _shared/moneybirdBoekingen.ts).
@@ -61,10 +61,11 @@ serve(async (req) => {
     const ctx = await laadContext(k, meldingen)
     const boeking = await pushFactuur(ctx, factuur)
     const bijlage = factuur.moneybird_bijlage_gesynct && !boeking.nieuw
-      ? { gelukt: true } : await pushFactuurPdf(ctx, factuur)
+      ? { gelukt: true } : await pushFactuurPdf(ctx, factuur, { nieuw: boeking.nieuw })
     const betaling = await pushBetaling(ctx, factuur)
+    const verrekend = await verrekenCredit(ctx, factuur)
     await markeerGesynct(admin, companyId, 'moneybird')
-    return json({ success: true, moneybird_id: boeking.moneybirdId, nieuw: boeking.nieuw, bijlage, betaling, meldingen })
+    return json({ success: true, moneybird_id: boeking.moneybirdId, nieuw: boeking.nieuw, bijlage, betaling, verrekend, meldingen })
   } catch (err: any) {
     console.error('moneybird-sync-factuur:', err?.message)
     return json({ success: false, error: clientFout(err) }, 500)

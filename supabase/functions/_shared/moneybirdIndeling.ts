@@ -107,7 +107,14 @@ export function standaardVerkoopTarief(tar: MbTarief[], regime: string): MbTarie
   const v = tar.filter(t => t.soort === 'verkoop')
   if (regime === 'normaal') return v.find(t => t.pct === 21 && !NIET_BINNENLANDS.test(t.naam)) ?? null
   if (regime === 'verlaagd') return v.find(t => t.pct === 9 && !NIET_BINNENLANDS.test(t.naam)) ?? null
-  if (regime === 'verlegd') return v.find(t => t.pct === 0 && /verlegd/i.test(t.naam)) ?? null
+  // Moneybird kent ook "Product buiten EU (btw verlegd)" en "Dienst binnen EU (btw
+  // verlegd)" (rubriek 3a/3b). Binnenlandse verlegging (onderaanneming) is
+  // "Btw verlegd binnenland" (rubriek 1e): die eerst, EU-varianten nooit.
+  if (regime === 'verlegd') {
+    return v.find(t => t.pct === 0 && /verlegd binnenland/i.test(t.naam))
+      ?? v.find(t => t.pct === 0 && /verlegd/i.test(t.naam) && !NIET_BINNENLANDS.test(t.naam) && !/product|dienst/i.test(t.naam))
+      ?? null
+  }
   if (regime === 'vrijgesteld') {
     return v.find(t => t.pct === 0 && /vrijgesteld/i.test(t.naam))
       ?? v.find(t => t.pct === 0 && /(geen btw|vrij van btw|0\s?%|nul)/i.test(t.naam) && !/verlegd/i.test(t.naam) && !NIET_BINNENLANDS.test(t.naam))

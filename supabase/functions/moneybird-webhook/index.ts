@@ -3,6 +3,7 @@ import { makeAdminClient } from "../_shared/scheduledSync.ts"
 import { mbFetch, type MbKoppeling } from "../_shared/moneybird.ts"
 import { handtekeningKlopt } from "../_shared/moneybirdWebhook.ts"
 import { verwerkContactWijziging } from "../_shared/moneybirdContacten.ts"
+import { echtBetaald } from "../_shared/moneybirdBoekingen.ts"
 import { vandaagIso } from "../_shared/datumTijd.ts"
 
 // Ontvangt webhooks van Moneybird (zie _shared/moneybirdWebhook.ts).
@@ -29,7 +30,8 @@ const ok = (tekst = 'ok') => new Response(tekst, { status: 200 })
 
 async function factuurBetaald(k: MbKoppeling, soort: 'external_sales_invoices' | 'sales_invoices', id: string) {
   const inv = await mbFetch(k, `/${soort}/${id}`)
-  if (inv?.state !== 'paid') return
+  // Verrekend met een creditnota is geen betaling (zie echtBetaald).
+  if (!echtBetaald(inv)) return
   const { data: f } = await k.admin.from('facturen').select('id, status')
     .eq('company_id', k.companyId).eq('moneybird_id', String(id)).maybeSingle()
   if (!f || !['verzonden', 'geboekt'].includes(f.status)) return

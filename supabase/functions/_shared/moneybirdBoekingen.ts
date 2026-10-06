@@ -52,6 +52,16 @@ import {
 } from './moneybirdContacten.ts'
 
 const round2 = (n: number) => Math.round(Number(n || 0) * 100) / 100
+
+/**
+ * Is deze factuur in Moneybird écht betaald? "paid" alleen is niet genoeg: een
+ * factuur die met een creditnota is verrekend staat daar ook op paid, met een
+ * betaling van het soort invoices_settlement. In BossBase is die factuur
+ * gecrediteerd, niet betaald — hem op betaald zetten zou de omzet- en
+ * betaaloverzichten vervuilen (gezien op 2026-10-06 bij BB-F005/BB-CF002).
+ */
+export const echtBetaald = (d: any): boolean =>
+  d?.state === 'paid' && (d.payments || []).some((p: any) => p?.manual_payment_action !== 'invoices_settlement')
 const MAX_BIJLAGE_BYTES = 10 * 1024 * 1024
 const KLANT_JOIN = 'customers(id, name, type, email, phone, address, postcode, city, contactpersoon, kvk_number, btw_number, iban, betaaltermijn_dagen, moneybird_id, moneybird_versie, moneybird_hash)'
 
@@ -143,7 +153,18 @@ export async function pushFactuur(ctx: Context, factuur: any): Promise<{ moneybi
       details_attributes: details,
     },
   }
-  const gemaakt = await mbFetch(k, '/external_sales_invoices', { method: 'POST', body: JSON.stringify(body) })
+  let gemaakt: any
+  try {
+    gemaakt = await mbFetch(k, '/external_sales_invoices', { method: 'POST', body: JSON.stringify(body) })
+  } catch (err) {
+    // Moneybird controleert het btw-nummer bij de EU (VIES). Bij btw verlegd moet
+    // dat nummer geldig zijn, anders weigert Moneybird het tarief.
+    if (verlegd && /valid VAT number/i.test(String((err as Error)?.message))) {
+      throw new Error(`Moneybird vindt het btw-nummer van "${klant.name}" (${klant.btw_number}) niet geldig, en bij btw verlegd `
+        + 'moet het geldig zijn. Controleer het btw-nummer bij de klant.')
+    }
+    throw err
+  }
   const id = gemaakt?.id ? String(gemaakt.id) : null
   if (!id) throw new Error('Moneybird gaf geen id terug voor de factuur')
   // Meteen terugschrijven: de volgende run maakt dan geen tweede aan.
@@ -159,8 +180,17 @@ export async function pushFactuur(ctx: Context, factuur: any): Promise<{ moneybi
   return { moneybirdId: id, nieuw: true }
 }
 
-/** Hangt onze factuur-PDF aan de externe factuur. Gooit niet. */
-export async function pushFactuurPdf(ctx: Context, factuur: any): Promise<{ gelukt: boolean; reden?: string }> {
+/**
+ * Hangt onze factuur-PDF aan de externe factuur. Moneybird maakt voor een
+ * externe factuur geen eigen PDF: deze bijlage IS het document dat je in
+ * Moneybird ziet en opent (gecontroleerd 2026-10-06). Daarom staat er altijd
+ * precies één: schrijft de app de PDF opnieuw weg (factuurService zet dan
+ * moneybird_bijlage_gesynct terug), dan gaat de oude bijlage eerst weg.
+ * Gooit niet, behalve bij de limiet.
+ */
+export async function pushFactuurPdf(
+  ctx: Context, factuur: any, { nieuw = false } = {},
+): Promise<{ gelukt: boolean; reden?: string }> {
   const { k } = ctx
   if (!factuur.moneybird_id) return { gelukt: false, reden: 'geen boeking' }
   try {
@@ -168,6 +198,12 @@ export async function pushFactuurPdf(ctx: Context, factuur: any): Promise<{ gelu
     if (error || !blob) return { gelukt: false, reden: 'ontbreekt' }
     const bytes = new Uint8Array(await blob.arrayBuffer())
     if (bytes.byteLength > MAX_BIJLAGE_BYTES) return { gelukt: false, reden: 'groter dan 10 MB' }
+    if (!nieuw) {
+      const inv = await mbFetch(k, `/external_sales_invoices/${factuur.moneybird_id}`)
+      for (const a of (inv?.attachments || [])) {
+        await mbFetch(k, `/external_sales_invoices/${factuur.moneybird_id}/attachments/${a.id}`, { method: 'DELETE' })
+      }
+    }
     const soort = factuur.is_credit ? 'Creditfactuur' : 'Factuur'
     await mbUpload(k, `/external_sales_invoices/${factuur.moneybird_id}/attachment`, bytes, `${soort}-${factuur.nummer || factuur.id}.pdf`)
     await k.admin.from('facturen').update({ moneybird_bijlage_gesynct: true }).eq('id', factuur.id)
@@ -203,6 +239,40 @@ export async function pushBetaling(ctx: Context, factuur: any): Promise<boolean>
     ctx.meldingen.push(`Betaling van factuur ${factuur.nummer} niet geregistreerd in Moneybird: ${f.message}`)
   }
   await k.admin.from('facturen').update({ moneybird_payment_registered_at: new Date().toISOString() }).eq('id', factuur.id)
+  return true
+}
+
+/**
+ * Verrekent een creditfactuur in Moneybird met de factuur die hij crediteert.
+ *
+ * In BossBase is een gecrediteerde factuur niet meer verschuldigd. In Moneybird
+ * staan factuur en creditnota los van elkaar allebei open, tot je ze verrekent.
+ * Dat doen we hier (betaling met manual_payment_action invoices_settlement), zodat
+ * de status in beide hetzelfde zegt. Alleen als het origineel in Moneybird nog
+ * openstaat: is het al betaald, dan moet de creditering worden terugbetaald en
+ * blijft de creditnota terecht open — net als in BossBase.
+ */
+export async function verrekenCredit(ctx: Context, credit: any): Promise<boolean> {
+  const { k } = ctx
+  if (!credit.is_credit || !credit.credit_van_factuur_id || !credit.moneybird_id || credit.moneybird_payment_registered_at) return false
+  const { data: orig } = await k.admin.from('facturen').select('id, nummer, moneybird_id')
+    .eq('id', credit.credit_van_factuur_id).maybeSingle()
+  if (!orig?.moneybird_id) return false   // origineel nog niet geboekt: volgende run
+  const origDaar = await mbFetch(k, `/external_sales_invoices/${orig.moneybird_id}`)
+  if (origDaar?.state === 'paid') return false
+  const openDaar = Math.abs(Number(origDaar?.total_unpaid ?? origDaar?.total_price_incl_tax ?? 0))
+  const bedrag = Math.min(Math.abs(Number(credit.totaal_incl)), openDaar)
+  if (!(bedrag > 0)) return false
+  await mbFetch(k, `/external_sales_invoices/${credit.moneybird_id}/payments`, {
+    method: 'POST',
+    body: JSON.stringify({ payment: {
+      payment_date: credit.factuurdatum || vandaagIso(),
+      price: mbBedrag(-bedrag),
+      manual_payment_action: 'invoices_settlement',
+      invoice_id: String(orig.moneybird_id),
+    } }),
+  })
+  await k.admin.from('facturen').update({ moneybird_payment_registered_at: new Date().toISOString() }).eq('id', credit.id)
   return true
 }
 
@@ -314,7 +384,7 @@ async function klantVoorContact(ctx: Context, contact: any, cache: Map<string, s
 
 // ── De sync ─────────────────────────────────────────────────────────────────
 export type BoekingenUitslag = {
-  exported: { facturen: number; kosten: number; betalingen: number }
+  exported: { facturen: number; kosten: number; betalingen: number; verrekend?: number }
   imported: { inkoopfacturen: number; verkoopfacturen: number }
   betaaldUitMoneybird: number
   overgeslagenUitPrullenbak: number
@@ -346,11 +416,26 @@ export async function syncBoekingen(k: MbKoppeling): Promise<BoekingenUitslag> {
       try {
         const r = await pushFactuur(ctx, f)
         if (r.nieuw) u.exported.facturen++
-        await pushFactuurPdf(ctx, f)
+        await pushFactuurPdf(ctx, f, { nieuw: r.nieuw })
         if (await pushBetaling(ctx, f)) u.exported.betalingen++
       } catch (err: any) {
         if (isLimiet(err)) throw err
         u.fouten.push(`Factuur ${f.nummer}: ${err?.message}`)
+      }
+    }
+
+    // ── 1b. Creditfacturen verrekenen met hun origineel ──────────────────────
+    if (!tijdOp()) {
+      const { data: credits } = await db.from('facturen')
+        .select('id, nummer, is_credit, credit_van_factuur_id, totaal_incl, factuurdatum, moneybird_id, moneybird_payment_registered_at')
+        .eq('company_id', co).eq('is_credit', true).is('externe_referentie', null)
+        .not('moneybird_id', 'is', null).is('moneybird_payment_registered_at', null).limit(50)
+      for (const c of (credits || [])) {
+        if (tijdOp()) { u.rest = true; break }
+        try { if (await verrekenCredit(ctx, c)) u.exported.verrekend = (u.exported.verrekend || 0) + 1 } catch (err: any) {
+          if (isLimiet(err)) throw err
+          u.fouten.push(`Creditfactuur ${c.nummer} verrekenen: ${err?.message}`)
+        }
       }
     }
 
@@ -407,7 +492,7 @@ export async function syncBoekingen(k: MbKoppeling): Promise<BoekingenUitslag> {
         const perId = new Map(lijst.map((f: any) => [String(f.moneybird_id), f]))
         const docs = await mbSyncOphalen(k, soort, [...perId.keys()])
         for (const d of docs) {
-          if (d?.state !== 'paid') continue
+          if (!echtBetaald(d)) continue
           const f = perId.get(String(d.id))
           if (!f) continue
           await db.from('facturen').update({

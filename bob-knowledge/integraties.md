@@ -19,8 +19,14 @@ bij Moneybird in).
 **Wat er gebeurt:**
 - Al je facturen gaan naar Moneybird, behalve concepten: als **externe factuur** met je
   eigen factuurnummer en je eigen PDF erbij. Per regel krijgt de factuur het juiste
-  btw-tarief (21%, 9%, vrijgesteld of verlegd) en een omzetrekening. Bij btw verlegd moet
-  het btw-nummer van de klant zijn ingevuld. Creditfacturen gaan met negatieve bedragen.
+  btw-tarief (21%, 9%, vrijgesteld of verlegd) en een omzetrekening. In Moneybird zie
+  en open je je eigen PDF bij de factuur; Moneybird maakt er geen eigen factuur van.
+- **Btw verlegd:** maak in Moneybird eerst het tarief **Btw verlegd binnenland** aan
+  (Instellingen › Boekhouding › Btw-tarieven › Toevoegen). Moneybird accepteert dat tarief
+  alleen bij een klant met een geldig btw-nummer; dat controleert Moneybird zelf.
+- Creditfacturen gaan met negatieve bedragen. Staat de gecrediteerde factuur in Moneybird
+  nog open, dan worden ze daar met elkaar verrekend; dat is geen betaling, dus in BossBase
+  blijven ze op hun status staan.
 - Een factuur die je op betaald zet (zelf of via de betaallink), krijgt ook in Moneybird
   een betaling. Staat een factuur in Moneybird op betaald, dan gaat hij in BossBase ook
   op betaald.
