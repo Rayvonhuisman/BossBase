@@ -444,7 +444,9 @@ function BossKnop({ onClick }) {
     <button className="tb-boss" title="Vraag het Boss" aria-label="Vraag het Boss" data-rl="boss" onClick={onClick}>
       {mislukt
         ? <span className="tb-boss-val" aria-hidden="true">B</span>
-        : <img src="/boss-avatar.png" alt="" onError={() => setMislukt(true)} />}
+        // boss-figuur.png: het figuur zonder witte achtergrond. Met de oude
+        // (boss-avatar.png) zag je een wit vlak zodra de knop oplichtte.
+        : <img src="/boss-figuur.png" alt="" onError={() => setMislukt(true)} />}
     </button>
   );
 }

@@ -18,7 +18,8 @@ import { supabase } from '../lib/supabase.js';
 
 export const BOSS_BEGROETING = 'Hoi! Ik ben Boss. Waar kan ik je mee helpen?';
 
-const AVATAR = '/boss-avatar.png';
+// Het figuur zonder witte achtergrond (klein, doorzichtig).
+const AVATAR = '/boss-figuur.png';
 
 // Boss schrijft in markdown: **vet**, opsommingen en genummerde stappen. Dat is
 // hem ook zo gevraagd, want het maakt een stappenplan leesbaar. Zonder opmaak
