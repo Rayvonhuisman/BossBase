@@ -438,6 +438,8 @@ export async function getGrootboekrekeningen(provider = 'snelstart') {
     // Alleen Moneybird: btw-tarieven bestaan daar per administratie en moeten
     // gekoppeld worden. SnelStart kent vaste btw-soorten.
     btwTarieven: data?.btwTarieven || [],
+    // Alleen Moneybird: checklist na het koppelen (wat moet er in de administratie staan).
+    controle: data?.controle || [],
   }
 }
 

@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient } from "../_shared/scheduledSync.ts"
 import { clientFout } from '../_shared/clientFout.ts'
 import { laadKoppeling } from "../_shared/moneybird.ts"
-import { laadIndeling, standaardIndeling, KOSTEN_CATEGORIEEN } from "../_shared/moneybirdIndeling.ts"
+import { laadIndeling, standaardIndeling, controleNaKoppelen, KOSTEN_CATEGORIEEN } from "../_shared/moneybirdIndeling.ts"
 
 // De grootboekrekeningen en btw-tarieven uit de Moneybird-administratie van de
 // klant, plus wat de standaardindeling per regel zou kiezen. Voedt het
@@ -47,6 +47,7 @@ serve(async (req) => {
         .sort((a, b) => (a.code ?? a.naam).localeCompare(b.code ?? b.naam, 'nl', { numeric: true })),
       btwTarieven: ind.tarieven.sort((a, b) => b.pct - a.pct || a.naam.localeCompare(b.naam, 'nl')),
       standaarden: standaardIndeling(ind, categorieen),
+      controle: controleNaKoppelen(ind),
     })
   } catch (err: any) {
     console.error('moneybird-instellingen:', err?.message)

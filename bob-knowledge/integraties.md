@@ -21,9 +21,12 @@ bij Moneybird in).
   eigen factuurnummer en je eigen PDF erbij. Per regel krijgt de factuur het juiste
   btw-tarief (21%, 9%, vrijgesteld of verlegd) en een omzetrekening. In Moneybird zie
   en open je je eigen PDF bij de factuur; Moneybird maakt er geen eigen factuur van.
-- **Btw verlegd:** maak in Moneybird eerst het tarief **Btw verlegd binnenland** aan
-  (Instellingen › Boekhouding › Btw-tarieven › Toevoegen). Moneybird accepteert dat tarief
+- **Btw verlegd en vrijgesteld:** een nieuwe Moneybird-administratie heeft daar geen
+  tarief voor. Maak in Moneybird **Btw verlegd binnenland** en **Btw vrijgesteld** aan
+  (Instellingen › Boekhouding › Btw-tarieven › Toevoegen). Moneybird accepteert verlegd
   alleen bij een klant met een geldig btw-nummer; dat controleert Moneybird zelf.
+- Elke factuur gaat met PDF naar je boekhouding, ook als je hem nooit vanuit BossBase
+  hebt verstuurd: dan maakt BossBase de PDF zelf, in je eigen huisstijl.
 - Creditfacturen gaan met negatieve bedragen. Staat de gecrediteerde factuur in Moneybird
   nog open, dan worden ze daar met elkaar verrekend; dat is geen betaling, dus in BossBase
   blijven ze op hun status staan.
@@ -42,7 +45,9 @@ bij Moneybird in).
   Moneybird komt meestal direct binnen.
 
 **Tabbladen in de Moneybird-kaart:**
-- **Instellingen**: per kostencategorie en per btw-soort een grootboekrekening, en welk
+- **Instellingen**: bovenaan de lijst **Controleer na het koppelen**: welke btw-tarieven
+  en categorieën er in je Moneybird-administratie moeten staan, met een vinkje of kruisje.
+  Daaronder per kostencategorie en per btw-soort een grootboekrekening, en welk
   btw-tarief van je administratie bij welke btw-soort hoort. Laat je een veld leeg, dan
   kiest BossBase een passende rekening of tarief.
 - **Synchroniseren**: **Kosten/facturen synchroniseren** en **Contacten synchroniseren**,

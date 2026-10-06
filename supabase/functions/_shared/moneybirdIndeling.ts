@@ -115,11 +115,10 @@ export function standaardVerkoopTarief(tar: MbTarief[], regime: string): MbTarie
       ?? v.find(t => t.pct === 0 && /verlegd/i.test(t.naam) && !NIET_BINNENLANDS.test(t.naam) && !/product|dienst/i.test(t.naam))
       ?? null
   }
-  if (regime === 'vrijgesteld') {
-    return v.find(t => t.pct === 0 && /vrijgesteld/i.test(t.naam))
-      ?? v.find(t => t.pct === 0 && /(geen btw|vrij van btw|0\s?%|nul)/i.test(t.naam) && !/verlegd/i.test(t.naam) && !NIET_BINNENLANDS.test(t.naam))
-      ?? null
-  }
+  // Vrijgesteld = Moneybird's tarief "Btw vrijgesteld" (zonder aangifterubriek).
+  // Bewust GEEN terugval op "0% btw": dat is rubriek 1e (nultarief en verlegd),
+  // en vrijgestelde omzet hoort daar niet in.
+  if (regime === 'vrijgesteld') return v.find(t => t.pct === 0 && /vrijgesteld/i.test(t.naam)) ?? null
   return null
 }
 
@@ -168,9 +167,10 @@ export function kiesVerkoopTarief(ind: Indeling, voork: Record<string, VoorkeurR
     // Een nieuwe Moneybird-administratie heeft standaard geen tarief voor btw
     // verlegd, en de API kan er geen aanmaken. Het 0%-tarief gebruiken zou
     // fiscaal fout zijn (andere aangifterubriek), dus: zeggen wat te doen.
-    throw new Error(regime === 'verlegd'
-      ? 'Je Moneybird-administratie heeft nog geen btw-tarief voor btw verlegd. Maak het aan in Moneybird '
-        + '(Instellingen › Btw-tarieven, soort "Btw verlegd") en synchroniseer opnieuw, of kies het onder Integraties › Moneybird › Instellingen.'
+    const naam = regime === 'verlegd' ? 'Btw verlegd binnenland' : regime === 'vrijgesteld' ? 'Btw vrijgesteld' : null
+    throw new Error(naam
+      ? `Je Moneybird-administratie heeft nog geen btw-tarief "${naam}". Maak het aan in Moneybird `
+        + `(Instellingen › Boekhouding › Btw-tarieven › Toevoegen › "${naam}") en synchroniseer opnieuw, of kies het onder Integraties › Moneybird › Instellingen.`
       : `Er is geen btw-tarief voor ${REGIME_TEKST[regime] ?? regime} gevonden in je Moneybird-administratie. `
         + 'Maak het aan in Moneybird (Instellingen › Btw-tarieven) of kies het onder Integraties › Moneybird › Instellingen.')
   }
@@ -188,6 +188,39 @@ export function kiesInkoopTarief(ind: Indeling, voork: Record<string, VoorkeurRi
       + 'Maak het aan in Moneybird (Instellingen › Btw-tarieven, voor inkoop) of kies het onder Integraties › Moneybird › Instellingen.')
   }
   return std.id
+}
+
+/**
+ * Checklist na het koppelen: wat moet er in de Moneybird-administratie staan
+ * om alles te kunnen boeken? Een nieuwe administratie mist standaard de
+ * tarieven voor btw verlegd en vrijgesteld, en die kan BossBase via de API niet
+ * aanmaken. Het instellingenscherm toont dit per punt met een vinkje of kruisje.
+ */
+export function controleNaKoppelen(ind: Indeling): { ok: boolean; titel: string; uitleg: string }[] {
+  const materiaal = standaardKosten(ind.rekeningen, 'Materiaal')
+  return [
+    {
+      ok: Boolean(standaardVerkoopTarief(ind.tarieven, 'verlegd')),
+      titel: 'Btw-tarief "Btw verlegd binnenland"',
+      uitleg: 'Nodig voor facturen met btw verlegd (onderaanneming). Moneybird › Instellingen › Boekhouding › Btw-tarieven › Toevoegen. '
+        + 'Moneybird accepteert het alleen bij een klant met een geldig btw-nummer.',
+    },
+    {
+      ok: Boolean(standaardVerkoopTarief(ind.tarieven, 'vrijgesteld')),
+      titel: 'Btw-tarief "Btw vrijgesteld"',
+      uitleg: 'Nodig voor vrijgestelde regels. Moneybird › Instellingen › Boekhouding › Btw-tarieven › Toevoegen.',
+    },
+    {
+      ok: Boolean(standaardInkoopTarief(ind.tarieven, 0)),
+      titel: 'Btw-tarief voor inkoop zonder btw (0% of "Geen btw")',
+      uitleg: 'Nodig voor kosten zonder btw, zoals verzekeringen. Toevoegen onder Inkoopfactuur bij dezelfde btw-tarieven.',
+    },
+    {
+      ok: Boolean(materiaal.rekening && !materiaal.gok),
+      titel: 'Een categorie voor inkoop of materiaal',
+      uitleg: 'Zonder komen materiaalkosten op Algemene kosten. Maak in Moneybird een categorie aan (bijvoorbeeld "Inkoop materialen") of kies hieronder een andere.',
+    },
+  ]
 }
 
 /** Wat de standaard zou kiezen, per instelbare sleutel — voor het instellingenscherm. */

@@ -102,7 +102,7 @@ function dataUrlBytes(dataUrl: string): { mime: string; bytes: Uint8Array } | nu
 
 const naarDataUrlVanBytes = (bytes: Uint8Array, mime: string) => `data:${mime};base64,${bytesNaarBase64(bytes)}`
 
-function serverOmgeving(admin: any) {
+export function serverOmgeving(admin: any) {
   return {
     // Alleen http(s) of een opslagpad in een van onze buckets.
     async naarDataUrl(url: string): Promise<string | null> {
@@ -158,7 +158,7 @@ const pdfBytes = (doc: any) => new Uint8Array(doc.output('arraybuffer'))
 
 // Bedrijf zoals de app het aan de PDF geeft: live gegevens, met de bevroren
 // snapshot van het document eroverheen als die er is (companyForDocument).
-function bedrijfVoorDocument(live: Record<string, any> | null, doc: Record<string, any>) {
+export function bedrijfVoorDocument(live: Record<string, any> | null, doc: Record<string, any>) {
   const basis = {
     name: live?.name || '', address: live?.address || '', postalCode: live?.postal_code || '',
     city: live?.city || '', email: live?.email || '', phone: live?.phone || '', kvk: live?.kvk || '',
@@ -178,6 +178,10 @@ function bedrijfVoorDocument(live: Record<string, any> | null, doc: Record<strin
     email: doc.snapshot_email ?? basis.email,
     kvk: doc.snapshot_kvk ?? basis.kvk,
     btwNumber: doc.snapshot_btw ?? basis.btwNumber,
+    // Alleen facturen hebben een IBAN-snapshot; bij een offerte is die er niet
+    // en blijft het huidige staan.
+    iban: doc.snapshot_iban ?? basis.iban,
+    ibanTnv: doc.snapshot_iban_tnv ?? basis.ibanTnv,
   }
 }
 

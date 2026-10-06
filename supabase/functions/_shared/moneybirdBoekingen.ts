@@ -40,6 +40,7 @@ import { alleRijen } from './alleRijen.ts'
 import { facturenTeBoeken, kostenTeBoeken, getGenegeerd, getVoorkeurRijen, type VoorkeurRij } from './boekhouding.ts'
 import { regimeVanRegel } from './snelstart.ts'
 import { vandaagIso } from './datumTijd.ts'
+import { factuurPdf } from './factuurPdf.ts'
 import {
   mbFetch, mbSyncLijst, mbSyncOphalen, mbUpload, mbDownload, mbBedrag, isLimiet, MB_HELE_PERIODE,
   type MbKoppeling, type MbFout,
@@ -194,9 +195,10 @@ export async function pushFactuurPdf(
   const { k } = ctx
   if (!factuur.moneybird_id) return { gelukt: false, reden: 'geen boeking' }
   try {
-    const { data: blob, error } = await k.admin.storage.from('factuur-pdfs').download(`${k.companyId}/${factuur.id}.pdf`)
-    if (error || !blob) return { gelukt: false, reden: 'ontbreekt' }
-    const bytes = new Uint8Array(await blob.arrayBuffer())
+    // De opgeslagen PDF, of anders maakt de server hem (zelfde opmaak als de app).
+    const pdf = await factuurPdf(k.admin, k.companyId, factuur.id)
+    if (!pdf) return { gelukt: false, reden: 'ontbreekt' }
+    const bytes = pdf.bytes
     if (bytes.byteLength > MAX_BIJLAGE_BYTES) return { gelukt: false, reden: 'groter dan 10 MB' }
     if (!nieuw) {
       const inv = await mbFetch(k, `/external_sales_invoices/${factuur.moneybird_id}`)

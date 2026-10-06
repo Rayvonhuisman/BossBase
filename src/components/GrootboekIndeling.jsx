@@ -115,6 +115,7 @@ export default function GrootboekIndeling({ provider = 'snelstart' }) {
   const toast = useToast();
   const [rekeningen, setRekeningen] = useState(null);
   const [btwTarieven, setBtwTarieven] = useState([]);
+  const [controle, setControle] = useState([]);
   const [standaarden, setStandaarden] = useState({});
   const [voorkeuren, setVoorkeuren] = useState({});
   const [categorieen, setCategorieen] = useState([]);
@@ -137,6 +138,7 @@ export default function GrootboekIndeling({ provider = 'snelstart' }) {
       setRekeningen(lijst.grootboeken ?? lijst);
       setStandaarden(lijst.standaarden || {});
       setBtwTarieven(lijst.btwTarieven || []);
+      setControle(lijst.controle || []);
       setVoorkeuren(gekozen);
       setCategorieen(cats);
       setGebruik(tellingen);
@@ -255,6 +257,28 @@ export default function GrootboekIndeling({ provider = 'snelstart' }) {
 
           {!laden && !fout && (
             <>
+              {/* Checklist na het koppelen (Moneybird): wat moet er in de
+                  administratie staan om alles te kunnen boeken. Een nieuwe
+                  administratie mist standaard een paar btw-tarieven, en die kan
+                  BossBase niet zelf aanmaken. Na aanpassen in Moneybird: Opnieuw. */}
+              {controle.length > 0 && (
+                <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
+                  <div style={{ fontWeight: 600, fontSize: '.82rem', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Controleer na het koppelen</span>
+                    <button className="btn btn-s btn-sm" onClick={laad}>Opnieuw controleren</button>
+                  </div>
+                  {controle.map(c => (
+                    <div key={c.titel} style={{ display: 'flex', gap: 8, padding: '4px 0', fontSize: '.8rem' }}>
+                      <span aria-hidden="true" style={{ color: c.ok ? 'var(--pd)' : 'var(--rd)', fontWeight: 700 }}>{c.ok ? '✓' : '✗'}</span>
+                      <div>
+                        <div style={{ color: 'var(--dk)' }}>{c.titel}{c.ok ? '' : ' — ontbreekt'}</div>
+                        {!c.ok && <div style={{ color: 'var(--dm)' }}>{c.uitleg}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {ontbrekend.length > 0 && (
                 <div style={{
                   border: '1px solid var(--warn-bd, #e0b050)', background: 'var(--warn-bg, rgba(224,176,80,.10))',

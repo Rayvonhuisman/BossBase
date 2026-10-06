@@ -10,6 +10,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { verifyStripeSignature } from '../_shared/stripe.ts'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
 import { clientFout } from '../_shared/clientFout.ts'
+import { factuurPdf } from '../_shared/factuurPdf.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -230,13 +231,13 @@ async function sendViaEdge(supabaseUrl: string, serviceKey: string, body: Record
   } catch { return false }
 }
 
-// Haal de bij verzending opgeslagen factuur-PDF op uit de private bucket en geef
-// 'm als base64 terug (of null als er niets is). Service-role omzeilt de RLS.
+// De factuur-PDF als base64: de bij verzending opgeslagen kopie, of — als die er
+// niet is — een door de server gemaakte in dezelfde opmaak (_shared/factuurPdf.ts).
+// Null als er geen te maken is.
 async function loadFactuurPdfBase64(admin: any, companyId: string, factuurId: string): Promise<string | null> {
   try {
-    const { data, error } = await admin.storage.from('factuur-pdfs').download(`${companyId}/${factuurId}.pdf`)
-    if (error || !data) return null
-    return base64Encode(new Uint8Array(await data.arrayBuffer()))
+    const pdf = await factuurPdf(admin, companyId, factuurId)
+    return pdf ? base64Encode(pdf.bytes.slice().buffer) : null
   } catch { return null }
 }
 

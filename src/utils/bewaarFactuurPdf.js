@@ -1,17 +1,14 @@
 // De factuur-PDF vastleggen in de privé-bucket factuur-pdfs.
 //
-// De opmaak zit in jsPDF en draait dus alleen in de browser. Alles wat later
-// zonder browser een kopie nodig heeft — de Stripe-webhook voor de
-// betaalbevestiging, en de SnelStart-koppeling die het brondocument aan de
-// verkoopboeking hangt — leest die opgeslagen kopie.
+// Alles wat later zonder browser een kopie nodig heeft — de Stripe-webhook voor
+// de betaalbevestiging, de boekhoudkoppelingen die het brondocument aan de
+// boeking hangen — leest deze opgeslagen kopie: dit is de PDF die de klant kreeg.
+// Wordt hij hier niet opgeslagen, dan maakt de server hem zelf in dezelfde
+// opmaak (supabase/functions/_shared/factuurPdf.ts, dezelfde pdfOpbouw.js).
 //
-// Dat betekent dat het moment van opslaan bepalend is: gebeurt het niet, dan
-// staat de boeking straks zonder factuur in de boekhouding. Daarom wordt dit
-// aangeroepen zodra een factuur definitief wordt, langs welke weg dan ook —
-// versturen per mail, of handmatig op verzonden/betaald zetten.
-//
+// Daarom wordt dit aangeroepen zodra een factuur definitief wordt, langs welke
+// weg dan ook — versturen per mail, of handmatig op verzonden/betaald zetten.
 // Best-effort: een mislukte PDF mag het versturen of opslaan nooit blokkeren.
-// De sync meldt zelf welke facturen zonder document in de boekhouding staan.
 
 import { getFactuurPdfBase64 } from './generatePdf.js';
 import { companyForDocument } from './documentSnapshot.js';
