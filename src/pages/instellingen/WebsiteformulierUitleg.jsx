@@ -123,6 +123,10 @@ export function WebsiteformulierUitleg({ onTerug }) {
           <strong>Meer instellingen</strong> zet je het formulier aan of uit, beheer je je websites (ook een tweede site),
           zie je de kleur (die wijzig je in Bedrijfsprofiel), vul je een link naar je privacyverklaring in en kopieer je de
           link naar het formulier.</p>
+        <p style={tekst}>Wil je het formulier helemaal weghalen, klik dan onderaan Meer instellingen op{' '}
+          <strong>Formulier verwijderen</strong>. De code op je website werkt dan niet meer; haal hem ook van je site af.
+          Aanvragen die al binnen zijn, blijven met hun klant en project gewoon staan. Daarna kun je met{' '}
+          <strong>Websiteformulier instellen</strong> opnieuw beginnen; je krijgt dan een nieuwe code.</p>
       </div>
 
       <div style={blok}>

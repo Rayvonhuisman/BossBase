@@ -73,11 +73,24 @@ const naarFormulier = r => r && ({
   paginaUrl: r.pagina_url || '',
 });
 
-/** Het formulier van het eigen bedrijf; maakt het de eerste keer aan. */
-export async function haalWebsiteformulier() {
-  const { data, error } = await supabase.rpc('bb_websiteformulier');
+/**
+ * Het formulier van het eigen bedrijf. Met `aanmaken: false` komt er null
+ * terug als er (nog) geen formulier is; dan toont de pagina een knop om er een
+ * in te stellen, in plaats van stilletjes een nieuw formulier te maken.
+ */
+export async function haalWebsiteformulier({ aanmaken = true } = {}) {
+  const { data, error } = await supabase.rpc('bb_websiteformulier', { p_aanmaken: aanmaken });
   if (error) throw error;
   return naarFormulier(data);
+}
+
+/**
+ * Haalt het formulier weg. De code op de website werkt daarna niet meer;
+ * aanvragen die al binnen zijn, blijven staan (migratie 20261006101847).
+ */
+export async function verwijderWebsiteformulier() {
+  const { error } = await supabase.rpc('bb_websiteformulier_verwijderen');
+  if (error) throw error;
 }
 
 export async function slaWebsiteformulierOp(f) {

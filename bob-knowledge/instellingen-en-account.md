@@ -129,6 +129,13 @@ site toevoegen of er een weghalen), de **Kleur** (die wijzig je in Bedrijfsprofi
 een link naar je privacyverklaring, de **Link naar het formulier** (voor Wix en
 andere sitebouwers), en de uitleg stap voor stap. Klik daar op **Opslaan**.
 
+**Formulier verwijderen:** onderaan **Meer instellingen** staat **Formulier
+verwijderen**. Na bevestigen is het formulier weg en werkt de code op je website niet
+meer (haal hem dus ook van je site). Aanvragen die al binnen zijn, blijven met hun
+klant en project gewoon staan. Daarna staat er **Nog geen websiteformulier** met de
+knop **Websiteformulier instellen**; dan begin je opnieuw bij stap 1 en krijg je een
+nieuwe code.
+
 **Spam en veiligheid:** een verborgen veld dat alleen robots invullen, een limiet per
 IP-adres en per e-mailadres, en alleen de opgegeven websites.
 

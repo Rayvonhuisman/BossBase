@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Info, Copy, Check, Plus, Trash2, Send, ArrowLeft, ArrowRight, ChevronDown, ChevronRight, Pencil, Code } from 'lucide-react';
 import { useToast } from '../../lib/toast.jsx';
 import { useProfile } from '../../lib/profileContext.jsx';
+import { usePlan } from '../../hooks/usePlan.js';
+import { bevestig } from '../../lib/bevestig.jsx';
 import { useUrlTab } from '../../hooks/useUrlTab.js';
 import { InfoTip, InfoUitklap } from '../../components/Uitleg.jsx';
 import Rondleiding from '../../components/Rondleiding.jsx';
 import {
-  BOSSBASE_VELDEN, EIGEN_SOORTEN, nieuwEigenVeld, haalWebsiteformulier, slaWebsiteformulierOp, naarDomeinen,
+  BOSSBASE_VELDEN, EIGEN_SOORTEN, nieuwEigenVeld, haalWebsiteformulier, slaWebsiteformulierOp, verwijderWebsiteformulier, naarDomeinen,
   naarPaginaUrl, isBossBasePagina, insluitcode, formulierLink, stelDoelVoor, leesVeldenVanSite, verstuurTestaanvraag,
 } from '../../services/websiteformulierService.js';
 import { WebsiteformulierUitleg } from './WebsiteformulierUitleg.jsx';
@@ -110,6 +112,7 @@ const isIngericht = f => !!f && f.domeinen.length > 0
 export function WebsiteformulierSectie({ openDeal, naarBedrijfsprofiel }) {
   const toast = useToast();
   const { company } = useProfile();
+  const { readonly } = usePlan();
   const [weergave, setWeergave] = useUrlTab('formulier', { param: 'weergave', validIds: ['formulier', 'uitleg'], stap: true });
 
   const [opgeslagen, setOpgeslagen] = useState(null);
@@ -130,20 +133,57 @@ export function WebsiteformulierSectie({ openDeal, naarBedrijfsprofiel }) {
   const [meerOpen, setMeerOpen] = useState(false);
   const [domeinInvoer, setDomeinInvoer] = useState('');
 
+  const neemOver = r => {
+    setOpgeslagen(r);
+    setF(r);
+    if (!r) return;
+    setAdres(r.paginaUrl || (r.domeinen.find(d => d.startsWith('https://www.')) || r.domeinen[0] || '').replace(/^https?:\/\//, ''));
+    setStap(isIngericht(r) ? 'klaar' : 0);
+  };
+
+  // Eerst zonder aanmaken: is er geen formulier (nooit ingesteld, of
+  // verwijderd), dan toont de pagina een knop in plaats van er zelf een te maken.
   useEffect(() => {
     let leeft = true;
-    haalWebsiteformulier()
-      .then(r => {
-        if (!leeft || !r) return;
-        setOpgeslagen(r);
-        setF(r);
-        setAdres(r.paginaUrl || (r.domeinen.find(d => d.startsWith('https://www.')) || r.domeinen[0] || '').replace(/^https?:\/\//, ''));
-        setStap(isIngericht(r) ? 'klaar' : 0);
-      })
+    haalWebsiteformulier({ aanmaken: false })
+      .then(r => { if (leeft) neemOver(r); })
       .catch(e => { if (leeft) setFout(e.message || 'Het websiteformulier kon niet worden geladen.'); })
       .finally(() => { if (leeft) setLaden(false); });
     return () => { leeft = false; };
   }, []);
+
+  const instellen = async () => {
+    setBezig(true);
+    try {
+      neemOver(await haalWebsiteformulier({ aanmaken: true }));
+      setStap(0);
+    } catch (e) {
+      toast.error(e.message || 'Het websiteformulier kon niet worden aangemaakt.');
+    } finally {
+      setBezig(false);
+    }
+  };
+
+  const verwijder = async () => {
+    const ja = await bevestig({
+      titel: 'Websiteformulier verwijderen?',
+      tekst: 'De code op je website werkt daarna niet meer. Aanvragen die al binnen zijn, blijven gewoon staan.',
+      knop: 'Verwijderen',
+      gevaarlijk: true,
+    });
+    if (!ja) return;
+    setBezig(true);
+    try {
+      await verwijderWebsiteformulier();
+      neemOver(null);
+      setMeerOpen(false);
+      toast.success('Websiteformulier verwijderd');
+    } catch (e) {
+      toast.error(e.message || 'Verwijderen is mislukt');
+    } finally {
+      setBezig(false);
+    }
+  };
 
   const gewijzigd = useMemo(() => JSON.stringify(f) !== JSON.stringify(opgeslagen), [f, opgeslagen]);
   const zet = (k, v) => setF(oud => ({ ...oud, [k]: v }));
@@ -186,10 +226,18 @@ export function WebsiteformulierSectie({ openDeal, naarBedrijfsprofiel }) {
   if (weergave === 'uitleg') return <WebsiteformulierUitleg onTerug={() => setWeergave('formulier')} />;
 
   if (laden) return <div className="card card-p" style={{ textAlign: 'center', color: 'var(--dl)' }}>Laden…</div>;
-  if (fout || !f) {
+  if (fout) return <div className="card card-p">{fout}</div>;
+  if (!f) {
+    if (readonly) {
+      return <div className="card card-p">Je account staat op alleen-lezen. Kies een abonnement om een websiteformulier in te stellen.</div>;
+    }
     return (
-      <div className="card card-p">
-        {fout || 'Je account staat op alleen-lezen. Kies een abonnement om een websiteformulier aan te maken.'}
+      <div className="card card-p afu3" style={{ maxWidth: 560, margin: '12px auto 0', padding: '32px', textAlign: 'center' }}>
+        <h2 style={{ ...vraag, justifyContent: 'center' }}>Nog geen websiteformulier</h2>
+        <p style={{ ...zin, marginBottom: 20 }}>Krijg aanvragen van je eigen website meteen in je pipeline.</p>
+        <button type="button" className="btn btn-p" onClick={instellen} disabled={bezig}>
+          {bezig ? 'Even geduld…' : 'Websiteformulier instellen'}
+        </button>
       </div>
     );
   }
@@ -436,6 +484,14 @@ export function WebsiteformulierSectie({ openDeal, naarBedrijfsprofiel }) {
               <div className="fa" style={{ marginTop: 0 }}>
                 <button className="btn btn-p" onClick={() => bewaar(f, { stil: false })} disabled={bezig || !gewijzigd}>
                   {bezig ? 'Opslaan…' : gewijzigd ? 'Opslaan' : 'Opgeslagen'}
+                </button>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+                <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Formulier verwijderen</div>
+                <p style={{ ...hint, margin: '0 0 10px' }}>De code op je website werkt dan niet meer. Aanvragen die al binnen zijn, blijven staan.</p>
+                <button type="button" className="btn btn-danger btn-sm" onClick={verwijder} disabled={bezig}>
+                  <Trash2 size={14} /> Formulier verwijderen
                 </button>
               </div>
             </div>
