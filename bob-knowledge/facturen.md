@@ -24,7 +24,7 @@ Daarnaast:
   Een factuur die vandaag vervalt, is morgen pas te laat.
 - **Gecrediteerd**: er is een creditfactuur voor gemaakt. De factuur zelf blijft
   bestaan.
-- **Uit SnelStart**: een factuur die uit de boekhouding is opgehaald. Die kun je
+- **Uit boekhouding**: een factuur die uit SnelStart of Moneybird is opgehaald. Die kun je
   alleen bekijken (**Origineel document**) en verwijderen.
 
 ## Een factuur maken

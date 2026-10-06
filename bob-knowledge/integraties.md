@@ -9,24 +9,42 @@ Te vinden onder **Instellingen**, tabblad **Integraties**. Er zijn drie koppelin
 
 ## Moneybird (Groei en Team)
 
-**Koppelen:** vul je **API token** en **Administratie-ID** in, klik
-**Verbinding testen** en daarna **Opslaan**.
+**Koppelen:** open de Moneybird-kaart en klik **Koppel met Moneybird**. Je logt in bij
+Moneybird en geeft BossBase toegang. Heb je meer administraties, dan kies je er daarna
+één. Daarna kom je vanzelf terug in BossBase. Een token of administratie-ID invullen
+hoeft niet meer. Met **Verbinding testen** controleer je de koppeling; met
+**Loskoppelen** stop je hem (er wordt niets verwijderd, en BossBase trekt zijn toegang
+bij Moneybird in).
 
 **Wat er gebeurt:**
-- Een factuur die je op betaald zet (zelf of via de betaallink), gaat direct naar
-  Moneybird, met de betaling. Concepten en onbetaalde facturen gaan niet mee.
-- Een nieuwe klant gaat naar Moneybird; wijzigingen aan een klant die al in Moneybird
-  staat ook.
-- Er draait **geen automatische synchronisatie**. Synchroniseren doe je zelf, in de
-  Moneybird-kaart, tabblad **Synchroniseren**:
-  - **Kosten importeren** haalt inkoopfacturen, bonnetjes en uitgaven op (maximaal 100
-    per soort per keer); die komen op de pagina **Kosten** met het label MB. Facturen die
-    in Moneybird als betaald staan, gaan ook in BossBase op betaald. De btw-cijfers voor
-    de btw-kaart op Financiën worden dan ook bijgewerkt.
-  - **Contacten synchroniseren** zet nieuwe klanten in beide richtingen over.
-- Kosten die je in BossBase invoert, gaan niet naar Moneybird.
-- BossBase stuurt geen btw-tarief en geen grootboekrekening mee; Moneybird kiest zelf
-  het standaardtarief. Controleer de eerste facturen in Moneybird.
+- Al je facturen gaan naar Moneybird, behalve concepten: als **externe factuur** met je
+  eigen factuurnummer en je eigen PDF erbij. Per regel krijgt de factuur het juiste
+  btw-tarief (21%, 9%, vrijgesteld of verlegd) en een omzetrekening. Bij btw verlegd moet
+  het btw-nummer van de klant zijn ingevuld. Creditfacturen gaan met negatieve bedragen.
+- Een factuur die je op betaald zet (zelf of via de betaallink), krijgt ook in Moneybird
+  een betaling. Staat een factuur in Moneybird op betaald, dan gaat hij in BossBase ook
+  op betaald.
+- Klanten en leveranciers worden beide kanten op bijgewerkt. Een contact dat op een
+  inkoopfactuur of bonnetje staat, komt binnen als leverancier, de rest als klant.
+- Inkoopfacturen en bonnetjes uit Moneybird komen als kosten binnen (label MB), met btw,
+  leverancier en bon. Facturen die je in Moneybird zelf maakt, komen in BossBase met het
+  label **Uit boekhouding**.
+- Kosten die je in BossBase invoert gaan naar Moneybird als inkoopfactuur, met bon, op de
+  grootboekrekening van hun categorie. Een leverancier is daarvoor verplicht.
+  Werkbonmateriaal en inkopen op een project gaan niet mee.
+- Elke nacht synchroniseert BossBase vanzelf. Een betaling of gewijzigd contact in
+  Moneybird komt meestal direct binnen.
+
+**Tabbladen in de Moneybird-kaart:**
+- **Instellingen**: per kostencategorie en per btw-soort een grootboekrekening, en welk
+  btw-tarief van je administratie bij welke btw-soort hoort. Laat je een veld leeg, dan
+  kiest BossBase een passende rekening of tarief.
+- **Synchroniseren**: **Kosten/facturen synchroniseren** en **Contacten synchroniseren**,
+  en wanneer er voor het laatst is gesynchroniseerd.
+- **Meldingen**: als er iets niet goed ging, bijvoorbeeld een factuur zonder btw-tarief.
+
+Iets verwijderd wat uit Moneybird kwam? Dan komt het niet terug. **Alles opnieuw
+ophalen** (tabblad Instellingen) haalt ook dat weer op.
 
 ## SnelStart (Groei en Team)
 
@@ -37,7 +55,7 @@ Te vinden onder **Instellingen**, tabblad **Integraties**. Er zijn drie koppelin
 - Een factuur die je op betaald zet, gaat direct naar SnelStart.
 - Elke nacht worden klanten, leveranciers, facturen en kosten bijgewerkt. Inkoopfacturen
   uit SnelStart komen als kosten binnen (label SS). Facturen die je in SnelStart maakt,
-  komen in BossBase met het label **Uit SnelStart**.
+  komen in BossBase met het label **Uit boekhouding**.
 - Bij verschillen tussen klantgegevens wint wat in SnelStart staat.
 
 **Tabbladen in de SnelStart-kaart:**

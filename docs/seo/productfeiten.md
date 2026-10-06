@@ -99,14 +99,15 @@ of staat het onder "Bestaat niet", dan beloven we het niet.
 
 ## Koppelingen (boekhouding vanaf Groei)
 
-- **Moneybird**: instellen met API-token en administratie-ID.
-  - BossBase → Moneybird: een factuur gaat naar Moneybird zodra hij betaald is
-    (contact, factuur en betaling). Moneybird kiest het btw-tarief.
-  - Moneybird → BossBase (alleen handmatig, met de knop Kosten importeren):
-    inkoopfacturen, bonnetjes en uitgaven worden kosten; verkoopfacturen die niet
-    uit BossBase komen; de betaalstatus van gesynchroniseerde facturen.
-  - Contacten: twee kanten op, handmatig. Btw-overzicht: bij het synchroniseren.
-    Er draait geen automatische synchronisatie (sinds 2026-10-05 ook officieel uit).
+- **Moneybird**: koppelen via inloggen bij Moneybird (OAuth), administratie kiezen.
+  - BossBase → Moneybird: alle facturen behalve concepten, als externe factuur met
+    eigen factuurnummer en PDF, btw-tarief per regel (21/9/vrijgesteld/verlegd),
+    creditfacturen met negatieve bedragen; betalingen; kosten als inkoopfactuur met bon.
+  - Moneybird → BossBase: inkoopfacturen en bonnetjes als kosten (btw, leverancier,
+    bon); verkoopfacturen gemaakt in Moneybird (alleen-lezen); betaalstatus.
+  - Klanten en leveranciers beide kanten op. Grootboekrekening en btw-tarief per
+    bedrijf instelbaar. Elke nacht automatisch; betalingen en contactwijzigingen
+    via webhook direct.
 - **SnelStart**: koppelsleutel invoeren.
   - BossBase → SnelStart: facturen als verkoopboeking (bij betaald markeren en
     dagelijks), met PDF. Geen betaalregistratie.
