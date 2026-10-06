@@ -455,7 +455,10 @@ export function WebsiteformulierSectie({ openDeal, naarBedrijfsprofiel }) {
   }[stap];
 
   return (
-    <div className="card card-p afu3" data-rl="set-websiteformulier" style={{ maxWidth: stap === 2 && !ja ? 980 : 720 }}>
+    // In het midden van de pagina, met wat lucht: een wizard leest als één
+    // vraag tegelijk, niet als een formulier links tegen de tabbladen.
+    <div className="card card-p afu3" data-rl="set-websiteformulier"
+      style={{ maxWidth: stap === 2 && !ja ? 980 : 680, margin: '12px auto 0', padding: '28px 32px' }}>
       <Rondleiding pagina="websiteformulier" />
 
       {/* Voortgang */}
