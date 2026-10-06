@@ -11,8 +11,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 //
 // De writes draaien met de eigen env-service-role van de functie — onvermijdelijk
 // voor een cross-company backend-job op RLS-tabellen, en hetzelfde patroon als
-// check-herinneringen. De gevoelige token-lees loopt via de afgebakende
-// SECURITY DEFINER-functie get_moneybird_sync_targets() (alleen service_role).
+// check-herinneringen. De gevoelige token-lees loopt via afgebakende
+// SECURITY DEFINER-functies (get_snelstart_sync_targets,
+// get_moneybird_sync_doelen; alleen service_role).
 
 export function makeAdminClient() {
   return createClient(
@@ -116,36 +117,4 @@ export async function eindSyncRun(
   } catch (e: any) {
     console.warn('[sync-run] einde niet vastgelegd:', e?.message)
   }
-}
-
-// Loopt over alle bedrijven met een ACTIEVE Moneybird-connectie en draait
-// `perCompany` per bedrijf. De bedrijvenlijst + tokens komen UITSLUITEND uit de
-// afgebakende SECURITY DEFINER-functie get_moneybird_sync_targets() (alleen
-// service_role mag die aanroepen; is_connected=true wordt daar afgedwongen).
-// Eén kapotte connectie blokkeert de rest niet; kleine pauze tussen bedrijven
-// i.v.m. de Moneybird rate-limits.
-export async function forEachMoneybirdCompany(
-  admin: any,
-  perCompany: (companyId: string, token: string, adminId: string) => Promise<Record<string, unknown>>,
-  betweenMs = 500,
-) {
-  const { data: targets, error } = await admin.rpc('get_moneybird_sync_targets')
-  if (error) throw error
-
-  const list = targets ?? []
-  const results: Record<string, unknown>[] = []
-  const errors: { company_id: string; error: string }[] = []
-
-  for (const c of list) {
-    try {
-      const r = await perCompany(c.company_id, c.api_token, c.administration_id)
-      results.push({ company_id: c.company_id, ...r })
-    } catch (e: any) {
-      console.error(`[moneybird-cron] bedrijf ${c.company_id} mislukt:`, e?.message)
-      errors.push({ company_id: c.company_id, error: e?.message ?? String(e) })
-    }
-    if (betweenMs) await sleep(betweenMs)
-  }
-
-  return { scheduled: true, companies: list.length, ok: results.length, failed: errors.length, results, errors }
 }

@@ -764,8 +764,8 @@ export async function pushInkoopboeking(
 
 // Loopt over alle bedrijven met een SnelStart-koppelsleutel (scheduled-modus).
 // Doelen komen UITSLUITEND uit de afgebakende SECURITY DEFINER-functie
-// get_snelstart_sync_targets() (alleen service_role). Zelfde patroon als
-// forEachMoneybirdCompany in scheduledSync.ts.
+// get_snelstart_sync_targets() (alleen service_role). Zelfde patroon als de
+// nachtelijke run in moneybird-sync (get_moneybird_sync_doelen).
 export async function forEachSnelStartCompany(
   admin: any,
   perCompany: (companyId: string, clientKey: string) => Promise<Record<string, unknown>>,
