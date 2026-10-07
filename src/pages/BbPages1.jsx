@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { leesbareFout } from '../components/LaadFout.jsx';
 import { logFout, meldFout } from '../lib/stilleFouten.js';
 import { vandaagIso } from '../lib/datumTijd.js';
-import SyncIndicator from '../components/SyncIndicator.jsx';
 import DOMPurify from 'dompurify';
 import { mailVoorbeeldDocument } from '../utils/mailFrame.js';
 import { Bold, Calendar, Check, Edit2, Euro, FileText, Folder, Italic, List, ListOrdered, Maximize2, Minimize2, MoreHorizontal, PenLine, Plus, RotateCcw, ShoppingCart, Sparkles, Underline, User, Wrench, X } from 'lucide-react';
@@ -704,12 +703,6 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
             {c.phone && <a href={`tel:${c.phone}`} className="btn btn-s btn-sm" style={{ flexShrink: 0, marginLeft: 12 }}>{I.call} {c.phone}</a>}
           </div>
           <div style={{ fontSize: '.82rem', color: 'var(--dmu)', marginBottom: 10 }}>{[c.company, c.city].filter(Boolean).join(' · ')}</div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-start', marginLeft: 0, paddingLeft: 0 }}>
-            {/* Toont zichzelf alleen als de betreffende koppeling ook echt
-                actief is — een oud id van een losgekoppelde boekhouding gaf
-                anders nog steeds een vinkje. */}
-            <SyncIndicator entiteit={c} />
-          </div>
         </div>
       </div>
 

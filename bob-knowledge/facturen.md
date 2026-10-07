@@ -26,8 +26,9 @@ Daarnaast:
   bestaan.
 - **Uit boekhouding**: een factuur die uit SnelStart of Moneybird is opgehaald. Die kun je
   alleen bekijken (**Origineel document**) en verwijderen.
-- Het blauwe label **MB** naast het nummer: de factuur komt uit Moneybird. Dat label
-  blijft staan, ook als de factuur betaald is.
+- Een label naast het nummer laat zien waar een opgehaalde factuur vandaan komt: blauw
+  **MB** voor Moneybird, oranje **SS** voor SnelStart. Dat label blijft staan, ook als
+  de factuur betaald is.
 
 ## Een factuur maken
 Klik op **Nieuwe factuur**.

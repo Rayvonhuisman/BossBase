@@ -18,7 +18,6 @@ import { useEscapeSluit } from '../hooks/useEscapeSluit.js';
 import { NoteEditor, renderNote } from '../components/NoteEditor.jsx';
 import NotitieLog, { toLogItem } from '../components/NotitieLog.jsx';
 import Tijdlijn from '../components/Tijdlijn.jsx';
-import SyncIndicator from '../components/SyncIndicator.jsx';
 import AdresZoeker from '../components/AdresZoeker.jsx';
 import { getTeamMembers, createMentionNotifications } from '../services/notificatieService.js';
 import { useProfile } from '../lib/profileContext.jsx';
@@ -261,9 +260,6 @@ export default function LeverancierPage({ leverancierId, onClose }) {
           </div>
           <div style={{ fontSize: '.82rem', color: 'var(--dmu)', marginBottom: 10 }}>
             {[l.contactpersoon, l.city].filter(Boolean).join(' · ') || ''}
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <SyncIndicator entiteit={l} />
           </div>
         </div>
       </div>
