@@ -47,11 +47,19 @@ bij Moneybird in).
 **Tabbladen in de Moneybird-kaart:**
 - **Instellingen**: bovenaan de lijst **Controleer na het koppelen**: welke btw-tarieven
   en categorieën er in je Moneybird-administratie moeten staan, met een vinkje of kruisje.
-  Daaronder per kostencategorie en per btw-soort een grootboekrekening, en welk
-  btw-tarief van je administratie bij welke btw-soort hoort. Laat je een veld leeg, dan
-  kiest BossBase een passende rekening of tarief.
-- **Synchroniseren**: **Kosten/facturen synchroniseren** en **Contacten synchroniseren**,
-  en wanneer er voor het laatst is gesynchroniseerd.
+  Mist de categorie voor inkoop/materiaal, klik dan **Aanmaken**: BossBase maakt
+  "Inkoop materialen" voor je aan en het vinkje gaat vanzelf aan. Mist een btw-tarief,
+  dan opent de link direct de pagina in Moneybird waar je het aanmaakt (btw-tarieven kan
+  BossBase niet zelf aanmaken). Daaronder de rekeningen voor omzet, welk btw-tarief bij
+  welke btw-soort hoort, en je **Kostencategorieën**: per categorie kies je de
+  Moneybird-rekening, en je kunt eigen categorieën toevoegen, op inactief zetten
+  (**Op inactief zetten**) of verwijderen. Laat je een rekening leeg, dan kiest BossBase
+  een passende. Past er geen enkele, dan komt de kost op **Ongecategoriseerde uitgaven**
+  met "controleren" in de omschrijving.
+- **Synchroniseren**: één knop **Synchroniseren** die alles in de goede volgorde doet
+  (kosten en facturen, daarna klanten en leveranciers, en de btw). De melding daarna
+  noemt per onderdeel wat er gebeurd is, met klanten en leveranciers apart. Ook zie je
+  wanneer er voor het laatst is gesynchroniseerd.
 - **Meldingen**: als er iets niet goed ging, bijvoorbeeld een factuur zonder btw-tarief.
 
 Iets verwijderd wat uit Moneybird kwam? Dan komt het niet terug. **Alles opnieuw
@@ -70,11 +78,13 @@ ophalen** (tabblad Instellingen) haalt ook dat weer op.
 - Bij verschillen tussen klantgegevens wint wat in SnelStart staat.
 
 **Tabbladen in de SnelStart-kaart:**
-- **Instellingen**: de **Grootboekindeling** (per kostencategorie en per btw-soort
-  een grootboekrekening) en je **Kostencategorieën**: eigen categorieën toevoegen,
-  op inactief zetten of verwijderen.
-- **Synchroniseren**: wanneer er voor het laatst is gesynchroniseerd, en knoppen om
-  het nu te doen.
+- **Instellingen**: bovenaan **Controleer na het koppelen**: welke grootboekrekeningen
+  er in SnelStart moeten zijn, met een link naar SnelStart Web als er een mist. Daaronder
+  de rekeningen voor omzet en je **Kostencategorieën**: per categorie een
+  grootboekrekening, eigen categorieën toevoegen, op inactief zetten of verwijderen.
+- **Synchroniseren**: één knop **Synchroniseren** (eerst klanten en leveranciers, dan
+  kosten en facturen), met daarna per onderdeel wat er gebeurd is, en wanneer er voor
+  het laatst is gesynchroniseerd.
 - **Meldingen**: als er iets niet goed ging.
 
 **Iets verwijderd wat uit SnelStart kwam?** Dan komt het bij de volgende

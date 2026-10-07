@@ -87,14 +87,30 @@ export function standaardOmzet(rek: MbRekening[], regime: string): MbRekening | 
   return omzet.find(r => zoek.test(r.naam)) ?? gewoon
 }
 
-/** Standaard kostenrekening voor een categorie; `gok` = teruggevallen op algemene kosten. */
-export function standaardKosten(rek: MbRekening[], categorie: string): { rekening: MbRekening | null; gok: boolean } {
+// De vraagpost van Moneybird: elke administratie heeft standaard
+// "Ongecategoriseerde uitgaven". Daar komen kosten waarvan BossBase niet weet
+// waar ze horen, met "controleren" erbij — net als de vraagpost bij SnelStart.
+const vraagpost = (r: MbRekening[]) =>
+  r.find(x => x.soort === 'kosten' && /ongecategoriseerd/i.test(x.naam)) ?? null
+
+/**
+ * Standaard kostenrekening voor een categorie, op het model van SnelStart:
+ *   - bekende categorie met passende rekening → die (gok: false);
+ *   - bekende categorie zonder passende rekening → Algemene kosten, met melding
+ *     (gok: true) — zoals SnelStart dan terugvalt op de grootboekfunctie;
+ *   - categorie die BossBase niet kent (zelf toegevoegd) → de vraagpost, met
+ *     melding en "controleren" (vraagpost: true) — zoals SnelStart.
+ */
+export function standaardKosten(rek: MbRekening[], categorie: string): { rekening: MbRekening | null; gok: boolean; vraagpost?: boolean } {
   const kosten = rek.filter(r => r.soort === 'kosten')
   const zoek = KOSTEN_ZOEK[categorie]
   if (zoek) {
     const hit = kosten.find(r => zoek.test(r.naam))
     if (hit) return { rekening: hit, gok: false }
+    return { rekening: algemeen(rek) ?? vraagpost(rek) ?? kosten[0] ?? null, gok: true }
   }
+  const vp = vraagpost(rek)
+  if (vp) return { rekening: vp, gok: true, vraagpost: true }
   return { rekening: algemeen(rek) ?? kosten[0] ?? null, gok: true }
 }
 
@@ -142,23 +158,37 @@ export function kiesOmzetRekening(ind: Indeling, voork: Record<string, VoorkeurR
   return std.id
 }
 
+/** De kostenrekening voor een categorie. `vraagpost`: boeken met "controleren" erbij. */
 export function kiesKostenRekening(
   ind: Indeling, voork: Record<string, VoorkeurRij>, categorie: string, meldingen?: string[],
-): string {
+): { id: string; vraagpost: boolean } {
   const eigen = voork[`kosten:${categorie}`]?.id
-  if (eigen && ind.rekeningen.some(r => r.id === eigen && r.soort === 'kosten')) return eigen
-  const { rekening, gok } = standaardKosten(ind.rekeningen, categorie)
+  if (eigen && ind.rekeningen.some(r => r.id === eigen && r.soort === 'kosten')) return { id: eigen, vraagpost: false }
+  const { rekening, gok, vraagpost: vp } = standaardKosten(ind.rekeningen, categorie)
   if (!rekening) throw new Error('Er staat geen kostenrekening in je Moneybird-administratie. Maak er een aan in Moneybird.')
-  if (gok) {
+  if (vp) {
+    meldingen?.push(
+      `Categorie "${categorie}" heeft nog geen grootboekrekening. De kosten staan nu op ${label(rekening)} met "controleren" erbij `
+      + 'voor je boekhouder. Kies er een rekening bij onder Integraties › Moneybird › Instellingen.',
+    )
+  } else if (gok) {
     meldingen?.push(
       `Categorie "${categorie}" heeft nog geen grootboekrekening in Moneybird. De kosten staan nu op ${label(rekening)}. `
-      + 'Kies er een rekening bij onder Integraties › Moneybird › Instellingen.',
+      + 'Kies er een rekening bij onder Integraties › Moneybird › Instellingen, of maak er een aan via de checklist daar.',
     )
   }
-  return rekening.id
+  return { id: rekening.id, vraagpost: Boolean(vp) }
 }
 
-export function kiesVerkoopTarief(ind: Indeling, voork: Record<string, VoorkeurRij>, regime: string): string {
+export function kiesVerkoopTarief(ind: Indeling, voork: Record<string, VoorkeurRij>, regime: string, pct = 21): string {
+  // Een normaal-regel met een afwijkend percentage (oude data, bijvoorbeeld 6%):
+  // het tarief met dát percentage, niet 21%. Bij SnelStart is dat de aparte
+  // overige-omzetrekening; in Moneybird zit het in het tarief.
+  if (regime === 'normaal' && pct !== 21) {
+    const t = ind.tarieven.find(x => x.soort === 'verkoop' && x.pct === pct && !NIET_BINNENLANDS.test(x.naam))
+    if (t) return t.id
+    throw new Error(`Er is geen btw-tarief van ${pct}% voor verkoop in je Moneybird-administratie. Maak het aan in Moneybird (Instellingen › Btw-tarieven).`)
+  }
   const eigen = voork[`btw:${regime}`]?.id
   if (eigen && ind.tarieven.some(t => t.id === eigen && t.soort === 'verkoop')) return eigen
   const std = standaardVerkoopTarief(ind.tarieven, regime)
@@ -195,31 +225,60 @@ export function kiesInkoopTarief(ind: Indeling, voork: Record<string, VoorkeurRi
  * tarieven voor btw verlegd en vrijgesteld, en die kan BossBase via de API niet
  * aanmaken. Het instellingenscherm toont dit per punt met een vinkje of kruisje.
  */
-export function controleNaKoppelen(ind: Indeling): { ok: boolean; titel: string; uitleg: string }[] {
+export type Controle = {
+  ok: boolean; titel: string; uitleg: string
+  // Wat de gebruiker kan doen: BossBase maakt het aan, of een link naar de
+  // plek in het boekhoudpakket waar hij het zelf doet.
+  actie?: { soort: 'aanmaken'; wat: 'inkoop'; label: string } | { soort: 'link'; url: string; label: string }
+}
+
+export function controleNaKoppelen(ind: Indeling, administratieId: string): Controle[] {
   const materiaal = standaardKosten(ind.rekeningen, 'Materiaal')
+  const tariefPagina = `https://moneybird.com/${administratieId}/tax_rates/new`
+  const link = { soort: 'link' as const, url: tariefPagina, label: 'Openen in Moneybird' }
   return [
     {
       ok: Boolean(standaardVerkoopTarief(ind.tarieven, 'verlegd')),
       titel: 'Btw-tarief "Btw verlegd binnenland"',
-      uitleg: 'Nodig voor facturen met btw verlegd (onderaanneming). Moneybird › Instellingen › Boekhouding › Btw-tarieven › Toevoegen. '
-        + 'Moneybird accepteert het alleen bij een klant met een geldig btw-nummer.',
+      uitleg: 'Nodig als je in onderaanneming werkt (btw verlegd). BossBase kan btw-tarieven niet zelf aanmaken: '
+        + 'open de pagina in Moneybird, vink onder Verkoopfactuur "Btw verlegd binnenland" aan en klik Opslaan.',
+      actie: link,
     },
     {
       ok: Boolean(standaardVerkoopTarief(ind.tarieven, 'vrijgesteld')),
       titel: 'Btw-tarief "Btw vrijgesteld"',
-      uitleg: 'Nodig voor vrijgestelde regels. Moneybird › Instellingen › Boekhouding › Btw-tarieven › Toevoegen.',
+      uitleg: 'Nodig voor werk zonder btw (vrijgesteld). Open de pagina in Moneybird, vink onder Verkoopfactuur '
+        + '"Btw vrijgesteld" aan en klik Opslaan.',
+      actie: link,
     },
     {
       ok: Boolean(standaardInkoopTarief(ind.tarieven, 0)),
-      titel: 'Btw-tarief voor inkoop zonder btw (0% of "Geen btw")',
-      uitleg: 'Nodig voor kosten zonder btw, zoals verzekeringen. Toevoegen onder Inkoopfactuur bij dezelfde btw-tarieven.',
+      titel: 'Btw-tarief voor kosten zonder btw',
+      uitleg: 'Nodig voor kosten waar geen btw op zit, zoals verzekeringen. Open de pagina in Moneybird, vink onder '
+        + 'Inkoopfactuur "0% btw" aan en klik Opslaan.',
+      actie: link,
     },
     {
       ok: Boolean(materiaal.rekening && !materiaal.gok),
-      titel: 'Een categorie voor inkoop of materiaal',
-      uitleg: 'Zonder komen materiaalkosten op Algemene kosten. Maak in Moneybird een categorie aan (bijvoorbeeld "Inkoop materialen") of kies hieronder een andere.',
+      titel: 'Een categorie voor inkoop van materiaal',
+      uitleg: 'Zonder komen materiaalkosten op Algemene kosten. BossBase kan de categorie "Inkoop materialen" voor je aanmaken.',
+      actie: { soort: 'aanmaken', wat: 'inkoop', label: 'Aanmaken' },
     },
   ]
+}
+
+// De categorie die de knop "Aanmaken" in de checklist maakt. RGS 3.5-code
+// WKprInhInh = "Inkoopwaarde handelsgoederen" (70251): ingekochte goederen die je
+// doorlevert, zoals materiaal bij een klus. Moneybird eist een RGS-code bij het
+// aanmaken van een categorie.
+export const INKOOP_REKENING = { name: 'Inkoop materialen', account_type: 'direct_costs', rgs_code: 'WKprInhInh' }
+
+export async function maakInkoopRekening(k: MbKoppeling): Promise<void> {
+  const { rgs_code, ...ledger_account } = INKOOP_REKENING
+  await mbFetch(k, '/ledger_accounts', {
+    method: 'POST',
+    body: JSON.stringify({ rgs_code, ledger_account: { ...ledger_account, allowed_document_types: ['purchase_invoice'] } }),
+  })
 }
 
 /** Wat de standaard zou kiezen, per instelbare sleutel — voor het instellingenscherm. */
@@ -232,8 +291,11 @@ export function standaardIndeling(ind: Indeling, kostenCategorieen: string[]): R
     const { rekening, gok } = standaardKosten(ind.rekeningen, cat)
     // Valt een categorie terug op algemene kosten, dan zegt het scherm dat
     // eerlijk: daar boekt de sync hem ook (met een melding).
+    const { vraagpost: vp } = standaardKosten(ind.rekeningen, cat)
     const passend = !gok || /algemene|overig/i.test(cat)
-    zet(`kosten:${cat}`, rekening?.id, rekening && (passend ? label(rekening) : `${label(rekening)} (geen eigen rekening gevonden)`))
+    zet(`kosten:${cat}`, rekening?.id, rekening && (vp
+      ? `${label(rekening)} (vraagpost, te controleren)`
+      : passend ? label(rekening) : `${label(rekening)} (geen eigen rekening gevonden)`))
   }
   for (const regime of ['normaal', 'verlaagd', 'vrijgesteld', 'verlegd']) {
     const r = standaardOmzet(ind.rekeningen, regime)

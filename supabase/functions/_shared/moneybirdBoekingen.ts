@@ -74,12 +74,15 @@ const KLANT_JOIN = 'customers(id, name, type, email, phone, address, postcode, c
 type Context = {
   k: MbKoppeling; ind: Indeling; voork: Record<string, VoorkeurRij>; meldingen: string[]
   klantContact: Map<string, string>; levContact: Map<string, string>
+  // Contacten die deze run in Moneybird zijn aangemaakt (bij facturen en kosten),
+  // voor de melding na afloop.
+  nieuw: { klanten: number; leveranciers: number }
 }
 
 export async function laadContext(k: MbKoppeling, meldingen: string[] = []): Promise<Context> {
   return {
     k, ind: await laadIndeling(k), voork: await getVoorkeurRijen(k.admin, k.companyId, 'moneybird'), meldingen,
-    klantContact: new Map(), levContact: new Map(),
+    klantContact: new Map(), levContact: new Map(), nieuw: { klanten: 0, leveranciers: 0 },
   }
 }
 
@@ -112,7 +115,7 @@ function regelNaarDetail(ctx: Context, r: any, factuurNummer: string) {
     description: r.omschrijving || factuurNummer,
     amount: netjes ? String(aantal) : '1',
     price: mbBedrag(netjes ? prijs : excl),
-    tax_rate_id: kiesVerkoopTarief(ctx.ind, ctx.voork, regime),
+    tax_rate_id: kiesVerkoopTarief(ctx.ind, ctx.voork, regime, Number(r.btw_pct ?? 21)),
     ledger_account_id: kiesOmzetRekening(ctx.ind, ctx.voork, regime),
   }
 }
@@ -134,7 +137,9 @@ export async function pushFactuur(ctx: Context, factuur: any): Promise<{ moneybi
     throw new Error(`Btw verlegd vraagt om het btw-nummer van de klant, en "${klant.name}" heeft er geen. Vul het aan bij de klant.`)
   }
   await bekendContact(ctx, 'customers', klant)
+  const hadContact = Boolean(klant.moneybird_id)
   const contactId = await zorgVoorKlantContact(k, klant, ctx.meldingen)
+  if (!hadContact) ctx.nieuw.klanten++
   ctx.klantContact.set(klant.id, contactId)
   if (verlegd) await werkKlantContactBij(k, klant, ctx.meldingen)
 
@@ -279,11 +284,22 @@ export async function verrekenCredit(ctx: Context, credit: any): Promise<boolean
 }
 
 // ── Kosten → inkoopfactuur ──────────────────────────────────────────────────
-async function pushKostenBijlagen(ctx: Context, cost: any): Promise<{ gelukt: number; overgeslagen: string[] }> {
+/**
+ * Hangt de bon(nen) aan de inkoopfactuur. Is de inkoopfactuur er al
+ * (nastuurlus, bijvoorbeeld na een nieuwe bon), dan gaan de oude bijlagen eerst
+ * weg: er staat altijd alleen de huidige bon bij.
+ */
+async function pushKostenBijlagen(ctx: Context, cost: any, { nieuw = false } = {}): Promise<{ gelukt: number; overgeslagen: string[] }> {
   const { k } = ctx
   const overgeslagen: string[] = []
   let gelukt = 0
   if (!cost?.bijlage_url || !cost.moneybird_id) return { gelukt, overgeslagen }
+  if (!nieuw) {
+    const doc = await mbFetch(k, `/documents/purchase_invoices/${cost.moneybird_id}`)
+    for (const a of (doc?.attachments || [])) {
+      await mbFetch(k, `/documents/purchase_invoices/${cost.moneybird_id}/attachments/${a.id}`, { method: 'DELETE' })
+    }
+  }
   let paden: string[]
   try { const p = JSON.parse(cost.bijlage_url); paden = Array.isArray(p) ? p : [p] } catch { paden = [cost.bijlage_url] }
   for (const pad of paden) {
@@ -312,11 +328,14 @@ export async function pushKost(ctx: Context, cost: any): Promise<boolean> {
     throw new Error('Geen leverancier ingevuld — vul die aan bij de kostenpost en synchroniseer opnieuw')
   }
   await bekendContact(ctx, 'leveranciers', cost.leveranciers)
+  const hadContact = Boolean(cost.leveranciers.moneybird_id)
   const contactId = await zorgVoorLeverancierContact(k, cost.leveranciers, ctx.meldingen)
+  if (!hadContact) ctx.nieuw.leveranciers++
   if (cost.leveranciers.id) ctx.levContact.set(cost.leveranciers.id, contactId)
   const pct = Number(cost.btw_percentage ?? 21)
   const categorie = String(cost.category || '').trim() || 'Overig'
   const omschrijving = cost.description || categorie
+  const rekening = kiesKostenRekening(ctx.ind, ctx.voork, categorie, ctx.meldingen)
   const body = {
     purchase_invoice: {
       contact_id: contactId,
@@ -325,11 +344,12 @@ export async function pushKost(ctx: Context, cost: any): Promise<boolean> {
       currency: 'EUR',
       prices_are_incl_tax: Boolean(cost.btw_inclusief),
       details_attributes: [{
-        description: `${omschrijving} (via BossBase)`,
+        // Op de vraagpost: "controleren" erbij voor de boekhouder, zoals SnelStart.
+        description: rekening.vraagpost ? `${omschrijving} (via BossBase — controleren)` : `${omschrijving} (via BossBase)`,
         amount: '1',
         price: mbBedrag(Math.abs(Number(cost.amount || 0))),
         tax_rate_id: kiesInkoopTarief(ctx.ind, ctx.voork, pct),
-        ledger_account_id: kiesKostenRekening(ctx.ind, ctx.voork, categorie, ctx.meldingen),
+        ledger_account_id: rekening.id,
       }],
     },
   }
@@ -340,7 +360,7 @@ export async function pushKost(ctx: Context, cost: any): Promise<boolean> {
   const patch: Record<string, unknown> = { moneybird_id: id, moneybird_bijlage_gesynct: !cost.bijlage_url }
   await k.admin.from('job_costs').update(patch).eq('id', cost.id)
   if (cost.bijlage_url) {
-    const r = await pushKostenBijlagen(ctx, cost)
+    const r = await pushKostenBijlagen(ctx, cost, { nieuw: true })
     if (r.gelukt > 0 || r.overgeslagen.length === 0) {
       await k.admin.from('job_costs').update({ moneybird_bijlage_gesynct: true }).eq('id', cost.id)
     }
@@ -389,6 +409,8 @@ export type BoekingenUitslag = {
   exported: { facturen: number; kosten: number; betalingen: number; verrekend?: number }
   imported: { inkoopfacturen: number; verkoopfacturen: number }
   betaaldUitMoneybird: number
+  // Contacten die bij het boeken van facturen en kosten in Moneybird zijn aangemaakt.
+  contacten: { klanten: number; leveranciers: number }
   overgeslagenUitPrullenbak: number
   kostenResterend: number
   fouten: string[]
@@ -400,13 +422,14 @@ export async function syncBoekingen(k: MbKoppeling): Promise<BoekingenUitslag> {
   const u: BoekingenUitslag = {
     exported: { facturen: 0, kosten: 0, betalingen: 0 },
     imported: { inkoopfacturen: 0, verkoopfacturen: 0 },
-    betaaldUitMoneybird: 0, overgeslagenUitPrullenbak: 0, kostenResterend: 0,
+    betaaldUitMoneybird: 0, contacten: { klanten: 0, leveranciers: 0 }, overgeslagenUitPrullenbak: 0, kostenResterend: 0,
     fouten: [], meldingen: [], rest: false,
   }
   const db = k.admin
   const co = k.companyId
   const tijdOp = (marge = 15_000) => Boolean(k.budget?.op(marge))
   const ctx = await laadContext(k, u.meldingen)
+  u.contacten = ctx.nieuw   // zelfde object: telt mee tijdens de run
 
   try {
     // ── 1. Facturen naar Moneybird ───────────────────────────────────────────

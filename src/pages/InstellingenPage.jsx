@@ -60,8 +60,7 @@ import {
   kiesMoneybirdAdministratie,
   testMoneybirdKoppeling,
   loskoppelenMoneybird,
-  importKostenVanuitMoneybird,
-  syncContactenMetMoneybird,
+  syncMoneybird,
   saveSnelStartConnection,
   disconnectConnection,
   getSnelStartReferentie,
@@ -296,7 +295,8 @@ export function InstellingenPage({ openDeal } = {}) {
   const [googleConnected, setGoogleConnected] = useState(false);
 
   // Moneybird
-  const [mbConnection, setMbConnection] = useState(null);
+  // Oude statusvorm (getConnection); de kaart gebruikt mbKoppeling. Wordt nog bijgehouden voor ververMoneybird.
+  const [, setMbConnection] = useState(null);
   // Status uit get_moneybird_koppeling: gekoppeld, administratie, eventuele fout.
   const [mbKoppeling, setMbKoppeling] = useState(null);
   // Terug van Moneybird: null | 'bezig' | { state, administraties, gekozen } | { fout }.
@@ -312,7 +312,6 @@ export function InstellingenPage({ openDeal } = {}) {
   const [mbKostenResterend, setMbKostenResterend] = useState(0);
   const [mbLaatsteAutoRun, setMbLaatsteAutoRun] = useState(null);
   const [mbImporting, setMbImporting] = useState(false);
-  const [mbSyncingContacten, setMbSyncingContacten] = useState(false);
 
   // SnelStart — testfase: klant voert handmatig zijn koppelsleutel in; na
   // certificering vervangt de oAuth-activatielink + webhook deze invoer.
@@ -324,7 +323,6 @@ export function InstellingenPage({ openDeal } = {}) {
   const [ssTesting, setSsTesting] = useState(false);
   const [ssSaving, setSsSaving] = useState(false);
   const [ssImporting, setSsImporting] = useState(false);
-  const [ssSyncingContacten, setSsSyncingContacten] = useState(false);
   // Klanten die zonder compleet adres naar SnelStart zijn gegaan (laatste sync).
   const [ssAdresWaarschuwingen, setSsAdresWaarschuwingen] = useState([]);
   // Aantal kostenposten dat na de laatste sync nog niet geboekt was.
@@ -1038,67 +1036,37 @@ export function InstellingenPage({ openDeal } = {}) {
     }
   };
 
-  const handleMbImport = async () => {
+  // Eén knop "Synchroniseren": facturen en kosten, dan klanten en
+  // leveranciers, in die volgorde (moneybird-sync onderdeel 'alles'). Twee losse
+  // knoppen leidden tot twee syncs tegelijk en dubbele contacten.
+  const handleMbSync = async () => {
     setMbImporting(true);
     try {
-      const result = await importKostenVanuitMoneybird();
-      // Beide richtingen benoemen, en alleen wat er gebeurd is — zoals bij SnelStart.
-      const uit = result.exported || {};
-      const inn = result.imported || {};
+      const r = await syncMoneybird();
       const delen = [];
-      if (uit.facturen) delen.push(`${uit.facturen} facturen naar Moneybird`);
-      if (uit.kosten) delen.push(`${uit.kosten} kosten naar Moneybird`);
-      if (uit.betalingen) delen.push(`${uit.betalingen} betalingen geregistreerd`);
-      if (result.betaaldUitMoneybird) delen.push(`${result.betaaldUitMoneybird} facturen betaald volgens Moneybird`);
-      if (inn.inkoopfacturen) delen.push(`${inn.inkoopfacturen} inkoopfacturen en bonnetjes opgehaald`);
-      if (inn.verkoopfacturen) delen.push(`${inn.verkoopfacturen} verkoopfacturen opgehaald`);
-      if (result.overgeslagenUitPrullenbak) delen.push(`${result.overgeslagenUitPrullenbak} overgeslagen (eerder verwijderd)`);
-      if (!delen.length) delen.push('niets te synchroniseren — alles was al bij');
-      toast.success(delen.join(', '));
-      setMbKostenResterend(result.kostenResterend ?? 0);
-      setMbFouten(result.fouten || []);
-      setMbMeldingen(result.meldingen || []);
+      const k = r.klanten, l = r.leveranciers, f = r.facturen;
+      const klant = [k.naarMoneybird && `${k.naarMoneybird} naar Moneybird`, k.opgehaald && `${k.opgehaald} opgehaald`, k.bijgewerkt && `${k.bijgewerkt} bijgewerkt`].filter(Boolean);
+      const lev = [l.naarMoneybird && `${l.naarMoneybird} naar Moneybird`, l.opgehaald && `${l.opgehaald} opgehaald`, l.bijgewerkt && `${l.bijgewerkt} bijgewerkt`].filter(Boolean);
+      const fact = [f.geboekt && `${f.geboekt} geboekt`, f.betalingen && `${f.betalingen} betaling${f.betalingen === 1 ? '' : 'en'} geregistreerd`, f.verrekend && `${f.verrekend} creditfactuur verrekend`, f.betaaldUitMoneybird && `${f.betaaldUitMoneybird} betaald volgens Moneybird`].filter(Boolean);
+      const opgehaald = [r.opgehaald.inkoopfacturen && `${r.opgehaald.inkoopfacturen} inkoopfacturen/bonnetjes`, r.opgehaald.verkoopfacturen && `${r.opgehaald.verkoopfacturen} verkoopfacturen`].filter(Boolean);
+      if (klant.length) delen.push(`Klanten: ${klant.join(', ')}`);
+      if (lev.length) delen.push(`Leveranciers: ${lev.join(', ')}`);
+      if (fact.length) delen.push(`Facturen: ${fact.join(', ')}`);
+      if (r.kosten.geboekt) delen.push(`Kosten: ${r.kosten.geboekt} geboekt`);
+      if (opgehaald.length) delen.push(`Opgehaald uit Moneybird: ${opgehaald.join(', ')}`);
+      if (r.overgeslagenUitPrullenbak) delen.push(`${r.overgeslagenUitPrullenbak} overgeslagen (eerder verwijderd)`);
+      if (!delen.length) delen.push('Alles was al bij — niets gewijzigd');
+      (r.fouten.length ? toast.info : toast.success)(delen.join('. ') + (r.fouten.length ? `. ${r.fouten.length} niet gelukt — zie Meldingen.` : '.'), { duration: 9000 });
+      setMbKostenResterend(r.kosten.resterend);
+      setMbFouten(r.fouten);
+      setMbMeldingen(r.meldingen);
+      setMbAdresWaarschuwingen(r.adresWaarschuwingen);
       await ververMoneybird();
       getLaatsteSyncRun('moneybird').then(setMbLaatsteAutoRun).catch(() => {});
     } catch (err) {
       toast.error(err.message || 'Synchroniseren mislukt');
     } finally {
       setMbImporting(false);
-    }
-  };
-
-  const handleMbSyncContacten = async () => {
-    setMbSyncingContacten(true);
-    try {
-      const result = await syncContactenMetMoneybird();
-      if (result?.success) {
-        // Eerder stond hier alleen "x klanten geïmporteerd, y geëxporteerd".
-        // Dat las als kapot zodra alles al bestond: dan is er niets nieuws maar
-        // wél van alles bijgewerkt, en leveranciers werden helemaal niet
-        // genoemd terwijl ze nu ook worden opgehaald.
-        const lev = result.leveranciers || {};
-        const delen = [];
-        if (result.imported) delen.push(`${result.imported} klanten opgehaald`);
-        if (result.bijgewerkt) delen.push(`${result.bijgewerkt} klanten bijgewerkt`);
-        if (result.exported) delen.push(`${result.exported} klanten naar Moneybird`);
-        if (result.doorgestuurd) delen.push(`${result.doorgestuurd} wijzigingen naar Moneybird`);
-        if (lev.geimporteerd) delen.push(`${lev.geimporteerd} leveranciers opgehaald`);
-        if (lev.bijgewerkt) delen.push(`${lev.bijgewerkt} leveranciers bijgewerkt`);
-        if (result.overgeslagenUitPrullenbak) {
-          delen.push(`${result.overgeslagenUitPrullenbak} overgeslagen (eerder verwijderd)`);
-        }
-        toast.success(delen.length ? delen.join(', ') : 'Contacten waren al bij — niets gewijzigd');
-        setMbFouten(result.fouten || []);
-        setMbMeldingen(result.meldingen || []);
-        setMbAdresWaarschuwingen(result.adresWaarschuwingen || []);
-        getMoneybirdKoppeling().then(setMbKoppeling).catch(() => {});
-      } else {
-        toast.error(result?.error || 'Synchronisatie mislukt');
-      }
-    } catch (err) {
-      toast.error(err.message || 'Synchronisatie mislukt');
-    } finally {
-      setMbSyncingContacten(false);
     }
   };
 
@@ -1198,81 +1166,44 @@ export function InstellingenPage({ openDeal } = {}) {
     }
   };
 
-  const handleSsImport = async () => {
+  // Eén knop "Synchroniseren", zoals bij Moneybird: eerst klanten en
+  // leveranciers (zodat facturen en kosten aan een bestaande relatie hangen), dan
+  // facturen en kosten. Dezelfde volgorde als de nachtelijke run.
+  const handleSsSync = async () => {
     setSsImporting(true);
     try {
-      const result = await importKostenVanuitSnelStart();
-      if (result?.success) {
-        // Beide richtingen benoemen, en alleen wat er daadwerkelijk gebeurd is.
-        // Eerder stonden hier alleen de export-aantallen plus de inkoopfacturen,
-        // waardoor opgehaalde verkoopfacturen nergens werden gemeld — je zag ze
-        // wel in de lijst verschijnen maar niet in de melding.
-        const delen = [];
-        const uit = result.exported || {};
-        const inn = result.imported || {};
-        if (uit.verkoopboekingen) delen.push(`${uit.verkoopboekingen} facturen naar SnelStart geboekt`);
-        if (uit.inkoopboekingen) delen.push(`${uit.inkoopboekingen} kosten naar SnelStart geboekt`);
-        if (inn.inkoopfacturen) delen.push(`${inn.inkoopfacturen} inkoopfacturen opgehaald`);
-        if (inn.verkoopfacturen) delen.push(`${inn.verkoopfacturen} verkoopfacturen opgehaald`);
-        // Wat de prullenbak tegenhield: anders leest "0 opgehaald" als een
-        // mislukking terwijl het precies is wat je zelf hebt gevraagd.
-        if (result.overgeslagenUitPrullenbak) {
-          delen.push(`${result.overgeslagenUitPrullenbak} overgeslagen (eerder verwijderd)`);
-        }
-        if (!delen.length) delen.push('niets te synchroniseren — alles was al bij');
-        toast.success(delen.join(', '));
-        // Kosten gaan per batch van 50. Zonder deze melding leest een halve
-        // batch als "klaar" terwijl er nog een rest openstaat.
-        setSsKostenResterend(result.kostenResterend ?? 0);
-        // Regels die misgingen én velden die SnelStart afwees: die verdwenen
-        // eerder in de serverlogs, waardoor je naar "0 geboekt" zat te kijken
-        // zonder te weten waarom.
-        setSsFouten(result.fouten || []);
-        setSsMeldingen(result.meldingen || []);
-        const refreshed = await getConnection('snelstart');
-        if (refreshed) setSsConnection(refreshed);
-        getLaatsteSyncRun('snelstart').then(setSsLaatsteAutoRun).catch(() => {});
-      } else {
-        toast.error(result?.error || 'Synchroniseren mislukt');
-      }
+      const c = await syncContactenMetSnelStart();
+      if (!c?.success) throw new Error(c?.error || 'Klanten synchroniseren mislukt');
+      const b = await importKostenVanuitSnelStart();
+      if (!b?.success) throw new Error(b?.error || 'Facturen en kosten synchroniseren mislukt');
+      const levC = c.leveranciers || {};
+      const uit = b.exported || {};
+      const inn = b.imported || {};
+      const delen = [];
+      const klant = [c.exported && `${c.exported} naar SnelStart`, c.imported && `${c.imported} opgehaald`, c.bijgewerkt && `${c.bijgewerkt} bijgewerkt`].filter(Boolean);
+      const lev = [levC.geimporteerd && `${levC.geimporteerd} opgehaald`, levC.bijgewerkt && `${levC.bijgewerkt} bijgewerkt`].filter(Boolean);
+      const opgehaald = [inn.inkoopfacturen && `${inn.inkoopfacturen} inkoopfacturen`, inn.verkoopfacturen && `${inn.verkoopfacturen} verkoopfacturen`].filter(Boolean);
+      if (klant.length) delen.push(`Klanten: ${klant.join(', ')}`);
+      if (lev.length) delen.push(`Leveranciers: ${lev.join(', ')}`);
+      if (uit.verkoopboekingen) delen.push(`Facturen: ${uit.verkoopboekingen} geboekt`);
+      if (uit.inkoopboekingen) delen.push(`Kosten: ${uit.inkoopboekingen} geboekt`);
+      if (opgehaald.length) delen.push(`Opgehaald uit SnelStart: ${opgehaald.join(', ')}`);
+      const prullenbak = (c.overgeslagenUitPrullenbak || 0) + (b.overgeslagenUitPrullenbak || 0);
+      if (prullenbak) delen.push(`${prullenbak} overgeslagen (eerder verwijderd)`);
+      if (!delen.length) delen.push('Alles was al bij — niets gewijzigd');
+      const fouten = b.fouten || [];
+      (fouten.length ? toast.info : toast.success)(delen.join('. ') + (fouten.length ? `. ${fouten.length} niet gelukt — zie Meldingen.` : '.'), { duration: 9000 });
+      setSsKostenResterend(b.kostenResterend ?? 0);
+      setSsFouten(fouten);
+      setSsMeldingen(b.meldingen || []);
+      setSsAdresWaarschuwingen(c.adresWaarschuwingen || []);
+      const refreshed = await getConnection('snelstart');
+      if (refreshed) setSsConnection(refreshed);
+      getLaatsteSyncRun('snelstart').then(setSsLaatsteAutoRun).catch(() => {});
     } catch (err) {
       toast.error(err.message || 'Synchroniseren mislukt');
     } finally {
       setSsImporting(false);
-    }
-  };
-
-
-  const handleSsSyncContacten = async () => {
-    setSsSyncingContacten(true);
-    try {
-      const result = await syncContactenMetSnelStart();
-      if (result?.success) {
-        // Eerder stond hier alleen "x klanten geïmporteerd, y geëxporteerd".
-        // Dat las als kapot zodra alles al bestond: dan is er niets nieuws maar
-        // wél van alles bijgewerkt, en leveranciers werden helemaal niet
-        // genoemd terwijl ze nu ook worden opgehaald.
-        const lev = result.leveranciers || {};
-        const delen = [];
-        if (result.imported) delen.push(`${result.imported} klanten opgehaald`);
-        if (result.bijgewerkt) delen.push(`${result.bijgewerkt} klanten bijgewerkt`);
-        if (result.exported) delen.push(`${result.exported} klanten naar SnelStart`);
-        if (lev.geimporteerd) delen.push(`${lev.geimporteerd} leveranciers opgehaald`);
-        if (lev.bijgewerkt) delen.push(`${lev.bijgewerkt} leveranciers bijgewerkt`);
-        if (result.overgeslagenUitPrullenbak) {
-          delen.push(`${result.overgeslagenUitPrullenbak} overgeslagen (eerder verwijderd)`);
-        }
-        toast.success(delen.length ? delen.join(', ') : 'Contacten waren al bij — niets gewijzigd');
-        // SnelStart accepteert klanten zonder adres, dus die komen er stilletjes
-        // in. Melden welke het betreft, zonder de sync te blokkeren.
-        setSsAdresWaarschuwingen(result.adresWaarschuwingen || []);
-      } else {
-        toast.error(result?.error || 'Synchroniseren mislukt');
-      }
-    } catch (err) {
-      toast.error(err.message || 'Synchroniseren mislukt');
-    } finally {
-      setSsSyncingContacten(false);
     }
   };
 
@@ -1474,11 +1405,8 @@ export function InstellingenPage({ openDeal } = {}) {
   };
 
   // Een sync kan minuten duren; zonder melding lijkt het alsof er niets gebeurt.
-  const syncBezig = ssImporting || ssSyncingContacten || mbImporting || mbSyncingContacten;
-  const syncTekst = ssImporting ? 'Bezig met synchroniseren met SnelStart'
-    : ssSyncingContacten ? 'Bezig met klanten synchroniseren met SnelStart'
-    : mbImporting ? 'Bezig met synchroniseren met Moneybird'
-    : 'Bezig met contacten synchroniseren met Moneybird';
+  const syncBezig = ssImporting || mbImporting;
+  const syncTekst = ssImporting ? 'Bezig met synchroniseren met SnelStart' : 'Bezig met synchroniseren met Moneybird';
 
 
   // Wat de klant ziet nadat hij terugkomt van SnelStart. Drie standen, want
@@ -1667,7 +1595,7 @@ export function InstellingenPage({ openDeal } = {}) {
     {
       id: 'moneybird',
       naam: 'Moneybird',
-      omschrijving: 'Zet betaalde facturen door naar Moneybird en haal inkoopfacturen op als kostenregels.',
+      omschrijving: 'Zet je facturen (behalve concepten) en kosten door naar Moneybird, synchroniseer klanten en leveranciers en haal betalingen en inkoopfacturen op.',
       logo: { src: '/brand/moneybird.svg', alt: 'Moneybird' },
       status: {
         actief: !!mbKoppeling?.gekoppeld && !mbKoppeling?.fout,
@@ -1741,10 +1669,8 @@ export function InstellingenPage({ openDeal } = {}) {
         toelichting: VASTE_WERKWIJZE_MONEYBIRD,
         laatsteSync: mbKoppeling?.lastSyncedAt || null,
         acties: mbKoppeling?.gekoppeld ? [
-          // Beide uit zolang er een loopt: twee syncs tegelijk maakten dubbele
-          // contacten in Moneybird. De server houdt het ook tegen (pakSlot).
-          { label: mbImporting ? 'Synchroniseren...' : 'Kosten/facturen synchroniseren', onClick: handleMbImport, disabled: mbImporting || mbSyncingContacten },
-          { label: mbSyncingContacten ? 'Synchroniseren...' : 'Contacten synchroniseren', onClick: handleMbSyncContacten, disabled: mbImporting || mbSyncingContacten },
+          // Eén knop voor alles; de server houdt een tweede sync tegelijk ook tegen (pakSlot).
+          { label: mbImporting ? 'Synchroniseren...' : 'Synchroniseren', onClick: handleMbSync, disabled: mbImporting },
         ] : [],
       } : null,
       meldingen: boekhoudGate ? [] : boekhoudMeldingen({
@@ -1754,7 +1680,7 @@ export function InstellingenPage({ openDeal } = {}) {
         meldingen: mbMeldingen,
         kostenResterend: mbKostenResterend,
         adresWaarschuwingen: mbAdresWaarschuwingen,
-        syncKnop: 'Kosten/facturen synchroniseren',
+        syncKnop: 'Synchroniseren',
       }),
     },
 
@@ -1847,8 +1773,7 @@ export function InstellingenPage({ openDeal } = {}) {
         toelichting: VASTE_WERKWIJZE,
         laatsteSync: ssConnection?.lastSyncedAt || null,
         acties: ssConnection?.connected ? [
-          { label: ssImporting ? 'Synchroniseren...' : 'Kosten/facturen synchroniseren', onClick: handleSsImport, disabled: ssImporting },
-          { label: ssSyncingContacten ? 'Synchroniseren...' : 'Contacten synchroniseren', onClick: handleSsSyncContacten, disabled: ssSyncingContacten },
+          { label: ssImporting ? 'Synchroniseren...' : 'Synchroniseren', onClick: handleSsSync, disabled: ssImporting },
         ] : [],
       } : null,
       meldingen: boekhoudGate ? [] : boekhoudMeldingen({
@@ -1858,7 +1783,7 @@ export function InstellingenPage({ openDeal } = {}) {
         meldingen: ssMeldingen,
         kostenResterend: ssKostenResterend,
         adresWaarschuwingen: ssAdresWaarschuwingen,
-        syncKnop: 'Kosten/facturen synchroniseren',
+        syncKnop: 'Synchroniseren',
       }),
     },
 

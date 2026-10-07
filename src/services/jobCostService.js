@@ -83,7 +83,12 @@ export function mapJobCostFormToPayload(input = {}) {
   if (input.company_id !== undefined || input.companyId !== undefined) {
     payload.company_id = input.company_id ?? input.companyId ?? null
   }
-  if (input.bijlage_url !== undefined) payload.bijlage_url = input.bijlage_url
+  if (input.bijlage_url !== undefined) {
+    payload.bijlage_url = input.bijlage_url
+    // Nieuwe bon: opnieuw naar Moneybird. De sync vervangt daar de oude bijlage
+    // (er staat altijd alleen de huidige bon bij de inkoopfactuur).
+    payload.moneybird_bijlage_gesynct = false
+  }
   if (input.klant_type !== undefined) payload.klant_type = input.klant_type
   if (input.btw_percentage !== undefined || input.btwPercentage !== undefined) {
     payload.btw_percentage = input.btw_percentage ?? input.btwPercentage ?? 21

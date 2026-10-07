@@ -29,6 +29,7 @@ import { BTW_REGIMES } from '../lib/btwRegime.js';
 import { InfoTip, InfoUitklap } from './Uitleg.jsx';
 import {
   getGrootboekrekeningen, getGrootboekVoorkeuren, setGrootboekVoorkeur, haalAllesOpnieuwOp,
+  maakMoneybirdInkoopRekening,
 } from '../services/accountingService.js';
 import {
   listKostenCategorieen, createKostenCategorie, updateKostenCategorie,
@@ -116,6 +117,7 @@ export default function GrootboekIndeling({ provider = 'snelstart' }) {
   const [rekeningen, setRekeningen] = useState(null);
   const [btwTarieven, setBtwTarieven] = useState([]);
   const [controle, setControle] = useState([]);
+  const [aanmaken, setAanmaken] = useState(false);
   const [standaarden, setStandaarden] = useState({});
   const [voorkeuren, setVoorkeuren] = useState({});
   const [categorieen, setCategorieen] = useState([]);
@@ -233,6 +235,45 @@ export default function GrootboekIndeling({ provider = 'snelstart' }) {
     }
   };
 
+  // De keuzelijst voor één rekening (kostencategorie of omzetsoort), met de
+  // standaard erachter en een waarschuwing als er niets past. Voor SnelStart en
+  // Moneybird hetzelfde; wat per pakket verschilt zit in PAKKET.
+  const rekeningKeuze = rij => {
+    const gekozen = pakket.gekozen(voorkeuren[rij.sleutel]);
+    const opties = (rekeningen || []).filter(rij.past);
+    const standaard = standaarden[rij.sleutel];
+    const mist = rij.verplicht && !gekozen;
+    return (
+      <>
+        <select
+          value={gekozen ?? ''}
+          onChange={e => kies(rij, e.target.value)}
+          style={{ flex: '1 1 280px', minWidth: 0, fontSize: 12.5, borderColor: mist ? 'var(--rd)' : undefined }}
+        >
+          <option value="">
+            {rij.verplicht
+              ? '— kies een rekening —'
+              : isGesplitst(standaard)
+                ? 'Standaard — hangt af van het btw-tarief'
+                : `Standaard — ${standaardTekst(standaard, pakket.leegStandaard)}`}
+          </option>
+          {opties.map(g => (
+            <option key={pakket.waarde(g)} value={pakket.waarde(g)}>{pakket.label(g)}</option>
+          ))}
+        </select>
+        {/* Een categorie die per tarief ergens anders landt kan niet in één
+            regel eerlijk worden samengevat. */}
+        {!gekozen && isGesplitst(standaard) && (
+          <div style={{ flex: '1 1 100%', fontSize: 11, color: 'var(--dl)', paddingLeft: 160 }}>{standaardTekst(standaard)}</div>
+        )}
+        {/* Lege keuzelijst: de administratie heeft geen passende rekening. */}
+        {opties.length === 0 && (
+          <div style={{ fontSize: 11, color: 'var(--rd)' }}>Geen passende rekening in je administratie</div>
+        )}
+      </>
+    );
+  };
+
   // Klassen .mo/.mc/.mh/.mt/.mb bestonden in geen enkel stylesheet: dit scherm
   // rendeerde daardoor als een gewoon blok onderaan de pagina in plaats van als
   // modal. Nu de bestaande overlay/modal-klassen, dezelfde als elders in het
@@ -257,10 +298,9 @@ export default function GrootboekIndeling({ provider = 'snelstart' }) {
 
           {!laden && !fout && (
             <>
-              {/* Checklist na het koppelen (Moneybird): wat moet er in de
-                  administratie staan om alles te kunnen boeken. Een nieuwe
-                  administratie mist standaard een paar btw-tarieven, en die kan
-                  BossBase niet zelf aanmaken. Na aanpassen in Moneybird: Opnieuw. */}
+              {/* Checklist na het koppelen: wat moet er in de administratie staan
+                  om alles te kunnen boeken. Wat BossBase zelf kan aanmaken krijgt
+                  een knop; de rest een link naar de juiste plek in het pakket. */}
               {controle.length > 0 && (
                 <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
                   <div style={{ fontWeight: 600, fontSize: '.82rem', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -270,10 +310,34 @@ export default function GrootboekIndeling({ provider = 'snelstart' }) {
                   {controle.map(c => (
                     <div key={c.titel} style={{ display: 'flex', gap: 8, padding: '4px 0', fontSize: '.8rem' }}>
                       <span aria-hidden="true" style={{ color: c.ok ? 'var(--pd)' : 'var(--rd)', fontWeight: 700 }}>{c.ok ? '✓' : '✗'}</span>
-                      <div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ color: 'var(--dk)' }}>{c.titel}{c.ok ? '' : ' — ontbreekt'}</div>
                         {!c.ok && <div style={{ color: 'var(--dm)' }}>{c.uitleg}</div>}
+                        {!c.ok && c.actie?.soort === 'link' && (
+                          <a href={c.actie.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '.78rem' }}>{c.actie.label} ↗</a>
+                        )}
                       </div>
+                      {!c.ok && c.actie?.soort === 'aanmaken' && (
+                        <button
+                          className="btn btn-p btn-sm"
+                          disabled={aanmaken}
+                          style={{ alignSelf: 'flex-start' }}
+                          onClick={async () => {
+                            setAanmaken(true);
+                            try {
+                              await maakMoneybirdInkoopRekening();
+                              toast.success('Categorie "Inkoop materialen" aangemaakt in Moneybird');
+                              await laad();
+                            } catch (err) {
+                              toast.error(err.message || 'Aanmaken mislukt');
+                            } finally {
+                              setAanmaken(false);
+                            }
+                          }}
+                        >
+                          {aanmaken ? 'Aanmaken…' : c.actie.label}
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -303,62 +367,18 @@ export default function GrootboekIndeling({ provider = 'snelstart' }) {
                 />
               </div>
 
-              {['Kosten', 'Omzet'].map(groep => (
-                <div key={groep} style={{ marginBottom: 16 }}>
-                  <div style={{
-                    fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em',
-                    color: 'var(--dl)', marginBottom: 6,
-                  }}>{groep}</div>
-
-                  {rijen.filter(r => r.groep === groep).map(rij => {
-                    const gekozen = pakket.gekozen(voorkeuren[rij.sleutel]);
-                    const opties = (rekeningen || []).filter(rij.past);
-                    const standaard = standaarden[rij.sleutel];
-                    const mist = rij.verplicht && !gekozen;
-                    return (
-                      <div key={rij.sleutel} style={{
-                        display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', flexWrap: 'wrap',
-                      }}>
-                        <div style={{ flex: '0 0 150px', fontSize: 12.5, color: 'var(--dk)' }}>
-                          {rij.label}{rij.verplicht ? ' *' : ''}
-                        </div>
-                        <select
-                          value={gekozen ?? ''}
-                          onChange={e => kies(rij, e.target.value)}
-                          style={{
-                            flex: '1 1 280px', minWidth: 0, fontSize: 12.5,
-                            borderColor: mist ? 'var(--rd)' : undefined,
-                          }}
-                        >
-                          <option value="">
-                            {rij.verplicht
-                              ? '— kies een rekening —'
-                              : isGesplitst(standaard)
-                                ? 'Standaard — hangt af van het btw-tarief'
-                                : `Standaard — ${standaardTekst(standaard, pakket.leegStandaard)}`}
-                          </option>
-                          {opties.map(g => (
-                            <option key={pakket.waarde(g)} value={pakket.waarde(g)}>{pakket.label(g)}</option>
-                          ))}
-                        </select>
-                        {/* Een categorie die per tarief ergens anders landt kan
-                            niet in één regel eerlijk worden samengevat. */}
-                        {!gekozen && isGesplitst(standaard) && (
-                          <div style={{ flex: '1 1 100%', fontSize: 11, color: 'var(--dl)', paddingLeft: 160 }}>
-                            {standaardTekst(standaard)}
-                          </div>
-                        )}
-                        {/* Een lege keuzelijst betekent dat de administratie geen
-                            enkele rekening heeft die dit btw-tarief accepteert.
-                            Dan is de standaard óók machteloos. */}
-                        {opties.length === 0 && (
-                          <div style={{ fontSize: 11, color: 'var(--rd)' }}>Geen passende rekening in je administratie</div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{
+                  fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em',
+                  color: 'var(--dl)', marginBottom: 6,
+                }}>Omzet</div>
+                {rijen.filter(r => r.groep === 'Omzet').map(rij => (
+                  <div key={rij.sleutel} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', flexWrap: 'wrap' }}>
+                    <div style={{ flex: '0 0 150px', fontSize: 12.5, color: 'var(--dk)' }}>{rij.label}</div>
+                    {rekeningKeuze(rij)}
+                  </div>
+                ))}
+              </div>
 
               {/* ── Btw-tarieven (Moneybird) ────────────────────────────── */}
               {btwRijen.length > 0 && ['Btw op facturen', 'Btw op kosten'].map(groep => (
@@ -409,34 +429,41 @@ export default function GrootboekIndeling({ provider = 'snelstart' }) {
                   Kostencategorieën
                   <InfoUitklap
                     id="uitleg-kostencategorieen"
-                    tekst="De zes standaardcategorieën kennen hun eigen rekening en zijn niet te verwijderen. Voeg je er zelf een toe, kies er dan hierboven een rekening bij."
+                    tekst="Per categorie kies je hier de rekening in je boekhouding. De zes standaardcategorieën hebben een standaard en zijn niet te verwijderen. Voeg je er zelf een toe, kies er dan een rekening bij."
                   />
                 </div>
 
+                {/* Per categorie de rekening, het gebruik en (in)actief in één
+                    regel. Stond eerder in twee blokken: de keuze bovenaan en hier
+                    alleen een knop "Inactief" — die leek een status, waardoor het
+                    hele blok inactief oogde terwijl alles actief was. */}
                 {categorieen.map(cat => {
                   const aantal = gebruik[cat.naam] || 0;
+                  const rij = rijen.find(r => r.sleutel === `kosten:${cat.naam}`);
                   return (
-                    <div key={cat.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 10, padding: '5px 0',
-                      borderBottom: '1px solid var(--border)', fontSize: 12.5,
-                    }}>
-                      <div style={{ flex: 1, minWidth: 0, color: cat.actief ? 'var(--dk)' : 'var(--dl)' }}>
-                        {cat.naam}
-                        {cat.standaard && <span style={{ color: 'var(--dl)', marginLeft: 6, fontSize: 11 }}>standaard</span>}
-                        {!cat.actief && <span style={{ color: 'var(--dl)', marginLeft: 6, fontSize: 11 }}>inactief</span>}
+                    <div key={cat.id} style={{ padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <div style={{ flex: '0 0 150px', color: cat.actief ? 'var(--dk)' : 'var(--dl)' }}>
+                          {cat.naam}{rij?.verplicht ? ' *' : ''}
+                        </div>
+                        {cat.actief && rij
+                          ? rekeningKeuze(rij)
+                          : <div style={{ flex: '1 1 280px', fontSize: 12, color: 'var(--dl)' }}>Inactief — niet te kiezen bij nieuwe kosten</div>}
                       </div>
-                      <div style={{ flex: '0 0 auto', fontSize: 11, color: 'var(--dl)' }}>
-                        {aantal === 0 ? 'ongebruikt' : aantal === 1 ? '1 kostenpost' : `${aantal} kostenposten`}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, paddingLeft: 160, flexWrap: 'wrap' }}>
+                        <span style={{ flex: 1, fontSize: 11, color: 'var(--dl)' }}>
+                          {cat.standaard ? 'standaard · ' : ''}{aantal === 0 ? 'ongebruikt' : aantal === 1 ? '1 kostenpost' : `${aantal} kostenposten`}
+                        </span>
+                        <button className="btn btn-s btn-sm" onClick={() => zetActief(cat, !cat.actief)}>
+                          {cat.actief ? 'Op inactief zetten' : 'Activeren'}
+                        </button>
+                        {/* Verwijderen alleen bij een eigen, ongebruikte categorie.
+                            In gebruik = inactief zetten, net als bij leveranciers:
+                            bestaande kosten mogen hun categorie niet kwijtraken. */}
+                        {!cat.standaard && aantal === 0 && (
+                          <button className="btn btn-danger btn-sm" onClick={() => verwijder(cat)}>Verwijderen</button>
+                        )}
                       </div>
-                      <button className="btn btn-s btn-sm" onClick={() => zetActief(cat, !cat.actief)}>
-                        {cat.actief ? 'Inactief' : 'Activeren'}
-                      </button>
-                      {/* Verwijderen alleen bij een eigen, ongebruikte categorie.
-                          In gebruik = inactief zetten, net als bij leveranciers:
-                          bestaande kosten mogen hun categorie niet kwijtraken. */}
-                      {!cat.standaard && aantal === 0 && (
-                        <button className="btn btn-danger btn-sm" onClick={() => verwijder(cat)}>Verwijderen</button>
-                      )}
                     </div>
                   );
                 })}

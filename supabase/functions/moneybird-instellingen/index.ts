@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { makeAdminClient } from "../_shared/scheduledSync.ts"
 import { clientFout } from '../_shared/clientFout.ts'
 import { laadKoppeling } from "../_shared/moneybird.ts"
-import { laadIndeling, standaardIndeling, controleNaKoppelen, KOSTEN_CATEGORIEEN } from "../_shared/moneybirdIndeling.ts"
+import { laadIndeling, standaardIndeling, controleNaKoppelen, maakInkoopRekening, KOSTEN_CATEGORIEEN } from "../_shared/moneybirdIndeling.ts"
 
 // De grootboekrekeningen en btw-tarieven uit de Moneybird-administratie van de
 // klant, plus wat de standaardindeling per regel zou kiezen. Voedt het
@@ -35,6 +35,11 @@ serve(async (req) => {
     const k = await laadKoppeling(admin, profile.company_id)
     if (!k) return json({ success: false, error: 'Moneybird is niet gekoppeld' }, 400)
 
+    // Knop "Aanmaken" in de checklist: de inkoopcategorie in Moneybird aanmaken.
+    // Daarna gewoon de lijst teruggeven, zodat het vinkje meteen klopt.
+    const body = await req.json().catch(() => ({}))
+    if (body?.actie === 'aanmaken' && body?.wat === 'inkoop') await maakInkoopRekening(k)
+
     const ind = await laadIndeling(k)
     // Ook de categorieën die de klant zelf heeft toegevoegd: die krijgen een
     // standaard als hun naam op een rekening lijkt.
@@ -47,7 +52,7 @@ serve(async (req) => {
         .sort((a, b) => (a.code ?? a.naam).localeCompare(b.code ?? b.naam, 'nl', { numeric: true })),
       btwTarieven: ind.tarieven.sort((a, b) => b.pct - a.pct || a.naam.localeCompare(b.naam, 'nl')),
       standaarden: standaardIndeling(ind, categorieen),
-      controle: controleNaKoppelen(ind),
+      controle: controleNaKoppelen(ind, k.administratieId),
     })
   } catch (err: any) {
     console.error('moneybird-instellingen:', err?.message)

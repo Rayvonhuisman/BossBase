@@ -74,6 +74,26 @@ serve(async (req) => {
         // instellingenscherm toont dat per regel, zodat "leeg laten" geen
         // black box is.
         standaarden: standaardIndeling(bestaand),
+        // Checklist na het koppelen, net als bij Moneybird: wat moet er in de
+        // administratie staan om alles te kunnen boeken. Aanmaken via de API
+        // kan bij SnelStart niet (POST /grootboeken geeft een 500), dus een
+        // link en uitleg.
+        controle: [
+          ...VEREIST.map(v => ({
+            ok: aanwezig.has(v.functie),
+            titel: `Omzetrekening voor ${v.waarvoor}`,
+            uitleg: `Nodig om facturen met ${v.waarvoor} te boeken. Staat in het standaard rekeningschema van SnelStart; `
+              + 'ontbreekt hij, maak dan in SnelStart een grootboekrekening aan met de functie "' + v.functie + '", of vraag je boekhouder.',
+            actie: { soort: 'link', url: 'https://web.snelstart.nl', label: 'Openen in SnelStart' },
+          })),
+          {
+            ok: aanwezig.has('InkopenVraagPosten'),
+            titel: 'Vraagpostenrekening',
+            uitleg: 'Daar komen kosten in een categorie zonder eigen rekening, met een markering voor je boekhouder. '
+              + 'Staat in het standaard rekeningschema; ontbreekt hij, maak in SnelStart een rekening met de functie "InkopenVraagPosten".',
+            actie: { soort: 'link', url: 'https://web.snelstart.nl', label: 'Openen in SnelStart' },
+          },
+        ],
         grootboeken: bestaand
           .map((g: any) => ({ nummer: g.nummer, omschrijving: g.omschrijving, functie: g.grootboekfunctie, rubriek: g.grootboekRubriek, btwSoort: g.btwSoort }))
           .sort((a: any, b: any) => (a.nummer ?? 0) - (b.nummer ?? 0)),

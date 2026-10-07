@@ -178,41 +178,36 @@ export async function syncFactuurNaarMoneybird(factuurId) {
   return data
 }
 
-export async function importKostenVanuitMoneybird() {
-  const data = await moneybirdSync('kosten-facturen')
+/**
+ * Alles in één keer, in de juiste volgorde: eerst facturen en kosten (daarmee
+ * komen leveranciers binnen via hun facturen), dan klanten en leveranciers.
+ * Geeft per onderdeel wat er gebeurde.
+ */
+export async function syncMoneybird() {
+  const data = await moneybirdSync('alles')
   const b = data?.['kosten-facturen'] || {}
-  // Btw-overzicht voor de btw-kaart bijwerken. Fouten hier falen stil: de
-  // synchronisatie zelf is geslaagd.
-  // Eén aanroep: de functie werkt maand en kwartaal in één keer bij.
-  await supabase.functions.invoke('moneybird-sync-btw', { body: {} }).catch(() => {})
-  return {
-    success: true,
-    exported: b.exported || {},
-    imported: b.imported || {},
-    betaaldUitMoneybird: b.betaaldUitMoneybird || 0,
-    overgeslagenUitPrullenbak: b.overgeslagenUitPrullenbak || 0,
-    kostenResterend: b.kostenResterend || 0,
-    fouten: b.fouten || [],
-    meldingen: b.meldingen || [],
-    rest: !!data?.rest,
-  }
-}
-
-export async function syncContactenMetMoneybird() {
-  const data = await moneybirdSync('contacten')
-  // Zelfde vorm als bij SnelStart, zodat het scherm één melding kan bouwen.
   const c = data?.contacten || {}
+  // Btw-overzicht voor de btw-kaart bijwerken; fouten hier falen stil.
+  supabase.functions.invoke('moneybird-sync-btw', { body: {} }).catch(() => {})
   return {
-    success: true,
-    imported: c.klanten?.geimporteerd || 0,
-    bijgewerkt: c.klanten?.bijgewerkt || 0,
-    exported: c.klanten?.geexporteerd || 0,
-    doorgestuurd: (c.klanten?.doorgestuurd || 0) + (c.leveranciers?.doorgestuurd || 0),
-    leveranciers: { geimporteerd: c.leveranciers?.geimporteerd || 0, bijgewerkt: c.leveranciers?.bijgewerkt || 0 },
-    overgeslagenUitPrullenbak: c.overgeslagenUitPrullenbak || 0,
+    facturen: { geboekt: b.exported?.facturen || 0, betalingen: b.exported?.betalingen || 0, verrekend: b.exported?.verrekend || 0, betaaldUitMoneybird: b.betaaldUitMoneybird || 0 },
+    kosten: { geboekt: b.exported?.kosten || 0, resterend: b.kostenResterend || 0 },
+    opgehaald: { inkoopfacturen: b.imported?.inkoopfacturen || 0, verkoopfacturen: b.imported?.verkoopfacturen || 0 },
+    // Nieuw in Moneybird: bij het boeken (facturen, kosten) én door de contactensync.
+    klanten: {
+      naarMoneybird: (b.contacten?.klanten || 0) + (c.klanten?.geexporteerd || 0),
+      opgehaald: c.klanten?.geimporteerd || 0,
+      bijgewerkt: (c.klanten?.bijgewerkt || 0) + (c.klanten?.doorgestuurd || 0),
+    },
+    leveranciers: {
+      naarMoneybird: b.contacten?.leveranciers || 0,
+      opgehaald: c.leveranciers?.geimporteerd || 0,
+      bijgewerkt: (c.leveranciers?.bijgewerkt || 0) + (c.leveranciers?.doorgestuurd || 0),
+    },
+    overgeslagenUitPrullenbak: (b.overgeslagenUitPrullenbak || 0) + (c.overgeslagenUitPrullenbak || 0),
+    fouten: [...(b.fouten || []), ...(c.fouten || [])],
+    meldingen: [...(b.meldingen || []), ...(c.meldingen || [])],
     adresWaarschuwingen: c.adresWaarschuwingen || [],
-    fouten: c.fouten || [],
-    meldingen: c.meldingen || [],
     rest: !!data?.rest,
   }
 }
@@ -438,9 +433,23 @@ export async function getGrootboekrekeningen(provider = 'snelstart') {
     // Alleen Moneybird: btw-tarieven bestaan daar per administratie en moeten
     // gekoppeld worden. SnelStart kent vaste btw-soorten.
     btwTarieven: data?.btwTarieven || [],
-    // Alleen Moneybird: checklist na het koppelen (wat moet er in de administratie staan).
+    // Checklist na het koppelen: wat moet er in de administratie staan.
     controle: data?.controle || [],
   }
+}
+
+/** Knop "Aanmaken" in de Moneybird-checklist: de inkoopcategorie aanmaken. Geeft de verse lijst. */
+export async function maakMoneybirdInkoopRekening() {
+  const { data, error } = await supabase.functions.invoke('moneybird-instellingen', {
+    body: { lijst: true, actie: 'aanmaken', wat: 'inkoop' },
+  })
+  if (error) {
+    let melding = error.message
+    try { melding = (await error.context?.json?.())?.error || melding } catch { /* geen json */ }
+    throw new Error(melding)
+  }
+  if (data?.success === false) throw new Error(data.error || 'Aanmaken in Moneybird mislukt')
+  return data
 }
 
 export async function getGrootboekVoorkeuren(provider = 'snelstart') {
@@ -517,9 +526,12 @@ export async function haalAllesOpnieuwOp(provider = 'snelstart') {
   if (error) throw error
 
   if (provider === 'moneybird') {
-    const contacten = await syncContactenMetMoneybird()
-    const boekingen = await importKostenVanuitMoneybird()
-    return { contacten, ...boekingen }
+    // Dezelfde volledige sync als de knop Synchroniseren, maar nu zonder prullenbak.
+    const r = await syncMoneybird()
+    return {
+      contacten: { imported: r.klanten.opgehaald, leveranciers: { geimporteerd: r.leveranciers.opgehaald } },
+      imported: r.opgehaald,
+    }
   }
   const contacten = await syncContactenMetSnelStart()
   const boekingen = await importKostenVanuitSnelStart()
