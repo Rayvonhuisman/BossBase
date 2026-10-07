@@ -3,7 +3,7 @@ import { heeftRecht, geenRecht } from '../_shared/eisRecht.ts'
 import { makeAdminClient, isScheduledCall } from "../_shared/scheduledSync.ts"
 import { clientFout } from '../_shared/clientFout.ts'
 import { markeerGesynct } from "../_shared/boekhouding.ts"
-import { laadKoppeling, Tijdsbudget } from "../_shared/moneybird.ts"
+import { laadKoppeling, Tijdsbudget, pakSlot, geefSlot } from "../_shared/moneybird.ts"
 import { laadContext, pushFactuur, pushFactuurPdf, pushBetaling, verrekenCredit } from "../_shared/moneybirdBoekingen.ts"
 
 // Boekt ÉÉN factuur in Moneybird als externe verkoopfactuur, met PDF, en
@@ -57,15 +57,26 @@ serve(async (req) => {
     // Uit een boekhouding opgehaald: gaat nooit terug.
     if (factuur.externe_referentie) return json({ success: true, skipped: 'opgehaalde facturen gaan niet terug' })
 
-    const meldingen: string[] = []
-    const ctx = await laadContext(k, meldingen)
-    const boeking = await pushFactuur(ctx, factuur)
-    const bijlage = factuur.moneybird_bijlage_gesynct && !boeking.nieuw
-      ? { gelukt: true } : await pushFactuurPdf(ctx, factuur, { nieuw: boeking.nieuw })
-    const betaling = await pushBetaling(ctx, factuur)
-    const verrekend = await verrekenCredit(ctx, factuur)
-    await markeerGesynct(admin, companyId, 'moneybird')
-    return json({ success: true, moneybird_id: boeking.moneybirdId, nieuw: boeking.nieuw, bijlage, betaling, verrekend, meldingen })
+    // Loopt er een sync, dan even wachten (die kan net een contact aanmaken voor
+    // deze klant). Duurt het te lang, dan neemt de volgende sync deze factuur mee.
+    if (!(await pakSlot(admin, companyId, { wachtMs: 60_000 }))) {
+      return json({ success: true, skipped: 'er loopt een synchronisatie; deze factuur gaat met de volgende mee' })
+    }
+    try {
+      // Opnieuw lezen: een sync die net klaar is, kan hem al geboekt hebben.
+      const { data: vers } = await admin.from('facturen').select(`*, ${KLANT_JOIN}`).eq('id', factuurId).single()
+      const meldingen: string[] = []
+      const ctx = await laadContext(k, meldingen)
+      const boeking = await pushFactuur(ctx, vers)
+      const bijlage = vers.moneybird_bijlage_gesynct && !boeking.nieuw
+        ? { gelukt: true } : await pushFactuurPdf(ctx, vers, { nieuw: boeking.nieuw })
+      const betaling = await pushBetaling(ctx, vers)
+      const verrekend = await verrekenCredit(ctx, vers)
+      await markeerGesynct(admin, companyId, 'moneybird')
+      return json({ success: true, moneybird_id: boeking.moneybirdId, nieuw: boeking.nieuw, bijlage, betaling, verrekend, meldingen })
+    } finally {
+      await geefSlot(admin, companyId)
+    }
   } catch (err: any) {
     console.error('moneybird-sync-factuur:', err?.message)
     return json({ success: false, error: clientFout(err) }, 500)

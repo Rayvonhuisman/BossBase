@@ -180,9 +180,15 @@ const BASIS_PAUZE_MS = 120
 const MAX_WACHT_MS = 15_000
 
 function leesLimiet(res: Response) {
-  const r = Number(res.headers.get('RateLimit-Remaining'))
+  // Let op: bij Moneybird is RateLimit-Remaining het aantal SECONDEN tot de
+  // reset, niet het aantal verzoeken. Het aantal staat in
+  // RateLimit-RequestsRemaining (gemeten 2026-10-07: remaining 15,
+  // requestsremaining 138). Wie Remaining als aantal leest, remt af en wacht aan
+  // het eind van elk venster — dat maakte een gewone sync tientallen seconden trager.
+  const kop = res.headers.has('RateLimit-RequestsRemaining') ? 'RateLimit-RequestsRemaining' : null
+  const r = kop ? Number(res.headers.get(kop)) : NaN
   const reset = Number(res.headers.get('RateLimit-Reset'))
-  if (Number.isFinite(r) && res.headers.has('RateLimit-Remaining')) resterend = r
+  if (Number.isFinite(r)) resterend = r
   if (Number.isFinite(reset) && res.headers.has('RateLimit-Reset')) {
     // Seconden tot de reset, of een tijdstempel in seconden. Beide komen voor in
     // de wereld van RateLimit-headers; de documentatie zegt het niet precies.
@@ -191,7 +197,10 @@ function leesLimiet(res: Response) {
 }
 
 async function wachtOpLimiet(budget?: Tijdsbudget) {
-  await sleep(BASIS_PAUZE_MS)
+  // Alleen afremmen als de limiet in zicht komt. Een vaste pauze voor elk
+  // verzoek maakte een gewone handmatige sync (±25 verzoeken) seconden trager
+  // zonder dat het nodig was: de headers zeggen zelf hoeveel er nog over is.
+  if (resterend !== null && resterend <= 20) await sleep(BASIS_PAUZE_MS)
   if (resterend === null || resterend > 3) return
   const wacht = resetOp - Date.now()
   if (wacht <= 0) { resterend = null; return }
@@ -363,6 +372,38 @@ export async function haalAdministraties(accessToken: string): Promise<{ id: str
 // terug tot en met volgend jaar. Dat dekt de wettelijke bewaartermijn van 7 jaar.
 const ditJaar = new Date().getUTCFullYear()
 export const MB_HELE_PERIODE = `period:${ditJaar - 8}0101..${ditJaar + 1}1231`
+
+// ── Eén sync tegelijk per bedrijf ───────────────────────────────────────────
+// Twee runs tegelijk (twee knoppen kort na elkaar, of "betaald" tijdens een
+// sync) maakten elk een contact aan voor dezelfde nieuwe klant: Moneybird's
+// zoekfunctie ziet een net aangemaakt contact niet. accounting_connections.
+// sync_bezig_sinds is het slot (migratie 20261007140314). Pakken gaat met één
+// atomaire update; een slot ouder dan 5 minuten is van een afgekapte run en
+// mag worden overgenomen.
+const SLOT_VERLOOPT_MS = 5 * 60 * 1000
+
+export async function pakSlot(admin: any, companyId: string, { wachtMs = 0 } = {}): Promise<boolean> {
+  const tot = Date.now() + wachtMs
+  for (;;) {
+    const verlopen = new Date(Date.now() - SLOT_VERLOOPT_MS).toISOString()
+    const { data } = await admin.from('accounting_connections')
+      .update({ sync_bezig_sinds: new Date().toISOString() })
+      .eq('company_id', companyId).eq('provider', 'moneybird')
+      .or(`sync_bezig_sinds.is.null,sync_bezig_sinds.lt.${verlopen}`)
+      .select('id')
+    if (data?.length) return true
+    if (Date.now() + 2000 > tot) return false
+    await sleep(2000)
+  }
+}
+
+export async function geefSlot(admin: any, companyId: string): Promise<void> {
+  await admin.from('accounting_connections')
+    .update({ sync_bezig_sinds: null })
+    .eq('company_id', companyId).eq('provider', 'moneybird')
+}
+
+export const SYNC_BEZIG = 'Er loopt al een synchronisatie met Moneybird. Wacht tot die klaar is en probeer het dan opnieuw.'
 
 /** Bedragen gaan als string met punt naar Moneybird, afgerond op centen. */
 export const mbBedrag = (n: number) => (Math.round(Number(n || 0) * 100) / 100).toFixed(2)

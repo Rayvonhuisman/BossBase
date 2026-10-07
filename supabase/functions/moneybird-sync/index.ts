@@ -3,7 +3,7 @@ import { heeftRecht, geenRecht } from '../_shared/eisRecht.ts'
 import { clientFout } from '../_shared/clientFout.ts'
 import { makeAdminClient, isScheduledCall, startSyncRun, eindSyncRun } from "../_shared/scheduledSync.ts"
 import { markeerGesynct } from "../_shared/boekhouding.ts"
-import { laadKoppeling, Tijdsbudget, isLimiet, type MbKoppeling } from "../_shared/moneybird.ts"
+import { laadKoppeling, Tijdsbudget, isLimiet, pakSlot, geefSlot, SYNC_BEZIG, type MbKoppeling } from "../_shared/moneybird.ts"
 import { syncContacten } from "../_shared/moneybirdContacten.ts"
 import { syncBoekingen } from "../_shared/moneybirdBoekingen.ts"
 import { zorgVoorWebhook } from "../_shared/moneybirdWebhook.ts"
@@ -66,6 +66,18 @@ async function draaiOnderdeel(k: MbKoppeling, onderdeel: Onderdeel, bron: 'cron'
 }
 
 async function syncBedrijf(k: MbKoppeling, onderdelen: Onderdeel[], bron: 'cron' | 'handmatig') {
+  // Eén sync tegelijk per bedrijf (zie pakSlot). Niet wachten: een tweede
+  // handmatige sync krijgt een duidelijke melding, de cron slaat het bedrijf
+  // deze ronde over.
+  if (!(await pakSlot(k.admin, k.companyId))) return { bezig: true }
+  try {
+    return await syncBedrijfMetSlot(k, onderdelen, bron)
+  } finally {
+    await geefSlot(k.admin, k.companyId)
+  }
+}
+
+async function syncBedrijfMetSlot(k: MbKoppeling, onderdelen: Onderdeel[], bron: 'cron' | 'handmatig') {
   const uit: Record<string, unknown> = {}
   let rest = false
   // Webhook alvast (opnieuw) aanmelden als dat nog niet gelukt was.
@@ -143,7 +155,8 @@ serve(async (req) => {
     if (!k) return json({ success: false, error: 'Moneybird is niet gekoppeld' }, 400)
     k.budget = new Tijdsbudget(BUDGET_HANDMATIG_MS)
 
-    const r = await syncBedrijf(k, onderdelen, 'handmatig')
+    const r: any = await syncBedrijf(k, onderdelen, 'handmatig')
+    if (r.bezig) return json({ success: false, bezig: true, error: SYNC_BEZIG }, 409)
     return json({ success: true, ...r })
   } catch (err: any) {
     console.error('moneybird-sync:', err?.message, err?.stack)

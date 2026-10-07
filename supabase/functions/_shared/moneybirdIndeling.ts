@@ -30,8 +30,7 @@ const pct = (v: unknown) => Math.round(Number(String(v ?? '').replace(',', '.'))
 /** Rekeningen en btw-tarieven van de administratie, in onze vorm. */
 export async function laadIndeling(k: MbKoppeling): Promise<Indeling> {
   // /ledger_accounts kent geen paginering; /tax_rates wel.
-  const rek = await mbFetch(k, '/ledger_accounts')
-  const tar = await mbAlles(k, '/tax_rates')
+  const [rek, tar] = await Promise.all([mbFetch(k, '/ledger_accounts'), mbAlles(k, '/tax_rates')])
   const rekeningen: MbRekening[] = (Array.isArray(rek) ? rek : [])
     .filter((r: any) => r?.active !== false)
     .map((r: any) => {

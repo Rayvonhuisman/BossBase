@@ -1574,7 +1574,10 @@ export function InstellingenPage({ openDeal } = {}) {
     } : null,
     meldingen.length ? {
       toon: 'waarschuwing',
-      titel: 'Velden overgeslagen',
+      // Was "Velden overgeslagen", maar hier staan ook meldingen die niets met
+      // velden te maken hebben (een categorie zonder rekening, een factuur
+      // zonder PDF).
+      titel: 'Aandachtspunten',
       items: meldingen,
     } : null,
     kostenResterend > 0 ? {
@@ -1738,8 +1741,10 @@ export function InstellingenPage({ openDeal } = {}) {
         toelichting: VASTE_WERKWIJZE_MONEYBIRD,
         laatsteSync: mbKoppeling?.lastSyncedAt || null,
         acties: mbKoppeling?.gekoppeld ? [
-          { label: mbImporting ? 'Synchroniseren...' : 'Kosten/facturen synchroniseren', onClick: handleMbImport, disabled: mbImporting },
-          { label: mbSyncingContacten ? 'Synchroniseren...' : 'Contacten synchroniseren', onClick: handleMbSyncContacten, disabled: mbSyncingContacten },
+          // Beide uit zolang er een loopt: twee syncs tegelijk maakten dubbele
+          // contacten in Moneybird. De server houdt het ook tegen (pakSlot).
+          { label: mbImporting ? 'Synchroniseren...' : 'Kosten/facturen synchroniseren', onClick: handleMbImport, disabled: mbImporting || mbSyncingContacten },
+          { label: mbSyncingContacten ? 'Synchroniseren...' : 'Contacten synchroniseren', onClick: handleMbSyncContacten, disabled: mbImporting || mbSyncingContacten },
         ] : [],
       } : null,
       meldingen: boekhoudGate ? [] : boekhoudMeldingen({

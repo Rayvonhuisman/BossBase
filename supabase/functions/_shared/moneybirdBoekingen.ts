@@ -539,12 +539,15 @@ async function importKosten(ctx: Context, u: BoekingenUitslag) {
   const genegeerd = await getGenegeerd(db, co, 'moneybird', 'kost')
   const levCache = new Map<string, string>()
 
-  for (const [soort, soortPad, label] of [
+  // Beide lijsten tegelijk: dat scheelt een rondgang naar Moneybird.
+  const soorten = [
     ['documents/purchase_invoices', 'documents/purchase_invoices', 'Inkoopfactuur'],
     ['documents/receipts', 'documents/receipts', 'Bonnetje'],
-  ] as const) {
+  ] as const
+  const lijsten = await Promise.all(soorten.map(([soort]) => mbSyncLijst(k, soort, MB_HELE_PERIODE)))
+  for (const [nr, [soort, soortPad, label]] of soorten.entries()) {
     if (k.budget?.op(20_000)) { u.rest = true; return }
-    const lijst = await mbSyncLijst(k, soort, MB_HELE_PERIODE)
+    const lijst = lijsten[nr]
     const nieuw = lijst.map(x => x.id).filter(id => {
       if (bekend.has(id) || eigen.has(id)) return false
       if (genegeerd.has(id)) { u.overgeslagenUitPrullenbak++; return false }
@@ -622,9 +625,11 @@ async function importVerkoop(ctx: Context, u: BoekingenUitslag) {
   const genegeerd = await getGenegeerd(db, co, 'moneybird', 'factuur')
   const klantCache = new Map<string, string | null>()
 
-  for (const [soort, voorvoegsel] of [['sales_invoices', ''], ['external_sales_invoices', 'x']] as const) {
+  const soorten = [['sales_invoices', ''], ['external_sales_invoices', 'x']] as const
+  const lijsten = await Promise.all(soorten.map(([soort]) => mbSyncLijst(k, soort, MB_HELE_PERIODE)))
+  for (const [nr, [soort, voorvoegsel]] of soorten.entries()) {
     if (k.budget?.op(20_000)) { u.rest = true; return }
-    const lijst = await mbSyncLijst(k, soort, MB_HELE_PERIODE)
+    const lijst = lijsten[nr]
     const nieuw = lijst.map(x => x.id).filter(id => {
       const ref = `moneybird_${voorvoegsel}${id}`
       if (refs.has(ref) || eigen.has(id)) return false
