@@ -190,8 +190,8 @@ export async function syncMoneybird() {
   // Btw-overzicht voor de btw-kaart bijwerken; fouten hier falen stil.
   supabase.functions.invoke('moneybird-sync-btw', { body: {} }).catch(() => {})
   return {
-    facturen: { geboekt: b.exported?.facturen || 0, betalingen: b.exported?.betalingen || 0, verrekend: b.exported?.verrekend || 0, betaaldUitMoneybird: b.betaaldUitMoneybird || 0 },
-    kosten: { geboekt: b.exported?.kosten || 0, resterend: b.kostenResterend || 0 },
+    facturen: { geboekt: b.exported?.facturen || 0, betalingen: b.exported?.betalingen || 0, verrekend: b.exported?.verrekend || 0, pdfs: b.exported?.pdfs || 0, betaaldUitMoneybird: b.betaaldUitMoneybird || 0 },
+    kosten: { geboekt: b.exported?.kosten || 0, bonnen: b.exported?.bonnen || 0, resterend: b.kostenResterend || 0 },
     opgehaald: { inkoopfacturen: b.imported?.inkoopfacturen || 0, verkoopfacturen: b.imported?.verkoopfacturen || 0 },
     // Nieuw in Moneybird: bij het boeken (facturen, kosten) én door de contactensync.
     klanten: {

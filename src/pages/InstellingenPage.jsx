@@ -1047,12 +1047,13 @@ export function InstellingenPage({ openDeal } = {}) {
       const k = r.klanten, l = r.leveranciers, f = r.facturen;
       const klant = [k.naarMoneybird && `${k.naarMoneybird} naar Moneybird`, k.opgehaald && `${k.opgehaald} opgehaald`, k.bijgewerkt && `${k.bijgewerkt} bijgewerkt`].filter(Boolean);
       const lev = [l.naarMoneybird && `${l.naarMoneybird} naar Moneybird`, l.opgehaald && `${l.opgehaald} opgehaald`, l.bijgewerkt && `${l.bijgewerkt} bijgewerkt`].filter(Boolean);
-      const fact = [f.geboekt && `${f.geboekt} geboekt`, f.betalingen && `${f.betalingen} betaling${f.betalingen === 1 ? '' : 'en'} geregistreerd`, f.verrekend && `${f.verrekend} creditfactuur verrekend`, f.betaaldUitMoneybird && `${f.betaaldUitMoneybird} betaald volgens Moneybird`].filter(Boolean);
+      const fact = [f.geboekt && `${f.geboekt} geboekt`, f.betalingen && `${f.betalingen} betaling${f.betalingen === 1 ? '' : 'en'} geregistreerd`, f.verrekend && `${f.verrekend} creditfactuur verrekend`, f.pdfs && `${f.pdfs} PDF${f.pdfs === 1 ? '' : "'s"} bijgewerkt`, f.betaaldUitMoneybird && `${f.betaaldUitMoneybird} betaald volgens Moneybird`].filter(Boolean);
       const opgehaald = [r.opgehaald.inkoopfacturen && `${r.opgehaald.inkoopfacturen} inkoopfacturen/bonnetjes`, r.opgehaald.verkoopfacturen && `${r.opgehaald.verkoopfacturen} verkoopfacturen`].filter(Boolean);
       if (klant.length) delen.push(`Klanten: ${klant.join(', ')}`);
       if (lev.length) delen.push(`Leveranciers: ${lev.join(', ')}`);
       if (fact.length) delen.push(`Facturen: ${fact.join(', ')}`);
-      if (r.kosten.geboekt) delen.push(`Kosten: ${r.kosten.geboekt} geboekt`);
+      const kost = [r.kosten.geboekt && `${r.kosten.geboekt} geboekt`, r.kosten.bonnen && `${r.kosten.bonnen} bon${r.kosten.bonnen === 1 ? '' : 'nen'} bijgewerkt`].filter(Boolean);
+      if (kost.length) delen.push(`Kosten: ${kost.join(', ')}`);
       if (opgehaald.length) delen.push(`Opgehaald uit Moneybird: ${opgehaald.join(', ')}`);
       if (r.overgeslagenUitPrullenbak) delen.push(`${r.overgeslagenUitPrullenbak} overgeslagen (eerder verwijderd)`);
       if (!delen.length) delen.push('Alles was al bij — niets gewijzigd');

@@ -406,7 +406,8 @@ async function klantVoorContact(ctx: Context, contact: any, cache: Map<string, s
 
 // ── De sync ─────────────────────────────────────────────────────────────────
 export type BoekingenUitslag = {
-  exported: { facturen: number; kosten: number; betalingen: number; verrekend?: number }
+  // pdfs/bonnen: bijlagen die (opnieuw) zijn meegestuurd bij wat er al stond.
+  exported: { facturen: number; kosten: number; betalingen: number; verrekend?: number; pdfs?: number; bonnen?: number }
   imported: { inkoopfacturen: number; verkoopfacturen: number }
   betaaldUitMoneybird: number
   // Contacten die bij het boeken van facturen en kosten in Moneybird zijn aangemaakt.
@@ -473,6 +474,7 @@ export async function syncBoekingen(k: MbKoppeling): Promise<BoekingenUitslag> {
       for (const f of (zonderPdf || [])) {
         if (tijdOp()) { u.rest = true; break }
         const r = await pushFactuurPdf(ctx, f)
+        if (r.gelukt) u.exported.pdfs = (u.exported.pdfs || 0) + 1
         if (!r.gelukt && r.reden === 'ontbreekt') missend.push(f.nummer || f.id)
       }
       if (missend.length) {
@@ -769,6 +771,7 @@ async function exportKosten(ctx: Context, u: BoekingenUitslag) {
   for (const cost of (naTeSturen || [])) {
     if (k.budget?.op(15_000)) { u.rest = true; break }
     const r = await pushKostenBijlagen(ctx, cost)
+    if (r.gelukt > 0) u.exported.bonnen = (u.exported.bonnen || 0) + 1
     if (r.gelukt > 0 || r.overgeslagen.length === 0) {
       await db.from('job_costs').update({ moneybird_bijlage_gesynct: true }).eq('id', cost.id)
     }
