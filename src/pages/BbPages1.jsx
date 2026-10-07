@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { leesbareFout } from '../components/LaadFout.jsx';
+import { InfoTip } from '../components/Uitleg.jsx';
 import { logFout, meldFout } from '../lib/stilleFouten.js';
 import { vandaagIso } from '../lib/datumTijd.js';
 import DOMPurify from 'dompurify';
@@ -713,10 +714,14 @@ export function CustomerPage({ custId, initialTab, onClose, setPage, onTabChange
             { label: 'Gefactureerd',      val: fmt(totalGefactureerd) },
             { label: 'Betaald',           val: fmt(totalBetaald),    green: totalBetaald > 0 },
             { label: 'Totale kosten',     val: fmt(totalCosts) },
-            { label: 'Brutowinst vóór arbeid', val: fmt(profit), green: profit > 0, red: profit < 0 },
+            // Kort label, zodat het bedrag in half scherm gelijk staat met de rest;
+            // "vóór arbeid" staat achter het info-icoontje.
+            { label: 'Brutowinst', tip: 'Vóór arbeid', val: fmt(profit), green: profit > 0, red: profit < 0 },
           ].map((s, i) => (
             <div key={i} style={{ background: 'var(--bgs)', border: '1px solid var(--border)', borderRadius: 'var(--r10)', padding: '12px 14px' }}>
-              <div style={{ fontSize: '.7rem', color: 'var(--dl)', marginBottom: 4, fontWeight: 600 }}>{s.label}</div>
+              <div style={{ fontSize: '.7rem', color: 'var(--dl)', marginBottom: 4, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                {s.label}{s.tip && <InfoTip tekst={s.tip} />}
+              </div>
               <div style={{ fontSize: '1.05rem', fontWeight: 800, letterSpacing: '-.02em', color: s.green ? '#15A34A' : s.red ? '#dc2626' : 'var(--dk)' }}>{s.val}</div>
             </div>
           ))}
