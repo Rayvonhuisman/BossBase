@@ -180,6 +180,11 @@ export default function GrootboekIndeling({ provider = 'snelstart' }) {
     }] : []),
   ], [categorieen, pakket]);
 
+  // Moneybird toont de rekening per kostencategorie in de categorielijst zelf.
+  // SnelStart houdt de indeling van vóór de Moneybird-herbouw: kosten en omzet
+  // samen onder Rekeningen, en daaronder een losse lijst om categorieën te beheren.
+  const rekeningPerCategorie = provider === 'moneybird';
+
   // Keuzelijsten met btw-tarieven; alleen bij een pakket dat ze levert.
   const btwRijen = provider === 'moneybird' ? BTW_RIJEN : [];
 
@@ -367,18 +372,22 @@ export default function GrootboekIndeling({ provider = 'snelstart' }) {
                 />
               </div>
 
-              <div style={{ marginBottom: 16 }}>
-                <div style={{
-                  fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em',
-                  color: 'var(--dl)', marginBottom: 6,
-                }}>Omzet</div>
-                {rijen.filter(r => r.groep === 'Omzet').map(rij => (
-                  <div key={rij.sleutel} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', flexWrap: 'wrap' }}>
-                    <div style={{ flex: '0 0 150px', fontSize: 12.5, color: 'var(--dk)' }}>{rij.label}</div>
-                    {rekeningKeuze(rij)}
-                  </div>
-                ))}
-              </div>
+              {(rekeningPerCategorie ? ['Omzet'] : ['Kosten', 'Omzet']).map(groep => (
+                <div key={groep} style={{ marginBottom: 16 }}>
+                  <div style={{
+                    fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em',
+                    color: 'var(--dl)', marginBottom: 6,
+                  }}>{groep}</div>
+                  {rijen.filter(r => r.groep === groep).map(rij => (
+                    <div key={rij.sleutel} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', flexWrap: 'wrap' }}>
+                      <div style={{ flex: '0 0 150px', fontSize: 12.5, color: 'var(--dk)' }}>
+                        {rij.label}{rij.verplicht ? ' *' : ''}
+                      </div>
+                      {rekeningKeuze(rij)}
+                    </div>
+                  ))}
+                </div>
+              ))}
 
               {/* ── Btw-tarieven (Moneybird) ────────────────────────────── */}
               {btwRijen.length > 0 && ['Btw op facturen', 'Btw op kosten'].map(groep => (
@@ -429,44 +438,82 @@ export default function GrootboekIndeling({ provider = 'snelstart' }) {
                   Kostencategorieën
                   <InfoUitklap
                     id="uitleg-kostencategorieen"
-                    tekst="Per categorie kies je hier de rekening in je boekhouding. De zes standaardcategorieën hebben een standaard en zijn niet te verwijderen. Voeg je er zelf een toe, kies er dan een rekening bij."
+                    tekst={rekeningPerCategorie
+                      ? 'Per categorie kies je hier de rekening in je boekhouding. De zes standaardcategorieën hebben een standaard en zijn niet te verwijderen. Voeg je er zelf een toe, kies er dan een rekening bij.'
+                      : 'De zes standaardcategorieën kennen hun eigen rekening en zijn niet te verwijderen. Voeg je er zelf een toe, kies er dan hierboven een rekening bij.'}
                   />
                 </div>
 
-                {/* Per categorie de rekening, het gebruik en (in)actief in één
-                    regel. Stond eerder in twee blokken: de keuze bovenaan en hier
-                    alleen een knop "Inactief" — die leek een status, waardoor het
-                    hele blok inactief oogde terwijl alles actief was. */}
-                {categorieen.map(cat => {
-                  const aantal = gebruik[cat.naam] || 0;
-                  const rij = rijen.find(r => r.sleutel === `kosten:${cat.naam}`);
-                  return (
-                    <div key={cat.id} style={{ padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                        <div style={{ flex: '0 0 150px', color: cat.actief ? 'var(--dk)' : 'var(--dl)' }}>
-                          {cat.naam}{rij?.verplicht ? ' *' : ''}
+                {rekeningPerCategorie ? (
+                  <>
+                    {/* Per categorie de rekening, het gebruik en (in)actief in één
+                        regel. Stond eerder in twee blokken: de keuze bovenaan en hier
+                        alleen een knop "Inactief" — die leek een status, waardoor het
+                        hele blok inactief oogde terwijl alles actief was. */}
+                    {categorieen.map(cat => {
+                      const aantal = gebruik[cat.naam] || 0;
+                      const rij = rijen.find(r => r.sleutel === `kosten:${cat.naam}`);
+                      return (
+                        <div key={cat.id} style={{ padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                            <div style={{ flex: '0 0 150px', color: cat.actief ? 'var(--dk)' : 'var(--dl)' }}>
+                              {cat.naam}{rij?.verplicht ? ' *' : ''}
+                            </div>
+                            {cat.actief && rij
+                              ? rekeningKeuze(rij)
+                              : <div style={{ flex: '1 1 280px', fontSize: 12, color: 'var(--dl)' }}>Inactief — niet te kiezen bij nieuwe kosten</div>}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, paddingLeft: 160, flexWrap: 'wrap' }}>
+                            <span style={{ flex: 1, fontSize: 11, color: 'var(--dl)' }}>
+                              {cat.standaard ? 'standaard · ' : ''}{aantal === 0 ? 'ongebruikt' : aantal === 1 ? '1 kostenpost' : `${aantal} kostenposten`}
+                            </span>
+                            <button className="btn btn-s btn-sm" onClick={() => zetActief(cat, !cat.actief)}>
+                              {cat.actief ? 'Op inactief zetten' : 'Activeren'}
+                            </button>
+                            {/* Verwijderen alleen bij een eigen, ongebruikte categorie.
+                                In gebruik = inactief zetten, net als bij leveranciers:
+                                bestaande kosten mogen hun categorie niet kwijtraken. */}
+                            {!cat.standaard && aantal === 0 && (
+                              <button className="btn btn-danger btn-sm" onClick={() => verwijder(cat)}>Verwijderen</button>
+                            )}
+                          </div>
                         </div>
-                        {cat.actief && rij
-                          ? rekeningKeuze(rij)
-                          : <div style={{ flex: '1 1 280px', fontSize: 12, color: 'var(--dl)' }}>Inactief — niet te kiezen bij nieuwe kosten</div>}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, paddingLeft: 160, flexWrap: 'wrap' }}>
-                        <span style={{ flex: 1, fontSize: 11, color: 'var(--dl)' }}>
-                          {cat.standaard ? 'standaard · ' : ''}{aantal === 0 ? 'ongebruikt' : aantal === 1 ? '1 kostenpost' : `${aantal} kostenposten`}
-                        </span>
-                        <button className="btn btn-s btn-sm" onClick={() => zetActief(cat, !cat.actief)}>
-                          {cat.actief ? 'Op inactief zetten' : 'Activeren'}
-                        </button>
-                        {/* Verwijderen alleen bij een eigen, ongebruikte categorie.
-                            In gebruik = inactief zetten, net als bij leveranciers:
-                            bestaande kosten mogen hun categorie niet kwijtraken. */}
-                        {!cat.standaard && aantal === 0 && (
-                          <button className="btn btn-danger btn-sm" onClick={() => verwijder(cat)}>Verwijderen</button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                  </>
+                ) : (
+                  <>
+                    {/* SnelStart: de lijst van vóór de Moneybird-herbouw. De rekening
+                        per categorie staat hierboven onder Rekeningen › Kosten. */}
+                    {categorieen.map(cat => {
+                      const aantal = gebruik[cat.naam] || 0;
+                      return (
+                        <div key={cat.id} style={{
+                          display: 'flex', alignItems: 'center', gap: 10, padding: '5px 0',
+                          borderBottom: '1px solid var(--border)', fontSize: 12.5,
+                        }}>
+                          <div style={{ flex: 1, minWidth: 0, color: cat.actief ? 'var(--dk)' : 'var(--dl)' }}>
+                            {cat.naam}
+                            {cat.standaard && <span style={{ color: 'var(--dl)', marginLeft: 6, fontSize: 11 }}>standaard</span>}
+                            {!cat.actief && <span style={{ color: 'var(--dl)', marginLeft: 6, fontSize: 11 }}>inactief</span>}
+                          </div>
+                          <div style={{ flex: '0 0 auto', fontSize: 11, color: 'var(--dl)' }}>
+                            {aantal === 0 ? 'ongebruikt' : aantal === 1 ? '1 kostenpost' : `${aantal} kostenposten`}
+                          </div>
+                          <button className="btn btn-s btn-sm" onClick={() => zetActief(cat, !cat.actief)}>
+                            {cat.actief ? 'Inactief' : 'Activeren'}
+                          </button>
+                          {/* Verwijderen alleen bij een eigen, ongebruikte categorie.
+                              In gebruik = inactief zetten, net als bij leveranciers:
+                              bestaande kosten mogen hun categorie niet kwijtraken. */}
+                          {!cat.standaard && aantal === 0 && (
+                            <button className="btn btn-danger btn-sm" onClick={() => verwijder(cat)}>Verwijderen</button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
 
                 <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                   <input

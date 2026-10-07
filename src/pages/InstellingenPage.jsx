@@ -323,6 +323,7 @@ export function InstellingenPage({ openDeal } = {}) {
   const [ssTesting, setSsTesting] = useState(false);
   const [ssSaving, setSsSaving] = useState(false);
   const [ssImporting, setSsImporting] = useState(false);
+  const [ssSyncingContacten, setSsSyncingContacten] = useState(false);
   // Klanten die zonder compleet adres naar SnelStart zijn gegaan (laatste sync).
   const [ssAdresWaarschuwingen, setSsAdresWaarschuwingen] = useState([]);
   // Aantal kostenposten dat na de laatste sync nog niet geboekt was.
@@ -1167,44 +1168,81 @@ export function InstellingenPage({ openDeal } = {}) {
     }
   };
 
-  // Eén knop "Synchroniseren", zoals bij Moneybird: eerst klanten en
-  // leveranciers (zodat facturen en kosten aan een bestaande relatie hangen), dan
-  // facturen en kosten. Dezelfde volgorde als de nachtelijke run.
-  const handleSsSync = async () => {
+  const handleSsImport = async () => {
     setSsImporting(true);
     try {
-      const c = await syncContactenMetSnelStart();
-      if (!c?.success) throw new Error(c?.error || 'Klanten synchroniseren mislukt');
-      const b = await importKostenVanuitSnelStart();
-      if (!b?.success) throw new Error(b?.error || 'Facturen en kosten synchroniseren mislukt');
-      const levC = c.leveranciers || {};
-      const uit = b.exported || {};
-      const inn = b.imported || {};
-      const delen = [];
-      const klant = [c.exported && `${c.exported} naar SnelStart`, c.imported && `${c.imported} opgehaald`, c.bijgewerkt && `${c.bijgewerkt} bijgewerkt`].filter(Boolean);
-      const lev = [levC.geimporteerd && `${levC.geimporteerd} opgehaald`, levC.bijgewerkt && `${levC.bijgewerkt} bijgewerkt`].filter(Boolean);
-      const opgehaald = [inn.inkoopfacturen && `${inn.inkoopfacturen} inkoopfacturen`, inn.verkoopfacturen && `${inn.verkoopfacturen} verkoopfacturen`].filter(Boolean);
-      if (klant.length) delen.push(`Klanten: ${klant.join(', ')}`);
-      if (lev.length) delen.push(`Leveranciers: ${lev.join(', ')}`);
-      if (uit.verkoopboekingen) delen.push(`Facturen: ${uit.verkoopboekingen} geboekt`);
-      if (uit.inkoopboekingen) delen.push(`Kosten: ${uit.inkoopboekingen} geboekt`);
-      if (opgehaald.length) delen.push(`Opgehaald uit SnelStart: ${opgehaald.join(', ')}`);
-      const prullenbak = (c.overgeslagenUitPrullenbak || 0) + (b.overgeslagenUitPrullenbak || 0);
-      if (prullenbak) delen.push(`${prullenbak} overgeslagen (eerder verwijderd)`);
-      if (!delen.length) delen.push('Alles was al bij — niets gewijzigd');
-      const fouten = b.fouten || [];
-      (fouten.length ? toast.info : toast.success)(delen.join('. ') + (fouten.length ? `. ${fouten.length} niet gelukt — zie Meldingen.` : '.'), { duration: 9000 });
-      setSsKostenResterend(b.kostenResterend ?? 0);
-      setSsFouten(fouten);
-      setSsMeldingen(b.meldingen || []);
-      setSsAdresWaarschuwingen(c.adresWaarschuwingen || []);
-      const refreshed = await getConnection('snelstart');
-      if (refreshed) setSsConnection(refreshed);
-      getLaatsteSyncRun('snelstart').then(setSsLaatsteAutoRun).catch(() => {});
+      const result = await importKostenVanuitSnelStart();
+      if (result?.success) {
+        // Beide richtingen benoemen, en alleen wat er daadwerkelijk gebeurd is.
+        // Eerder stonden hier alleen de export-aantallen plus de inkoopfacturen,
+        // waardoor opgehaalde verkoopfacturen nergens werden gemeld — je zag ze
+        // wel in de lijst verschijnen maar niet in de melding.
+        const delen = [];
+        const uit = result.exported || {};
+        const inn = result.imported || {};
+        if (uit.verkoopboekingen) delen.push(`${uit.verkoopboekingen} facturen naar SnelStart geboekt`);
+        if (uit.inkoopboekingen) delen.push(`${uit.inkoopboekingen} kosten naar SnelStart geboekt`);
+        if (inn.inkoopfacturen) delen.push(`${inn.inkoopfacturen} inkoopfacturen opgehaald`);
+        if (inn.verkoopfacturen) delen.push(`${inn.verkoopfacturen} verkoopfacturen opgehaald`);
+        // Wat de prullenbak tegenhield: anders leest "0 opgehaald" als een
+        // mislukking terwijl het precies is wat je zelf hebt gevraagd.
+        if (result.overgeslagenUitPrullenbak) {
+          delen.push(`${result.overgeslagenUitPrullenbak} overgeslagen (eerder verwijderd)`);
+        }
+        if (!delen.length) delen.push('niets te synchroniseren — alles was al bij');
+        toast.success(delen.join(', '));
+        // Kosten gaan per batch van 50. Zonder deze melding leest een halve
+        // batch als "klaar" terwijl er nog een rest openstaat.
+        setSsKostenResterend(result.kostenResterend ?? 0);
+        // Regels die misgingen én velden die SnelStart afwees: die verdwenen
+        // eerder in de serverlogs, waardoor je naar "0 geboekt" zat te kijken
+        // zonder te weten waarom.
+        setSsFouten(result.fouten || []);
+        setSsMeldingen(result.meldingen || []);
+        const refreshed = await getConnection('snelstart');
+        if (refreshed) setSsConnection(refreshed);
+        getLaatsteSyncRun('snelstart').then(setSsLaatsteAutoRun).catch(() => {});
+      } else {
+        toast.error(result?.error || 'Synchroniseren mislukt');
+      }
     } catch (err) {
       toast.error(err.message || 'Synchroniseren mislukt');
     } finally {
       setSsImporting(false);
+    }
+  };
+
+
+  const handleSsSyncContacten = async () => {
+    setSsSyncingContacten(true);
+    try {
+      const result = await syncContactenMetSnelStart();
+      if (result?.success) {
+        // Eerder stond hier alleen "x klanten geïmporteerd, y geëxporteerd".
+        // Dat las als kapot zodra alles al bestond: dan is er niets nieuws maar
+        // wél van alles bijgewerkt, en leveranciers werden helemaal niet
+        // genoemd terwijl ze nu ook worden opgehaald.
+        const lev = result.leveranciers || {};
+        const delen = [];
+        if (result.imported) delen.push(`${result.imported} klanten opgehaald`);
+        if (result.bijgewerkt) delen.push(`${result.bijgewerkt} klanten bijgewerkt`);
+        if (result.exported) delen.push(`${result.exported} klanten naar SnelStart`);
+        if (lev.geimporteerd) delen.push(`${lev.geimporteerd} leveranciers opgehaald`);
+        if (lev.bijgewerkt) delen.push(`${lev.bijgewerkt} leveranciers bijgewerkt`);
+        if (result.overgeslagenUitPrullenbak) {
+          delen.push(`${result.overgeslagenUitPrullenbak} overgeslagen (eerder verwijderd)`);
+        }
+        toast.success(delen.length ? delen.join(', ') : 'Contacten waren al bij — niets gewijzigd');
+        // SnelStart accepteert klanten zonder adres, dus die komen er stilletjes
+        // in. Melden welke het betreft, zonder de sync te blokkeren.
+        setSsAdresWaarschuwingen(result.adresWaarschuwingen || []);
+      } else {
+        toast.error(result?.error || 'Synchroniseren mislukt');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Synchroniseren mislukt');
+    } finally {
+      setSsSyncingContacten(false);
     }
   };
 
@@ -1406,8 +1444,10 @@ export function InstellingenPage({ openDeal } = {}) {
   };
 
   // Een sync kan minuten duren; zonder melding lijkt het alsof er niets gebeurt.
-  const syncBezig = ssImporting || mbImporting;
-  const syncTekst = ssImporting ? 'Bezig met synchroniseren met SnelStart' : 'Bezig met synchroniseren met Moneybird';
+  const syncBezig = ssImporting || ssSyncingContacten || mbImporting;
+  const syncTekst = ssImporting ? 'Bezig met synchroniseren met SnelStart'
+    : ssSyncingContacten ? 'Bezig met klanten synchroniseren met SnelStart'
+    : 'Bezig met synchroniseren met Moneybird';
 
 
   // Wat de klant ziet nadat hij terugkomt van SnelStart. Drie standen, want
@@ -1476,7 +1516,7 @@ export function InstellingenPage({ openDeal } = {}) {
   // zien: eerst wat de automatische run opleverde, dan de laatste handmatige.
   const boekhoudMeldingen = ({
     naam, laatsteAutoRun, fouten = [], meldingen = [], kostenResterend = 0,
-    adresWaarschuwingen = [], syncKnop,
+    adresWaarschuwingen = [], syncKnop, meldingenTitel = 'Aandachtspunten',
   }) => [
     // Uit de laatste automatische run. Die fouten stonden tot nu toe alleen
     // in de functielogs: mislukt er 's nachts een boeking, dan hoort dat
@@ -1503,10 +1543,10 @@ export function InstellingenPage({ openDeal } = {}) {
     } : null,
     meldingen.length ? {
       toon: 'waarschuwing',
-      // Was "Velden overgeslagen", maar hier staan ook meldingen die niets met
-      // velden te maken hebben (een categorie zonder rekening, een factuur
-      // zonder PDF).
-      titel: 'Aandachtspunten',
+      // Moneybird: "Aandachtspunten", want daar staan ook meldingen die niets
+      // met velden te maken hebben (een categorie zonder rekening, een factuur
+      // zonder PDF). SnelStart houdt zijn oude titel "Velden overgeslagen".
+      titel: meldingenTitel,
       items: meldingen,
     } : null,
     kostenResterend > 0 ? {
@@ -1774,7 +1814,8 @@ export function InstellingenPage({ openDeal } = {}) {
         toelichting: VASTE_WERKWIJZE,
         laatsteSync: ssConnection?.lastSyncedAt || null,
         acties: ssConnection?.connected ? [
-          { label: ssImporting ? 'Synchroniseren...' : 'Synchroniseren', onClick: handleSsSync, disabled: ssImporting },
+          { label: ssImporting ? 'Synchroniseren...' : 'Kosten/facturen synchroniseren', onClick: handleSsImport, disabled: ssImporting },
+          { label: ssSyncingContacten ? 'Synchroniseren...' : 'Contacten synchroniseren', onClick: handleSsSyncContacten, disabled: ssSyncingContacten },
         ] : [],
       } : null,
       meldingen: boekhoudGate ? [] : boekhoudMeldingen({
@@ -1784,7 +1825,9 @@ export function InstellingenPage({ openDeal } = {}) {
         meldingen: ssMeldingen,
         kostenResterend: ssKostenResterend,
         adresWaarschuwingen: ssAdresWaarschuwingen,
-        syncKnop: 'Synchroniseren',
+        // SnelStart houdt zijn eigen teksten (zoals vóór de Moneybird-herbouw).
+        syncKnop: 'Kosten/facturen synchroniseren',
+        meldingenTitel: 'Velden overgeslagen',
       }),
     },
 

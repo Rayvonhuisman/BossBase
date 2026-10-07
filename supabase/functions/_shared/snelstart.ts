@@ -1,7 +1,6 @@
 import { kiesOmzetGrootboek, kiesInkoopGrootboek } from "./grootboekKeuze.ts"
 import { getGenegeerd as getGenegeerdVoor, getVoorkeurRijen } from "./boekhouding.ts"
 import { vandaagIso } from "./datumTijd.ts"
-import { factuurPdf } from "./factuurPdf.ts"
 
 // Gedeelde SnelStart B2B-Api v2 client voor edge functions.
 //
@@ -655,14 +654,15 @@ export async function pushFactuurPdf(
 ): Promise<{ gelukt: boolean; reden?: string }> {
   if (!verkoopboekingId) return { gelukt: false, reden: 'geen boeking' }
 
+  // Alleen de opgeslagen PDF (de app slaat hem op bij het versturen). De
+  // server-PDF van _shared/factuurPdf.ts is voor Moneybird; SnelStart werkt
+  // bewust zoals voorheen.
+  const pad = `${companyId}/${factuur.id}.pdf`
   try {
-    // De opgeslagen PDF, of anders maakt de server hem in dezelfde opmaak als de
-    // app (_shared/factuurPdf.ts). Zo staat ook een factuur die nooit vanuit de
-    // app is verstuurd met brondocument in de boekhouding.
-    const pdf = await factuurPdf(admin, companyId, factuur.id)
-    if (!pdf) return { gelukt: false, reden: 'ontbreekt' }
+    const { data: blob, error } = await admin.storage.from('factuur-pdfs').download(pad)
+    if (error || !blob) return { gelukt: false, reden: 'ontbreekt' }
 
-    const buf = pdf.bytes.buffer.slice(pdf.bytes.byteOffset, pdf.bytes.byteOffset + pdf.bytes.byteLength) as ArrayBuffer
+    const buf = await blob.arrayBuffer()
     if (buf.byteLength > MAX_BIJLAGE_BYTES) return { gelukt: false, reden: 'groter dan 5 MB' }
 
     // Het type staat in de bestandsnaam zodat een boekhouder in SnelStart meteen

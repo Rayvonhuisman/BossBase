@@ -78,13 +78,11 @@ ophalen** (tabblad Instellingen) haalt ook dat weer op.
 - Bij verschillen tussen klantgegevens wint wat in SnelStart staat.
 
 **Tabbladen in de SnelStart-kaart:**
-- **Instellingen**: bovenaan **Controleer na het koppelen**: welke grootboekrekeningen
-  er in SnelStart moeten zijn, met een link naar SnelStart Web als er een mist. Daaronder
-  de rekeningen voor omzet en je **Kostencategorieën**: per categorie een
-  grootboekrekening, eigen categorieën toevoegen, op inactief zetten of verwijderen.
-- **Synchroniseren**: één knop **Synchroniseren** (eerst klanten en leveranciers, dan
-  kosten en facturen), met daarna per onderdeel wat er gebeurd is, en wanneer er voor
-  het laatst is gesynchroniseerd.
+- **Instellingen**: de **Grootboekindeling** (per kostencategorie en per btw-soort
+  een grootboekrekening) en je **Kostencategorieën**: eigen categorieën toevoegen,
+  op inactief zetten of verwijderen.
+- **Synchroniseren**: wanneer er voor het laatst is gesynchroniseerd, en knoppen om
+  het nu te doen.
 - **Meldingen**: als er iets niet goed ging.
 
 **Iets verwijderd wat uit SnelStart kwam?** Dan komt het bij de volgende
