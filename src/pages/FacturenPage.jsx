@@ -47,6 +47,18 @@ const THIS_MONTH = () => vandaagIso().slice(0, 7);
 // facturen.betaaltermijn_dagen in de database).
 const STANDAARD_BETAALTERMIJN = 14;
 
+// Herkomstlabel "MB" bij een factuur die uit Moneybird is opgehaald, los van de
+// status: ook een betaalde opgehaalde factuur is zo herkenbaar. Zelfde vorm als
+// het bronlabel in de kostenlijst (BbPages2). SnelStart krijgt hier bewust geen
+// label.
+const uitMoneybird = f => String(f?.externeReferentie || '').startsWith('moneybird_');
+const MbLabel = () => (
+  <span
+    title="Opgehaald uit Moneybird"
+    style={{ fontSize: '.7rem', fontWeight: 700, color: '#fff', background: '#2563EB', borderRadius: 4, padding: '2px 6px', marginLeft: 6, verticalAlign: 'middle' }}
+  >MB</span>
+);
+
 // Te laat = verstuurd, niet betaald, niet gecrediteerd en geen creditnota, en
 // de vervaldatum is voorbij. Concepten zijn nooit naar de klant gegaan; een
 // gecrediteerde factuur is niet meer verschuldigd (audit 2026-10-01, H9).
@@ -859,7 +871,7 @@ function ViewFactuurModal({ factuur, customers, onClose, onSluitVoorActie, onRef
       <div className="modal modal-wide">
         <div className="modal-hd">
           <div>
-            <div className="modal-title">{factuur.nummer}</div>
+            <div className="modal-title">{factuur.nummer}{uitMoneybird(factuur) && <MbLabel />}</div>
             <div className="modal-sub">{customerName}</div>
           </div>
           <ModalX onClose={onClose} />
@@ -1455,6 +1467,7 @@ export function FacturenPage({ openCustomer, preOpenFactuurId, onItemOpen, onIte
                       <td className="td">
                         <span style={{ fontWeight: 700, fontFamily: 'monospace', fontSize: 13 }}>{f.nummer}</span>
                         {f.isCredit && <span className="badge" style={{ background: '#fee2e2', color: '#dc2626', marginLeft: 6, fontSize: 10 }}>CF</span>}
+                        {uitMoneybird(f) && <MbLabel />}
                       </td>
                       <td className="td">
                         <button

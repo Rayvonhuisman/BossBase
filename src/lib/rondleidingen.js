@@ -290,7 +290,7 @@ export const START = [
   { tab: 'templates', doel: 'set-templates', titel: 'Je mails',
     tekst: 'Zo klinken de mails bij je offertes, facturen en betaalherinneringen. Pas ze aan naar jouw manier van schrijven.' },
   { tab: 'integraties', doel: 'set-integraties', titel: 'Je boekhouding',
-    tekst: 'Werk je met Moneybird of SnelStart? Koppel het hier, dan gaan betaalde facturen vanzelf naar je boekhouding.' },
+    tekst: 'Werk je met Moneybird? Koppel het hier, dan gaan je facturen vanzelf naar je boekhouding. SnelStart komt binnenkort.' },
   { welkom: true, einde: true, titel: 'Klaar voor je eerste offerte',
     tekst: 'Dat is de basis. Nu laat ik je de rest zien.' },
 ];

@@ -2,8 +2,12 @@
 
 > Kennisbron voor **Boss**.
 
-Te vinden onder **Instellingen**, tabblad **Integraties**. Er zijn drie koppelingen:
-**Stripe**, **Moneybird** en **SnelStart**. Klik op een kaart om hem te openen.
+Te vinden onder **Instellingen**, tabblad **Integraties**. Je kunt **Stripe** en
+**Moneybird** koppelen. Klik op een kaart om hem te openen. **SnelStart** komt
+binnenkort: die kaart staat op **Binnenkort beschikbaar** en is nog niet te openen.
+
+Heb je net een koppeling gemaakt, dan feliciteer ik je even en vertel ik wat er vanaf
+nu vanzelf gaat. Loop je ergens tegenaan, meld het dan via **Bug of idee** bovenin.
 
 ---
 
@@ -37,7 +41,8 @@ bij Moneybird in).
   inkoopfactuur of bonnetje staat, komt binnen als leverancier, de rest als klant.
 - Inkoopfacturen en bonnetjes uit Moneybird komen als kosten binnen (label MB), met btw,
   leverancier en bon. Facturen die je in Moneybird zelf maakt, komen in BossBase met het
-  label **Uit boekhouding**.
+  blauwe label **MB** naast het nummer, ook als ze betaald zijn. Staan ze nog open, dan
+  is hun status **Uit boekhouding**.
 - Kosten die je in BossBase invoert gaan naar Moneybird als inkoopfactuur, met bon, op de
   grootboekrekening van hun categorie. Een leverancier is daarvoor verplicht.
   Werkbonmateriaal en inkopen op een project gaan niet mee.
@@ -65,32 +70,11 @@ bij Moneybird in).
 Iets verwijderd wat uit Moneybird kwam? Dan komt het niet terug. **Alles opnieuw
 ophalen** (tabblad Instellingen) haalt ook dat weer op.
 
-## SnelStart (Groei en Team)
+## SnelStart (binnenkort)
 
-**Koppelen:** maak in SnelStart Web een koppelsleutel aan, vul die in bij
-**Koppelsleutel**, klik **Verbinding testen** en **Opslaan**.
-
-**Wat er gebeurt:**
-- Een factuur die je op betaald zet, gaat direct naar SnelStart.
-- Elke nacht worden klanten, leveranciers, facturen en kosten bijgewerkt. Inkoopfacturen
-  uit SnelStart komen als kosten binnen (label SS). Facturen die je in SnelStart maakt,
-  komen in BossBase met het label **Uit boekhouding**.
-- Bij verschillen tussen klantgegevens wint wat in SnelStart staat.
-
-**Tabbladen in de SnelStart-kaart:**
-- **Instellingen**: de **Grootboekindeling** (per kostencategorie en per btw-soort
-  een grootboekrekening) en je **Kostencategorieën**: eigen categorieën toevoegen,
-  op inactief zetten of verwijderen.
-- **Synchroniseren**: wanneer er voor het laatst is gesynchroniseerd, en knoppen om
-  het nu te doen.
-- **Meldingen**: als er iets niet goed ging.
-
-**Iets verwijderd wat uit SnelStart kwam?** Dan komt het bij de volgende
-synchronisatie niet terug. Wil je alles toch weer ophalen, klik dan in de
-SnelStart-kaart, tabblad **Instellingen**, op **Alles opnieuw ophalen**. Dan komt ook
-alles terug wat je eerder hebt verwijderd.
-
-Ontkoppelen doe je met **Loskoppelen**.
+De koppeling met SnelStart komt binnenkort. De kaart staat op **Binnenkort
+beschikbaar**; koppelen kan nu nog niet. Werk je met Moneybird, dan kun je die nu al
+koppelen.
 
 ## Stripe betaallink (Team, of als module bij Groei)
 
@@ -107,4 +91,5 @@ geld komt op je eigen rekening. Ontkoppelen doe je met **Ontkoppelen**.
 ## Wat er niet is
 - Klanten importeren uit Excel kan niet (exporteren wel, via Database).
 - Er is geen koppeling met een mailprogramma.
-- Andere koppelingen dan deze drie zijn er op dit moment niet.
+- Andere koppelingen dan Stripe en Moneybird zijn er op dit moment niet. SnelStart komt
+  binnenkort.

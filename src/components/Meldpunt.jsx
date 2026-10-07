@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Bug, Lightbulb, MessageSquarePlus, ImagePlus, X, Gift, CheckCircle2, Info } from 'lucide-react';
 import { ModalX } from '../bb-shared.jsx';
 import { useToast } from '../lib/toast.jsx';
+import KoppelFelicitatie from './KoppelFelicitatie.jsx';
 import {
   getMeldactie, verstuurMelding, verkleinAfbeelding, SCREENSHOT_TYPES,
 } from '../services/meldpuntService.js';
@@ -52,6 +53,8 @@ export function MeldKnop({ pagina }) {
         {prijzen && <Gift size={14} strokeWidth={2.2} className="tb-meld-gift" aria-hidden="true" />}
       </button>
       {open && <MeldModal pagina={pagina} prijzen={prijzen} onClose={() => setOpen(false)} />}
+      {/* Boss na een nieuwe koppeling; zijn knop "Bug of idee" opent dit formulier. */}
+      <KoppelFelicitatie onMeldpunt={() => { laadActie(); setOpen(true); }} />
     </>
   );
 }

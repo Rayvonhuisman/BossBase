@@ -21,6 +21,9 @@
 //   omschrijving  één zin: wat doet deze koppeling
 //   logo          { src, alt } woordmerk | { img, alt } extern logo | { node }
 //   verborgen     true = nog niet voor klanten (staat wél in de code)
+//   binnenkort    true = kaart wel zichtbaar, maar niet te openen ("Binnenkort
+//                 beschikbaar"). Een bedrijf dat al gekoppeld is krijgt dit niet,
+//                 zodat een bestaande koppeling blijft werken.
 //   status        { actief, label }
 //   gate          null | { pill, tekst, knop, onClick } — pakket ontbreekt
 //   koppeling     { inleiding?, activatie?, velden[], acties[], fout? }
@@ -271,16 +274,18 @@ function LaatsteSync({ iso }) {
 // ── Overzichtskaart ─────────────────────────────────────────────────────────
 
 export function IntegratieKaart({ integratie, onOpen }) {
-  const { naam, omschrijving, logo, status, gate } = integratie;
+  const { naam, omschrijving, logo, status, gate, binnenkort } = integratie;
   return (
     <button
       type="button"
       className="card card-p integ-card"
-      onClick={onOpen}
-      aria-label={`${naam} instellen`}
+      onClick={binnenkort ? undefined : onOpen}
+      disabled={!!binnenkort}
+      aria-label={binnenkort ? `${naam}: binnenkort beschikbaar` : `${naam} instellen`}
       style={{
-        border: '1px solid var(--border)', textAlign: 'left', cursor: 'pointer',
+        border: '1px solid var(--border)', textAlign: 'left', cursor: binnenkort ? 'default' : 'pointer',
         display: 'flex', flexDirection: 'column', gap: 10, width: '100%',
+        opacity: binnenkort ? 0.6 : 1,
       }}
     >
       <div className="integ-card-hd" style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
@@ -289,9 +294,11 @@ export function IntegratieKaart({ integratie, onOpen }) {
           <div style={{ fontSize: '.82rem', color: 'var(--dmu)' }}>{omschrijving}</div>
         </div>
         <div style={{ flexShrink: 0 }}>
-          {gate
-            ? <IntegStatusPill>{gate.pill}</IntegStatusPill>
-            : <IntegStatusPill actief={!!status?.actief}>{status?.label}</IntegStatusPill>}
+          {binnenkort
+            ? <IntegStatusPill>Binnenkort beschikbaar</IntegStatusPill>
+            : gate
+              ? <IntegStatusPill>{gate.pill}</IntegStatusPill>
+              : <IntegStatusPill actief={!!status?.actief}>{status?.label}</IntegStatusPill>}
         </div>
       </div>
     </button>
@@ -513,7 +520,7 @@ export default function IntegratiesOverzicht({ integraties, initieelOpen = null 
     if (initieelOpen) setOpen(initieelOpen);
   }, [initieelOpen]);
   const zichtbaar = integraties.filter(i => i && !i.verborgen);
-  const actief = zichtbaar.find(i => i.id === open) || null;
+  const actief = zichtbaar.find(i => i.id === open && !i.binnenkort) || null;
 
   return (
     <div className="afu3">

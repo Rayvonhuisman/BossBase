@@ -76,6 +76,7 @@ import {
 } from '../services/accountingService.js';
 import { bevestig } from '../lib/bevestig.jsx';
 import { neemMoneybirdTerug, MONEYBIRD_TERUG_PARAM } from '../lib/moneybirdTerug.js';
+import { feliciteerKoppeling } from '../components/KoppelFelicitatie.jsx';
 
 const ALL_TEMPLATE_CONFIGS = [
   { type: 'offerte', label: 'Offerte', vars: ['klant_naam','bedrijfsnaam','offerte_nummer','totaal_bedrag','vervaldatum','link'], showAutoToggle: false, showAutoDagen: false },
@@ -381,6 +382,8 @@ export function InstellingenPage({ openDeal } = {}) {
           try { await refreshStripeStatus(); } catch { /* stil; kaart toont laatst bekende status */ }
           const fresh = await getStripeConnection().catch(() => conn);
           if (alive) setStripeConn(fresh);
+          // Net actief geworden (terug uit de onboarding): Boss feliciteert.
+          if (alive && fresh?.chargesEnabled) feliciteerKoppeling('stripe');
         }
       })
       .catch(() => {});
@@ -407,7 +410,9 @@ export function InstellingenPage({ openDeal } = {}) {
     setStripeBusy(true);
     try {
       await refreshStripeStatus();
-      setStripeConn(await getStripeConnection());
+      const fresh = await getStripeConnection();
+      if (fresh?.chargesEnabled && !stripeConn?.chargesEnabled) feliciteerKoppeling('stripe');
+      setStripeConn(fresh);
     } catch (e) {
       toast.error(e.message || 'Status vernieuwen mislukt');
     } finally {
@@ -526,6 +531,7 @@ export function InstellingenPage({ openDeal } = {}) {
         if (r.klaar) {
           setMbTerug(null);
           toast.success(`Moneybird is gekoppeld met ${r.administratie}`);
+          feliciteerKoppeling('moneybird');
           meldAdministratieCheck(r);
           await ververMoneybird();
         } else {
@@ -999,6 +1005,7 @@ export function InstellingenPage({ openDeal } = {}) {
       const r = await kiesMoneybirdAdministratie(mbTerug.state, mbTerug.gekozen);
       setMbTerug(null);
       toast.success(`Moneybird is gekoppeld met ${r.administratie}`);
+      feliciteerKoppeling('moneybird');
       meldAdministratieCheck(r);
       await ververMoneybird();
     } catch (err) {
@@ -1582,6 +1589,7 @@ export function InstellingenPage({ openDeal } = {}) {
               label: 'Verbinden', variant: 's', icon: I.google,
               onClick: () => {
                 setGoogleConnected(true);
+                feliciteerKoppeling('google');
                 toast.info('Google Agenda-koppeling is voorbereid. Echte OAuth-koppeling moet nog worden geconfigureerd.');
               },
             }],
@@ -1741,6 +1749,10 @@ export function InstellingenPage({ openDeal } = {}) {
       naam: 'SnelStart',
       omschrijving: 'Boek facturen automatisch als verkoopboeking in SnelStart en synchroniseer klanten.',
       logo: { src: '/brand/snelstart.svg', alt: 'SnelStart' },
+      // Nieuwe koppelingen staan dicht ("Binnenkort beschikbaar"). Een bedrijf
+      // dat al gekoppeld is, of net midden in het koppelen zit, houdt de kaart
+      // zoals hij was: daarmee testen we verder (TEST SnelStart BV).
+      binnenkort: !ssConnection?.connected && ssActivatie !== 'wachten',
       status: {
         actief: !!ssConnection?.connected,
         // 'Koppelen...' terwijl we op de webhook wachten: "Niet gekoppeld" tonen
