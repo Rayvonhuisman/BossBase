@@ -1048,8 +1048,8 @@ export function InstellingenPage({ openDeal } = {}) {
       const k = r.klanten, l = r.leveranciers, f = r.facturen;
       const klant = [k.naarMoneybird && `${k.naarMoneybird} naar Moneybird`, k.opgehaald && `${k.opgehaald} opgehaald`, k.bijgewerkt && `${k.bijgewerkt} bijgewerkt`].filter(Boolean);
       const lev = [l.naarMoneybird && `${l.naarMoneybird} naar Moneybird`, l.opgehaald && `${l.opgehaald} opgehaald`, l.bijgewerkt && `${l.bijgewerkt} bijgewerkt`].filter(Boolean);
-      const fact = [f.geboekt && `${f.geboekt} geboekt`, f.betalingen && `${f.betalingen} betaling${f.betalingen === 1 ? '' : 'en'} geregistreerd`, f.verrekend && `${f.verrekend} creditfactuur verrekend`, f.pdfs && `${f.pdfs} PDF${f.pdfs === 1 ? '' : "'s"} bijgewerkt`, f.betaaldUitMoneybird && `${f.betaaldUitMoneybird} betaald volgens Moneybird`].filter(Boolean);
-      const opgehaald = [r.opgehaald.inkoopfacturen && `${r.opgehaald.inkoopfacturen} inkoopfacturen/bonnetjes`, r.opgehaald.verkoopfacturen && `${r.opgehaald.verkoopfacturen} verkoopfacturen`].filter(Boolean);
+      const fact = [f.geboekt && `${f.geboekt} geboekt`, f.betalingen && `${f.betalingen} betaling${f.betalingen === 1 ? '' : 'en'} geregistreerd`, f.verrekend && `${f.verrekend} ${f.verrekend === 1 ? 'creditfactuur' : 'creditfacturen'} verrekend`, f.pdfs && `${f.pdfs} PDF${f.pdfs === 1 ? '' : "'s"} bijgewerkt`, f.betaaldUitMoneybird && `${f.betaaldUitMoneybird} betaald volgens Moneybird`].filter(Boolean);
+      const opgehaald = [r.opgehaald.inkoopfacturen && `${r.opgehaald.inkoopfacturen} ${r.opgehaald.inkoopfacturen === 1 ? 'inkoopfactuur/bonnetje' : 'inkoopfacturen/bonnetjes'}`, r.opgehaald.verkoopfacturen && `${r.opgehaald.verkoopfacturen} ${r.opgehaald.verkoopfacturen === 1 ? 'verkoopfactuur' : 'verkoopfacturen'}`].filter(Boolean);
       if (klant.length) delen.push(`Klanten: ${klant.join(', ')}`);
       if (lev.length) delen.push(`Leveranciers: ${lev.join(', ')}`);
       if (fact.length) delen.push(`Facturen: ${fact.join(', ')}`);
