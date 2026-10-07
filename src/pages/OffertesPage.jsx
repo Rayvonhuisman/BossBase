@@ -1396,7 +1396,9 @@ export function OffertesPage({ openCustomer, preOpenOfferteId, onItemOpen, onIte
                       </td>
                       <td className="td">
                         <button
-                          onClick={() => openCustomer?.(o.customerId)}
+                          // Niet doorgeven aan de rij: die opent anders eerst de offerte en
+                          // pas na wegklikken verschijnt de klantkaart.
+                          onClick={e => { e.stopPropagation(); openCustomer?.(o.customerId); }}
                           style={{ background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'inherit', cursor: 'pointer' }}
                           onMouseEnter={e => { e.currentTarget.style.color = 'var(--p)'; e.currentTarget.style.textDecoration = 'underline'; }}
                           onMouseLeave={e => { e.currentTarget.style.color = 'inherit'; e.currentTarget.style.textDecoration = 'none'; }}
