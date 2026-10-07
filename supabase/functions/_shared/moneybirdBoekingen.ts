@@ -77,12 +77,15 @@ type Context = {
   // Contacten die deze run in Moneybird zijn aangemaakt (bij facturen en kosten),
   // voor de melding na afloop.
   nieuw: { klanten: number; leveranciers: number }
+  // En andersom: contacten die via opgehaalde documenten hier zijn aangemaakt.
+  opgehaald: { klanten: number; leveranciers: number }
 }
 
 export async function laadContext(k: MbKoppeling, meldingen: string[] = []): Promise<Context> {
   return {
     k, ind: await laadIndeling(k), voork: await getVoorkeurRijen(k.admin, k.companyId, 'moneybird'), meldingen,
     klantContact: new Map(), levContact: new Map(), nieuw: { klanten: 0, leveranciers: 0 },
+    opgehaald: { klanten: 0, leveranciers: 0 },
   }
 }
 
@@ -400,6 +403,7 @@ async function klantVoorContact(ctx: Context, contact: any, cache: Map<string, s
   const { data: bestaand } = await ctx.k.admin.from('customers').select('id')
     .eq('company_id', ctx.k.companyId).eq('moneybird_id', id).maybeSingle()
   const uit: string | null = bestaand?.id ?? await klantUitContact(ctx.k, contact)
+  if (!bestaand?.id && uit) ctx.opgehaald.klanten++
   cache.set(id, uit)
   return uit
 }
@@ -412,6 +416,9 @@ export type BoekingenUitslag = {
   betaaldUitMoneybird: number
   // Contacten die bij het boeken van facturen en kosten in Moneybird zijn aangemaakt.
   contacten: { klanten: number; leveranciers: number }
+  // Contacten die via opgehaalde facturen en inkoopfacturen hier zijn aangemaakt
+  // (de contactensync telt alleen wat hij zelf ophaalt).
+  contactenOpgehaald: { klanten: number; leveranciers: number }
   overgeslagenUitPrullenbak: number
   kostenResterend: number
   fouten: string[]
@@ -423,7 +430,7 @@ export async function syncBoekingen(k: MbKoppeling): Promise<BoekingenUitslag> {
   const u: BoekingenUitslag = {
     exported: { facturen: 0, kosten: 0, betalingen: 0 },
     imported: { inkoopfacturen: 0, verkoopfacturen: 0 },
-    betaaldUitMoneybird: 0, contacten: { klanten: 0, leveranciers: 0 }, overgeslagenUitPrullenbak: 0, kostenResterend: 0,
+    betaaldUitMoneybird: 0, contacten: { klanten: 0, leveranciers: 0 }, contactenOpgehaald: { klanten: 0, leveranciers: 0 }, overgeslagenUitPrullenbak: 0, kostenResterend: 0,
     fouten: [], meldingen: [], rest: false,
   }
   const db = k.admin
@@ -431,6 +438,7 @@ export async function syncBoekingen(k: MbKoppeling): Promise<BoekingenUitslag> {
   const tijdOp = (marge = 15_000) => Boolean(k.budget?.op(marge))
   const ctx = await laadContext(k, u.meldingen)
   u.contacten = ctx.nieuw   // zelfde object: telt mee tijdens de run
+  u.contactenOpgehaald = ctx.opgehaald
 
   try {
     // ── 1. Facturen naar Moneybird ───────────────────────────────────────────
@@ -586,8 +594,15 @@ async function importKosten(ctx: Context, u: BoekingenUitslag) {
       // 'new' = nog niet verwerkt in Moneybird (inbox): gegevens kunnen nog
       // ontbreken. Die komt bij een volgende sync, als hij opgeslagen is.
       if (d.state === 'new') continue
+      // Door BossBase zelf geboekt (pushKost zet dit kenmerk): dat is een kost
+      // uit BossBase, geen inkoopfactuur van buiten. Ook als hij hier inmiddels
+      // is verwijderd: dan niet als vreemde inkoopfactuur terughalen, net zoals
+      // eigen externe verkoopfacturen niet terugkomen (zie importVerkoop).
+      if (/^BB-KST-/.test(String(d.reference || ''))) continue
       try {
-        const leverancierId = d.contact ? await importeerLeverancier(k, d.contact, levCache) : null
+        const leverancierId = d.contact
+          ? await importeerLeverancier(k, d.contact, levCache, () => { ctx.opgehaald.leveranciers++ })
+          : null
         const bijlagen = await haalBijlagen(ctx, soortPad, d)
         const bijlageUrl = bijlagen.length ? JSON.stringify(bijlagen) : null
         const basis = d.reference ? `${label} ${d.reference}` : label

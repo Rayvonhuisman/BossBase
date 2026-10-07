@@ -196,12 +196,12 @@ export async function syncMoneybird() {
     // Nieuw in Moneybird: bij het boeken (facturen, kosten) én door de contactensync.
     klanten: {
       naarMoneybird: (b.contacten?.klanten || 0) + (c.klanten?.geexporteerd || 0),
-      opgehaald: c.klanten?.geimporteerd || 0,
+      opgehaald: (b.contactenOpgehaald?.klanten || 0) + (c.klanten?.geimporteerd || 0),
       bijgewerkt: (c.klanten?.bijgewerkt || 0) + (c.klanten?.doorgestuurd || 0),
     },
     leveranciers: {
       naarMoneybird: b.contacten?.leveranciers || 0,
-      opgehaald: c.leveranciers?.geimporteerd || 0,
+      opgehaald: (b.contactenOpgehaald?.leveranciers || 0) + (c.leveranciers?.geimporteerd || 0),
       bijgewerkt: (c.leveranciers?.bijgewerkt || 0) + (c.leveranciers?.doorgestuurd || 0),
     },
     overgeslagenUitPrullenbak: (b.overgeslagenUitPrullenbak || 0) + (c.overgeslagenUitPrullenbak || 0),

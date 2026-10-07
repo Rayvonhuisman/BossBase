@@ -313,7 +313,7 @@ export async function zorgVoorLeverancierContact(k: MbKoppeling, lev: any, meldi
  * bestaande terug. Gebruikt bij het importeren van inkoopfacturen en bonnen.
  */
 export async function importeerLeverancier(
-  k: MbKoppeling, contact: any, cache?: Map<string, string>,
+  k: MbKoppeling, contact: any, cache?: Map<string, string>, bijNieuw?: () => void,
 ): Promise<string | null> {
   const id = String(contact?.id || '')
   if (!id) return null
@@ -335,6 +335,7 @@ export async function importeerLeverancier(
     .insert({ company_id: k.companyId, moneybird_id: id, moneybird_versie: Number(contact.version) || null, actief: true, ...velden })
     .select(LEV_KOLOMMEN).single()
   if (!nieuw?.id) return null
+  bijNieuw?.()
   // Meteen een vingerafdruk: hier is nu gelijk aan daar, dus de contactensync
   // hoeft hem niet terug te sturen.
   await k.admin.from('leveranciers').update({ moneybird_hash: await vingerafdruk(leverancierNaarContact(nieuw)) }).eq('id', nieuw.id)
