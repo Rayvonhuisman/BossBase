@@ -6,22 +6,23 @@
 //   laad      → wat we al weten, om het formulier vooraf in te vullen
 //   upload    → een ondertekende upload-URL voor één bestand in de private
 //               bucket website-intake (de browser uploadt rechtstreeks)
-//   verzenden → intake opslaan, sleutel ongeldig maken, taak afvinken, mails;
-//               bij een upgrade met iDEAL de link naar Stripe Checkout
+//   verzenden → zonder bedrag: intake indienen (rondIntakeAf). Met bedrag:
+//               concept bij een betaling zetten en de link naar Stripe
+//               Checkout teruggeven; indienen doet billing-webhook na betaling
 //
-// De sleutel verloopt na 30 dagen of zodra de intake is verstuurd.
+// De sleutel verloopt na 30 dagen of zodra de intake is ingediend.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { CORS, json, stuurBossBaseMail } from '../_shared/billing.ts'
 import { clientFout } from '../_shared/clientFout.ts'
 import {
-  PAKKETTEN, EXTRAS, HOSTING_PER_MAAND, DOMEIN_PER_JAAR, EMAIL_PER_MAAND, TERMIJNEN, WEBSITE_INTERN,
-  isPakket, upgradePrijs, schoneExtras, extrasPrijs, extrasTekst, euro, controleerSleutel,
-  mailIntakeBevestiging, mailIntern,
+  PAKKETTEN, EXTRAS, HOSTING_PER_MAAND, DOMEIN_PER_JAAR, EMAIL_PER_MAAND, TERMIJNEN,
+  isPakket, upgradePrijs, schoneExtras, extrasPrijs, controleerSleutel, rondIntakeAf, type IntakeGegevens,
 } from '../_shared/website.ts'
-import { startUpgradeBetaling, regelOpAbonnement } from '../_shared/websiteBetalen.ts'
+import { startBetaling } from '../_shared/websiteBetalen.ts'
 
 const MAX_INTAKE_BYTES = 400_000
+const MAX_EMAIL = 10
 const TOEGESTAAN = /^(image\/(jpeg|png|webp|heic|heif|svg\+xml|gif)|application\/pdf)$/
 
 const veiligeNaam = (naam: string) => {
@@ -63,8 +64,6 @@ serve(async (req) => {
       const { data: c } = await admin.from('companies')
         .select('name, email, phone, address, postal_code, city, kvk, btw_number, website, logo_url, branche')
         .eq('id', companyId).maybeSingle()
-      const { data: sub } = await admin.from('subscriptions')
-        .select('stripe_subscription_id, stripe_status').eq('company_id', companyId).maybeSingle()
       return json({
         bedrijf: {
           naam: c?.name ?? '', email: c?.email ?? '', telefoon: c?.phone ?? '',
@@ -73,9 +72,9 @@ serve(async (req) => {
           branche: c?.branche ?? '', logoUrl: c?.logo_url ?? '',
         },
         verlooptOp: sleutel.verloopt_op,
-        // Termijnen gaan als regel op het abonnement; zonder lopend
-        // Stripe-abonnement kan dat niet.
-        termijnenMogelijk: Boolean(sub?.stripe_subscription_id) && ['active', 'trialing', 'past_due'].includes(sub?.stripe_status ?? ''),
+        // Termijnen zijn een eigen Stripe-abonnement dat in Checkout wordt
+        // afgesloten; dat kan altijd.
+        termijnenMogelijk: true,
         prijzen: { pakketten: PAKKETTEN, extras: EXTRAS, hosting: HOSTING_PER_MAAND, domein: DOMEIN_PER_JAAR, email: EMAIL_PER_MAAND, termijnen: TERMIJNEN },
       })
     }
@@ -105,83 +104,35 @@ serve(async (req) => {
       // bedrag uit de browser telt niet.
       const extras = schoneExtras(body.extras, pakket)
       const bedrag = upgradePrijs('basis', pakket, true) + extrasPrijs(extras, true)
-      const wijze = bedrag > 0 ? (body.betaalwijze === 'termijnen' ? 'termijnen' : 'ideal') : null
       const domein = typeof body.domein === 'string' ? body.domein.trim().toLowerCase().slice(0, 120) : ''
-      // Zakelijke e-mail bieden we alleen aan bij een domein via ons.
-      const email = Boolean(domein) && body.email === true
+      // Zakelijke e-mail alleen bij een domein via ons; per adres.
+      const emailAantal = domein ? Math.max(0, Math.min(Math.floor(Number(body.emailAantal) || 0), MAX_EMAIL)) : 0
+      const gegevens: IntakeGegevens = { intake, pakket, extras, domein, emailAantal }
 
-      // Eerst de sleutel claimen: wie twee keer op versturen drukt, mag maar
-      // één intake (en één betaling) opleveren.
-      const { data: geclaimd } = await admin.from('website_tokens')
-        .update({ gebruikt_op: new Date().toISOString() })
-        .eq('id', sleutel.id).is('gebruikt_op', null).select('id').maybeSingle()
-      if (!geclaimd) return json({ error: 'Je intake is al verstuurd.', code: 'al_ingevuld' }, 409)
-      // Andere openstaande links van dit bedrijf vervallen ook.
-      await admin.from('website_tokens').update({ gebruikt_op: new Date().toISOString() })
-        .eq('company_id', companyId).is('gebruikt_op', null)
-
-      const nu = new Date().toISOString()
-      const { error: opslaanFout } = await admin.from('website_aanvragen').update({
-        intake, pakket, extras, email, domein_via_ons: Boolean(domein), domein: domein || null,
-        status: 'intake_ontvangen', intake_ontvangen_op: nu, status_gewijzigd_op: nu,
-      }).eq('id', aanvraag.id)
-      if (opslaanFout) {
-        // Sleutel teruggeven, anders staat de klant met lege handen.
-        await admin.from('website_tokens').update({ gebruikt_op: null }).eq('id', sleutel.id)
-        return json({ error: 'Opslaan lukte niet. Je antwoorden staan nog bewaard; probeer het zo nog eens.' }, 500)
-      }
-      if (aanvraag.taak_id) await admin.from('activities').update({ completed: true }).eq('id', aanvraag.taak_id)
-
-      // Betalen. Gaat dit mis, dan staat de intake toch; de klant kan de
-      // betaling later vanuit Website in BossBase afronden.
-      let checkoutUrl: string | null = null
-      let betaalRegel: string | null = null
-      let betaalFout: string | null = null
-      if (bedrag > 0) {
-        const omschrijving = `Website ${PAKKETTEN[pakket].label}${Object.keys(extras).length ? ' met extra\'s' : ''} (aanmeldprijs)`
-        try {
-          if (wijze === 'termijnen') {
-            await regelOpAbonnement(admin, { companyId, soort: 'upgrade', pakket, extras, omschrijving, bedrag, termijnen: TERMIJNEN })
-            betaalRegel = `${euro(bedrag)} in ${TERMIJNEN} maandelijkse termijnen op je abonnement.`
-          } else {
-            checkoutUrl = await startUpgradeBetaling(admin, {
-              companyId, pakket, extras, omschrijving, bedrag,
-              terug: '/intake/bedankt', origin: req.headers.get('origin') ?? '',
-            })
-            betaalRegel = `${euro(bedrag)} eenmalig via iDEAL.`
-          }
-        } catch (e) {
-          betaalFout = (e as Error).message
-          console.warn('website-intake betalen:', betaalFout)
-        }
+      // Niets te betalen: meteen indienen.
+      if (bedrag <= 0) {
+        const ok = await rondIntakeAf(admin, companyId, gegevens, stuurBossBaseMail, null)
+        if (!ok) return json({ error: 'Je intake is al verstuurd.', code: 'al_ingevuld' }, 409)
+        return json({ ok: true, checkoutUrl: null })
       }
 
-      // Mails. Mislukt er een, dan staat het in mail_fouten (stuurBossBaseMail).
-      const { data: c } = await admin.from('companies').select('id, name, email, phone').eq('id', companyId).maybeSingle()
-      const p = PAKKETTEN[pakket]
-      const i = mailIntern({
-        onderwerp: `Nieuwe website-intake: ${c?.name ?? 'onbekend'} (${p.label})`,
-        kop: 'Nieuwe intake binnen',
-        bedrijf: c ?? { id: companyId },
-        regels: [
-          ['Pakket', `${p.label} · ${p.omvang}`],
-          ['Extra\'s', Object.keys(extras).length ? extrasTekst(extras) : 'geen'],
-          ['Te betalen', bedrag > 0 ? `${euro(bedrag)} excl. btw · ${wijze === 'termijnen' ? `${TERMIJNEN} termijnen` : 'iDEAL'}${betaalFout ? ` · MISLUKT: ${betaalFout}` : ''}` : 'geen'],
-          ['Domein via ons', domein ? `${domein} (${euro(DOMEIN_PER_JAAR)} per jaar, vanaf livegang)` : 'nee'],
-          ['Zakelijke e-mail', email ? `ja (${euro(EMAIL_PER_MAAND)} per maand, vanaf livegang)` : 'nee'],
-          ['Nog na te vragen', intake.ontbreekt.length ? intake.ontbreekt.join('; ') : 'niets'],
-        ],
-      })
-      await stuurBossBaseMail(WEBSITE_INTERN, i.subject, i.html, c?.email ?? undefined, undefined, 'website_intern')
-      if (c?.email) {
-        const m = mailIntakeBevestiging({
-          bedrijfsnaam: c.name, pakket,
-          betaling: checkoutUrl ? `Je betaalt ${betaalRegel} Lukte dat niet, dan rond je het af in BossBase onder Website.` : betaalRegel,
+      // Wel te betalen: de intake wacht als concept bij de betaling en wordt pas
+      // ingediend als Stripe meldt dat er betaald is (billing-webhook). Breekt
+      // de klant af, dan komt hij terug op deze link met zijn antwoorden.
+      const wijze = body.betaalwijze === 'termijnen' ? 'termijnen' : 'ideal'
+      const omschrijving = `Website ${PAKKETTEN[pakket].label}${Object.keys(extras).length ? ' met extra\'s' : ''} (aanmeldprijs)`
+      try {
+        const checkoutUrl = await startBetaling(admin, {
+          companyId, soort: 'upgrade', wijze, pakket, extras, gegevens, omschrijving, bedrag,
+          gelukt: '/intake/bedankt?betaling=gelukt',
+          afgebroken: `/intake/${body.sleutel}?betaling=afgebroken`,
+          origin: req.headers.get('origin') ?? '',
         })
-        await stuurBossBaseMail(c.email, m.subject, m.html, WEBSITE_INTERN, undefined, 'website_klant')
+        return json({ ok: true, checkoutUrl })
+      } catch (e) {
+        console.warn('website-intake betalen:', (e as Error).message)
+        return json({ error: 'Het betalen kon nu niet worden gestart. Je antwoorden staan nog bewaard; probeer het zo nog eens.' }, 502)
       }
-
-      return json({ ok: true, checkoutUrl, betaalFout: betaalFout ? 'Het betalen kon nu niet worden gestart. Je intake is wel binnen; je rondt de betaling af in BossBase onder Website.' : null })
     }
 
     return json({ error: 'Onbekende actie' }, 400)

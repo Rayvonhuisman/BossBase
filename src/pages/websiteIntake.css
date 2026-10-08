@@ -229,3 +229,5 @@
 .wi-teller button { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--wi-rand); background: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: var(--wi-zwart); }
 .wi-teller button:disabled { opacity: .4; cursor: not-allowed; }
 .wi-teller > span:first-of-type { min-width: 18px; text-align: center; font-weight: 700; }
+.wi-afgebroken { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+.wi-teller-los { margin: 10px 0 0; }

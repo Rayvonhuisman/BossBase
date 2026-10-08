@@ -1,79 +1,120 @@
-// Betalen voor de website, op twee manieren.
+// Betalen voor de website.
 //
-// EENMALIG MET iDEAL — een Stripe Checkout-sessie in payment-mode op ons eigen
-// platform-account, met de Stripe-klant van het abonnement. billing-webhook
-// zet de betaling op 'betaald' bij checkout.session.completed (metadata
-// soort=website_upgrade).
+// UPGRADE EN EXTRA'S — altijd via Stripe Checkout op ons eigen platform-account,
+// met de betaalmethodes die in Stripe aanstaan (iDEAL, creditcard, …; we geven
+// er bewust geen vaste mee). Twee wijzen:
+//  - eenmalig ('ideal'): payment-mode;
+//  - per maand ('termijnen'): subscription-mode, een eigen abonnement van
+//    TERMIJNEN maandtermijnen. De eerste wordt meteen afgerekend; billing-webhook
+//    zet daarna cancel_at, zodat het na de laatste termijn vanzelf stopt.
+// Pas als Stripe meldt dat er betaald is, telt het (billing-webhook →
+// verwerkWebsiteBetaling). Bij de intake staat de hele intake als concept in
+// `gegevens` en wordt hij pas dan ingediend.
 //
-// ALS REGEL OP HET ABONNEMENT — upgrade in 12 termijnen, hosting en domein.
-// Bewust geen extra subscription-item:
-//  - een jaarabonnement hangt aan een subscription_schedule, en een item
-//    toevoegen betekent die schedule vrijgeven en opnieuw zetten (zie
-//    billing-wijzig) — met het risico dat de looptijd verschuift;
-//  - Stripe staat op één abonnement geen jaarregel naast maandregels toe, en het
-//    domein is per jaar;
-//  - een item stopt niet vanzelf na 12 termijnen.
-// In plaats daarvan zet website-termijnen elke periode een factuurregel
-// (invoice item) klaar. Stripe neemt die mee op de eerstvolgende factuur van het
-// abonnement. Wat er al gefactureerd is, houdt website_betalingen bij.
+// DOORLOPENDE REGELS — hosting, domein en e-mail gaan als regel op het
+// BossBase-abonnement (regelOpAbonnement hieronder). Bewust geen extra
+// subscription-item: een jaarabonnement hangt aan een subscription_schedule, en
+// Stripe staat geen jaarregel naast maandregels toe. website-termijnen zet elke
+// periode een factuurregel (invoice item) klaar voor de eerstvolgende factuur.
 import { stripeFetch, stripeSecret, appOrigin } from './stripe.ts'
-import { termijnCenten, type Pakket } from './website.ts'
+import { termijnCenten, TERMIJNEN, type Pakket } from './website.ts'
 
-/** Start een iDEAL-betaling en geeft de Checkout-URL terug. */
-export async function startUpgradeBetaling(admin: any, o: {
-  companyId: string; pakket?: Pakket | null; extras?: Record<string, number> | null;
-  soort?: 'upgrade' | 'extra'; omschrijving: string; bedrag: number;
-  terug: string; origin: string; betalingId?: string
+/** Bedrag per maandtermijn in centen. */
+export const termijnBedragCenten = (bedrag: number) => Math.round((bedrag * 100) / TERMIJNEN)
+
+/**
+ * Start een betaling via Stripe Checkout en geeft de URL terug. Een eerdere
+ * openstaande Checkout van dit bedrijf voor dezelfde soort laten we verlopen,
+ * zodat er nooit twee tegelijk betaald kunnen worden.
+ */
+export async function startBetaling(admin: any, o: {
+  companyId: string; soort: 'upgrade' | 'extra'; wijze: 'ideal' | 'termijnen';
+  pakket?: Pakket | null; extras?: Record<string, number> | null; gegevens?: unknown;
+  omschrijving: string; bedrag: number;
+  gelukt: string; afgebroken: string; origin: string; betalingId?: string
 }): Promise<string> {
   const { data: sub } = await admin.from('subscriptions')
     .select('stripe_customer_id').eq('company_id', o.companyId).maybeSingle()
 
-  // Eén openstaande iDEAL-betaling per bedrijf en pakket. Bestaat hij al, dan
-  // hergebruiken we de rij en maken alleen een nieuwe sessie.
+  // Oude openstaande sessies van dit bedrijf (zelfde soort) laten verlopen.
+  const { data: open } = await admin.from('website_betalingen')
+    .select('id, stripe_session_id').eq('company_id', o.companyId).eq('soort', o.soort).eq('status', 'open')
+  for (const b of open ?? []) {
+    if (b.id === o.betalingId) continue
+    if (b.stripe_session_id) {
+      try { await stripeFetch(`/checkout/sessions/${b.stripe_session_id}/expire`, 'POST', {}) } catch { /* al verlopen of afgerond */ }
+    }
+    await admin.from('website_betalingen').update({ status: 'vervallen' }).eq('id', b.id).eq('status', 'open')
+  }
+
   let betalingId = o.betalingId ?? null
   if (!betalingId) {
     const { data: rij, error } = await admin.from('website_betalingen').insert({
-      company_id: o.companyId, soort: o.soort ?? 'upgrade', pakket: o.pakket ?? null, extras: o.extras ?? null,
-      omschrijving: o.omschrijving, bedrag: o.bedrag, wijze: 'ideal', status: 'open',
+      company_id: o.companyId, soort: o.soort, pakket: o.pakket ?? null, extras: o.extras ?? null,
+      gegevens: o.gegevens ?? null, omschrijving: o.omschrijving, bedrag: o.bedrag,
+      wijze: o.wijze, status: 'open',
+      per_keer: o.wijze === 'termijnen' ? termijnBedragCenten(o.bedrag) / 100 : null,
+      interval_maanden: o.wijze === 'termijnen' ? 1 : null,
+      aantal_totaal: o.wijze === 'termijnen' ? TERMIJNEN : null,
     }).select('id').single()
     if (error) throw new Error(`Betaling vastleggen mislukt: ${error.message}`)
     betalingId = rij.id
   }
 
   const origin = appOrigin(o.origin)
+  const metaSoort = o.wijze === 'termijnen' ? 'website_termijnen' : 'website_upgrade'
   const params: Record<string, string> = {
-    'mode': 'payment',
-    'payment_method_types[0]': 'ideal',
     'line_items[0][quantity]': '1',
     'line_items[0][price_data][currency]': 'eur',
-    'line_items[0][price_data][unit_amount]': String(Math.round(o.bedrag * 100)),
     'line_items[0][price_data][tax_behavior]': 'exclusive',
     'line_items[0][price_data][product_data][name]': o.omschrijving,
     'automatic_tax[enabled]': 'true',
-    'invoice_creation[enabled]': 'true',
-    'metadata[soort]': 'website_upgrade',
+    'metadata[soort]': metaSoort,
     'metadata[company_id]': o.companyId,
     'metadata[betaling_id]': betalingId!,
-    'payment_intent_data[metadata][soort]': 'website_upgrade',
-    'payment_intent_data[metadata][betaling_id]': betalingId!,
-    'success_url': `${origin}${o.terug}${o.terug.includes('?') ? '&' : '?'}betaling=gelukt`,
-    'cancel_url': `${origin}${o.terug}${o.terug.includes('?') ? '&' : '?'}betaling=afgebroken`,
+    'success_url': `${origin}${o.gelukt}`,
+    'cancel_url': `${origin}${o.afgebroken}`,
+  }
+  if (o.wijze === 'termijnen') {
+    params['mode'] = 'subscription'
+    params['line_items[0][price_data][unit_amount]'] = String(termijnBedragCenten(o.bedrag))
+    params['line_items[0][price_data][recurring][interval]'] = 'month'
+    params['line_items[0][price_data][product_data][name]'] = `${o.omschrijving} (${TERMIJNEN} maandtermijnen)`
+    // Op het abonnement zelf, zodat ook latere facturen bij de betaling te
+    // herleiden zijn, en zodat billing-webhook het niet voor het
+    // BossBase-abonnement aanziet.
+    params['subscription_data[metadata][soort]'] = metaSoort
+    params['subscription_data[metadata][company_id]'] = o.companyId
+    params['subscription_data[metadata][betaling_id]'] = betalingId!
+  } else {
+    params['mode'] = 'payment'
+    params['line_items[0][price_data][unit_amount]'] = String(Math.round(o.bedrag * 100))
+    params['invoice_creation[enabled]'] = 'true'
+    params['payment_intent_data[metadata][soort]'] = metaSoort
+    params['payment_intent_data[metadata][betaling_id]'] = betalingId!
   }
   if (sub?.stripe_customer_id) {
     params['customer'] = sub.stripe_customer_id
     params['customer_update[address]'] = 'auto'
   } else {
-    params['customer_creation'] = 'always'
+    if (o.wijze !== 'termijnen') params['customer_creation'] = 'always'
     params['billing_address_collection'] = 'required'
   }
   const sessie = await stripeFetch('/checkout/sessions', 'POST', params)
-  await admin.from('website_betalingen').update({ stripe_session_id: sessie.id }).eq('id', betalingId)
+  await admin.from('website_betalingen').update({ stripe_session_id: sessie.id, status: 'open' }).eq('id', betalingId)
   return sessie.url
+}
+
+/** Telt `maanden` kalendermaanden op bij een unix-tijd (seconden). */
+export function plusMaanden(sec: number, maanden: number): number {
+  const d = new Date(sec * 1000)
+  const doel = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + maanden, d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()))
+  return Math.floor(doel.getTime() / 1000)
 }
 
 /** Legt een regel op het abonnement vast. website-termijnen factureert hem. */
 export async function regelOpAbonnement(admin: any, o: {
-  companyId: string; soort: 'upgrade' | 'extra' | 'hosting' | 'domein' | 'email'; omschrijving: string;
+  companyId: string; soort: 'hosting' | 'domein' | 'email'; omschrijving: string;
   bedrag: number; pakket?: Pakket | null; extras?: Record<string, number> | null;
   termijnen?: number | null; intervalMaanden?: number
 }): Promise<string> {

@@ -277,7 +277,7 @@ function MijnWebsite({ data, bezig, doe }) {
   const s = statusInfo(a.status);
   const stapIndex = STAPPEN.findIndex(x => x.key === a.status);
   const betalingen = data.betalingen || [];
-  const openBetaling = betalingen.find(b => b.wijze === 'ideal' && b.status === 'open');
+  const openBetaling = betalingen.find(b => (b.wijze === 'ideal' || b.wijze === 'termijnen') && b.status === 'open');
 
   return (
     <>
@@ -315,7 +315,7 @@ function MijnWebsite({ data, bezig, doe }) {
         <div className="ws-melding afu">
           <div><strong>{openBetaling.omschrijving}</strong> is nog niet betaald ({euroBedrag(openBetaling.bedrag)} excl. btw).</div>
           {data.magBeheren
-            ? <button className="btn btn-p btn-sm" disabled={!!bezig} onClick={() => doe('betaal', () => opnieuwBetalen(openBetaling.id))}>{bezig === 'betaal' ? 'Bezig…' : 'Nu betalen met iDEAL'}</button>
+            ? <button className="btn btn-p btn-sm" disabled={!!bezig} onClick={() => doe('betaal', () => opnieuwBetalen(openBetaling.id))}>{bezig === 'betaal' ? 'Bezig…' : 'Nu betalen'}</button>
             : <span className="ab-hint">De eigenaar van je bedrijf kan dit afronden.</span>}
         </div>
       )}
@@ -333,7 +333,7 @@ function MijnWebsite({ data, bezig, doe }) {
 
       <div className="ws-kop afu3">
         Upgraden
-        <InfoIcoon titel="Upgraden" links>Meer pagina’s voor je site. Je betaalt eenmalig met iDEAL, of verspreid over {TERMIJNEN} maanden als extra regel op je abonnement. Na je upgrade nemen we contact op over de inhoud van de nieuwe pagina’s.</InfoIcoon>
+        <InfoIcoon titel="Upgraden" links>Meer pagina’s voor je site. Je betaalt in één keer, of verspreid over {TERMIJNEN} maanden. Na je upgrade nemen we contact op over de inhoud van de nieuwe pagina’s.</InfoIcoon>
       </div>
       {a.pakket === 'pro'
         ? <p className="ab-hint afu3">Je hebt het grootste pakket. Meer nodig? Vraag hieronder een uitbreiding aan.</p>
@@ -389,7 +389,7 @@ function WatJeBetaalt({ a, betalingen }) {
   const domein = betalingen.find(b => b.soort === 'domein' && b.status === 'loopt');
   const email = betalingen.find(b => b.soort === 'email' && b.status === 'loopt');
   const eenmaligSoort = b => b.soort === 'upgrade' || b.soort === 'extra';
-  const termijnen = betalingen.filter(b => eenmaligSoort(b) && b.wijze === 'abonnement' && b.status === 'loopt');
+  const termijnen = betalingen.filter(b => eenmaligSoort(b) && (b.wijze === 'termijnen' || b.wijze === 'abonnement') && b.status === 'loopt');
   const eenmalig = betalingen.filter(b => eenmaligSoort(b) && b.wijze === 'ideal' && b.status === 'betaald');
   const perMaand = (hosting ? Number(hosting.perKeer) : 0) + (email ? Number(email.perKeer) : 0)
     + termijnen.reduce((t, b) => t + Number(b.perKeer || 0), 0);
@@ -452,15 +452,14 @@ function WatJeBetaalt({ a, betalingen }) {
 function Upgraden({ a, data, bezig, doe }) {
   const [keuze, setKeuze] = useState(null); // { pakket, prijs }
   const [wijze, setWijze] = useState('ideal');
-  const termijnenMogelijk = data.heeftStripe;
 
   const reken = async () => {
     const naar = getPakket(keuze.pakket);
     const ok = await bevestig({
       titel: `Upgraden naar ${naar.label}?`,
       tekst: wijze === 'ideal'
-        ? `Je betaalt ${euroBedrag(keuze.prijs)} excl. btw eenmalig met iDEAL.`
-        : `Je betaalt ${TERMIJNEN} maanden ${euroBedrag(perTermijn(keuze.prijs))} excl. btw extra op je abonnement, samen ${euroBedrag(keuze.prijs)}.`,
+        ? `Je betaalt ${euroBedrag(keuze.prijs)} excl. btw in één keer.`
+        : `Je betaalt ${TERMIJNEN} maanden ${euroBedrag(perTermijn(keuze.prijs))} excl. btw, samen ${euroBedrag(keuze.prijs)}. De eerste termijn betaal je nu.`,
       knop: wijze === 'ideal' ? 'Naar betalen' : 'Upgraden',
     });
     if (!ok) return;
@@ -480,14 +479,13 @@ function Upgraden({ a, data, bezig, doe }) {
           <div className="ws-keuzes" role="radiogroup" aria-label="Hoe wil je betalen?">
             <label className={`ws-keuze${wijze === 'ideal' ? ' on' : ''}`}>
               <input type="radio" name="ws-wijze" checked={wijze === 'ideal'} onChange={() => setWijze('ideal')} />
-              <span><strong>Eenmalig met iDEAL</strong><em>{euroBedrag(keuze.prijs)} in één keer</em></span>
+              <span><strong>In één keer</strong><em>{euroBedrag(keuze.prijs)}, met iDEAL, creditcard of anders</em></span>
             </label>
-            <label className={`ws-keuze${wijze === 'termijnen' ? ' on' : ''}${termijnenMogelijk ? '' : ' uit'}`}>
-              <input type="radio" name="ws-wijze" checked={wijze === 'termijnen'} disabled={!termijnenMogelijk} onChange={() => setWijze('termijnen')} />
-              <span><strong>Verspreid over {TERMIJNEN} maanden</strong><em>{euroBedrag(perTermijn(keuze.prijs))} p/mnd extra op je abonnement</em></span>
+            <label className={`ws-keuze${wijze === 'termijnen' ? ' on' : ''}`}>
+              <input type="radio" name="ws-wijze" checked={wijze === 'termijnen'} onChange={() => setWijze('termijnen')} />
+              <span><strong>Verspreid over {TERMIJNEN} maanden</strong><em>{euroBedrag(perTermijn(keuze.prijs))} p/mnd, stopt vanzelf na {TERMIJNEN} keer</em></span>
             </label>
           </div>
-          {!termijnenMogelijk && <p className="ab-hint">In termijnen kan zodra je abonnement loopt.</p>}
           <div className="ws-acties">
             <button className="btn btn-ghost" onClick={() => setKeuze(null)} disabled={!!bezig}>Annuleren</button>
             <button className="btn btn-p" onClick={reken} disabled={!!bezig}>
@@ -599,30 +597,44 @@ function Domein({ a, betalingen, verzoeken, emailVerzoeken = [], bezig, doe }) {
   );
 }
 
-// Zakelijke e-mail bieden we alleen aan bij een domeinnaam via ons.
+// Zakelijke e-mail bieden we alleen aan bij een domeinnaam via ons. Per adres
+// € 9 per maand; meer adressen aanvragen kan altijd.
 function Email({ a, betalingen, verzoeken, bezig, doe }) {
-  const [adres, setAdres] = useState('');
+  const [adressen, setAdressen] = useState('');
+  const [aantal, setAantal] = useState(1);
   const loopt = betalingen.find(b => b.soort === 'email' && b.status === 'loopt');
   const open = verzoeken.find(v => ['nieuw', 'in_behandeling', 'prijsopgave'].includes(v.status));
+  const heeft = Number(a.emailAantal) || (a.email ? 1 : 0);
+  const vraag = async () => {
+    const r = await doe('email', () => vraagEmailAan({ aantal, adres: adressen }), 'Aangevraagd. We richten je e-mail in.');
+    if (r) { setAdressen(''); setAantal(1); }
+  };
   return (
     <div className="ws-email">
       <div className="ab-kop">
         Zakelijke e-mail
-        <InfoIcoon titel="Zakelijke e-mail" links>Een e-mailadres op je eigen domeinnaam, zoals info@jouwbedrijf.nl. Wij richten het in. {euroBedrag(EMAIL_PER_MAAND)} per maand, als regel op je abonnement.</InfoIcoon>
+        <InfoIcoon titel="Zakelijke e-mail" links>E-mailadressen op je eigen domeinnaam, zoals info@jouwbedrijf.nl. Wij richten ze in. {euroBedrag(EMAIL_PER_MAAND)} per adres per maand, als regel op je abonnement.</InfoIcoon>
       </div>
-      {loopt || a.email ? (
-        <p className="ws-tekst">Je hebt zakelijke e-mail bij ons · {euroBedrag(EMAIL_PER_MAAND)} per maand{loopt ? '' : ', vanaf livegang'}.</p>
-      ) : open ? (
+      {heeft > 0 && (
+        <p className="ws-tekst">
+          Je hebt {heeft} {heeft === 1 ? 'adres' : 'adressen'} bij ons · {euroBedrag(EMAIL_PER_MAAND * heeft)} per maand{loopt ? '' : ', vanaf livegang'}.
+        </p>
+      )}
+      {open ? (
         <p className="ws-tekst">{open.omschrijving}. Status: <strong>{(VERZOEK_STATUS[open.status] || {}).label || open.status}</strong>.</p>
       ) : (
         <div className="ws-domein-rij">
           <div className="f">
-            <label htmlFor="ws-email">Welk adres wil je?</label>
-            <input id="ws-email" value={adres} onChange={e => setAdres(e.target.value)} placeholder="info@jouwbedrijf.nl" />
+            <label htmlFor="ws-email">{heeft > 0 ? 'Meer adressen nodig? Welke?' : 'Welke adressen wil je?'}</label>
+            <input id="ws-email" value={adressen} onChange={e => setAdressen(e.target.value)} placeholder="info@jouwbedrijf.nl, jan@jouwbedrijf.nl" />
           </div>
-          <button className="btn btn-s" disabled={!!bezig}
-            onClick={async () => { const r = await doe('email', () => vraagEmailAan(adres), 'Aangevraagd. We richten je e-mail in.'); if (r) setAdres(''); }}>
-            {bezig === 'email' ? 'Bezig…' : `Aanvragen · ${euroBedrag(EMAIL_PER_MAAND)} p/mnd`}
+          <div className="ab-teller" role="group" aria-label="Aantal adressen">
+            <button className="btn btn-s btn-sm" disabled={aantal <= 1} onClick={() => setAantal(n => n - 1)} aria-label="Minder">−</button>
+            <span className="ab-teller-waarde">{aantal} {aantal === 1 ? 'adres' : 'adressen'}</span>
+            <button className="btn btn-s btn-sm" disabled={aantal >= 10} onClick={() => setAantal(n => n + 1)} aria-label="Meer">+</button>
+          </div>
+          <button className="btn btn-s" disabled={!!bezig} onClick={vraag}>
+            {bezig === 'email' ? 'Bezig…' : `Aanvragen · ${euroBedrag(EMAIL_PER_MAAND * aantal)} p/mnd`}
           </button>
         </div>
       )}
@@ -644,8 +656,8 @@ function Extras({ a, data, bezig, doe }) {
     const ok = await bevestig({
       titel: `${keuze.extra.label} bestellen?`,
       tekst: wijze === 'ideal'
-        ? `Je betaalt ${euroBedrag(prijs)} excl. btw eenmalig met iDEAL.`
-        : `Je betaalt ${TERMIJNEN} maanden ${euroBedrag(perTermijn(prijs))} excl. btw extra op je abonnement, samen ${euroBedrag(prijs)}.`,
+        ? `Je betaalt ${euroBedrag(prijs)} excl. btw in één keer.`
+        : `Je betaalt ${TERMIJNEN} maanden ${euroBedrag(perTermijn(prijs))} excl. btw, samen ${euroBedrag(prijs)}. De eerste termijn betaal je nu.`,
       knop: wijze === 'ideal' ? 'Naar betalen' : 'Bestellen',
     });
     if (!ok) return;
@@ -686,11 +698,11 @@ function Extras({ a, data, bezig, doe }) {
           <div className="ws-keuzes" role="radiogroup" aria-label="Hoe wil je betalen?">
             <label className={`ws-keuze${wijze === 'ideal' ? ' on' : ''}`}>
               <input type="radio" name="ws-extra-wijze" checked={wijze === 'ideal'} onChange={() => setWijze('ideal')} />
-              <span><strong>Eenmalig met iDEAL</strong><em>{euroBedrag(prijs)} in één keer</em></span>
+              <span><strong>In één keer</strong><em>{euroBedrag(prijs)}, met iDEAL, creditcard of anders</em></span>
             </label>
-            <label className={`ws-keuze${wijze === 'termijnen' ? ' on' : ''}${data.heeftStripe ? '' : ' uit'}`}>
-              <input type="radio" name="ws-extra-wijze" checked={wijze === 'termijnen'} disabled={!data.heeftStripe} onChange={() => setWijze('termijnen')} />
-              <span><strong>Verspreid over {TERMIJNEN} maanden</strong><em>{euroBedrag(perTermijn(prijs))} p/mnd extra op je abonnement</em></span>
+            <label className={`ws-keuze${wijze === 'termijnen' ? ' on' : ''}`}>
+              <input type="radio" name="ws-extra-wijze" checked={wijze === 'termijnen'} onChange={() => setWijze('termijnen')} />
+              <span><strong>Verspreid over {TERMIJNEN} maanden</strong><em>{euroBedrag(perTermijn(prijs))} p/mnd, stopt vanzelf na {TERMIJNEN} keer</em></span>
             </label>
           </div>
           <div className="ws-acties">

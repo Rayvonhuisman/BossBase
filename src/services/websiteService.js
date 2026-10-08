@@ -32,4 +32,4 @@ export const vraagWijzigingAan = ({ soort, omschrijving }) => actie({ actie: 've
 export const vraagDomeinAan   = domein             => actie({ actie: 'domein', domein });
 export const geefFeedback     = tekst              => actie({ actie: 'feedback', tekst });
 export const bestelExtra      = ({ extra, aantal, wijze }) => actie({ actie: 'extra', extra, aantal, wijze });
-export const vraagEmailAan    = adres              => actie({ actie: 'email', adres });
+export const vraagEmailAan    = ({ aantal, adres }) => actie({ actie: 'email', aantal, adres });

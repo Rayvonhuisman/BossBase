@@ -232,7 +232,7 @@ export const STAPPEN = [
   {
     sleutel: 'extras',
     titel: "Je extra's",
-    als: k => Boolean(k.extras.logo || k.extras.google_profiel || k.extras.whatsapp || k.email),
+    als: k => Boolean(k.extras.logo || k.extras.google_profiel || k.extras.whatsapp),
     intro: "Wat we nodig hebben voor de extra's die je koos.",
     velden: [
       { naam: 'logo.wensen', label: 'Logo-ontwerp: wat moet erin?', type: 'langeTekst', verplicht: true, als: k => k.extras.logo,
@@ -248,13 +248,28 @@ export const STAPPEN = [
         placeholder: '06 12345678' },
       { naam: 'whatsapp.bericht', label: 'Eerste zin die klaarstaat in het bericht', type: 'tekst', als: k => k.extras.whatsapp,
         placeholder: 'Hallo, ik heb een vraag over…' },
-      { naam: 'email.adres', label: 'Zakelijke e-mail: welk adres wil je?', type: 'tekst', verplicht: true, als: k => k.email,
-        hulp: 'Op je nieuwe domeinnaam. Meer adressen nodig? Zet ze eronder bij opmerkingen.', placeholder: 'info@jouwbedrijf.nl' },
-      { naam: 'email.gebruiker', label: 'Wie gaat de mailbox gebruiken?', type: 'tekst', als: k => k.email, placeholder: 'Jan Jansen' },
-      { naam: 'email.doorsturen', label: 'Mail ook doorsturen naar een bestaand adres?', type: 'email', als: k => k.email,
-        hulp: 'Laat leeg als dat niet hoeft.' },
-      { naam: 'email.opmerkingen', label: 'Opmerkingen over je e-mail', type: 'langeTekst', als: k => k.email },
     ],
+  },
+  {
+    sleutel: 'email',
+    titel: 'Zakelijke e-mail',
+    als: k => k.email,
+    intro: 'Per adres een mailbox op je nieuwe domeinnaam. Vertel per adres wie hem gebruikt.',
+    velden: [
+      { naam: 'email.opmerkingen', label: 'Opmerkingen over je e-mail', type: 'langeTekst',
+        hulp: 'Bijvoorbeeld mail die je wilt meenemen van een oud adres.' },
+    ],
+    herhaling: {
+      naam: 'email.adressen', enkelvoud: 'E-mailadres', meervoud: 'E-mailadressen',
+      minimum: 1, maximum: 1, start: 1,
+      aantal: k => k.emailAantal,
+      velden: [
+        { naam: 'adres', label: 'Welk adres?', type: 'tekst', verplicht: true, placeholder: 'info@jouwbedrijf.nl',
+          hulp: 'Op je nieuwe domeinnaam.' },
+        { naam: 'gebruiker', label: 'Wie gebruikt deze mailbox?', type: 'tekst', placeholder: 'Jan Jansen' },
+        { naam: 'doorsturen', label: 'Ook doorsturen naar een bestaand adres?', type: 'email', hulp: 'Laat leeg als dat niet hoeft.' },
+      ],
+    },
   },
   {
     sleutel: 'afronden',
@@ -280,7 +295,9 @@ export function keuzeUit(antwoorden) {
   const domeinViaOns = antwoorden['website.domeinViaOns'] === true;
   // De fotoset zit in Compleet en Pro; bij Basis is het een extra.
   const fotoset = pakket !== 'basis' || Boolean(extras.fotoset);
-  return { pakket, extras, fotoset, domeinViaOns, email: domeinViaOns && antwoorden['website.email'] === true };
+  // E-mail per adres, alleen bij een domein via ons.
+  const emailAantal = domeinViaOns ? Math.max(0, Math.min(Math.floor(Number(antwoorden['website.emailAantal']) || 0), 10)) : 0;
+  return { pakket, extras, fotoset, domeinViaOns, emailAantal, email: emailAantal > 0 };
 }
 
 const telt = (def, k) => (!def.alleenBij || def.alleenBij.includes(k.pakket)) && (!def.als || Boolean(def.als(k)));

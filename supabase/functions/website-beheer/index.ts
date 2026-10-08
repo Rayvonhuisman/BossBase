@@ -7,7 +7,8 @@
 //                    nieuwe status; bij "live" start de hosting
 //   verzoek-status → status van een wijzigings- of domeinverzoek
 //   domein-actief  → domein geregistreerd: jaarregel op het abonnement
-//   email-actief   → zakelijke e-mail ingericht: maandregel op het abonnement
+//   email-actief   → zakelijke e-mail ingericht (totaal aantal adressen):
+//                    maandregel op het abonnement, vervangt een lopende
 //   regel-stoppen  → een lopende abonnementsregel stopzetten
 //   traject-starten→ aanvraag openen, taak zetten en de intakelink mailen; bij
 //                    een klant die nog op de intake wacht: een verse link.
@@ -100,7 +101,7 @@ serve(async (req) => {
 
       case 'status': {
         const { data: a } = await admin.from('website_aanvragen')
-          .select('id, company_id, status, site_url, live_op, domein, domein_via_ons, email').eq('company_id', body.companyId).maybeSingle()
+          .select('id, company_id, status, site_url, live_op, domein, domein_via_ons, email, email_aantal').eq('company_id', body.companyId).maybeSingle()
         if (!a) return json({ error: 'Website niet gevonden' }, 404)
         const status = body.status ?? a.status
         if (!STATUS_LABEL[status]) return json({ error: 'Onbekende status' }, 400)
@@ -124,7 +125,8 @@ serve(async (req) => {
             { soort: 'hosting', omschrijving: 'Website-hosting', bedrag: HOSTING_PER_MAAND },
           ]
           if (a.domein_via_ons) regels.push({ soort: 'domein', omschrijving: `Domeinnaam ${a.domein ?? ''} (1 jaar)`, bedrag: DOMEIN_PER_JAAR, intervalMaanden: 12 })
-          if (a.email) regels.push({ soort: 'email', omschrijving: 'Zakelijke e-mail', bedrag: EMAIL_PER_MAAND })
+          const adressen = Math.max(Number(a.email_aantal) || 0, a.email ? 1 : 0)
+          if (adressen > 0) regels.push({ soort: 'email', omschrijving: `Zakelijke e-mail (${adressen} adres${adressen > 1 ? 'sen' : ''})`, bedrag: EMAIL_PER_MAAND * adressen })
           for (const r of regels) uit.push(await startRegel(admin, a.company_id, r))
         }
         if (nieuw && body.mail !== false) {
@@ -166,8 +168,12 @@ serve(async (req) => {
       }
 
       case 'email-actief': {
-        const r = await startRegel(admin, body.companyId, { soort: 'email', omschrijving: 'Zakelijke e-mail', bedrag: EMAIL_PER_MAAND })
-        await admin.from('website_aanvragen').update({ email: true }).eq('company_id', body.companyId)
+        // `aantal` is het totaal aantal adressen: een lopende regel wordt vervangen.
+        const adressen = Math.max(1, Math.min(Math.floor(Number(body.aantal) || 1), 10))
+        await admin.from('website_betalingen').update({ status: 'gestopt' })
+          .eq('company_id', body.companyId).eq('soort', 'email').eq('status', 'loopt')
+        const r = await startRegel(admin, body.companyId, { soort: 'email', omschrijving: `Zakelijke e-mail (${adressen} adres${adressen > 1 ? 'sen' : ''})`, bedrag: EMAIL_PER_MAAND * adressen })
+        await admin.from('website_aanvragen').update({ email: true, email_aantal: adressen }).eq('company_id', body.companyId)
         await admin.from('website_verzoeken').update({ status: 'afgerond', afgehandeld_op: new Date().toISOString() })
           .eq('company_id', body.companyId).eq('soort', 'email').in('status', ['nieuw', 'in_behandeling'])
         return json({ ok: true, resultaat: [r] })

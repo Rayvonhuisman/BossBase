@@ -52,7 +52,9 @@ function actiePunten(w) {
 }
 
 function betalingSamenvatting(b) {
-  if (b.wijze === 'ideal') return `${euroBedrag(b.bedrag)} iDEAL ${b.status === 'betaald' ? 'betaald' : b.status}`;
+  if (b.status === 'vervallen') return `${euroBedrag(b.bedrag)} vervallen (opnieuw gestart)`;
+  if (b.wijze === 'ideal') return `${euroBedrag(b.bedrag)} eenmalig ${b.status}`;
+  if (b.wijze === 'termijnen') return `${euroBedrag(b.bedrag)} in termijnen ${b.status === 'open' ? 'open' : `${b.aantal_gedaan}/${b.aantal_totaal}`}`;
   if (b.soort === 'hosting') return `hosting ${b.status}`;
   if (b.soort === 'domein') return `domein ${b.status}`;
   if (b.soort === 'email') return `e-mail ${b.status}`;
@@ -154,6 +156,7 @@ function Detail({ w, herlaad, toast }) {
   const [bezig, setBezig] = useState(false);
   const [stopVraag, setStopVraag] = useState(null);
   const [domein, setDomein] = useState(w.domein || '');
+  const [emailTotaal, setEmailTotaal] = useState(String(Math.max(1, Number(w.email_aantal) || 0)));
   const [notities, setNotities] = useState({});
 
   const doe = async (fn, succes) => {
@@ -295,9 +298,12 @@ function Detail({ w, herlaad, toast }) {
               </button>
             </div>
             {v.soort === 'email' && v.status !== 'afgerond' && (
-              <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+              <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
+                <label style={{ fontSize: 12, color: '#6b7280' }}>Totaal adressen</label>
+                <input type="number" min={1} max={10} value={emailTotaal} onChange={e => setEmailTotaal(e.target.value)}
+                  style={{ width: 56, fontSize: 12, padding: '4px 7px' }} />
                 <button className="btn btn-p btn-sm" disabled={bezig}
-                  onClick={() => doe(() => roep('email-actief', { companyId: w.company_id }), 'E-mail vastgelegd, maandregel gestart')}>
+                  onClick={() => doe(() => roep('email-actief', { companyId: w.company_id, aantal: Number(emailTotaal) || 1 }), 'E-mail vastgelegd, maandregel gestart')}>
                   E-mail ingericht
                 </button>
               </div>

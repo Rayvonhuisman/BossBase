@@ -247,10 +247,13 @@ moment. Kies je het later, dan betaal je de prijs die op dat moment in de app st
 De fotoset bestaat uit sfeerbeelden die wij met AI maken; foto's van je eigen werk
 lever je zelf aan.
 
-15.3 **Betalen van een upgrade of extra.** Je betaalt in één keer met iDEAL, of
-verspreid over 12 maanden als extra regel op je abonnement. Kies je voor 12
-maanden, dan blijft het hele bedrag verschuldigd, ook als je abonnement eerder
-stopt. De termijnen die dan nog openstaan, factureren we in één keer.
+15.3 **Betalen van een upgrade of extra.** Je betaalt in één keer, of in 12
+maandelijkse termijnen, met een betaalmethode die Stripe aanbiedt. De eerste
+termijn betaal je meteen; daarna worden de termijnen automatisch afgeschreven tot
+de twaalfde, en dan stopt het vanzelf. Je intake wordt pas verstuurd als de
+betaling gelukt is. Kies je voor termijnen, dan blijft het hele bedrag
+verschuldigd, ook als je abonnement eerder stopt. De termijnen die dan nog
+openstaan, factureren we in één keer.
 
 15.4 **Hosting.** Bij de website hoort hosting: wij zetten de site online en houden
 hem draaiend. Hosting kost € 5 per maand en is niet los te kiezen of op te zeggen
@@ -261,7 +264,7 @@ abonnementsfactuur rekenen we niet.
 15.5 **Domeinnaam en e-mail.** Er zit geen gratis domeinnaam bij. Wil je dat wij je
 domeinnaam registreren en beheren, dan kost dat het bedrag per jaar dat in de app
 staat, als jaarlijkse regel op je abonnement. Bij een domeinnaam via ons kun je ook
-een zakelijk e-mailadres nemen, als maandelijkse regel op je abonnement. Beide gaan
+zakelijke e-mailadressen nemen, per adres als maandelijkse regel op je abonnement. Beide gaan
 in als je site live gaat, of zodra we ze later voor je hebben ingericht. Heb je al
 een domeinnaam, dan koppelen we die aan je site.
 

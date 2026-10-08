@@ -7,7 +7,8 @@
 //   verzoek        → wijziging of uitbreiding aanvragen (beheerder)
 //   extra          → een extra bestellen tegen de latere prijs (eigenaar)
 //   domein         → domeinnaam via ons aanvragen (beheerder)
-//   email          → zakelijke e-mail aanvragen, alleen bij een domein via ons
+//   email          → zakelijke e-mail aanvragen (aantal adressen), alleen bij
+//                    een domein via ons
 //   feedback       → de ene feedbackronde bij "ter beoordeling" (beheerder)
 //
 // Lezen gaat via de RPC get_mijn_website(); hier staat alleen wat iets
@@ -21,7 +22,7 @@ import {
   PAKKETTEN, EXTRAS, DOMEIN_PER_JAAR, EMAIL_PER_MAAND, TERMIJNEN, WEBSITE_INTERN,
   isPakket, upgradePrijs, euro, maakIntakeLink, mailIntern, type Pakket,
 } from '../_shared/website.ts'
-import { startUpgradeBetaling, regelOpAbonnement } from '../_shared/websiteBetalen.ts'
+import { startBetaling } from '../_shared/websiteBetalen.ts'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
@@ -85,12 +86,13 @@ serve(async (req) => {
 
         if (body.actie === 'opnieuw-betalen') {
           const { data: b } = await admin.from('website_betalingen')
-            .select('id, soort, pakket, extras, omschrijving, bedrag, status, wijze')
+            .select('id, soort, pakket, extras, gegevens, omschrijving, bedrag, status, wijze')
             .eq('id', body.betalingId).eq('company_id', companyId).maybeSingle()
-          if (!b || b.status !== 'open' || b.wijze !== 'ideal') return json({ error: 'Deze betaling staat niet meer open.' }, 400)
-          const checkoutUrl = await startUpgradeBetaling(admin, {
-            companyId, soort: b.soort, pakket: b.pakket as Pakket | null, extras: b.extras, omschrijving: b.omschrijving, bedrag: Number(b.bedrag),
-            terug: '/dashboard/website', origin, betalingId: b.id,
+          if (!b || b.status !== 'open' || b.wijze === 'abonnement') return json({ error: 'Deze betaling staat niet meer open.' }, 400)
+          const checkoutUrl = await startBetaling(admin, {
+            companyId, soort: b.soort, wijze: b.wijze, pakket: b.pakket as Pakket | null, extras: b.extras, gegevens: b.gegevens,
+            omschrijving: b.omschrijving, bedrag: Number(b.bedrag),
+            gelukt: '/dashboard/website?betaling=gelukt', afgebroken: '/dashboard/website?betaling=afgebroken', origin, betalingId: b.id,
           })
           return json({ checkoutUrl })
         }
@@ -104,24 +106,18 @@ serve(async (req) => {
         const bedrag = upgradePrijs(van, naar, false)
         if (bedrag <= 0) return json({ error: `Je hebt al ${PAKKETTEN[van].label}.` }, 400)
 
-        // Niet twee upgrades tegelijk open: dan zou een afgebroken iDEAL-poging
-        // naast een nieuwe keuze blijven staan.
-        const { data: open } = await admin.from('website_betalingen')
-          .select('id').eq('company_id', companyId).eq('soort', 'upgrade').eq('status', 'open').limit(1)
-        if (open?.length) return json({ error: 'Er staat nog een upgrade open die niet is betaald. Rond die eerst af.' }, 409)
-
+        // Een eerdere, niet afgeronde poging laat startBetaling verlopen. Het
+        // pakket verandert pas als Stripe meldt dat er betaald is.
         const omschrijving = `Website upgrade ${PAKKETTEN[van].label} → ${PAKKETTEN[naar].label}`
-        let checkoutUrl: string | null = null
-        if (body.wijze === 'termijnen') {
-          await regelOpAbonnement(admin, { companyId, soort: 'upgrade', pakket: naar, omschrijving, bedrag, termijnen: TERMIJNEN })
-          await admin.from('website_aanvragen').update({ pakket: naar }).eq('id', aanvraag.id)
-        } else {
-          checkoutUrl = await startUpgradeBetaling(admin, { companyId, pakket: naar, omschrijving, bedrag, terug: '/dashboard/website', origin })
-        }
+        const wijze = body.wijze === 'termijnen' ? 'termijnen' : 'ideal'
+        const checkoutUrl = await startBetaling(admin, {
+          companyId, soort: 'upgrade', wijze, pakket: naar, omschrijving, bedrag,
+          gelukt: '/dashboard/website?betaling=gelukt', afgebroken: '/dashboard/website?betaling=afgebroken', origin,
+        })
         await meld(`Website-upgrade: ${bedrijf?.name ?? ''} naar ${PAKKETTEN[naar].label}`, 'Upgrade aangevraagd', [
           ['Van', PAKKETTEN[van].label], ['Naar', `${PAKKETTEN[naar].label} · ${PAKKETTEN[naar].omvang}`],
           ['Bedrag', `${euro(bedrag)} excl. btw`],
-          ['Betaling', body.wijze === 'termijnen' ? `${TERMIJNEN} termijnen op het abonnement` : 'iDEAL (wacht op betaling)'],
+          ['Betaling', wijze === 'termijnen' ? `${TERMIJNEN} maandtermijnen (wacht op eerste betaling)` : 'eenmalig (wacht op betaling)'],
         ])
         return json({ ok: true, checkoutUrl })
       }
@@ -140,32 +136,31 @@ serve(async (req) => {
         const bedrag = aantal * e.laterPrijs
         const extras = { [body.extra]: aantal }
         const omschrijving = `Website extra: ${aantal > 1 ? `${aantal} × ` : ''}${e.label}`
-        let checkoutUrl: string | null = null
-        if (body.wijze === 'termijnen') {
-          await regelOpAbonnement(admin, { companyId, soort: 'extra', extras, omschrijving, bedrag, termijnen: TERMIJNEN })
-          await admin.from('website_aanvragen').update({ extras: { ...(aanvraag.extras ?? {}), [body.extra]: al + aantal } }).eq('id', aanvraag.id)
-        } else {
-          checkoutUrl = await startUpgradeBetaling(admin, { companyId, soort: 'extra', extras, omschrijving, bedrag, terug: '/dashboard/website', origin })
-        }
+        const wijze = body.wijze === 'termijnen' ? 'termijnen' : 'ideal'
+        const checkoutUrl = await startBetaling(admin, {
+          companyId, soort: 'extra', wijze, extras, omschrijving, bedrag,
+          gelukt: '/dashboard/website?betaling=gelukt', afgebroken: '/dashboard/website?betaling=afgebroken', origin,
+        })
         await meld(`Website-extra besteld: ${bedrijf?.name ?? ''}`, 'Extra besteld', [
           ['Extra', `${aantal > 1 ? `${aantal} × ` : ''}${e.label}`], ['Bedrag', `${euro(bedrag)} excl. btw`],
-          ['Betaling', body.wijze === 'termijnen' ? `${TERMIJNEN} termijnen op het abonnement` : 'iDEAL (wacht op betaling)'],
+          ['Betaling', wijze === 'termijnen' ? `${TERMIJNEN} maandtermijnen (wacht op eerste betaling)` : 'eenmalig (wacht op betaling)'],
         ])
         return json({ ok: true, checkoutUrl })
       }
 
       case 'email': {
         if (!aanvraag) return json({ error: 'Je hebt nog geen website bij ons.' }, 400)
-        if (aanvraag.email) return json({ error: 'Je hebt al zakelijke e-mail bij ons.' }, 400)
+        const aantalAdressen = Math.max(1, Math.min(Math.floor(Number(body.aantal) || 1), 10))
         const { data: domeinVerzoek } = await admin.from('website_verzoeken').select('id')
           .eq('company_id', companyId).eq('soort', 'domein').in('status', ['nieuw', 'in_behandeling', 'prijsopgave']).limit(1)
         if (!aanvraag.domein_via_ons && !domeinVerzoek?.length) return json({ error: 'Zakelijke e-mail regelen we bij een domeinnaam via ons. Vraag eerst de domeinnaam aan.' }, 400)
-        const wens = String(body.adres ?? '').trim().slice(0, 200)
+        const wens = String(body.adres ?? '').trim().slice(0, 400)
+        const prijs = `${euro(EMAIL_PER_MAAND * aantalAdressen)} per maand (${aantalAdressen} × ${euro(EMAIL_PER_MAAND)})`
         await admin.from('website_verzoeken').insert({
           company_id: companyId, soort: 'email', aangemaakt_door: user.id,
-          omschrijving: `Zakelijke e-mail (${euro(EMAIL_PER_MAAND)} per maand)${wens ? `: ${wens}` : ''}`,
+          omschrijving: `${aantalAdressen} zakelijk${aantalAdressen > 1 ? 'e' : ''} e-mailadres${aantalAdressen > 1 ? 'sen' : ''}, ${prijs}${wens ? `: ${wens}` : ''}`,
         })
-        await meld(`Zakelijke e-mail aangevraagd: ${bedrijf?.name ?? ''}`, 'Zakelijke e-mail aangevraagd', [['Gewenst adres', wens || '—'], ['Prijs', `${euro(EMAIL_PER_MAAND)} per maand`]])
+        await meld(`Zakelijke e-mail aangevraagd: ${bedrijf?.name ?? ''}`, 'Zakelijke e-mail aangevraagd', [['Aantal adressen', String(aantalAdressen)], ['Gewenste adressen', wens || '—'], ['Prijs', prijs]])
         return json({ ok: true })
       }
 

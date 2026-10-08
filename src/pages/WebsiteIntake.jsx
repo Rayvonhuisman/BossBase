@@ -196,6 +196,10 @@ function Melding({ titel, children }) {
 
 function Bedankt() {
   const betaling = new URLSearchParams(window.location.search).get('betaling');
+  // Betaald: de bewaarde antwoorden zijn niet meer nodig.
+  if (betaling === 'gelukt') {
+    try { Object.keys(localStorage).filter(k => k.startsWith('bb-intake-')).forEach(k => localStorage.removeItem(k)); } catch { /* geen opslag */ }
+  }
   if (betaling === 'afgebroken') {
     return (
       <Melding titel="Je intake is binnen">
@@ -207,7 +211,7 @@ function Bedankt() {
   return (
     <Melding titel={betaling === 'gelukt' ? 'Bedankt, betaling ontvangen' : 'Bedankt, je intake is binnen'}>
       <p>
-        {betaling === 'gelukt' ? 'We hebben je intake en je betaling ontvangen. ' : 'We hebben je intake ontvangen. '}
+        {betaling === 'gelukt' ? 'Je betaling is gelukt en je intake is verstuurd. Je krijgt een bevestiging per mail. ' : 'We hebben je intake ontvangen. '}
         We gaan aan de slag. Zodra er een eerste versie staat, krijg je een link om hem te bekijken.
       </p>
       <p>Hoe ver we zijn, zie je in BossBase onder <strong>Website</strong>.</p>
@@ -262,7 +266,9 @@ function Formulier({ sleutel, laad }) {
   const [begin] = useState(() => leesBewaard(sleutel));
   const [antwoorden, setAntwoorden] = useState(() => ({ ...vooraf(laad.bedrijf), ...zonderHalveUploads(begin?.antwoorden) }));
   const [rijen, setRijen] = useState(() => begin?.rijen || {});
-  const [stap, setStap] = useState(() => begin?.stap || 0);
+  // Terug van een betaling die niet lukte: naar de laatste stap, met melding.
+  const [afgebroken] = useState(() => new URLSearchParams(window.location.search).get('betaling') === 'afgebroken');
+  const [stap, setStap] = useState(() => (afgebroken ? 99 : begin?.stap || 0));
   const [fouten, setFouten] = useState({});
   const [hervat, setHervat] = useState(Boolean(begin));
   const [bezig, setBezig] = useState(false);
@@ -395,26 +401,27 @@ function Formulier({ sleutel, laad }) {
   async function verstuur() {
     setBezig(true);
     setVerzendfout(null);
-    const betaalwijze = bedrag > 0
-      ? (antwoorden['website.betaalwijze'] === 'termijnen' && laad.termijnenMogelijk ? 'termijnen' : 'ideal')
-      : null;
+    const betaalwijze = bedrag > 0 ? (antwoorden['website.betaalwijze'] === 'termijnen' ? 'termijnen' : 'ideal') : null;
     const domein = antwoorden['website.domeinViaOns'] === true ? String(antwoorden['website.domein'] || '').trim().toLowerCase() : '';
     try {
       if (DEMO) {
         await new Promise(r => setTimeout(r, 800));
-        console.info('[intake demo] verzenden', { pakket, extras: keuze.extras, email: keuze.email, betaalwijze, domein, antwoorden: opgeschoond(antwoorden), ontbreekt: ontbrekendeZaken(keuze, antwoorden) });
+        console.info('[intake demo] verzenden', { pakket, extras: keuze.extras, emailAantal: keuze.emailAantal, betaalwijze, domein, antwoorden: opgeschoond(antwoorden), ontbreekt: ontbrekendeZaken(keuze, antwoorden) });
         try { localStorage.removeItem(opslagSleutel(sleutel)); } catch { /* geen opslag */ }
         window.location.href = '/intake/bedankt';
         return;
       }
       const r = await roep('verzenden', {
-        sleutel, pakket, betaalwijze, domein, extras: keuze.extras, email: keuze.email,
+        sleutel, pakket, betaalwijze, domein, extras: keuze.extras, emailAantal: keuze.emailAantal,
         antwoorden: opgeschoond(antwoorden),
         ontbreekt: ontbrekendeZaken(keuze, antwoorden),
       });
-      try { localStorage.removeItem(opslagSleutel(sleutel)); } catch { /* geen opslag */ }
+      // Naar betalen: de antwoorden blijven bewaard. Breekt de klant af, dan
+      // komt hij hier terug en staat alles er nog. Ingediend wordt de intake
+      // pas als Stripe meldt dat er betaald is.
       if (r?.checkoutUrl) { window.location.href = r.checkoutUrl; return; }
-      window.location.href = r?.betaalFout ? '/intake/bedankt?betaling=afgebroken' : '/intake/bedankt';
+      try { localStorage.removeItem(opslagSleutel(sleutel)); } catch { /* geen opslag */ }
+      window.location.href = '/intake/bedankt';
     } catch (e) {
       if (e.code === 'al_ingevuld') { window.location.href = '/intake/bedankt'; return; }
       setVerzendfout(`${e.message} Je antwoorden staan nog bewaard, dus je kunt het zo nog eens proberen.`);
@@ -448,7 +455,12 @@ function Formulier({ sleutel, laad }) {
           </nav>
         </div>
 
-        {hervat && (
+        {afgebroken && (
+          <div className="wi-hervat wi-afgebroken" role="alert">
+            <span>De betaling is niet gelukt of afgebroken, dus je intake is nog niet verstuurd. Je antwoorden staan er nog: kies hieronder opnieuw hoe je wilt betalen.</span>
+          </div>
+        )}
+        {!afgebroken && hervat && (
           <div className="wi-hervat">
             <span>We hebben je eerdere antwoorden teruggezet. Je kunt verder waar je gebleven was.</span>
             <button type="button" onClick={() => setHervat(false)}>Sluiten</button>
@@ -482,7 +494,7 @@ function Formulier({ sleutel, laad }) {
             </div>
             {laatste && (
               <Afronden antwoorden={antwoorden} zet={zet} keuze={keuze} bedrag={bedrag}
-                termijnenMogelijk={laad.termijnenMogelijk} />
+                />
             )}
           </>
         )}
@@ -498,7 +510,7 @@ function Formulier({ sleutel, laad }) {
             <span className="wi-zacht wi-bewaard">Je antwoorden worden vanzelf bewaard.</span>
             <button type="button" className="wi-knop wi-knop-p" onClick={verder} disabled={bezig}>
               {bezig ? 'Bezig met versturen…'
-                : laatste ? (bedrag > 0 && antwoorden['website.betaalwijze'] !== 'termijnen' ? 'Versturen en betalen' : 'Versturen')
+                : laatste ? (bedrag > 0 ? 'Naar betalen' : 'Versturen')
                   : <>Volgende <ChevronRight size={17} /></>}
             </button>
           </div>
@@ -570,7 +582,8 @@ function StapBedrijf({ laad, antwoorden, fouten, zet, veldProps }) {
 function StapPakket({ antwoorden, fouten, zet }) {
   const gekozen = antwoorden['website.pakket'] || 'basis';
   const domeinAan = antwoorden['website.domeinViaOns'] === true;
-  const emailAan = domeinAan && antwoorden['website.email'] === true;
+  const emailAantal = domeinAan ? Math.min(Math.max(Number(antwoorden['website.emailAantal']) || 0, 0), 10) : 0;
+  const emailAan = emailAantal > 0;
   const extras = antwoorden['website.extras'] || {};
   const zetExtra = (key, n) => zet('website.extras', { ...extras, [key]: n });
   return (
@@ -683,14 +696,22 @@ function StapPakket({ antwoorden, fouten, zet }) {
               naam="website.domein" waarde={antwoorden['website.domein']} fout={fouten['website.domein']}
               opSlaan={w => zet('website.domein', w)} />
             <label className={`wi-vink wi-vink-blok${emailAan ? ' on' : ''}`}>
-              <input type="checkbox" checked={emailAan} onChange={e => zet('website.email', e.target.checked)} />
+              <input type="checkbox" checked={emailAan} onChange={e => zet('website.emailAantal', e.target.checked ? 1 : 0)} />
               <span>
-                <strong>Zakelijk e-mailadres · {euroBedrag(EMAIL_PER_MAAND)} per maand</strong>
+                <strong>Zakelijke e-mail · {euroBedrag(EMAIL_PER_MAAND)} per adres per maand</strong>
                 <span className="wi-zacht">
-                  Een adres op je eigen domeinnaam, zoals info@jouwbedrijf.nl. Wij richten het in. Als regel op je abonnement vanaf livegang.
+                  Adressen op je eigen domeinnaam, zoals info@jouwbedrijf.nl. Wij richten ze in. Als regel op je abonnement vanaf livegang.
                 </span>
               </span>
             </label>
+            {emailAan && (
+              <div className="wi-teller wi-teller-los" role="group" aria-label="Aantal e-mailadressen">
+                <button type="button" aria-label="Minder" disabled={emailAantal <= 1} onClick={() => zet('website.emailAantal', emailAantal - 1)}><Minus size={15} /></button>
+                <span>{emailAantal}</span>
+                <button type="button" aria-label="Meer" disabled={emailAantal >= 10} onClick={() => zet('website.emailAantal', emailAantal + 1)}><Plus size={15} /></button>
+                <span className="wi-zacht">{emailAantal === 1 ? 'adres' : 'adressen'} = {euroBedrag(emailAantal * EMAIL_PER_MAAND)} per maand</span>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -700,9 +721,9 @@ function StapPakket({ antwoorden, fouten, zet }) {
 
 // ── Laatste stap: betalen en samenvatting ───────────────────────────────────
 
-function Afronden({ antwoorden, zet, keuze, bedrag, termijnenMogelijk }) {
+function Afronden({ antwoorden, zet, keuze, bedrag }) {
   const p = getPakket(keuze.pakket);
-  const wijze = antwoorden['website.betaalwijze'] === 'termijnen' && termijnenMogelijk ? 'termijnen' : 'ideal';
+  const wijze = antwoorden['website.betaalwijze'] === 'termijnen' ? 'termijnen' : 'ideal';
   const domein = keuze.domeinViaOns ? String(antwoorden['website.domein'] || '').trim() : '';
   const extraRegels = Object.entries(keuze.extras).map(([k, n]) => {
     const e = getExtra(k);
@@ -718,24 +739,24 @@ function Afronden({ antwoorden, zet, keuze, bedrag, termijnenMogelijk }) {
             <label className={`wi-optie${wijze === 'ideal' ? ' on' : ''}`}>
               <input type="radio" name="betaalwijze" checked={wijze === 'ideal'} onChange={() => zet('website.betaalwijze', 'ideal')} />
               <span>
-                <strong>Eenmalig met iDEAL · {euroBedrag(bedrag)}</strong>
-                <span className="wi-zacht">Na het versturen ga je naar de betaalpagina.</span>
+                <strong>In één keer · {euroBedrag(bedrag)}</strong>
+                <span className="wi-zacht">Met iDEAL, creditcard of een andere betaalmethode op de betaalpagina.</span>
               </span>
             </label>
-            <label className={`wi-optie${wijze === 'termijnen' ? ' on' : ''}${termijnenMogelijk ? '' : ' uit'}`}>
-              <input type="radio" name="betaalwijze" checked={wijze === 'termijnen'} disabled={!termijnenMogelijk}
+            <label className={`wi-optie${wijze === 'termijnen' ? ' on' : ''}`}>
+              <input type="radio" name="betaalwijze" checked={wijze === 'termijnen'}
                 onChange={() => zet('website.betaalwijze', 'termijnen')} />
               <span>
                 <strong>Verspreid over {TERMIJNEN} maanden · {euroBedrag(perTermijn(bedrag))} per maand</strong>
                 <span className="wi-zacht">
-                  {termijnenMogelijk
-                    ? `Als extra regel op je BossBase-abonnement, ${TERMIJNEN} keer. Samen ${euroBedrag(bedrag)}.`
-                    : 'Kan alleen met een lopend BossBase-abonnement. Kies iDEAL, of neem contact met ons op.'}
+                  De eerste termijn betaal je nu, daarna gaat het {TERMIJNEN - 1} maanden automatisch en dan stopt het vanzelf.
                 </span>
               </span>
             </label>
           </div>
-          <p className="wi-hulp">Bedragen zijn exclusief btw.</p>
+          <p className="wi-hulp">
+            Bedragen zijn exclusief btw. Je intake wordt verstuurd zodra de betaling gelukt is. Lukt het niet, dan kom je hier terug en staan je antwoorden er nog.
+          </p>
         </div>
       )}
 
@@ -745,10 +766,10 @@ function Afronden({ antwoorden, zet, keuze, bedrag, termijnenMogelijk }) {
           <dt>Pakket</dt><dd>{p.label} · {p.omvang}{p.aanmeldPrijs ? ` (${euroBedrag(p.aanmeldPrijs)})` : ' (gratis)'}</dd>
           {extraRegels.length > 0 && <><dt>Extra's</dt><dd>{extraRegels.join(', ')}</dd></>}
           <dt>Eenmalig</dt>
-          <dd>{bedrag > 0 ? (wijze === 'termijnen' ? `${TERMIJNEN} × ${euroBedrag(perTermijn(bedrag))} per maand, samen ${euroBedrag(bedrag)}` : `${euroBedrag(bedrag)} via iDEAL`) : 'Niets'}</dd>
+          <dd>{bedrag > 0 ? (wijze === 'termijnen' ? `${TERMIJNEN} × ${euroBedrag(perTermijn(bedrag))} per maand, samen ${euroBedrag(bedrag)}` : `${euroBedrag(bedrag)} in één keer`) : 'Niets'}</dd>
           <dt>Hosting</dt><dd>{euroBedrag(HOSTING_PER_MAAND)} per maand, vanaf livegang</dd>
           <dt>Domeinnaam</dt><dd>{domein ? `${domein} · ${euroBedrag(DOMEIN_PER_JAAR)} per jaar, vanaf livegang` : (antwoorden['huisstijl.huidigeSite'] ? `Eigen: ${antwoorden['huisstijl.huidigeSite']}` : 'Niet via ons')}</dd>
-          {keuze.email && <><dt>E-mail</dt><dd>Zakelijk e-mailadres · {euroBedrag(EMAIL_PER_MAAND)} per maand, vanaf livegang</dd></>}
+          {keuze.email && <><dt>E-mail</dt><dd>{keuze.emailAantal} {keuze.emailAantal === 1 ? 'adres' : 'adressen'} · {euroBedrag(keuze.emailAantal * EMAIL_PER_MAAND)} per maand, vanaf livegang</dd></>}
         </dl>
         <p className="wi-hulp">
           Bedragen excl. btw. Na de eerste versie geef je je wijzigingen één keer door; daarna gaat je site live.
@@ -757,7 +778,7 @@ function Afronden({ antwoorden, zet, keuze, bedrag, termijnenMogelijk }) {
       </div>
 
       <p className="wi-akkoord">
-        Door te versturen ga je akkoord met de <a href="/voorwaarden" target="_blank" rel="noreferrer">algemene voorwaarden</a>.
+        Door te {bedrag > 0 ? 'betalen en te versturen' : 'versturen'} ga je akkoord met de <a href="/voorwaarden" target="_blank" rel="noreferrer">algemene voorwaarden</a>.
       </p>
     </>
   );

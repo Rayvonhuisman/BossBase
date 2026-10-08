@@ -69,20 +69,26 @@ Wat het formulier vraagt, hangt af van wat je in stap 2 kiest:
 - **Extra pagina's**: een stap waarin je per pagina vertelt wat erop moet.
 - **Fotoset** (Compleet, Pro of als extra): geen foto's voor de bovenkant en de diensten
   nodig; wel een vraag welke beelden bij je bedrijf passen.
-- **Logo-ontwerp, Google Bedrijfsprofiel, WhatsApp-knop, zakelijke e-mail**: een stap
-  Je extra's met alleen de vragen die daarbij horen.
+- **Logo-ontwerp, Google Bedrijfsprofiel, WhatsApp-knop**: een stap Je extra's met alleen
+  de vragen die daarbij horen.
+- **Zakelijke e-mail**: een stap met per gekozen adres het adres en wie hem gebruikt.
 
 ## Betalen voor een upgrade
 
-Voor een pakket en extra's samen: twee keuzes, in de intake en op de pagina Website:
-1. **Eenmalig met iDEAL**: je gaat naar een betaalpagina van Stripe.
-2. **Verspreid over 12 maanden**: het bedrag gedeeld door 12 komt als extra regel op je
-   BossBase-abonnement (Compleet bij aanmelding: ongeveer € 24,92 per maand). Kan alleen
-   als je abonnement loopt. Stopt je abonnement eerder, dan blijven de resterende
-   termijnen verschuldigd.
+Voor een pakket en extra's samen: twee keuzes, in de intake en op de pagina Website.
+Betalen gaat op een betaalpagina van Stripe, met iDEAL, creditcard of een andere
+methode die daar staat.
+1. **In één keer.**
+2. **Verspreid over 12 maanden**: het bedrag gedeeld door 12 per maand (Compleet bij
+   aanmelding: ongeveer € 24,92). De eerste termijn betaal je meteen, daarna gaat het
+   automatisch en na 12 termijnen stopt het vanzelf. Dit is een aparte maandelijkse
+   betaling, los van het BossBase-abonnement. Stopt je abonnement eerder, dan blijven de
+   resterende termijnen verschuldigd.
 
-Is een iDEAL-betaling niet afgerond, dan staat er op de pagina Website een knop **Nu
-betalen met iDEAL**.
+**De intake wordt pas verstuurd als de betaling gelukt is**, in één keer of de eerste
+termijn. Lukt het betalen niet of breek je af, dan kom je terug in de intake met al je
+antwoorden en kies je opnieuw. Een upgrade of extra vanaf de pagina Website gaat pas in
+als hij betaald is. Staat er nog een betaling open, dan staat er een knop **Nu betalen**.
 
 ## Hosting en domeinnaam
 
@@ -92,12 +98,14 @@ betalen met iDEAL**.
 - **Domeinnaam via ons: € 25 per jaar**, als jaarlijkse regel op je abonnement. Er zit
   geen gratis domeinnaam bij. Aanvragen kan in de intake of op de pagina Website (blok
   Domeinnaam via ons). Heb je al een domein, dan koppelen we dat.
-- **Zakelijk e-mailadres: € 9 per maand**, alleen bij een domeinnaam via ons (zoals
-  info@jouwbedrijf.nl). Kiezen in de intake, of later op de pagina Website onder de
-  domeinnaam.
+- **Zakelijke e-mail: € 9 per adres per maand**, alleen bij een domeinnaam via ons
+  (zoals info@jouwbedrijf.nl). In de intake kies je hoeveel adressen, en per adres vul
+  je in wie hem gebruikt. Later meer adressen aanvragen kan op de pagina Website onder
+  de domeinnaam.
 - Domein en e-mail uit de intake gaan in als de site live gaat; later aangevraagd zodra
   ze zijn ingericht.
-- Hosting, domein, e-mail en termijnen staan als aparte regels op de factuur van BossBase.
+- Hosting, domein en e-mail staan als aparte regels op de factuur van BossBase; termijnen
+  van een upgrade zijn een eigen maandelijkse betaling.
 
 ## Zo verloopt het
 

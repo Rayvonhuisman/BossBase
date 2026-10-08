@@ -330,3 +330,56 @@ export async function startWebsiteTraject(
     .eq('company_id', companyId)
   return klantOk ? 'traject gestart: intakelink gemaild, taak gezet' : 'traject gestart (mail naar klant mislukt)'
 }
+
+// ── De intake afronden ──────────────────────────────────────────────────────
+// Zonder bedrag meteen (website-intake), met een bedrag pas als Stripe meldt
+// dat er betaald is (billing-webhook). Alleen een aanvraag die nog op de intake
+// wacht wordt bijgewerkt, dus een tweede betaling of een herhaald event dient
+// niets dubbel in.
+export type IntakeGegevens = {
+  intake: { antwoorden: Record<string, unknown>; ontbreekt: string[] }
+  pakket: Pakket
+  extras: Record<string, number>
+  domein: string
+  emailAantal: number
+}
+
+export async function rondIntakeAf(
+  admin: any, companyId: string, g: IntakeGegevens,
+  stuur: (to: string, subject: string, html: string, replyTo?: string, att?: undefined, soort?: string) => Promise<string | null>,
+  betaling: string | null,
+): Promise<boolean> {
+  const nu = new Date().toISOString()
+  const { data: aanvraag } = await admin.from('website_aanvragen').update({
+    intake: g.intake, pakket: g.pakket, extras: g.extras,
+    domein_via_ons: Boolean(g.domein), domein: g.domein || null,
+    email: g.emailAantal > 0, email_aantal: g.emailAantal,
+    status: 'intake_ontvangen', intake_ontvangen_op: nu, status_gewijzigd_op: nu,
+  }).eq('company_id', companyId).eq('status', 'wacht_op_intake').select('taak_id').maybeSingle()
+  if (!aanvraag) return false
+
+  await admin.from('website_tokens').update({ gebruikt_op: nu }).eq('company_id', companyId).is('gebruikt_op', null)
+  if (aanvraag.taak_id) await admin.from('activities').update({ completed: true }).eq('id', aanvraag.taak_id)
+
+  const { data: c } = await admin.from('companies').select('id, name, email, phone').eq('id', companyId).maybeSingle()
+  const p = PAKKETTEN[g.pakket]
+  const i = mailIntern({
+    onderwerp: `Nieuwe website-intake: ${c?.name ?? 'onbekend'} (${p.label})`,
+    kop: 'Nieuwe intake binnen',
+    bedrijf: c ?? { id: companyId },
+    regels: [
+      ['Pakket', `${p.label} · ${p.omvang}`],
+      ['Extra\'s', Object.keys(g.extras).length ? extrasTekst(g.extras) : 'geen'],
+      ['Betaling', betaling ?? 'geen (Basis zonder extra\'s)'],
+      ['Domein via ons', g.domein ? `${g.domein} (${euro(DOMEIN_PER_JAAR)} per jaar, vanaf livegang)` : 'nee'],
+      ['Zakelijke e-mail', g.emailAantal ? `${g.emailAantal} adres${g.emailAantal > 1 ? 'sen' : ''} (${euro(EMAIL_PER_MAAND * g.emailAantal)} per maand, vanaf livegang)` : 'nee'],
+      ['Nog na te vragen', g.intake.ontbreekt.length ? g.intake.ontbreekt.join('; ') : 'niets'],
+    ],
+  })
+  await stuur(WEBSITE_INTERN, i.subject, i.html, c?.email ?? undefined, undefined, 'website_intern')
+  if (c?.email) {
+    const m = mailIntakeBevestiging({ bedrijfsnaam: c.name, pakket: g.pakket, betaling })
+    await stuur(c.email, m.subject, m.html, WEBSITE_INTERN, undefined, 'website_klant')
+  }
+  return true
+}

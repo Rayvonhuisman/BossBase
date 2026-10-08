@@ -25,8 +25,9 @@ import {
   appOrigin, EXTRA_GEBRUIKER_PRIJS, inbegrepenGebruikers, zetJaarverplichting,
 } from '../_shared/billing.ts'
 import {
-  startWebsiteTraject, mailIntern, PAKKETTEN, WEBSITE_INTERN, euro,
+  startWebsiteTraject, rondIntakeAf, mailIntern, WEBSITE_INTERN, TERMIJNEN, euro, type IntakeGegevens,
 } from '../_shared/website.ts'
+import { plusMaanden } from '../_shared/websiteBetalen.ts'
 import { welkomMail } from '../_shared/welkomMail.ts'
 import { opzeggenBijStripe } from '../_shared/opzeggen.ts'
 import { clientFout } from '../_shared/clientFout.ts'
@@ -112,20 +113,60 @@ async function stuurWelkomstmail(
 const verwerkWebsiteAanvraag = (admin: any, companyId: string, plan: string | null) =>
   startWebsiteTraject(admin, companyId, plan, stuurBossBaseMail)
 
-// Een iDEAL-betaling voor een website-upgrade (Checkout in payment-mode, uit
-// _shared/websiteBetalen.ts). Zet de betaling op betaald en het pakket goed.
-// Idempotent: een tweede levering vindt de betaling al op 'betaald'.
+// Een betaling voor de website (Checkout uit _shared/websiteBetalen.ts):
+// eenmalig (payment-mode) of in termijnen (subscription-mode, eigen abonnement).
+// Pas hier telt het: de betaling gaat op betaald/loopt, bij termijnen krijgt het
+// abonnement zijn einde na de laatste termijn, en wat erop wachtte wordt
+// uitgevoerd: de intake indienen, het pakket of een extra bijwerken.
+// Idempotent: alleen een betaling die nog 'open' staat wordt verwerkt.
 async function verwerkWebsiteBetaling(admin: any, sessie: any): Promise<string> {
   const betalingId = sessie?.metadata?.betaling_id ?? null
   const companyId = sessie?.metadata?.company_id ?? null
   if (!betalingId || !companyId) return 'website-betaling zonder kenmerk'
   if (sessie?.payment_status !== 'paid') return `website-betaling nog niet betaald (${sessie?.payment_status})`
 
+  const termijnen = sessie?.mode === 'subscription'
+  const abonnementId = termijnen && typeof sessie.subscription === 'string' ? sessie.subscription : null
   const { data: b } = await admin.from('website_betalingen')
-    .update({ status: 'betaald', betaald_op: new Date().toISOString(), stripe_session_id: sessie.id })
+    .update({
+      status: termijnen ? 'loopt' : 'betaald',
+      betaald_op: new Date().toISOString(),
+      start_op: new Date().toISOString(),
+      stripe_session_id: sessie.id,
+      ...(abonnementId ? { stripe_subscription_id: abonnementId } : {}),
+    })
     .eq('id', betalingId).eq('company_id', companyId).eq('status', 'open')
-    .select('soort, pakket, extras, bedrag, omschrijving').maybeSingle()
-  if (!b) return 'website-betaling was al verwerkt'
+    .select('soort, pakket, extras, bedrag, per_keer, omschrijving, gegevens').maybeSingle()
+  if (!b) return 'website-betaling was al verwerkt (of vervallen)'
+
+  // Termijnen: het abonnement stopt na de laatste termijn. Gaat dit mis, dan
+  // loopt het door; dat moet opvallen in de superadmin.
+  let einde = ''
+  if (abonnementId) {
+    try {
+      const sub = await stripeFetch(`/subscriptions/${abonnementId}`, 'GET')
+      const start = Number(sub?.start_date ?? sub?.billing_cycle_anchor)
+      await stripeFetch(`/subscriptions/${abonnementId}`, 'POST', {
+        cancel_at: String(plusMaanden(start, TERMIJNEN)),
+        proration_behavior: 'none',
+      })
+      einde = ` · stopt na ${TERMIJNEN} termijnen`
+    } catch (e) {
+      await admin.from('website_betalingen').update({ fout: `Einde na ${TERMIJNEN} termijnen niet gezet: ${(e as Error).message}` }).eq('id', betalingId)
+      einde = ' · EINDE NIET GEZET'
+    }
+  }
+
+  const betaling = termijnen
+    ? `${TERMIJNEN} × ${euro(Number(b.per_keer))} per maand (samen ${euro(Number(b.bedrag))}), eerste termijn betaald`
+    : `${euro(Number(b.bedrag))} eenmalig betaald`
+
+  // Wachtte er een intake op deze betaling, dan wordt die nu ingediend. Die
+  // mailt zelf (ons en de klant).
+  if (b.gegevens) {
+    const ingediend = await rondIntakeAf(admin, companyId, b.gegevens as IntakeGegevens, stuurBossBaseMail, betaling)
+    return `website-betaling ${betalingId} ${termijnen ? 'loopt' : 'betaald'}${einde} · intake ${ingediend ? 'ingediend' : 'was al binnen'}`
+  }
 
   if (b.pakket) await admin.from('website_aanvragen').update({ pakket: b.pakket }).eq('company_id', companyId)
   // Een later bestelde extra komt pas bij de website als hij betaald is.
@@ -137,15 +178,55 @@ async function verwerkWebsiteBetaling(admin: any, sessie: any): Promise<string> 
   }
 
   const { data: bedrijf } = await admin.from('companies').select('id, name, email, phone').eq('id', companyId).maybeSingle()
-  const label = PAKKETTEN[b.pakket as keyof typeof PAKKETTEN]?.label ?? b.pakket
   const i = mailIntern({
-    onderwerp: `Website-betaling ontvangen: ${bedrijf?.name ?? ''}${b.pakket ? ` (${label})` : ''}`,
-    kop: 'Upgrade betaald',
+    onderwerp: `Website-betaling ontvangen: ${bedrijf?.name ?? ''}`,
+    kop: b.soort === 'extra' ? 'Extra betaald' : 'Upgrade betaald',
     bedrijf: bedrijf ?? { id: companyId },
-    regels: [['Wat', b.omschrijving ?? label], ['Bedrag', `${euro(Number(b.bedrag))} excl. btw, via iDEAL`]],
+    regels: [['Wat', b.omschrijving ?? ''], ['Betaling', `${betaling}, excl. btw`]],
   })
   await stuurBossBaseMail(WEBSITE_INTERN, i.subject, i.html, bedrijf?.email ?? undefined, undefined, 'website_intern')
-  return `website-betaling ${betalingId} betaald`
+  return `website-betaling ${betalingId} ${termijnen ? 'loopt' : 'betaald'}${einde}`
+}
+
+// Events van een termijnen-abonnement van de website (geen BossBase-abonnement):
+// betaalde termijnen tellen, en bij het einde de betaling afronden. Geeft null
+// als het abonnement niet van de website is.
+async function websiteTermijnEvent(admin: any, type: string, subscriptionId: string): Promise<string | null> {
+  let { data: b } = await admin.from('website_betalingen')
+    .select('id, status, aantal_gedaan, aantal_totaal').eq('stripe_subscription_id', subscriptionId).maybeSingle()
+  if (!b) {
+    // Een factuur kan binnenkomen vóór checkout.session.completed; dan kennen we
+    // het abonnement nog niet en kijken we naar de metadata bij Stripe.
+    const sub = await stripeFetch(`/subscriptions/${subscriptionId}`, 'GET').catch(() => null)
+    if (sub?.metadata?.soort !== 'website_termijnen' || !sub?.metadata?.betaling_id) return null
+    const r = await admin.from('website_betalingen')
+      .update({ stripe_subscription_id: subscriptionId }).eq('id', sub.metadata.betaling_id)
+      .select('id, status, aantal_gedaan, aantal_totaal').maybeSingle()
+    b = r.data
+    if (!b) return 'website-termijnen: betaling niet gevonden'
+  }
+  const totaal = Number(b.aantal_totaal ?? TERMIJNEN)
+  if (type === 'invoice.paid') {
+    const gedaan = Math.min(totaal, Number(b.aantal_gedaan ?? 0) + 1)
+    await admin.from('website_betalingen').update({
+      aantal_gedaan: gedaan, laatst_gefactureerd: new Date().toISOString(), fout: null,
+      ...(gedaan >= totaal && b.status === 'loopt' ? { status: 'afgerond' } : {}),
+    }).eq('id', b.id)
+    return `website-termijn ${gedaan}/${totaal} betaald`
+  }
+  if (type === 'invoice.payment_failed') {
+    await admin.from('website_betalingen').update({ fout: 'Termijn niet betaald; Stripe probeert het opnieuw.' }).eq('id', b.id)
+    return 'website-termijn mislukt'
+  }
+  if (type === 'customer.subscription.deleted') {
+    const klaar = Number(b.aantal_gedaan ?? 0) >= totaal
+    await admin.from('website_betalingen').update({
+      status: klaar ? 'afgerond' : 'gestopt',
+      ...(klaar ? {} : { fout: `Termijnen gestopt na ${b.aantal_gedaan}/${totaal}; rest handmatig factureren.` }),
+    }).eq('id', b.id)
+    return `website-termijnen ${klaar ? 'afgerond' : 'gestopt'}`
+  }
+  return `website-termijnen: ${type} genegeerd`
 }
 
 // Zet de 12-maandsverplichting op een pas afgesloten jaarabonnement.
@@ -228,14 +309,17 @@ serve(async (req) => {
 
     // iDEAL bevestigt soms pas na afloop van Checkout; dan komt de betaling met
     // dit event binnen in plaats van met checkout.session.completed.
-    if (type === 'checkout.session.async_payment_succeeded' && obj?.metadata?.soort === 'website_upgrade') {
+    const websiteSoort = obj?.metadata?.soort === 'website_upgrade' || obj?.metadata?.soort === 'website_termijnen'
+    if (type === 'checkout.session.async_payment_succeeded' && websiteSoort) {
       return await rond(await verwerkWebsiteBetaling(admin, obj), obj?.metadata?.company_id ?? null)
     }
 
     if (type === 'checkout.session.completed') {
       // Het ENIGE moment waarop we een bedrijf aan Stripe koppelen. Het bedrijf
       // komt uit onze eigen metadata, die wij bij het aanmaken hebben gezet.
-      if (obj?.mode === 'payment' && obj?.metadata?.soort === 'website_upgrade') {
+      // Een betaling voor de website, ook in termijnen (subscription-mode): dat
+      // is nooit het BossBase-abonnement en mag dus niet koppelen.
+      if (websiteSoort) {
         return await rond(await verwerkWebsiteBetaling(admin, obj), obj?.metadata?.company_id ?? null)
       }
       if (obj?.mode !== 'subscription') return await rond('genegeerd: geen abonnements-checkout')
@@ -285,7 +369,10 @@ serve(async (req) => {
         .from('subscriptions').select('company_id')
         .eq('stripe_subscription_id', subscriptionId).maybeSingle()
       companyId = rij?.company_id ?? null
-      if (!companyId) return await rond('genegeerd: onbekend abonnement (geen gekoppeld bedrijf)')
+      if (!companyId) {
+        const website = await websiteTermijnEvent(admin, type, subscriptionId)
+        return await rond(website ?? 'genegeerd: onbekend abonnement (geen gekoppeld bedrijf)')
+      }
     }
     if (!companyId) return await rond('genegeerd: geen bedrijf te bepalen')
 
