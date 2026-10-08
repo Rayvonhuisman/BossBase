@@ -136,7 +136,7 @@
 .wi-pakket-omvang { font-size: 14px; font-weight: 600; color: var(--wi-grijs); line-height: 1.4; min-height: 2.8em; }
 /* Elke kaart dezelfde opbouw en hoogtes, zodat prijs, lijst en knop op één
    lijn staan, ook als Basis minder tekst heeft. */
-.wi-prijsblok { display: flex; flex-direction: column; gap: 4px; min-height: 92px; }
+.wi-prijsblok { display: flex; flex-direction: column; gap: 4px; min-height: 112px; }
 .wi-prijsblok .wi-zacht { font-size: 13px; }
 .wi-prijsblok .wi-actie { margin-top: 2px; }
 .wi-erft { font-size: 13px; color: var(--wi-grijs); font-weight: 600; }
@@ -231,3 +231,8 @@
 .wi-teller > span:first-of-type { min-width: 18px; text-align: center; font-weight: 700; }
 .wi-afgebroken { background: #fffbeb; border-color: #fde68a; color: #92400e; }
 .wi-teller-los { margin: 10px 0 0; }
+/* Betalen in termijnen: duidelijk in beeld, in de kaart en in een balk. */
+.wi-termijnprijs { font-size: 14px; font-weight: 700; color: var(--wi-groen-donker); }
+.wi-termijnbalk { display: flex; gap: 12px; align-items: flex-start; margin: 16px 0 20px; padding: 14px 16px; border-radius: 14px; background: var(--wi-groen-licht); border: 1px solid #b7f0cd; font-size: 15px; line-height: 1.55; color: var(--wi-zwart); }
+.wi-termijnbalk-icoon { flex: none; width: 26px; height: 26px; border-radius: 99px; background: var(--wi-groen); color: var(--wi-zwart); display: inline-flex; align-items: center; justify-content: center; margin-top: 1px; }
+.wi-termijnbalk-klein { display: block; margin-top: 4px; font-size: 13px; color: var(--wi-grijs); }

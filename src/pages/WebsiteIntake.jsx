@@ -615,7 +615,9 @@ function StapPakket({ antwoorden, fouten, zet }) {
                         <s aria-label={`Later ${euroBedrag(p.laterPrijs)}`}>{euroBedrag(p.laterPrijs)}</s>
                         <strong>{euroBedrag(p.aanmeldPrijs)}</strong>
                       </span>
-                      <span className="wi-zacht">eenmalig, excl. btw</span>
+                      {/* Betalen in termijnen is een sterk punt: direct onder de prijs. */}
+                      <span className="wi-termijnprijs">of {TERMIJNEN} × {euroBedrag(perTermijn(p.aanmeldPrijs))} per maand</span>
+                      <span className="wi-zacht">excl. btw</span>
                       <span className="wi-actie">Alleen bij je aanmelding</span>
                     </>
                   )}
@@ -630,10 +632,16 @@ function StapPakket({ antwoorden, fouten, zet }) {
           );
         })}
       </div>
-      <p className="wi-hulp wi-midden">
-        Deze prijzen gelden alleen nu, bij je aanmelding. Later kost Compleet {euroBedrag(getPakket('compleet').laterPrijs)} en Pro {euroBedrag(getPakket('pro').laterPrijs)}.
-        Betalen kan eenmalig met iDEAL of verspreid over {TERMIJNEN} maanden; dat kies je in de laatste stap.
-      </p>
+      <div className="wi-termijnbalk">
+        <span className="wi-termijnbalk-icoon" aria-hidden="true"><Check size={16} strokeWidth={3} /></span>
+        <div>
+          <strong>Betaal in één keer, of verspreid over {TERMIJNEN} maanden.</strong>{' '}
+          Compleet heb je al voor {euroBedrag(perTermijn(getPakket('compleet').aanmeldPrijs))} per maand, Pro voor {euroBedrag(perTermijn(getPakket('pro').aanmeldPrijs))} per maand. Je kiest het in de laatste stap.
+          <span className="wi-termijnbalk-klein">
+            Deze prijzen gelden alleen nu, bij je aanmelding. Later kost Compleet {euroBedrag(getPakket('compleet').laterPrijs)} en Pro {euroBedrag(getPakket('pro').laterPrijs)}.
+          </span>
+        </div>
+      </div>
 
       <div className="wi-blok">
         <div className="wi-label">Extra's <span className="wi-actie">aanmeldkorting</span></div>
