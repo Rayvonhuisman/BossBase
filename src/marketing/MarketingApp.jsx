@@ -11,6 +11,7 @@ import { vindRoute, laadComponent, normaliseerPad } from './routes.jsx';
 import { applyHead } from './seo.js';
 import { isAppPath } from '../lib/appRoutes.js';
 import { meet } from '../lib/meting.js';
+import { meetPagina } from '../lib/analytics.js';
 
 export default function MarketingApp({ initieel }) {
   const [stand, setStand] = useState(initieel);
@@ -32,6 +33,8 @@ export default function MarketingApp({ initieel }) {
     else if (replace) window.history.replaceState({}, '', doel);
     setStand({ route, Pagina });
     applyHead(route);
+    // Paginaweergave voor de eigen meting (ook bij terug/vooruit).
+    meetPagina();
     // Na het renderen: naar het anker, of naar boven.
     requestAnimationFrame(() => {
       const anker = url.hash && document.getElementById(decodeURIComponent(url.hash.slice(1)));

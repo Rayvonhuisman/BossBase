@@ -5,11 +5,11 @@
 import { PaginaSchil, PaginaKop, Sectie } from '../../marketing/templates/Onderdelen.jsx';
 import { EXPLOITANT_REGEL } from '../../marketing/site.js';
 
-const STAND = '30 september 2026';
+const STAND = '8 oktober 2026';
 
 const SUBVERWERKERS = [
-  { naam: 'Supabase Pte. Ltd.', waarvoor: 'Database, inloggen, opslag van bestanden, serverfuncties', waar: 'Frankfurt, Duitsland', waarborg: 'Standaardcontractbepalingen' },
-  { naam: 'Vercel Inc.', waarvoor: 'Hosting van de website en de app; gebruiksstatistieken (Web Analytics, zonder cookies)', waar: 'Wereldwijd netwerk (voor Nederland Frankfurt); serverfunctie in Frankfurt; bedrijf in de VS', waarborg: 'EU-US Data Privacy Framework en standaardcontractbepalingen' },
+  { naam: 'Supabase Pte. Ltd.', waarvoor: 'Database, inloggen, opslag van bestanden, serverfuncties, de eigen gebruiksstatistieken van de website (zonder cookies)', waar: 'Frankfurt, Duitsland', waarborg: 'Standaardcontractbepalingen' },
+  { naam: 'Vercel Inc.', waarvoor: 'Hosting van de website en de app', waar: 'Wereldwijd netwerk (voor Nederland Frankfurt); serverfunctie in Frankfurt; bedrijf in de VS', waarborg: 'EU-US Data Privacy Framework en standaardcontractbepalingen' },
   { naam: 'Resend (Plus Five Five, Inc.)', waarvoor: 'Versturen van e-mail: offertes, facturen, werkbonnen, uitnodigingen en herinneringen', waar: 'Verenigde Staten', waarborg: 'EU-US Data Privacy Framework en standaardcontractbepalingen' },
   { naam: 'Stripe Payments Europe, Ltd.', waarvoor: 'Betalen van het BossBase-abonnement', waar: 'Ierland; verwerking ook buiten de EU', waarborg: 'EU-US Data Privacy Framework en standaardcontractbepalingen' },
   { naam: 'Anthropic Ireland, Ltd.', waarvoor: 'De helpassistent Boss in de app; alleen wat een gebruiker zelf in de chat typt', waar: 'Ierland; verwerking ook in de VS', waarborg: 'Standaardcontractbepalingen' },

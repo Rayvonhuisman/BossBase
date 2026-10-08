@@ -22,6 +22,7 @@
 // _shared/websiteAanvraagHandler.ts voor wat daarbij anders is.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { mailTemplate } from '../_shared/mailTemplate.ts'
+import { bronVanBezoeker } from '../_shared/meting.ts'
 import {
   kiesOntvangers,
   verwerkVerzoek,
@@ -267,4 +268,19 @@ const opslag: AanvraagOpslag = {
   },
 }
 
-Deno.serve(req => verwerkVerzoek(req, opslag, log, { paginaHerkomsten: PAGINA_HERKOMSTEN }))
+// Bij een aanvraag via bossbase.nl zelf het kanaal meegeven waarlangs de
+// bezoeker vandaag binnenkwam (eigen cookievrije meting, zie _shared/meting.ts).
+// Per verzoek een eigen opslag-object: de bron hoort bij dít verzoek.
+Deno.serve(req => verwerkVerzoek(req, {
+  ...opslag,
+  async bewaar(rij) {
+    try {
+      const { data: f } = await admin.from('website_forms').select('settings').eq('id', rij.form_id).maybeSingle()
+      if ((f?.settings as Record<string, unknown> | null)?.bestemming === 'superadmin') {
+        const bron = await bronVanBezoeker(admin, req)
+        if (bron) rij = { ...rij, metadata: { ...rij.metadata, bron } }
+      }
+    } catch { /* zonder bron gewoon bewaren */ }
+    return opslag.bewaar(rij)
+  },
+}, log, { paginaHerkomsten: PAGINA_HERKOMSTEN }))

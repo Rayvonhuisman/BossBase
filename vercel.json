@@ -50,6 +50,10 @@
       "destination": "/app"
     },
     {
+      "source": "/superadmin/:pad*",
+      "destination": "/app"
+    },
+    {
       "source": "/afmelden",
       "destination": "/app"
     },
@@ -173,6 +177,15 @@
     },
     {
       "source": "/superadmin",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/superadmin/:pad*",
       "headers": [
         {
           "key": "X-Robots-Tag",

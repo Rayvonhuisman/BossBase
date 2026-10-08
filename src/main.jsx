@@ -8,10 +8,12 @@ import { installeerLaadfoutHerstel, isLaadfout, herlaadEenmaal, toonLaadfout } f
 import { startAnalytics } from './lib/analytics.js';
 
 installeerLaadfoutHerstel();
-// Website én app: Vercel Web Analytics, zonder cookies, met geschoonde URL's.
-startAnalytics();
+const isApp = isAppPath(window.location.pathname);
+// Alleen de website: eigen cookievrije meting (lib/analytics.js). Wat er in de
+// app gebeurt staat al in onze eigen database.
+if (!isApp) startAnalytics();
 
-const ingang = isAppPath(window.location.pathname)
+const ingang = isApp
   ? import('./app-entry.jsx')
   : import('./marketing/entry-client.jsx');
 

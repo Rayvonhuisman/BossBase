@@ -1,5 +1,5 @@
 // website-beheer — de lijst Websites in de superadmin. Alleen voor
-// profiles.is_super_admin (zelfde controle als super-admin-data).
+// profiles.is_super_admin (zelfde poort als de functie superadmin).
 //
 //   lijst          → alle websites met bedrijf, intake, betalingen en verzoeken
 //   bestand        → ondertekende link (1 uur) naar een bestand uit de intake
@@ -16,6 +16,10 @@
 //                    een klant die nog op de intake wacht: een verse link.
 //                    Ook intern aan te roepen met het cron-geheim (net.http_post
 //                    uit de database), bijvoorbeeld voor een testbedrijf.
+//
+// Poort en logboek: zie _shared/superadmin.ts. Alleen superbeheerders;
+// elke handeling behalve `lijst` staat in
+// superadmin_log (ook het openen van een intakebestand).
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { CORS, json, stuurBossBaseMail } from '../_shared/billing.ts'
@@ -23,6 +27,7 @@ import { clientFout } from '../_shared/clientFout.ts'
 import { HOSTING_PER_MAAND, DOMEIN_PER_JAAR, EMAIL_PER_MAAND, STATUS_LABEL, WEBSITE_INTERN, mailStatus, mailHostingNodig, startWebsiteTraject } from '../_shared/website.ts'
 import { isScheduledCall } from '../_shared/scheduledSync.ts'
 import { regelOpAbonnement, hostingStand } from '../_shared/websiteBetalen.ts'
+import { eisSuperbeheerder, metLog } from '../_shared/superadmin.ts'
 
 const VERZOEK_STATUSSEN = ['nieuw', 'in_behandeling', 'prijsopgave', 'afgerond', 'afgewezen']
 
@@ -47,10 +52,6 @@ serve(async (req) => {
   const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
-  const userClient = createClient(url, Deno.env.get('SUPABASE_ANON_KEY')!, {
-    global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
 
   let body: any
   try { body = await req.json() } catch { return json({ error: 'Ongeldige aanvraag' }, 400) }
@@ -59,13 +60,56 @@ serve(async (req) => {
     // Intern (cron-geheim) mag alleen het traject starten; de rest vraagt een
     // ingelogde superadmin.
     const intern = body?.actie === 'traject-starten' && isScheduledCall(body)
-    if (!intern) {
-      const { data: { user } } = await userClient.auth.getUser()
-      if (!user) return json({ error: 'Log opnieuw in.' }, 401)
-      const { data: p } = await admin.from('profiles').select('is_super_admin').eq('id', user.id).maybeSingle()
-      if (p?.is_super_admin !== true) return json({ error: 'Niet toegestaan' }, 403)
-    }
+    if (intern) return await handel(admin, body)
 
+    const wie = await eisSuperbeheerder(req, admin)
+    if (wie instanceof Response) return wie
+    if (body.actie === 'lijst') return await handel(admin, body)
+
+    // Alles behalve de lijst gaat het logboek in. Bij welk bedrijf hoort het?
+    let companyId: string | null = body.companyId ?? null
+    if (!companyId && body.actie === 'verzoek-status') companyId = (await admin.from('website_verzoeken').select('company_id').eq('id', body.id).maybeSingle()).data?.company_id ?? null
+    if (!companyId && body.actie === 'regel-stoppen') companyId = (await admin.from('website_betalingen').select('company_id').eq('id', body.id).maybeSingle()).data?.company_id ?? null
+    if (!companyId && body.actie === 'bestand') companyId = /^[0-9a-f-]{36}\//.test(String(body.pad ?? '')) ? String(body.pad).slice(0, 36) : null
+    const { data: c } = companyId ? await admin.from('companies').select('name').eq('id', companyId).maybeSingle() : { data: null }
+    const omschrijving: Record<string, string> = {
+      'bestand': `Intakebestand geopend (${String(body.pad ?? '').split('/').pop()})`,
+      'status': `Website-status → ${STATUS_LABEL[body.status] ?? body.status ?? 'ongewijzigd'}${body.siteUrl !== undefined ? ` · link ${body.siteUrl || '(leeg)'}` : ''}${body.mail === false ? ' · zonder mail' : ''}${body.zonderHosting ? ' · zonder hosting' : ''}`,
+      'verzoek-status': `Verzoek → ${body.status}${typeof body.notitie === 'string' ? ' (met notitie)' : ''}`,
+      'domein-actief': `Domein actief: ${body.domein ?? ''}`,
+      'email-actief': `Zakelijke e-mail actief: ${body.aantal ?? 1} adres(sen)`,
+      'traject-starten': 'Intakelink (opnieuw) gestuurd',
+      'hosting-link': 'Klant gemaild: hosting afsluiten',
+      'regel-stoppen': 'Betaalregel gestopt',
+    }
+    if (!omschrijving[body.actie]) return json({ error: 'Onbekende actie' }, 400)
+    let antwoord: Response | null = null
+    try {
+      await metLog(admin, wie, {
+        actie: `website.${body.actie}`, soort: 'website', omschrijving: omschrijving[body.actie],
+        companyId, doel: c?.name ?? null, doelId: body.id ?? body.companyId ?? null,
+      }, async () => {
+        antwoord = await handel(admin, body)
+        if (!antwoord.ok) {
+          const tekst = await antwoord.clone().json().then((j: any) => j?.error).catch(() => null)
+          throw new Error(tekst ?? `status ${antwoord.status}`)
+        }
+        return antwoord.clone().json().catch(() => ({}))
+      }, (u: any) => u?.resultaat ? { resultaat: u.resultaat } : null)
+    } catch (e) {
+      // De handeling zelf gaf een fout (die staat in het logboek): geef het
+      // oorspronkelijke antwoord terug. Geen antwoord = het logboek faalde.
+      if (antwoord) return antwoord
+      throw e
+    }
+    return antwoord!
+  } catch (e) {
+    console.error('website-beheer:', e)
+    return json({ error: clientFout(e) }, 500)
+  }
+})
+
+async function handel(admin: any, body: any): Promise<Response> {
     switch (body.actie) {
       case 'lijst': {
         const [{ data: aanvragen }, { data: betalingen }, { data: verzoeken }] = await Promise.all([
@@ -215,8 +259,4 @@ serve(async (req) => {
       }
     }
     return json({ error: 'Onbekende actie' }, 400)
-  } catch (e) {
-    console.error('website-beheer:', e)
-    return json({ error: clientFout(e) }, 500)
-  }
-})
+}

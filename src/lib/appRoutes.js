@@ -18,7 +18,6 @@ export const APP_PATHS = [
   '/reset-password',
   '/betaald',
   '/betaling-geannuleerd',
-  '/superadmin',
   '/afmelden',
 ];
 
@@ -33,6 +32,8 @@ export const APP_PREFIXES = [
   '/betaal',
   // Intake van de gratis website: /intake/<sleutel> en /intake/bedankt.
   '/intake',
+  // De superadmin: /superadmin en /superadmin/<pagina>[/<id>].
+  '/superadmin',
 ];
 
 export function isAppPath(pathname) {

@@ -1,0 +1,55 @@
+/* Superadmin: kleine aanvullingen op bb-dashboard.css. Alleen wat het
+   dashboard nog niet had; kleuren en maten uit dezelfde variabelen. */
+.sa-label-sb{background:rgba(29,219,98,.15);color:#1DDB62;font-size:.58rem;text-transform:uppercase;letter-spacing:.06em}
+.sa-tab-n{margin-left:6px;font-size:.66rem;color:var(--dl);font-weight:600}
+.tab.active .sa-tab-n{color:var(--pd)}
+.sa-twee{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:16px;align-items:start}
+.sa-twee-gelijk{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+@media(max-width:1100px){.sa-twee,.sa-twee-gelijk{grid-template-columns:minmax(0,1fr)}}
+.sa-knoppen{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sa-actie{gap:12px;align-items:center}
+.sa-actie-ic{width:28px;height:28px;padding:0;justify-content:center;border-radius:8px;flex-shrink:0}
+.sa-actie-knoppen{display:flex;gap:4px;flex-shrink:0;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.sa-actie .lrow-sub{white-space:normal;line-height:1.45}
+.sa-feed{display:flex;flex-direction:column;gap:12px}
+.sa-feed-rij{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.sa-feed-t{font-size:13px;font-weight:600}
+.sa-stip{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block}
+.sa-feed-rij .sa-stip{margin-top:5px}
+.sa-rij{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px}
+.sa-rij>span:first-child{color:var(--dl);flex-shrink:0}
+.sa-rij>span:last-child{font-weight:500;text-align:right;min-width:0;overflow-wrap:anywhere}
+.sa-input{width:100%;padding:8px 11px;border:1px solid var(--bstrong);border-radius:8px;font-size:13px;font-family:inherit;background:#fff;outline:none;color:var(--dk)}
+.sa-input:focus{border-color:var(--p);box-shadow:0 0 0 3px rgba(29,219,98,.14)}
+textarea.sa-input{min-height:80px;resize:vertical}
+.sa-check{display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--dm);cursor:pointer;margin-top:4px}
+.sa-tijdlijn{margin-top:14px;display:flex;flex-direction:column;gap:10px}
+.sa-tl-rij{border-left:2px solid var(--pl);padding-left:10px}
+.sa-logo{border-radius:7px;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sa-trechter-mini{display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:#fff;border:1px solid var(--border);border-radius:var(--r12);padding:12px 16px;margin-bottom:14px}
+.sa-tm-stap{display:flex;align-items:center;gap:8px}
+.sa-tm-n{font-weight:700;font-size:18px}
+.sa-tm-l{font-size:12px;color:var(--dmu)}
+.sa-tm-pijl{color:var(--dl);margin:0 6px}
+.sa-tm-conv{margin-left:auto;font-size:12.5px;color:var(--dm)}
+.sa-tr-rij{display:grid;grid-template-columns:minmax(140px,260px) 1fr 90px 120px;gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)}
+.sa-tr-rij:last-child{border-bottom:none}
+.sa-tr-l{font-size:13px;font-weight:600}
+.sa-tr-balk{height:14px;background:var(--bgs);border-radius:4px;overflow:hidden}
+.sa-tr-balk>div{height:100%;border-radius:4px}
+.sa-tr-n{font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.sa-tr-p{font-size:12px;color:var(--dl)}
+.sa-minibalk{height:6px;background:var(--bgs);border-radius:3px;min-width:60px}
+.sa-minibalk>div{height:100%;background:#1DDB62;border-radius:3px}
+.sa-melding{background:#fff4ec;border:1px solid #fed7aa;color:#7c2d12;border-radius:var(--r12);padding:12px 16px;font-size:13px;margin-bottom:16px;line-height:1.5}
+.sa-info{background:var(--bgs);border:1px solid var(--border);color:var(--dm);border-radius:var(--r12);padding:12px 16px;font-size:13px;margin-bottom:16px;line-height:1.5}
+.sa-bubbel{max-width:80%;padding:9px 12px;border-radius:12px;font-size:13px;margin-bottom:8px;line-height:1.45;white-space:pre-wrap}
+.sa-bubbel.gebruiker,.sa-bubbel.user{background:var(--bgs);border:1px solid var(--border)}
+.sa-bubbel.boss,.sa-bubbel.assistant{background:var(--pll);border:1px solid var(--pl);margin-left:auto}
+.sa-treffer{display:block;width:100%;text-align:left;padding:9px 14px;border-bottom:1px solid var(--border)}
+.sa-treffer:hover,.sa-treffer:focus-visible{background:var(--pll);outline:none}
+.sa-fout{color:#dc2626;font-size:.82rem;margin:0 0 12px;text-align:center}
+.sa-dt-klik tbody tr{cursor:pointer}
+.sa-pc{cursor:pointer}
+.sa-pc-over{border-color:#fdba74}
+@media(max-width:768px){.sa-tr-rij{grid-template-columns:1fr 70px}.sa-tr-balk,.sa-tr-p{display:none}}

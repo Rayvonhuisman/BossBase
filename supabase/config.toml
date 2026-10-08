@@ -88,3 +88,9 @@ verify_jwt = false
 # Draait dagelijks op de cron; eist zelf het cron_secret uit de vault.
 [functions.website-termijnen]
 verify_jwt = false
+
+# Eigen cookievrije meting van bossbase.nl: de bezoeker is niet ingelogd. De
+# functie neemt alleen berichten van de eigen website aan, bewaart geen
+# IP-adres en geeft altijd 204 terug (zie _shared/meting.ts).
+[functions.meting]
+verify_jwt = false

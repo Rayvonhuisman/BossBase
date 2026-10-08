@@ -6,6 +6,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { hashVerificationCode, legacyHashVerificationCode, LEGACY_TOT, gelijk } from '../_shared/hashCode.ts'
 import { legAkkoordVast } from '../_shared/akkoord.ts'
+import { bronVanBezoeker } from '../_shared/meting.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -136,6 +137,16 @@ serve(async (req) => {
       if (companyId && rpcData?.status === 'created' && branche) {
         const { error: brancheErr } = await admin.from('companies').update({ branche }).eq('id', companyId)
         if (brancheErr) console.error('[verify-code] branche zetten mislukt:', brancheErr.message)
+      }
+      // Langs welk kanaal kwam dit account binnen? Uit de eigen cookievrije
+      // meting van bossbase.nl, alleen als de bezoeker vandaag op de site was.
+      // Alleen het kanaal wordt bewaard, nooit de bezoekershash.
+      if (companyId && rpcData?.status === 'created') {
+        const bron = await bronVanBezoeker(admin, req)
+        if (bron) {
+          const { error: bronErr } = await admin.from('companies').update({ aanmeldbron: bron }).eq('id', companyId)
+          if (bronErr) console.error('[verify-code] aanmeldbron zetten mislukt:', bronErr.message)
+        }
       }
       const telefoon = typeof meta.phone === 'string' ? meta.phone.trim().slice(0, 30) : ''
       if (telefoon) {

@@ -31,6 +31,7 @@ import { plusMaanden } from '../_shared/websiteBetalen.ts'
 import { welkomMail } from '../_shared/welkomMail.ts'
 import { opzeggenBijStripe } from '../_shared/opzeggen.ts'
 import { clientFout } from '../_shared/clientFout.ts'
+import { bewaarFactuur } from '../_shared/stripeFacturen.ts'
 
 // Bevestigingsmail "je abonnement is actief", precies één keer per abonnement.
 //
@@ -395,8 +396,21 @@ serve(async (req) => {
 
   const rond = async (resultaat: string, companyId: string | null = null) => {
     await admin.from('stripe_billing_events')
-      .update({ resultaat, company_id: companyId }).eq('event_id', eventId)
+      .update({ resultaat: resultaat + factuurResultaat, company_id: companyId }).eq('event_id', eventId)
     return ok(resultaat)
+  }
+
+  // ── Factuur bewaren (superadmin: betalingen per klant, omzethistorie) ──────
+  // Los van de rest en nooit fataal: een fout hier mag de abonnementsverwerking
+  // niet tegenhouden. Bij een retry van Stripe wordt de factuur opnieuw
+  // weggeschreven (upsert), dus er gaat niets dubbel.
+  let factuurResultaat = ''
+  if (type.startsWith('invoice.')) {
+    try {
+      factuurResultaat = ` · ${await bewaarFactuur(admin, obj, type)}`
+    } catch (e) {
+      factuurResultaat = ` · factuur niet bewaard: ${(e as Error).message}`
+    }
   }
 
   try {

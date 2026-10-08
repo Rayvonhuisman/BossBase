@@ -1,19 +1,19 @@
-// Vercel Web Analytics voor de website én de app.
+// Eigen cookievrije meting voor de website (sinds 8 oktober 2026; daarvoor
+// Vercel Web Analytics, dat op ons abonnement geen gegevens doorgaf).
 //
-// Waarom zonder cookiebanner: Web Analytics zet geen cookies en schrijft niets
-// in de browseropslag. Een bezoeker wordt herkend aan een hash van het verzoek
-// die Vercel na 24 uur weggooit; IP-adressen worden niet bewaard. Dat valt onder
-// de uitzondering voor analytics met geen of geringe privacygevolgen
-// (Telecommunicatiewet art. 11.7a lid 3 sub b). Zie docs/juridisch/cookiebeleid.md.
+// Waarom zonder cookiebanner: er wordt niets in de browser opgeslagen (geen
+// cookies, geen localStorage). Een bezoeker wordt aan de serverkant herkend
+// aan een hash van IP-adres en browser met een zout dat elke dag wisselt en
+// daarna gewist wordt; het IP-adres zelf wordt niet bewaard. Dat valt onder de
+// uitzondering voor analytics met geen of geringe privacygevolgen
+// (Telecommunicatiewet art. 11.7a lid 3 sub b). Zie docs/juridisch/cookiebeleid.md
+// en supabase/functions/_shared/meting.ts.
 //
-// Die uitzondering houdt alleen stand als er via de URL geen persoonsgegevens
-// meegaan. Vercel ontvangt de volledige URL van elke pagina, en bij ons staan
-// daar tokens in (/offerte/<token>, /werkbon/<token>, /betaal/<token>,
-// /uitnodiging?token=…, /reset-password?…) en id's van klanten, projecten en
-// facturen (/dashboard/projecten/<uuid>, ?klant=<uuid>). Die haalt anoniemeUrl()
-// eruit vóór er iets verstuurd wordt. Het pad blijft zichtbaar, de sleutel niet.
-import { inject, track } from '@vercel/analytics';
-
+// Alleen de website wordt gemeten, niet de app: wat klanten in de app doen
+// staat al in onze eigen database. Ook hier gaan er geen persoonsgegevens via
+// de URL mee: anoniemeUrl() haalt tokens en id's eruit, en van de verwijzer
+// gaat alleen de domeinnaam mee. Wie "Do Not Track" of Global Privacy Control
+// aan heeft staan, meten we niet.
 // Alleen deze parameters zeggen iets over herkomst en bevatten geen gegevens
 // over een persoon. Alle andere (token, klant, deal, open, email, …) vallen weg.
 const TOEGESTANE_PARAMS = new Set(['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'ref']);
@@ -53,32 +53,55 @@ export function anoniemeUrl(url) {
   return `${u.origin}${pad}${query ? `?${query}` : ''}`;
 }
 
+const ENDPOINT = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meting`;
+
+// Alleen op de echte website, niet op localhost of een preview.
+const meetbaar = () => {
+  try {
+    if (!/(^|\.)bossbase\.nl$/.test(window.location.hostname)) return false;
+    if (navigator.globalPrivacyControl === true || navigator.doNotTrack === '1' || window.doNotTrack === '1') return false;
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+function verwijzerDomein() {
+  try {
+    return document.referrer ? `https://${new URL(document.referrer).hostname}` : '';
+  } catch {
+    return '';
+  }
+}
+
+function stuur(bericht) {
+  if (!meetbaar()) return;
+  try {
+    const url = anoniemeUrl(window.location.href);
+    if (!url) return;
+    const tekst = JSON.stringify({ ...bericht, url, verwijzer: verwijzerDomein() });
+    const blob = new Blob([tekst], { type: 'text/plain' });
+    if (!(navigator.sendBeacon && navigator.sendBeacon(ENDPOINT, blob))) {
+      fetch(ENDPOINT, { method: 'POST', body: tekst, keepalive: true, headers: { 'Content-Type': 'text/plain' } }).catch(() => {});
+    }
+  } catch {
+    // Meten mag de site nooit breken.
+  }
+}
+
+// Een paginaweergave. Bij het laden van de website en na elke navigatie
+// binnen de website (MarketingApp).
+export function meetPagina() {
+  stuur({ soort: 'pagina' });
+}
+
 export function startAnalytics() {
   // Overblijfsel van de oude cookiebanner (verwijderd 30-09-2026). Die keuze
   // deed niets en er valt niets meer te kiezen; niet laten staan.
   try { localStorage.removeItem('cookie_consent'); } catch { /* geen opslag */ }
 
-  try {
-    inject({
-      mode: import.meta.env.PROD ? 'production' : 'development',
-      debug: false,
-      beforeSend: event => {
-        const url = anoniemeUrl(event.url);
-        return url ? { ...event, url } : null;
-      },
-    });
-
-    // De meetpunten uit lib/meting.js doorgeven als eigen gebeurtenis. Alleen
-    // platte waarden; meting.js stuurt geen persoonsgegevens mee.
-    window.bbMeter = (gebeurtenis, gegevens = {}) => {
-      const plat = {};
-      for (const [k, v] of Object.entries(gegevens || {})) {
-        if (v === null || ['string', 'number', 'boolean'].includes(typeof v)) plat[k] = v;
-      }
-      if (typeof plat.pagina === 'string') plat.pagina = new URL(anoniemeUrl(plat.pagina) || '/', window.location.origin).pathname;
-      track(gebeurtenis, plat);
-    };
-  } catch {
-    // Meten mag de site nooit breken.
-  }
+  // De meetpunten uit lib/meting.js. Alleen de naam gaat mee; de server neemt
+  // alleen bekende gebeurtenissen aan.
+  window.bbMeter = gebeurtenis => stuur({ soort: 'gebeurtenis', naam: gebeurtenis });
+  meetPagina();
 }

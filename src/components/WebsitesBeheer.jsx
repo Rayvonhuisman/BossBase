@@ -28,7 +28,7 @@ const FILTERS = [
 const fmt = d => d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
 const fmtTijd = d => d ? new Date(d).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
 
-const roep = async (actie, extra = {}) => {
+export const roep = async (actie, extra = {}) => {
   const { data, error } = await supabase.functions.invoke('website-beheer', { body: { actie, ...extra } });
   if (error) {
     let bericht = error.message;
@@ -40,7 +40,7 @@ const roep = async (actie, extra = {}) => {
 };
 
 // Wat vraagt hier om actie van ons?
-function actiePunten(w) {
+export function actiePunten(w) {
   const uit = [];
   if (w.status === 'intake_ontvangen') uit.push('intake ontvangen');
   if (w.feedback && w.status !== 'live' && w.status !== 'geannuleerd') uit.push('feedback');
@@ -59,7 +59,7 @@ const hostingGedekt = w =>
   LOPEND.includes(w.abonnement?.stripe_status ?? '')
   || (w.betalingen || []).some(b => b.soort === 'hosting' && b.wijze === 'los' && b.status === 'loopt');
 
-function betalingSamenvatting(b) {
+export function betalingSamenvatting(b) {
   if (b.status === 'vervallen') return `${euroBedrag(b.bedrag)} vervallen (opnieuw gestart)`;
   if (b.wijze === 'ideal') return `${euroBedrag(b.bedrag)} eenmalig ${b.status}`;
   if (b.wijze === 'termijnen') return `${euroBedrag(b.bedrag)} in termijnen ${b.status === 'open' ? 'open' : `${b.aantal_gedaan}/${b.aantal_totaal}`}`;
@@ -71,7 +71,7 @@ function betalingSamenvatting(b) {
   return `${b.omschrijving} ${b.status}`;
 }
 
-function Pil({ status }) {
+export function Pil({ status }) {
   const s = statusInfo(status);
   const k = STATUS_KLEUR[status] || STATUS_KLEUR.geannuleerd;
   return (
@@ -158,7 +158,7 @@ function Intake({ intake, toast }) {
 const kop = { fontSize: 11, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: '#6b7280' };
 const blok = { borderTop: '1px solid var(--border)', paddingTop: 14, marginTop: 14 };
 
-function Detail({ w, herlaad, toast }) {
+export function Detail({ w, herlaad, toast }) {
   const [status, setStatus] = useState(w.status);
   const [siteUrl, setSiteUrl] = useState(w.site_url || '');
   const [mail, setMail] = useState(true);

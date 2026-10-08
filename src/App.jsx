@@ -43,7 +43,7 @@ const DatabasePage = lazy(() => import('./pages/DatabasePage.jsx').then(m => ({ 
 const LeveranciersPage = lazy(() => import('./pages/LeveranciersPage.jsx'));
 const LeverancierPage  = lazy(() => import('./pages/LeverancierPage.jsx'));
 const MaterialenPage   = lazy(() => import('./pages/MaterialenPage.jsx'));
-const SuperAdminPage = lazy(() => import('./pages/SuperAdminPage.jsx').then(m => ({ default: m.SuperAdminPage })));
+const SuperAdmin = lazy(() => import('./pages/superadmin/SuperAdmin.jsx').then(m => ({ default: m.SuperAdmin })));
 import { createMissingProfile, getSession, logout, onAuthStateChange } from './services/authService.js';
 import { getCurrentUserContext } from './services/profileService.js';
 import { getPlanStatus, fallbackPlanStatus } from './services/planService.js';
@@ -1928,7 +1928,7 @@ function AppInner() {
     return <Wacht fallback={PubliekLaden}><WebsiteIntake sleutel={sleutel} /></Wacht>;
   }
 
-  if (route === '/superadmin') {
+  if (route === '/superadmin' || route.startsWith('/superadmin/') || route.startsWith('/superadmin?')) {
     if (!session) { navigate('/login', true); return null; }
     // Render NIETS (alleen een donkere achtergrond) tot het profiel én de
     // permissies volledig geladen zijn. Zo is de pagina geen enkel frame
@@ -1937,13 +1937,13 @@ function AppInner() {
       return <div style={{ background: '#0D0D0D', minHeight: '100dvh' }} />;
     }
     // Alleen profiles.is_super_admin telt: die kan een gebruiker niet zelf zetten
-    // (trigger a0_protect_privileges) en super-admin-data controleert hem op de
-    // server. Geen e-mailadressen meer in de publieke bundel (audit F9).
+    // (trigger a0_protect_privileges) en de edge functions controleren hem op de
+    // server. Geen e-mailadressen in de publieke bundel (audit F9).
     if (profile.isSuperAdmin !== true) {
       navigate('/dashboard', true);
       return null;
     }
-    return <Wacht fallback={PubliekLaden}><SuperAdminPage navigate={navigate} profile={profile} /></Wacht>;
+    return <Wacht fallback={PubliekLaden}><SuperAdmin route={route} navigate={navigate} profile={profile} /></Wacht>;
   }
 
   // /api/ is van Vercel (serverfuncties, o.a. de SnelStart-webhook) en komt hier

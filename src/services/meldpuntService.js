@@ -20,26 +20,6 @@ export async function getMeldactie() {
   return prijzen.length ? prijzen : null
 }
 
-// Volledige instelling, voor het super-admin portaal.
-export async function getMeldactieInstelling() {
-  const { data, error } = await supabase
-    .from('platform_instellingen')
-    .select('waarde, bijgewerkt_op')
-    .eq('sleutel', 'meldactie')
-    .maybeSingle()
-  if (error) throw error
-  return data
-}
-
-export async function zetMeldactie(waarde) {
-  const { data: { user } } = await supabase.auth.getUser()
-  const { error } = await supabase
-    .from('platform_instellingen')
-    .update({ waarde, bijgewerkt_op: new Date().toISOString(), bijgewerkt_door: user?.id ?? null })
-    .eq('sleutel', 'meldactie')
-  if (error) throw error
-}
-
 // ── CONTEXT ──────────────────────────────────────────────────────────────────
 // "Chrome 140 op macOS". Grof, maar genoeg om te zien of een bug aan één browser
 // hangt; de volledige user-agent gaat er los bij.
@@ -123,24 +103,5 @@ export async function verstuurMelding({ soort, omschrijving, screenshot, pagina 
   return data
 }
 
-// ── OVERZICHT (super-admin) ──────────────────────────────────────────────────
-export async function listMeldingen() {
-  const { data, error } = await supabase
-    .from('meldingen')
-    .select('*')
-    .order('aangemaakt_op', { ascending: false })
-    .limit(500)
-  if (error) throw error
-  return data || []
-}
-
-export async function zetMeldingStatus(id, status) {
-  const { error } = await supabase.from('meldingen').update({ status }).eq('id', id)
-  if (error) throw error
-}
-
-export async function screenshotUrl(pad) {
-  const { data, error } = await supabase.storage.from('meldingen').createSignedUrl(pad, 60 * 10)
-  if (error) throw error
-  return data.signedUrl
-}
+// Het overzicht van meldingen (status, notitie, schermafdruk, prijsactie) zit
+// in de superadmin en loopt via de edge function `superadmin`, met logboek.

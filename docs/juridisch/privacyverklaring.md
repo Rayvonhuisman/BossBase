@@ -2,7 +2,7 @@
 
 **Versie 2026-11 · geldig vanaf 7 november 2026**
 
-*Nieuw in deze versie: de intake van de website, in §3 en §5.*
+*Nieuw in deze versie: de intake van de website, in §3 en §5; en een eigen meting van de website zonder cookies in plaats van Vercel Web Analytics, in §3, §4 en §5.*
 
 ## 1. Wie we zijn
 
@@ -24,7 +24,7 @@ info@bossbase.nl.
 
 | Verwerking | Gegevens | Doel | Grondslag | Bewaartermijn |
 | --- | --- | --- | --- | --- |
-| Account en registratie | Naam, e-mailadres, wachtwoord (door de inlogdienst versleuteld opgeslagen), bedrijfsnaam, telefoon, KvK-nummer; aanmeldcode (versleuteld opgeslagen, 10 minuten geldig, na 24 uur verwijderd) | Account aanmaken en toegang geven | Uitvoering van de overeenkomst | Zolang het account bestaat, en 2 jaar na het einde van het abonnement |
+| Account en registratie | Naam, e-mailadres, wachtwoord (door de inlogdienst versleuteld opgeslagen), bedrijfsnaam, telefoon, KvK-nummer; aanmeldcode (versleuteld opgeslagen, 10 minuten geldig, na 24 uur verwijderd); het kanaal waarlangs je die dag op de website kwam, als dat bekend is (zie Gebruiksstatistieken) | Account aanmaken en toegang geven | Uitvoering van de overeenkomst | Zolang het account bestaat, en 2 jaar na het einde van het abonnement |
 | Akkoord met de voorwaarden | Welke documenten (algemene voorwaarden, verwerkersovereenkomst, privacyverklaring) en welke versie, tijdstip, IP-adres en browser | Kunnen aantonen dat je akkoord ging | Gerechtvaardigd belang (bewijs) | Zolang het account bestaat |
 | Wachtwoordherstel | E-mailadres, hersteltoken (alleen versleuteld opgeslagen, 1 uur geldig) | Nieuw wachtwoord instellen | Uitvoering van de overeenkomst | 24 uur, daarna automatisch verwijderd |
 | Bedrijfsprofiel | Bedrijfsnaam, KvK, btw-nummer, adres, telefoon, e-mail, website, logo | Dienst leveren; op offertes en facturen van de gebruiker | Uitvoering van de overeenkomst | Zolang het account bestaat, en 2 jaar na het einde van het abonnement |
@@ -32,7 +32,7 @@ info@bossbase.nl.
 | Intake van de website | Wat je in het intakeformulier invult: bedrijfsgegevens, naam en telefoon van de contactpersoon, teksten over je bedrijf, diensten, projecten, werkgebied en beoordelingen, het gekozen pakket, extra's, domeinnaam en e-mail. De bestanden die je uploadt: logo, foto's, schermafbeeldingen. De intakelink (alleen versleuteld opgeslagen, 30 dagen geldig). Foto's en beoordelingen kunnen gegevens van anderen bevatten; daar zorg jij voor toestemming | Je website bouwen, onderhouden en afrekenen | Uitvoering van de overeenkomst | Zolang je website bij ons loopt, en daarna net als de andere gegevens van het bedrijf tot 2 jaar na het einde van het abonnement, ook de bestanden |
 | Servicemails | E-mailadres | Aanmeldcode, wachtwoordherstel, uitnodigingen en berichten over je account en abonnement | Uitvoering van de overeenkomst | Zolang het account bestaat |
 | Proefperiodemails | E-mailadres van de beheerder | Vijf mails: 7 en 3 dagen vóór het einde (hoe het gaat, einddatum), 1 dag vóór het einde (met aanbod jaarabonnement), 1 dag na het einde (nieuw werk vastleggen en versturen staat stil) en 15 dagen na het einde (herinnering om een abonnement te kiezen). Vanaf 3 dagen vóór het einde elk met een knop om een abonnement te kiezen. Elke mail heeft een afmeldlink | Gerechtvaardigd belang: het gaat om onze eigen klanten en een vergelijkbare dienst (artikel 11.7 lid 3 Telecommunicatiewet) | Tot je je afmeldt of je account eindigt |
-| Contactformulier | Naam, e-mailadres, bericht; optioneel bedrijfsnaam, telefoon, branche, onderwerp; adres van de pagina (zonder querystring); bevestiging dat de privacy-uitleg is gelezen, met versie en tijdstip | Bericht beantwoorden | Gerechtvaardigd belang | 1 jaar, daarna automatisch verwijderd |
+| Contactformulier | Naam, e-mailadres, bericht; optioneel bedrijfsnaam, telefoon, branche, onderwerp; adres van de pagina (zonder querystring); bevestiging dat de privacy-uitleg is gelezen, met versie en tijdstip; het kanaal waarlangs je die dag op de website kwam (bijvoorbeeld "Google (organisch)"), als dat bekend is | Bericht beantwoorden | Gerechtvaardigd belang | 1 jaar, daarna automatisch verwijderd |
 | Misbruik van het formulier beperken | Versleutelde code (hash) van IP-adres en e-mailadres met een teller | Spam en misbruik tegengaan | Gerechtvaardigd belang (beveiliging) | 1 dag, daarna automatisch verwijderd |
 | Helpchat Boss | Chatberichten (rol, tekst, tijdstip), titel (eerste 80 tekens) | Gebruiksvragen beantwoorden | Uitvoering van de overeenkomst | 12 maanden na het laatste bericht, daarna automatisch verwijderd |
 | Boss doorzetten naar het team | Naam, e-mail, bedrijfsnaam en het volledige gesprek, per e-mail aan ons team | Vraag door een mens laten beantwoorden | Uitvoering van de overeenkomst | 12 maanden |
@@ -40,7 +40,7 @@ info@bossbase.nl.
 | Meldactie (als er een actie loopt) | Deelname aan een prijsactie bij een melding | Actie uitvoeren | Gerechtvaardigd belang | 2 jaar |
 | Verzonden e-mails namens de gebruiker | Ontvanger, onderwerp, volledige inhoud van de mail, klant-id; fouten | Bewijs van verzending, foutopsporing | Uitvoering van de overeenkomst | Zolang de klantgegevens bestaan; ze worden verwijderd samen met de klant |
 | Adres zoeken | De getypte zoektekst gaat vanuit je browser naar PDOK (Kadaster), met je IP-adres | Adres aanvullen | Uitvoering van de overeenkomst | BossBase slaat niets op |
-| Gebruiksstatistieken (Vercel Web Analytics), website en app | Per paginabezoek: tijdstip, pagina-adres waaruit codes, nummers en querystrings (behalve `utm_*` en `ref`) vooraf zijn verwijderd, verwijzende site, land en regio (afgeleid uit het IP-adres, dat niet wordt bewaard), besturingssysteem, browser en soort apparaat. Twee gebeurtenissen: klik op een link naar de aanmeldpagina en een gelukte aanmelding, zonder persoonsgegevens. Een versleutelde code van het verzoek om bezoeken te tellen, na 24 uur weggegooid. Geen cookies, niets opgeslagen op het apparaat | Zien hoe website en app gebruikt worden en ze verbeteren | Gerechtvaardigd belang; geen toestemming nodig op grond van artikel 11.7a lid 3 onder b Telecommunicatiewet (analytics met geen of geringe gevolgen voor je privacy, zie het [cookiebeleid](/cookieverklaring)) | Alleen opgetelde cijfers. Vercel houdt die op ons abonnement minstens 1 maand beschikbaar en kan ze langer bewaren |
+| Gebruiksstatistieken van de website (eigen meting) | Per paginabezoek op bossbase.nl: dag en tijdstip, het pad van de pagina (zonder codes, nummers en querystring, behalve `utm_*` en `ref`), de domeinnaam van de site waar je vandaan kwam, het daaruit afgeleide kanaal (bijvoorbeeld "Google (organisch)") en het soort apparaat (mobiel, tablet of computer). Eén gebeurtenis: een klik op een link naar de aanmeldpagina. Om bezoekers per dag te tellen een code (hash) van je IP-adres en browser, gemaakt met een sleutel die elke dag wisselt en daarna wordt gewist; je IP-adres zelf wordt niet bewaard, en na die dag is de code niet meer naar jou of naar een andere dag te herleiden. Maak je dezelfde dag een account aan of stuur je het contactformulier, dan bewaren we bij het account of de aanvraag alleen het kanaal, niet de code. Geen cookies, niets opgeslagen op je apparaat; met "Do Not Track" of Global Privacy Control aan meten we niets. In de app meten we niets: wat je daar doet staat al in je account | Zien hoe de website gebruikt wordt, welke kanalen tot aanmeldingen leiden, en de website verbeteren | Gerechtvaardigd belang; geen toestemming nodig op grond van artikel 11.7a lid 3 onder b Telecommunicatiewet (analytics met geen of geringe gevolgen voor je privacy, zie het [cookiebeleid](/cookieverklaring)) | 25 maanden, daarna automatisch verwijderd. De dagsleutel: alleen die dag |
 | Logbestanden | Technische gegevens en gebruikers-id's van serverfuncties; geen e-mailadressen of tokens | Beveiliging en foutopsporing | Gerechtvaardigd belang | Supabase: 1 dag. Vercel: 1 uur |
 
 ## 4. Met wie we gegevens delen
@@ -54,13 +54,13 @@ info@bossbase.nl.
 | Anthropic | Antwoorden van de helpchat; alleen de chatberichten, geen naam of e-mail | Server | Anthropic Ireland, Ltd.; verwerking ook in de VS op basis van standaardcontractbepalingen; geen training op klantgegevens, na 30 dagen verwijderd |
 | PDOK (Kadaster) | Adres zoeken | Browser | Nederland (Kadaster, overheid) |
 | Moneybird / SnelStart / AFAS / Google Agenda | Alleen als de gebruiker die koppeling aanzet | Server | Niet door BossBase bepaald |
-| Vercel (Web Analytics) | Gebruiksstatistieken van website en app | Browser | Vercel Inc., VS; EU-US Data Privacy Framework en standaardcontractbepalingen |
 
 De actuele lijst van subverwerkers staat op [bossbase.nl/subverwerkers](/subverwerkers).
 
-Geen advertentie- of trackingdiensten. Voor gebruiksstatistieken gebruiken we
-Vercel Web Analytics, zonder cookies en zonder dat er iets op je apparaat wordt
-opgeslagen. Lettertypen staan op onze eigen server.
+Geen advertentie- of trackingdiensten. Gebruiksstatistieken van de website meten
+we zelf, zonder cookies en zonder dat er iets op je apparaat wordt opgeslagen;
+ze staan in onze eigen database bij Supabase en gaan naar niemand anders.
+Lettertypen staan op onze eigen server.
 
 ## 5. Cookies en opslag in je browser
 
@@ -74,8 +74,8 @@ BossBase zet zelf geen cookies. Wel gebruikt de app de browseropslag
 - **Intake van de website:** je antwoorden worden onderweg in je browser bewaard,
   zodat je later verder kunt. Na het versturen worden ze daar gewist.
 
-Vercel Web Analytics telt bezoeken zonder cookies en zonder iets op je apparaat
-op te slaan. Er is geen cookiebanner, omdat er niets is waarvoor toestemming
+Onze eigen meting van de website telt bezoeken zonder cookies en zonder iets op
+je apparaat op te slaan. Er is geen cookiebanner, omdat er niets is waarvoor toestemming
 nodig is. Meer daarover in het [cookiebeleid](/cookieverklaring).
 
 ## 6. Bewaren en verwijderen
