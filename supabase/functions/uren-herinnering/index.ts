@@ -21,7 +21,8 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { vandaagIso, voegDagenToe } from '../_shared/datumTijd.ts'
 import { isScheduledCall } from '../_shared/scheduledSync.ts'
-import { mailTemplate, mailButton } from '../_shared/mailTemplate.ts'
+import { mailTemplate } from '../_shared/mailTemplate.ts'
+import { bbKnop } from '../_shared/bossbaseMail.ts'
 import { logMailFout } from '../_shared/mailFout.ts'
 import { appOrigin } from '../_shared/stripe.ts'
 import { clientFout } from '../_shared/clientFout.ts'
@@ -122,9 +123,9 @@ serve(async (req) => {
         title: 'Vul je werkdag in',
         preheader: meer ? `Er staan nog ${aantal} werkdagen open` : `Je werkdag van ${leesbaar(mijnDagen[0])} staat nog open`,
         body: `<p>Hoi ${esc(prof?.full_name || 'collega')},</p>
-               <p>Je stond ${meer ? 'op deze dagen' : 'op deze dag'} gepland bij ${esc(bedrijfsnaam)}, maar er ${meer ? 'zijn' : 'is'} nog geen werkdag ingevuld:</p>
+               <p>Je stond ${meer ? 'op deze dagen' : 'op deze dag'} gepland bij ${esc(bedrijfsnaam)}, maar er ${meer ? 'zijn nog geen werkdagen' : 'is nog geen werkdag'} ingevuld:</p>
                <ul style="padding-left:18px;margin:12px 0">${mijnDagen.map(d => `<li style="margin-bottom:4px">${esc(leesbaar(d))}</li>`).join('')}</ul>
-               ${mailButton('Werkdag invullen', `${appOrigin('')}/login`)}
+               ${bbKnop('Werkdag invullen', `${appOrigin('')}/login`)}
                <p style="color:#6b7280;font-size:13px">Na het inloggen kun je ${meer ? 'de dagen' : 'de dag'} direct invullen.</p>`,
         // Geen companyName/logoUrl/brandColor: post van BossBase aan een
         // medewerker, net als planning-samenvatting.

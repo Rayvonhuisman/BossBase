@@ -1,14 +1,11 @@
 // Centrale mailtemplate met twee branding-varianten:
 //  - Zakelijke mail (bedrijf → klant): bedrijfslogo + bedrijfskleur, geen
 //    "via BossBase". Geef companyName + logoUrl + brandColor mee.
-//  - Systeemmail (BossBase → gebruiker): officieel BossBase-logo + groen.
-//    companyName 'BossBase' (default) schakelt automatisch naar deze variant.
-//
-// Het BossBase-logo moet via een geldige publieke https-URL geladen worden
-// (e-mailclients laden geen lokale assets en blokkeren data-URI's). icon-512.png
-// staat in public/brand en wordt op www.bossbase.nl geserveerd — de enige
-// productieplek die er is.
-const BOSSBASE_LOGO_URL = 'https://www.bossbase.nl/brand/icon-512.png';
+//  - Systeemmail (BossBase → gebruiker): de BossBase-opmaak uit
+//    supabase/functions/_shared/bossbaseMail.ts, dezelfde als in de edge
+//    functions. companyName 'BossBase' (default) schakelt daarnaar.
+import { bossbaseMail } from '../../supabase/functions/_shared/bossbaseMail.ts';
+
 const BOSSBASE_GREEN = '#1DDB62';
 
 // Leesbare tekstkleur op een achtergrondkleur: donkere tekst op lichte kleuren
@@ -61,15 +58,24 @@ export function mailTemplate({
   brandColor,
 }) {
   const isSystem = companyName === 'BossBase';
-  // Zakelijke mail volgt de bedrijfskleur; systeemmail altijd BossBase-groen.
-  const accent = isSystem ? BOSSBASE_GREEN : (brandColor || BOSSBASE_GREEN);
-
-  // Header: systeem → BossBase-logo + woordmerk; zakelijk → bedrijfslogo of,
-  // als dat ontbreekt, de bedrijfsnaam als tekst.
-  let headerHtml;
+  // Mail van BossBase zelf: de BossBase-opmaak (bossbaseMail.ts). Wat hieronder
+  // volgt is alleen nog de zakelijke variant, in de huisstijl van het bedrijf.
   if (isSystem) {
-    headerHtml = `<img src="${safeUrl(logoUrl) || BOSSBASE_LOGO_URL}" alt="BossBase" width="32" height="32" style="display:inline-block;vertical-align:middle;border-radius:8px;border:0;outline:none;text-decoration:none;"><span style="vertical-align:middle;margin-left:9px;font-size:20px;font-weight:700;color:#0a0a0a;letter-spacing:-0.5px;">BossBase</span>`;
-  } else if (safeUrl(logoUrl)) {
+    return bossbaseMail({
+      titel: title,
+      kop: esc(title),
+      voorvertoning: preheader || title,
+      inhoud: body,
+      knop: buttonText && buttonUrl ? { tekst: buttonText, url: buttonUrl } : undefined,
+      voetnoot: footerText,
+    });
+  }
+  // Zakelijke mail volgt de bedrijfskleur, met BossBase-groen als terugval.
+  const accent = brandColor || BOSSBASE_GREEN;
+
+  // Header: bedrijfslogo of, als dat ontbreekt, de bedrijfsnaam als tekst.
+  let headerHtml;
+  if (safeUrl(logoUrl)) {
     // Alleen een plaatje als er een geldige logo-URL is; anders de bedrijfsnaam
     // als tekst — nooit een leeg of gebroken plaatje.
     headerHtml = `<img src="${safeUrl(logoUrl)}" alt="${esc(companyName)}" height="40" style="max-height:48px;max-width:220px;display:inline-block;border:0;outline:none;text-decoration:none;">`;
@@ -77,9 +83,7 @@ export function mailTemplate({
     headerHtml = `<span style="font-size:20px;font-weight:700;color:#0a0a0a;letter-spacing:-0.5px;">${esc(companyName)}</span>`;
   }
 
-  const footerLine = isSystem
-    ? `BossBase, een handelsnaam van NG E-Commerce B.V. &middot; KvK 91856396 &middot; <a href="https://www.bossbase.nl" style="color:#9ca3af;">bossbase.nl</a>`
-    : `Verstuurd met <a href="https://www.bossbase.nl" style="color:#9ca3af;text-decoration:none;font-weight:600;">BossBase</a>`;
+  const footerLine = `Verstuurd met <a href="https://www.bossbase.nl" style="color:#9ca3af;text-decoration:none;font-weight:600;">BossBase</a>`;
 
   const accentText = readableTextColor(accent);
   const buttonHtml = buttonText && buttonUrl ? `

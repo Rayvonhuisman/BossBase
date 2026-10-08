@@ -21,7 +21,7 @@
 export const PAGINAS = [
   'pipeline', 'customers', 'leveranciers', 'materialen', 'activities', 'calendar',
   'planning', 'projecten', 'werkbonnen', 'uren', 'costs', 'revenue', 'facturen',
-  'offertes', 'database', 'team', 'instellingen', 'abonnement',
+  'offertes', 'database', 'team', 'instellingen', 'abonnement', 'website',
 ];
 
 // Pagina's die een detail-id in het pad mogen dragen.

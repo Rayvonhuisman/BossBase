@@ -1,0 +1,135 @@
+/* De pagina Website in het dashboard. Bouwt op de bestaande stijl
+   (card, card-p, btn, f, ab-kop, ab-hint, ab-info-knop/ab-uitleg) en voegt
+   alleen toe wat er niet is. Alle klassen met ws-. */
+
+.ws-page{max-width:980px;padding-bottom:48px}
+.ws-page .card + .card,.ws-page .card + .ws-kop{margin-top:14px}
+.ws-kop{display:flex;align-items:center;gap:4px;font-size:.72rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--dmu);margin:26px 0 10px}
+.ws-page .ab-kop{display:flex;align-items:center;gap:4px}
+.ws-tekst{font-size:.86rem;color:var(--dm);line-height:1.6;margin:0 0 12px}
+.ws-acties{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
+
+/* Info-icoon: zelfde popover als de modules op de abonnementspagina. Binnen
+   een kop naar links uitlijnen, anders valt hij buiten de kaart. */
+.ws-info .ab-uitleg{font-size:.78rem;text-transform:none;letter-spacing:0;color:#fff}
+.ws-info.links .ab-uitleg{left:-8px;transform:none}
+.ws-info.links .ab-uitleg::before{left:14px;transform:none}
+
+/* ── Nog geen website ── */
+.ws-hero{padding:26px 28px;background:linear-gradient(135deg,#0D0D0D 0%,#1a1a1a 100%);color:#fff;border:none}
+.ws-bovenkop{font-size:.72rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--p);margin-bottom:8px}
+.ws-hero h2{font-size:1.45rem;font-weight:800;letter-spacing:-.02em;margin:0 0 8px;color:#fff}
+.ws-hero p{font-size:.9rem;line-height:1.6;color:#d1d5db;margin:0;max-width:620px}
+.ws-hero .ab-hint{color:#9ca3af;margin-top:10px}
+.ws-hero-knoppen{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+
+.ws-stappen{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.ws-stappen li{padding:14px 14px 16px;display:flex;flex-direction:column;gap:4px;font-size:.8rem;color:var(--dm);line-height:1.5}
+.ws-stappen li strong{font-size:.9rem;color:var(--dk)}
+.ws-nr{width:24px;height:24px;border-radius:var(--r999);background:var(--p);color:var(--dk);font-weight:800;font-size:.75rem;display:inline-flex;align-items:center;justify-content:center;margin-bottom:4px}
+
+/* ── Pakketten ── */
+.ws-pakketten{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:stretch}
+/* De marge tussen opeenvolgende kaarten hoort niet in een raster: hij duwde
+   Compleet en Pro 14px omlaag ten opzichte van Basis. */
+.ws-page .ws-pakketten .card,.ws-page .ws-extras .card{margin-top:0}
+.ws-pakket{padding:16px 16px 18px;display:flex;flex-direction:column}
+.ws-pakket.huidig{border-color:var(--p);box-shadow:0 0 0 1px var(--p)}
+.ws-pakket.lager{opacity:.55}
+.ws-pakket-kop{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ws-pakket-naam{font-weight:800;font-size:1rem;color:var(--dk)}
+.ws-merk{font-size:.66rem;font-weight:700;padding:2px 8px;border-radius:var(--r999);background:var(--bgs);border:1px solid var(--border);color:var(--dmu);white-space:nowrap}
+.ws-merk.groen{background:var(--pll);border-color:var(--pl);color:var(--pd)}
+.ws-pakket-omvang{font-size:.78rem;color:var(--dmu);margin-top:2px;line-height:1.4;min-height:2.8em}
+.ws-prijsblok{margin-top:8px;min-height:52px}
+.ws-erft{font-size:.74rem;font-weight:600;color:var(--dmu)}
+.ws-knop-rust{cursor:default;opacity:.7;pointer-events:none}
+.ws-pakket-prijs{font-size:.82rem;color:var(--dmu);display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.ws-pakket-prijs strong{font-size:1.3rem;font-weight:800;color:var(--dk);letter-spacing:-.02em}
+.ws-pakket-prijs s{color:var(--dl);font-size:.95rem}
+.ws-prijs-rust{font-weight:700;color:var(--dmu)}
+.ws-pakket-sub{font-size:.72rem;color:var(--dl);margin-top:2px}
+.ws-punten{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:.8rem;color:var(--dm);flex:1}
+.ws-punten li{display:flex;gap:6px;align-items:flex-start}
+.ws-punten svg{color:var(--pd);flex-shrink:0;margin-top:3px}
+.ws-pakket-knop{margin-top:14px;justify-content:center;width:100%}
+
+/* ── Kosten ── */
+.ws-kosten{margin-top:14px}
+.ws-regel{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--border);font-size:.85rem;color:var(--dm)}
+.ws-regel:first-of-type{border-top:none}
+.ws-regel > span{display:inline-flex;align-items:center;gap:2px}
+.ws-regel strong{color:var(--dk);text-align:right;font-weight:700}
+.ws-regel em{display:block;font-style:normal;font-weight:500;font-size:.72rem;color:var(--dl)}
+.ws-regel.totaal{border-top:1.5px solid var(--dk);font-weight:700;color:var(--dk)}
+
+/* ── Status ── */
+.ws-status-kop{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.ws-status-label{font-size:1.3rem;font-weight:800;color:var(--dk);letter-spacing:-.02em}
+.ws-status-uitleg{font-size:.85rem;color:var(--dmu);margin-top:2px}
+.ws-voortgang{list-style:none;margin:18px 0 0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;counter-reset:x}
+.ws-voortgang li{display:flex;align-items:center;gap:8px;font-size:.78rem;font-weight:600;color:var(--dl);padding:8px 10px;border-radius:var(--r10);background:var(--bgs)}
+.ws-voortgang li.klaar{color:var(--pd);background:var(--pll)}
+.ws-voortgang li.nu{color:var(--dk);background:#fff;box-shadow:0 0 0 1.5px var(--p)}
+.ws-bol{width:20px;height:20px;border-radius:var(--r999);display:inline-flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:800;background:#e5e7eb;color:var(--dmu);flex-shrink:0}
+.ws-voortgang li.klaar .ws-bol{background:var(--p);color:var(--dk)}
+.ws-voortgang li.nu .ws-bol{background:var(--dk);color:#fff}
+.ws-feiten{display:flex;gap:28px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}
+.ws-feiten div{display:flex;flex-direction:column;gap:1px;min-width:0}
+.ws-feiten span{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dl)}
+.ws-feiten strong{font-size:.9rem;color:var(--dk);overflow-wrap:anywhere}
+.ws-feiten strong a{color:var(--pd);text-decoration:none}
+.ws-feiten em{font-style:normal;font-size:.75rem;color:var(--dmu)}
+
+.ws-melding{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px;padding:12px 15px;border-radius:var(--r12);background:#fffbeb;border:1px solid #fde68a;font-size:.85rem;color:#92400e}
+.ws-citaat{white-space:pre-wrap;margin:0;padding:12px 14px;border-radius:var(--r10);background:var(--bgs);font-size:.86rem;color:var(--dm);line-height:1.6}
+
+/* ── Keuzes (betaalwijze, soort aanvraag) ── */
+.ws-keuzes{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ws-keuze{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--bstrong,#e5e7eb);border-radius:var(--r10);cursor:pointer;background:#fff;transition:border-color .15s ease,box-shadow .15s ease}
+.ws-keuze.on{border-color:var(--p);box-shadow:0 0 0 1px var(--p);background:var(--pll)}
+.ws-keuze.uit{opacity:.5;cursor:not-allowed}
+.ws-keuze input{accent-color:#15A34A;width:16px;height:16px;flex-shrink:0}
+.ws-keuze > span:not(.ws-info){display:flex;flex-direction:column;font-size:.85rem;color:var(--dk)}
+.ws-keuze em{font-style:normal;font-size:.76rem;color:var(--dmu)}
+.ws-keuze.klein{padding:9px 12px}
+.ws-afrekenen{margin-top:12px}
+
+/* ── Wijzigingen ── */
+.ws-wijzigen{margin-top:14px}
+.ws-betaald{padding:11px 14px;border-radius:var(--r10);background:#fffbeb;border:1px solid #fde68a;font-size:.84rem;color:#92400e;line-height:1.55;margin-bottom:14px}
+.ws-soorten{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.ws-verzoeken{list-style:none;margin:16px 0 0;padding:0;border-top:1px solid var(--border)}
+.ws-verzoeken li{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border);font-size:.82rem;color:var(--dmu)}
+.ws-verzoeken li strong{color:var(--dk)}
+.ws-verzoeken p{margin:3px 0 0;color:var(--dm);white-space:pre-wrap}
+.ws-pil{font-size:.7rem;font-weight:700;padding:2px 9px;border-radius:var(--r999);white-space:nowrap}
+.ws-pil.blauw{background:#eff6ff;color:#1d4ed8}
+.ws-pil.paars{background:#f5f3ff;color:#6d28d9}
+.ws-pil.oranje{background:#fffbeb;color:#b45309}
+.ws-pil.groen{background:#f0fdf4;color:#15803d}
+.ws-pil.grijs{background:#f3f4f6;color:#6b7280}
+
+/* ── Domein ── */
+.ws-domein{margin-top:14px}
+.ws-domein-rij{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.ws-domein-rij .f{flex:1;min-width:220px}
+
+@media (max-width:900px){
+  .ws-stappen{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ws-pakketten{grid-template-columns:1fr}
+  .ws-voortgang{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ws-keuzes{grid-template-columns:1fr}
+}
+
+/* ── Extra's (later bestellen) ── */
+.ws-extras{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.ws-extra{padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.ws-extra-kop{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.ws-extra-kop strong{font-size:.9rem;color:var(--dk)}
+.ws-extra-kop span{font-weight:800;color:var(--dk);white-space:nowrap}
+.ws-extra p{margin:0;font-size:.8rem;line-height:1.5;color:var(--dmu);flex:1}
+.ws-extra .btn{align-self:flex-start;margin-top:4px}
+.ws-extra.heb{opacity:.6}
+@media (max-width:900px){ .ws-extras{grid-template-columns:1fr} }
+.ws-email{margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}

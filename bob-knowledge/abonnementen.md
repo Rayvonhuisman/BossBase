@@ -64,11 +64,12 @@ zonder rechten in te stellen. Rechten per persoon zitten in Team.
 | Planningsmodule | € 10 per maand |
 | Stripe betaallink | € 10 per maand |
 | Voertuigen | € 5 per maand, alleen samen met de planningsmodule |
-| Website-hosting | € 5 per maand |
 
 Kies je Voertuigen, dan komt de planningsmodule er vanzelf bij. In Team zitten
-planning, voertuigen en betaallink er al in. Website-hosting (wij houden je
-bedrijfswebsite in de lucht) kan ook bij Team.
+planning, voertuigen en betaallink er al in.
+
+Website-hosting is geen module meer die je los kiest. Hij hoort bij de website die
+wij bouwen en gaat in als die live staat (zie het onderdeel Website).
 
 ---
 
@@ -109,8 +110,10 @@ maand.
 Je kiest er één, en dat kan achteraf niet meer wisselen:
 1. **Eerste 2 maanden gratis**: je betaalt 10 van de 12 maanden. Bij alle pakketten.
 2. **Gratis website**: alleen bij Groei en Team. Wij bouwen eenmalig een website voor
-   je bedrijf; je krijgt een mail waarin we de gegevens opvragen. Hosting kost € 5 per
-   maand.
+   je bedrijf (Basis, een onepager). Je krijgt een mail met een link naar het
+   intakeformulier, en in BossBase staat een taak. Hosting kost € 5 per maand vanaf
+   het moment dat de site live staat. Alles hierover staat onder **Website** in het
+   menu (zie het onderdeel Website).
 
 Overstappen van maandelijks naar jaarlijks kan niet zelf; zet die vraag door.
 

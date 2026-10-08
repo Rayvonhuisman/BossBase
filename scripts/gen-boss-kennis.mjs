@@ -306,7 +306,12 @@ const FOUTE_PRIJZEN = [
   /€\s?79\b/,
 ]
 const lek = kennis.split('\n').filter(r => VERDACHT.some(p => p.test(r)))
-const prijslek = kennis.split('\n').filter(r => FOUTE_PRIJZEN.some(p => p.test(r)))
+// Uitzondering: de WhatsApp-knop van de website kost bij de aanmelding echt
+// € 19 (website.md, tabel Extra's). Alleen die tabelregel mag het bedrag noemen.
+const TOEGESTANE_REGELS = [/^\| WhatsApp-knop \| € 19 \|/]
+const prijslek = kennis.split('\n')
+  .filter(r => FOUTE_PRIJZEN.some(p => p.test(r)))
+  .filter(r => !TOEGESTANE_REGELS.some(p => p.test(r.trim())))
 if (lek.length > 0) {
   console.error('\nAFGEBROKEN — het beheerportaal staat nog in de gebundelde kennis:')
   lek.slice(0, 5).forEach(r => console.error(`  ${r.trim().slice(0, 100)}`))

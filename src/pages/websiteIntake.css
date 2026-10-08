@@ -1,0 +1,231 @@
+/* Intake gratis website (/intake/<sleutel>). Publieke pagina, eigen opmaak met
+   het prefix wi-, zodat er niets van het dashboard doorheen lekt. Licht en
+   rustig, en bruikbaar vanaf 360px: veel klanten vullen dit op hun telefoon in. */
+
+.wi {
+  --wi-groen: #1DDB62;
+  --wi-groen-donker: #047a35;
+  --wi-groen-licht: #ecfdf3;
+  --wi-zwart: #0D0D0D;
+  --wi-tekst: #374151;
+  --wi-grijs: #6b7280;
+  --wi-rand: #e5e7eb;
+  --wi-vlak: #ffffff;
+  --wi-achter: #f7f7f5;
+  --wi-rood: #b42318;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--wi-achter);
+  color: var(--wi-tekst);
+  font-size: 16px;
+  line-height: 1.55;
+}
+.wi *, .wi *::before, .wi *::after { box-sizing: border-box; }
+.wi a { color: var(--wi-groen-donker); }
+
+/* Kop */
+.wi-kop { background: var(--wi-vlak); border-bottom: 1px solid var(--wi-rand); }
+.wi-kop-in { max-width: 860px; margin: 0 auto; padding: 14px 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.wi-logo { text-decoration: none; display: inline-flex; }
+.wi-kop-titel { font-size: 14px; font-weight: 600; color: var(--wi-zwart); }
+.wi-kop-bedrijf { color: var(--wi-grijs); font-weight: 500; }
+
+.wi-main { flex: 1; width: 100%; }
+.wi-wrap { max-width: 860px; margin: 0 auto; padding: 28px 16px 40px; }
+.wi-voet { text-align: center; font-size: 12px; color: #8a8a85; padding: 20px 16px 28px; }
+.wi-voet a { color: inherit; }
+
+.wi-laden { text-align: center; padding: 80px 16px; color: var(--wi-grijs); }
+
+/* Melding (bedankt, ongeldige link) */
+.wi-melding { max-width: 520px; margin: 56px auto; padding: 32px 28px; background: var(--wi-vlak); border: 1px solid var(--wi-rand); border-radius: 18px; }
+.wi-melding h1 { margin: 0 0 12px; font-size: 26px; line-height: 1.2; letter-spacing: -.02em; color: var(--wi-zwart); }
+.wi-melding p { margin: 0 0 14px; }
+.wi-melding .wi-knop { margin-top: 8px; }
+
+/* Voortgang */
+.wi-voortgang { margin-bottom: 24px; }
+.wi-voortgang-regel { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+.wi-stapnr { font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--wi-groen-donker); }
+.wi-balk { height: 6px; border-radius: 99px; background: #e9ebe6; overflow: hidden; }
+.wi-balk > div { height: 100%; border-radius: 99px; background: var(--wi-groen); transition: width .4s ease; }
+.wi-stappen { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.wi-stappen button {
+  min-height: 36px; padding: 6px 12px; border-radius: 99px; border: 1px solid transparent;
+  background: transparent; color: var(--wi-grijs); font: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+}
+.wi-stappen button:hover { color: var(--wi-zwart); }
+.wi-stappen button.gedaan { background: var(--wi-groen-licht); color: var(--wi-groen-donker); }
+.wi-stappen button.on { background: var(--wi-zwart); color: #fff; }
+
+.wi-hervat { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; margin-bottom: 20px; background: var(--wi-groen-licht); border: 1px solid #b7f0cd; border-radius: 12px; font-size: 14px; }
+.wi-hervat button { background: none; border: 0; font: inherit; font-weight: 700; color: var(--wi-groen-donker); cursor: pointer; min-height: 44px; }
+
+.wi-titel { margin: 0 0 8px; font-size: 30px; line-height: 1.15; letter-spacing: -.025em; color: var(--wi-zwart); }
+.wi-intro { margin: 0 0 22px; font-size: 17px; }
+.wi-letop { margin: 0 0 22px; padding: 12px 16px; border-left: 4px solid var(--wi-groen); background: var(--wi-vlak); border-radius: 0 12px 12px 0; }
+
+/* Velden */
+.wi-velden { display: grid; gap: 20px; }
+.wi-raster { grid-template-columns: 1fr; }
+@media (min-width: 640px) {
+  .wi-raster { grid-template-columns: 1fr 1fr; column-gap: 16px; }
+  .wi-raster > .wi-veld:not(.half) { grid-column: 1 / -1; }
+}
+.wi-veld-label, .wi-label { display: block; font-weight: 700; color: var(--wi-zwart); margin-bottom: 4px; }
+.wi-label { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 10px; }
+.wi-ster { color: var(--wi-groen-donker); }
+.wi-hulp { margin: 0 0 8px; font-size: 14px; color: var(--wi-grijs); }
+.wi-zacht { color: var(--wi-grijs); font-size: 14px; }
+.wi-midden { text-align: center; margin: 14px auto 0; max-width: 640px; }
+.wi-rustig { display: flex; gap: 8px; align-items: flex-start; margin: 0; }
+.wi-rustig svg { flex: none; margin-top: 3px; }
+
+.wi input[type=text], .wi input[type=email], .wi input[type=tel], .wi input:not([type]), .wi textarea {
+  width: 100%; min-height: 48px; padding: 12px 14px; border: 1px solid var(--wi-rand); border-radius: 12px;
+  background: var(--wi-vlak); color: var(--wi-zwart); font: inherit; font-size: 16px;
+}
+.wi textarea { resize: vertical; min-height: 110px; }
+.wi input:focus-visible, .wi textarea:focus-visible, .wi button:focus-visible, .wi label:focus-within {
+  outline: 2px solid var(--wi-groen); outline-offset: 2px;
+}
+.wi input:focus, .wi textarea:focus { border-color: var(--wi-zwart); }
+.wi [aria-invalid="true"] { border-color: var(--wi-rood) !important; }
+.wi input:disabled, .wi textarea:disabled { background: #f3f4f6; color: var(--wi-grijs); }
+.wi-veld.uit .wi-veld-label { color: var(--wi-grijs); }
+.wi-fout { margin: 6px 0 0; font-size: 14px; font-weight: 600; color: var(--wi-rood); }
+
+.wi-vink { display: flex; align-items: center; gap: 10px; min-height: 44px; width: fit-content; cursor: pointer; font-size: 15px; }
+.wi-vink input, .wi-optie input { width: 20px; height: 20px; accent-color: var(--wi-groen-donker); flex: none; margin: 0; }
+.wi-vink-blok { width: 100%; align-items: flex-start; padding: 14px 16px; border: 1px solid var(--wi-rand); border-radius: 12px; background: var(--wi-vlak); }
+.wi-vink-blok input { margin-top: 2px; }
+.wi-vink-blok > span { display: flex; flex-direction: column; gap: 2px; }
+.wi-vink-blok.on { border-color: var(--wi-groen-donker); background: var(--wi-groen-licht); }
+
+.wi-blok { margin: 0 0 24px; padding: 20px; background: var(--wi-vlak); border: 1px solid var(--wi-rand); border-radius: 16px; display: grid; gap: 14px; }
+.wi-blok > .wi-label { margin-bottom: 0; }
+
+/* Keuzeblokken (logo, betalen) */
+.wi-logokeuze, .wi-betaal { display: grid; gap: 10px; }
+@media (min-width: 640px) { .wi-logokeuze { grid-template-columns: 1fr 1fr; } }
+.wi-optie { display: flex; align-items: center; gap: 12px; padding: 14px 16px; min-height: 56px; border: 1px solid var(--wi-rand); border-radius: 12px; cursor: pointer; background: var(--wi-vlak); }
+.wi-optie > span:last-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wi-optie strong { color: var(--wi-zwart); }
+.wi-optie.on { border-color: var(--wi-groen-donker); background: var(--wi-groen-licht); box-shadow: 0 0 0 1px var(--wi-groen-donker) inset; }
+.wi-optie.uit { opacity: .6; cursor: not-allowed; }
+.wi-logo-voorbeeld { width: 56px; height: 56px; flex: none; border-radius: 10px; border: 1px solid var(--wi-rand); background: #fff; display: grid; place-items: center; overflow: hidden; color: var(--wi-grijs); }
+.wi-logo-voorbeeld img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+/* Pakketten */
+.wi-pakketten { display: grid; gap: 14px; }
+@media (min-width: 760px) { .wi-pakketten { grid-template-columns: repeat(3, 1fr); } }
+.wi-pakket { position: relative; display: flex; flex-direction: column; border: 1px solid var(--wi-rand); border-radius: 16px; background: var(--wi-vlak); overflow: hidden; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.wi-pakket input { position: absolute; opacity: 0; pointer-events: none; }
+.wi-pakket:hover { border-color: #c9ccc4; }
+.wi-pakket.hot { border-color: #b7f0cd; }
+/* Gekozen: één rand in BossBase-groen. De focusrand alleen bij bediening met
+   het toetsenbord; met de muis gaf hij een tweede lijn om de kaart. */
+.wi-pakket.on { border-color: var(--wi-groen); box-shadow: 0 0 0 1px var(--wi-groen); }
+.wi-pakket:has(input:focus-visible) { outline: 2px solid var(--wi-groen); outline-offset: 2px; }
+.wi-badge { position: absolute; top: 10px; right: 10px; z-index: 1; padding: 4px 10px; border-radius: 99px; background: var(--wi-groen); color: var(--wi-zwart); font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.wi-pakket-beeld { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; object-position: top; border-bottom: 1px solid var(--wi-rand); background: #f3f4f6; }
+.wi-pakket-in { display: flex; flex-direction: column; gap: 6px; padding-bottom: 16px; padding: 16px; flex: 1; }
+.wi-pakket-naam { font-size: 20px; font-weight: 800; letter-spacing: -.02em; color: var(--wi-zwart); }
+.wi-pakket-omvang { font-size: 14px; font-weight: 600; color: var(--wi-grijs); line-height: 1.4; min-height: 2.8em; }
+/* Elke kaart dezelfde opbouw en hoogtes, zodat prijs, lijst en knop op één
+   lijn staan, ook als Basis minder tekst heeft. */
+.wi-prijsblok { display: flex; flex-direction: column; gap: 4px; min-height: 92px; }
+.wi-prijsblok .wi-zacht { font-size: 13px; }
+.wi-prijsblok .wi-actie { margin-top: 2px; }
+.wi-erft { font-size: 13px; color: var(--wi-grijs); font-weight: 600; }
+.wi-punten { margin-bottom: 14px !important; }
+.wi-prijs { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; margin-top: 6px; }
+.wi-prijs s { color: var(--wi-grijs); font-size: 17px; text-decoration-thickness: 2px; text-decoration-color: #9ca3af; }
+.wi-prijs strong { font-size: 28px; line-height: 1.1; font-weight: 800; letter-spacing: -.03em; color: var(--wi-zwart); }
+.wi-prijs .wi-zacht { font-size: 13px; width: 100%; }
+.wi-actie { align-self: flex-start; padding: 3px 9px; border-radius: 99px; background: var(--wi-groen-licht); color: var(--wi-groen-donker); font-size: 12px; font-weight: 700; }
+.wi-pakket-kort { font-size: 14px; margin-top: 4px; }
+.wi-punten { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; font-size: 14px; color: var(--wi-zwart); }
+.wi-punten li { display: flex; gap: 6px; align-items: flex-start; }
+.wi-punten svg { color: var(--wi-groen-donker); flex: none; margin-top: 4px; }
+.wi-kies { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; margin-top: auto; border-radius: 10px; border: 1px solid var(--wi-rand); font-weight: 700; color: var(--wi-zwart); }
+.wi-kies.on { background: var(--wi-zwart); border-color: var(--wi-zwart); color: #fff; }
+
+/* Herhaling */
+.wi-rijen { display: grid; gap: 16px; }
+.wi-rij { margin: 0; padding: 18px; border: 1px solid var(--wi-rand); border-radius: 16px; background: var(--wi-vlak); }
+.wi-rij legend { padding: 0 8px; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--wi-groen-donker); }
+.wi-rij .wi-vink { margin-bottom: 8px; }
+.wi-rij-weg { margin-top: 14px; min-height: 44px; background: none; border: 0; padding: 0; font: inherit; font-size: 14px; font-weight: 600; color: var(--wi-grijs); cursor: pointer; }
+.wi-rij-weg:hover { color: var(--wi-rood); }
+.wi-erbij { min-height: 48px; border: 1px dashed #c9ccc4; border-radius: 12px; background: transparent; font: inherit; font-weight: 700; color: var(--wi-zwart); cursor: pointer; }
+.wi-erbij:hover { border-color: var(--wi-groen-donker); }
+
+/* Bestanden */
+.wi-foto { display: grid; gap: 10px; }
+.wi-foto-lijst { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.wi-foto-lijst li { display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid var(--wi-rand); border-radius: 12px; background: var(--wi-vlak); }
+.wi-foto-lijst li.fout { border-color: #f1b5ae; background: #fef3f2; }
+.wi-foto-beeld { width: 52px; height: 52px; flex: none; border-radius: 8px; background: #f3f4f6; display: grid; place-items: center; overflow: hidden; color: var(--wi-grijs); }
+.wi-foto-beeld img { width: 100%; height: 100%; object-fit: cover; }
+.wi-foto-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.wi-foto-naam { font-size: 14px; font-weight: 600; color: var(--wi-zwart); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wi-foto-status { font-size: 13px; color: var(--wi-grijs); display: inline-flex; align-items: center; gap: 4px; }
+.klaar .wi-foto-status { color: var(--wi-groen-donker); font-weight: 600; }
+.fout .wi-foto-status { color: var(--wi-rood); }
+.wi-foto-balk { height: 3px; border-radius: 99px; background: #e9ebe6; overflow: hidden; position: relative; }
+.wi-foto-balk.loopt::after { content: ''; position: absolute; inset: 0; width: 40%; background: var(--wi-groen); border-radius: 99px; animation: wi-loopt 1.1s ease-in-out infinite; }
+@keyframes wi-loopt { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) { .wi-foto-balk.loopt::after { animation: none; width: 100%; opacity: .5; } }
+.wi-ikoon { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border: 0; border-radius: 10px; background: transparent; color: var(--wi-grijs); cursor: pointer; }
+.wi-ikoon:hover { background: #f3f4f6; color: var(--wi-zwart); }
+.wi-drop { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 14px; border: 1px dashed #c9ccc4; border-radius: 12px; background: var(--wi-vlak); }
+.wi-drop.sleept { border-color: var(--wi-groen-donker); background: var(--wi-groen-licht); }
+
+/* Samenvatting */
+.wi-samenvatting { margin: 24px 0 0; padding: 20px; border-radius: 16px; background: var(--wi-zwart); color: #d1d5db; }
+.wi-samenvatting .wi-label { color: var(--wi-groen); }
+.wi-samenvatting dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0 0 12px; }
+.wi-samenvatting dt { color: #9ca3af; font-size: 14px; }
+.wi-samenvatting dd { margin: 0; color: #fff; font-weight: 600; font-size: 14px; }
+.wi-samenvatting .wi-hulp { color: #9ca3af; margin: 0; }
+@media (max-width: 420px) { .wi-samenvatting dl { grid-template-columns: 1fr; } .wi-samenvatting dd { margin-bottom: 6px; } }
+.wi-akkoord { margin: 18px 0 0; font-size: 14px; color: var(--wi-grijs); }
+
+/* Knoppen en navigatie */
+.wi-knop { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 48px; padding: 12px 22px; border-radius: 12px; font: inherit; font-weight: 700; font-size: 16px; cursor: pointer; text-decoration: none; border: 1px solid transparent; }
+.wi a.wi-knop-p, .wi-knop-p { background: var(--wi-groen); color: var(--wi-zwart); }
+.wi-knop-p:hover { background: #18c457; }
+.wi-knop-s { background: var(--wi-vlak); border-color: var(--wi-rand); color: var(--wi-zwart); }
+.wi-knop-s:hover { border-color: var(--wi-zwart); }
+.wi-knop:disabled { opacity: .6; cursor: default; }
+.wi-navigatie { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--wi-rand); }
+.wi-navigatie-rechts { display: flex; align-items: center; gap: 14px; margin-left: auto; }
+@media (max-width: 560px) {
+  .wi-bewaard { display: none; }
+  .wi-titel { font-size: 25px; }
+  .wi-blok { padding: 16px; }
+}
+.wi-verzendfout { margin: 20px 0 0; padding: 12px 16px; border-radius: 12px; background: #fef3f2; color: var(--wi-rood); font-weight: 600; }
+.wi-geldig { margin: 18px 0 0; text-align: center; font-size: 13px; color: var(--wi-grijs); }
+.wi-velden + .wi-blok { margin-top: 24px; }
+
+/* ── Extra's ── */
+.wi-label .wi-actie { margin-left: 8px; vertical-align: 1px; text-transform: none; letter-spacing: 0; }
+.wi-extras { display: grid; gap: 10px; margin-top: 10px; }
+@media (min-width: 760px) { .wi-extras { grid-template-columns: 1fr 1fr; } }
+.wi-extra { border: 1px solid var(--wi-rand); border-radius: 12px; background: var(--wi-vlak); padding: 12px 14px; transition: border-color .15s, box-shadow .15s; }
+.wi-extra.on { border-color: var(--wi-groen-donker); box-shadow: 0 0 0 1px var(--wi-groen-donker); background: var(--wi-groen-licht); }
+.wi-extra-kop { display: flex; align-items: center; gap: 10px; cursor: pointer; min-height: 32px; }
+.wi-extra-kop input { width: 18px; height: 18px; accent-color: var(--wi-groen-donker); flex: none; }
+.wi-extra-naam { font-weight: 700; color: var(--wi-zwart); flex: 1; }
+.wi-extra-prijs { white-space: nowrap; font-size: 15px; }
+.wi-extra-prijs s { color: var(--wi-grijs); font-size: 13px; }
+.wi-extra-prijs strong { color: var(--wi-zwart); }
+.wi-extra-uitleg { margin: 4px 0 0 28px; font-size: 13px; line-height: 1.5; color: var(--wi-grijs); }
+.wi-teller { display: flex; align-items: center; gap: 8px; margin: 10px 0 0 28px; }
+.wi-teller button { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--wi-rand); background: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: var(--wi-zwart); }
+.wi-teller button:disabled { opacity: .4; cursor: not-allowed; }
+.wi-teller > span:first-of-type { min-width: 18px; text-align: center; font-weight: 700; }

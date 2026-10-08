@@ -78,3 +78,13 @@ verify_jwt = false
 # ontvanger of datum aan: wie er gemaild wordt bepaalt de database.
 [functions.uren-herinnering]
 verify_jwt = false
+
+# Intakepagina van de gratis website (/intake/<sleutel>): de klant is niet
+# ingelogd. Alles hangt aan de sleutel uit de link, die de functie zelf
+# controleert (sha256 in website_tokens, verloopt na 30 dagen of na versturen).
+[functions.website-intake]
+verify_jwt = false
+
+# Draait dagelijks op de cron; eist zelf het cron_secret uit de vault.
+[functions.website-termijnen]
+verify_jwt = false

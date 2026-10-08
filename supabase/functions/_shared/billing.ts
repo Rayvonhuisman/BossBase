@@ -111,13 +111,13 @@ export const MODULE_BESCHIKBAAR: Record<string, string[]> = {
   stripe_betaallink: ['groei'],
   planning:          ['groei'],
   voertuigen:        ['groei'],
-  hosting:           ['groei', 'team'],
+  // Hosting is geen losse module meer: hij hoort bij de website en gaat in bij
+  // livegang, als regel op het abonnement (_shared/websiteBetalen.ts).
 }
 export const MODULE_VEREIST: Record<string, string | null> = {
   stripe_betaallink: null,
   planning:          null,
   voertuigen:        'planning',
-  hosting:           null,
 }
 
 // Hoeveel gebruikers zitten er IN de pakketprijs (de rest is een apart item)?

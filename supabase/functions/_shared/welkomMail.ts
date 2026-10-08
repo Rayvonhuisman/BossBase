@@ -9,7 +9,7 @@
 // Toon: bevestigend en praktisch. De klant heeft net betaald en wil twee dingen
 // weten — klopt wat ik heb afgenomen, en wat kost het. Geen verkooppraat meer;
 // hij is al klant.
-import { mailTemplate } from './mailTemplate.ts'
+import { bossbaseMail, bbHandtekening, bbKnop, bbKlein, bbP, bbUitgelicht, BB } from './bossbaseMail.ts'
 
 const esc = (s: unknown) => String(s ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -30,6 +30,9 @@ export type WelkomGegevens = {
   tierLabel: string
   tierPrijs: number
   extraGebruikers: number
+  // Bij Team zit er geen gebruiker in de pakketprijs: dan is elke gebruiker
+  // betaald en heet de regel "gebruikers", niet "extra gebruikers".
+  inbegrepenGebruikers: number
   extraGebruikerPrijs: number
   modules: { label: string; prijs: number }[]
   interval: string | null
@@ -46,7 +49,7 @@ export function welkomMail(g: WelkomGegevens) {
   ]
   if (g.extraGebruikers > 0) {
     regels.push({
-      wat: `${g.extraGebruikers} extra gebruiker${g.extraGebruikers === 1 ? '' : 's'}`,
+      wat: `${g.extraGebruikers}${g.inbegrepenGebruikers > 0 ? ' extra' : ''} gebruiker${g.extraGebruikers === 1 ? '' : 's'}`,
       bedrag: g.extraGebruikers * g.extraGebruikerPrijs,
     })
   }
@@ -54,76 +57,67 @@ export function welkomMail(g: WelkomGegevens) {
 
   const totaal = regels.reduce((s, r) => s + r.bedrag, 0)
 
-  const regelsHtml = regels.map(r => `
+  // Overzicht van wat er is afgenomen, als nette tabel met het totaal op zwart.
+  const cel = 'padding:12px 16px;font-size:15px;line-height:1.4;border-top:1px solid #e5e7eb;'
+  const overzicht = `
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 8px;border:1px solid #e5e7eb;border-radius:14px;border-collapse:separate;border-spacing:0;">
     <tr>
-      <td style="padding:5px 14px 5px 0;color:#374151">${esc(r.wat)}</td>
-      <td style="padding:5px 0;text-align:right;color:#374151;white-space:nowrap">${euro(r.bedrag)}</td>
-    </tr>`).join('')
+      <td colspan="2" bgcolor="${BB.vlak}" style="padding:12px 16px;background:${BB.vlak};border-radius:13px 13px 0 0;font-size:12px;line-height:1.4;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:${BB.grijs};">Wat je hebt afgenomen</td>
+    </tr>
+    ${regels.map(r => `
+    <tr>
+      <td style="${cel}color:${BB.zwart};font-weight:600;">${esc(r.wat)}</td>
+      <td align="right" style="${cel}color:${BB.zwart};white-space:nowrap;">${euro(r.bedrag)}</td>
+    </tr>`).join('')}
+    <tr>
+      <td bgcolor="${BB.zwart}" style="padding:14px 16px;background:${BB.zwart};border-radius:0 0 0 13px;font-size:15px;font-weight:700;color:#ffffff;">Per maand</td>
+      <td align="right" bgcolor="${BB.zwart}" style="padding:14px 16px;background:${BB.zwart};border-radius:0 0 13px 0;font-size:17px;font-weight:800;color:${BB.groen};white-space:nowrap;">${euro(totaal)}</td>
+    </tr>
+  </table>
+  ${bbKlein('Bedragen zijn exclusief btw.')}`
 
-  // De welkomstactie verdient een eigen alinea. Wie twee maanden gratis heeft,
+  // De welkomstactie verdient een eigen blok. Wie twee maanden gratis heeft,
   // ziet straks € 0,00 op zijn eerste facturen — zonder uitleg lijkt dat een
   // fout, en dat levert precies het supportgesprek op dat we niet willen.
-  const actieHtml = g.welkomstactieLabel ? `
-    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 14px;margin:0 0 18px 0">
-      <p style="margin:0;font-size:14px;color:#166534"><strong>Welkomstactie: ${esc(g.welkomstactieLabel)}</strong></p>
-      ${g.kortingMaanden > 0 ? `
-      <p style="margin:6px 0 0 0;font-size:13px;color:#166534">
-        Je eerste ${g.kortingMaanden} facturen staan op ${euro(0)}. Daarna betaal je het bedrag hierboven.
-      </p>` : `
-      <p style="margin:6px 0 0 0;font-size:13px;color:#166534">
-        We nemen contact met je op over je website. Je hoeft zelf niets te doen.
-      </p>`}
-    </div>` : ''
+  const actieHtml = g.welkomstactieLabel
+    ? bbUitgelicht(
+        'Welkomstactie',
+        esc(g.welkomstactieLabel),
+        g.kortingMaanden > 0
+          ? `Je eerste ${g.kortingMaanden} facturen staan op ${euro(0)}. Daarna betaal je het bedrag hierboven.`
+          : 'We nemen contact met je op over je website. Je hoeft zelf niets te doen.',
+      )
+    : ''
 
-  const looptijdHtml = g.interval === 'jaar' && g.verplichtingTot ? `
-    <p style="margin:0 0 16px 0;font-size:14px;color:#374151">
-      Je hebt een jaarabonnement: 12 maanden vast, tot en met
-      <strong>${esc(datumNL(g.verplichtingTot))}</strong>. Daarna loopt het maandelijks
-      door en kun je per maand opzeggen.
-    </p>` : g.verlengtOp ? `
-    <p style="margin:0 0 16px 0;font-size:14px;color:#374151">
-      Je abonnement is maandelijks opzegbaar. De volgende incasso is op
-      <strong>${esc(datumNL(g.verlengtOp))}</strong>.
-    </p>` : ''
+  const looptijdHtml = g.interval === 'jaar' && g.verplichtingTot
+    ? bbP(`Je hebt een jaarabonnement: 12 maanden vast, tot en met <strong style="color:${BB.zwart};">${esc(datumNL(g.verplichtingTot))}</strong>. Daarna loopt het maandelijks door en kun je per maand opzeggen.`)
+    : g.verlengtOp
+      ? bbP(`Je abonnement is maandelijks opzegbaar. De volgende incasso is op <strong style="color:${BB.zwart};">${esc(datumNL(g.verlengtOp))}</strong>.`)
+      : ''
 
-  const body = `
-    <p style="margin:0 0 14px 0;font-size:15px;color:#111827">
-      ${g.bedrijfsnaam ? `Hoi ${esc(g.bedrijfsnaam)},` : 'Hoi,'}
-    </p>
-    <p style="margin:0 0 18px 0;font-size:15px;color:#374151">
-      Je abonnement is actief. Alles staat voor je open — je kunt meteen verder waar je gebleven was.
-    </p>
-
-    ${actieHtml}
-
-    <p style="margin:0 0 6px 0;font-size:14px"><strong>Wat je hebt afgenomen</strong></p>
-    <table role="presentation" style="border-collapse:collapse;margin:0 0 4px 0;font-size:14px;width:100%;max-width:360px">
-      ${regelsHtml}
-      <tr>
-        <td style="padding:9px 14px 0 0;border-top:1px solid #e5e7eb;font-weight:700;color:#111827">Per maand</td>
-        <td style="padding:9px 0 0 0;border-top:1px solid #e5e7eb;text-align:right;font-weight:700;color:#111827;white-space:nowrap">${euro(totaal)}</td>
-      </tr>
-    </table>
-    <p style="margin:0 0 18px 0;font-size:12px;color:#6b7280">Bedragen zijn exclusief btw.</p>
-
-    ${looptijdHtml}
-
-    <p style="margin:0 0 4px 0;font-size:14px;color:#374151">
-      Je facturen, betaalmethode en abonnement vind je terug bij Instellingen → Abonnement.
-    </p>
-    <p style="margin:0;font-size:14px;color:#374151">
-      Vragen? Antwoord gewoon op deze mail.
-    </p>`
+  const subject = `Je BossBase ${g.tierLabel}-abonnement is actief`
+  const inhoud =
+    bbP(g.bedrijfsnaam ? `Hoi ${esc(g.bedrijfsnaam)},` : 'Hoi,') +
+    bbP('Je abonnement is actief. Alles staat voor je open: je kunt meteen verder waar je gebleven was.') +
+    overzicht +
+    actieHtml +
+    looptijdHtml +
+    bbP('Je facturen, betaalmethode en abonnement vind je terug bij Instellingen → Abonnement.') +
+    bbKnop('Naar je abonnement', `${g.appUrl}/dashboard/instellingen?tab=abonnement`) +
+    // Van Niels, met handtekening: net als bij de proefperiodemails is dit het
+    // moment waarop iemand klant wordt, en dan hoort er een mens bij.
+    bbHandtekening({ titel: 'Vragen?', tekst: 'Antwoord gewoon op deze mail of bel me. Ik help je graag op weg.' })
 
   return {
-    subject: `Je BossBase ${g.tierLabel}-abonnement is actief`,
-    html: mailTemplate({
-      title: 'Je abonnement is actief',
-      preheader: `BossBase ${g.tierLabel} — ${euro(totaal)} per maand, excl. btw`,
-      body,
-      buttonText: 'Naar je abonnement',
-      buttonUrl: `${g.appUrl}/dashboard/instellingen?tab=abonnement`,
-      footerText: 'Je ontvangt deze mail omdat je een BossBase-abonnement hebt afgesloten.',
+    subject,
+    html: bossbaseMail({
+      titel: subject,
+      label: { tekst: 'Abonnement actief' },
+      bovenkop: `BossBase ${esc(g.tierLabel)}`,
+      kop: 'Je abonnement is actief',
+      voorvertoning: `BossBase ${g.tierLabel} — ${euro(totaal)} per maand, excl. btw`,
+      inhoud,
+      reden: 'Je ontvangt deze mail omdat je een BossBase-abonnement hebt afgesloten.',
     }),
   }
 }

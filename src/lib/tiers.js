@@ -80,14 +80,14 @@ export const WELKOMSTACTIES = [
   {
     key: 'gratis_website',
     label: 'Gratis website',
-    kort: 'Wij bouwen eenmalig een professionele website voor je bedrijf.',
+    kort: 'Wij bouwen eenmalig een professionele website voor je bedrijf. Hosting € 5 per maand vanaf livegang.',
     // Geen korting: betalen vanaf de eerste maand.
     kortingMaanden: 0,
     // Niet bij Starter — dat pakket is te klein voor deze actie.
     tiers: ['groei', 'team'],
-    // De website blijft beschikbaar zolang het abonnement loopt; hosting is een
-    // aparte maandelijkse module (zie features.js → MODULES).
-    hostingModule: 'hosting',
+    // De website blijft online zolang het abonnement loopt. Hosting hoort bij
+    // de website: geen module, maar een regel op het abonnement vanaf livegang
+    // (zie lib/website.js en de pagina Website).
   },
 ]
 

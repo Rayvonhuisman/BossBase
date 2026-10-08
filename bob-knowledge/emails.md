@@ -69,12 +69,13 @@ In Starter kun je de standaardtemplates aanpassen, maar geen eigen templates mak
 ---
 
 ## Hoe je mails eruitzien
-Mails aan jouw klanten hebben je eigen logo, merkkleur en bedrijfsnaam (uit
+Mails aan jouw klanten en leveranciers hebben je eigen logo, merkkleur en bedrijfsnaam (uit
 Instellingen, **Bedrijfsprofiel**). Antwoordt een klant, dan komt dat binnen op je
 **Antwoord e-mailadres**, of anders op het e-mailadres van je bedrijf.
 
 ## Mails van BossBase zelf
-Deze komen van BossBase en zijn niet aan te passen:
+Deze komen van BossBase, hebben altijd de BossBase-opmaak (ook als je een eigen
+huisstijl hebt ingesteld) en zijn niet aan te passen:
 - uitnodiging voor een teamlid;
 - de code om je e-mailadres te bevestigen en de link bij wachtwoord vergeten;
 - meldingen aan collega's als ze getagd, toegewezen of verantwoordelijk gemaakt zijn;

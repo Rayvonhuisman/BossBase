@@ -10,6 +10,8 @@ const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage.jsx').the
 const UitnodigingPage = lazy(() => import('./pages/UitnodigingPage.jsx').then(m => ({ default: m.UitnodigingPage })));
 const OfferteSigneren = lazy(() => import('./pages/OfferteSigneren.jsx'));
 const WerkbonOndertekenen = lazy(() => import('./pages/WerkbonOndertekenen.jsx'));
+const WebsiteIntake = lazy(() => import('./pages/WebsiteIntake.jsx'));
+const WebsitePage = lazy(() => import('./pages/WebsitePage.jsx'));
 const DashboardHome = lazy(() => import('./pages/dashboard/DashboardHome.jsx').then(m => ({ default: m.DashboardHome })));
 const Pipeline = lazy(() => import('./pages/BbDashboard.jsx').then(m => ({ default: m.Pipeline })));
 const ProjectDetailDrawer = lazy(() => import('./pages/projects/ProjectDetailDrawer.jsx').then(m => ({ default: m.ProjectDetailDrawer })));
@@ -58,6 +60,7 @@ import { ToastProvider, useToast } from './lib/toast.jsx';
 import { BevestigVenster } from './lib/bevestig.jsx';
 import { UploadProvider } from './lib/uploadContext.jsx';
 import { UrenHerinneringModal } from './components/UrenHerinneringModal.jsx';
+import { NieuweVoorwaarden } from './components/NieuweVoorwaarden.jsx';
 const BetaalStatusPage = lazy(() => import('./pages/BetaalStatusPage.jsx').then(m => ({ default: m.BetaalStatusPage })));
 const BetaalPage = lazy(() => import('./pages/BetaalPage.jsx').then(m => ({ default: m.BetaalPage })));
 import { ProfileContext, displayName, profileInitials } from './lib/profileContext.jsx';
@@ -168,6 +171,9 @@ const NAV = [
   { id: 'revenue',     label: 'Financiën',     icon: 'chart',   section: 'finance', permission: 'bedrijfsfinancien' },
   { id: 'database',    label: 'Database',      icon: 'db',      section: 'bedrijf', permission: 'database' },
   { id: 'team',        label: 'Team',          icon: 'team',    section: 'bedrijf', permission: 'team' },
+  // De gratis website en wat je bij ons afneemt. Zelfde recht als de
+  // bedrijfsinstellingen; afrekenen vraagt daarnaast de eigenaar (server).
+  { id: 'website',     label: 'Website',       icon: 'globe',   section: 'bedrijf', permission: 'instellingen' },
   // Geen permission: de pagina beveiligt zichzelf (alleen "Mijn profiel" zonder
   // het recht 'instellingen'), en iedereen moet bij zijn eigen profiel kunnen.
   { id: 'instellingen',label: 'Instellingen',  icon: 'settings',section: 'bedrijf' },
@@ -1149,6 +1155,7 @@ function AppInner() {
       // Ontbraken: de kop viel dan terug op "Dashboard" (audit C-11).
       database:    { title: 'Database',     sub: 'Alle klanten, documenten en exports' },
       abonnement:  { title: 'Abonnement',   sub: 'Kies of wijzig je pakket' },
+      website:     { title: 'Website',      sub: 'Je website, je pakket en wijzigingen' },
     };
   }, [profile, user, profileLoading]);
 
@@ -1720,6 +1727,7 @@ function AppInner() {
     switch (page) {
       case 'dashboard':  return <DashboardHome {...props} />;
       case 'abonnement': return <AbonnementPage {...props} />;
+      case 'website':    return <WebsitePage setPage={navigatePage} />;
       case 'pipeline':   return <Pipeline openCustomer={openCustomer} openDeal={openDeal} setPage={navigatePage} />;
       case 'customers':
         return drawerCust !== null ? (
@@ -1850,6 +1858,14 @@ function AppInner() {
   if (route.startsWith('/werkbon/')) {
     const token = route.replace('/werkbon/', '').split('?')[0];
     return <Wacht fallback={PubliekLaden}><WerkbonOndertekenen token={token} /></Wacht>;
+  }
+
+  // Intake van de gratis website. Publiek: alles hangt aan de sleutel in de
+  // link (zie supabase/functions/website-intake). Vóór de mobiel-blokkade,
+  // want de klant vult hem net zo goed op zijn telefoon in.
+  if (route.startsWith('/intake/') || route === '/intake') {
+    const sleutel = route.replace(/^\/intake\/?/, '').split('?')[0].split('/')[0];
+    return <Wacht fallback={PubliekLaden}><WebsiteIntake sleutel={sleutel} /></Wacht>;
   }
 
   if (route === '/superadmin') {
@@ -2124,6 +2140,7 @@ function AppInner() {
         </Wacht>
       </div>
       <UrenHerinneringModal navigatePage={navigatePage} />
+      <NieuweVoorwaarden userId={sessionUserId} isAdmin={profile?.role === 'admin'} onLogout={handleLogout} />
       </DataContext.Provider>
     </ProfileContext.Provider>
   );

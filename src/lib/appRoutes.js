@@ -31,6 +31,8 @@ export const APP_PREFIXES = [
   '/offerte',
   '/werkbon',
   '/betaal',
+  // Intake van de gratis website: /intake/<sleutel> en /intake/bedankt.
+  '/intake',
 ];
 
 export function isAppPath(pathname) {

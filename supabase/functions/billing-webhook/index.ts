@@ -22,19 +22,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
   verifyStripeSignature, stripeFetch, duidItems, naarISO, CORS,
   stuurBossBaseMail, INTERN_ADRES, isJaar, JAAR_TERMIJNEN, SCHEDULE_DOORLOPEN,
-  appOrigin, EXTRA_GEBRUIKER_PRIJS, zetJaarverplichting,
+  appOrigin, EXTRA_GEBRUIKER_PRIJS, inbegrepenGebruikers, zetJaarverplichting,
 } from '../_shared/billing.ts'
-import { klantMail, internMail } from '../_shared/websiteMail.ts'
+import {
+  maakIntakeLink, maakIntakeTaak, mailIntakeUitnodiging, mailIntern, PAKKETTEN, WEBSITE_INTERN, euro,
+} from '../_shared/website.ts'
 import { welkomMail } from '../_shared/welkomMail.ts'
 import { opzeggenBijStripe } from '../_shared/opzeggen.ts'
 import { clientFout } from '../_shared/clientFout.ts'
-
-// Maandprijs van de hostingmodule — noemen we in de klantmail zodat die kosten
-// niet als verrassing komen. Uit de matrix (plan_modules), niet hardcoded.
-async function hostingPrijs(admin: any): Promise<number> {
-  const { data } = await admin.from('plan_modules').select('price').eq('module_key', 'hosting').maybeSingle()
-  return Number(data?.price ?? 5)
-}
 
 // Bevestigingsmail "je abonnement is actief", precies één keer per abonnement.
 //
@@ -90,6 +85,7 @@ async function stuurWelkomstmail(
       tierLabel: (tier ?? 'groei').charAt(0).toUpperCase() + (tier ?? 'groei').slice(1),
       tierPrijs: Number(sub?.price_per_month ?? 0),
       extraGebruikers,
+      inbegrepenGebruikers: inbegrepenGebruikers(tier ?? 'groei'),
       extraGebruikerPrijs: EXTRA_GEBRUIKER_PRIJS,
       modules: moduleInfo,
       interval,
@@ -113,37 +109,74 @@ async function stuurWelkomstmail(
 }
 
 // Website-aanvraag afhandelen: rij aanmaken (idempotent) en, alleen als hij
-// NIEUW is, de mails versturen. Bij een herhaalde levering van hetzelfde event
-// mag de klant niet twee keer dezelfde mail krijgen.
+// NIEUW is, de intakelink mailen, de taak in het dashboard zetten en ons
+// melden. Bij een herhaalde levering van hetzelfde event mag de klant niet twee
+// keer dezelfde mail krijgen.
 async function verwerkWebsiteAanvraag(admin: any, companyId: string, plan: string | null) {
   const { data: resultaat } = await admin.rpc('bb_open_website_aanvraag', { p_company_id: companyId })
   if (resultaat !== 'aangemaakt') return String(resultaat ?? 'geen aanvraag')
 
   const { data: bedrijf } = await admin
-    .from('companies')
-    .select('id, name, email, phone, address, postal_code, city, kvk, btw_number, website, logo_url, branding_color')
-    .eq('id', companyId).maybeSingle()
+    .from('companies').select('id, name, email, phone').eq('id', companyId).maybeSingle()
   if (!bedrijf) return 'aanvraag aangemaakt, bedrijf niet gevonden'
 
-  const prijs = await hostingPrijs(admin)
+  const taakId = await maakIntakeTaak(admin, companyId).catch(() => null)
+  const { url } = await maakIntakeLink(admin, companyId)
 
-  // Mail naar de klant met de uitvraag. Antwoorden komen bij ons binnen.
   let klantOk = false
   if (bedrijf.email) {
-    const m = klantMail(bedrijf, prijs)
-    klantOk = !!(await stuurBossBaseMail(bedrijf.email, m.subject, m.html, INTERN_ADRES()))
+    const m = mailIntakeUitnodiging({ bedrijfsnaam: bedrijf.name, url })
+    klantOk = !!(await stuurBossBaseMail(bedrijf.email, m.subject, m.html, WEBSITE_INTERN, undefined, 'website_klant'))
   }
 
-  // En een seintje naar onszelf dat er actie nodig is.
-  const i = internMail(bedrijf, plan)
-  await stuurBossBaseMail(INTERN_ADRES(), i.subject, i.html, bedrijf.email ?? undefined)
+  const i = mailIntern({
+    onderwerp: `Gratis website gekozen: ${bedrijf.name ?? 'onbekend bedrijf'}`,
+    kop: 'Gratis website gekozen',
+    bedrijf,
+    regels: [['Abonnement', plan ?? 'onbekend'], ['Intakelink gemaild', klantOk ? 'ja' : 'NEE, mail mislukt of geen adres']],
+  })
+  await stuurBossBaseMail(WEBSITE_INTERN, i.subject, i.html, bedrijf.email ?? undefined, undefined, 'website_intern')
 
-  if (klantOk) {
-    await admin.from('website_aanvragen')
-      .update({ status: 'gegevens_gevraagd', mail_verstuurd_op: new Date().toISOString() })
-      .eq('company_id', companyId)
+  await admin.from('website_aanvragen')
+    .update({ taak_id: taakId, mail_verstuurd_op: klantOk ? new Date().toISOString() : null })
+    .eq('company_id', companyId)
+  return klantOk ? 'aanvraag aangemaakt + intakelink gemaild' : 'aanvraag aangemaakt (mail naar klant mislukt)'
+}
+
+// Een iDEAL-betaling voor een website-upgrade (Checkout in payment-mode, uit
+// _shared/websiteBetalen.ts). Zet de betaling op betaald en het pakket goed.
+// Idempotent: een tweede levering vindt de betaling al op 'betaald'.
+async function verwerkWebsiteBetaling(admin: any, sessie: any): Promise<string> {
+  const betalingId = sessie?.metadata?.betaling_id ?? null
+  const companyId = sessie?.metadata?.company_id ?? null
+  if (!betalingId || !companyId) return 'website-betaling zonder kenmerk'
+  if (sessie?.payment_status !== 'paid') return `website-betaling nog niet betaald (${sessie?.payment_status})`
+
+  const { data: b } = await admin.from('website_betalingen')
+    .update({ status: 'betaald', betaald_op: new Date().toISOString(), stripe_session_id: sessie.id })
+    .eq('id', betalingId).eq('company_id', companyId).eq('status', 'open')
+    .select('soort, pakket, extras, bedrag, omschrijving').maybeSingle()
+  if (!b) return 'website-betaling was al verwerkt'
+
+  if (b.pakket) await admin.from('website_aanvragen').update({ pakket: b.pakket }).eq('company_id', companyId)
+  // Een later bestelde extra komt pas bij de website als hij betaald is.
+  if (b.soort === 'extra' && b.extras) {
+    const { data: a } = await admin.from('website_aanvragen').select('extras').eq('company_id', companyId).maybeSingle()
+    const samen: Record<string, number> = { ...(a?.extras ?? {}) }
+    for (const [k, n] of Object.entries(b.extras as Record<string, number>)) samen[k] = Number(samen[k] ?? 0) + Number(n)
+    await admin.from('website_aanvragen').update({ extras: samen }).eq('company_id', companyId)
   }
-  return klantOk ? 'aanvraag aangemaakt + mails verstuurd' : 'aanvraag aangemaakt (mail naar klant mislukt)'
+
+  const { data: bedrijf } = await admin.from('companies').select('id, name, email, phone').eq('id', companyId).maybeSingle()
+  const label = PAKKETTEN[b.pakket as keyof typeof PAKKETTEN]?.label ?? b.pakket
+  const i = mailIntern({
+    onderwerp: `Website-betaling ontvangen: ${bedrijf?.name ?? ''}${b.pakket ? ` (${label})` : ''}`,
+    kop: 'Upgrade betaald',
+    bedrijf: bedrijf ?? { id: companyId },
+    regels: [['Wat', b.omschrijving ?? label], ['Bedrag', `${euro(Number(b.bedrag))} excl. btw, via iDEAL`]],
+  })
+  await stuurBossBaseMail(WEBSITE_INTERN, i.subject, i.html, bedrijf?.email ?? undefined, undefined, 'website_intern')
+  return `website-betaling ${betalingId} betaald`
 }
 
 // Zet de 12-maandsverplichting op een pas afgesloten jaarabonnement.
@@ -224,9 +257,18 @@ serve(async (req) => {
     let companyId: string | null = null
     let bind = false
 
+    // iDEAL bevestigt soms pas na afloop van Checkout; dan komt de betaling met
+    // dit event binnen in plaats van met checkout.session.completed.
+    if (type === 'checkout.session.async_payment_succeeded' && obj?.metadata?.soort === 'website_upgrade') {
+      return await rond(await verwerkWebsiteBetaling(admin, obj), obj?.metadata?.company_id ?? null)
+    }
+
     if (type === 'checkout.session.completed') {
       // Het ENIGE moment waarop we een bedrijf aan Stripe koppelen. Het bedrijf
       // komt uit onze eigen metadata, die wij bij het aanmaken hebben gezet.
+      if (obj?.mode === 'payment' && obj?.metadata?.soort === 'website_upgrade') {
+        return await rond(await verwerkWebsiteBetaling(admin, obj), obj?.metadata?.company_id ?? null)
+      }
       if (obj?.mode !== 'subscription') return await rond('genegeerd: geen abonnements-checkout')
       subscriptionId = typeof obj.subscription === 'string' ? obj.subscription : null
       companyId = obj?.metadata?.company_id ?? null

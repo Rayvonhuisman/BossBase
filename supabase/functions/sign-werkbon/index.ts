@@ -231,7 +231,7 @@ serve(async (req) => {
 
     // ── Bevestigingsmails ────────────────────────────────────────────────────
     try {
-      const bedrijfsnaam = (company?.name as string) || 'BossBase'
+      const bedrijfsnaam = (company?.name as string) || 'Ons bedrijf'
       const logoUrl = (company?.logo_url as string) || undefined
       const brandColor = (company?.branding_color as string) || undefined
       const bedrijfEmail = (company?.email as string) || null

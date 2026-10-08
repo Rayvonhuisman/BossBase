@@ -1,6 +1,8 @@
 # Privacyverklaring BossBase
 
-**Versie 2026-10 · geldig vanaf 1 oktober 2026**
+**Versie 2026-11 · geldig vanaf 7 november 2026**
+
+*Nieuw in deze versie: de intake van de website, in §3 en §5.*
 
 ## 1. Wie we zijn
 
@@ -27,6 +29,7 @@ info@bossbase.nl.
 | Wachtwoordherstel | E-mailadres, hersteltoken (alleen versleuteld opgeslagen, 1 uur geldig) | Nieuw wachtwoord instellen | Uitvoering van de overeenkomst | 24 uur, daarna automatisch verwijderd |
 | Bedrijfsprofiel | Bedrijfsnaam, KvK, btw-nummer, adres, telefoon, e-mail, website, logo | Dienst leveren; op offertes en facturen van de gebruiker | Uitvoering van de overeenkomst | Zolang het account bestaat, en 2 jaar na het einde van het abonnement |
 | Abonnement en betaling | Bedrijfsnaam, e-mail, factuuradres (door Stripe gevraagd), Stripe-id's, pakket, perioden | Abonnement afrekenen | Uitvoering van de overeenkomst; voor onze facturen een wettelijke plicht (fiscale bewaarplicht) | Onze facturen 7 jaar (fiscale bewaarplicht) |
+| Intake van de website | Wat je in het intakeformulier invult: bedrijfsgegevens, naam en telefoon van de contactpersoon, teksten over je bedrijf, diensten, projecten, werkgebied en beoordelingen, het gekozen pakket, extra's, domeinnaam en e-mail. De bestanden die je uploadt: logo, foto's, schermafbeeldingen. De intakelink (alleen versleuteld opgeslagen, 30 dagen geldig). Foto's en beoordelingen kunnen gegevens van anderen bevatten; daar zorg jij voor toestemming | Je website bouwen, onderhouden en afrekenen | Uitvoering van de overeenkomst | Zolang je website bij ons loopt, en daarna net als de andere gegevens van het bedrijf tot 2 jaar na het einde van het abonnement, ook de bestanden |
 | Servicemails | E-mailadres | Aanmeldcode, wachtwoordherstel, uitnodigingen en berichten over je account en abonnement | Uitvoering van de overeenkomst | Zolang het account bestaat |
 | Proefperiodemails | E-mailadres van de beheerder | Vijf mails: 7 en 3 dagen vóór het einde (hoe het gaat, einddatum), 1 dag vóór het einde (met aanbod jaarabonnement), 1 dag na het einde (nieuw werk vastleggen en versturen staat stil) en 15 dagen na het einde (herinnering om een abonnement te kiezen). Vanaf 3 dagen vóór het einde elk met een knop om een abonnement te kiezen. Elke mail heeft een afmeldlink | Gerechtvaardigd belang: het gaat om onze eigen klanten en een vergelijkbare dienst (artikel 11.7 lid 3 Telecommunicatiewet) | Tot je je afmeldt of je account eindigt |
 | Contactformulier | Naam, e-mailadres, bericht; optioneel bedrijfsnaam, telefoon, branche, onderwerp; adres van de pagina (zonder querystring); bevestiging dat de privacy-uitleg is gelezen, met versie en tijdstip | Bericht beantwoorden | Gerechtvaardigd belang | 1 jaar, daarna automatisch verwijderd |
@@ -68,6 +71,8 @@ BossBase zet zelf geen cookies. Wel gebruikt de app de browseropslag
 - **Voorkeuren:** ingeklapte zijbalk, weergave van lijsten, opgeslagen filters,
   kostenweergave, planningslegenda, uitstel van de urenherinnering, gekozen
   pakket tijdens het aanmelden.
+- **Intake van de website:** je antwoorden worden onderweg in je browser bewaard,
+  zodat je later verder kunt. Na het versturen worden ze daar gewist.
 
 Vercel Web Analytics telt bezoeken zonder cookies en zonder iets op je apparaat
 op te slaan. Er is geen cookiebanner, omdat er niets is waarvoor toestemming

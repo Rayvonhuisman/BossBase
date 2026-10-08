@@ -50,9 +50,6 @@ export const FEATURES = [
   { key: 'stripe_betaallink',       label: 'Stripe betaallink',           uitleg: 'iDEAL-betaalknop op je facturen via Stripe.' },
   { key: 'voertuigen',              label: 'Voertuigen',                  uitleg: 'Voertuigen beheren en inplannen in de planning.' },
 
-  // Losse dienst, geen onderdeel van een pakket — alleen als bijgekochte module.
-  { key: 'hosting',                 label: 'Website-hosting',             uitleg: 'Wij draaien en onderhouden je bedrijfswebsite.' },
-
   // Intern gedrag — geen verkoopbare functie, wel tier-afhankelijk. Staat hier
   // zodat er nergens meer een losse `tier === '…'`-vergelijking nodig is.
   // `intern: true` houdt het uit prijskaarten en upgrade-meldingen.
@@ -100,8 +97,8 @@ export const TIER_FEATURES = {
 // `beschikbaarBij` = tiers waar de module BIJGEKOCHT kan worden. Staat de feature
 // al in het pakket (Team heeft stripe/planning/voertuigen inbegrepen), dan hoort
 // het tier hier niet in — anders zou je iets kunnen kopen dat je al hebt.
-// Hosting is geen feature-gate maar een dienst (we draaien de website), en is
-// daarom óók bij Team bij te kopen.
+// Hosting staat hier niet: die hoort bij de website en gaat in bij livegang
+// (lib/website.js). Zonder website is hij nergens te kiezen.
 // `uitleg` = wat de module in gewone taal doet. Wordt getoond achter het
 // info-icoontje bij de modulekeuze; bewust zonder jargon, want de lezer is een
 // vakman die wil weten wat hij eraan heeft — niet hoe het werkt.
@@ -112,8 +109,6 @@ export const MODULES = [
     uitleg: 'Een weekplanning waarin je klussen op medewerkers zet. Je sleept een werkbon naar een dag en je ziet in één oogopslag wie waar is en wie er nog ruimte heeft.' },
   { key: 'voertuigen',        label: 'Voertuigen',        price: 5,  feature: 'voertuigen',        vereist: 'planning', beschikbaarBij: ['groei'],
     uitleg: 'Leg je bussen en aanhangers vast en plan ze in bij een klus. Zo zie je meteen of het busje die dag al ergens anders staat. Werkt samen met de planningsmodule, dus die heb je er ook bij nodig.' },
-  { key: 'hosting',           label: 'Website-hosting',   price: 5,  feature: 'hosting',           vereist: null,       beschikbaarBij: ['groei', 'team'],
-    uitleg: 'Wij zetten je bedrijfswebsite online en houden hem draaiend: domein, beveiligd slotje en updates. Jij hoeft er niets voor te regelen.' },
 ]
 
 // Tiers die überhaupt modules kunnen bijkopen — afgeleid, niet apart onderhouden.

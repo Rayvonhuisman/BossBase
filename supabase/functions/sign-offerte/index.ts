@@ -216,7 +216,7 @@ serve(async (req) => {
     // pagina) via de send-email relay met het interne secret. Best-effort: een
     // mailfout mag het ondertekenen niet laten falen.
     try {
-      const bedrijfsnaam = (company?.name as string) || offerte.snapshot_bedrijfsnaam || 'BossBase'
+      const bedrijfsnaam = (company?.name as string) || offerte.snapshot_bedrijfsnaam || 'Ons bedrijf'
       const logoUrl      = (company?.logo_url as string) || undefined
       const brandColor   = (company?.branding_color as string) || undefined
       const bedrijfEmail = (company?.email as string) || null

@@ -35,6 +35,8 @@ niet in je pakket zit, staat er gewoon niet.
 **Bedrijf**
 - **Database**: recht *Database & Export*.
 - **Team**: recht *Team beheren*.
+- **Website**: recht *Instellingen*. De website die BossBase voor je bouwt: status,
+  pakket, kosten, upgraden, wijzigingen en domeinnaam (zie het onderdeel Website).
 - **Instellingen**: voor iedereen. Zonder het recht *Instellingen* zie je daar alleen
   het tabblad **Mijn profiel**.
 

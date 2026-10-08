@@ -1,6 +1,8 @@
 # Algemene voorwaarden BossBase
 
-**Versie 2026-10 · geldig vanaf 1 oktober 2026**
+**Versie 2026-11 · geldig vanaf 7 november 2026**
+
+*Nieuw in deze versie: artikel 15, over de website bij je jaarabonnement. Accepteer je deze versie eerder in de app, dan geldt hij voor jou vanaf dat moment.*
 
 Dit zijn de afspraken tussen BossBase en jou als ondernemer die BossBase gebruikt.
 We hebben ze zo kort en duidelijk mogelijk gehouden. Bij elk artikel staat eerst in
@@ -59,8 +61,8 @@ kunt het opzeggen tegen het einde van de lopende maand.
 
 4.3 **Jaarlijks:** je betaalt per maand, maar zit **12 maanden vast**. Tussentijds
 opzeggen kan in die periode niet. Daarvoor krijg je een welkomstactie, zoals
-gratis maanden of een gratis website. Na 12 maanden loopt het abonnement per maand
-door en kun je het maandelijks opzeggen.
+gratis maanden of een gratis website (zie artikel 15). Na 12 maanden loopt het
+abonnement per maand door en kun je het maandelijks opzeggen.
 
 4.4 Kies je tijdens een jaarperiode voor een groter abonnement, en start daarmee
 een nieuwe periode van 12 maanden? Dan laten we dat vooraf zien en vragen we je
@@ -226,6 +228,60 @@ wijziging ingaat, ook tijdens een jaarperiode.
 
 14.2 Hebben we een meningsverschil, dan proberen we het eerst samen op te lossen.
 Lukt dat niet, dan is de **rechtbank Noord-Nederland, locatie Assen**, bevoegd.
+
+## 15. De website bij je jaarabonnement
+
+*Kort: Basis is gratis, meer pagina's en hosting kosten geld, en de site draait zolang je abonnement loopt.*
+
+15.1 **Welkomstactie.** Kies je bij een jaarabonnement (Groei of Team) voor de
+gratis website, dan bouwen we eenmalig een website voor je bedrijf: een onepager
+(Basis). Wat erop komt, geef je door in het intakeformulier. Je levert zelf de
+gegevens, teksten, foto's en het logo aan, en je mag die ook gebruiken. Foto's
+en teksten van anderen gebruik je alleen als je daar toestemming voor hebt.
+
+15.2 **Upgrade en extra's.** Je kunt kiezen voor Compleet (6 pagina's, het
+inrichten van je Google Bedrijfsprofiel en een fotoset) of Pro (12 pagina's, met
+alles van Compleet), en voor extra's zoals een logo-ontwerp of extra pagina's. Bij je aanmelding, in het
+intakeformulier, betaal je daarvoor de aanmeldprijs. Die prijs geldt alleen op dat
+moment. Kies je het later, dan betaal je de prijs die op dat moment in de app staat.
+De fotoset bestaat uit sfeerbeelden die wij met AI maken; foto's van je eigen werk
+lever je zelf aan.
+
+15.3 **Betalen van een upgrade of extra.** Je betaalt in één keer met iDEAL, of
+verspreid over 12 maanden als extra regel op je abonnement. Kies je voor 12
+maanden, dan blijft het hele bedrag verschuldigd, ook als je abonnement eerder
+stopt. De termijnen die dan nog openstaan, factureren we in één keer.
+
+15.4 **Hosting.** Bij de website hoort hosting: wij zetten de site online en houden
+hem draaiend. Hosting kost € 5 per maand en is niet los te kiezen of op te zeggen
+zolang je website online staat. Hij gaat in op de dag dat je site live gaat en
+staat als regel op je abonnement. De dagen tussen de livegang en je eerstvolgende
+abonnementsfactuur rekenen we niet.
+
+15.5 **Domeinnaam en e-mail.** Er zit geen gratis domeinnaam bij. Wil je dat wij je
+domeinnaam registreren en beheren, dan kost dat het bedrag per jaar dat in de app
+staat, als jaarlijkse regel op je abonnement. Bij een domeinnaam via ons kun je ook
+een zakelijk e-mailadres nemen, als maandelijkse regel op je abonnement. Beide gaan
+in als je site live gaat, of zodra we ze later voor je hebben ingericht. Heb je al
+een domeinnaam, dan koppelen we die aan je site.
+
+15.6 **Beoordelen.** Voordat je site live gaat, krijg je een link om hem te
+bekijken. Je geeft je wijzigingen één keer door, in één bericht. Die verwerken we
+zonder extra kosten, voor zover ze passen binnen je pakket en wat je in de intake
+hebt aangeleverd. Daarna zetten we je site live.
+
+15.7 **Meerwerk.** Wijzigingen en uitbreidingen na die ronde zijn betaald werk, ook
+kleine. Je vraagt ze aan in de app onder Website. Je krijgt eerst een prijsopgave
+en we beginnen pas na je akkoord.
+
+15.8 **Als je opzegt.** Je website blijft online zolang je abonnement loopt. Stopt
+je abonnement, dan stopt ook de hosting en halen we de site offline aan het
+einde van de laatste periode. Je teksten, foto's en logo zijn en blijven van jou;
+op verzoek sturen we ze je terug. Het ontwerp en de techniek van de site blijven
+van ons (artikel 11). Hebben wij je domeinnaam geregistreerd, dan zetten we die op
+je verzoek kosteloos naar je over, of laten we hem aan het einde van de lopende
+registratieperiode vervallen. Zakelijke e-mail via ons stopt met je abonnement;
+zorg dat je je mail vóór die tijd hebt bewaard of verhuisd.
 
 ---
 

@@ -87,7 +87,7 @@ serve(async (req) => {
     // Vangnet: kwam het akkoord bij registratie niet aan (akkoord-vastleggen
     // faalde), leg het dan nu vast. Een account bestaat niet zonder akkoord.
     try {
-      if (await legAkkoordVast(admin, user, req, 'registratie_vangnet')) {
+      if (await legAkkoordVast(admin, user, req, 'registratie_vangnet', { alleenEerste: true })) {
         console.log('[verify-code] Akkoord via vangnet vastgelegd', { user: userId })
       }
     } catch (e) {

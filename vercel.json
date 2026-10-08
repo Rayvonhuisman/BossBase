@@ -94,6 +94,14 @@
       "destination": "/app"
     },
     {
+      "source": "/intake",
+      "destination": "/app"
+    },
+    {
+      "source": "/intake/:pad*",
+      "destination": "/app"
+    },
+    {
       "source": "/betaal",
       "destination": "/app"
     },
@@ -264,6 +272,24 @@
     },
     {
       "source": "/werkbon/:pad*",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/intake",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/intake/:pad*",
       "headers": [
         {
           "key": "X-Robots-Tag",

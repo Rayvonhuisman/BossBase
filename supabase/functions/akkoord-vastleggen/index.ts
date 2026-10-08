@@ -1,7 +1,7 @@
-// akkoord-vastleggen — legt vast dat een gebruiker bij het aanmaken van zijn
-// account akkoord ging met de algemene voorwaarden en de verwerkersovereenkomst
-// en de privacyverklaring kreeg aangeboden. Aangeroepen direct na signUp, dus
-// bij het klikken op "BossBase starten".
+// akkoord-vastleggen — legt vast dat een gebruiker akkoord ging met de algemene
+// voorwaarden en de verwerkersovereenkomst en de privacyverklaring kreeg
+// aangeboden. Aangeroepen direct na signUp (bij het klikken op "BossBase
+// starten"), en na het accepteren van een nieuwe versie in de app.
 //
 // De versies (_shared/akkoord.ts), het tijdstip en het IP-adres bepaalt de
 // server zelf; de body wordt niet gelezen. verify_jwt=true: wie, volgt uit de sessie.

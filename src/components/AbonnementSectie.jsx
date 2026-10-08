@@ -9,6 +9,7 @@ import { gaNaarAbonnement } from '../lib/abonnementNav.js';
 import { getOpenUpgradeVerzoeken, rondUpgradeVerzoekAf } from '../services/planService.js';
 import { vandaagIso } from '../lib/datumTijd.js';
 import { bevestig } from '../lib/bevestig.jsx';
+import { statusInfo } from '../lib/website.js';
 
 // Abonnementssectie in Instellingen: huidig pakket, status, verlengdatum,
 // verbruik tegen de limieten, modules en de knoppen om te wijzigen.
@@ -26,13 +27,8 @@ const STATUS_LABELS = {
   opgezegd:       { label: 'Opgezegd',      kleur: '#b91c1c', bg: '#fef2f2' },
 };
 
-const WEBSITE_STATUS = {
-  open:              'aangevraagd',
-  gegevens_gevraagd: 'we hebben je gegevens opgevraagd per mail',
-  in_behandeling:    'in aanbouw',
-  opgeleverd:        'opgeleverd',
-  geannuleerd:       'geannuleerd',
-};
+// Statussen van de website staan in lib/website.js; alles over de website
+// zelf staat op de pagina Website.
 
 const fmtDatum = d => d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
 
@@ -241,7 +237,7 @@ export function AbonnementSectie() {
             </div>
             {stand.welkomstactie === 'gratis_website' && stand.websiteAanvraag && (
               <div style={{ fontSize: '.78rem', color: 'var(--dmu)', marginTop: 6 }}>
-                Status aanvraag: <strong>{WEBSITE_STATUS[stand.websiteAanvraag.status] || stand.websiteAanvraag.status}</strong>
+                Status: <strong>{statusInfo(stand.websiteAanvraag.status).label}</strong> · meer onder Website in het menu
               </div>
             )}
           </div>

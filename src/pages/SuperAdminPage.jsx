@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { WebsiteAanvragen } from '../components/WebsiteAanvragen.jsx'
+import { WebsitesBeheer } from '../components/WebsitesBeheer.jsx'
 import { Meldingen } from '../components/Meldingen.jsx'
 import { X } from 'lucide-react'
 import { supabase } from '../lib/supabase.js'
@@ -342,8 +342,8 @@ export function SuperAdminPage({ navigate, profile }) {
           </div>
         </div>
 
-        {/* Openstaande website-aanvragen uit de welkomstactie */}
-        <WebsiteAanvragen />
+        {/* Websites uit de welkomstactie: intake, pakket, betaling, verzoeken */}
+        <WebsitesBeheer />
 
         {/* Bugs en ideeën uit het meldpunt, plus de schakelaar voor de actie */}
         <Meldingen />

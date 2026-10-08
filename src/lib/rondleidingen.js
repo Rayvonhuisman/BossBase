@@ -212,6 +212,26 @@ export const RONDLEIDINGEN = {
       tekst: 'Je pakket, modules en gebruikers, en verzoeken van je team.' },
   ],
 
+  // De pagina Website: zonder website alleen de eerste stap, daarna de rest.
+  website: [
+    { doel: 'website-start', titel: 'Je gratis website',
+      tekst: 'Bij een jaarabonnement bouwen wij een website voor je bedrijf. Hier zie je wat je krijgt en start je de intake.' },
+    { doel: 'website-status', titel: 'Hoe ver we zijn',
+      tekst: 'Van intake tot live: hier zie je waar je site staat, met de link en je pakket.' },
+    { doel: 'website-feedback', titel: 'Je site beoordelen',
+      tekst: 'Staat je site klaar, dan geef je hier je wijzigingen door. Eén keer, alles in één bericht.' },
+    { doel: 'website-kosten', titel: 'Wat je betaalt',
+      tekst: 'Hosting, je domeinnaam en eventuele termijnen. Ze staan als regels op je BossBase-factuur.' },
+    { doel: 'website-upgraden', titel: 'Upgraden',
+      tekst: 'Meer pagina’s nodig? Upgrade naar Compleet of Pro, met iDEAL of verspreid over 12 maanden.' },
+    { doel: 'website-extras', titel: 'Extra’s',
+      tekst: 'Losse onderdelen voor je site, zoals een fotoset, een logo of een extra pagina.' },
+    { doel: 'website-wijzigen', titel: 'Iets laten aanpassen',
+      tekst: 'Vraag een wijziging of uitbreiding aan. Dat is betaald werk; je krijgt eerst een prijsopgave.' },
+    { doel: 'website-domein', titel: 'Domeinnaam en e-mail',
+      tekst: 'Laat ons je domeinnaam en een zakelijk e-mailadres regelen. Heb je al een domein, dan koppelen we dat.' },
+  ],
+
   // Het tabblad Websiteformulier heeft een eigen rondleiding: wie Instellingen
   // al kende toen dit tabblad erbij kwam, krijgt hem zo toch de eerste keer.
   websiteformulier: [

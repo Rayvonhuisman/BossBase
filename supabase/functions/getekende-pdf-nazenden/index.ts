@@ -190,7 +190,7 @@ serve(async (req) => {
     // ── Bijlage nasturen ────────────────────────────────────────────────────
     const { data: bedrijf } = await admin
       .from('companies').select('name, email, logo_url, branding_color').eq('id', rij.company_id).maybeSingle()
-    const bedrijfsnaam = (bedrijf?.name as string) || 'BossBase'
+    const bedrijfsnaam = (bedrijf?.name as string) || 'Ons bedrijf'
     const klantEmail = rij[cfg.emailKolom] as string | null
     const bijlagen = [{ filename: `${bestandsnaam.charAt(0).toUpperCase()}${bestandsnaam.slice(1)}`, content: pdfBase64 }]
 
