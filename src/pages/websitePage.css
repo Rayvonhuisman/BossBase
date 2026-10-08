@@ -2,7 +2,7 @@
    (card, card-p, btn, f, ab-kop, ab-hint, ab-info-knop/ab-uitleg) en voegt
    alleen toe wat er niet is. Alle klassen met ws-. */
 
-.ws-page{max-width:980px;padding-bottom:48px}
+.ws-page{padding-bottom:48px}
 .ws-page .card + .card,.ws-page .card + .ws-kop{margin-top:14px}
 .ws-kop{display:flex;align-items:center;gap:4px;font-size:.72rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--dmu);margin:26px 0 10px}
 .ws-page .ab-kop{display:flex;align-items:center;gap:4px}
