@@ -121,4 +121,4 @@ Wat je moet weten voor de overstap:
 - **Export kan wel:** je klanten als Excel of CSV. Je zit dus niet vast.
 - **Pakketten:** in Starter kun je maximaal 100 klanten vastleggen, in Groei en Team is dat onbeperkt. Zie [de prijzen](/prijzen).
 
-Tijdens de proefperiode van 14 dagen werk je met de functies van Groei, zonder betaalgegevens.
+Tijdens de proefperiode van 14 dagen werk je met alle functies, zonder betaalgegevens.

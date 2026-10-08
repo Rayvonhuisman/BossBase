@@ -133,7 +133,7 @@ export default function AboutPage({ navigate }) {
             <Reveal>
               <div className="final-cta">
                 <h2>Klaar om kennis te maken? <span className="green">Begin vandaag.</span></h2>
-                <p>14 dagen gratis met de functies van Groei. Geen betaalgegevens nodig.</p>
+                <p>14 dagen gratis met alle functies. Geen betaalgegevens nodig.</p>
                 <div className="hero-ctas" style={{ justifyContent: "center" }}>
                   <a href="/register" className="btn btn-p glow btn-lg" onClick={e => go(e, "/register")}>
                     Gratis proberen {I.arrowRight}

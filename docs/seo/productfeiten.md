@@ -139,7 +139,7 @@ of staat het onder "Bestaat niet", dan beloven we het niet.
   gratis (alle pakketten) óf een gratis website (niet bij Starter; hosting
   € 5/maand). Upgraden kan altijd; downgraden niet binnen de jaarlooptijd, en
   niet als je boven de limiet van het kleinere pakket zit.
-- **Proefperiode**: 14 dagen, altijd met de functies van Groei, geen
+- **Proefperiode**: 14 dagen, met alle functies (ook betaallink, planning en voertuigen), geen
   betaalgegevens nodig. Daarna alleen-lezen (bekijken en exporteren) tot je een
   abonnement kiest.
 - Welke betaalmethoden voor het abonnement actief zijn, staat in Stripe, niet in

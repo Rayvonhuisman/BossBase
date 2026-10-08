@@ -121,7 +121,7 @@ function Field({ label, id, req, error, children }) {
 }
 
 const FAQ_PREVIEW = [
-  { q: "Is BossBase gratis te proberen?", a: "Ja, 14 dagen gratis met de functies van Groei. Je hoeft geen betaalgegevens in te vullen." },
+  { q: "Is BossBase gratis te proberen?", a: "Ja, 14 dagen gratis met alle functies. Je hoeft geen betaalgegevens in te vullen." },
   { q: "Kan ik importeren vanuit Excel?", a: "Nee, een importfunctie is er niet. Je voert klanten zelf in. Exporteren naar Excel of CSV kan wel." },
   { q: "Werkt BossBase op mijn telefoon?", a: "Het dashboard werkt op een tablet, laptop of computer (vanaf 768 pixels breed), niet op een smalle telefoon, en er is geen app. Klanten kunnen offertes en werkbonnen wel op hun telefoon ondertekenen." },
 ]

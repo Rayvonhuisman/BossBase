@@ -76,8 +76,9 @@ wij bouwen en gaat in als die live staat (zie het onderdeel Website).
 ## Gratis proberen
 
 - **14 dagen gratis**, zonder betaalgegevens.
-- Je probeert alles uit Groei, zonder limieten. Planning, voertuigen en de
-  betaallink zitten niet in de proefperiode.
+- Je probeert **alle functies**, zonder limieten: ook de Stripe-betaallink, de
+  boekhoudkoppeling, planning en voertuigen. Na de proefperiode houd je wat in het
+  pakket zit dat je kiest.
 
 ### Na de proefperiode, of als het abonnement stopt
 Je account gaat niet op slot. Je kunt alles blijven bekijken en exporteren, maar

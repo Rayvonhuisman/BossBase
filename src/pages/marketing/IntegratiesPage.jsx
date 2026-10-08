@@ -40,13 +40,13 @@ const KOPPELINGEN = [
     titel: 'Betaallink met iDEAL',
     tekst: 'Koppel je eigen Stripe-account en elke factuurmail krijgt een betaallink. Je klant betaalt met iDEAL, en de factuur gaat vanzelf op betaald.',
     regels: [['naar', 'Betaallink in elke factuurmail, blijft werken'], ['terug', 'Betaling terug: factuur op betaald'], ['naar', 'Daarna door naar Moneybird of SnelStart']],
-    pakket: 'In Team, of € 10 per maand bij Groei. Niet in de proefperiode',
+    pakket: 'In Team, of € 10 per maand bij Groei, ook in de proefperiode',
   },
 ];
 
 const VRAGEN = [
   ['Gaat elke factuur meteen naar mijn boekhouding?', 'Bij Moneybird pas als de factuur betaald is: dan maakt BossBase de factuur aan en registreert hij de betaling. Bij SnelStart gaat elke verstuurde factuur als verkoopboeking door, met de PDF erbij; de betaling verwerk je daar zelf.'],
-  ['Welke koppeling zit in welk pakket?', 'Moneybird en SnelStart zitten in Groei en Team, en in de proefperiode. De betaallink zit in Team, of als module van € 10 per maand bij Groei. In de proefperiode zit de betaallink niet.'],
+  ['Welke koppeling zit in welk pakket?', 'Moneybird en SnelStart zitten in Groei en Team, en in de proefperiode. De betaallink zit in Team, of als module van € 10 per maand bij Groei. In de proefperiode werken ze allemaal.'],
   ['Heb ik een eigen account bij Moneybird, SnelStart of Stripe nodig?', 'Ja. Je koppelt je eigen administratie of Stripe-account; BossBase vervangt je boekhoudpakket niet. De kosten van dat pakket, en de transactiekosten van Stripe, betaal je daar zelf.'],
   ['Ik werk met een ander boekhoudpakket. Kan dat?', 'Andere pakketten zijn nu niet te koppelen. Laat het ons weten via de contactpagina. Exporteren kan altijd: klanten als Excel of CSV, offertes en facturen als PDF.'],
 ];
