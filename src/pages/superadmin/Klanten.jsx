@@ -3,7 +3,8 @@ import { useLaad } from './api.js';
 import { useSa, Kop, Laden, Tabs, Lijntje, StatusBadge, BedrijfLogo, PAKKETTEN, pakketLabel, euro, geleden } from './ui.jsx';
 
 // Alle bedrijven in één tabel. Tabs op status (daar doe je iets anders mee),
-// branche en pakket als filter. Testbedrijven standaard uit.
+// branche en pakket als filter. Testbedrijven staan erbij (vinkje Test), maar
+// tellen niet mee in de kop.
 const SORTEER = {
   naam: (a, b) => a.naam.localeCompare(b.naam, 'nl'),
   mrr: (a, b) => b.mrr - a.mrr,
@@ -18,7 +19,7 @@ export default function Klanten() {
   const [branche, setBranche] = useState('');
   const [pakket, setPakket] = useState('');
   const [zoek, setZoek] = useState('');
-  const [test, setTest] = useState(false);
+  const [test, setTest] = useState(true);
   const [sorteer, setSorteer] = useState('nieuw');
 
   const basis = useMemo(() => (data?.klanten ?? []).filter(k => test || !k.isTest), [data, test]);
@@ -33,11 +34,15 @@ export default function Klanten() {
     .filter(k => !pakket || k.abonnement?.plan === pakket)
     .filter(k => !q || [k.naam, k.email, k.telefoon, k.eigenaar?.naam, k.eigenaar?.email, k.plaats].some(x => String(x ?? '').toLowerCase().includes(q)))
     .sort(SORTEER[sorteer]);
-  const mrr = basis.reduce((t, k) => t + k.mrr, 0);
+  // De kop telt alleen echte bedrijven; testbedrijven staan wel in de lijst.
+  const echt = basis.filter(k => !k.isTest);
+  const nEcht = s => echt.filter(k => k.status === s).length;
+  const aantalTest = basis.length - echt.length;
+  const mrr = echt.reduce((t, k) => t + k.mrr, 0);
 
   return (
     <>
-      <Kop titel="Klanten" sub={`${basis.length} bedrijven · ${n('actief') + n('betaalprobleem')} betalend · ${n('proef')} in proef · ${euro(mrr)} MRR`} />
+      <Kop titel="Klanten" sub={`${echt.length} bedrijven${aantalTest ? ` en ${aantalTest} testbedrijven` : ''} · ${nEcht('actief') + nEcht('betaalprobleem')} betalend · ${nEcht('proef')} in proef · ${euro(mrr)} MRR`} />
       <div className="card afu2">
         <div className="tw-filter">
           <Tabs waarde={tab} onKies={setTab} opties={[

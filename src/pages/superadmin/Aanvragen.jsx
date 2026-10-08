@@ -21,7 +21,7 @@ export default function Aanvragen({ sub }) {
   const { data, laden, fout, herlaad } = useLaad('aanvragen');
   const [kanaal, setKanaal] = useState('');
   const [afgewezenTonen, setAfgewezenTonen] = useState(false);
-  const [testTonen, setTestTonen] = useState(false);
+  const [testTonen, setTestTonen] = useState(true);
 
   if (laden || fout) return <><Kop titel="Aanvragen" /><Laden fout={fout} herlaad={herlaad} /></>;
 

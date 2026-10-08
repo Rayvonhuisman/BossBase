@@ -24,7 +24,7 @@ export default function Websites({ sub }) {
   const [rijen, setRijen] = useState(null);
   const [fout, setFout] = useState('');
   const [tab, setTab] = useState('lijn');
-  const [test, setTest] = useState(false);
+  const [test, setTest] = useState(true);
   const [geannuleerd, setGeannuleerd] = useState(false);
 
   const laad = useCallback(async () => {
