@@ -42,6 +42,8 @@ const dagenSinds = (iso: string | null) => (iso ? Math.floor((Date.now() - new D
 const dagenTot = (iso: string | null) => (iso ? Math.ceil((new Date(iso).getTime() - Date.now()) / DAG) : 0)
 const maandVan = (iso: string) => iso.slice(0, 7) + '-01'
 
+const LEZEN = new Set(['overzicht', 'badges', 'aanvragen', 'klanten', 'klant', 'omzet', 'support', 'analytics', 'systeem', 'logboek', 'zoek'])
+
 class Fout extends Error {
   constructor(bericht: string, public status = 400) { super(bericht) }
 }
@@ -131,7 +133,10 @@ async function laadAanvragen(admin: any) {
   const inquiries = await alleRijen(() => admin.from('inquiries')
     .select('id, name, company_name, email, phone, subject, message, source_url, metadata, is_test, created_at, status')
     .in('form_id', formulieren).order('created_at', { ascending: false }))
-  const pipeline = await alleRijen(() => admin.from('sa_aanvragen').select('*'), 1000, ['inquiry_id'])
+  const [pipeline, notities] = await Promise.all([
+    alleRijen(() => admin.from('sa_aanvragen').select('*'), 1000, ['inquiry_id']),
+    alleRijen(() => admin.from('sa_notities').select('*').eq('doel_soort', 'aanvraag').order('op', { ascending: false })),
+  ])
   const perId = new Map(pipeline.map((p: any) => [p.inquiry_id, p]))
 
   const ontbreekt = inquiries.filter((i: any) => !perId.has(i.id))
@@ -141,25 +146,30 @@ async function laadAanvragen(admin: any) {
     for (const n of nieuw) perId.set(n.inquiry_id, { ...n, afwijsreden: null, volgende_stap: null, company_id: null })
   }
 
-  const notities = await alleRijen(() => admin.from('sa_notities').select('*').eq('doel_soort', 'aanvraag').order('op', { ascending: false }))
+
+  // Bij welk bedrijf hoort elk e-mailadres, en in welke fase zit dat? Eén
+  // vraag voor alle adressen samen (was twee rondreizen per aanvraag).
+  const teKoppelen = inquiries.filter((i: any) => i.email && !i.is_test && perId.get(i.id)?.fase !== 'afgewezen')
+  const { data: koppelingen } = teKoppelen.length
+    ? await admin.rpc('sa_aanvraag_koppelingen', { p_emails: teKoppelen.map((i: any) => i.email) })
+    : { data: [] }
+  const perEmail = new Map((koppelingen ?? []).filter((k: any) => k.company_id).map((k: any) => [k.email, k]))
+  const bijwerken: Promise<unknown>[] = []
 
   const uit = []
   for (const i of inquiries) {
     const p: any = perId.get(i.id)
     let fase = p.fase
     let companyId = p.company_id
-    if (fase !== 'afgewezen' && !i.is_test && i.email) {
-      const { data: gevonden } = await admin.rpc('sa_bedrijf_bij_email', { p_email: i.email })
-      if (gevonden) {
-        const { data: bedrijfsfase } = await admin.rpc('sa_fase_van_bedrijf', { p_company_id: gevonden })
-        if (bedrijfsfase && FASE_RANG[bedrijfsfase] > FASE_RANG[fase]) {
-          await admin.from('sa_aanvragen').update({ fase: bedrijfsfase, company_id: gevonden, fase_gewijzigd_op: new Date().toISOString() }).eq('inquiry_id', i.id)
-          fase = bedrijfsfase
-          companyId = gevonden
-        } else if (!companyId) {
-          await admin.from('sa_aanvragen').update({ company_id: gevonden }).eq('inquiry_id', i.id)
-          companyId = gevonden
-        }
+    const k: any = fase !== 'afgewezen' && !i.is_test && i.email ? perEmail.get(String(i.email).trim().toLowerCase()) : null
+    if (k) {
+      if (k.fase && FASE_RANG[k.fase] > FASE_RANG[fase]) {
+        bijwerken.push(admin.from('sa_aanvragen').update({ fase: k.fase, company_id: k.company_id, fase_gewijzigd_op: new Date().toISOString() }).eq('inquiry_id', i.id))
+        fase = k.fase
+        companyId = k.company_id
+      } else if (!companyId) {
+        bijwerken.push(admin.from('sa_aanvragen').update({ company_id: k.company_id }).eq('inquiry_id', i.id))
+        companyId = k.company_id
       }
     }
     const bron = (i.metadata?.bron as string) || null
@@ -172,12 +182,13 @@ async function laadAanvragen(admin: any) {
       notities: notities.filter((n: any) => n.doel_id === i.id).map((n: any) => ({ op: n.op, door: n.door_naam, tekst: n.tekst })),
     })
   }
+  await Promise.all(bijwerken)
   return uit
 }
 
 // ── Vandaag ─────────────────────────────────────────────────────────────────
 async function overzicht(admin: any) {
-  const [bedrijven, aanvragen, vandaag, facturen, webBetalingen, websites, verzoeken, meldingen, boss, syncs, mailFouten, crons] = await Promise.all([
+  const [bedrijven, aanvragen, vandaag, facturen, webBetalingen, websites, verzoeken, meldingen, boss, syncs, mailFouten, crons, recentBetaald, vorige] = await Promise.all([
     laadBedrijven(admin),
     laadAanvragen(admin),
     admin.from('sa_vandaag').select('*').then((r: any) => r.data ?? []),
@@ -190,6 +201,8 @@ async function overzicht(admin: any) {
     admin.from('accounting_sync_runs').select('company_id, provider, onderdeel, gestart_op, gelukt, fout').gte('gestart_op', new Date(Date.now() - 7 * DAG).toISOString()).order('gestart_op', { ascending: false }).limit(2000).then((r: any) => r.data ?? []),
     admin.from('mail_fouten').select('id, soort, ontvanger, bedrijf_naam, fout, opgetreden_op').gte('opgetreden_op', new Date(Date.now() - DAG).toISOString()).then((r: any) => r.data ?? []),
     admin.rpc('sa_cron_status').then((r: any) => r.data ?? []),
+    admin.from('stripe_facturen').select('company_id, bedrag, omschrijving, betaald_op').eq('betaalstatus', 'betaald').gte('betaald_op', new Date(Date.now() - 7 * DAG).toISOString()).then((r: any) => r.data ?? []),
+    admin.from('omzet_momentopnames').select('mrr').eq('maand', (() => { const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1); return d.toISOString().slice(0, 10) })()).then((r: any) => r.data ?? []),
   ])
   const naam = (id: string | null) => bedrijven.find((b: any) => b.id === id)?.naam ?? 'Onbekend bedrijf'
   const bedrijf = (id: string | null) => bedrijven.find((b: any) => b.id === id)
@@ -286,7 +299,7 @@ async function overzicht(admin: any) {
     if (new Date(b.aangemaakt).getTime() > week) recent.push({ op: b.aangemaakt, soort: 'aanmelding', tekst: `${b.naam} startte een proef`, sub: [b.branche, b.aanmeldbron].filter(Boolean).join(' · '), companyId: b.id })
     if (b.abonnement?.opgezegdOp && new Date(b.abonnement.opgezegdOp).getTime() > week) recent.push({ op: b.abonnement.opgezegdOp, soort: 'opzegging', tekst: `${b.naam} zegde op`, sub: PAKKET_LABEL[b.abonnement.plan] ?? '', companyId: b.id })
   }
-  const { data: betaald } = await admin.from('stripe_facturen').select('company_id, bedrag, omschrijving, betaald_op').eq('betaalstatus', 'betaald').gte('betaald_op', new Date(week).toISOString())
+  const betaald = recentBetaald
   for (const f of betaald ?? []) recent.push({ op: f.betaald_op, soort: 'betaling', tekst: `${naam(f.company_id)} betaalde € ${Number(f.bedrag ?? 0).toFixed(2).replace('.', ',')}`, sub: f.omschrijving ?? '', companyId: f.company_id })
   for (const w of websites.filter((x: any) => x.intake_ontvangen_op && new Date(x.intake_ontvangen_op).getTime() > week)) recent.push({ op: w.intake_ontvangen_op, soort: 'website', tekst: `${naam(w.company_id)} stuurde de intake in`, sub: `Website ${w.pakket ?? ''}`, companyId: w.company_id })
   for (const f of facturen.filter((x: any) => x.factuurdatum && new Date(x.factuurdatum).getTime() > week)) recent.push({ op: f.factuurdatum, soort: 'mislukt', tekst: `${naam(f.company_id)}: betaling mislukt`, sub: f.fout ?? '', companyId: f.company_id })
@@ -294,8 +307,6 @@ async function overzicht(admin: any) {
 
   const echt = bedrijven.filter((b: any) => !b.isTest)
   const mrr = echt.reduce((t: number, b: any) => t + b.mrr, 0)
-  const vorigeMaand = new Date(); vorigeMaand.setUTCDate(1); vorigeMaand.setUTCMonth(vorigeMaand.getUTCMonth() - 1)
-  const { data: vorige } = await admin.from('omzet_momentopnames').select('mrr').eq('maand', vorigeMaand.toISOString().slice(0, 10))
   const mrrVorige = (vorige ?? []).length ? (vorige ?? []).reduce((t: number, r: any) => t + Number(r.mrr), 0) : null
 
   return {
@@ -313,9 +324,22 @@ async function overzicht(admin: any) {
   }
 }
 
+// Het overzicht is het zwaarste antwoord en wordt bij het openen twee keer
+// tegelijk gevraagd (Vandaag en de tellers in het menu). Binnen dezelfde
+// instantie delen ze één berekening, en het resultaat blijft 30 seconden
+// geldig. Elke handeling die iets wijzigt gooit het weg.
+let overzichtCache: { tot: number; data: Promise<any> } | null = null
+function overzichtGedeeld(admin: any) {
+  if (overzichtCache && overzichtCache.tot > Date.now()) return overzichtCache.data
+  const data = overzicht(admin)
+  overzichtCache = { tot: Date.now() + 30000, data }
+  data.catch(() => { overzichtCache = null })
+  return data
+}
+
 async function badges(admin: any) {
   const [o, meld, boss] = await Promise.all([
-    overzicht(admin),
+    overzichtGedeeld(admin),
     admin.from('meldingen').select('id', { count: 'exact', head: true }).eq('status', 'nieuw'),
     admin.from('boss_conversations').select('id', { count: 'exact', head: true }).not('doorzet_verstuurd_op', 'is', null).is('doorzet_afgehandeld_op', null),
   ])
@@ -469,7 +493,7 @@ async function voerUit(admin: any, wie: Superbeheerder, body: any): Promise<unkn
 
   switch (body.actie) {
     // ── Lezen ──
-    case 'overzicht': return overzicht(admin)
+    case 'overzicht': return overzichtGedeeld(admin)
     case 'badges': return badges(admin)
     case 'aanvragen': return { aanvragen: await laadAanvragen(admin) }
     case 'klanten': {
@@ -734,6 +758,8 @@ serve(async (req) => {
   if (wie instanceof Response) return wie
   let body: any
   try { body = await req.json() } catch { return json({ error: 'Ongeldige aanvraag' }, 400) }
+  // Een handeling die iets wijzigt maakt het bewaarde overzicht ongeldig.
+  if (!LEZEN.has(body?.actie)) overzichtCache = null
   try {
     return json(await voerUit(admin, wie, body))
   } catch (e) {
