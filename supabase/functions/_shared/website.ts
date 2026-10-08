@@ -5,7 +5,7 @@
 // laden, dus ze staan hier nog een keer; dit is de kant die rekent en afschrijft.
 // Pas je een prijs aan, doe het dan in allebei.
 import { bossbaseMail, bbP, bbKlein, bbKop2, bbVinkjes, bbUitgelicht } from './bossbaseMail.ts'
-import { appOrigin } from './stripe.ts'
+import { appOrigin, stripeFetch } from './stripe.ts'
 
 export type Pakket = 'basis' | 'compleet' | 'pro'
 
@@ -300,6 +300,19 @@ export async function startWebsiteTraject(
   const { data: bedrijf } = await admin
     .from('companies').select('id, name, email, phone').eq('id', companyId).maybeSingle()
   if (!bedrijf) return 'aanvraag aangemaakt, bedrijf niet gevonden'
+
+  // Opnieuw beginnen: een nog openstaande betaling van een eerdere poging laten
+  // vervallen, ook bij Stripe, zodat die oude betaalpagina niet meer werkt.
+  if (o.opnieuw) {
+    const { data: open } = await admin.from('website_betalingen')
+      .select('id, stripe_session_id').eq('company_id', companyId).eq('status', 'open')
+    for (const b of open ?? []) {
+      if (b.stripe_session_id) {
+        try { await stripeFetch(`/checkout/sessions/${b.stripe_session_id}/expire`, 'POST', {}) } catch { /* al verlopen of afgerond */ }
+      }
+      await admin.from('website_betalingen').update({ status: 'vervallen' }).eq('id', b.id).eq('status', 'open')
+    }
+  }
 
   // Een taak alleen als er nog geen open taak staat.
   let taakId = aanvraag?.taak_id ?? null

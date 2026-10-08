@@ -309,6 +309,7 @@ function MijnWebsite({ data, bezig, doe }) {
           {a.liveOp && <div><span>Live sinds</span><strong>{datum(a.liveOp)}</strong></div>}
           {!a.liveOp && a.intakeOntvangenOp && <div><span>Intake ontvangen</span><strong>{datum(a.intakeOntvangenOp)}</strong></div>}
         </div>
+        <Doorlopend a={a} betalingen={betalingen} />
       </div>
 
       {openBetaling && (
@@ -329,7 +330,7 @@ function MijnWebsite({ data, bezig, doe }) {
         </div>
       )}
 
-      <WatJeBetaalt a={a} betalingen={betalingen} />
+      <WatJeBetaalt betalingen={betalingen} />
 
       <div className="ws-kop afu3">
         Upgraden
@@ -384,67 +385,61 @@ function Feedback({ a, bezig, doe }) {
   );
 }
 
-function WatJeBetaalt({ a, betalingen }) {
-  const hosting = betalingen.find(b => b.soort === 'hosting' && b.status === 'loopt');
-  const domein = betalingen.find(b => b.soort === 'domein' && b.status === 'loopt');
-  const email = betalingen.find(b => b.soort === 'email' && b.status === 'loopt');
+// Doorlopende kosten: klein, één regel per onderdeel, onderaan het statusblok.
+// Hosting altijd; domein en e-mail alleen als die gekozen zijn.
+function Doorlopend({ a, betalingen }) {
+  const loopt = soort => betalingen.find(b => b.soort === soort && b.status === 'loopt');
+  const wanneer = regel => (regel ? `loopt sinds ${datum(regel.startOp)}` : 'gaat in bij livegang');
+  const hosting = loopt('hosting');
+  const domein = loopt('domein');
+  const email = loopt('email');
+  const adressen = Number(a.emailAantal) || (a.email ? 1 : 0);
+  const regels = [
+    { key: 'hosting', tekst: `Hosting ${euroBedrag(hosting?.perKeer ?? HOSTING_PER_MAAND)} per maand, ${wanneer(hosting)} en komt op je BossBase-factuur`,
+      uitleg: 'Wij zetten je site online en houden hem draaiend: beveiligd slotje en updates. Hosting hoort bij de website en is niet los te kiezen. De dagen tussen livegang en je eerstvolgende factuur rekenen we niet.' },
+    (domein || a.domeinViaOns) && { key: 'domein', tekst: `Domeinnaam${a.domein ? ` ${a.domein}` : ''} ${euroBedrag(domein?.perKeer ?? DOMEIN_PER_JAAR)} per jaar, ${wanneer(domein)} en komt op je BossBase-factuur`,
+      uitleg: 'Wij registreren je domeinnaam en houden hem bij. Eén keer per jaar op je factuur. Zeg je op, dan zetten we hem op verzoek kosteloos naar je over.' },
+    (email || adressen > 0) && { key: 'email', tekst: `Zakelijke e-mail (${adressen} ${adressen === 1 ? 'adres' : 'adressen'}) ${euroBedrag(email?.perKeer ?? EMAIL_PER_MAAND * adressen)} per maand, ${wanneer(email)} en komt op je BossBase-factuur`,
+      uitleg: `${euroBedrag(EMAIL_PER_MAAND)} per adres per maand. Wij richten de adressen in op je eigen domeinnaam. Meer adressen vraag je hieronder aan bij Zakelijke e-mail.` },
+  ].filter(Boolean);
+  return (
+    <ul className="ws-doorlopend" data-rl="website-kosten">
+      {regels.map(r => (
+        <li key={r.key}>
+          <span>{r.tekst}</span>
+          <InfoIcoon titel={r.key === 'hosting' ? 'Hosting' : r.key === 'domein' ? 'Domeinnaam' : 'Zakelijke e-mail'} links>{r.uitleg} Bedragen excl. btw.</InfoIcoon>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// Betalingen voor een upgrade of extra: in één keer of in termijnen. Geen
+// betalingen, geen blok.
+function WatJeBetaalt({ betalingen }) {
   const eenmaligSoort = b => b.soort === 'upgrade' || b.soort === 'extra';
   const termijnen = betalingen.filter(b => eenmaligSoort(b) && (b.wijze === 'termijnen' || b.wijze === 'abonnement') && b.status === 'loopt');
   const eenmalig = betalingen.filter(b => eenmaligSoort(b) && b.wijze === 'ideal' && b.status === 'betaald');
-  const perMaand = (hosting ? Number(hosting.perKeer) : 0) + (email ? Number(email.perKeer) : 0)
-    + termijnen.reduce((t, b) => t + Number(b.perKeer || 0), 0);
+  if (!termijnen.length && !eenmalig.length) return null;
 
   return (
-    <div className="card card-p ws-kosten afu3" data-rl="website-kosten">
+    <div className="card card-p ws-kosten afu3">
       <div className="ab-kop">
-        Wat je betaalt
-        <InfoIcoon titel="Wat je betaalt" links>Hosting, je domeinnaam, zakelijke e-mail en termijnen staan als aparte regels op je BossBase-factuur. Je hoeft daar niets voor te doen. Bedragen excl. btw.</InfoIcoon>
+        Betalingen voor je website
+        <InfoIcoon titel="Betalingen" links>Wat je betaalde voor je pakket en extra’s. Termijnen worden elke maand automatisch betaald en stoppen vanzelf na de laatste. Bedragen excl. btw.</InfoIcoon>
       </div>
-      <div className="ws-regel">
-        <span>Hosting</span>
-        {hosting
-          ? <strong>{euroBedrag(hosting.perKeer)} p/mnd <em>sinds {datum(hosting.startOp)}</em></strong>
-          : <strong>{euroBedrag(HOSTING_PER_MAAND)} p/mnd <em>{a.status === 'live' ? 'start binnenkort' : 'gaat in bij livegang'}</em></strong>}
-      </div>
-      {domein ? (
-        <div className="ws-regel">
-          <span>Domeinnaam{a.domein ? ` ${a.domein}` : ''}</span>
-          <strong>{euroBedrag(domein.perKeer)} per jaar</strong>
-        </div>
-      ) : a.domeinViaOns ? (
-        <div className="ws-regel">
-          <span>Domeinnaam{a.domein ? ` ${a.domein}` : ''}</span>
-          <strong>{euroBedrag(DOMEIN_PER_JAAR)} per jaar <em>gaat in bij livegang</em></strong>
-        </div>
-      ) : null}
-      {email ? (
-        <div className="ws-regel">
-          <span>Zakelijke e-mail</span>
-          <strong>{euroBedrag(email.perKeer)} p/mnd</strong>
-        </div>
-      ) : a.email ? (
-        <div className="ws-regel">
-          <span>Zakelijke e-mail</span>
-          <strong>{euroBedrag(EMAIL_PER_MAAND)} p/mnd <em>gaat in bij livegang</em></strong>
-        </div>
-      ) : null}
       {termijnen.map(b => (
         <div className="ws-regel" key={b.id}>
           <span>{b.omschrijving}</span>
-          <strong>{euroBedrag(perTermijn(b.bedrag))} p/mnd <em>{b.aantalGedaan || 0} van {b.aantalTotaal} betaald</em></strong>
+          <strong>{euroBedrag(b.perKeer ?? perTermijn(b.bedrag))} p/mnd <em>{b.aantalGedaan || 0} van {b.aantalTotaal} betaald</em></strong>
         </div>
       ))}
       {eenmalig.map(b => (
         <div className="ws-regel" key={b.id}>
           <span>{b.omschrijving}</span>
-          <strong>{euroBedrag(b.bedrag)} <em>eenmalig betaald</em></strong>
+          <strong>{euroBedrag(b.bedrag)} <em>betaald</em></strong>
         </div>
       ))}
-      {(hosting || email || termijnen.length > 0) && (
-        <div className="ws-regel totaal">
-          <span>Per maand</span><strong>{euroBedrag(perMaand)}</strong>
-        </div>
-      )}
     </div>
   );
 }

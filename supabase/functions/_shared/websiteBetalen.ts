@@ -1,8 +1,9 @@
 // Betalen voor de website.
 //
 // UPGRADE EN EXTRA'S — altijd via Stripe Checkout op ons eigen platform-account,
-// met de betaalmethodes die in Stripe aanstaan (iDEAL, creditcard, …; we geven
-// er bewust geen vaste mee). Twee wijzen:
+// met precies dezelfde klant, betaalmethodes en instellingen als de checkout van
+// het BossBase-abonnement (stripeKlantVoorBedrijf en checkoutInstellingen in
+// _shared/billing.ts). Twee wijzen:
 //  - eenmalig ('ideal'): payment-mode;
 //  - per maand ('termijnen'): subscription-mode, een eigen abonnement van
 //    TERMIJNEN maandtermijnen. De eerste wordt meteen afgerekend; billing-webhook
@@ -17,6 +18,7 @@
 // Stripe staat geen jaarregel naast maandregels toe. website-termijnen zet elke
 // periode een factuurregel (invoice item) klaar voor de eerstvolgende factuur.
 import { stripeFetch, stripeSecret, appOrigin } from './stripe.ts'
+import { stripeKlantVoorBedrijf, checkoutInstellingen } from './billing.ts'
 import { termijnCenten, TERMIJNEN, type Pakket } from './website.ts'
 
 /** Bedrag per maandtermijn in centen. */
@@ -33,9 +35,6 @@ export async function startBetaling(admin: any, o: {
   omschrijving: string; bedrag: number;
   gelukt: string; afgebroken: string; origin: string; betalingId?: string
 }): Promise<string> {
-  const { data: sub } = await admin.from('subscriptions')
-    .select('stripe_customer_id').eq('company_id', o.companyId).maybeSingle()
-
   // Oude openstaande sessies van dit bedrijf (zelfde soort) laten verlopen.
   const { data: open } = await admin.from('website_betalingen')
     .select('id, stripe_session_id').eq('company_id', o.companyId).eq('soort', o.soort).eq('status', 'open')
@@ -63,12 +62,13 @@ export async function startBetaling(admin: any, o: {
 
   const origin = appOrigin(o.origin)
   const metaSoort = o.wijze === 'termijnen' ? 'website_termijnen' : 'website_upgrade'
+  const customerId = await stripeKlantVoorBedrijf(admin, o.companyId)
   const params: Record<string, string> = {
+    ...checkoutInstellingen(customerId, o.wijze === 'termijnen' ? 'subscription' : 'payment'),
     'line_items[0][quantity]': '1',
     'line_items[0][price_data][currency]': 'eur',
     'line_items[0][price_data][tax_behavior]': 'exclusive',
     'line_items[0][price_data][product_data][name]': o.omschrijving,
-    'automatic_tax[enabled]': 'true',
     'metadata[soort]': metaSoort,
     'metadata[company_id]': o.companyId,
     'metadata[betaling_id]': betalingId!,
@@ -76,7 +76,6 @@ export async function startBetaling(admin: any, o: {
     'cancel_url': `${origin}${o.afgebroken}`,
   }
   if (o.wijze === 'termijnen') {
-    params['mode'] = 'subscription'
     params['line_items[0][price_data][unit_amount]'] = String(termijnBedragCenten(o.bedrag))
     params['line_items[0][price_data][recurring][interval]'] = 'month'
     params['line_items[0][price_data][product_data][name]'] = `${o.omschrijving} (${TERMIJNEN} maandtermijnen)`
@@ -87,18 +86,10 @@ export async function startBetaling(admin: any, o: {
     params['subscription_data[metadata][company_id]'] = o.companyId
     params['subscription_data[metadata][betaling_id]'] = betalingId!
   } else {
-    params['mode'] = 'payment'
     params['line_items[0][price_data][unit_amount]'] = String(Math.round(o.bedrag * 100))
     params['invoice_creation[enabled]'] = 'true'
     params['payment_intent_data[metadata][soort]'] = metaSoort
     params['payment_intent_data[metadata][betaling_id]'] = betalingId!
-  }
-  if (sub?.stripe_customer_id) {
-    params['customer'] = sub.stripe_customer_id
-    params['customer_update[address]'] = 'auto'
-  } else {
-    if (o.wijze !== 'termijnen') params['customer_creation'] = 'always'
-    params['billing_address_collection'] = 'required'
   }
   const sessie = await stripeFetch('/checkout/sessions', 'POST', params)
   await admin.from('website_betalingen').update({ stripe_session_id: sessie.id, status: 'open' }).eq('id', betalingId)

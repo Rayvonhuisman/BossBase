@@ -19,7 +19,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
-  stripeFetch, appOrigin, json, CORS, eisAbonnementsbeheerder,
+  stripeFetch, appOrigin, json, CORS, eisAbonnementsbeheerder, stripeKlantVoorBedrijf, checkoutInstellingen,
   tierPriceId, modulePriceId, extraUserPriceId,
   MODULE_BESCHIKBAAR, MODULE_VEREIST, inbegrepenGebruikers, benodigdeGebruikers, teWeinigGebruikers,
   WELKOMSTACTIES, heeftWelkomstkorting, welkomCouponId, isJaar,
@@ -151,20 +151,7 @@ serve(async (req) => {
       }, 409)
     }
 
-    let customerId = sub?.stripe_customer_id || null
-    if (!customerId) {
-      const { data: company } = await admin
-        .from('companies').select('name, email').eq('id', companyId).maybeSingle()
-      const params: Record<string, string> = { 'metadata[company_id]': companyId }
-      if (company?.name)  params['name'] = company.name
-      if (company?.email) params['email'] = company.email
-      const customer = await stripeFetch('/customers', 'POST', params)
-      customerId = customer.id as string
-      // Meteen vastleggen; de webhook kan het event anders niet thuisbrengen.
-      await admin.from('subscriptions')
-        .update({ stripe_customer_id: customerId })
-        .eq('company_id', companyId)
-    }
+    const customerId = await stripeKlantVoorBedrijf(admin, companyId)
 
     // ── 5. Loopt er al een abonnement? Dan is dit een wijziging ────────────────
     // Een tweede Checkout zou een tweede abonnement naast het bestaande maken.
@@ -186,27 +173,10 @@ serve(async (req) => {
 
     // ── 6. Checkout Session ────────────────────────────────────────────────────
     const origin = appOrigin(req.headers.get('origin') || '')
+    // Vaste instellingen (klant, btw, adres, betaalmethodes): _shared/billing.ts,
+    // gedeeld met de websitebetalingen.
     const params: Record<string, string> = {
-      'mode': 'subscription',
-      'customer': customerId,
-      // Altijd een betaalmethode vastleggen, ook als er vandaag € 0 te betalen
-      // is. Bij welkomstactie A (60 dagen gratis) is de eerste termijn € 0;
-      // zonder machtiging zou er na die twee maanden niets te incasseren zijn.
-      // Dit is óók de standaard van Stripe voor abonnementen — expliciet gezet
-      // zodat een gewijzigde standaard of dashboardinstelling het niet stil kan
-      // omzetten naar 'if_required'.
-      'payment_method_collection': 'always',
-      // Bedragen zijn exclusief BTW; Stripe Tax rekent het juiste tarief erbij.
-      'automatic_tax[enabled]': 'true',
-      'customer_update[address]': 'auto',
-      'billing_address_collection': 'required',
-      // Een zakelijke klant kan zijn btw-nummer invullen ("Ik koop als
-      // bedrijf"). Stripe Tax controleert het en verlegt de btw voor een bedrijf
-      // in een ander EU-land; het nummer komt op de klant en op de factuur.
-      // Bij een bestaande klant eist Stripe dan dat de bedrijfsnaam mag worden
-      // bijgewerkt, vandaar customer_update[name].
-      'tax_id_collection[enabled]': 'true',
-      'customer_update[name]': 'auto',
+      ...checkoutInstellingen(customerId, 'subscription'),
       // Let op het /dashboard-voorvoegsel: de instellingenpagina leeft binnen de
       // app-shell (/dashboard/<pagina>). Zonder dat voorvoegsel landt de klant na
       // het betalen op de marketingsite in plaats van bij zijn abonnement.
@@ -221,17 +191,6 @@ serve(async (req) => {
     // De keuze reist mee als metadata; de webhook legt hem daarna vast en zet zo
     // nodig de website-aanvraag klaar.
     if (welkomstactie) params['subscription_data[metadata][welkomstactie]'] = welkomstactie
-
-    // Welke betaalmethoden Checkout toont, komt normaal uit de dynamische
-    // configuratie in het Stripe-dashboard. Staat STRIPE_BILLING_PAYMENT_METHODS
-    // gezet (komma-gescheiden, bv. "ideal,card,sepa_debit"), dan pinnen we de
-    // lijst vast. Dat maakt het onafhankelijk van dashboardstatus — handig als
-    // je zeker wilt weten dát iDEAL erbij staat en Klarna niet.
-    // Let op: pinnen schakelt de dynamische selectie uit; nieuwe methoden komen
-    // er dan niet vanzelf bij.
-    const gepind = (Deno.env.get('STRIPE_BILLING_PAYMENT_METHODS') || '')
-      .split(',').map(s => s.trim()).filter(Boolean)
-    gepind.forEach((pm, idx) => { params[`payment_method_types[${idx}]`] = pm })
 
     let i = 0
     params[`line_items[${i}][price]`] = tierPriceId(tier)

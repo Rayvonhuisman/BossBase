@@ -124,15 +124,28 @@ async function verwerkWebsiteBetaling(admin: any, sessie: any): Promise<string> 
   const companyId = sessie?.metadata?.company_id ?? null
   if (!betalingId || !companyId) return 'website-betaling zonder kenmerk'
   if (sessie?.payment_status !== 'paid') return `website-betaling nog niet betaald (${sessie?.payment_status})`
-
   const termijnen = sessie?.mode === 'subscription'
-  const abonnementId = termijnen && typeof sessie.subscription === 'string' ? sessie.subscription : null
+  return voltooiWebsiteBetaling(admin, betalingId, companyId, {
+    sessieId: sessie.id,
+    abonnementId: termijnen && typeof sessie.subscription === 'string' ? sessie.subscription : null,
+    termijnen,
+  })
+}
+
+// Wat er gebeurt zodra een websitebetaling betaald is, ongeacht welk event dat
+// meldt: de Checkout zelf, of (bij termijnen die later bevestigd worden) de
+// eerste betaalde factuur van het abonnement.
+async function voltooiWebsiteBetaling(
+  admin: any, betalingId: string, companyId: string,
+  o: { sessieId?: string | null; abonnementId?: string | null; termijnen: boolean },
+): Promise<string> {
+  const { termijnen, abonnementId } = o
   const { data: b } = await admin.from('website_betalingen')
     .update({
       status: termijnen ? 'loopt' : 'betaald',
       betaald_op: new Date().toISOString(),
       start_op: new Date().toISOString(),
-      stripe_session_id: sessie.id,
+      ...(o.sessieId ? { stripe_session_id: o.sessieId } : {}),
       ...(abonnementId ? { stripe_subscription_id: abonnementId } : {}),
     })
     .eq('id', betalingId).eq('company_id', companyId).eq('status', 'open')
@@ -193,7 +206,7 @@ async function verwerkWebsiteBetaling(admin: any, sessie: any): Promise<string> 
 // als het abonnement niet van de website is.
 async function websiteTermijnEvent(admin: any, type: string, subscriptionId: string): Promise<string | null> {
   let { data: b } = await admin.from('website_betalingen')
-    .select('id, status, aantal_gedaan, aantal_totaal').eq('stripe_subscription_id', subscriptionId).maybeSingle()
+    .select('id, company_id, status, aantal_gedaan, aantal_totaal').eq('stripe_subscription_id', subscriptionId).maybeSingle()
   if (!b) {
     // Een factuur kan binnenkomen vóór checkout.session.completed; dan kennen we
     // het abonnement nog niet en kijken we naar de metadata bij Stripe.
@@ -201,18 +214,25 @@ async function websiteTermijnEvent(admin: any, type: string, subscriptionId: str
     if (sub?.metadata?.soort !== 'website_termijnen' || !sub?.metadata?.betaling_id) return null
     const r = await admin.from('website_betalingen')
       .update({ stripe_subscription_id: subscriptionId }).eq('id', sub.metadata.betaling_id)
-      .select('id, status, aantal_gedaan, aantal_totaal').maybeSingle()
+      .select('id, company_id, status, aantal_gedaan, aantal_totaal').maybeSingle()
     b = r.data
     if (!b) return 'website-termijnen: betaling niet gevonden'
   }
   const totaal = Number(b.aantal_totaal ?? TERMIJNEN)
   if (type === 'invoice.paid') {
+    // Eerste termijn betaald terwijl de Checkout dat nog niet meldde (een
+    // betaalmethode die later bevestigd wordt): dan hier afronden.
+    let voltooid = ''
+    if (b.status === 'open') {
+      voltooid = ` · ${await voltooiWebsiteBetaling(admin, b.id, b.company_id, { abonnementId: subscriptionId, termijnen: true })}`
+      b.status = 'loopt'
+    }
     const gedaan = Math.min(totaal, Number(b.aantal_gedaan ?? 0) + 1)
     await admin.from('website_betalingen').update({
       aantal_gedaan: gedaan, laatst_gefactureerd: new Date().toISOString(), fout: null,
       ...(gedaan >= totaal && b.status === 'loopt' ? { status: 'afgerond' } : {}),
     }).eq('id', b.id)
-    return `website-termijn ${gedaan}/${totaal} betaald`
+    return `website-termijn ${gedaan}/${totaal} betaald${voltooid}`
   }
   if (type === 'invoice.payment_failed') {
     await admin.from('website_betalingen').update({ fout: 'Termijn niet betaald; Stripe probeert het opnieuw.' }).eq('id', b.id)

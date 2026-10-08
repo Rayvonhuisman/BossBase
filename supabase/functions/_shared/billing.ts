@@ -521,3 +521,62 @@ export async function portalConfigJaar(): Promise<string | null> {
   portalJaarCache = gevonden.id
   return portalJaarCache
 }
+
+
+// ── CHECKOUT: KLANT EN INSTELLINGEN ─────────────────────────────────────────
+// Eén plek voor hoe een Checkout van BossBase eruitziet: die van het abonnement
+// (billing-checkout) en die van de websitebetalingen (_shared/websiteBetalen.ts).
+// Zo bieden ze per definitie dezelfde betaalmethodes en vragen ze hetzelfde.
+
+/** De Stripe-klant van dit bedrijf; maakt hem aan (naam, e-mail) als hij er nog niet is. */
+export async function stripeKlantVoorBedrijf(admin: any, companyId: string): Promise<string> {
+  const { data: sub } = await admin.from('subscriptions')
+    .select('stripe_customer_id').eq('company_id', companyId).maybeSingle()
+  if (sub?.stripe_customer_id) return sub.stripe_customer_id
+  const { data: company } = await admin
+    .from('companies').select('name, email').eq('id', companyId).maybeSingle()
+  const params: Record<string, string> = { 'metadata[company_id]': companyId }
+  if (company?.name)  params['name'] = company.name
+  if (company?.email) params['email'] = company.email
+  const customer = await stripeFetch('/customers', 'POST', params)
+  // Meteen vastleggen; de webhook kan het event anders niet thuisbrengen.
+  await admin.from('subscriptions')
+    .update({ stripe_customer_id: customer.id })
+    .eq('company_id', companyId)
+  return customer.id as string
+}
+
+/**
+ * De vaste instellingen van elke Checkout van BossBase.
+ *
+ * Betaalmethodes: normaal de dynamische configuratie in het Stripe-dashboard
+ * (iDEAL, creditcard, ...). Staat STRIPE_BILLING_PAYMENT_METHODS gezet
+ * (komma-gescheiden, bv. "ideal,card,sepa_debit"), dan pinnen we de lijst vast.
+ * Pinnen schakelt de dynamische selectie uit; nieuwe methoden komen er dan niet
+ * vanzelf bij.
+ */
+export function checkoutInstellingen(customerId: string, mode: 'subscription' | 'payment'): Record<string, string> {
+  const params: Record<string, string> = {
+    'mode': mode,
+    'customer': customerId,
+    // Bedragen zijn exclusief btw; Stripe Tax rekent het juiste tarief erbij.
+    'automatic_tax[enabled]': 'true',
+    'customer_update[address]': 'auto',
+    'billing_address_collection': 'required',
+    // Een zakelijke klant kan zijn btw-nummer invullen ("Ik koop als bedrijf").
+    // Stripe Tax controleert het; het nummer komt op de klant en de factuur.
+    // Bij een bestaande klant eist Stripe dan dat de naam mag worden bijgewerkt.
+    'tax_id_collection[enabled]': 'true',
+    'customer_update[name]': 'auto',
+  }
+  // Bij een abonnement altijd een betaalmethode vastleggen, ook als er vandaag
+  // € 0 te betalen is (welkomstactie 2 maanden gratis: de eerste termijn is € 0);
+  // anders valt er later niets te incasseren. Óók de standaard
+  // van Stripe, expliciet zodat een andere dashboardinstelling het niet stil kan
+  // omzetten naar 'if_required'.
+  if (mode === 'subscription') params['payment_method_collection'] = 'always'
+  const gepind = (Deno.env.get('STRIPE_BILLING_PAYMENT_METHODS') || '')
+    .split(',').map(s => s.trim()).filter(Boolean)
+  gepind.forEach((pm, idx) => { params[`payment_method_types[${idx}]`] = pm })
+  return params
+}
