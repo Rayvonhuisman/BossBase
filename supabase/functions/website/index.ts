@@ -51,10 +51,10 @@ serve(async (req) => {
     const companyId: string | null = profiel?.company_id ?? null
     if (!companyId || profiel?.actief === false) return json({ error: 'Geen bedrijf gekoppeld.' }, 403)
 
-    // Wie bij de bedrijfsinstellingen mag, mag ook de website regelen. Afrekenen
-    // vraagt daarbovenop de eigenaar (eisAbonnementsbeheerder).
-    if (!await heeftRecht(user.id, 'instellingen')) {
-      return json({ error: 'Je hebt geen recht om de website van je bedrijf te regelen.' }, 403)
+    // Alleen beheerders regelen de website (de pagina staat ook alleen in hun
+    // menu). Afrekenen vraagt daarbovenop de eigenaar (eisAbonnementsbeheerder).
+    if (!await heeftRecht(user.id, null)) {
+      return json({ error: 'Alleen een beheerder van je bedrijf kan de website regelen.' }, 403)
     }
 
     const { data: aanvraag } = await admin.from('website_aanvragen')

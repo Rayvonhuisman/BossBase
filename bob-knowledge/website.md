@@ -11,9 +11,11 @@ een formulier dat je op je eigen site zet, zodat aanvragen in je pipeline komen.
 
 ## Waar vind je het
 
-**Website** in het menu, onder Bedrijf. Je ziet de pagina als je het recht
-**Instellingen** hebt (beheerders altijd). Upgraden en afrekenen kan alleen de
-**eigenaar** van het bedrijf, net als bij het abonnement.
+**Website** in het menu, onder Bedrijf. Die pagina zie je alleen als je **beheerder**
+bent én je bedrijf bij het jaarabonnement voor de **gratis website** koos. Andere
+gebruikers en bedrijven zien hem niet. Upgraden en afrekenen kan alleen de **eigenaar**
+van het bedrijf, net als bij het abonnement. Wie de gratis website nog niet koos, vindt
+de actie onder Instellingen → Abonnement, bij het afsluiten van een jaarabonnement.
 
 ## De gratis website
 
@@ -22,9 +24,9 @@ een formulier dat je op je eigen site zet, zodat aanvragen in je pipeline komen.
   wisselen kan niet.
 - Gratis is het pakket **Basis**: een onepager met je diensten, je werk, je werkgebied en
   een contactformulier.
-- Wie geen jaarabonnement met deze actie heeft, ziet op de pagina Website wat het is en
-  een knop naar het abonnement (tijdens het uitproberen). Heeft het abonnement al een
-  andere welkomstactie, dan kan het niet meer via de actie; mail dan info@bossbase.nl.
+- Wie geen jaarabonnement met deze actie heeft, kiest hem bij het afsluiten van het
+  abonnement (Instellingen → Abonnement, Jaarlijks). Heeft het abonnement al een andere
+  welkomstactie, dan kan het niet meer via de actie; mail dan info@bossbase.nl.
 
 ## De pakketten
 

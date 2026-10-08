@@ -171,9 +171,10 @@ const NAV = [
   { id: 'revenue',     label: 'Financiën',     icon: 'chart',   section: 'finance', permission: 'bedrijfsfinancien' },
   { id: 'database',    label: 'Database',      icon: 'db',      section: 'bedrijf', permission: 'database' },
   { id: 'team',        label: 'Team',          icon: 'team',    section: 'bedrijf', permission: 'team' },
-  // De gratis website en wat je bij ons afneemt. Zelfde recht als de
-  // bedrijfsinstellingen; afrekenen vraagt daarnaast de eigenaar (server).
-  { id: 'website',     label: 'Website',       icon: 'globe',   section: 'bedrijf', permission: 'instellingen' },
+  // De gratis website. Alleen voor beheerders van een bedrijf dat bij zijn
+  // abonnement voor de gratis website koos (er is dan een website-aanvraag);
+  // zie heeftWebsite in AppInner. Afrekenen vraagt daarnaast de eigenaar (server).
+  { id: 'website',     label: 'Website',       icon: 'globe',   section: 'bedrijf', alleenMetWebsite: true },
   // Geen permission: de pagina beveiligt zichzelf (alleen "Mijn profiel" zonder
   // het recht 'instellingen'), en iedereen moet bij zijn eigen profiel kunnen.
   { id: 'instellingen',label: 'Instellingen',  icon: 'settings',section: 'bedrijf' },
@@ -215,7 +216,7 @@ const SECTIONS = [
 ];
 
 // ── SIDEBAR ──────────────────────────────────────────────────
-function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, company, loading, onOpenProfile, badges = {}, collapsed, onToggleCollapsed }) {
+function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, company, loading, onOpenProfile, badges = {}, collapsed, onToggleCollapsed, heeftWebsite = false }) {
   const { can } = usePermissions();
   const plan = usePlan();
   // Handmatig open/dicht geklapte navigatiegroepen. Niet gezet = volg de
@@ -333,6 +334,7 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, compan
               if (n.permission && !can(n.permission)) return false;
               // Zit de pagina niet in dit abonnement, dan tonen we hem niet.
               if (n.feature && !plan.has(n.feature)) return false;
+              if (n.alleenMetWebsite && !heeftWebsite) return false;
               return true;
             });
             if (items.length === 0) return null;
@@ -1094,6 +1096,22 @@ function AppInner() {
   const [company,    setCompany]    = useState(isDemo ? DEMO_COMPANY : null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError,   setProfileError]   = useState(null);
+  // Heeft dit bedrijf de gratis website gekozen, en is de gebruiker beheerder?
+  // Dan staat Website in het menu. null = nog niet bekend.
+  const [heeftWebsite, setHeeftWebsite] = useState(null);
+  useEffect(() => {
+    if (!profile) return;
+    if (isDemo || profile.role !== 'admin' || !profile.companyId) { setHeeftWebsite(false); return; }
+    let leeft = true;
+    supabase.from('website_aanvragen').select('id', { count: 'exact', head: true })
+      .eq('company_id', profile.companyId)
+      .then(({ count, error }) => {
+        if (!leeft) return;
+        if (error) { logFout('website-aanvraag controleren')(error); setHeeftWebsite(false); return; }
+        setHeeftWebsite((count || 0) > 0);
+      });
+    return () => { leeft = false; };
+  }, [profile?.role, profile?.companyId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [userPermissions, setUserPermissions] = useState(isDemo ? DEMO_PERMISSIONS : []);
   const [permissionsLoaded, setPermissionsLoaded] = useState(isDemo);
   // Abonnementsstand (features, modules, limieten + huidige stand). Komt uit
@@ -1693,6 +1711,11 @@ function AppInner() {
     // naar het dashboard terwijl dezelfde pagina via het menu wél opende.
     if (!profile || !permissionsLoaded || !planStatus) return;
     const isAdmin = profile.role === 'admin';
+    // De pagina Website bestaat alleen voor beheerders met de gratis website.
+    if (page === 'website' && heeftWebsite === false) {
+      navigatePage('dashboard');
+      return;
+    }
     const requiredPerm = PROTECTED_PAGES[page];
     // In een gedeelde werkruimte vervallen de OPERATIONELE inzagerechten —
     // dezelfde regel als in usePermissions().can() en in de policies. Pipeline,
@@ -1720,7 +1743,7 @@ function AppInner() {
       toast.error(`${featureLabel(requiredFeature)} zit niet in je abonnement`);
       navigatePage('dashboard');
     }
-  }, [page, profile, userPermissions, permissionsLoaded, planStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page, profile, userPermissions, permissionsLoaded, planStatus, heeftWebsite]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const renderPage = () => {
     const props = { setPage: navigatePage, openCustomer, openDeal, openInvoice, openCalendarEvent };
@@ -1968,6 +1991,7 @@ function AppInner() {
           loading={profileLoading}
           onOpenProfile={() => setOpenProfile(true)}
           badges={sidebarBadges}
+          heeftWebsite={heeftWebsite === true}
           collapsed={sbCollapsed}
           onToggleCollapsed={() => setSbCollapsed(c => {
             const next = !c;
