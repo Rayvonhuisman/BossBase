@@ -591,7 +591,7 @@ export function CalendarPage({ openCustomer, openCalendarEvent, setPage, preOpen
           <div className="modal" style={{ maxWidth: 380 }}>
             <div className="modal-hd">
               <div>
-                <span className={`badge ${showEvent.type === 'job' ? 'b-orange' : showEvent.type === 'visit' ? 'b-new' : 'b-blue'}`} style={{ marginBottom: 6 }}>{typeLabel(showEvent.type)}</span>
+                <span className={`badge ${showEvent.type === 'job' ? 'b-orange' : showEvent.type === 'visit' ? 'b-purple' : 'b-blue'}`} style={{ marginBottom: 6 }}>{typeLabel(showEvent.type)}</span>
                 <div className="modal-title">{showEvent.title}</div>
                 <div className="modal-sub">{showEvent.date} · {showEvent.time}–{showEvent.end}</div>
               </div>

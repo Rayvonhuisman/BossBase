@@ -22,7 +22,7 @@ import NotitieLog, { toLogItem } from '../../components/NotitieLog.jsx';
 import { bevestig } from '../../lib/bevestig.jsx';
 
 const TYPE_LABEL = { job: 'Klus', visit: 'Opname', activity: 'Activiteit', event: 'Afspraak' };
-const TYPE_TONE = { job: 'b-orange', visit: 'b-new', activity: 'b-blue', event: 'b-green' };
+const TYPE_TONE = { job: 'b-orange', visit: 'b-purple', activity: 'b-blue', event: 'b-green' };
 const TYPE_OPTIONS = ['event', 'job', 'visit', 'activity'];
 
 const inputStyle = {
