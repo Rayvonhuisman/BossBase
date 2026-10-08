@@ -11,7 +11,7 @@
   "lead": "Zie in één weekoverzicht wie waar staat en met welke bus. Sleep werkbonnen die nog niet gepland zijn naar de juiste dag, en krijg een waarschuwing als iemand of een bus dubbel staat.",
   "cta": { "label": "Start 14 dagen gratis", "href": "/register" },
   "cta2": { "label": "Bekijk prijzen", "href": "/prijzen" },
-  "noot": "De planningsmodule zit in Team. Bij Groei neem je hem erbij voor € 10 per maand. De agenda zit in elk pakket. In de proefperiode kun je de planningsmodule gewoon uitproberen.",
+  "noot": "De planningsmodule zit in Team. Bij Groei neem je hem erbij voor € 10 per maand. De agenda zit in elk pakket. In de proefperiode probeer je de planningsmodule gratis, ook als je Groei kiest.",
   "beeld": { "src": "/screens/planning.webp", "width": 1600, "height": 1000, "alt": "De weekplanning in BossBase met de werkbonnen van één medewerker per dag", "bijschrift": "De weekplanning per medewerker. Voorbeeld uit de demo, met fictieve gegevens." },
   "puntenTitel": "Wat de planning voor je doet",
   "punten": [
@@ -23,7 +23,7 @@
     { "titel": "Voertuigen", "tekst": "Plan ook je bussen in, met naam en kenteken. Voertuigen zitten in Team, of als module van € 5 bij Groei (naast de planning)." }
   ],
   "faq": [
-    { "v": "In welk pakket zit de planning?", "a": "De planningsmodule zit in Team. Bij Groei neem je hem erbij voor € 10 per maand. De agenda zit in elk pakket. In de proefperiode kun je de planningsmodule gewoon uitproberen." },
+    { "v": "In welk pakket zit de planning?", "a": "De planningsmodule zit in Team. Bij Groei neem je hem erbij voor € 10 per maand. De agenda zit in elk pakket. In de proefperiode probeer je de planningsmodule gratis, ook als je Groei kiest." },
     { "v": "Heb ik de planning nodig als ik alleen werk?", "a": "Werk je alleen, dan heb je vaak genoeg aan de agenda. Die zit in elk pakket en toont je afspraken en ingeplande werkbonnen. De planningsmodule is bedoeld voor bedrijven met meerdere mensen of bussen." },
     { "v": "Kan ik ook mijn bussen inplannen?", "a": "Ja. Plan je bussen in met naam en kenteken, en krijg een waarschuwing als een bus al ergens ingepland staat. Voertuigen zitten in Team, of als module van € 5 bij Groei, naast de planning." },
     { "v": "Krijgt mijn team een melding bij een wijziging?", "a": "Wie ingepland wordt, krijgt een melding in de app, en als je wilt ook een mail. Om 18:00 volgt een samenvatting van de wijzigingen van die dag." }

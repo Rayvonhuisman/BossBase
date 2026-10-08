@@ -1,3 +1,4 @@
+import { toonModule } from '../lib/moduleVenster.jsx';
 import { useState, useEffect, useRef } from 'react';
 import { vandaagIso, voegDagenToe } from '../lib/datumTijd.js';
 import { getCustomer } from '../services/customerService.js';
@@ -1144,6 +1145,8 @@ export function SendFactuurMailModal({ factuur, customers, company, templateType
       toast.success('E-mail verstuurd');
       onSent?.();
       onClose();
+      // Verstuurd zonder betaalknop: één keer de betaallink aanbieden.
+      if (!stripeAllowed) toonModule('stripe_betaallink', { onderwerp: 'factuur-betaallink' });
     } catch (err) {
       toast.error(err.message || 'Versturen mislukt');
     } finally {

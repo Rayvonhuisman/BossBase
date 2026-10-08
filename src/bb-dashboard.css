@@ -3543,3 +3543,24 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 /* Na de rondleiding licht de Boss-knop rechtsboven even op. */
 @keyframes rlPuls{0%,100%{box-shadow:0 0 0 0 rgba(29,219,98,0)}50%{box-shadow:0 0 0 7px rgba(29,219,98,.35)}}
 .rl-boss-puls{border-radius:50%;animation:rlPuls 1s ease 3}
+
+/* ── Module op slot (lib/moduleVenster.jsx) ── */
+.mv{max-width:440px;width:100%}
+.mv-titel{display:inline-flex;align-items:center;gap:7px}
+.mv-titel svg{color:var(--dmu)}
+.mv-prijs{font-size:1.4rem;font-weight:800;color:var(--dk);letter-spacing:-.02em;margin:2px 0 6px}
+.mv-prijs span{font-size:.8rem;font-weight:500;color:var(--dmu);letter-spacing:0}
+.mv-tekst{margin:0 0 8px;color:var(--dm);font-size:.9rem;line-height:1.55}
+.mv-klein{margin:0 0 6px;color:var(--dmu);font-size:.8rem;line-height:1.5}
+.mv-fout{margin:6px 0 0;color:#b91c1c;font-size:.82rem}
+.wbv-slot{display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.wbv-slot .wbd-kop{display:inline-flex;align-items:center;gap:5px;color:var(--dmu)}
+.wbv-slot p{margin:0;font-size:.8rem;color:var(--dmu)}
+.sbi.op-slot{color:var(--dl)}
+.sbi.op-slot .sbi-slot{margin-left:auto;display:inline-flex;color:var(--dl)}
+.sbi.op-slot .sbi-slot svg{width:13px;height:13px}
+.sb.collapsed .sbi.op-slot .sbi-slot{display:none}
+.proef-wissel{display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;border-radius:var(--r10);background:var(--pll);border:1px solid var(--pl);font-size:.84rem;color:var(--dm)}
+.ab-proef{margin-bottom:14px}
+.ab-module-rij{flex-wrap:wrap}
+.ab-module-proef{flex-basis:100%;font-size:.78rem;color:var(--pd);margin:2px 0 0 26px}

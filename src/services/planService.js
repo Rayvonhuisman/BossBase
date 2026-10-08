@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase.js'
 import { withCompanyId } from '../lib/currentCompany.js'
 import { DEFAULT_TIER } from '../lib/tiers.js'
-import { TIER_FEATURES, TIER_LIMITS, effectiveTier } from '../lib/features.js'
+import { TIER_FEATURES, TIER_LIMITS, MODULES, effectiveTier } from '../lib/features.js'
 
 // Abonnementsstand van het huidige bedrijf: tier, trial, periode, modules,
 // features en per limiet de stand. Dit is dezelfde waarheid als de server
@@ -26,8 +26,11 @@ export async function getPlanStatus() {
     readonlyReden: data.readonlyReden || null,
     magBeheren:    data.magBeheren === true,
     modules:      Array.isArray(data.modules) ? data.modules : [],
+    // Modules die het bedrijf in de proef gratis probeerde (ook na de proef).
+    proefModules: Array.isArray(data.proefModules) ? data.proefModules : [],
     features:     Array.isArray(data.features) ? data.features : [],
     limits:       data.limits || {},
+    ...proefDemoStand(data.limits),
   }
 }
 
@@ -46,7 +49,7 @@ export function fallbackPlanStatus(tier = DEFAULT_TIER) {
     // Zonder serverantwoord nooit read-only — zie de veiligheidsklep in de
     // database. Een storing in het ophalen van de stand mag geen account sluiten.
     readonly: false, readonlyReden: null, magBeheren: false,
-    modules: [], features: TIER_FEATURES[t] || [], limits,
+    modules: [], proefModules: [], features: TIER_FEATURES[t] || [], limits,
   }
 }
 
@@ -95,4 +98,57 @@ export async function requestUpgrade({ tier, modules = [], aanleiding = null }) 
     .single()
   if (error) throw error
   return data
+}
+
+// ── Proef-testmodus (alleen in de devserver) ─────────────────────────────────
+// /dashboard?proefdemo=groei (of team, groei-na, team-na; uit = stoppen) doet
+// alsof dit bedrijf in de proef zit, zonder database. Geprobeerde modules
+// staan dan in de browser. Nooit in een productiebundel.
+const DEMO_SLEUTEL = 'bb.proefdemo'
+const DEMO_MODULES = 'bb.proefdemo.modules'
+
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  const q = new URLSearchParams(window.location.search).get('proefdemo')
+  try {
+    if (q === 'uit') { localStorage.removeItem(DEMO_SLEUTEL); localStorage.removeItem(DEMO_MODULES) }
+    else if (q) localStorage.setItem(DEMO_SLEUTEL, q)
+  } catch { /* geen opslag */ }
+}
+
+export function proefDemo() {
+  if (!import.meta.env.DEV) return null
+  try { return localStorage.getItem(DEMO_SLEUTEL) } catch { return null }
+}
+
+export function proefDemoModules() {
+  try { return JSON.parse(localStorage.getItem(DEMO_MODULES) || '[]') } catch { return [] }
+}
+
+export function zetProefDemo(waarde, modules) {
+  try {
+    if (waarde) localStorage.setItem(DEMO_SLEUTEL, waarde)
+    if (modules) localStorage.setItem(DEMO_MODULES, JSON.stringify(modules))
+  } catch { /* geen opslag */ }
+}
+
+// Alleen proef, pakket en modules worden overschreven; tellingen en de rest
+// komen van de echte stand.
+function proefDemoStand(limits = {}) {
+  const demo = proefDemo()
+  if (!demo) return {}
+  const [tierNaam, na] = demo.split('-')
+  const t = effectiveTier(tierNaam)
+  const trial = na !== 'na'
+  const proefModules = proefDemoModules()
+  const moduleFeatures = trial ? proefModules.map(k => MODULES.find(m => m.key === k)?.feature).filter(Boolean) : []
+  return {
+    tier: t, plan: t,
+    status: trial ? 'trial' : 'actief', trial,
+    trialEndsAt: new Date(Date.now() + (trial ? 6 : -1) * 86400_000).toISOString(),
+    magBeheren: true,
+    proefModules,
+    features: [...new Set([...(TIER_FEATURES[t] || []), ...moduleFeatures])],
+    // In een echte proef zijn er geen limieten.
+    limits: trial ? Object.fromEntries(Object.entries(limits || {}).map(([k, v]) => [k, { ...v, max: null }])) : limits,
+  }
 }

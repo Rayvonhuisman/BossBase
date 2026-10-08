@@ -126,7 +126,7 @@ function Kop({ situatie, setSituatie, vak, setVak, navigate }) {
             <a href="/register" className="hv-btn hv-btn-p hv-btn-lg" onClick={e => go(e, '/register')}>Start nu gratis {HI.arrow}</a>
             <a href="/prijzen" className="hv-btn hv-btn-s hv-btn-lg" onClick={e => go(e, '/prijzen')}>Bekijk prijzen</a>
           </div>
-          <p className="fp-noot-kop"><i>{HI.check}</i>14 dagen gratis met alle functies. Geen betaalgegevens nodig.</p>
+          <p className="fp-noot-kop"><i>{HI.check}</i>14 dagen gratis met het pakket dat je kiest. Modules probeer je er gratis bij. Geen betaalgegevens nodig.</p>
         </div>
 
         <div className="vw-paneel-wrap">
@@ -182,7 +182,7 @@ function Situatie({ situatie, setSituatie, navigate }) {
         </div>
         <div className="vw-cta-rij">
           <a href="/register" className="hv-btn hv-btn-p hv-btn-lg" onClick={e => go(e, '/register')}>{s.cta} {HI.arrow}</a>
-          <span>14 dagen gratis met alle functies. Geen betaalgegevens nodig.</span>
+          <span>14 dagen gratis met het pakket dat je kiest. Modules probeer je er gratis bij. Geen betaalgegevens nodig.</span>
         </div>
       </div>
     </section>

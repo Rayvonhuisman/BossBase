@@ -34,6 +34,7 @@ import { WerkbonDagenVelden, WerkbonLocatieVeld, useKlantAdres } from '../compon
 import { MijnVoertuig, MijnPlanningMelding, useWerkbonVoertuigen } from '../components/WerkbonVoertuigen.jsx';
 import { PlanningRegels, planRegels } from '../components/PlanningBlok.jsx';
 import { voertuigPlanningUitWerkbon } from '../utils/voertuigDagen.js';
+import { toonModule } from '../lib/moduleVenster.jsx';
 import {
   planningUitWerkbon, dagenUitPlanning, controleerPlanning, legePlanning, planningLabel, geplandeDatums,
   werkbonVenster,
@@ -392,12 +393,19 @@ export function WerkbonModal({ mode, werkbon, customers, projects = [], onClose,
           <WerkbonDagenVelden
             className="full"
             planning={planning}
-            onChange={setPlanning}
+            onChange={nieuw => {
+              // Zonder planning kan een werkbon maar op één dag. Kiest iemand
+              // een andere dag terwijl er al een staat, dan wil hij misschien
+              // meerdere dagen: één keer de planningsmodule aanbieden.
+              const nu = geplandeDatums(planning)[0];
+              if (!meerdaags && nu && geplandeDatums(nieuw)[0] !== nu) toonModule('planning', { onderwerp: 'werkbon-meerdere-dagen' });
+              setPlanning(nieuw);
+            }}
             starttijd={form.starttijd}
             eindtijd={form.eindtijd}
             disabled={saving}
             meerdaags={meerdaags}
-            onUpgrade={guardFeature('planning', () => {})}
+            onUpgrade={() => toonModule('planning')}
             onTijden={t => setForm(f => ({ ...f, ...t }))}
             ploeg={form.assignedToIds.map(id => {
               const m = teamMembers.find(x => x.profileId === id);

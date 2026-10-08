@@ -58,6 +58,8 @@ export function usePlan() {
 
   return {
     tier, trial, modules, planStatus,
+    // Modules die in de proef gratis geprobeerd zijn (ook na de proef bekend).
+    proefModules: planStatus?.proefModules || [],
     readonly,
     readonlyReden: readonly ? (planStatus?.readonlyReden || null) : null,
     // Alleen de eigenaar/admin kan betalen — bepaalt of iemand de betaalknop ziet.

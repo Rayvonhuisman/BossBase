@@ -76,9 +76,45 @@ wij bouwen en gaat in als die live staat (zie het onderdeel Website).
 ## Gratis proberen
 
 - **14 dagen gratis**, zonder betaalgegevens.
-- Je probeert **alle functies**, zonder limieten: ook de Stripe-betaallink, de
-  boekhoudkoppeling, planning en voertuigen. Na de proefperiode houd je wat in het
-  pakket zit dat je kiest.
+- Je probeert het pakket dat je bij het aanmelden koos: **Groei of Team**, zonder limieten.
+- In de proef wissel je met één klik van Groei naar Team of terug, zonder opnieuw te
+  beginnen: **Instellingen → Abonnement**, knop **Proef naar Team** (of **Proef naar
+  Groei**). Alleen de eigenaar kan dat.
+
+### Een module gratis proberen
+Bij Groei zitten planning, voertuigen en de Stripe-betaallink niet in het pakket. Je ziet
+ze met een slotje op de plek waar je ze gebruikt:
+- **Planning**: in het menu.
+- **Voertuigen**: in het blok Voertuigen bij een werkbon (als je planning hebt).
+- **Betaallink**: op de Stripe-kaart onder Instellingen → Koppelingen.
+
+Klik erop: je ziet wat de module doet en wat hij kost, met twee knoppen.
+- **Gratis proberen tot het einde van je proef**: de module staat meteen aan, tot je
+  proef afloopt. Alleen de eigenaar kan dat.
+- **Niet nu**: het venster gaat dicht.
+
+| Module | Prijs na de proef |
+|---|---|
+| Planningsmodule | € 10 per maand |
+| Stripe betaallink | € 10 per maand |
+| Voertuigen | € 5 per maand, alleen samen met de planningsmodule |
+
+Voertuigen werkt samen met planning; probeer je voertuigen, dan gaat planning er ook bij
+aan. In Team zitten alle drie er al in.
+
+Het venster komt ook vanzelf, één keer per onderwerp: als je een werkbon op een andere
+dag zet (meerdere dagen kan met planning), als je een factuur verstuurt zonder
+betaalknop (betaallink), en als je bij Groei een derde collega uitnodigt (dan de keuze
+om je proef naar Team te zetten). Na **Niet nu** komt het voor dat onderwerp niet terug.
+
+**Houden**: bij het afsluiten van je abonnement staan de modules die je probeerde al
+aangevinkt, met "Je gebruikte … in je proef. Houden voor € … per maand?". Vink uit wat
+je niet nodig hebt. Een module die je niet houdt, gaat uit na de proef; je gegevens
+blijven bewaard, dus hij kan later weer aan. De mails van 3 dagen en 1 dag voor het
+einde noemen de modules die je probeerde.
+
+Na de proef staat in het venster **Toevoegen**: dan ga je naar je abonnement met de
+module al aangevinkt.
 
 ### Na de proefperiode, of als het abonnement stopt
 Je account gaat niet op slot. Je kunt alles blijven bekijken en exporteren, maar

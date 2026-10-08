@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Truck } from 'lucide-react';
+import { Truck, Lock } from 'lucide-react';
+import { moduleForFeature } from '../lib/features.js';
+import { toonModule } from '../lib/moduleVenster.jsx';
 import { getVoertuigen } from '../services/voertuigService.js';
 import { databaseKentVoertuigen } from '../services/werkbonService.js';
 import { usePlan } from '../hooks/usePlan.js';
@@ -67,7 +69,16 @@ export function useWerkbonVoertuigen({ werkbon = null, meerdaags = true }) {
     controleer: (planning, ploegIds, naamVan, standaard) =>
       (klaar ? controleerVoertuigen(ctx(planning, ploegIds, naamVan, standaard), origineel) : ''),
     blok: ({ planning, onChange, ploeg = [], standaard, werkbonId = null, disabled = false, style, className = '' }) =>
-      (klaar ? (
+      // Met planning maar zonder voertuigen: het blok op slot, op dezelfde plek.
+      (meerdaags && !plan.has('voertuigen') && moduleForFeature(plan.tier, 'voertuigen') ? (
+        <div className={`wbv wbv-slot ${className}`} style={style}>
+          <span className="wbd-kop"><Lock size={12} /> Voertuigen</span>
+          <p>Bussen en aanhangers inplannen bij deze klus.</p>
+          <button type="button" className="btn btn-s btn-sm" disabled={disabled} onClick={() => toonModule('voertuigen')}>
+            {plan.trial ? 'Gratis proberen' : 'Bekijken'}
+          </button>
+        </div>
+      ) : klaar ? (
         <WerkbonVoertuigenBlok
           planning={planning}
           onChange={onChange}

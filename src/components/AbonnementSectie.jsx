@@ -10,6 +10,7 @@ import { getOpenUpgradeVerzoeken, rondUpgradeVerzoekAf } from '../services/planS
 import { vandaagIso } from '../lib/datumTijd.js';
 import { bevestig } from '../lib/bevestig.jsx';
 import { statusInfo } from '../lib/website.js';
+import { ProefPakketWissel } from './ProefPakketWissel.jsx';
 
 // Abonnementssectie in Instellingen: huidig pakket, status, verlengdatum,
 // verbruik tegen de limieten, modules en de knoppen om te wijzigen.
@@ -188,6 +189,7 @@ export function AbonnementSectie() {
               <div style={{ fontWeight: 600 }}>{fmtDatum(stand.trialEindigtOp)}</div>
             </div>
           )}
+          {stand.trial && <ProefPakketWissel onGewisseld={() => getBillingStatus().then(setStand).catch(() => {})} />}
           {/* Een verlengdatum in het verleden (bedrijf zonder Stripe) is geen
               informatie maar verwarring; dan niet tonen. */}
           {stand.verlengtOp && !stand.definitiefOpgezegd && String(stand.verlengtOp).slice(0, 10) >= vandaagIso() && (

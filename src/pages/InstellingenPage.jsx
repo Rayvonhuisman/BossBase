@@ -1,3 +1,5 @@
+import { Lock } from 'lucide-react';
+import { toonModule } from '../lib/moduleVenster.jsx';
 import { useState, useEffect, useRef } from 'react';
 import { resetGezien } from '../services/rondleidingService.js';
 import { RL_RESET } from '../lib/rondleidingen.js';
@@ -1611,15 +1613,15 @@ export function InstellingenPage({ openDeal } = {}) {
           : 'Niet gekoppeld',
       },
       gate: !stripeAllowed ? {
-        pill: `Vanaf ${tierLabel(plan.needsFor('stripe_betaallink'))}`,
+        pill: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Lock size={11} strokeWidth={2.4} /> Op slot</span>,
         tekst: (
           <>
             Stripe-betalingen horen bij <strong>{tierLabel(plan.needsFor('stripe_betaallink'))}</strong>,
             of als losse module bij Groei.
           </>
         ),
-        knop: 'Bekijk opties',
-        onClick: () => gaNaarAbonnement(null, { soort: 'feature', key: 'stripe_betaallink' }),
+        knop: plan.trial ? 'Gratis proberen' : 'Bekijk opties',
+        onClick: () => toonModule('stripe_betaallink'),
       } : null,
       koppeling: {
         inleiding: stripeConn?.chargesEnabled ? 'Klanten kunnen je facturen nu online betalen.'

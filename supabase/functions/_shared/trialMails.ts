@@ -38,7 +38,15 @@ export type TrialMailGegevens = {
   trialEindigt: string | null   // ISO-datum
   appUrl: string
   afmeldUrl: string             // pagina /afmelden met ondertekende link
+  // Modules die in de proef gratis geprobeerd zijn (dag 11 en 14 noemen ze).
+  modules?: { label: string; prijs: number }[]
 }
+
+// Geprobeerde modules: wat ze kosten, en dat ze bij het afsluiten al aanstaan.
+const geprobeerd = (modules?: { label: string; prijs: number }[]) => !modules?.length ? '' :
+  bbKop2('Je probeerde ook') +
+  bbVinkjes(modules.map(m => `${esc(m.label)}: € ${m.prijs} per maand`)) +
+  bbP(`Wil je ${modules.length === 1 ? 'hem' : 'ze'} houden? Bij het afsluiten van je abonnement ${modules.length === 1 ? 'staat hij' : 'staan ze'} al aangevinkt. Niet nodig? Vink uit; je gegevens blijven bewaard.`)
 
 const datumNL = (iso?: string | null) => {
   if (!iso) return ''
@@ -160,6 +168,7 @@ export function trialMail(nummer: TrialMailNummer, g: TrialMailGegevens): Mail {
           'Klussen, werkbonnen en uren bijhouden',
           'Je team erbij, ieder met eigen rechten',
         ]) +
+        geprobeerd(g.modules) +
         jaarAanbod +
         bbKnop('Kies je abonnement', abonnement) +
         bbHandtekening({ titel: 'Twijfel je nog?', tekst: 'Welk pakket past bij jou, of kan BossBase iets wat je nodig hebt? Antwoord op deze mail of bel me, dan zoeken we het samen uit.' }),
@@ -175,6 +184,7 @@ export function trialMail(nummer: TrialMailNummer, g: TrialMailGegevens): Mail {
         bbP(`Hoi ${naam},`) +
         bbP('Morgen loopt je proefperiode af.') +
         bbP('Vanaf dan kun je je gegevens nog bekijken en exporteren, maar geen nieuwe offertes, facturen of klussen meer aanmaken. Zodra je een abonnement kiest, staat alles meteen weer open, precies zoals je het achterliet.') +
+        geprobeerd(g.modules) +
         jaarAanbod +
         bbKnop('Kies je abonnement', abonnement) +
         bbHandtekening({ titel: 'Nog een vraag voordat je kiest?', tekst: 'Antwoord op deze mail of bel me. Dan heb je vandaag nog antwoord.' }),

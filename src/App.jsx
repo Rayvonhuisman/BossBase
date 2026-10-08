@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { logFout } from './lib/stilleFouten.js';
 import { vandaagIso } from './lib/datumTijd.js';
 import { createPortal } from 'react-dom';
-import { Wrench, AlertTriangle } from 'lucide-react';
+import { Wrench, AlertTriangle, Lock } from 'lucide-react';
 import { I, Logo, initials } from './bb-shared.jsx';
 import { LoginPage, RegisterFlow, EmailVerificationScreen } from './pages/BbAuth.jsx';
 const AfmeldenPage = lazy(() => import('./pages/AfmeldenPage.jsx').then(m => ({ default: m.AfmeldenPage })));
@@ -54,13 +54,14 @@ import { ReadOnlyBanner } from './components/ReadOnly.jsx';
 import { CheckoutTerugkeer } from './components/CheckoutTerugkeer.jsx';
 import { BossChat, BOSS_BEGROETING } from './components/BossChat.jsx';
 import { MeldKnop } from './components/Meldpunt.jsx';
-import { featureLabel } from './lib/features.js';
+import { featureLabel, moduleForFeature } from './lib/features.js';
 import { clearCompanyId, setCompanyId } from './lib/currentCompany.js';
 import { ToastProvider, useToast } from './lib/toast.jsx';
 import { BevestigVenster } from './lib/bevestig.jsx';
 import { UploadProvider } from './lib/uploadContext.jsx';
 import { UrenHerinneringModal } from './components/UrenHerinneringModal.jsx';
 import { NieuweVoorwaarden } from './components/NieuweVoorwaarden.jsx';
+import { ModuleVenster, toonModule } from './lib/moduleVenster.jsx';
 const BetaalStatusPage = lazy(() => import('./pages/BetaalStatusPage.jsx').then(m => ({ default: m.BetaalStatusPage })));
 const BetaalPage = lazy(() => import('./pages/BetaalPage.jsx').then(m => ({ default: m.BetaalPage })));
 import { ProfileContext, displayName, profileInitials } from './lib/profileContext.jsx';
@@ -197,6 +198,20 @@ const uitNav = veld => Object.fromEntries(
 // dit abonnement". Beide moeten kloppen.
 const PLAN_GATED_PAGES = uitNav('feature');
 
+// Een pagina die als module bij het pakket kan (bij Groei: planning) staat in
+// het menu met een slotje. Een klik opent het modulevenster: gratis proberen in
+// de proef, daarna toevoegen. Voertuigen en de betaallink hebben geen eigen
+// pagina; hun slotje staat waar je ze gebruikt (WerkbonVoertuigen.jsx en de
+// Stripe-kaart onder Instellingen, Koppelingen).
+// Geeft de module, of null als het item gewoon open of helemaal niet te koop is.
+const moduleOpSlot = (item, plan) =>
+  item.feature && !plan.has(item.feature) ? moduleForFeature(plan.tier, item.feature) : null;
+
+// Waar een module zit als hij net aan staat.
+const NA_START = {
+  planning: { page: 'planning' },
+};
+
 // Pagina's die een bepaald recht vereisen voor toegang.
 //
 // UITZONDERING — instellingen. Die pagina beveiligt zichzelf: zonder het recht
@@ -332,8 +347,10 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, compan
             const items = NAV.filter(n => {
               if (n.section !== sec.id) return false;
               if (n.permission && !can(n.permission)) return false;
-              // Zit de pagina niet in dit abonnement, dan tonen we hem niet.
-              if (n.feature && !plan.has(n.feature)) return false;
+              // Zit de pagina niet in dit abonnement: met een slotje als hij er
+              // als module bij kan, anders niet tonen. Een module zonder eigen
+              // pagina staat alleen in het menu zolang hij op slot zit.
+              if (n.feature && !plan.has(n.feature) && !moduleOpSlot(n, plan)) return false;
               if (n.alleenMetWebsite && !heeftWebsite) return false;
               return true;
             });
@@ -396,6 +413,26 @@ function Sidebar({ page, setPage, open, onClose, onLogout, profile, user, compan
                           </button>
                         ))}
                       </div>
+                    );
+                  }
+
+                  const slot = moduleOpSlot(item, plan);
+                  if (slot) {
+                    const open = async () => {
+                      onClose();
+                      if (await toonModule(slot.key) !== 'gestart') return;
+                      const doel = NA_START[slot.key];
+                      if (doel?.page) setPage(doel.page);
+                    };
+                    return (
+                      <button key={item.id} className="sbi op-slot" onClick={open}
+                        aria-label={`${item.label} (op slot)`}
+                        onMouseEnter={collapsed ? e => showNavTip(e, `${item.label} (op slot)`) : undefined}
+                        onMouseLeave={collapsed ? hideNavTip : undefined}>
+                        <span className="sbi-icon">{I[item.icon]}</span>
+                        <span className="sbi-label">{item.label}</span>
+                        <span className="sbi-slot" aria-hidden="true"><Lock /></span>
+                      </button>
                     );
                   }
 
@@ -2165,6 +2202,7 @@ function AppInner() {
       </div>
       <UrenHerinneringModal navigatePage={navigatePage} />
       <NieuweVoorwaarden userId={sessionUserId} isAdmin={profile?.role === 'admin'} onLogout={handleLogout} />
+      <ModuleVenster setPage={navigatePage} bumpRefresh={bumpRefresh} />
       </DataContext.Provider>
     </ProfileContext.Provider>
   );

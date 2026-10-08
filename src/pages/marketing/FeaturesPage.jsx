@@ -70,7 +70,7 @@ const BLOKKEN = [
 const HERO_PUNTEN = [
   "Aan elkaar gekoppeld: de factuur komt uit de geaccepteerde offerte, de uren van de werkbon.",
   "Werkbon met handtekening van de klant, in elk pakket.",
-  "Gratis 14 dagen op proef, met alle functies. Geen betaalgegevens nodig.",
+  "Gratis 14 dagen op proef met het pakket dat je kiest. Modules probeer je er gratis bij. Geen betaalgegevens nodig.",
 ]
 
 function Hero({ navigate }) {

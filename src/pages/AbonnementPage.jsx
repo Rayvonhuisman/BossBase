@@ -18,6 +18,7 @@ import {
 import { requestUpgrade } from '../services/planService.js';
 import { bedenkVoorstel, euro, fmtDatum } from '../lib/upgradeVoorstel.js';
 import { aanleidingUitUrl } from '../lib/abonnementNav.js';
+import { ProefPakketWissel } from '../components/ProefPakketWissel.jsx';
 
 // ── DE ABONNEMENTSPAGINA ──────────────────────────────────────────────────────
 // Was een modal (UpgradeFlow). Daar moest te veel in: pakketkeuze, betaaltermijn,
@@ -176,6 +177,16 @@ export default function AbonnementPage({ setPage }) {
     return () => { leeft = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Modules die in de proef geprobeerd zijn, staan al aangevinkt (uit te
+  // vinken). Alleen wat bij het gekozen pakket los te kiezen is. Eigen effect,
+  // want de abonnementsstand kan later binnenkomen dan deze pagina.
+  const proefKeys = (plan.proefModules || []).join(',');
+  useEffect(() => {
+    if (!stand || stand.heeftStripe || !tier || !proefKeys) return;
+    const geprobeerd = proefKeys.split(',').filter(k => canBuyModule(tier, k));
+    if (geprobeerd.length) setModules(prev => [...new Set([...prev, ...geprobeerd])]);
+  }, [stand, proefKeys, tier]);
 
   // Wat vindt de server van deze keuze? Dezelfde functie als billing-wijzig
   // gebruikt, dus het scherm belooft nooit iets dat daarna geweigerd wordt.
@@ -343,6 +354,8 @@ export default function AbonnementPage({ setPage }) {
             : 'Je gegevens blijven staan. Je gaat verder waar je gebleven was.'}</p>
         </div>
       </div>
+
+      {!heeftStripe && magBetalen && <ProefPakketWissel className="ab-proef afu" onGewisseld={kiesTier} />}
 
       {/* ── Waarom je hier bent ────────────────────────────────────────────── */}
       {/* 'abonnement' is geen probleem maar gewoon de keuze — de paginakop zegt
@@ -532,6 +545,9 @@ export default function AbonnementPage({ setPage }) {
                       </span>
                     )}
                     <span className="ab-module-prijs">+ {euro(m.price)} p/mnd</span>
+                    {plan.proefModules?.includes(m.key) && !heeftStripe && (
+                      <span className="ab-module-proef">Je gebruikte {m.label} in je proef. Houden voor {euro(m.price)} per maand?</span>
+                    )}
                   </div>
                 ))}
                 {modules.includes('voertuigen') && (

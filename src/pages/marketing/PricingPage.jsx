@@ -157,7 +157,7 @@ const CMP_CATS = [
 const FAQ_P = [
   { q: "Hoe zit het met opzeggen?", a: "Een maandabonnement is per maand opzegbaar. Een jaarabonnement loopt 12 maanden: je betaalt maandelijks en kunt tussentijds niet opzeggen, wel tegen het einde van die 12 maanden. Daarna loopt het maandelijks door en is het per maand opzegbaar." },
   { q: "Wat gebeurt er met mijn looptijd als ik overstap naar een groter pakket?", a: "Bij een jaarabonnement begint de looptijd van 12 maanden dan opnieuw, gerekend vanaf de overstap. Je ziet de nieuwe einddatum in het scherm voordat je bevestigt en gaat er expliciet mee akkoord. Modules bijkopen en teamleden toevoegen raken je looptijd niet — dat zijn bijbestellingen. Bij een maandabonnement verandert er niets: dat blijft per maand opzegbaar, ook na een upgrade." },
-  { q: "Wat gebeurt er na de proefperiode?", a: "Tijdens de proefperiode werk je met alle functies, zonder limieten. Na 14 dagen kies je een abonnement. Doe je dat niet, dan wordt je account alleen-lezen: je kunt je gegevens nog bekijken en exporteren, maar niets nieuws aanmaken." },
+  { q: "Wat gebeurt er na de proefperiode?", a: "Tijdens de proefperiode werk je met het pakket dat je kiest, zonder limieten. Losse modules probeer je er gratis bij. Na 14 dagen kies je een abonnement. Doe je dat niet, dan wordt je account alleen-lezen: je kunt je gegevens nog bekijken en exporteren, maar niets nieuws aanmaken." },
   { q: "Kan ik van plan wisselen?", a: "Upgraden naar een groter pakket kan altijd. Naar een kleiner pakket gaan kan bij een maandabonnement; bij een jaarabonnement niet binnen de looptijd van 12 maanden. Zit je boven de limiet van het kleinere pakket (bijvoorbeeld meer dan 100 klanten bij Starter), dan kan het ook niet." },
   { q: "Is BTW inbegrepen in de prijs?", a: "Nee, alle prijzen zijn exclusief btw. De btw komt er op je factuur bij." },
   { q: "Wat zijn de betaalmogelijkheden?", a: "Je sluit het abonnement af en betaalt via Stripe, ook bij een jaarabonnement (in 12 maandtermijnen). Welke betaalmethoden je kunt kiezen, zie je bij het afrekenen." },
@@ -195,7 +195,7 @@ export default function PricingPage({ navigate }) {
           <div className="container">
             <span className="section-kicker">Prijzen</span>
             <h1>Duidelijke prijs.<br/>Geen verrassingen.</h1>
-            <p>Prijzen per maand, exclusief btw. Probeer BossBase 14 dagen gratis met alle functies; je hoeft geen betaalgegevens in te vullen.</p>
+            <p>Prijzen per maand, exclusief btw. Probeer BossBase 14 dagen gratis met het pakket dat je kiest, en probeer modules er gratis bij. Je hoeft geen betaalgegevens in te vullen.</p>
           </div>
         </section>
 

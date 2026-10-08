@@ -1,3 +1,4 @@
+import { toonProefTeam } from '../lib/moduleVenster.jsx';
 import { useState, useEffect } from 'react';
 import { LaadFout } from '../components/LaadFout.jsx';
 import { I, ModalX, initials, Av } from '../bb-shared.jsx';
@@ -457,6 +458,15 @@ export function TeamPage() {
   // De database weigerde omdat het pakket vol zit: melding staat al als toast,
   // nu door naar de abonnementspagina om te upgraden.
   const naarUpgrade = () => toonBlokkade({ limiet: 'gebruikers' });
+  // Groei is voor één of twee personen. Nodigt iemand in de proef een derde
+  // collega uit, dan één keer de keuze om de proef naar Team te zetten; daarna
+  // gaat het uitnodigen gewoon door.
+  const nodigUit = async () => {
+    if (plan.trial && plan.tier === 'groei' && (Number(plan.used('gebruikers')) || 0) >= 2) {
+      await toonProefTeam({ onderwerp: 'derde-collega' });
+    }
+    setShowInvite(true);
+  };
 
   const [laadFout, setLaadFout] = useState(null);
   const laad = () => {
@@ -552,7 +562,7 @@ export function TeamPage() {
         </div>
         <div className="page-hd-actions">
           {isAdmin && (
-            <button className="btn btn-p" data-rl="team-uitnodigen" onClick={guardLimiet('gebruikers', () => setShowInvite(true))}>
+            <button className="btn btn-p" data-rl="team-uitnodigen" onClick={guardLimiet('gebruikers', nodigUit)}>
               {I.plus} Teamlid uitnodigen
             </button>
           )}

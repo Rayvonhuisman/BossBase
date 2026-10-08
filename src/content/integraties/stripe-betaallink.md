@@ -11,7 +11,7 @@
   "lead": "Koppel je eigen Stripe-account en elke factuurmail krijgt een betaallink. Je klant betaalt met iDEAL, en de factuur gaat vanzelf op betaald. Geen afschriften meer naast je facturen leggen.",
   "cta": { "label": "Start 14 dagen gratis", "href": "/register" },
   "cta2": { "label": "Bekijk prijzen", "href": "/prijzen" },
-  "noot": "De betaallink zit in Team. Bij Groei neem je hem erbij voor € 10 per maand. De transactiekosten van Stripe betaal je zelf, via je eigen Stripe-account. In de proefperiode kun je hem gewoon uitproberen.",
+  "noot": "De betaallink zit in Team. Bij Groei neem je hem erbij voor € 10 per maand. De transactiekosten van Stripe betaal je zelf, via je eigen Stripe-account. In de proefperiode probeer je hem gratis, ook als je Groei kiest.",
   "puntenTitel": "Hoe de betaallink werkt",
   "punten": [
     { "titel": "Je eigen Stripe-account", "tekst": "Je koppelt BossBase aan een eigen Stripe-account. Het geld komt bij jou binnen, niet bij BossBase." },
@@ -23,7 +23,7 @@
   "faq": [
     { "v": "Welke betaalmethoden kan mijn klant gebruiken?", "a": "iDEAL." },
     { "v": "Moet ik een Stripe-account hebben?", "a": "Ja. Je koppelt een eigen Stripe-account via Instellingen in BossBase. De voorwaarden en kosten van Stripe gelden voor dat account." },
-    { "v": "Kan ik de betaallink in de proefperiode uitproberen?", "a": "Ja. In de proefperiode werken alle functies, ook de betaallink. Daarna zit hij in Team, of als module bij Groei." }
+    { "v": "Kan ik de betaallink in de proefperiode uitproberen?", "a": "Ja. Kies je Team, dan zit hij erin. Kies je Groei, dan zet je hem met één klik aan als module en probeer je hem gratis tot het einde van je proef. Daarna houd je hem voor € 10 per maand, of zet je hem uit." }
   ],
   "gerelateerd": [
     { "href": "/facturen", "titel": "Facturen", "tekst": "Factureren vanuit je offerte, met herinneringen." },

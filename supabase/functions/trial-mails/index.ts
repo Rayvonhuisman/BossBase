@@ -135,6 +135,7 @@ serve(async (req) => {
           trialEindigt: overMorgen,
           appUrl,
           afmeldUrl: voorbeeld.pagina,
+          modules: [{ label: 'Planningsmodule', prijs: 10 }, { label: 'Voertuigen', prijs: 5 }],
         })
         const id = await verstuur(internAdres, `[dag ${nummer}] ${m.subject}`, m.html, `trial_${nummer}_bekijk`)
         if (id) { uitslag.verstuurd++; uitslag.details.push(`dag ${nummer} verstuurd`) }
@@ -163,11 +164,19 @@ serve(async (req) => {
       }
 
       const afmelden = await afmeldLinks(appUrl, k.company_id)
+      // Dag 11 en 14 noemen de modules die in de proef geprobeerd zijn.
+      let modules: { label: string; prijs: number }[] = []
+      if (k.mail === 11 || k.mail === 14) {
+        const { data: pm } = await db.from('proef_modules')
+          .select('module_key, plan_modules(label, price)').eq('company_id', k.company_id)
+        modules = (pm ?? []).map((r: any) => ({ label: r.plan_modules?.label ?? r.module_key, prijs: Number(r.plan_modules?.price ?? 0) }))
+      }
       const m = trialMail(k.mail as TrialMailNummer, {
         naam: k.naam,
         trialEindigt: k.trial_eindigt,
         appUrl,
         afmeldUrl: afmelden.pagina,
+        modules,
       })
 
       const messageId = await verstuur(k.naar, m.subject, m.html, `trial_${k.mail}`, afmelden.eenKlik)
