@@ -57,7 +57,7 @@ async function laadBedrijven(admin: any) {
     alleRijen(() => admin.from('companies').select('id, name, email, phone, city, branche, status, created_at, logo_url, branding_color, is_testbedrijf, eigenaar_id, kvk, btw_number, address, postal_code, website, aanmeldbron, opgezegd_op')),
     alleRijen(() => admin.from('subscriptions').select('*')),
     admin.rpc('sa_gebruikers').then((r: any) => r.data ?? []),
-    alleRijen(() => admin.from('company_modules').select('company_id, module_key, actief').eq('actief', true)),
+    alleRijen(() => admin.from('company_modules').select('company_id, module_key, actief').eq('actief', true), 1000, ['company_id', 'module_key']),
     admin.from('plan_modules').select('module_key, label, price').then((r: any) => r.data ?? []),
     admin.from('upgrade_requests').select('*').eq('status', 'open').then((r: any) => r.data ?? []),
     admin.from('website_aanvragen').select('company_id, status, pakket, status_gewijzigd_op, site_url').then((r: any) => r.data ?? []),
@@ -131,7 +131,7 @@ async function laadAanvragen(admin: any) {
   const inquiries = await alleRijen(() => admin.from('inquiries')
     .select('id, name, company_name, email, phone, subject, message, source_url, metadata, is_test, created_at, status')
     .in('form_id', formulieren).order('created_at', { ascending: false }))
-  const pipeline = await alleRijen(() => admin.from('sa_aanvragen').select('*'))
+  const pipeline = await alleRijen(() => admin.from('sa_aanvragen').select('*'), 1000, ['inquiry_id'])
   const perId = new Map(pipeline.map((p: any) => [p.inquiry_id, p]))
 
   const ontbreekt = inquiries.filter((i: any) => !perId.has(i.id))
@@ -331,7 +331,7 @@ async function badges(admin: any) {
 // ── Omzet ───────────────────────────────────────────────────────────────────
 async function omzet(admin: any) {
   const [opnames, bedrijven, webBetalingen, webFacturen] = await Promise.all([
-    alleRijen(() => admin.from('omzet_momentopnames').select('maand, company_id, plan, status, mrr, bron').order('maand')),
+    alleRijen(() => admin.from('omzet_momentopnames').select('maand, company_id, plan, status, mrr, bron'), 1000, ['maand', 'company_id']),
     alleRijen(() => admin.from('companies').select('id, created_at, is_testbedrijf')),
     admin.from('website_betalingen').select('bedrag, betaald_op, wijze, status').in('wijze', ['ideal', 'los']).in('status', ['betaald', 'afgerond']).then((r: any) => r.data ?? []),
     admin.from('stripe_facturen').select('bedrag_excl, bedrag, betaald_op').eq('soort', 'website').eq('betaalstatus', 'betaald').then((r: any) => r.data ?? []),
@@ -397,7 +397,7 @@ async function analytics(admin: any, dagen: number) {
     (async () => { const f = await superadminFormulieren(admin); return f.length ? alleRijen(() => admin.from('inquiries').select('id, created_at, metadata, is_test').in('form_id', f).gte('created_at', vanaf.toISOString())) : [] })(),
     admin.rpc('sa_functiegebruik', { p_dagen: 30 }).then((r: any) => r.data ?? []),
     admin.rpc('sa_activiteit', { p_weken: Math.ceil(dagen / 7) + 3 }).then((r: any) => r.data ?? []),
-    alleRijen(() => admin.from('omzet_momentopnames').select('company_id, mrr')),
+    alleRijen(() => admin.from('omzet_momentopnames').select('company_id, mrr'), 1000, ['maand', 'company_id']),
     admin.from('website_meting').select('dag').order('dag').limit(1).maybeSingle().then((r: any) => r.data?.dag ?? null),
   ])
   const echteBedrijven = bedrijven.filter((b: any) => !b.is_testbedrijf)

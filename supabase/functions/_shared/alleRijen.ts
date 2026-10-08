@@ -8,10 +8,15 @@
 // `maak` moet elke keer een NIEUWE query teruggeven (een builder is na await
 // verbruikt). Gesorteerd op id, zodat pagina's niet overlappen of iets missen.
 // Een fout gooit: met een halve lijst verder gaan zou juist dubbelen opleveren.
-export async function alleRijen<T = any>(maak: () => any, stap = 1000): Promise<T[]> {
+//
+// Een tabel zonder kolom `id` geeft zijn eigen unieke sortering mee in
+// `volgorde` (bijv. ['company_id', 'module_key']).
+export async function alleRijen<T = any>(maak: () => any, stap = 1000, volgorde: string[] = ['id']): Promise<T[]> {
   const uit: T[] = []
   for (let van = 0; ; van += stap) {
-    const { data, error } = await maak().order('id', { ascending: true }).range(van, van + stap - 1)
+    let q = maak()
+    for (const k of volgorde) q = q.order(k, { ascending: true })
+    const { data, error } = await q.range(van, van + stap - 1)
     if (error) throw new Error(`ophalen mislukt: ${error.message}`)
     uit.push(...((data ?? []) as T[]))
     if (!data || data.length < stap) return uit
