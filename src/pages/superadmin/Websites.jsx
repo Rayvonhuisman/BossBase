@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useToast } from '../../lib/toast.jsx';
+import { bevestig } from '../../lib/bevestig.jsx';
+import { Bord } from './Bord.jsx';
 import { roep as roepWebsite, Detail, actiePunten, betalingSamenvatting } from '../../components/WebsitesBeheer.jsx';
 import { getPakket } from '../../lib/website.js';
 import { useSa, Kop, Laden, Tabs, Lade, datum, geleden, dagenSinds } from './ui.jsx';
@@ -15,6 +17,7 @@ const STAPPEN = [
   { id: 'in_bouw', label: 'In bouw', norm: 10, wie: 'Wij' },
   { id: 'ter_beoordeling', label: 'Ter beoordeling', norm: 5, wie: 'Klant' },
   { id: 'live', label: 'Live', norm: null, wie: null },
+  { id: 'geannuleerd', label: 'Geannuleerd', norm: null, wie: null },
 ];
 const VERZOEK_LABEL = { nieuw: 'Nieuw', in_behandeling: 'In behandeling', prijsopgave: 'Prijsopgave gestuurd', afgerond: 'Afgerond', afgewezen: 'Afgewezen' };
 
@@ -46,6 +49,7 @@ export default function Websites({ sub }) {
     <>
       <Kop titel="Websites" sub={`Het gratis-website-traject, van betaling tot live en daarna${metActie ? ` · ${metActie} met actie` : ''}`}>
         <label className="sa-check" style={{ marginTop: 0 }}><input type="checkbox" checked={test} onChange={e => setTest(e.target.checked)} /> Test</label>
+        <span className="lrow-sub">Sleep een site naar een andere stap</span>
       </Kop>
       <div style={{ marginBottom: 14 }}>
         <Tabs waarde={tab} onKies={setTab} opties={[
@@ -57,35 +61,51 @@ export default function Websites({ sub }) {
 
       {tab === 'lijn' && (
         <>
-          <div className="pipe-wrap afu2"><div className="pipe-board" style={{ minHeight: 'auto' }}>
-            {[...STAPPEN, ...(geannuleerd ? [{ id: 'geannuleerd', label: 'Geannuleerd' }] : [])].map(s => {
-              const items = lijst.filter(w => w.status === s.id);
+          <Bord
+            kolommen={STAPPEN.map(s => ({
+              id: s.id,
+              kop: <div className="pipe-col-title">{s.label}</div>,
+              sub: s.wie ? `${s.wie} aan zet · norm ${s.norm} dagen` : s.id === 'live' ? 'Hosting loopt' : null,
+            }))}
+            tijdensSlepen={geannuleerd ? [] : ['geannuleerd']}
+            items={lijst}
+            sleutel={w => w.id}
+            kolomVan={w => w.status}
+            onOpen={w => ga(`websites/${w.company_id}`)}
+            kaartKlasse={w => { const st = STAPPEN.find(s => s.id === w.status); return st?.norm && dagenSinds(sinds(w)) > st.norm ? 'sa-pc-over' : ''; }}
+            onVerplaats={async (w, status) => {
+              const naar = STAPPEN.find(s => s.id === status);
+              const ok = await bevestig({
+                titel: 'Status wijzigen',
+                tekst: `${w.bedrijf?.name || 'Deze website'} naar "${naar.label}" zetten? De klant krijgt hierover een mail, net als bij wijzigen in de lade. Zonder mail wijzigen kan in de lade van de site.`,
+                knop: 'Zetten en mailen',
+              });
+              if (!ok) return false;
+              try {
+                const r = await roepWebsite('status', { companyId: w.company_id, status, siteUrl: w.site_url || '', mail: true });
+                toast.success(`${naar.label}${r?.resultaat?.length ? `: ${r.resultaat.join(', ')}` : ''}`);
+                laad();
+                return true;
+              } catch (e) {
+                toast.error(e.message || 'Wijzigen mislukt');
+                return false;
+              }
+            }}
+            kaart={w => {
+              const st = STAPPEN.find(s => s.id === w.status);
+              const d = dagenSinds(sinds(w));
+              const over = st?.norm && d > st.norm;
+              const punten = actiePunten(w);
               return (
-                <div key={s.id} className="pipe-col" style={{ flex: '0 0 230px', minWidth: 230 }}>
-                  <div className="pipe-col-hd">
-                    <div><div className="pipe-col-title">{s.label}</div><div style={{ fontSize: '.68rem', color: 'var(--dl)', marginTop: 2 }}>{s.wie ? `${s.wie} aan zet · norm ${s.norm} dagen` : s.id === 'live' ? 'Hosting loopt' : ''}</div></div>
-                    <span className="pipe-col-cnt">{items.length}</span>
-                  </div>
-                  <div className="pipe-cards">
-                    {items.map(w => {
-                      const d = dagenSinds(sinds(w));
-                      const over = s.norm && d > s.norm;
-                      const punten = actiePunten(w);
-                      return (
-                        <div key={w.id} className={`pc sa-pc${over ? ' sa-pc-over' : ''}`} role="button" tabIndex={0} onClick={() => ga(`websites/${w.company_id}`)} onKeyDown={e => e.key === 'Enter' && ga(`websites/${w.company_id}`)}>
-                          <div style={{ fontWeight: 700, fontSize: 13 }}>{w.bedrijf?.name || 'Onbekend bedrijf'}{w.bedrijf?.is_testbedrijf && <span className="badge b-concept" style={{ marginLeft: 6 }}>test</span>}</div>
-                          <div style={{ display: 'flex', gap: 4, margin: '6px 0', flexWrap: 'wrap' }}><span className="badge b-concept">{getPakket(w.pakket).label}</span>{w.site_url && <span className="badge b-blue">{w.site_url.replace(/^https?:\/\//, '')}</span>}</div>
-                          {punten.length > 0 && <div style={{ fontSize: 11.5, color: '#b45309', fontWeight: 600 }}>{punten.join(' · ')}</div>}
-                          <div style={{ fontSize: 11.5, color: over ? '#e8784a' : 'var(--dl)', fontWeight: over ? 600 : 400 }}>{s.id === 'live' ? `live sinds ${datum(w.live_op || sinds(w), true)}` : `${d} ${d === 1 ? 'dag' : 'dagen'} in deze stap${over ? ' · over de norm' : ''}`}</div>
-                        </div>
-                      );
-                    })}
-                    {items.length === 0 && <div className="lsec-empty" style={{ padding: 12 }}>Leeg</div>}
-                  </div>
-                </div>
+                <>
+                  <div style={{ fontWeight: 700, fontSize: 13 }}>{w.bedrijf?.name || 'Onbekend bedrijf'}{w.bedrijf?.is_testbedrijf && <span className="badge b-concept" style={{ marginLeft: 6 }}>test</span>}</div>
+                  <div style={{ display: 'flex', gap: 4, margin: '6px 0', flexWrap: 'wrap' }}><span className="badge b-concept">{getPakket(w.pakket).label}</span>{w.site_url && <span className="badge b-blue">{w.site_url.replace(/^https?:\/\//, '')}</span>}</div>
+                  {punten.length > 0 && <div style={{ fontSize: 11.5, color: '#b45309', fontWeight: 600 }}>{punten.join(' · ')}</div>}
+                  <div style={{ fontSize: 11.5, color: over ? '#e8784a' : 'var(--dl)', fontWeight: over ? 600 : 400 }}>{w.status === 'live' ? `live sinds ${datum(w.live_op || sinds(w), true)}` : `${d} ${d === 1 ? 'dag' : 'dagen'} in deze stap${over ? ' · over de norm' : ''}`}</div>
+                </>
               );
-            })}
-          </div></div>
+            }}
+          />
           <button className="btn btn-ghost btn-xs" onClick={() => setGeannuleerd(v => !v)}>{geannuleerd ? 'Geannuleerd verbergen' : `Geannuleerd tonen (${lijst.filter(w => w.status === 'geannuleerd').length})`}</button>
         </>
       )}

@@ -50,6 +50,13 @@ textarea.sa-input{min-height:80px;resize:vertical}
 .sa-treffer:hover,.sa-treffer:focus-visible{background:var(--pll);outline:none}
 .sa-fout{color:#dc2626;font-size:.82rem;margin:0 0 12px;text-align:center}
 .sa-dt-klik tbody tr{cursor:pointer}
-.sa-pc{cursor:pointer}
 .sa-pc-over{border-color:#fdba74}
 @media(max-width:768px){.sa-tr-rij{grid-template-columns:1fr 70px}.sa-tr-balk,.sa-tr-p{display:none}}
+
+/* Bord (Aanvragen, Websites): zoals de pipeline van het dashboard, maar de
+   kolommen vullen de breedte als er ruimte is en het bord de hoogte. */
+.sa-bord{width:100%;min-width:max-content;min-height:max(420px,calc(100vh - 300px))}
+.sa-col{flex:1 0 250px;min-width:250px;max-width:none}
+.sa-col-dicht{outline:2px dashed #fca5a5;outline-offset:-3px;background:#fef2f2}
+.sa-col-leeg{text-align:center;padding:18px 8px;color:var(--dl);font-size:12px;border:1px dashed transparent;border-radius:var(--r10)}
+.pipe-col-drop .sa-col-leeg{border-color:var(--p);color:var(--pd)}

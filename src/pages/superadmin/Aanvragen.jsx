@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useToast } from '../../lib/toast.jsx';
 import { Phone, Mail, ArrowRight } from 'lucide-react';
-import { useLaad } from './api.js';
+import { roep, useLaad } from './api.js';
+import { Bord } from './Bord.jsx';
 import { useSa, Kop, Laden, Lade, Sectie, Rij, Notities, datum, geleden, dagenSinds } from './ui.jsx';
 
 // Aanvragen via bossbase.nl als pipeline. "In proef" en "Klant" vult de
@@ -17,8 +19,10 @@ export const FASEN = [
 const REDENEN = ['Spam', 'Past niet bij BossBase', 'Te duur', 'Koos iets anders', 'Geen reactie meer', 'Anders'];
 
 export default function Aanvragen({ sub }) {
-  const { ga, doe } = useSa();
+  const { ga, doe, laadBadges } = useSa();
   const { data, laden, fout, herlaad } = useLaad('aanvragen');
+  const [afwijzenVoor, setAfwijzenVoor] = useState(null);
+  const toast = useToast();
   const [kanaal, setKanaal] = useState('');
   const [afgewezenTonen, setAfgewezenTonen] = useState(false);
   const [testTonen, setTestTonen] = useState(true);
@@ -28,7 +32,6 @@ export default function Aanvragen({ sub }) {
   const alle = data.aanvragen.filter(a => testTonen || !a.isTest);
   const kanalen = [...new Set(alle.map(a => a.kanaal || 'Onbekend'))].sort();
   const lijst = kanaal ? alle.filter(a => (a.kanaal || 'Onbekend') === kanaal) : alle;
-  const kolommen = FASEN.filter(f => afgewezenTonen || f.id !== 'afgewezen');
   const open = data.aanvragen.find(a => a.id === sub) ?? null;
   const recent = alle.filter(a => dagenSinds(a.ontvangen) <= 90);
   const conversie = recent.length ? Math.round((recent.filter(a => a.fase === 'klant').length / recent.length) * 100) : null;
@@ -42,6 +45,7 @@ export default function Aanvragen({ sub }) {
         </select>
         <label className="sa-check" style={{ marginTop: 0 }}><input type="checkbox" checked={testTonen} onChange={e => setTestTonen(e.target.checked)} /> Test</label>
         <button className="btn btn-s btn-sm" onClick={() => setAfgewezenTonen(v => !v)}>{afgewezenTonen ? 'Afgewezen verbergen' : 'Afgewezen tonen'}</button>
+        <span className="lrow-sub">Sleep een kaart naar een andere fase</span>
       </Kop>
 
       <div className="sa-trechter-mini afu2">
@@ -55,53 +59,60 @@ export default function Aanvragen({ sub }) {
         {conversie != null && <div className="sa-tm-conv">Van aanvraag naar klant (90 dagen): <b>{conversie}%</b></div>}
       </div>
 
-      <div className="pipe-wrap afu2">
-        <div className="pipe-board" style={{ minHeight: 'auto' }}>
-          {kolommen.map(f => {
-            const kaarten = lijst.filter(a => a.fase === f.id);
-            return (
-              <div key={f.id} className="pipe-col" style={{ flex: '0 0 250px', minWidth: 250 }}>
-                <div className="pipe-col-hd">
-                  <div>
-                    <span className={`badge ${f.badge}`}>{f.label}</span>
-                    {f.automatisch && <div style={{ fontSize: '.68rem', color: 'var(--dl)', marginTop: 4 }}>vult zichzelf</div>}
-                  </div>
-                  <span className="pipe-col-cnt">{kaarten.length}</span>
-                </div>
-                <div className="pipe-cards">
-                  {kaarten.map(a => (
-                    <div key={a.id} className="pc sa-pc" role="button" tabIndex={0} onClick={() => ga(`aanvragen/${a.id}`)} onKeyDown={e => e.key === 'Enter' && ga(`aanvragen/${a.id}`)}>
-                      <div style={{ fontWeight: 700, fontSize: 13 }}>{a.naam}</div>
-                      {a.bedrijf && <div style={{ fontSize: 12, color: 'var(--dmu)' }}>{a.bedrijf}</div>}
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', margin: '8px 0 6px' }}>
-                        {a.onderwerp && <span className="badge b-concept">{a.onderwerp}</span>}
-                        {a.kanaal && <span className="badge b-blue">{a.kanaal}</span>}
-                        {a.isTest && <span className="badge b-concept">test</span>}
-                      </div>
-                      {a.volgendeStap && <div style={{ fontSize: 11.5, color: 'var(--dm)' }}>→ {a.volgendeStap}</div>}
-                      {a.afwijsreden && <div style={{ fontSize: 11.5, color: 'var(--dl)' }}>Reden: {a.afwijsreden}</div>}
-                      <div style={{ fontSize: 11, color: a.fase === 'nieuw' && dagenSinds(a.ontvangen) === 0 ? 'var(--pd)' : 'var(--dl)', marginTop: 6 }}>{geleden(a.ontvangen)}{a.notities.length ? ` · ${a.notities.length} ${a.notities.length === 1 ? 'notitie' : 'notities'}` : ''}</div>
-                    </div>
-                  ))}
-                  {kaarten.length === 0 && <div className="lsec-empty" style={{ padding: 12 }}>Leeg</div>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      <Bord
+        kolommen={FASEN.map(f => ({
+          id: f.id,
+          kop: <span className={`badge ${f.badge}`}>{f.label}</span>,
+          sub: f.automatisch ? 'vult zichzelf' : null,
+          vergrendeld: f.automatisch ? `"${f.label}" vult zichzelf zodra er een account of betaald abonnement is met dit e-mailadres.` : null,
+        }))}
+        tijdensSlepen={afgewezenTonen ? [] : ['afgewezen']}
+        items={lijst}
+        sleutel={a => a.id}
+        kolomVan={a => a.fase}
+        onOpen={a => ga(`aanvragen/${a.id}`)}
+        onGeweigerd={reden => toast.error(reden)}
+        onVerplaats={async (a, fase) => {
+          // Afwijzen vraagt een reden: open de lade met de keuze klaar.
+          if (fase === 'afgewezen') { setAfwijzenVoor(a.id); ga(`aanvragen/${a.id}`); return false; }
+          try {
+            await roep('aanvraag-fase', { id: a.id, fase });
+            toast.success(`${a.naam} → ${FASEN.find(f => f.id === fase).label}`);
+            laadBadges();
+            herlaad();
+            return true;
+          } catch (e) {
+            toast.error(e.message || 'Verplaatsen mislukt');
+            return false;
+          }
+        }}
+        kaart={a => (
+          <>
+            <div style={{ fontWeight: 700, fontSize: 13 }}>{a.naam}</div>
+            {a.bedrijf && <div style={{ fontSize: 12, color: 'var(--dmu)' }}>{a.bedrijf}</div>}
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', margin: '8px 0 6px' }}>
+              {a.onderwerp && <span className="badge b-concept">{a.onderwerp}</span>}
+              {a.kanaal && <span className="badge b-blue">{a.kanaal}</span>}
+              {a.isTest && <span className="badge b-concept">test</span>}
+            </div>
+            {a.volgendeStap && <div style={{ fontSize: 11.5, color: 'var(--dm)' }}>→ {a.volgendeStap}</div>}
+            {a.afwijsreden && <div style={{ fontSize: 11.5, color: 'var(--dl)' }}>Reden: {a.afwijsreden}</div>}
+            <div style={{ fontSize: 11, color: a.fase === 'nieuw' && dagenSinds(a.ontvangen) === 0 ? 'var(--pd)' : 'var(--dl)', marginTop: 6 }}>{geleden(a.ontvangen)}{a.notities.length ? ` · ${a.notities.length} ${a.notities.length === 1 ? 'notitie' : 'notities'}` : ''}</div>
+          </>
+        )}
+      />
 
       {sub && !open && <Lade titel="Aanvraag niet gevonden" onSluit={() => ga('aanvragen')}><div className="lrow-sub">Deze aanvraag bestaat niet (meer).</div></Lade>}
-      {open && <AanvraagLade a={open} herlaad={herlaad} onSluit={() => ga('aanvragen')} doe={doe} ga={ga} />}
+      {open && <AanvraagLade a={open} herlaad={herlaad} onSluit={() => { setAfwijzenVoor(null); ga('aanvragen'); }} doe={doe} ga={ga} afwijzenOpen={afwijzenVoor === open.id} />}
     </>
   );
 }
 
-function AanvraagLade({ a, herlaad, onSluit, doe, ga }) {
+function AanvraagLade({ a, herlaad, onSluit, doe, ga, afwijzenOpen }) {
   const [stap, setStap] = useState(a.volgendeStap ?? '');
-  const [afwijzen, setAfwijzen] = useState(false);
+  const [afwijzen, setAfwijzen] = useState(!!afwijzenOpen);
   const [reden, setReden] = useState(REDENEN[0]);
-  useEffect(() => { setStap(a.volgendeStap ?? ''); setAfwijzen(false); }, [a.id, a.volgendeStap]);
+  useEffect(() => { setStap(a.volgendeStap ?? ''); setAfwijzen(!!afwijzenOpen); }, [a.id, a.volgendeStap, afwijzenOpen]);
 
   const zetFase = async (fase, extra = {}) => {
     const r = await doe('aanvraag-fase', { id: a.id, fase, ...extra }, { succes: `Naar "${FASEN.find(f => f.id === fase).label}"` });
