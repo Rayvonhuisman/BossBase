@@ -3126,14 +3126,27 @@ body.bb-syncbar-actief .bb-toast-stack{top:76px}
 .ab-termijn-uitleg{font-size:.8rem;color:var(--dmu);margin-top:8px;line-height:1.6;max-width:640px}
 
 /* Welkomstactie */
-.ab-actie{margin-bottom:14px}
-.ab-actie-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
-.ab-actie-kaart{text-align:left;padding:13px 15px;border-radius:var(--r12);border:1.5px solid var(--bstrong);background:#fff;cursor:pointer;transition:all .15s ease}
+.ab-actie{margin-bottom:16px;padding:18px 20px 20px;border-radius:var(--r16);background:linear-gradient(135deg,#0D0D0D 0%,#1c1c1c 100%);color:#fff}
+.ab-actie-kop{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.ab-actie-icoon{width:38px;height:38px;border-radius:var(--r10);background:var(--p);color:var(--dk);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.ab-actie-bovenkop{font-size:.7rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--p)}
+.ab-actie-titel{font-size:1.15rem;font-weight:800;letter-spacing:-.02em;color:#fff;margin-top:1px}
+.ab-actie-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+.ab-actie-kaart{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:16px 18px;border-radius:var(--r12);border:1.5px solid #333;background:#171717;color:#fff;cursor:pointer;transition:border-color .15s ease,background .15s ease}
 .ab-actie-kaart:hover{border-color:var(--p)}
-.ab-actie-kaart.on{border-color:var(--p);background:var(--pll)}
-.ab-actie-label{font-weight:700;font-size:.9rem;color:var(--dk)}
-.ab-actie-kort{font-size:.79rem;color:var(--dmu);margin-top:3px;line-height:1.5}
-.ab-actie-vast{background:var(--bgs);border-radius:var(--r10);padding:11px 13px;font-size:.85rem;color:var(--dm)}
+.ab-actie-kaart.on{border-color:var(--p);background:#0f2a19;box-shadow:0 0 0 1px var(--p)}
+.ab-actie-kaart:focus-visible{outline:2px solid var(--p);outline-offset:2px}
+.ab-actie-vink{position:absolute;top:14px;right:14px;width:22px;height:22px;border-radius:var(--r999);border:1.5px solid #555;display:inline-flex;align-items:center;justify-content:center}
+.ab-actie-kaart.on .ab-actie-vink{background:var(--p);border-color:var(--p);color:var(--dk)}
+.ab-actie-beeld{color:var(--p);margin-bottom:6px}
+.ab-actie-label{font-weight:800;font-size:1.05rem;color:#fff}
+.ab-actie-waarde{font-weight:700;font-size:.9rem;color:var(--p)}
+.ab-actie-kort{font-size:.8rem;color:#c4c4c4;margin-top:4px;line-height:1.55}
+.ab-actie-let{font-size:.75rem;color:#fbbf24;margin-top:6px}
+.ab-actie-vast{background:#171717;border-radius:var(--r10);padding:11px 13px;font-size:.85rem;color:#d1d5db}
+.ab-actie-lokker{display:inline-flex;align-items:center;gap:8px;margin-top:10px;padding:9px 14px;border-radius:var(--r999);border:1px solid var(--pl);background:var(--pll);color:var(--dk);font-size:.84rem;cursor:pointer;transition:border-color .15s ease}
+.ab-actie-lokker:hover{border-color:var(--p)}
+.ab-actie-lokker svg{color:var(--pd)}
 
 /* De drie pakketten */
 .ab-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px;align-items:stretch}

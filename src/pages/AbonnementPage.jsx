@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Minus, Star, ChevronDown, Info, X } from 'lucide-react';
+import { Check, Minus, Star, ChevronDown, Info, X, Gift, Globe2 } from 'lucide-react';
 import { useToast } from '../lib/toast.jsx';
 import { useProfile } from '../lib/profileContext.jsx';
 import { usePlan } from '../hooks/usePlan.js';
@@ -18,6 +18,7 @@ import {
 import { requestUpgrade } from '../services/planService.js';
 import { bedenkVoorstel, euro, fmtDatum } from '../lib/upgradeVoorstel.js';
 import { aanleidingUitUrl } from '../lib/abonnementNav.js';
+import { getPakket } from '../lib/website.js';
 
 // ── DE ABONNEMENTSPAGINA ──────────────────────────────────────────────────────
 // Was een modal (UpgradeFlow). Daar moest te veel in: pakketkeuze, betaaltermijn,
@@ -384,37 +385,74 @@ export default function AbonnementPage({ setPage }) {
                     onClick={() => setInterval(w)} disabled={bezig}>{label}</button>
                 ))}
               </div>
-              {interval === 'jaar' && (
+              {interval === 'jaar' ? (
                 <div className="ab-termijn-uitleg">
                   Je betaalt maandelijks, <strong>12 maanden vast</strong>. Tussentijds opzeggen
                   kan niet. Daarna maandelijks opzegbaar. Je kiest er één welkomstactie bij.
                 </div>
+              ) : (
+                // Bij maandelijks zie je de acties niet; laat in elk geval zien
+                // wat je misloopt.
+                <button type="button" className="ab-actie-lokker" onClick={() => setInterval('jaar')} disabled={bezig}>
+                  <Gift size={16} />
+                  <span>Kies jaarlijks en krijg <strong>2 maanden gratis</strong> of een <strong>gratis website</strong></span>
+                </button>
               )}
             </div>
           )}
 
           {/* ── Welkomstactie ─────────────────────────────────────────────── */}
+          {/* Een opvallend blok: dit is het voordeel van een jaarabonnement, en
+              in twee kleine witte kaartjes viel het weg tussen de rest. */}
           {magIntervalKiezen && interval === 'jaar' && (
-            <div className="ab-actie afu2">
-              <div className="ab-kop">Kies je welkomstactie</div>
+            <div className="ab-actie afu2" data-rl="abonnement-welkomstactie">
+              <div className="ab-actie-kop">
+                <span className="ab-actie-icoon"><Gift size={18} /></span>
+                <div>
+                  <div className="ab-actie-bovenkop">Welkomstcadeau bij je jaarabonnement</div>
+                  <div className="ab-actie-titel">
+                    {stand?.welkomstactie ? `Je koos: ${welkomstactieLabel(stand.welkomstactie)}` : 'Kies wat je erbij krijgt'}
+                  </div>
+                </div>
+              </div>
               {stand?.welkomstactie ? (
                 <div className="ab-actie-vast">
-                  Je hebt al gekozen voor <strong>{welkomstactieLabel(stand.welkomstactie)}</strong>.
                   Een welkomstactie is eenmalig en kan niet worden gewisseld.
                 </div>
               ) : (
-                <div className="ab-actie-grid">
-                  {welkomstactiesVoor(tier).map(a => (
-                    <button key={a.key} className={`ab-actie-kaart${actie === a.key ? ' on' : ''}`}
-                      onClick={() => setActie(a.key)} disabled={bezig}>
-                      <div className="ab-actie-label">{a.label}</div>
-                      <div className="ab-actie-kort">{a.kort}</div>
-                    </button>
-                  ))}
+                <div className="ab-actie-grid" role="radiogroup" aria-label="Welkomstactie">
+                  {(() => {
+                    const maanden = kortingMaandenVoorActie('gratis_maanden');
+                    const websiteKan = welkomstactiesVoor(tier).some(a => a.key === 'gratis_website');
+                    const compleet = getPakket('compleet');
+                    return (
+                      <>
+                        <button type="button" role="radio" aria-checked={actie === 'gratis_maanden'}
+                          className={`ab-actie-kaart${actie === 'gratis_maanden' ? ' on' : ''}`}
+                          onClick={() => setActie('gratis_maanden')} disabled={bezig}>
+                          <span className="ab-actie-vink">{actie === 'gratis_maanden' && <Check size={14} strokeWidth={3} />}</span>
+                          <span className="ab-actie-beeld"><Gift size={22} /></span>
+                          <span className="ab-actie-label">Eerste {maanden} maanden gratis</span>
+                          <span className="ab-actie-waarde">Je bespaart {euro(maanden * totaal)}</span>
+                          <span className="ab-actie-kort">Je betaalt {12 - maanden} van de 12 maanden. Bij elk pakket.</span>
+                        </button>
+                        <button type="button" role="radio" aria-checked={actie === 'gratis_website'}
+                          className={`ab-actie-kaart${actie === 'gratis_website' ? ' on' : ''}`}
+                          onClick={() => { if (!websiteKan) kiesTier('groei'); setActie('gratis_website'); }} disabled={bezig}>
+                          <span className="ab-actie-vink">{actie === 'gratis_website' && <Check size={14} strokeWidth={3} />}</span>
+                          <span className="ab-actie-beeld"><Globe2 size={22} /></span>
+                          <span className="ab-actie-label">Gratis website</span>
+                          <span className="ab-actie-waarde">Wij bouwen hem voor je</span>
+                          <span className="ab-actie-kort">
+                            Een onepager voor je bedrijf. Meer pagina’s? {compleet.label} voor {euro(compleet.aanmeldPrijs)} in plaats van {euro(compleet.laterPrijs)}.
+                            Hosting {euro(5)} p/mnd vanaf livegang.
+                          </span>
+                          {!websiteKan && <span className="ab-actie-let">Bij {tierLabel('groei')} en {tierLabel('team')}: we zetten je pakket op {tierLabel('groei')}.</span>}
+                        </button>
+                      </>
+                    );
+                  })()}
                 </div>
-              )}
-              {welkomstactiesVoor(tier).length === 1 && !stand?.welkomstactie && (
-                <p className="ab-hint">De gratis website hoort bij {tierLabel('groei')} en {tierLabel('team')}.</p>
               )}
             </div>
           )}
