@@ -275,3 +275,58 @@ export function mailIntern(o: { onderwerp: string; kop: string; bedrijf: { id: s
     }),
   }
 }
+
+// ── Het traject starten ─────────────────────────────────────────────────────
+// Wat er gebeurt zodra een klant de gratis website kiest: de aanvraag openen,
+// de taak in zijn dashboard zetten, de intakelink mailen en ons melden.
+// Aangeroepen door billing-webhook (na afrekenen) en door website-beheer
+// (handmatig, of om de uitnodiging opnieuw te sturen).
+//
+// Idempotent: zonder `opnieuw` doet hij niets als de aanvraag al bestond. Met
+// `opnieuw` krijgt een klant die nog op de intake wacht een verse link, en een
+// taak als hij die nog niet open had staan.
+export async function startWebsiteTraject(
+  admin: any, companyId: string, plan: string | null,
+  stuur: (to: string, subject: string, html: string, replyTo?: string, att?: undefined, soort?: string) => Promise<string | null>,
+  o: { opnieuw?: boolean } = {},
+): Promise<string> {
+  const { data: resultaat } = await admin.rpc('bb_open_website_aanvraag', { p_company_id: companyId })
+  if (resultaat !== 'aangemaakt' && !(o.opnieuw && resultaat === 'bestond al')) return String(resultaat ?? 'geen aanvraag')
+
+  const { data: aanvraag } = await admin.from('website_aanvragen')
+    .select('status, taak_id').eq('company_id', companyId).maybeSingle()
+  if (aanvraag?.status !== 'wacht_op_intake') return 'intake is al binnen'
+
+  const { data: bedrijf } = await admin
+    .from('companies').select('id, name, email, phone').eq('id', companyId).maybeSingle()
+  if (!bedrijf) return 'aanvraag aangemaakt, bedrijf niet gevonden'
+
+  // Een taak alleen als er nog geen open taak staat.
+  let taakId = aanvraag?.taak_id ?? null
+  if (taakId) {
+    const { data: t } = await admin.from('activities').select('completed').eq('id', taakId).maybeSingle()
+    if (!t || t.completed) taakId = null
+  }
+  if (!taakId) taakId = await maakIntakeTaak(admin, companyId).catch(() => null)
+
+  const { url } = await maakIntakeLink(admin, companyId)
+
+  let klantOk = false
+  if (bedrijf.email) {
+    const m = mailIntakeUitnodiging({ bedrijfsnaam: bedrijf.name, url })
+    klantOk = !!(await stuur(bedrijf.email, m.subject, m.html, WEBSITE_INTERN, undefined, 'website_klant'))
+  }
+
+  const i = mailIntern({
+    onderwerp: `${o.opnieuw && resultaat === 'bestond al' ? 'Intakelink opnieuw gestuurd' : 'Gratis website gekozen'}: ${bedrijf.name ?? 'onbekend bedrijf'}`,
+    kop: o.opnieuw && resultaat === 'bestond al' ? 'Intakelink opnieuw gestuurd' : 'Gratis website gekozen',
+    bedrijf,
+    regels: [['Abonnement', plan ?? 'onbekend'], ['Intakelink gemaild', klantOk ? 'ja' : 'NEE, mail mislukt of geen adres']],
+  })
+  await stuur(WEBSITE_INTERN, i.subject, i.html, bedrijf.email ?? undefined, undefined, 'website_intern')
+
+  await admin.from('website_aanvragen')
+    .update({ taak_id: taakId, mail_verstuurd_op: klantOk ? new Date().toISOString() : null })
+    .eq('company_id', companyId)
+  return klantOk ? 'traject gestart: intakelink gemaild, taak gezet' : 'traject gestart (mail naar klant mislukt)'
+}

@@ -80,7 +80,7 @@ export const WELKOMSTACTIES = [
   {
     key: 'gratis_website',
     label: 'Gratis website',
-    kort: 'Wij bouwen eenmalig een professionele website voor je bedrijf. Hosting € 5 per maand vanaf livegang.',
+    kort: 'Wij bouwen eenmalig een professionele website voor je bedrijf.',
     // Geen korting: betalen vanaf de eerste maand.
     kortingMaanden: 0,
     // Niet bij Starter — dat pakket is te klein voor deze actie.

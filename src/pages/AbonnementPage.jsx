@@ -18,7 +18,6 @@ import {
 import { requestUpgrade } from '../services/planService.js';
 import { bedenkVoorstel, euro, fmtDatum } from '../lib/upgradeVoorstel.js';
 import { aanleidingUitUrl } from '../lib/abonnementNav.js';
-import { getPakket } from '../lib/website.js';
 
 // ── DE ABONNEMENTSPAGINA ──────────────────────────────────────────────────────
 // Was een modal (UpgradeFlow). Daar moest te veel in: pakketkeuze, betaaltermijn,
@@ -424,7 +423,6 @@ export default function AbonnementPage({ setPage }) {
                   {(() => {
                     const maanden = kortingMaandenVoorActie('gratis_maanden');
                     const websiteKan = welkomstactiesVoor(tier).some(a => a.key === 'gratis_website');
-                    const compleet = getPakket('compleet');
                     return (
                       <>
                         <button type="button" role="radio" aria-checked={actie === 'gratis_maanden'}
@@ -443,10 +441,7 @@ export default function AbonnementPage({ setPage }) {
                           <span className="ab-actie-beeld"><Globe2 size={22} /></span>
                           <span className="ab-actie-label">Gratis website</span>
                           <span className="ab-actie-waarde">Wij bouwen hem voor je</span>
-                          <span className="ab-actie-kort">
-                            Een onepager voor je bedrijf. Meer pagina’s? {compleet.label} voor {euro(compleet.aanmeldPrijs)} in plaats van {euro(compleet.laterPrijs)}.
-                            Hosting {euro(5)} p/mnd vanaf livegang.
-                          </span>
+                          <span className="ab-actie-kort">Een professionele onepager voor je bedrijf. Wij schrijven de teksten.</span>
                           {!websiteKan && <span className="ab-actie-let">Bij {tierLabel('groei')} en {tierLabel('team')}: we zetten je pakket op {tierLabel('groei')}.</span>}
                         </button>
                       </>

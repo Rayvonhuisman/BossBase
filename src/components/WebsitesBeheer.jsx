@@ -199,6 +199,14 @@ function Detail({ w, herlaad, toast }) {
       {status === 'ter_beoordeling' && (
         <div style={{ fontSize: 12, color: '#1d4ed8', marginTop: 6 }}>Ter beoordeling vraagt een link: die krijgt de klant in de mail.</div>
       )}
+      {w.status === 'wacht_op_intake' && (
+        <div style={{ marginTop: 8 }}>
+          <button className="btn btn-s btn-sm" disabled={bezig}
+            onClick={() => doe(() => roep('traject-starten', { companyId: w.company_id }), 'Intakelink opnieuw gestuurd')}>
+            Intakelink opnieuw sturen
+          </button>
+        </div>
+      )}
       {status === 'live' && w.status !== 'live' && (
         <div style={{ fontSize: 12, color: '#b45309', marginTop: 6 }}>Live zetten start de hosting, en domein en e-mail als die in de intake gekozen zijn, als regels op het abonnement van de klant.</div>
       )}

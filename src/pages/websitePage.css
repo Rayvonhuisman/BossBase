@@ -50,6 +50,7 @@
 .ws-prijs-rust{font-weight:700;color:var(--dmu)}
 .ws-pakket-sub{font-size:.72rem;color:var(--dl);margin-top:2px}
 .ws-punten{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:.8rem;color:var(--dm);flex:1}
+.ws-punten-los{margin:0}
 .ws-punten li{display:flex;gap:6px;align-items:flex-start}
 .ws-punten svg{color:var(--pd);flex-shrink:0;margin-top:3px}
 .ws-pakket-knop{margin-top:14px;justify-content:center;width:100%}

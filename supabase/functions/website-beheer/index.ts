@@ -9,11 +9,16 @@
 //   domein-actief  → domein geregistreerd: jaarregel op het abonnement
 //   email-actief   → zakelijke e-mail ingericht: maandregel op het abonnement
 //   regel-stoppen  → een lopende abonnementsregel stopzetten
+//   traject-starten→ aanvraag openen, taak zetten en de intakelink mailen; bij
+//                    een klant die nog op de intake wacht: een verse link.
+//                    Ook intern aan te roepen met het cron-geheim (net.http_post
+//                    uit de database), bijvoorbeeld voor een testbedrijf.
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { CORS, json, stuurBossBaseMail } from '../_shared/billing.ts'
 import { clientFout } from '../_shared/clientFout.ts'
-import { HOSTING_PER_MAAND, DOMEIN_PER_JAAR, EMAIL_PER_MAAND, STATUS_LABEL, WEBSITE_INTERN, mailStatus } from '../_shared/website.ts'
+import { HOSTING_PER_MAAND, DOMEIN_PER_JAAR, EMAIL_PER_MAAND, STATUS_LABEL, WEBSITE_INTERN, mailStatus, startWebsiteTraject } from '../_shared/website.ts'
+import { isScheduledCall } from '../_shared/scheduledSync.ts'
 import { regelOpAbonnement } from '../_shared/websiteBetalen.ts'
 
 const VERZOEK_STATUSSEN = ['nieuw', 'in_behandeling', 'prijsopgave', 'afgerond', 'afgewezen']
@@ -48,10 +53,15 @@ serve(async (req) => {
   try { body = await req.json() } catch { return json({ error: 'Ongeldige aanvraag' }, 400) }
 
   try {
-    const { data: { user } } = await userClient.auth.getUser()
-    if (!user) return json({ error: 'Log opnieuw in.' }, 401)
-    const { data: p } = await admin.from('profiles').select('is_super_admin').eq('id', user.id).maybeSingle()
-    if (p?.is_super_admin !== true) return json({ error: 'Niet toegestaan' }, 403)
+    // Intern (cron-geheim) mag alleen het traject starten; de rest vraagt een
+    // ingelogde superadmin.
+    const intern = body?.actie === 'traject-starten' && isScheduledCall(body)
+    if (!intern) {
+      const { data: { user } } = await userClient.auth.getUser()
+      if (!user) return json({ error: 'Log opnieuw in.' }, 401)
+      const { data: p } = await admin.from('profiles').select('is_super_admin').eq('id', user.id).maybeSingle()
+      if (p?.is_super_admin !== true) return json({ error: 'Niet toegestaan' }, 403)
+    }
 
     switch (body.actie) {
       case 'lijst': {
@@ -160,6 +170,12 @@ serve(async (req) => {
         await admin.from('website_aanvragen').update({ email: true }).eq('company_id', body.companyId)
         await admin.from('website_verzoeken').update({ status: 'afgerond', afgehandeld_op: new Date().toISOString() })
           .eq('company_id', body.companyId).eq('soort', 'email').in('status', ['nieuw', 'in_behandeling'])
+        return json({ ok: true, resultaat: [r] })
+      }
+
+      case 'traject-starten': {
+        const { data: sub } = await admin.from('subscriptions').select('plan').eq('company_id', body.companyId).maybeSingle()
+        const r = await startWebsiteTraject(admin, String(body.companyId), sub?.plan ?? null, stuurBossBaseMail, { opnieuw: true })
         return json({ ok: true, resultaat: [r] })
       }
 

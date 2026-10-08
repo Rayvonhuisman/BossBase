@@ -202,14 +202,14 @@ function GeenWebsite({ data, bezig, startIntake, setPage }) {
         ))}
       </ol>
 
+      {/* Alleen wat je krijgt. Prijzen van upgrades en hosting horen niet bij
+          het aanbod; die zie je in de intake, waar je kiest. */}
       <div className="ws-kop afu3">Wat je krijgt</div>
-      <PakketKaarten moment="aanmelding" huidig="basis" />
-      <p className="ab-hint afu3">
-        Compleet en Pro kies je in de intake tegen de aanmeldprijs. Die prijs geldt alleen bij je aanmelding;
-        later upgraden kost {euroBedrag(getPakket('compleet').laterPrijs)} of {euroBedrag(getPakket('pro').laterPrijs)}. Alle prijzen excl. btw.
-      </p>
-
-      <Kosten />
+      <div className="card card-p afu3">
+        <ul className="ws-punten ws-punten-los">
+          {getPakket('basis').punten.map(t => <li key={t}><Check size={13} strokeWidth={2.6} /> {t}</li>)}
+        </ul>
+      </div>
     </>
   );
 }
@@ -266,31 +266,6 @@ function PakketKaarten({ moment, huidig, onUpgrade, magUpgraden, bezig }) {
           </div>
         );
       })}
-    </div>
-  );
-}
-
-// ── Wat het kost (algemeen) ──────────────────────────────────────────────────
-function Kosten() {
-  return (
-    <div className="card card-p ws-kosten afu3">
-      <div className="ab-kop">Wat het kost</div>
-      <div className="ws-regel">
-        <span>Website Basis</span><strong>Gratis</strong>
-      </div>
-      <div className="ws-regel">
-        <span>Hosting <InfoIcoon titel="Hosting">Wij zetten je site online en houden hem draaiend: beveiligd slotje en updates. Hosting hoort bij de website en is niet los te kiezen. Hij gaat in op de dag dat je site live gaat, als regel op je BossBase-abonnement.</InfoIcoon></span>
-        <strong>{euroBedrag(HOSTING_PER_MAAND)} p/mnd <em>vanaf livegang</em></strong>
-      </div>
-      <div className="ws-regel">
-        <span>Domeinnaam via ons <InfoIcoon titel="Domeinnaam">Wil je dat wij je domeinnaam (zoals jouwbedrijf.nl) regelen en beheren, dan kost dat {euroBedrag(DOMEIN_PER_JAAR)} per jaar, als regel op je abonnement. Er zit geen gratis domein bij. Heb je al een domein, dan koppelen we dat.</InfoIcoon></span>
-        <strong>{euroBedrag(DOMEIN_PER_JAAR)} per jaar <em>optioneel</em></strong>
-      </div>
-      <div className="ws-regel">
-        <span>Wijzigingen en uitbreidingen <InfoIcoon titel="Meerwerk">De eerste ronde wijzigingen voordat je site live gaat zit erbij. Daarna is elke wijziging of uitbreiding betaald werk. Je krijgt altijd eerst een prijsopgave.</InfoIcoon></span>
-        <strong>Op prijsopgave</strong>
-      </div>
-      <p className="ab-hint">Alle prijzen excl. btw.</p>
     </div>
   );
 }

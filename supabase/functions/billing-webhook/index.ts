@@ -25,7 +25,7 @@ import {
   appOrigin, EXTRA_GEBRUIKER_PRIJS, inbegrepenGebruikers, zetJaarverplichting,
 } from '../_shared/billing.ts'
 import {
-  maakIntakeLink, maakIntakeTaak, mailIntakeUitnodiging, mailIntern, PAKKETTEN, WEBSITE_INTERN, euro,
+  startWebsiteTraject, mailIntern, PAKKETTEN, WEBSITE_INTERN, euro,
 } from '../_shared/website.ts'
 import { welkomMail } from '../_shared/welkomMail.ts'
 import { opzeggenBijStripe } from '../_shared/opzeggen.ts'
@@ -108,40 +108,9 @@ async function stuurWelkomstmail(
   }
 }
 
-// Website-aanvraag afhandelen: rij aanmaken (idempotent) en, alleen als hij
-// NIEUW is, de intakelink mailen, de taak in het dashboard zetten en ons
-// melden. Bij een herhaalde levering van hetzelfde event mag de klant niet twee
-// keer dezelfde mail krijgen.
-async function verwerkWebsiteAanvraag(admin: any, companyId: string, plan: string | null) {
-  const { data: resultaat } = await admin.rpc('bb_open_website_aanvraag', { p_company_id: companyId })
-  if (resultaat !== 'aangemaakt') return String(resultaat ?? 'geen aanvraag')
-
-  const { data: bedrijf } = await admin
-    .from('companies').select('id, name, email, phone').eq('id', companyId).maybeSingle()
-  if (!bedrijf) return 'aanvraag aangemaakt, bedrijf niet gevonden'
-
-  const taakId = await maakIntakeTaak(admin, companyId).catch(() => null)
-  const { url } = await maakIntakeLink(admin, companyId)
-
-  let klantOk = false
-  if (bedrijf.email) {
-    const m = mailIntakeUitnodiging({ bedrijfsnaam: bedrijf.name, url })
-    klantOk = !!(await stuurBossBaseMail(bedrijf.email, m.subject, m.html, WEBSITE_INTERN, undefined, 'website_klant'))
-  }
-
-  const i = mailIntern({
-    onderwerp: `Gratis website gekozen: ${bedrijf.name ?? 'onbekend bedrijf'}`,
-    kop: 'Gratis website gekozen',
-    bedrijf,
-    regels: [['Abonnement', plan ?? 'onbekend'], ['Intakelink gemaild', klantOk ? 'ja' : 'NEE, mail mislukt of geen adres']],
-  })
-  await stuurBossBaseMail(WEBSITE_INTERN, i.subject, i.html, bedrijf.email ?? undefined, undefined, 'website_intern')
-
-  await admin.from('website_aanvragen')
-    .update({ taak_id: taakId, mail_verstuurd_op: klantOk ? new Date().toISOString() : null })
-    .eq('company_id', companyId)
-  return klantOk ? 'aanvraag aangemaakt + intakelink gemaild' : 'aanvraag aangemaakt (mail naar klant mislukt)'
-}
+// Website-aanvraag afhandelen: zie startWebsiteTraject in _shared/website.ts.
+const verwerkWebsiteAanvraag = (admin: any, companyId: string, plan: string | null) =>
+  startWebsiteTraject(admin, companyId, plan, stuurBossBaseMail)
 
 // Een iDEAL-betaling voor een website-upgrade (Checkout in payment-mode, uit
 // _shared/websiteBetalen.ts). Zet de betaling op betaald en het pakket goed.
