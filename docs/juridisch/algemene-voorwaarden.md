@@ -259,7 +259,9 @@ openstaan, factureren we in één keer.
 hem draaiend. Hosting kost € 5 per maand en is niet los te kiezen of op te zeggen
 zolang je website online staat. Hij gaat in op de dag dat je site live gaat en
 staat als regel op je abonnement. De dagen tussen de livegang en je eerstvolgende
-abonnementsfactuur rekenen we niet.
+abonnementsfactuur rekenen we niet. Loopt er geen abonnement waar de hosting op
+kan, dan sluit je hem los af als eigen maandabonnement (met domeinnaam en e-mail
+als je die bij ons hebt). Je site gaat pas live als dat betaald is.
 
 15.5 **Domeinnaam en e-mail.** Er zit geen gratis domeinnaam bij. Wil je dat wij je
 domeinnaam registreren en beheren, dan kost dat het bedrag per jaar dat in de app
@@ -278,13 +280,19 @@ kleine. Je vraagt ze aan in de app onder Website. Je krijgt eerst een prijsopgav
 en we beginnen pas na je akkoord.
 
 15.8 **Als je opzegt.** Je website blijft online zolang je abonnement loopt. Stopt
-je abonnement, dan stopt ook de hosting en halen we de site offline aan het
-einde van de laatste periode. Je teksten, foto's en logo zijn en blijven van jou;
+je abonnement, dan stopt ook de hosting. Je kunt je website dan online houden met
+een eigen hostingabonnement, los van BossBase (hosting, en domeinnaam en e-mail als
+je die bij ons hebt, tegen de prijzen in de app). We mailen je daarover zodra je
+opzegt, en je sluit het af via de pagina Website in de app, ook als je abonnement
+al gestopt is. Heb je binnen 14 dagen na het einde van je abonnement geen
+hostingabonnement afgesloten, dan halen we de site offline. Hetzelfde geldt als je
+een eigen hostingabonnement opzegt of niet meer betaalt. Je teksten, foto's en logo zijn en blijven van jou;
 op verzoek sturen we ze je terug. Het ontwerp en de techniek van de site blijven
 van ons (artikel 11). Hebben wij je domeinnaam geregistreerd, dan zetten we die op
 je verzoek kosteloos naar je over, of laten we hem aan het einde van de lopende
-registratieperiode vervallen. Zakelijke e-mail via ons stopt met je abonnement;
-zorg dat je je mail vóór die tijd hebt bewaard of verhuisd.
+registratieperiode vervallen. Zakelijke e-mail via ons stopt met je abonnement,
+tenzij je hem meeneemt in een eigen hostingabonnement; zorg anders dat je je mail
+vóór die tijd hebt bewaard of verhuisd.
 
 ---
 

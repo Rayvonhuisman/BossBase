@@ -6,6 +6,8 @@
 //   opnieuw-betalen→ een openstaande iDEAL-betaling afronden (eigenaar)
 //   verzoek        → wijziging of uitbreiding aanvragen (beheerder)
 //   extra          → een extra bestellen tegen de latere prijs (eigenaar)
+//   hosting-los    → eigen hostingabonnement afsluiten, zonder lopend
+//                    BossBase-abonnement (eigenaar)
 //   domein         → domeinnaam via ons aanvragen (beheerder)
 //   email          → zakelijke e-mail aanvragen (aantal adressen), alleen bij
 //                    een domein via ons
@@ -22,7 +24,7 @@ import {
   PAKKETTEN, EXTRAS, DOMEIN_PER_JAAR, EMAIL_PER_MAAND, TERMIJNEN, WEBSITE_INTERN,
   isPakket, upgradePrijs, euro, maakIntakeLink, mailIntern, type Pakket,
 } from '../_shared/website.ts'
-import { startBetaling } from '../_shared/websiteBetalen.ts'
+import { startBetaling, startHostingAbonnement } from '../_shared/websiteBetalen.ts'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
@@ -145,6 +147,17 @@ serve(async (req) => {
           ['Extra', `${aantal > 1 ? `${aantal} × ` : ''}${e.label}`], ['Bedrag', `${euro(bedrag)} excl. btw`],
           ['Betaling', wijze === 'termijnen' ? `${TERMIJNEN} maandtermijnen (wacht op eerste betaling)` : 'eenmalig (wacht op betaling)'],
         ])
+        return json({ ok: true, checkoutUrl })
+      }
+
+      case 'hosting-los': {
+        const beheerder = await eisAbonnementsbeheerder(admin, userClient)
+        if (beheerder instanceof Response) return beheerder
+        if (!aanvraag) return json({ error: 'Je hebt nog geen website bij ons.' }, 400)
+        const checkoutUrl = await startHostingAbonnement(admin, {
+          companyId, origin,
+          gelukt: '/dashboard/website?betaling=gelukt', afgebroken: '/dashboard/website?betaling=afgebroken',
+        })
         return json({ ok: true, checkoutUrl })
       }
 

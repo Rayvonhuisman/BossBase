@@ -25,7 +25,7 @@ import {
   appOrigin, EXTRA_GEBRUIKER_PRIJS, inbegrepenGebruikers, zetJaarverplichting,
 } from '../_shared/billing.ts'
 import {
-  startWebsiteTraject, rondIntakeAf, mailIntern, WEBSITE_INTERN, TERMIJNEN, euro, type IntakeGegevens,
+  startWebsiteTraject, rondIntakeAf, mailIntern, WEBSITE_INTERN, TERMIJNEN, EMAIL_PER_MAAND, DOMEIN_PER_JAAR, euro, type IntakeGegevens,
 } from '../_shared/website.ts'
 import { plusMaanden } from '../_shared/websiteBetalen.ts'
 import { welkomMail } from '../_shared/welkomMail.ts'
@@ -124,6 +124,9 @@ async function verwerkWebsiteBetaling(admin: any, sessie: any): Promise<string> 
   const companyId = sessie?.metadata?.company_id ?? null
   if (!betalingId || !companyId) return 'website-betaling zonder kenmerk'
   if (sessie?.payment_status !== 'paid') return `website-betaling nog niet betaald (${sessie?.payment_status})`
+  if (sessie?.metadata?.soort === 'website_hosting') {
+    return activeerLosseHosting(admin, betalingId, companyId, typeof sessie.subscription === 'string' ? sessie.subscription : null)
+  }
   const termijnen = sessie?.mode === 'subscription'
   return voltooiWebsiteBetaling(admin, betalingId, companyId, {
     sessieId: sessie.id,
@@ -201,23 +204,98 @@ async function voltooiWebsiteBetaling(
   return `website-betaling ${betalingId} ${termijnen ? 'loopt' : 'betaald'}${einde}`
 }
 
+// Een eigen hostingabonnement is betaald (Checkout uit startHostingAbonnement):
+// hosting, e-mail en domein gaan lopen op dat abonnement, en eventuele regels op
+// het BossBase-abonnement stoppen. Idempotent via de status 'open'.
+async function activeerLosseHosting(admin: any, betalingId: string, companyId: string, abonnementId: string | null): Promise<string> {
+  const nu = new Date().toISOString()
+  const { data: b } = await admin.from('website_betalingen')
+    .update({ status: 'loopt', start_op: nu, betaald_op: nu, ...(abonnementId ? { stripe_subscription_id: abonnementId } : {}) })
+    .eq('id', betalingId).eq('company_id', companyId).eq('status', 'open')
+    .select('gegevens').maybeSingle()
+  if (!b) return 'losse hosting was al verwerkt (of vervallen)'
+
+  // Regels op het BossBase-abonnement die nog liepen: die vervallen nu.
+  await admin.from('website_betalingen').update({ status: 'gestopt', fout: 'Vervangen door eigen hostingabonnement.' })
+    .eq('company_id', companyId).in('soort', ['hosting', 'domein', 'email']).eq('wijze', 'abonnement').eq('status', 'loopt')
+
+  const g = (b.gegevens ?? {}) as { domein?: string | null; emailAantal?: number }
+  const nieuw: Record<string, unknown>[] = []
+  if (g.emailAantal) nieuw.push({
+    company_id: companyId, soort: 'email', wijze: 'los', status: 'loopt', start_op: nu,
+    omschrijving: `Zakelijke e-mail (${g.emailAantal} adres${g.emailAantal > 1 ? 'sen' : ''})`,
+    bedrag: EMAIL_PER_MAAND * g.emailAantal, per_keer: EMAIL_PER_MAAND * g.emailAantal, interval_maanden: 1,
+    stripe_subscription_id: abonnementId,
+  })
+  // Het eerste jaar domein stond als eenmalige regel in de Checkout; de volgende
+  // jaren zet website-termijnen hem op dit abonnement.
+  if (g.domein) nieuw.push({
+    company_id: companyId, soort: 'domein', wijze: 'abonnement', status: 'loopt', start_op: nu,
+    omschrijving: `Domeinnaam ${g.domein} (1 jaar)`, bedrag: DOMEIN_PER_JAAR, per_keer: DOMEIN_PER_JAAR,
+    interval_maanden: 12, aantal_gedaan: 1, laatst_voor_periode: nu, laatst_gefactureerd: nu,
+    stripe_subscription_id: abonnementId,
+  })
+  if (nieuw.length) await admin.from('website_betalingen').insert(nieuw)
+  await admin.from('website_aanvragen').update({ offline_melding_op: null, hosting_einde_op: null }).eq('company_id', companyId)
+
+  const { data: bedrijf } = await admin.from('companies').select('id, name, email, phone').eq('id', companyId).maybeSingle()
+  const { data: a } = await admin.from('website_aanvragen').select('status').eq('company_id', companyId).maybeSingle()
+  const i = mailIntern({
+    onderwerp: `Hosting los afgesloten: ${bedrijf?.name ?? ''}`,
+    kop: 'Hosting afgesloten',
+    bedrijf: bedrijf ?? { id: companyId },
+    regels: [
+      ['Status website', a?.status ?? 'onbekend'],
+      ['Wat nu', a?.status === 'live' ? 'Site blijft online.' : 'Je kunt de site live zetten.'],
+      ['E-mail', g.emailAantal ? `${g.emailAantal} adres(sen)` : 'nee'],
+      ['Domein', g.domein ?? 'nee'],
+    ],
+  })
+  await stuurBossBaseMail(WEBSITE_INTERN, i.subject, i.html, bedrijf?.email ?? undefined, undefined, 'website_intern')
+  return `losse hosting ${betalingId} loopt`
+}
+
 // Events van een termijnen-abonnement van de website (geen BossBase-abonnement):
 // betaalde termijnen tellen, en bij het einde de betaling afronden. Geeft null
 // als het abonnement niet van de website is.
 async function websiteTermijnEvent(admin: any, type: string, subscriptionId: string): Promise<string | null> {
   let { data: b } = await admin.from('website_betalingen')
-    .select('id, company_id, status, aantal_gedaan, aantal_totaal').eq('stripe_subscription_id', subscriptionId).maybeSingle()
+    .select('id, company_id, status, wijze, aantal_gedaan, aantal_totaal').eq('stripe_subscription_id', subscriptionId)
+    .in('wijze', ['termijnen', 'los']).in('soort', ['upgrade', 'extra', 'hosting']).maybeSingle()
   if (!b) {
     // Een factuur kan binnenkomen vóór checkout.session.completed; dan kennen we
     // het abonnement nog niet en kijken we naar de metadata bij Stripe.
     const sub = await stripeFetch(`/subscriptions/${subscriptionId}`, 'GET').catch(() => null)
-    if (sub?.metadata?.soort !== 'website_termijnen' || !sub?.metadata?.betaling_id) return null
+    if (!['website_termijnen', 'website_hosting'].includes(sub?.metadata?.soort) || !sub?.metadata?.betaling_id) return null
     const r = await admin.from('website_betalingen')
       .update({ stripe_subscription_id: subscriptionId }).eq('id', sub.metadata.betaling_id)
-      .select('id, company_id, status, aantal_gedaan, aantal_totaal').maybeSingle()
+      .select('id, company_id, status, wijze, aantal_gedaan, aantal_totaal').maybeSingle()
     b = r.data
     if (!b) return 'website-termijnen: betaling niet gevonden'
   }
+  // Eigen hostingabonnement: betaald = activeren (als dat nog niet gebeurde),
+  // gestopt = alles van dat abonnement stopt en de bewaking (website-termijnen)
+  // neemt het over: na 14 dagen een melding om de site offline te halen.
+  if (b.wijze === 'los') {
+    if (type === 'invoice.paid') {
+      if (b.status === 'open') return await activeerLosseHosting(admin, b.id, b.company_id, subscriptionId)
+      await admin.from('website_betalingen').update({ fout: null }).eq('stripe_subscription_id', subscriptionId)
+      return 'losse hosting: factuur betaald'
+    }
+    if (type === 'invoice.payment_failed') {
+      await admin.from('website_betalingen').update({ fout: 'Hosting niet betaald; Stripe probeert het opnieuw.' }).eq('id', b.id)
+      return 'losse hosting: betaling mislukt'
+    }
+    if (type === 'customer.subscription.deleted') {
+      await admin.from('website_betalingen').update({ status: 'gestopt' })
+        .eq('stripe_subscription_id', subscriptionId).eq('status', 'loopt')
+      await admin.from('website_aanvragen').update({ hosting_einde_op: new Date().toISOString(), hosting_mail_op: null, offline_melding_op: null })
+        .eq('company_id', b.company_id)
+      return 'losse hosting gestopt'
+    }
+    return `losse hosting: ${type} genegeerd`
+  }
+
   const totaal = Number(b.aantal_totaal ?? TERMIJNEN)
   if (type === 'invoice.paid') {
     // Eerste termijn betaald terwijl de Checkout dat nog niet meldde (een
@@ -329,7 +407,7 @@ serve(async (req) => {
 
     // iDEAL bevestigt soms pas na afloop van Checkout; dan komt de betaling met
     // dit event binnen in plaats van met checkout.session.completed.
-    const websiteSoort = obj?.metadata?.soort === 'website_upgrade' || obj?.metadata?.soort === 'website_termijnen'
+    const websiteSoort = ['website_upgrade', 'website_termijnen', 'website_hosting'].includes(obj?.metadata?.soort)
     if (type === 'checkout.session.async_payment_succeeded' && websiteSoort) {
       return await rond(await verwerkWebsiteBetaling(admin, obj), obj?.metadata?.company_id ?? null)
     }

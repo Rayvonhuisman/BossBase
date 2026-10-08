@@ -19,7 +19,7 @@
 // periode een factuurregel (invoice item) klaar voor de eerstvolgende factuur.
 import { stripeFetch, stripeSecret, appOrigin } from './stripe.ts'
 import { stripeKlantVoorBedrijf, checkoutInstellingen } from './billing.ts'
-import { termijnCenten, TERMIJNEN, type Pakket } from './website.ts'
+import { termijnCenten, TERMIJNEN, HOSTING_PER_MAAND, EMAIL_PER_MAAND, DOMEIN_PER_JAAR, type Pakket } from './website.ts'
 
 /** Bedrag per maandtermijn in centen. */
 export const termijnBedragCenten = (bedrag: number) => Math.round((bedrag * 100) / TERMIJNEN)
@@ -185,4 +185,91 @@ export function regelVoorFactuur(r: { soort: string; omschrijving: string; bedra
     }
   }
   return { centen: Math.round(Number(r.per_keer ?? r.bedrag) * 100), omschrijving: r.omschrijving }
+}
+
+// ── Eigen hostingabonnement ─────────────────────────────────────────────────
+// Voor een klant zonder lopend BossBase-abonnement: bij livegang, of om zijn
+// website online te houden nadat hij heeft opgezegd. Eén Stripe-abonnement via
+// dezelfde Checkout als het BossBase-abonnement, met:
+//  - hosting (maandelijks);
+//  - zakelijke e-mail per adres (maandelijks), als gekozen;
+//  - het eerste jaar domeinnaam als eenmalige regel op de eerste factuur, als
+//    gekozen. De volgende jaren zet website-termijnen hem als factuurregel op
+//    dit abonnement (Stripe staat geen jaarregel naast maandregels toe).
+// billing-webhook zet de regels op 'loopt' zodra Stripe meldt dat er betaald is.
+
+const LOPEND = ['active', 'trialing', 'past_due']
+
+/** Loopt er een abonnement waar de hosting op kan, of loopt er losse hosting? */
+export async function hostingStand(admin: any, companyId: string): Promise<{ abonnementLoopt: boolean; losLoopt: boolean }> {
+  const { data: sub } = await admin.from('subscriptions')
+    .select('stripe_subscription_id, stripe_status').eq('company_id', companyId).maybeSingle()
+  const { data: los } = await admin.from('website_betalingen').select('id')
+    .eq('company_id', companyId).eq('soort', 'hosting').eq('wijze', 'los').eq('status', 'loopt').limit(1)
+  return {
+    abonnementLoopt: Boolean(sub?.stripe_subscription_id) && LOPEND.includes(sub?.stripe_status ?? ''),
+    losLoopt: Boolean(los?.length),
+  }
+}
+
+export async function startHostingAbonnement(admin: any, o: {
+  companyId: string; gelukt: string; afgebroken: string; origin: string
+}): Promise<string> {
+  const stand = await hostingStand(admin, o.companyId)
+  if (stand.losLoopt) throw new Error('Je hosting loopt al.')
+
+  const { data: a } = await admin.from('website_aanvragen')
+    .select('domein, domein_via_ons, email_aantal').eq('company_id', o.companyId).maybeSingle()
+  if (!a) throw new Error('Je hebt nog geen website bij ons.')
+  const adressen = Math.max(0, Number(a.email_aantal) || 0)
+  const domein = a.domein_via_ons ? (a.domein || 'je domeinnaam') : null
+  const perMaand = HOSTING_PER_MAAND + EMAIL_PER_MAAND * adressen
+
+  // Een eerdere, niet afgeronde poging laten verlopen.
+  const { data: open } = await admin.from('website_betalingen')
+    .select('id, stripe_session_id').eq('company_id', o.companyId).eq('wijze', 'los').eq('status', 'open')
+  for (const b of open ?? []) {
+    if (b.stripe_session_id) {
+      try { await stripeFetch(`/checkout/sessions/${b.stripe_session_id}/expire`, 'POST', {}) } catch { /* al verlopen */ }
+    }
+    await admin.from('website_betalingen').update({ status: 'vervallen' }).eq('id', b.id).eq('status', 'open')
+  }
+
+  const { data: rij, error } = await admin.from('website_betalingen').insert({
+    company_id: o.companyId, soort: 'hosting', wijze: 'los', status: 'open',
+    omschrijving: 'Website-hosting (eigen abonnement)', bedrag: perMaand, per_keer: HOSTING_PER_MAAND,
+    interval_maanden: 1, gegevens: { domein, emailAantal: adressen },
+  }).select('id').single()
+  if (error) throw new Error(`Hosting vastleggen mislukt: ${error.message}`)
+
+  const customerId = await stripeKlantVoorBedrijf(admin, o.companyId)
+  const origin = appOrigin(o.origin)
+  const params: Record<string, string> = {
+    ...checkoutInstellingen(customerId, 'subscription'),
+    'metadata[soort]': 'website_hosting',
+    'metadata[company_id]': o.companyId,
+    'metadata[betaling_id]': rij.id,
+    'subscription_data[metadata][soort]': 'website_hosting',
+    'subscription_data[metadata][company_id]': o.companyId,
+    'subscription_data[metadata][betaling_id]': rij.id,
+    'success_url': `${origin}${o.gelukt}`,
+    'cancel_url': `${origin}${o.afgebroken}`,
+  }
+  let i = 0
+  const regel = (naam: string, centen: number, aantal: number, maandelijks: boolean) => {
+    params[`line_items[${i}][quantity]`] = String(aantal)
+    params[`line_items[${i}][price_data][currency]`] = 'eur'
+    params[`line_items[${i}][price_data][tax_behavior]`] = 'exclusive'
+    params[`line_items[${i}][price_data][unit_amount]`] = String(centen)
+    params[`line_items[${i}][price_data][product_data][name]`] = naam
+    if (maandelijks) params[`line_items[${i}][price_data][recurring][interval]`] = 'month'
+    i++
+  }
+  regel('Website-hosting', HOSTING_PER_MAAND * 100, 1, true)
+  if (adressen > 0) regel('Zakelijke e-mail (per adres)', EMAIL_PER_MAAND * 100, adressen, true)
+  if (domein) regel(`Domeinnaam ${domein} (1 jaar)`, DOMEIN_PER_JAAR * 100, 1, false)
+
+  const sessie = await stripeFetch('/checkout/sessions', 'POST', params)
+  await admin.from('website_betalingen').update({ stripe_session_id: sessie.id }).eq('id', rij.id)
+  return sessie.url
 }

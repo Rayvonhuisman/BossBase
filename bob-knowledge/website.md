@@ -136,13 +136,31 @@ Bij elke stap krijg je een mail. De status staat ook op de pagina Website.
 - Je ziet de status van je aanvragen eronder: ontvangen, in behandeling, prijsopgave
   gestuurd, afgerond of niet uitgevoerd.
 
+## Hosting zonder lopend abonnement
+
+Hosting, domein en e-mail staan normaal als regel op het BossBase-abonnement. Loopt er
+geen abonnement (bijvoorbeeld omdat het gestopt is), dan sluit je de hosting **los** af:
+een eigen maandabonnement via de betaalpagina van Stripe, met hosting (€ 5 per maand),
+zakelijke e-mail (€ 9 per adres per maand) en het eerste jaar domeinnaam (€ 25) als je
+die bij ons hebt. Je betaalt de eerste maand meteen. Op de pagina Website staat dan een
+geel blok met de knop **Hosting afsluiten**; alleen de eigenaar kan afsluiten.
+
+- **Voor livegang:** zonder abonnement of losse hosting gaat een site niet live. Het team
+  stuurt je dan een mail om de hosting af te sluiten; daarna gaat je site live.
+
 ## Als je opzegt
 
-De site blijft online zolang je abonnement loopt. Stopt het abonnement, dan stopt de
-hosting en gaat de site offline aan het einde van de laatste periode. Je eigen teksten,
-foto's en logo krijg je op verzoek terug. Een domeinnaam die wij voor je registreerden,
-zetten we op verzoek kosteloos naar je over. Zakelijke e-mail via ons stopt met het
-abonnement. Zie artikel 15 van de algemene voorwaarden.
+- Zeg je je BossBase-abonnement op, dan krijg je een mail: je abonnement stopt op een
+  datum, en daarmee de hosting. Wil je je website houden, dan neem je alleen de hosting
+  (zie hierboven). Dat kan ook nog als je abonnement al gestopt is: inloggen en betalen
+  blijft mogelijk.
+- **Binnen 14 dagen na het einde** moet de hosting afgesloten zijn; anders haalt het
+  team de site offline. Hetzelfde als je een eigen hostingabonnement opzegt of niet meer
+  betaalt.
+- Je eigen teksten, foto's en logo krijg je op verzoek terug. Een domeinnaam die wij voor
+  je registreerden, zetten we op verzoek kosteloos naar je over. Zakelijke e-mail via ons
+  stopt, tenzij je hem meeneemt in je eigen hostingabonnement. Zie artikel 15.8 van de
+  algemene voorwaarden.
 
 ## Voorwaarden versie 2026-11
 

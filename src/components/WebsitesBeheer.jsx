@@ -48,13 +48,22 @@ function actiePunten(w) {
   if (nieuweVerzoeken) uit.push(`${nieuweVerzoeken} verzoek${nieuweVerzoeken === 1 ? '' : 'en'}`);
   if ((w.betalingen || []).some(b => b.status === 'open')) uit.push('betaling open');
   if ((w.betalingen || []).some(b => b.fout)) uit.push('betaalfout');
+  if (w.offline_melding_op && w.status === 'live') uit.push('site offline halen');
   return uit;
 }
+
+// Loopt er iets waar de hosting op kan: het BossBase-abonnement in Stripe, of
+// een eigen hostingabonnement? Zonder dat kan een site niet live.
+const LOPEND = ['active', 'trialing', 'past_due'];
+const hostingGedekt = w =>
+  LOPEND.includes(w.abonnement?.stripe_status ?? '')
+  || (w.betalingen || []).some(b => b.soort === 'hosting' && b.wijze === 'los' && b.status === 'loopt');
 
 function betalingSamenvatting(b) {
   if (b.status === 'vervallen') return `${euroBedrag(b.bedrag)} vervallen (opnieuw gestart)`;
   if (b.wijze === 'ideal') return `${euroBedrag(b.bedrag)} eenmalig ${b.status}`;
   if (b.wijze === 'termijnen') return `${euroBedrag(b.bedrag)} in termijnen ${b.status === 'open' ? 'open' : `${b.aantal_gedaan}/${b.aantal_totaal}`}`;
+  if (b.wijze === 'los') return `${b.soort === 'hosting' ? 'hosting' : b.soort === 'email' ? 'e-mail' : b.soort} los ${b.status}`;
   if (b.soort === 'hosting') return `hosting ${b.status}`;
   if (b.soort === 'domein') return `domein ${b.status}`;
   if (b.soort === 'email') return `e-mail ${b.status}`;
@@ -210,8 +219,29 @@ function Detail({ w, herlaad, toast }) {
           </button>
         </div>
       )}
-      {status === 'live' && w.status !== 'live' && (
+      {status === 'live' && w.status !== 'live' && hostingGedekt(w) && (
         <div style={{ fontSize: 12, color: '#b45309', marginTop: 6 }}>Live zetten start de hosting, en domein en e-mail als die in de intake gekozen zijn, als regels op het abonnement van de klant.</div>
+      )}
+      {w.status !== 'live' && !hostingGedekt(w) && (
+        <div style={{ fontSize: 12, color: '#b91c1c', marginTop: 8 }}>
+          Geen lopend abonnement voor de hosting: live kan pas als de klant de hosting los heeft afgesloten.
+          <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+            <button className="btn btn-p btn-sm" disabled={bezig}
+              onClick={() => doe(() => roep('hosting-link', { companyId: w.company_id }), 'Verstuurd')}>
+              Hosting laten activeren
+            </button>
+            <button className="btn btn-s btn-sm" disabled={bezig}
+              onClick={() => doe(() => roep('status', { companyId: w.company_id, status: 'live', siteUrl, mail, zonderHosting: true }), 'Live gezet zonder hosting')}>
+              Toch live zetten (zonder hosting)
+            </button>
+          </div>
+        </div>
+      )}
+      {w.status === 'live' && (w.hosting_mail_op || w.offline_melding_op) && (
+        <div style={{ fontSize: 12, color: '#b45309', marginTop: 8 }}>
+          Hosting stopt{w.hosting_einde_op ? ` op ${fmt(w.hosting_einde_op)}` : ''}; klant gemaild op {fmt(w.hosting_mail_op)}.
+          {w.offline_melding_op ? ` Geen hosting afgesloten: site offline halen (gemeld ${fmt(w.offline_melding_op)}).` : ' Wacht op losse hosting.'}
+        </div>
       )}
       <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 6 }}>
         Aangevraagd {fmt(w.aangevraagd_op)}

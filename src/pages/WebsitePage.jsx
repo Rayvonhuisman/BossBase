@@ -9,7 +9,7 @@ import {
 } from '../lib/website.js';
 import {
   getMijnWebsite, maakIntakeLink, upgradeWebsite, opnieuwBetalen,
-  vraagWijzigingAan, vraagDomeinAan, geefFeedback, bestelExtra, vraagEmailAan,
+  vraagWijzigingAan, vraagDomeinAan, geefFeedback, bestelExtra, vraagEmailAan, hostingLos,
 } from '../services/websiteService.js';
 import './websitePage.css';
 
@@ -67,7 +67,7 @@ function InfoIcoon({ titel, children, links }) {
 // /dashboard/website?voorbeeld=geen|intake|bouw|beoordeling|live toont de
 // pagina in elke stand, zonder database. Nooit in productie.
 function voorbeeld(stand) {
-  const basis = { welkomstactie: 'gratis_website', interval: 'jaar', tier: 'groei', heeftStripe: true, magBeheren: true, betalingen: [], verzoeken: [] };
+  const basis = { welkomstactie: 'gratis_website', interval: 'jaar', tier: 'groei', heeftStripe: true, magBeheren: true, betalingen: [], verzoeken: [], hosting: { abonnementLoopt: true } };
   const aanvraag = (status, extra = {}) => ({ status, pakket: 'compleet', siteUrl: null, aangevraagdOp: '2026-10-01', intakeOntvangenOp: '2026-10-03', liveOp: null, feedback: null, feedbackOp: null, domein: null, ...extra });
   switch (stand) {
     case 'geen':  return { ...basis, welkomstactie: null, heeftStripe: false, aanvraag: null };
@@ -82,6 +82,8 @@ function voorbeeld(stand) {
         { id: 'b4', soort: 'email', omschrijving: 'Zakelijke e-mail', bedrag: 9, wijze: 'abonnement', status: 'loopt', perKeer: 9, startOp: '2026-10-20' },
       ],
       verzoeken: [{ id: 'v1', soort: 'wijziging', omschrijving: 'Nieuwe foto bij dakgoten.', status: 'prijsopgave', createdAt: '2026-10-25' }] };
+    case 'stopt': return { ...voorbeeld('live'), hosting: { abonnementLoopt: true, stoptOp: '2026-12-01' } };
+    case 'zonderabonnement': return { ...voorbeeld('beoordeling'), heeftStripe: false, hosting: { abonnementLoopt: false } };
     default: return null;
   }
 }
@@ -321,6 +323,8 @@ function MijnWebsite({ data, bezig, doe }) {
         </div>
       )}
 
+      <HostingNodig a={a} data={data} bezig={bezig} doe={doe} />
+
       {a.status === 'ter_beoordeling' && <Feedback a={a} bezig={bezig} doe={doe} />}
       {a.feedback && a.status !== 'ter_beoordeling' && (
         <div className="card card-p afu2">
@@ -385,21 +389,61 @@ function Feedback({ a, bezig, doe }) {
   );
 }
 
+// Hosting los afsluiten, als er geen BossBase-abonnement is om hem op te zetten:
+// vóór livegang, of omdat het abonnement stopt of gestopt is.
+function HostingNodig({ a, data, bezig, doe }) {
+  const h = data.hosting || {};
+  if (h.losLoopt) return null;
+  const stopt = a.status === 'live' && (h.stoptOp || h.gestopt || a.hostingEindeOp);
+  const voorLivegang = a.status === 'ter_beoordeling' && !h.abonnementLoopt;
+  if (!stopt && !voorLivegang) return null;
+  const einde = a.hostingEindeOp || h.stoptOp;
+  const offline = einde ? datum(new Date(new Date(einde).getTime() + 14 * 86400_000)) : null;
+  const adressen = Number(a.emailAantal) || 0;
+  const perMaand = HOSTING_PER_MAAND + EMAIL_PER_MAAND * adressen;
+  return (
+    <div className="ws-melding ws-hosting afu" data-rl="website-hosting">
+      <div>
+        <strong>
+          {voorLivegang ? 'Sluit de hosting af, dan zetten we je site live.'
+            : h.gestopt || a.hostingEindeOp ? 'Je abonnement is gestopt. Houd je website online.'
+              : `Je abonnement stopt op ${datum(einde)}. Houd je website online.`}
+        </strong>
+        <div className="ws-hosting-uitleg">
+          {voorLivegang
+            ? 'Er loopt geen BossBase-abonnement waar de hosting op kan.'
+            : `Neem alleen de hosting, ook zonder BossBase.${offline ? ` Doe je dat niet vóór ${offline}, dan halen we je site offline.` : ''}`}
+          {' '}{euroBedrag(perMaand)} per maand{a.domeinViaOns ? ` + domeinnaam ${euroBedrag(DOMEIN_PER_JAAR)} per jaar` : ''}, excl. btw.
+          <InfoIcoon titel="Eigen hostingabonnement" links>
+            Een eigen maandabonnement voor hosting{adressen ? ', zakelijke e-mail' : ''}{a.domeinViaOns ? ' en je domeinnaam' : ''}, los van BossBase. Je betaalt de eerste maand meteen, daarna maandelijks. Opzeggen kan per maand; dan halen we je site offline.
+          </InfoIcoon>
+        </div>
+      </div>
+      {data.magBeheren
+        ? <button className="btn btn-p btn-sm" disabled={!!bezig} onClick={() => doe('hosting', hostingLos)}>{bezig === 'hosting' ? 'Bezig…' : 'Hosting afsluiten'}</button>
+        : <span className="ab-hint">De eigenaar van je bedrijf kan dit afsluiten.</span>}
+    </div>
+  );
+}
+
 // Doorlopende kosten: klein, één regel per onderdeel, onderaan het statusblok.
 // Hosting altijd; domein en e-mail alleen als die gekozen zijn.
 function Doorlopend({ a, betalingen }) {
   const loopt = soort => betalingen.find(b => b.soort === soort && b.status === 'loopt');
   const wanneer = regel => (regel ? `loopt sinds ${datum(regel.startOp)}` : 'gaat in bij livegang');
+  // Een eigen hostingabonnement heeft een eigen factuur.
+  const factuur = regel => (regel?.wijze === 'los' || (regel?.soort === 'domein' && betalingen.some(b => b.wijze === 'los' && b.status === 'loopt'))
+    ? 'via je eigen hostingabonnement' : 'komt op je BossBase-factuur');
   const hosting = loopt('hosting');
   const domein = loopt('domein');
   const email = loopt('email');
   const adressen = Number(a.emailAantal) || (a.email ? 1 : 0);
   const regels = [
-    { key: 'hosting', tekst: `Hosting ${euroBedrag(hosting?.perKeer ?? HOSTING_PER_MAAND)} per maand, ${wanneer(hosting)} en komt op je BossBase-factuur`,
+    { key: 'hosting', tekst: `Hosting ${euroBedrag(hosting?.perKeer ?? HOSTING_PER_MAAND)} per maand, ${wanneer(hosting)} en ${factuur(hosting)}`,
       uitleg: 'Wij zetten je site online en houden hem draaiend: beveiligd slotje en updates. Hosting hoort bij de website en is niet los te kiezen. De dagen tussen livegang en je eerstvolgende factuur rekenen we niet.' },
-    (domein || a.domeinViaOns) && { key: 'domein', tekst: `Domeinnaam${a.domein ? ` ${a.domein}` : ''} ${euroBedrag(domein?.perKeer ?? DOMEIN_PER_JAAR)} per jaar, ${wanneer(domein)} en komt op je BossBase-factuur`,
+    (domein || a.domeinViaOns) && { key: 'domein', tekst: `Domeinnaam${a.domein ? ` ${a.domein}` : ''} ${euroBedrag(domein?.perKeer ?? DOMEIN_PER_JAAR)} per jaar, ${wanneer(domein)} en ${factuur(domein)}`,
       uitleg: 'Wij registreren je domeinnaam en houden hem bij. Eén keer per jaar op je factuur. Zeg je op, dan zetten we hem op verzoek kosteloos naar je over.' },
-    (email || adressen > 0) && { key: 'email', tekst: `Zakelijke e-mail (${adressen} ${adressen === 1 ? 'adres' : 'adressen'}) ${euroBedrag(email?.perKeer ?? EMAIL_PER_MAAND * adressen)} per maand, ${wanneer(email)} en komt op je BossBase-factuur`,
+    (email || adressen > 0) && { key: 'email', tekst: `Zakelijke e-mail (${adressen} ${adressen === 1 ? 'adres' : 'adressen'}) ${euroBedrag(email?.perKeer ?? EMAIL_PER_MAAND * adressen)} per maand, ${wanneer(email)} en ${factuur(email)}`,
       uitleg: `${euroBedrag(EMAIL_PER_MAAND)} per adres per maand. Wij richten de adressen in op je eigen domeinnaam. Meer adressen vraag je hieronder aan bij Zakelijke e-mail.` },
   ].filter(Boolean);
   return (

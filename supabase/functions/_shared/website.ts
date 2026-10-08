@@ -396,3 +396,55 @@ export async function rondIntakeAf(
   }
   return true
 }
+
+// ── Hosting: livegang zonder abonnement, en na opzeggen ─────────────────────
+const datumNl = (d: string | Date) => new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
+
+function hostingKosten(o: { domein?: string | null; emailAantal?: number }) {
+  const regels = [`Hosting: ${euro(HOSTING_PER_MAAND)} per maand`]
+  if (o.emailAantal) regels.push(`Zakelijke e-mail: ${o.emailAantal} × ${euro(EMAIL_PER_MAAND)} per maand`)
+  if (o.domein) regels.push(`Domeinnaam ${o.domein}: ${euro(DOMEIN_PER_JAAR)} per jaar`)
+  return bbVinkjes(regels.map(esc))
+}
+
+/** Livegang: de site is klaar, maar er loopt geen abonnement voor de hosting. */
+export function mailHostingNodig(o: { bedrijfsnaam?: string | null; domein?: string | null; emailAantal?: number }) {
+  const inhoud = [
+    groet(o.bedrijfsnaam),
+    bbP('Je website is klaar om live te gaan. Daarvoor is hosting nodig: wij zetten je site online en houden hem draaiend.'),
+    bbP('Omdat er geen BossBase-abonnement loopt waar de hosting op kan, sluit je hem los af. Dat kost:'),
+    hostingKosten(o),
+    bbKlein('Bedragen excl. btw. Je betaalt de eerste maand meteen; daarna maandelijks. Zodra het rond is, zetten we je site live.'),
+  ].join('')
+  return {
+    subject: 'Je website kan live: sluit de hosting af',
+    html: bossbaseMail({
+      titel: 'Hosting afsluiten', bovenkop: 'Je website', kop: 'Je website kan live',
+      voorvertoning: 'Sluit de hosting af, dan zetten we je site online.',
+      inhoud, knop: { tekst: 'Hosting afsluiten', url: `${appOrigin('')}/dashboard/website` },
+    }),
+  }
+}
+
+/** Opzeggen: het BossBase-abonnement stopt (of is gestopt), en daarmee de hosting. */
+export function mailAbonnementStopt(o: { bedrijfsnaam?: string | null; einde: string; offlineOp: string; gestopt: boolean; domein?: string | null; emailAantal?: number }) {
+  const inhoud = [
+    groet(o.bedrijfsnaam),
+    bbP(o.gestopt
+      ? `Je BossBase-abonnement is gestopt op <strong>${datumNl(o.einde)}</strong>. Daarmee is ook de hosting van je website gestopt.`
+      : `Je BossBase-abonnement stopt op <strong>${datumNl(o.einde)}</strong>. Daarmee stopt ook de hosting van je website.`),
+    bbP('Wil je je website online houden? Dat kan, ook zonder BossBase: neem alleen de hosting. Dat kost:'),
+    hostingKosten(o),
+    bbUitgelicht('Belangrijk', `Kies vóór ${datumNl(o.offlineOp)}`,
+      `Heb je dan geen hosting afgesloten, dan halen we je website offline.${o.domein ? ' Je domeinnaam zetten we op verzoek kosteloos naar je over.' : ''}`),
+    bbKlein('Bedragen excl. btw. Je kunt inloggen en betalen, ook als je abonnement al gestopt is.'),
+  ].join('')
+  return {
+    subject: o.gestopt ? 'Je abonnement is gestopt: houd je website online' : 'Je abonnement stopt: houd je website online',
+    html: bossbaseMail({
+      titel: 'Je website online houden', bovenkop: 'Je website', kop: 'Houd je website online',
+      voorvertoning: `Neem alleen de hosting, dan blijft je site online. Kies vóór ${datumNl(o.offlineOp)}.`,
+      inhoud, knop: { tekst: 'Hosting afsluiten', url: `${appOrigin('')}/dashboard/website` },
+    }),
+  }
+}

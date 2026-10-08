@@ -31,5 +31,6 @@ export const opnieuwBetalen   = betalingId         => actie({ actie: 'opnieuw-be
 export const vraagWijzigingAan = ({ soort, omschrijving }) => actie({ actie: 'verzoek', soort, omschrijving });
 export const vraagDomeinAan   = domein             => actie({ actie: 'domein', domein });
 export const geefFeedback     = tekst              => actie({ actie: 'feedback', tekst });
+export const hostingLos       = ()                 => actie({ actie: 'hosting-los' });
 export const bestelExtra      = ({ extra, aantal, wijze }) => actie({ actie: 'extra', extra, aantal, wijze });
 export const vraagEmailAan    = ({ aantal, adres }) => actie({ actie: 'email', aantal, adres });

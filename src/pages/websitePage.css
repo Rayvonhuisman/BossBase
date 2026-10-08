@@ -136,3 +136,5 @@
 .ws-email{margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}
 .ws-doorlopend{list-style:none;margin:12px 0 0;padding:10px 0 0;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:2px}
 .ws-doorlopend li{display:flex;align-items:center;gap:2px;font-size:.78rem;color:var(--dmu);line-height:1.5}
+.ws-hosting{align-items:center}
+.ws-hosting-uitleg{display:flex;align-items:center;flex-wrap:wrap;gap:2px;margin-top:3px;font-size:.8rem}

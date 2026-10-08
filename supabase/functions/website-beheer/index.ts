@@ -10,6 +10,8 @@
 //   email-actief   → zakelijke e-mail ingericht (totaal aantal adressen):
 //                    maandregel op het abonnement, vervangt een lopende
 //   regel-stoppen  → een lopende abonnementsregel stopzetten
+//   hosting-link   → klant mailen dat hij de hosting los moet afsluiten (geen
+//                    lopend abonnement); hij betaalt vanaf de pagina Website
 //   traject-starten→ aanvraag openen, taak zetten en de intakelink mailen; bij
 //                    een klant die nog op de intake wacht: een verse link.
 //                    Ook intern aan te roepen met het cron-geheim (net.http_post
@@ -18,9 +20,9 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { CORS, json, stuurBossBaseMail } from '../_shared/billing.ts'
 import { clientFout } from '../_shared/clientFout.ts'
-import { HOSTING_PER_MAAND, DOMEIN_PER_JAAR, EMAIL_PER_MAAND, STATUS_LABEL, WEBSITE_INTERN, mailStatus, startWebsiteTraject } from '../_shared/website.ts'
+import { HOSTING_PER_MAAND, DOMEIN_PER_JAAR, EMAIL_PER_MAAND, STATUS_LABEL, WEBSITE_INTERN, mailStatus, mailHostingNodig, startWebsiteTraject } from '../_shared/website.ts'
 import { isScheduledCall } from '../_shared/scheduledSync.ts'
-import { regelOpAbonnement } from '../_shared/websiteBetalen.ts'
+import { regelOpAbonnement, hostingStand } from '../_shared/websiteBetalen.ts'
 
 const VERZOEK_STATUSSEN = ['nieuw', 'in_behandeling', 'prijsopgave', 'afgerond', 'afgewezen']
 
@@ -110,6 +112,16 @@ serve(async (req) => {
         if (status === 'ter_beoordeling' && !siteUrl) return json({ error: 'Vul eerst de link naar de site in; die krijgt de klant in de mail.' }, 400)
 
         const nieuw = status !== a.status
+        // Live alleen met betaalde hosting: via het BossBase-abonnement, of een
+        // eigen hostingabonnement. `zonderHosting` is de bewuste uitzondering
+        // (eigen sites, testbedrijven).
+        const stand = await hostingStand(admin, a.company_id)
+        if (nieuw && status === 'live' && !stand.abonnementLoopt && !stand.losLoopt && body.zonderHosting !== true) {
+          return json({
+            error: 'Er loopt geen abonnement voor de hosting. Stuur de klant eerst de link om de hosting af te sluiten.',
+            code: 'hosting_nodig',
+          }, 409)
+        }
         const nu = new Date().toISOString()
         const velden: Record<string, unknown> = { status, site_url: siteUrl }
         if (nieuw) velden.status_gewijzigd_op = nu
@@ -120,7 +132,7 @@ serve(async (req) => {
         const uit: string[] = []
         // Livegang: hosting gaat in, en domein en e-mail als die in de intake
         // gekozen zijn. Elk als regel op het abonnement, elk hooguit één keer.
-        if (nieuw && status === 'live') {
+        if (nieuw && status === 'live' && stand.abonnementLoopt && !stand.losLoopt) {
           const regels: { soort: 'hosting' | 'domein' | 'email'; omschrijving: string; bedrag: number; intervalMaanden?: number }[] = [
             { soort: 'hosting', omschrijving: 'Website-hosting', bedrag: HOSTING_PER_MAAND },
           ]
@@ -183,6 +195,16 @@ serve(async (req) => {
         const { data: sub } = await admin.from('subscriptions').select('plan').eq('company_id', body.companyId).maybeSingle()
         const r = await startWebsiteTraject(admin, String(body.companyId), sub?.plan ?? null, stuurBossBaseMail, { opnieuw: true })
         return json({ ok: true, resultaat: [r] })
+      }
+
+      case 'hosting-link': {
+        const { data: a } = await admin.from('website_aanvragen')
+          .select('domein, domein_via_ons, email_aantal').eq('company_id', body.companyId).maybeSingle()
+        const { data: c } = await admin.from('companies').select('name, email').eq('id', body.companyId).maybeSingle()
+        if (!a || !c?.email) return json({ error: 'Geen website of geen e-mailadres bij dit bedrijf.' }, 400)
+        const m = mailHostingNodig({ bedrijfsnaam: c.name, domein: a.domein_via_ons ? a.domein : null, emailAantal: Number(a.email_aantal) || 0 })
+        const id = await stuurBossBaseMail(c.email, m.subject, m.html, WEBSITE_INTERN, undefined, 'website_klant')
+        return json({ ok: true, resultaat: [id ? 'klant gemaild: hosting afsluiten' : 'mail mislukt'] })
       }
 
       case 'regel-stoppen': {
