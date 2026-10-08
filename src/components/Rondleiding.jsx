@@ -273,7 +273,7 @@ function Gids({ stappen, onStop, onKlaar, voorStap, geduld = 400 }) {
               <div className="rl-knoppen-rechts">
                 {index > 0 && <button type="button" className="btn btn-s btn-sm" onClick={vorige}>Vorige</button>}
                 <button type="button" className="btn btn-p btn-sm" autoFocus onClick={volgende}>
-                  {stap.einde ? 'Verder' : stap.welkom ? 'Laat zien' : (laatste || laatsteEcht) ? 'Klaar' : 'Volgende'}
+                  {stap.knop || (stap.einde ? 'Verder' : stap.welkom ? 'Laat zien' : (laatste || laatsteEcht) ? 'Klaar' : 'Volgende')}
                 </button>
               </div>
             </div>
@@ -423,8 +423,11 @@ export function StartRondleiding({ rol, company }) {
         if (bezet || document.querySelector('.overlay')) { setTimeout(probeer, 500); return; }
         startStand = 'loopt';
         bezet = 'start';
-        gezien.add('start'); gezien.add('welkom');
-        markeerGezien(['start', 'welkom']).catch(() => {});
+        // De startrondleiding loopt al door Instellingen; de losse rondleiding
+        // van die pagina zou er anders meteen overheen komen terwijl je je
+        // gegevens invult.
+        gezien.add('start'); gezien.add('welkom'); gezien.add('instellingen');
+        markeerGezien(['start', 'welkom', 'instellingen']).catch(() => {});
         // Stappen die er voor deze gebruiker niet zijn (geen koppelingen in
         // het pakket) vallen weg zodra we op dat tabblad niets vinden; zie
         // overslaanAlsAfwezig hieronder.
@@ -443,11 +446,14 @@ export function StartRondleiding({ rol, company }) {
     return () => window.removeEventListener(RL_RESET, opReset);
   }, []);
 
-  const klaarMet = useCallback(naarDashboard => {
+  // Na de laatste stap niet naar het dashboard maar naar Instellingen ›
+  // Bedrijf: een nieuwe klant vult eerst zijn gegevens in (logo, adres, KvK,
+  // btw, IBAN), want die staan op elke offerte en factuur.
+  const klaarMet = useCallback(naarGegevens => {
     if (bezet === 'start') bezet = null;
     startStand = 'klaar';
     setStappen(null);
-    if (naarDashboard) gaNaarPad('/dashboard');
+    if (naarGegevens) gaNaarPad('/dashboard/instellingen?tab=bedrijf');
   }, []);
 
   const voorStap = useCallback(stap => {

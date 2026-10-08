@@ -311,8 +311,10 @@ export const START = [
     tekst: 'Zo klinken de mails bij je offertes, facturen en betaalherinneringen. Pas ze aan naar jouw manier van schrijven.' },
   { tab: 'integraties', doel: 'set-integraties', titel: 'Je boekhouding',
     tekst: 'Werk je met Moneybird? Koppel het hier, dan gaan je facturen vanzelf naar je boekhouding. SnelStart komt binnenkort.' },
-  { welkom: true, einde: true, titel: 'Klaar voor je eerste offerte',
-    tekst: 'Dat is de basis. Nu laat ik je de rest zien.' },
+  // Niet door naar het dashboard: eerst de gegevens invullen. "Gegevens
+  // invullen" brengt je naar Instellingen › Bedrijf (zie StartRondleiding).
+  { welkom: true, einde: true, knop: 'Gegevens invullen', titel: 'Vul nu je gegevens in',
+    tekst: 'Begin met je logo en bedrijfsgegevens en sla ze op. Die heb je nodig voor je eerste offerte. De rest laat ik je zien zodra je een onderdeel opent.' },
 ];
 
 /** Alle pagina's en vensters met een rondleiding (voor "geen rondleidingen meer"). */
