@@ -248,6 +248,18 @@ async function overzicht(admin: any) {
       sub: `laatst ingelogd ${b.laatsteLogin ? new Date(b.laatsteLogin).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' }) : 'nooit'} · ${b.gebruikers} ${b.gebruikers === 1 ? 'gebruiker' : 'gebruikers'}`,
       op: proefTot, companyId: b.id, telefoon: b.telefoon, proef: true })
   }
+  // Gratis periode zonder Stripe (actief met een einddatum): een maand van
+  // tevoren een seintje. Na de einddatum gebeurt er vanzelf niets, dus het
+  // blijft staan tot het is afgehandeld.
+  for (const b of bedrijven.filter((x: any) => x.status === 'actief' && !x.isTest && !x.abonnement?.heeftStripe && x.abonnement?.stoptOp)) {
+    const eind: string = (b.abonnement as any).stoptOp
+    const tot = dagenTot(eind)
+    if (tot > 31) continue
+    voeg({ sleutel: `gratis:${b.id}:${String(eind).slice(0, 10)}`, prio: 3, soort: 'proef',
+      titel: `${b.naam} · gratis periode ${tot > 0 ? `loopt af op ${new Date(eind).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long' })}` : 'is afgelopen'}`,
+      sub: `${PAKKET_LABEL[b.abonnement.plan] ?? b.abonnement.plan} zonder Stripe · nog geen betaald abonnement`,
+      op: eind, companyId: b.id, telefoon: b.telefoon })
+  }
   for (const b of bedrijven.filter((x: any) => x.upgradeVerzoek && !x.isTest)) {
     const u = b.upgradeVerzoek
     voeg({ sleutel: `upgrade:${u.id}`, prio: 3, soort: 'upgrade', titel: `${b.naam} wil ${u.gewenst_plan ? `naar ${PAKKET_LABEL[u.gewenst_plan] ?? u.gewenst_plan}` : 'meer'}`,
